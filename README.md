@@ -184,6 +184,12 @@ Features that may be added in any future version, or not at all. See [`docs/data
 
 ---
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full release history.
+
+---
+
 ## License
 
 MIT. See [LICENSE](LICENSE) for details.

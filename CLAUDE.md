@@ -205,7 +205,8 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
-3. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
+3. **Changelog updated** — add an entry to `CHANGELOG.md` under `[Unreleased]` for any user-visible change; move entries to a versioned section when tagging a release
+4. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
    ```bash
    docker build -f docker/Dockerfile -t quotinator:local .
    ```
