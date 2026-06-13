@@ -10,6 +10,7 @@ RUN dotnet restore src/Quotinator.Api/Quotinator.Api.csproj
 # Build and publish
 COPY src/Quotinator.Core/ src/Quotinator.Core/
 COPY src/Quotinator.Api/ src/Quotinator.Api/
+COPY data/ data/
 RUN dotnet publish src/Quotinator.Api/Quotinator.Api.csproj \
     --configuration Release \
     --no-restore \
