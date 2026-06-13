@@ -203,13 +203,14 @@ The actual host, port, and file path are configured in the consumer environment,
 
 Run these checks before pushing any commit or tag. Tests alone do not cover all failure modes — the Docker build in particular is only verified here and in the release workflow.
 
-1. **Tests pass** — `dotnet test`
-2. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
+1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
+2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
+3. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
    ```bash
    docker build -f docker/Dockerfile -t quotinator:local .
    ```
    If you do not have Docker available, note this explicitly and let the reviewer know CI is the first Docker gate.
-3. **Smoke-test the image** (optional but recommended for Dockerfile changes):
+4. **Smoke-test the image** (optional but recommended for Dockerfile changes):
    ```bash
    docker run --rm -p 8080:8080 quotinator:local
    curl -s http://localhost:8080/api/v1/health
