@@ -57,7 +57,7 @@ Quotinator/
 Quotinator uses a curated `quotes.json` dataset seeded from two MIT-licensed sources:
 
 - **[vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes)** — AFI Top 100 movie quotes
-- **[NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes)** — broader community dataset (~500 quotes)
+- **[NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes)** — broader community dataset (~732 quotes)
 
 Both sources are MIT licensed. See [SOURCES.md](SOURCES.md) for full attribution.
 
@@ -95,39 +95,31 @@ API responses include `language`, `originalLanguage`, and `isTranslated` so cons
 
 ## REST API Endpoints (v1)
 
-All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a specific language. See [`docs/localisation.md`](docs/localisation.md) for details.
+All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a specific language. Responses always include `language`, `originalLanguage`, and `isTranslated` so consumers know whether they received a translation or the original. See [`docs/localisation.md`](docs/localisation.md) for details.
 
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/v1/quotes/random` | One random quote |
-| GET | `/api/v1/quotes/random?n=10` | N random quotes |
-| GET | `/api/v1/quotes` | All quotes (paginated) |
-| GET | `/api/v1/quotes/{id}` | Quote by ID |
-| GET | `/api/v1/quotes/search?q=` | Search quotes |
+| GET | `/api/v1/quotes/random?n=10` | N random quotes (1–100) |
+| GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`) |
+| GET | `/api/v1/quotes/{id}` | Quote by UUID |
+| GET | `/api/v1/quotes/search?q=term` | Search by text, source, character, or author |
 | GET | `/api/v1/health` | Health check |
+| GET | `/api/v1/version` | Running version and environment |
+
+All list endpoints accept `type` and `genre` filters. All endpoints return [RFC 7807 ProblemDetails](https://www.rfc-editor.org/rfc/rfc7807) on error, with localised `detail` messages when `lang` is set. The API applies a sliding-window rate limit of 100 requests per minute per IP.
 
 ---
 
-## MCP Support
+## MCP Support (v3 — planned)
 
-Quotinator exposes an MCP-compatible endpoint so AI assistants can use it as a tool. The MCP server is served at `/mcp` and provides the following tools:
-
-- `get_random_quote` — fetch a random movie quote
-- `search_quotes` — search by keyword, movie, or year range
-- `get_quote_by_id` — fetch a specific quote by ID
+MCP support is planned for v3. The endpoint will be served at `/mcp` and will expose tools for fetching and searching quotes. Not yet implemented.
 
 ---
 
-## Web Frontend (Blazor)
+## Web Frontend (v2 — planned)
 
-The management UI is available at the root URL and provides:
-
-- Quote browser with search and filters
-- Add / edit / delete quotes
-- API key management
-- User management (admin only)
-- Server health and stats dashboard
-- MCP feature toggle
+The Blazor Server management UI is planned for v2. Not yet implemented.
 
 ---
 
@@ -137,11 +129,12 @@ The management UI is available at the root URL and provides:
 docker run -d \
   -p 8080:8080 \
   -v ./data:/app/data \
-  -e QUOTINATOR__ApiKey=your-key-here \
   ghcr.io/dutchjafo/quotinator:latest
 ```
 
 A `docker-compose.yml` example is included in the `docker/` directory.
+
+> **Note:** Authentication is not implemented in v1. The API is read-only and requires no credentials.
 
 ---
 
@@ -154,7 +147,7 @@ A `docker-compose.yml` example is included in the `docker/` directory.
 ### Run locally
 
 ```bash
-git clone https://github.com/your-github-username/quotinator.git
+git clone https://github.com/DutchJaFO/Quotinator.git
 cd quotinator
 dotnet run --project src/Quotinator.Api
 ```
@@ -167,8 +160,8 @@ The API will be available at `https://localhost:7028`. See [`docs/running-locall
 
 ### v1 — Core (current focus)
 - [x] Project structure
-- [ ] Quote data seed + deduplication script
-- [ ] REST API (read endpoints)
+- [x] Quote data seed + deduplication script (780 quotes)
+- [x] REST API (read endpoints)
 - [ ] Docker image (amd64 + arm64)
 
 ### v2 — Management

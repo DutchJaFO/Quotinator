@@ -19,7 +19,6 @@ The browser opens automatically to the Scalar UI when the API is started via the
 |---|---|---|
 | `Microsoft.AspNetCore.OpenApi` | 10.0.x | OpenAPI spec generation (built-in to .NET 10) |
 | `Scalar.AspNetCore` | 2.x | Interactive API UI (replaces Swagger UI / Swashbuckle) |
-| `Microsoft.OpenApi` | 2.x | OpenAPI model types (transitive dependency) |
 
 > Swashbuckle is not used. Microsoft replaced it with `Microsoft.AspNetCore.OpenApi` + Scalar for .NET 9+.
 
@@ -55,6 +54,18 @@ app.MapGet("/api/v1/quotes/random", ...)
    .WithTags("Quotes")               // groups the endpoint in the UI
    .WithSummary("Random quote")      // short label shown in the endpoint list
    .WithDescription("Returns one random quote from the dataset.");
+```
+
+### Documenting parameters
+
+Use `[System.ComponentModel.Description]` on handler parameters. ASP.NET Core 10 picks this up natively — the deprecated `WithOpenApi(op => ...)` overload is not used.
+
+```csharp
+private static IResult GetRandom(
+    IQuoteService service,
+    [Description("Number of quotes to return (1–100). Omit for a single random quote.")] string? n = null,
+    [Description("ISO 639-1 language code (e.g. `nl`, `de`).")] string? lang = null)
+{ ... }
 ```
 
 - **`WithTags`** — must match a tag registered in `document.Tags` in the transformer, otherwise it renders without a description
