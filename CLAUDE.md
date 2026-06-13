@@ -226,31 +226,42 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 ---
 
-## Session Handoff Notes
+## Known Issues
 
-Use this section to leave notes for the next session. Clear entries once the work they describe is complete.
+Bugs and defects confirmed in the running add-on or CI. Fix before or alongside the next release.
 
-**Background task not killed by PowerShell** — in this session, a `dotnet run` background task ("Run API and test random endpoint") persisted despite `Stop-Process` calls and had to be manually stopped from the background tasks panel. If this recurs, investigate whether the process is being relaunched by a watcher or VS, and whether there is a more reliable way to stop it.
+| # | Issue | Notes |
+|---|---|---|
+| 1 | **HA ingress bad gateway** | App binds to port 8080 only; HA ingress routes internally to `ingress_port: 8099`. Fix: add `ENV ASPNETCORE_HTTP_PORTS=8080;8099` to `docker/Dockerfile`. |
+| 2 | **DataProtection warnings in container log** | Two `warn:` lines at startup because ASP.NET Data Protection has nowhere to persist keys. Fix for v1: `builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider()` in `Program.cs` and set `Microsoft.AspNetCore.DataProtection` log level to `None` in `appsettings.json`. In v2 switch to `PersistKeysToFileSystem(new DirectoryInfo("/app/data"))`. |
+| 3 | **`addon/config.yaml` description still mentions Blazor UI** | `description` field still says "Self-hosted quote REST API with Blazor management UI." — update to match the corrected `addon/README.md`. |
+| 4 | **`actions/checkout@v4` Node 20 warning in CI** | Warning only — build succeeds. Upstream issue; revisit when a Node 24-native patch is released. See: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/ |
+| 5 | **Background task not killed by PowerShell** | A `dotnet run` background task persisted despite `Stop-Process` and needed manual kill from the background tasks panel. Investigate if it recurs. |
 
-**GHCR package visibility** — the `ghcr.io/dutchjafo/quotinator` package has been set to Public. This is a one-time setting on the package itself; all future image tags inherit it automatically. No action needed on subsequent releases.
+---
 
-**Dependabot not configured** — add `.github/dependabot.yml` to enable automated dependency updates for NuGet packages and GitHub Actions. Keeps dependencies current without manual tracking.
+## Planned Improvements
 
-**Release workflow runs in parallel with CI** — the Release and CI workflows trigger independently on a tag push, with no guarantee CI passes before the Docker image is built and pushed. Consider adding a `workflow_run` trigger to the release workflow so it only starts after CI completes successfully. This prevents a broken build from producing a published release.
+Quality and process improvements that are not bugs but should be done before or during v2.
 
-**`actions/checkout@v4` Node 20 warning** — after updating to `@v4`, GitHub Actions still reports this action targets Node.js 20. The error is a warning only (build succeeds). Investigate whether a specific patch version of `actions/checkout@v4` resolves this, or whether it requires waiting for an upstream release. See: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+| # | Item | Notes |
+|---|---|---|
+| 1 | **HA add-on direct port: default to `null`** | Set host port to `null` in `addon/config.yaml` so it is disabled by default; users who need direct API access (MagicMirror, automations) enable and set it themselves. Ingress covers UI access. |
+| 2 | **HA add-on quality score: AppArmor profile** | Adding a custom AppArmor profile raises the score from 7 to 8 (base 5 + ingress 2 + AppArmor 1). Low risk, good security posture. |
+| 3 | **Release workflow: gate on CI passing** | Release and CI run in parallel — a broken build can produce a published image. Add a `workflow_run` trigger so the release only starts after CI passes. |
+| 4 | **Dependabot** | Add `.github/dependabot.yml` for automated NuGet and GitHub Actions version updates. |
 
-**HA ingress bad gateway** — the app binds to port 8080 only. HA ingress routes to port 8099 (`ingress_port` in `addon/config.yaml`). Fix: add `ENV ASPNETCORE_HTTP_PORTS=8080;8099` to `docker/Dockerfile`. Without this the ingress panel returns a bad gateway error.
+---
 
-**DataProtection warnings in container log** — two `warn:` lines appear at startup because ASP.NET Data Protection has nowhere to persist keys in the container. In v1 (no auth, nothing to protect) silence them with `builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider()` in `Program.cs`. In v2 when auth is added, switch to `PersistKeysToFileSystem(new DirectoryInfo("/app/data"))` so keys survive restarts. Also suppress the log noise in `appsettings.json` by setting `Microsoft.AspNetCore.DataProtection` log level to `None`.
+## Next Milestone: v2 — SQLite Backend
 
-**v2 SQLite backend** — next session starting point.
+Starting point for the next development session.
 
-- Replace `QuoteService` (flat-file JSON) with a SQLite-backed implementation.
-- EF Core is forbidden — use Dapper (preferred, minimal footprint) or raw `Microsoft.Data.Sqlite`.
-- All parameterised query rules from the Architecture Decisions section apply from day one.
-- `IQuoteService` contract stays the same — no API surface changes.
-- Seeding strategy: on first run, if the DB is empty, import from `data/quotes.json` so existing deployments migrate automatically.
-- The `.db` file lives in `/app/data/` (same Docker volume as the JSON file).
-- Add `data/*.db` to `.gitignore` before the first run.
-- Update the phase gates in this file and the roadmap in `README.md` as items are completed.
+- Replace `QuoteService` (flat-file JSON) with a SQLite-backed implementation
+- EF Core is forbidden — use Dapper (preferred, minimal footprint) or raw `Microsoft.Data.Sqlite`
+- All parameterised query rules from the Architecture Decisions section apply from day one
+- `IQuoteService` contract stays the same — no API surface changes
+- Seeding strategy: on first run, if the DB is empty, import from `data/quotes.json` so existing deployments migrate automatically
+- The `.db` file lives in `/app/data/` (same Docker volume as the JSON file)
+- Add `data/*.db` to `.gitignore` before the first run
+- Update the phase gates in this file and the roadmap in `README.md` as items are completed
