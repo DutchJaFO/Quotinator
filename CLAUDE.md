@@ -199,6 +199,27 @@ The actual host, port, and file path are configured in the consumer environment,
 
 ---
 
+## Pre-Push Checklist
+
+Run these checks before pushing any commit or tag. Tests alone do not cover all failure modes — the Docker build in particular is only verified here and in the release workflow.
+
+1. **Tests pass** — `dotnet test`
+2. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
+   ```bash
+   docker build -f docker/Dockerfile -t quotinator:local .
+   ```
+   If you do not have Docker available, note this explicitly and let the reviewer know CI is the first Docker gate.
+3. **Smoke-test the image** (optional but recommended for Dockerfile changes):
+   ```bash
+   docker run --rm -p 8080:8080 quotinator:local
+   curl -s http://localhost:8080/api/v1/health
+   curl -s http://localhost:8080/api/v1/quotes/random
+   ```
+
+> The CI pipeline runs `dotnet publish` and asserts `data/quotes.json` is present in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 2 locally before tagging.
+
+---
+
 ## Session Handoff Notes
 
 Use this section to leave notes for the next session. Clear entries once the work they describe is complete.

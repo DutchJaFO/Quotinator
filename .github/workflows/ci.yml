@@ -34,3 +34,12 @@ jobs:
 
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
+
+      - name: Publish smoke test
+        run: |
+          dotnet publish src/Quotinator.Api/Quotinator.Api.csproj \
+            --configuration Release \
+            --no-restore \
+            --output /tmp/publish
+          test -f /tmp/publish/data/quotes.json || \
+            (echo "ERROR: data/quotes.json missing from publish output" && exit 1)
