@@ -68,11 +68,15 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
-builder.Services.AddSingleton<IQuoteService>(_ =>
+builder.Services.AddSingleton<IQuoteService>(sp =>
 {
     var dataPath = builder.Configuration["Quotinator:DataPath"]
         ?? Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
-    return new QuoteService(dataPath);
+    var logger = sp.GetRequiredService<ILogger<QuoteService>>();
+    logger.LogInformation("Loading quotes from {DataPath} (exists: {Exists})", dataPath, File.Exists(dataPath));
+    var service = new QuoteService(dataPath);
+    logger.LogInformation("Loaded {Count} quotes", service.GetAll(1, 1).TotalCount);
+    return service;
 });
 builder.Services.AddI18nText();
 
