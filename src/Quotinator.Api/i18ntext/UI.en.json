@@ -1,0 +1,12 @@
+{
+  "AppTagline": "A self-hosted movie quote REST API.",
+  "RestApiHeading": "REST API",
+  "RestApiDescription": "The Quotinator API serves real, verified movie quotes over a clean REST interface.",
+  "EndpointColumn": "Endpoint",
+  "UrlColumn": "URL",
+  "OpenApiUiLabel": "OpenAPI UI (Scalar)",
+  "OpenApiSpecLabel": "OpenAPI Spec",
+  "HealthCheckLabel": "Health check",
+  "AboutHeading": "About",
+  "HomeNavLabel": "Home"
+}

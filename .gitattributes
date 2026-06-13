@@ -1,0 +1,28 @@
+# Default — let git decide, normalise to LF in the repo
+* text=auto eol=lf
+
+# Windows source files — CRLF on checkout
+*.cs        text eol=crlf
+*.razor     text eol=crlf
+*.csproj    text eol=crlf
+*.sln       text eol=crlf
+*.slnx      text eol=crlf
+*.json      text eol=crlf
+*.md        text eol=crlf
+*.css       text eol=crlf
+*.js        text eol=crlf
+*.html      text eol=crlf
+
+# Docker and shell — must stay LF
+Dockerfile* text eol=lf
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Binary — no line ending conversion
+*.png       binary
+*.ico       binary
+*.jpg       binary
+*.woff2     binary
+*.woff      binary
+*.ttf       binary

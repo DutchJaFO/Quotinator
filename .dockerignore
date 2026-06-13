@@ -1,0 +1,14 @@
+**/.git
+**/.vs
+**/bin
+**/obj
+**/*.user
+**/TestResults
+
+# Data files are mounted at runtime, not baked into the image
+data/
+
+# Docs and scripts are not needed in the image
+docs/
+scripts/
+docker/

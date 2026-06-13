@@ -1,0 +1,68 @@
+@page "/"
+@using Microsoft.AspNetCore.Hosting
+@using Quotinator.Api.Services
+@inject IWebHostEnvironment Env
+@inject IVersionService VersionService
+@inject I18nText I18nText
+
+<PageTitle>Quotinator</PageTitle>
+
+<h1>Quotinator</h1>
+<p class="lead">@Text.AppTagline</p>
+
+<hr />
+
+<h2>@Text.RestApiHeading</h2>
+<p>@Text.RestApiDescription</p>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>@Text.EndpointColumn</th>
+            <th>@Text.UrlColumn</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Env.IsDevelopment())
+        {
+            <tr>
+                <td>@Text.OpenApiUiLabel</td>
+                <td><a href="/scalar/v1" target="_blank">/scalar/v1</a></td>
+            </tr>
+            <tr>
+                <td>@Text.OpenApiSpecLabel</td>
+                <td><a href="/openapi/v1.json" target="_blank">/openapi/v1.json</a></td>
+            </tr>
+        }
+        <tr>
+            <td>@Text.HealthCheckLabel</td>
+            <td><a href="/api/v1/health" target="_blank">/api/v1/health</a></td>
+        </tr>
+    </tbody>
+</table>
+
+<hr />
+
+<h2>@Text.AboutHeading</h2>
+<p>
+    Quotinator is built with <strong>ASP.NET Core (.NET 10)</strong> and deployed as a Docker container
+    targeting <code>linux/amd64</code> and <code>linux/arm64</code>.
+</p>
+<ul>
+    <li><strong>v1</strong> — REST API with read endpoints (current)</li>
+    <li><strong>v2</strong> — Authenticated write endpoints, SQLite backend, management UI</li>
+    <li><strong>v3</strong> — MCP server, Home Assistant add-on</li>
+</ul>
+
+<p class="text-muted mt-4">
+    <small>Version @VersionService.Version &mdash; @Env.EnvironmentName</small>
+</p>
+
+@code {
+    private Quotinator.Api.I18nText.UI Text = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
+    }
+}

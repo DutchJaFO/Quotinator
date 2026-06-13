@@ -1,0 +1,12 @@
+{
+  "AppTagline": "Een zelf-gehoste filmcitaten-REST-API.",
+  "RestApiHeading": "REST-API",
+  "RestApiDescription": "De Quotinator-API levert echte, geverifieerde filmcitaten via een overzichtelijke REST-interface.",
+  "EndpointColumn": "Eindpunt",
+  "UrlColumn": "URL",
+  "OpenApiUiLabel": "OpenAPI-interface (Scalar)",
+  "OpenApiSpecLabel": "OpenAPI-specificatie",
+  "HealthCheckLabel": "Statuscontrole",
+  "AboutHeading": "Over",
+  "HomeNavLabel": "Startpagina"
+}

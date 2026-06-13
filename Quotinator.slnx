@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Quotinator.Api/Quotinator.Api.csproj" />
+    <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
+    <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
+  </Folder>
+</Solution>
