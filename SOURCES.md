@@ -1,6 +1,38 @@
 # Sources & Attribution
 
-The `data/quotes.json` dataset used in Quotinator is seeded from the following open-source projects and extended with manually curated entries. All seed sources are MIT licensed. Data has been normalised to the Quotinator quote schema and deduplicated.
+Attribution for all external resources used in this project: quote datasets and NuGet packages.
+
+---
+
+## NuGet packages
+
+### Production
+
+| Package | Version | License | Purpose | Source |
+|---|---|---|---|---|
+| `Microsoft.AspNetCore.OpenApi` | 10.0.7 | MIT | OpenAPI spec generation (built-in to .NET 10) | [NuGet](https://www.nuget.org/packages/Microsoft.AspNetCore.OpenApi) · [GitHub](https://github.com/dotnet/aspnetcore) |
+| `Scalar.AspNetCore` | 2.16.3 | MIT | Interactive OpenAPI UI (replaces Swagger UI) | [NuGet](https://www.nuget.org/packages/Scalar.AspNetCore) · [GitHub](https://github.com/scalar/scalar) |
+| `Toolbelt.Blazor.I18nText` | 14.1.1 | MIT | Blazor UI localisation (en, en-GB, de, nl) | [NuGet](https://www.nuget.org/packages/Toolbelt.Blazor.I18nText) · [GitHub](https://github.com/jsakamoto/Toolbelt.Blazor.I18nText) |
+
+### Development / tooling
+
+| Package | Version | License | Purpose | Source |
+|---|---|---|---|---|
+| `MSTest` | 4.0.2 | MIT | Unit and integration test framework | [NuGet](https://www.nuget.org/packages/MSTest) · [GitHub](https://github.com/microsoft/testfx) |
+| `Microsoft.AspNetCore.Mvc.Testing` | 10.0.0 | MIT | `WebApplicationFactory` for endpoint integration tests | [NuGet](https://www.nuget.org/packages/Microsoft.AspNetCore.Mvc.Testing) · [GitHub](https://github.com/dotnet/aspnetcore) |
+| `Microsoft.VisualStudio.Azure.Containers.Tools.Targets` | 1.23.0 | MIT | Visual Studio Docker tooling integration | [NuGet](https://www.nuget.org/packages/Microsoft.VisualStudio.Azure.Containers.Tools.Targets) |
+
+### Seed script (`scripts/seed.csx`)
+
+| Tool | Version | License | Purpose | Source |
+|---|---|---|---|---|
+| `dotnet-script` | 2.0.1 | MIT | Run `.csx` C# scripts without a project file | [NuGet](https://www.nuget.org/packages/dotnet-script) · [GitHub](https://github.com/dotnet-script/dotnet-script) |
+
+---
+
+## Quote datasets
+
+The `data/quotes.json` dataset is seeded from the following open-source projects and extended with manually curated entries. All seed sources are MIT licensed. Data has been normalised to the Quotinator quote schema and deduplicated.
 
 ---
 
@@ -19,7 +51,7 @@ The `data/quotes.json` dataset used in Quotinator is seeded from the following o
 - **Repository:** https://github.com/NikhilNamal17/popular-movie-quotes
 - **Author:** Nikhil N Namal
 - **License:** MIT
-- **Contents:** Popular movie, TV, and anime quotes (~500 entries)
+- **Contents:** Popular movie, TV, and anime quotes (~732 entries)
 - **npm:** https://www.npmjs.com/package/popular-movie-quotes
 
 ---
