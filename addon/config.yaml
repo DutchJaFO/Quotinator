@@ -1,5 +1,5 @@
 name: Quotinator
-version: "1.0.2"
+version: "1.0.3"
 slug: quotinator
 description: Self-hosted quote REST API with Blazor management UI.
 url: https://github.com/DutchJaFO/Quotinator

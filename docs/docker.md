@@ -50,7 +50,7 @@ You should see system information. If you see a connection error, Docker Desktop
 |---|---|
 | `docker/Dockerfile` | Multi-stage build for the combined API + UI |
 | `docker/docker-compose.yml` | Local development and testing |
-| `.dockerignore` | Excludes `bin/`, `obj/`, `data/`, docs, scripts from the build context |
+| `.dockerignore` | Excludes `bin/`, `obj/`, docs, scripts from the build context. `data/` is intentionally included so `dotnet publish` can copy `quotes.json` into the image. |
 
 ---
 

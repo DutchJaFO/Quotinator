@@ -13,11 +13,10 @@ HA discovers add-ons by searching recursively for `config.yaml` files. No separa
 | `repository.yaml` | Repository metadata (name, URL, maintainer) |
 | `addon/config.yaml` | Add-on manifest — name, version, arch, ports, ingress |
 | `addon/DOCS.md` | User-facing documentation shown in the HA UI |
-| `addon/icon.png` | Add-on icon (128×128 PNG, not yet created) |
-| `addon/logo.png` | Add-on logo (250×100 PNG, not yet created) |
+| `addon/icon.png` | Add-on icon (128×128 PNG — currently GitHub avatar placeholder) |
+| `addon/logo.png` | Add-on logo (250×100 PNG — currently GitHub avatar placeholder) |
 | `addon/README.md` | Store listing — short description shown in the add-on store |
-| `addon/DOCS.md` | Full documentation shown on the add-on detail page |
-| `addon/CHANGELOG.md` | Version history (Keep a Changelog format) |
+| `addon/CHANGELOG.md` | Add-on version history (Keep a Changelog format) |
 
 ---
 
@@ -31,6 +30,16 @@ Users install the add-on by adding the repository URL in HA:
 
 ---
 
+## GHCR package visibility
+
+The `ghcr.io/dutchjafo/quotinator` package **must be set to Public** in GitHub package settings. The HA Supervisor pulls the image without credentials — a private package returns 401 and the add-on fails to install silently.
+
+To change visibility: GitHub → your profile → **Packages** → **quotinator** → **Package settings** → **Change visibility → Public**.
+
+This is a one-time manual step not controlled by code or CI.
+
+---
+
 ## Ports
 
 The container listens on two ports:
@@ -40,15 +49,15 @@ The container listens on two ports:
 | `8080` | Direct access — user can override the host-side port in HA if `8080` is taken |
 | `8099` | Home Assistant ingress — dedicated port for the HA sidebar integration |
 
-Both ports are configured via `ASPNETCORE_HTTP_PORTS=8080;8099` in the container.
-
 ---
 
 ## Ingress
 
-Ingress embeds the Blazor UI directly into the HA sidebar. The HA supervisor handles URL routing and authentication automatically — no port forwarding or reverse proxy configuration is needed.
+Ingress embeds the UI directly into the HA sidebar. The HA supervisor handles URL routing and authentication automatically — no port forwarding or reverse proxy configuration is needed.
 
 The ingress port (`8099`) is separate from the direct access port (`8080`) so both can be used simultaneously.
+
+> The Blazor management UI is planned for v2. In v1 the ingress panel shows a placeholder page; the REST API is fully functional via direct access on port `8080`.
 
 ---
 
@@ -60,16 +69,12 @@ Quotes are stored in `/data/quotes.json` inside the add-on data directory, which
 
 ## Releasing a new version
 
-The `version` field in `addon/config.yaml` must match the Docker image tag published to `ghcr.io`. When releasing:
+The `version` field in `addon/config.yaml` must match the Docker image tag published to GHCR. The HA Supervisor appends this value as the image tag when pulling — a mismatch causes a 404 or 401 and the install fails.
 
-1. Update `version` in `addon/config.yaml` to match the new tag (e.g. `1.0.0`)
-2. Tag and push: `git tag v1.0.0 && git push origin v1.0.0`
-3. The release workflow builds and pushes `ghcr.io/dutchjafo/quotinator:1.0.0`
-4. HA users will see the update available in the add-on store
+See [`ci-cd.md`](ci-cd.md) for the full release process and the complete list of files to update before tagging.
 
 ---
 
 ## Pending
 
-- `addon/icon.png` — 128×128 PNG, currently a placeholder (GitHub avatar); replace with final artwork before publishing to the HA store
-- `addon/logo.png` — 250×100 PNG, currently a placeholder (GitHub avatar); replace with final artwork before publishing to the HA store
+- `addon/icon.png` and `addon/logo.png` — currently use the GitHub avatar as a placeholder; replace with final artwork before publishing to the official HA add-on store.

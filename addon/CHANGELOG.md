@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-06-14
+
+### Fixed
+- Store listing and documentation updated to accurately reflect v1 scope (REST API only; Blazor management UI is planned for v2)
+- GHCR package visibility requirement documented
+
 ## [1.0.2] - 2026-06-14
 
 ### Fixed

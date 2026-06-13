@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-06-14
+
+### Fixed
+- Documentation corrections: CI/CD steps updated to reflect publish smoke test and GitHub Release creation; Home Assistant docs updated with GHCR visibility requirement; Docker docs corrected for `data/` build context inclusion
+- Add-on store listing and documentation corrected — Blazor management UI is planned for v2, not present in v1
+- Add-on `config.yaml` version kept in sync with API version going forward
+
 ## [1.0.2] - 2026-06-14
 
 ### Fixed
@@ -36,7 +43,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - GitHub Actions CI pipeline: build, test, and publish smoke test
 - GitHub Actions release pipeline: builds and pushes Docker image to GHCR on version tags
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/DutchJaFO/Quotinator/releases/tag/v1.0.0

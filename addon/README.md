@@ -1,16 +1,16 @@
 # Quotinator
 
-A self-hosted movie quote REST API with a Blazor management UI. Serves real, verified movie quotes from a curated dataset — no AI-generated quotes.
+A self-hosted quote REST API. Serves real, verified quotes from films, books, television, and famous people — no AI-generated quotes.
 
 ## Features
 
-- REST API with random, search, and lookup endpoints
-- Blazor web UI accessible via Home Assistant ingress or direct access
-- Quotes persisted in a local JSON dataset that survives updates
+- REST API with random, search, paginated, and lookup endpoints
+- 780 curated quotes seeded from MIT-licensed sources
+- Optional language parameter — returns translated quote when available, falls back to original
 - Multi-arch image (amd64 + aarch64)
 
 ## Usage
 
-After installation, open the add-on UI from the Home Assistant sidebar. The REST API is available at `http://<ha-host>:8080/api/v1/`.
+After installation, the REST API is available at `http://<ha-host>:8080/api/v1/`.
 
-See the **Documentation** tab for full configuration options.
+See the **Documentation** tab for endpoints and configuration options.
