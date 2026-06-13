@@ -226,6 +226,10 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 Use this section to leave notes for the next session. Clear entries once the work they describe is complete.
 
+**Background task not killed by PowerShell** — in this session, a `dotnet run` background task ("Run API and test random endpoint") persisted despite `Stop-Process` calls and had to be manually stopped from the background tasks panel. If this recurs, investigate whether the process is being relaunched by a watcher or VS, and whether there is a more reliable way to stop it.
+
+**`actions/checkout@v4` Node 20 warning** — after updating to `@v4`, GitHub Actions still reports this action targets Node.js 20. The error is a warning only (build succeeds). Investigate whether a specific patch version of `actions/checkout@v4` resolves this, or whether it requires waiting for an upstream release. See: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+
 **v2 SQLite backend** — next session starting point.
 
 - Replace `QuoteService` (flat-file JSON) with a SQLite-backed implementation.
