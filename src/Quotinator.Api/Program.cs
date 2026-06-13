@@ -68,16 +68,10 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
-builder.Services.AddSingleton<IQuoteService>(sp =>
-{
-    var dataPath = builder.Configuration["Quotinator:DataPath"]
-        ?? Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
-    var logger = sp.GetRequiredService<ILogger<QuoteService>>();
-    logger.LogInformation("Loading quotes from {DataPath} (exists: {Exists})", dataPath, File.Exists(dataPath));
-    var service = new QuoteService(dataPath);
-    logger.LogInformation("Loaded {Count} quotes", service.GetAll(1, 1).TotalCount);
-    return service;
-});
+var dataPath = builder.Configuration["Quotinator:DataPath"]
+    ?? Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
+
+builder.Services.AddSingleton<IQuoteService>(_ => new QuoteService(dataPath));
 builder.Services.AddI18nText();
 
 builder.Services.Configure<RequestLocalizationOptions>(options =>
@@ -92,6 +86,14 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var app = builder.Build();
+
+// Eager init — resolves the path and loads quotes before the first request.
+// The count appears in both the application log and the VS Debug output window.
+var quoteService = app.Services.GetRequiredService<IQuoteService>();
+var quoteCount   = quoteService.GetAll(1, 1).TotalCount;
+Console.WriteLine($"[Quotinator] Data: {dataPath}");
+Console.WriteLine($"[Quotinator] Quotes loaded: {quoteCount}");
+app.Logger.LogInformation("Loaded {Count} quotes from {Path}", quoteCount, dataPath);
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
