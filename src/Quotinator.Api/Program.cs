@@ -68,7 +68,12 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
-builder.Services.AddSingleton<IQuoteService, QuoteService>();
+builder.Services.AddSingleton<IQuoteService>(_ =>
+{
+    var dataPath = builder.Configuration["Quotinator:DataPath"]
+        ?? Path.Combine(builder.Environment.ContentRootPath, "data", "quotes.json");
+    return new QuoteService(dataPath);
+});
 builder.Services.AddI18nText();
 
 builder.Services.Configure<RequestLocalizationOptions>(options =>

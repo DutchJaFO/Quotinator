@@ -22,9 +22,11 @@ WORKDIR /app
 # 8080 — direct access; 8099 — Home Assistant ingress
 EXPOSE 8080 8099
 
-# Mount quotes.json here at runtime
-VOLUME ["/app/data"]
-
 COPY --from=build /app/publish .
+
+# Bake the committed dataset into the image.
+# Mount a volume at /app/data to override with a custom dataset at runtime.
+COPY data/quotes.json /app/data/quotes.json
+VOLUME ["/app/data"]
 
 ENTRYPOINT ["dotnet", "Quotinator.Api.dll"]
