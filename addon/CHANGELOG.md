@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-14
+
+### Fixed
+- Docker image tag corrected — add-on version now matches published image tag on GHCR
+
 ## [1.0.0-beta.1] - 2026-06-13
 
 ### Added
