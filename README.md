@@ -175,6 +175,13 @@ The API will be available at `https://localhost:7028`. See [`docs/running-locall
 - [ ] MCP server endpoint
 - [x] Home Assistant add-on manifest and ingress
 
+### Optional / unversioned
+Features that may be added in any future version, or not at all. See [`docs/data-import.md`](docs/data-import.md) for detail on the import strategy variants.
+
+- [ ] Docker build-time seeding (data baked in at image build, no committed file needed)
+- [ ] Container startup seeding (data fetched fresh on first run)
+- [ ] Scheduled or webhook-triggered seed refresh
+
 ---
 
 ## License
