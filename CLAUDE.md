@@ -206,19 +206,23 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
 3. **Changelog updated** — add an entry to `CHANGELOG.md` under `[Unreleased]` for any user-visible change; move entries to a versioned section when tagging a release
-4. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
+4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
+   - `src/Quotinator.Api/Quotinator.Api.csproj` → `<Version>`
+   - `addon/config.yaml` → `version`
+   - `CHANGELOG.md` and `addon/CHANGELOG.md` → versioned section heading
+5. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
    ```bash
    docker build -f docker/Dockerfile -t quotinator:local .
    ```
    If you do not have Docker available, note this explicitly and let the reviewer know CI is the first Docker gate.
-4. **Smoke-test the image** (optional but recommended for Dockerfile changes):
+6. **Smoke-test the image** (optional but recommended for Dockerfile changes):
    ```bash
    docker run --rm -p 8080:8080 quotinator:local
    curl -s http://localhost:8080/api/v1/health
    curl -s http://localhost:8080/api/v1/quotes/random
    ```
 
-> The CI pipeline runs `dotnet publish` and asserts `data/quotes.json` is present in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 2 locally before tagging.
+> The CI pipeline runs `dotnet publish` and asserts `data/quotes.json` is present in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ---
 
@@ -228,7 +232,7 @@ Use this section to leave notes for the next session. Clear entries once the wor
 
 **Background task not killed by PowerShell** — in this session, a `dotnet run` background task ("Run API and test random endpoint") persisted despite `Stop-Process` calls and had to be manually stopped from the background tasks panel. If this recurs, investigate whether the process is being relaunched by a watcher or VS, and whether there is a more reliable way to stop it.
 
-**GHCR package must be public for HA add-on installs** — the `ghcr.io/dutchjafo/quotinator` package on GitHub must be set to **Public** (GitHub → Packages → quotinator → Package settings → Change visibility). The Home Assistant Supervisor pulls the image without credentials; a private package returns 401 and the add-on fails to install. This is a one-time manual step in GitHub settings — it is not controlled by code or CI.
+**GHCR package must be set to Public — ACTION REQUIRED** — the `ghcr.io/dutchjafo/quotinator` package is currently private. The Home Assistant Supervisor pulls without credentials and gets a 401, causing the add-on install to fail. Go to: GitHub → your profile → Packages → quotinator → Package settings → Change visibility → Public. One-time manual step, not controlled by code or CI.
 
 **Dependabot not configured** — add `.github/dependabot.yml` to enable automated dependency updates for NuGet packages and GitHub Actions. Keeps dependencies current without manual tracking.
 
