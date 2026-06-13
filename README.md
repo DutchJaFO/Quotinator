@@ -158,18 +158,18 @@ The API will be available at `https://localhost:7028`. See [`docs/running-locall
 
 ## Roadmap
 
-### v1 — Core (current focus)
+### v1 — Core ✅ (1.0.0)
 - [x] Project structure
 - [x] Quote data seed + deduplication script (780 quotes)
 - [x] REST API (read endpoints)
-- [ ] Docker image (amd64 + arm64)
+- [x] Docker image (amd64 + arm64)
 
-### v2 — Management
+### v2 — SQLite + Management (next)
+- [ ] SQLite backend (replaces flat-file JSON)
 - [ ] Authenticated write endpoints
 - [ ] Blazor management UI (CRUD)
 - [ ] API key management
 - [ ] User management
-- [ ] SQLite backend (replace flat-file)
 
 ### v3 — Integrations
 - [ ] MCP server endpoint

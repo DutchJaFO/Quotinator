@@ -40,15 +40,25 @@ Quotes come from **films, television, books, and famous people**. All quotes are
 
 ## Current Development Phase
 
-**Phase: v1 — Core API**
+**Phase: v1 — COMPLETE (tagged 1.0.0)**
 
-Focus exclusively on getting the REST API working with the quote dataset. Do not implement auth, MCP, or the Blazor UI until the core API phase is complete.
+v1 phase gates — all done:
+- [x] `data/quotes.json` seeded and deduplicated from both source datasets (780 quotes)
+- [x] REST read endpoints working (`/random`, `/random?n=`, `/`, `/{id}`, `/search`)
+- [x] `/api/v1/health` endpoint
+- [x] Docker image builds and runs correctly on amd64 and arm64
 
-Phase gates (must be done before moving to v2):
-- [ ] `data/quotes.json` seeded and deduplicated from both source datasets
-- [ ] REST read endpoints working (`/random`, `/random?n=`, `/`, `/{id}`, `/search`)
-- [ ] `/api/v1/health` endpoint
-- [ ] Docker image builds and runs correctly on amd64 and arm64
+**Phase: v2 — SQLite backend (next)**
+
+Focus: replace flat-file JSON with a SQLite database. Keep the REST API surface unchanged. No auth, no Blazor UI, no write endpoints yet — just the persistence layer swap.
+
+Phase gates (must be done before moving to v2 write endpoints):
+- [ ] SQLite database created at startup with the correct schema (EF Core forbidden — use Dapper or raw ADO.NET)
+- [ ] Migration from `data/quotes.json` → SQLite on first run (or a seeder that imports the JSON)
+- [ ] `IQuoteService` implementation backed by SQLite replacing `QuoteService` (flat-file)
+- [ ] All v1 read endpoints behave identically to v1 flat-file (existing tests pass unchanged)
+- [ ] Docker volume at `/app/data` persists the `.db` file across restarts
+- [ ] `.gitignore` excludes `data/*.db`
 
 ---
 
@@ -193,4 +203,13 @@ The actual host, port, and file path are configured in the consumer environment,
 
 Use this section to leave notes for the next session. Clear entries once the work they describe is complete.
 
-*(empty — project just started)*
+**v2 SQLite backend** — next session starting point.
+
+- Replace `QuoteService` (flat-file JSON) with a SQLite-backed implementation.
+- EF Core is forbidden — use Dapper (preferred, minimal footprint) or raw `Microsoft.Data.Sqlite`.
+- All parameterised query rules from the Architecture Decisions section apply from day one.
+- `IQuoteService` contract stays the same — no API surface changes.
+- Seeding strategy: on first run, if the DB is empty, import from `data/quotes.json` so existing deployments migrate automatically.
+- The `.db` file lives in `/app/data/` (same Docker volume as the JSON file).
+- Add `data/*.db` to `.gitignore` before the first run.
+- Update the phase gates in this file and the roadmap in `README.md` as items are completed.
