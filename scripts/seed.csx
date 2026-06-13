@@ -1,166 +1,218 @@
 #!/usr/bin/env dotnet-script
 #nullable enable
-// Seed script — merges two MIT-licensed movie quote datasets into data/quotes.json.
+// Quotinator seed script
+// Reads sources.json, downloads each source, normalises to the canonical schema,
+// deduplicates, and writes data/quotes.json.
 //
-// Sources:
-//   vilaboim  — array of "\"Quote text.\" Movie Title" strings
-//   NikhilNamal17 — array of { quote, movie, type, year } objects
+// Usage:
+//   dotnet-script scripts/seed.csx
 //
-// Run: dotnet script scripts/seed.csx
-//      (requires: dotnet tool install -g dotnet-script)
+// Options:
+//   --dry-run    Print stats without writing data/quotes.json
+//   --no-fetch   Use cached files in scripts/cache/ instead of downloading
+//
+// Adding a new source: see scripts/SOURCES.md
 
 #r "nuget: System.Text.Json, 8.0.0"
 
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
-// ── Paths ────────────────────────────────────────────────────────────────────
+// ── CLI flags ─────────────────────────────────────────────────────────────────
 
-var repoRoot   = Path.GetFullPath(Path.Combine(Args.Count > 0 ? Args[0] : ".", ".."));
-var vilaboim   = Path.Combine(repoRoot, "scripts", "sources", "vilaboim.json");
-var nikhil     = Path.Combine(repoRoot, "scripts", "sources", "nikhil.json");
-var outputPath = Path.Combine(repoRoot, "data", "quotes.json");
+var dryRun   = Args.Contains("--dry-run");
+var noFetch  = Args.Contains("--no-fetch");
 
-if (!File.Exists(vilaboim) || !File.Exists(nikhil))
-{
-    Console.Error.WriteLine($"""
-        Source files not found. Download them first:
+// ── Paths ─────────────────────────────────────────────────────────────────────
 
-          curl -o scripts/sources/vilaboim.json \
-               https://raw.githubusercontent.com/vilaboim/movie-quotes/master/movie-quotes.json
+// Run from the repo root: dotnet-script scripts/seed.csx
+var repoRoot    = Directory.GetCurrentDirectory();
+var sourcesJson = Path.Combine(repoRoot, "scripts", "sources.json");
+var cacheDir    = Path.Combine(repoRoot, "scripts", "cache");
+var outputPath  = Path.Combine(repoRoot, "data", "quotes.json");
 
-          curl -o scripts/sources/nikhil.json \
-               https://raw.githubusercontent.com/NikhilNamal17/popular-movie-quotes/master/data/data.json
-        """);
-    Environment.Exit(1);
-}
+Directory.CreateDirectory(cacheDir);
 
-// ── Models ───────────────────────────────────────────────────────────────────
+// ── Source config ─────────────────────────────────────────────────────────────
 
-record SeedQuote(
-    string Id,
-    string Quote,
-    string Source,
-    string? Date,
-    string Type,
-    string OriginalLanguage = "en");
+var sources = JsonNode.Parse(File.ReadAllText(sourcesJson))!.AsArray();
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Deterministic UUID v5-style: SHA-256 of normalised content → first 16 bytes → UUID.
+static string Normalise(string s) =>
+    Regex.Replace(s.Trim().ToLowerInvariant(), @"\s+", " ");
+
+// Deterministic UUID: SHA-256 of normalised quote|source → first 16 bytes.
 static string StableId(string quote, string source)
 {
     var key  = $"{Normalise(quote)}|{Normalise(source)}";
     var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-    // Force version 4 bits for UUID format validity (cosmetic — still content-derived).
     hash[6] = (byte)((hash[6] & 0x0f) | 0x40);
     hash[8] = (byte)((hash[8] & 0x3f) | 0x80);
     return new Guid(hash[..16]).ToString();
 }
 
-static string Normalise(string s) =>
-    Regex.Replace(s.Trim().ToLowerInvariant(), @"\s+", " ");
-
-// ── Parse vilaboim ───────────────────────────────────────────────────────────
-// Format: [ "\"Quote text.\" Movie Title", ... ]
-
-var vilaboims = new List<SeedQuote>();
-var vilaboiRaw = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(vilaboim))!;
-
-foreach (var raw in vilaboiRaw)
+static string? CleanYear(JsonNode? yearNode)
 {
-    // Split on the closing quote-mark: "«text»" «source»
-    var match = Regex.Match(raw, @"^""(.+?)""\s+(.+)$");
-    if (!match.Success)
+    if (yearNode is null) return null;
+    if (yearNode.GetValueKind() == JsonValueKind.Number)
     {
-        Console.Error.WriteLine($"[vilaboim] skipping unparseable: {raw}");
-        continue;
+        var y = yearNode.GetValue<int>();
+        return y is > 1900 and < 2100 ? y.ToString() : null;
+    }
+    var s = yearNode.GetValue<string>()?.Trim();
+    return int.TryParse(s, out var parsed) && parsed is > 1900 and < 2100 ? parsed.ToString() : null;
+}
+
+static string CanonicalType(string? raw, string defaultType) => raw?.ToLowerInvariant() switch
+{
+    "movie"  => "movie",
+    "tv"     => "tv",
+    "anime"  => "anime",
+    "book"   => "book",
+    "person" => "person",
+    _        => defaultType
+};
+
+// ── Adapters ──────────────────────────────────────────────────────────────────
+
+// quoted-string: [ "\"Quote text.\" Movie Title", ... ]
+static List<(string Quote, string Source, string? Date, string Type)>
+    ParseQuotedString(JsonNode root, string defaultType)
+{
+    var results = new List<(string, string, string?, string)>();
+    foreach (var item in root.AsArray())
+    {
+        var raw = item?.GetValue<string>();
+        if (raw is null) continue;
+        var m = Regex.Match(raw, @"^""(.+?)""\s+(.+)$");
+        if (!m.Success)
+        {
+            Console.Error.WriteLine($"  [skip] unparseable: {raw}");
+            continue;
+        }
+        results.Add((m.Groups[1].Value.Trim(), m.Groups[2].Value.Trim(), null, defaultType));
+    }
+    return results;
+}
+
+// object-array: [ { "quote": "...", "movie": "...", ... }, ... ]
+// Fields are remapped via sources.json fieldMap.
+static List<(string Quote, string Source, string? Date, string Type)>
+    ParseObjectArray(JsonNode root, JsonNode fieldMap, string defaultType)
+{
+    var results = new List<(string, string, string?, string)>();
+    var qField = fieldMap["quote"]?.GetValue<string>()  ?? "quote";
+    var sField = fieldMap["source"]?.GetValue<string>() ?? "source";
+    var tField = fieldMap["type"]?.GetValue<string>()   ?? "type";
+    var yField = fieldMap["year"]?.GetValue<string>()   ?? "year";
+
+    foreach (var item in root.AsArray())
+    {
+        if (item is null) continue;
+        var quote  = item[qField]?.GetValue<string>()?.Trim();
+        var source = item[sField]?.GetValue<string>()?.Trim();
+        if (string.IsNullOrWhiteSpace(quote) || string.IsNullOrWhiteSpace(source)) continue;
+
+        var type = CanonicalType(item[tField]?.GetValue<string>(), defaultType);
+        var date = CleanYear(item[yField]);
+        results.Add((quote, source, date, type));
+    }
+    return results;
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+var allQuotes = new List<(string Quote, string Source, string? Date, string Type)>();
+
+var http = new HttpClient();
+http.DefaultRequestHeaders.Add("User-Agent", "Quotinator-seed/1.0");
+
+foreach (var src in sources)
+{
+    var name        = src!["name"]!.GetValue<string>();
+    var url         = src["url"]!.GetValue<string>();
+    var format      = src["format"]!.GetValue<string>();
+    var defaultType = src["defaultType"]?.GetValue<string>() ?? "movie";
+    var cacheFile   = Path.Combine(cacheDir, $"{name.Replace("/", "_")}.json");
+
+    Console.WriteLine($"\n[{name}]");
+
+    string json;
+    if (noFetch && File.Exists(cacheFile))
+    {
+        Console.WriteLine($"  using cache: {cacheFile}");
+        json = File.ReadAllText(cacheFile);
+    }
+    else
+    {
+        Console.Write($"  fetching {url} ... ");
+        json = http.GetStringAsync(url).GetAwaiter().GetResult();
+        File.WriteAllText(cacheFile, json);
+        Console.WriteLine("done");
     }
 
-    var quote  = match.Groups[1].Value.Trim();
-    var source = match.Groups[2].Value.Trim();
-    vilaboims.Add(new SeedQuote(StableId(quote, source), quote, source, null, "movie"));
-}
-
-Console.WriteLine($"[vilaboim]  parsed {vilaboims.Count} quotes");
-
-// ── Parse NikhilNamal17 ──────────────────────────────────────────────────────
-// Format: [ { "quote": "...", "movie": "...", "type": "movie", "year": 1984 }, ... ]
-
-var nikhils = new List<SeedQuote>();
-var nikhilDoc = JsonDocument.Parse(File.ReadAllText(nikhil));
-
-foreach (var el in nikhilDoc.RootElement.EnumerateArray())
-{
-    var quote  = el.TryGetProperty("quote",  out var q) ? q.GetString()?.Trim() : null;
-    var source = el.TryGetProperty("movie",  out var m) ? m.GetString()?.Trim() : null;
-    var type   = el.TryGetProperty("type",   out var t) ? t.GetString()?.Trim() : null;
-    var year   = el.TryGetProperty("year",   out var y) && y.ValueKind == JsonValueKind.Number
-                    ? (int?)y.GetInt32() : null;
-
-    if (string.IsNullOrWhiteSpace(quote) || string.IsNullOrWhiteSpace(source))
-        continue;
-
-    // Clamp obviously wrong years (the dataset has year=1890 for Star Wars etc.)
-    string? date = year is > 1900 and < 2100 ? year.ToString() : null;
-
-    // Normalise type to our canonical set
-    var canonicalType = (type?.ToLowerInvariant()) switch
+    var root = JsonNode.Parse(json)!;
+    var parsed = format switch
     {
-        "movie"  => "movie",
-        "tv"     => "tv",
-        "anime"  => "anime",
-        "book"   => "book",
-        "person" => "person",
-        _        => "movie"
+        "quoted-string" => ParseQuotedString(root, defaultType),
+        "object-array"  => ParseObjectArray(root, src["fieldMap"]!, defaultType),
+        _               => throw new InvalidOperationException($"Unknown format: {format}")
     };
 
-    nikhils.Add(new SeedQuote(StableId(quote, source), quote, source, date, canonicalType));
+    Console.WriteLine($"  parsed {parsed.Count} quotes");
+    allQuotes.AddRange(parsed);
 }
 
-Console.WriteLine($"[nikhil]    parsed {nikhils.Count} quotes");
+http.Dispose();
 
 // ── Merge and dedup ───────────────────────────────────────────────────────────
-// Deduplicate on normalised quote text — keep the richer record (nikhil has year/type).
-// NikhilNamal17 goes first so its richer metadata wins when both have the same quote.
 
-var seen = new HashSet<string>();
-var merged = new List<SeedQuote>();
+Console.WriteLine($"\n[merge]");
+Console.WriteLine($"  total before dedup: {allQuotes.Count}");
 
-foreach (var q in nikhils.Concat(vilaboims))
+var seen   = new HashSet<string>();
+var merged = new List<(string Quote, string Source, string? Date, string Type)>();
+
+foreach (var q in allQuotes)
 {
-    var key = Normalise(q.Quote);
-    if (seen.Add(key))
+    if (seen.Add(Normalise(q.Quote)))
         merged.Add(q);
 }
 
-Console.WriteLine($"[merge]     {merged.Count} unique quotes ({nikhils.Count + vilaboims.Count - merged.Count} duplicates removed)");
+Console.WriteLine($"  duplicates removed: {allQuotes.Count - merged.Count}");
+Console.WriteLine($"  unique quotes:      {merged.Count}");
 
-// ── Write output ──────────────────────────────────────────────────────────────
+// ── Output ────────────────────────────────────────────────────────────────────
 
-var output = merged.Select(q => new Dictionary<string, object?>
+if (dryRun)
 {
-    ["id"]               = q.Id,
-    ["quote"]            = q.Quote,
-    ["originalLanguage"] = q.OriginalLanguage,
-    ["source"]           = q.Source,
-    ["date"]             = q.Date,
-    ["character"]        = null,
-    ["author"]           = null,
-    ["type"]             = q.Type,
-    ["genres"]           = Array.Empty<string>(),
-    ["translations"]     = new Dictionary<string, object>()
-}).ToList();
-
-var opts = new JsonSerializerOptions
+    Console.WriteLine("\n[dry-run] skipping write.");
+}
+else
 {
-    WriteIndented = true,
-    DefaultIgnoreCondition = JsonIgnoreCondition.Never
-};
+    var output = merged.Select(q => new Dictionary<string, object?>
+    {
+        ["id"]               = StableId(q.Quote, q.Source),
+        ["quote"]            = q.Quote,
+        ["originalLanguage"] = "en",
+        ["source"]           = q.Source,
+        ["date"]             = q.Date,
+        ["character"]        = null,
+        ["author"]           = null,
+        ["type"]             = q.Type,
+        ["genres"]           = Array.Empty<string>(),
+        ["translations"]     = new Dictionary<string, object>()
+    }).ToList();
 
-Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-File.WriteAllText(outputPath, JsonSerializer.Serialize(output, opts));
-Console.WriteLine($"[output]    wrote {output.Count} quotes to {outputPath}");
+    Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+    var opts = new JsonSerializerOptions { WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never };
+    File.WriteAllText(outputPath, JsonSerializer.Serialize(output, opts));
+    Console.WriteLine($"\n[output]  wrote {output.Count} quotes → {outputPath}");
+}

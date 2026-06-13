@@ -36,6 +36,10 @@ PublishScripts/
 ## dotnet-script
 .dotnet-script/
 
+# ===== Seed script =====
+# Downloaded source files — fetched on demand, not committed
+scripts/cache/
+
 ## Test results
 TestResults/
 *.trx

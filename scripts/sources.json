@@ -1,0 +1,24 @@
+[
+  {
+    "name": "vilaboim/movie-quotes",
+    "url": "https://raw.githubusercontent.com/vilaboim/movie-quotes/master/movie-quotes.json",
+    "format": "quoted-string",
+    "defaultType": "movie",
+    "license": "MIT",
+    "attribution": "https://github.com/vilaboim/movie-quotes"
+  },
+  {
+    "name": "NikhilNamal17/popular-movie-quotes",
+    "url": "https://raw.githubusercontent.com/NikhilNamal17/popular-movie-quotes/master/data/data.json",
+    "format": "object-array",
+    "defaultType": "movie",
+    "fieldMap": {
+      "quote": "quote",
+      "source": "movie",
+      "type": "type",
+      "year": "year"
+    },
+    "license": "MIT",
+    "attribution": "https://github.com/NikhilNamal17/popular-movie-quotes"
+  }
+]
