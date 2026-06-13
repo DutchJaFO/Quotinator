@@ -240,6 +240,10 @@ Use this section to leave notes for the next session. Clear entries once the wor
 
 **`actions/checkout@v4` Node 20 warning** — after updating to `@v4`, GitHub Actions still reports this action targets Node.js 20. The error is a warning only (build succeeds). Investigate whether a specific patch version of `actions/checkout@v4` resolves this, or whether it requires waiting for an upstream release. See: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
 
+**HA ingress bad gateway** — the app binds to port 8080 only. HA ingress routes to port 8099 (`ingress_port` in `addon/config.yaml`). Fix: add `ENV ASPNETCORE_HTTP_PORTS=8080;8099` to `docker/Dockerfile`. Without this the ingress panel returns a bad gateway error.
+
+**DataProtection warnings in container log** — two `warn:` lines appear at startup because ASP.NET Data Protection has nowhere to persist keys in the container. In v1 (no auth, nothing to protect) silence them with `builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider()` in `Program.cs`. In v2 when auth is added, switch to `PersistKeysToFileSystem(new DirectoryInfo("/app/data"))` so keys survive restarts. Also suppress the log noise in `appsettings.json` by setting `Microsoft.AspNetCore.DataProtection` log level to `None`.
+
 **v2 SQLite backend** — next session starting point.
 
 - Replace `QuoteService` (flat-file JSON) with a SQLite-backed implementation.
