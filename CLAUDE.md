@@ -258,7 +258,8 @@ Quality and process improvements that are not bugs but should be done before or 
 Starting point for the next development session.
 
 - Replace `QuoteService` (flat-file JSON) with a SQLite-backed implementation
-- EF Core is forbidden — use Dapper (preferred, minimal footprint) or raw `Microsoft.Data.Sqlite`
+- **User has an existing Dapper repository class with built-in schema versioning/migration support from a prior project — locate and reuse this before writing anything from scratch**
+- EF Core is forbidden — use Dapper
 - All parameterised query rules from the Architecture Decisions section apply from day one
 - `IQuoteService` contract stays the same — no API surface changes
 - Seeding strategy: on first run, if the DB is empty, import from `data/quotes.json` so existing deployments migrate automatically
