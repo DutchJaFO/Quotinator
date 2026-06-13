@@ -232,7 +232,7 @@ Use this section to leave notes for the next session. Clear entries once the wor
 
 **Background task not killed by PowerShell** — in this session, a `dotnet run` background task ("Run API and test random endpoint") persisted despite `Stop-Process` calls and had to be manually stopped from the background tasks panel. If this recurs, investigate whether the process is being relaunched by a watcher or VS, and whether there is a more reliable way to stop it.
 
-**GHCR package must be set to Public — ACTION REQUIRED** — the `ghcr.io/dutchjafo/quotinator` package is currently private. The Home Assistant Supervisor pulls without credentials and gets a 401, causing the add-on install to fail. Go to: GitHub → your profile → Packages → quotinator → Package settings → Change visibility → Public. One-time manual step, not controlled by code or CI.
+**GHCR package visibility** — the `ghcr.io/dutchjafo/quotinator` package has been set to Public. This is a one-time setting on the package itself; all future image tags inherit it automatically. No action needed on subsequent releases.
 
 **Dependabot not configured** — add `.github/dependabot.yml` to enable automated dependency updates for NuGet packages and GitHub Actions. Keeps dependencies current without manual tracking.
 
