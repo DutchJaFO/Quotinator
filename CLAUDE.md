@@ -57,6 +57,8 @@ Phase gates (must be done before moving to v2):
 ### Flat-file JSON for v1, SQLite for v2
 `data/quotes.json` is loaded into memory at startup. No database in v1. SQLite migration is planned for v2 when write endpoints and user management are added.
 
+**SQL injection policy (mandatory for v2):** All database access must use parameterised queries or a query builder that parameterises automatically. Never build SQL strings by concatenating user input. This applies to every parameter that originates from an HTTP request — `id`, `q`, `type`, `genre`, `lang`, `page`, `pageSize`. The same inputs that reach the in-memory service in v1 will reach the database in v2; the v1 input validation layer is the first defence, parameterised queries are the second.
+
 ### Project structure
 ```
 src/Quotinator.Api/      # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
@@ -147,6 +149,7 @@ See [`docs/testing-policy.md`](docs/testing-policy.md).
 - Do not add authentication in v1 — API is read-only in this phase
 - Do not implement the Blazor UI until v1 REST API phase gates are complete
 - Do not add NuGet packages without a clear reason — keep the dependency footprint small
+- Do not build SQL strings by concatenating user input in v2 — always use parameterised queries
 - Do not change the quote schema without updating this file and `README.md`
 - Do not generate or invent quotes — all quotes must come from the seeded dataset or be manually added
 - Do not auto-translate quotes — translations must be manually curated

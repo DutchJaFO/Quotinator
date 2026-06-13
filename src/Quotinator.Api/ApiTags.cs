@@ -6,3 +6,9 @@ internal static class ApiTags
     internal const string System = "System";
     internal const string Quotes = "Quotes";
 }
+
+/// <summary>Rate-limiter policy names.</summary>
+internal static class RateLimitPolicies
+{
+    internal const string Api = "api";
+}

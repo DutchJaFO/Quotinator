@@ -1,0 +1,151 @@
+using System.ComponentModel;
+using Quotinator.Core.Services;
+
+namespace Quotinator.Api.Endpoints;
+
+/// <summary>Registers all <c>/api/v1/quotes</c> endpoints.</summary>
+internal static class QuoteEndpoints
+{
+    private const int MaxQueryLength = 200;
+
+    internal static void MapQuoteEndpoints(this WebApplication app)
+    {
+        var group = app.MapGroup("/api/v1/quotes")
+                       .WithTags(ApiTags.Quotes)
+                       .RequireRateLimiting(RateLimitPolicies.Api);
+
+        group.MapGet("/random", GetRandom)
+             .WithName("GetRandomQuotes")
+             .WithSummary("Random quote(s)")
+             .WithDescription(
+                 "Returns one random quote when called without parameters, " +
+                 "or an array of `n` random quotes when `n` is specified (1–100). " +
+                 "Use `lang` (ISO 639-1) to request a specific language; falls back to the original language if no translation exists.");
+
+        // /search must be registered before /{id} so the literal segment wins.
+        group.MapGet("/search", Search)
+             .WithName("SearchQuotes")
+             .WithSummary("Search quotes")
+             .WithDescription(
+                 "Returns quotes whose text, source, character, or author contain `q` (case-insensitive). " +
+                 "Optionally filter by `type` or `genre`. Use `lang` to request a specific language.");
+
+        group.MapGet("/{id}", GetById)
+             .WithName("GetQuoteById")
+             .WithSummary("Quote by ID")
+             .WithDescription(
+                 "Returns a single quote by its UUID. Returns 404 if not found. " +
+                 "Use `lang` to request a specific language.");
+
+        group.MapGet("/", GetAll)
+             .WithName("GetAllQuotes")
+             .WithSummary("All quotes (paginated)")
+             .WithDescription(
+                 "Returns a paginated list of all quotes. " +
+                 "Optionally filter by `type` (movie, tv, anime, book, person) or `genre`. " +
+                 "Use `lang` to request a specific language.");
+    }
+
+    // Returns a 400 problem result when lang or type are invalid, null when both are fine.
+    private static IResult? ValidateCommon(string? lang, string? type)
+    {
+        if (lang is not null && !InputValidation.IsValidLang(lang))
+            return Results.Problem(
+                detail: ApiMessages.Get(ApiMessages.LangInvalid, null),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        if (type is not null && !InputValidation.ValidTypes.Contains(type.ToLowerInvariant()))
+            return Results.Problem(
+                detail: ApiMessages.Get(ApiMessages.TypeInvalid, lang),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        return null;
+    }
+
+    private static IResult GetRandom(
+        IQuoteService service,
+        [Description("Number of quotes to return (1–100). Omit for a single random quote.")] string? n = null,
+        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists.")] string? lang = null)
+    {
+        if (ValidateCommon(lang, null) is { } err) return err;
+
+        if (n is null)
+            return Results.Ok(service.GetRandom(1, lang).FirstOrDefault());
+
+        if (!int.TryParse(n, out var count) || count < 1 || count > 100)
+            return Results.Problem(
+                detail: ApiMessages.Get(ApiMessages.RandomNOutOfRange, lang),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        return Results.Ok(service.GetRandom(count, lang));
+    }
+
+    private static IResult GetById(
+        [Description("UUID of the quote.")] string id,
+        IQuoteService service,
+        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists.")] string? lang = null)
+    {
+        if (ValidateCommon(lang, null) is { } err) return err;
+
+        var quote = service.GetById(id, lang);
+        return quote is null
+            ? Results.Problem(
+                detail: ApiMessages.Get(ApiMessages.QuoteNotFound, lang),
+                statusCode: StatusCodes.Status404NotFound)
+            : Results.Ok(quote);
+    }
+
+    private static IResult Search(
+        IQuoteService service,
+        [Description("Search term. Matched case-insensitively against quote text, source, character name, and author.")] string? q = null,
+        [Description("Maximum number of results to return (1–100). Default: 20.")] string? limit = null,
+        [Description("Filter by type. One of: `movie`, `tv`, `anime`, `book`, `person`.")] string? type = null,
+        [Description("Filter by genre tag (e.g. `sci-fi`, `drama`, `non-fiction`).")] string? genre = null,
+        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists.")] string? lang = null)
+    {
+        if (ValidateCommon(lang, type) is { } err) return err;
+
+        if (string.IsNullOrWhiteSpace(q))
+            return Results.Problem(
+                detail: ApiMessages.Get(ApiMessages.SearchQueryRequired, lang),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        if (q.Length > MaxQueryLength)
+            return Results.Problem(
+                detail: ApiMessages.Get(ApiMessages.SearchQueryTooLong, lang),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        var limitValue = 20;
+        if (limit is not null && (!int.TryParse(limit, out limitValue) || limitValue < 1 || limitValue > 100))
+            return Results.Problem(
+                detail: ApiMessages.Get(ApiMessages.LimitOutOfRange, lang),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        return Results.Ok(service.Search(q, limitValue, type, genre, lang));
+    }
+
+    private static IResult GetAll(
+        IQuoteService service,
+        [Description("Page number, 1-based. Default: 1.")] string? page = null,
+        [Description("Number of quotes per page (1–100). Default: 20.")] string? pageSize = null,
+        [Description("Filter by type. One of: `movie`, `tv`, `anime`, `book`, `person`.")] string? type = null,
+        [Description("Filter by genre tag (e.g. `sci-fi`, `drama`, `non-fiction`).")] string? genre = null,
+        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists.")] string? lang = null)
+    {
+        if (ValidateCommon(lang, type) is { } err) return err;
+
+        var pageValue = 1;
+        if (page is not null && (!int.TryParse(page, out pageValue) || pageValue < 1))
+            return Results.Problem(
+                detail: ApiMessages.Get(ApiMessages.PageOutOfRange, lang),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        var pageSizeValue = 20;
+        if (pageSize is not null && (!int.TryParse(pageSize, out pageSizeValue) || pageSizeValue < 1 || pageSizeValue > 100))
+            return Results.Problem(
+                detail: ApiMessages.Get(ApiMessages.PageSizeOutOfRange, lang),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        return Results.Ok(service.GetAll(pageValue, pageSizeValue, type, genre, lang));
+    }
+}
