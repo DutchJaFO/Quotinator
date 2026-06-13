@@ -228,6 +228,8 @@ Use this section to leave notes for the next session. Clear entries once the wor
 
 **Background task not killed by PowerShell** — in this session, a `dotnet run` background task ("Run API and test random endpoint") persisted despite `Stop-Process` calls and had to be manually stopped from the background tasks panel. If this recurs, investigate whether the process is being relaunched by a watcher or VS, and whether there is a more reliable way to stop it.
 
+**GHCR package must be public for HA add-on installs** — the `ghcr.io/dutchjafo/quotinator` package on GitHub must be set to **Public** (GitHub → Packages → quotinator → Package settings → Change visibility). The Home Assistant Supervisor pulls the image without credentials; a private package returns 401 and the add-on fails to install. This is a one-time manual step in GitHub settings — it is not controlled by code or CI.
+
 **Dependabot not configured** — add `.github/dependabot.yml` to enable automated dependency updates for NuGet packages and GitHub Actions. Keeps dependencies current without manual tracking.
 
 **Release workflow runs in parallel with CI** — the Release and CI workflows trigger independently on a tag push, with no guarantee CI passes before the Docker image is built and pushed. Consider adding a `workflow_run` trigger to the release workflow so it only starts after CI completes successfully. This prevents a broken build from producing a published release.
