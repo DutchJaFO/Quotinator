@@ -71,7 +71,7 @@ builder.Services.AddSingleton<IVersionService, VersionService>();
 builder.Services.AddSingleton<IQuoteService>(_ =>
 {
     var dataPath = builder.Configuration["Quotinator:DataPath"]
-        ?? Path.Combine(builder.Environment.ContentRootPath, "data", "quotes.json");
+        ?? Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
     return new QuoteService(dataPath);
 });
 builder.Services.AddI18nText();

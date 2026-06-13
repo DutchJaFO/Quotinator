@@ -24,4 +24,11 @@
     <ProjectReference Include="..\Quotinator.Core\Quotinator.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Copy the quote dataset to the build output so it is available at runtime
+         regardless of working directory (VS, dotnet run, Docker). -->
+    <Content Include="..\..\data\quotes.json" Link="data\quotes.json"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

@@ -24,9 +24,8 @@ EXPOSE 8080 8099
 
 COPY --from=build /app/publish .
 
-# Bake the committed dataset into the image.
+# data/quotes.json is included in the publish output (CopyToPublishDirectory=PreserveNewest).
 # Mount a volume at /app/data to override with a custom dataset at runtime.
-COPY data/quotes.json /app/data/quotes.json
 VOLUME ["/app/data"]
 
 ENTRYPOINT ["dotnet", "Quotinator.Api.dll"]

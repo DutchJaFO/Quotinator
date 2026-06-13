@@ -65,7 +65,7 @@ internal static class QuoteEndpoints
     private static IResult GetRandom(
         IQuoteService service,
         [Description("Number of quotes to return (1–100). Omit for a single random quote.")] string? n = null,
-        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists.")] string? lang = null)
+        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
         if (ValidateCommon(lang, null) is { } err) return err;
 
@@ -83,7 +83,7 @@ internal static class QuoteEndpoints
     private static IResult GetById(
         [Description("UUID of the quote.")] string id,
         IQuoteService service,
-        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists.")] string? lang = null)
+        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
         if (ValidateCommon(lang, null) is { } err) return err;
 
@@ -98,10 +98,10 @@ internal static class QuoteEndpoints
     private static IResult Search(
         IQuoteService service,
         [Description("Search term. Matched case-insensitively against quote text, source, character name, and author.")] string? q = null,
-        [Description("Maximum number of results to return (1–100). Default: 20.")] string? limit = null,
+        [Description("Maximum number of results to return (1–100)."), DefaultValue(20)] string? limit = null,
         [Description("Filter by type. One of: `movie`, `tv`, `anime`, `book`, `person`.")] string? type = null,
         [Description("Filter by genre tag (e.g. `sci-fi`, `drama`, `non-fiction`).")] string? genre = null,
-        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists.")] string? lang = null)
+        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
         if (ValidateCommon(lang, type) is { } err) return err;
 
@@ -126,11 +126,11 @@ internal static class QuoteEndpoints
 
     private static IResult GetAll(
         IQuoteService service,
-        [Description("Page number, 1-based. Default: 1.")] string? page = null,
-        [Description("Number of quotes per page (1–100). Default: 20.")] string? pageSize = null,
+        [Description("Page number, 1-based."), DefaultValue(1)] string? page = null,
+        [Description("Number of quotes per page (1–100)."), DefaultValue(20)] string? pageSize = null,
         [Description("Filter by type. One of: `movie`, `tv`, `anime`, `book`, `person`.")] string? type = null,
         [Description("Filter by genre tag (e.g. `sci-fi`, `drama`, `non-fiction`).")] string? genre = null,
-        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists.")] string? lang = null)
+        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
         if (ValidateCommon(lang, type) is { } err) return err;
 
