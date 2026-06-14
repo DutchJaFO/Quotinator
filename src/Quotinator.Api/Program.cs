@@ -5,10 +5,9 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
-using Quotinator.Api;
 using Quotinator.Api.Components;
 using Quotinator.Api.Endpoints;
-using Quotinator.Api.Services;
+using Quotinator.Constants;
 using Quotinator.Core.Services;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
@@ -251,13 +250,13 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-app.MapGet("/api/v1/health", () => Results.Ok(new { status = "healthy" }))
+app.MapGet(ApiRoutes.Health, () => Results.Ok(new { status = "healthy" }))
    .WithName("Health")
    .WithTags(ApiTags.System)
    .WithSummary("Health check")
    .WithDescription("Returns the current health status of the API. Use this endpoint to verify the service is running.");
 
-app.MapGet("/api/v1/version", (IVersionService vs, IWebHostEnvironment env) =>
+app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env) =>
     Results.Ok(new { version = vs.Version, environment = env.EnvironmentName }))
    .WithName("Version")
    .WithTags(ApiTags.System)
@@ -269,7 +268,7 @@ app.MapQuoteEndpoints();
 // Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
 // Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.
 // Non-empty culture: sets the cookie (c={culture}|uic={culture}) read by CookieRequestCultureProvider.
-app.MapGet("/Culture/Set", (string? culture, string redirectUri, HttpContext context) =>
+app.MapGet(ApiRoutes.CultureSet, (string? culture, string redirectUri, HttpContext context) =>
 {
     if (string.IsNullOrEmpty(culture))
     {

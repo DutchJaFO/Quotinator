@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Hosting;
-using Quotinator.Api.Services;
+using Quotinator.Core.Services;
 using Toolbelt.Blazor.I18nText;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 

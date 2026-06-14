@@ -43,6 +43,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Quotinator.Api/Quotinator.Api.csproj" />
+    <Project Path="src/Quotinator.Constants/Quotinator.Constants.csproj" />
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">

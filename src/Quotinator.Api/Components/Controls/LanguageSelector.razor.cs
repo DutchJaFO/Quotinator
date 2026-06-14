@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Localization;
+using Quotinator.Constants;
 using Toolbelt.Blazor.I18nText;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
@@ -47,7 +48,7 @@ public partial class LanguageSelector
     // Includes PathBase so the form action works through HA ingress (e.g. /api/hassio_ingress/TOKEN/Culture/Set).
     // Without PathBase the browser sends to /Culture/Set, which bypasses the ingress proxy entirely.
     private string CultureSetAction =>
-        (HttpContext?.Request.PathBase.Value ?? string.Empty).TrimEnd('/') + "/Culture/Set";
+        (HttpContext?.Request.PathBase.Value ?? string.Empty).TrimEnd('/') + ApiRoutes.CultureSet;
 
     private string ReturnUri =>
         new Uri(Navigation.Uri).GetComponents(UriComponents.PathAndQuery, UriFormat.Unescaped);

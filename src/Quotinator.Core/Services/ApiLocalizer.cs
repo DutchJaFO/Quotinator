@@ -1,14 +1,14 @@
 using System.Globalization;
 using System.Text.Json;
 
-namespace Quotinator.Api.Services;
+namespace Quotinator.Core.Services;
 
-internal interface IApiLocalizer
+public interface IApiLocalizer
 {
     string this[string key] { get; }
 }
 
-internal sealed class ApiLocalizer : IApiLocalizer
+public sealed class ApiLocalizer : IApiLocalizer
 {
     private readonly Dictionary<string, IReadOnlyDictionary<string, string>> _tables;
 

@@ -13,7 +13,7 @@
 <p>@Text.RestApiDescription</p>
 
 <p>
-    <a class="btn btn-primary" href="scalar/v1" target="_blank">@Text.OpenApiButtonLabel</a>
+    <a class="btn btn-primary" href="@ApiRoutes.ScalarUi.AsLink()" target="_blank">@Text.OpenApiButtonLabel</a>
 </p>
 
 <table class="table">
@@ -26,15 +26,15 @@
     <tbody>
         <tr>
             <td>@Text.OpenApiUiLabel</td>
-            <td><a href="scalar/v1" target="_blank">scalar/v1</a></td>
+            <td><a href="@ApiRoutes.ScalarUi.AsLink()" target="_blank">@ApiRoutes.ScalarUi.AsLink()</a></td>
         </tr>
         <tr>
             <td>@Text.OpenApiSpecLabel</td>
-            <td><a href="openapi/v1.json" target="_blank">openapi/v1.json</a></td>
+            <td><a href="@ApiRoutes.OpenApiSpec.AsLink()" target="_blank">@ApiRoutes.OpenApiSpec.AsLink()</a></td>
         </tr>
         <tr>
             <td>@Text.HealthCheckLabel</td>
-            <td><a href="api/v1/health" target="_blank">api/v1/health</a></td>
+            <td><a href="@ApiRoutes.Health.AsLink()" target="_blank">@ApiRoutes.Health.AsLink()</a></td>
         </tr>
     </tbody>
 </table>

@@ -1,0 +1,17 @@
+namespace Quotinator.Constants;
+
+/// <summary>Keys for localised API error messages stored in i18ntext/UI.*.json.</summary>
+public static class ApiMessages
+{
+    public const string SearchQueryRequired = "ErrorSearchQueryRequired";
+    public const string SearchQueryTooLong  = "ErrorSearchQueryTooLong";
+    public const string LimitOutOfRange     = "ErrorLimitOutOfRange";
+    public const string RandomNOutOfRange   = "ErrorRandomNOutOfRange";
+    public const string PageOutOfRange      = "ErrorPageOutOfRange";
+    public const string PageSizeOutOfRange  = "ErrorPageSizeOutOfRange";
+    public const string QuoteNotFound       = "ErrorQuoteNotFound";
+    public const string LangInvalid         = "ErrorLangInvalid";
+    public const string TypeInvalid         = "ErrorTypeInvalid";
+    public const string TooManyRequests     = "ErrorTooManyRequests";
+    public const string FieldInvalid        = "ErrorFieldInvalid";
+}

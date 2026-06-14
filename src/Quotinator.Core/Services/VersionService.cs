@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace Quotinator.Api.Services;
+namespace Quotinator.Core.Services;
 
 /// <summary>Provides the running assembly's version string.</summary>
 public interface IVersionService

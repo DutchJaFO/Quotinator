@@ -104,13 +104,16 @@ Phase gates (must be done before moving to v2 write endpoints):
 
 ### Project structure
 ```
-src/Quotinator.Api/      # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
-src/Quotinator.Core/     # Shared — models, interfaces, services
-data/quotes.json         # The quote dataset
-scripts/seed.csx         # Seed/merge/dedup script (dotnet-script)
-docker/Dockerfile        # Multi-stage build, targets linux/amd64 + linux/arm64
-addon/                   # Home Assistant add-on manifest and assets
+src/Quotinator.Constants/ # Route strings, tag names, error message keys — no dependencies
+src/Quotinator.Core/      # Models, interfaces, all service implementations
+src/Quotinator.Api/       # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
+data/quotes.json          # The quote dataset
+scripts/seed.csx          # Seed/merge/dedup script (dotnet-script)
+docker/Dockerfile         # Multi-stage build, targets linux/amd64 + linux/arm64
+addon/                    # Home Assistant add-on manifest and assets
 ```
+
+Dependency direction: `Quotinator.Api` → `Quotinator.Core` → (no deps); `Quotinator.Api` → `Quotinator.Constants` (no deps). Core does not reference Constants.
 
 ### Why Quotinator.Api hosts the Blazor UI
 

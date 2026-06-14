@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using Quotinator.Api.Services;
+using Quotinator.Constants;
 using Quotinator.Core.Services;
 
 namespace Quotinator.Api.Endpoints;
