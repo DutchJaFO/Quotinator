@@ -368,6 +368,24 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 > The CI pipeline runs `dotnet publish` and asserts `data/quotes.json` is present in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
+## Tagging a release — separate push cycle
+
+**Always tag in a separate commit/push cycle from feature work.** The reason: Dependabot may open PRs shortly after a push (NuGet and GitHub Actions updates run weekly). Merging those before tagging means the release includes up-to-date dependencies rather than shipping a version that is immediately out of date.
+
+Workflow:
+1. Push all feature/fix commits to `main`
+2. Wait for any pending Dependabot PRs to finish CI
+3. Review and merge passing Dependabot PRs
+4. `git pull` to bring dependency bumps onto your local branch
+5. Update `CHANGELOG.md` and `addon/CHANGELOG.md` with the dependency bump entries
+6. Bump versions (`csproj`, `addon/config.yaml`, both changelogs) and commit
+7. Run the full pre-push checklist above (including Docker build)
+8. Push the version bump commit, then push the tag:
+   ```bash
+   git tag v1.0.x
+   git push origin v1.0.x
+   ```
+
 ---
 
 ## Issue and improvement tracking
