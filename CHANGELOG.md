@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.0.8] - 2026-06-14
+
+### Fixed
+- Scalar UI button, OpenAPI spec link, and health check link on the home page were broken under the Home Assistant ingress — absolute paths (e.g. `/scalar/v1`) ignored `<base href>` and resolved against HA's server root; changed to relative paths so they resolve correctly through the ingress proxy in all deployment scenarios (closes [#8](https://github.com/DutchJaFO/Quotinator/issues/8))
+
 ## [1.0.7] - 2026-06-14
 
 ### Added
@@ -99,6 +104,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - GitHub Actions CI pipeline: build, test, and publish smoke test
 - GitHub Actions release pipeline: builds and pushes Docker image to GHCR on version tags
 
+[1.0.8]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.4...v1.0.5

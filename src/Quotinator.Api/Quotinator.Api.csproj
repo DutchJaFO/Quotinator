@@ -7,7 +7,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- Suppress CS1591 (missing XML doc) on source-generated code we cannot annotate -->
     <NoWarn>$(NoWarn);1591</NoWarn>
-    <Version>1.0.7</Version>
+    <Version>1.0.8</Version>
     <I18nTextFallBackLanguage>en-GB</I18nTextFallBackLanguage>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <DockerfileFile>..\..\docker\Dockerfile</DockerfileFile>

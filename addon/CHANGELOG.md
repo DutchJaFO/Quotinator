@@ -4,6 +4,11 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.0.8] - 2026-06-14
+
+### Fixed
+- Links on the home page (Scalar UI, OpenAPI spec, health check) did not work through the Home Assistant ingress — now use relative paths that resolve correctly through the ingress proxy
+
 ## [1.0.7] - 2026-06-14
 
 ### Added
