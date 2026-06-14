@@ -135,7 +135,8 @@ builder.Services.AddSingleton<IVersionService, VersionService>();
 var dbPath = Path.Combine(dataDir, "quotes.db");
 var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
-builder.Services.AddSingleton<DatabaseInitializer>(_ => new DatabaseInitializer(connectionFactory, dataPath));
+builder.Services.AddSingleton<DatabaseInitializer>(sp => new DatabaseInitializer(
+    connectionFactory, dataPath, sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
 builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));

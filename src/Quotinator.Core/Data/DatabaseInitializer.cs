@@ -2,6 +2,7 @@ using System.Text.Json;
 using Dapper;
 using Dapper.Contrib.Extensions;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using Quotinator.Core.Data.Entities;
 using Quotinator.Core.Data.Enums;
 using Quotinator.Core.Models;
@@ -19,6 +20,7 @@ public sealed class DatabaseInitializer
 {
     private readonly IDbConnectionFactory _factory;
     private readonly string _seedJsonPath;
+    private readonly ILogger<DatabaseInitializer> _logger;
 
     // Numbered migration scripts. Add new entries at the end — never reorder or edit existing ones.
     private static readonly IReadOnlyList<string> Migrations =
@@ -29,10 +31,12 @@ public sealed class DatabaseInitializer
     /// <summary>Initialises the instance with the connection factory and the path to the seed data file.</summary>
     /// <param name="factory">Factory used to open SQLite connections.</param>
     /// <param name="seedJsonPath">Absolute path to <c>quotes.json</c>. Used only on first run when the database is empty.</param>
-    public DatabaseInitializer(IDbConnectionFactory factory, string seedJsonPath)
+    /// <param name="logger">Logger for startup diagnostics.</param>
+    public DatabaseInitializer(IDbConnectionFactory factory, string seedJsonPath, ILogger<DatabaseInitializer> logger)
     {
-        _factory  = factory;
+        _factory      = factory;
         _seedJsonPath = seedJsonPath;
+        _logger       = logger;
     }
 
     /// <summary>Ensures WAL mode is active, applies any pending schema migrations, and seeds the database from <c>quotes.json</c> if empty.</summary>
@@ -44,6 +48,7 @@ public sealed class DatabaseInitializer
         EnableWal(connection);
         await ApplyMigrationsAsync(connection);
         await SeedIfEmptyAsync(connection);
+        await LogDatabaseStatsAsync(connection);
     }
 
     // -------------------------------------------------------------------------
@@ -52,13 +57,26 @@ public sealed class DatabaseInitializer
     private static void EnableWal(SqliteConnection connection)
         => connection.Execute("PRAGMA journal_mode=WAL;");
 
-    private static async Task ApplyMigrationsAsync(SqliteConnection connection)
+    private async Task ApplyMigrationsAsync(SqliteConnection connection)
     {
         await connection.ExecuteAsync(
             "CREATE TABLE IF NOT EXISTS SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);");
 
         var current = await connection.ExecuteScalarAsync<int>(
             "SELECT COALESCE(MAX(Version), 0) FROM SchemaVersion;");
+
+        if (current >= Migrations.Count)
+        {
+            _logger.LogInformation("Database: schema is up to date at version {Version}", current);
+            return;
+        }
+
+        if (current == 0)
+            _logger.LogInformation("Database: creating schema...");
+        else
+            _logger.LogInformation(
+                "Database: applying {Count} pending migration(s) (version {Current} → {Target})...",
+                Migrations.Count - current, current, Migrations.Count);
 
         for (var i = current; i < Migrations.Count; i++)
         {
@@ -67,6 +85,10 @@ public sealed class DatabaseInitializer
                 "INSERT INTO SchemaVersion (Version, AppliedAt) VALUES (@v, @at);",
                 new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) });
         }
+
+        _logger.LogInformation(
+            "Database: schema {Action} at version {Version}",
+            current == 0 ? "created" : "updated", Migrations.Count);
     }
 
     #endregion
@@ -79,11 +101,17 @@ public sealed class DatabaseInitializer
         var count = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes;");
         if (count > 0) return;
 
-        if (!File.Exists(_seedJsonPath)) return;
+        if (!File.Exists(_seedJsonPath))
+        {
+            _logger.LogWarning("Database: seed file not found at {Path} — database will be empty", _seedJsonPath);
+            return;
+        }
 
         var json    = await File.ReadAllTextAsync(_seedJsonPath);
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         var quotes  = JsonSerializer.Deserialize<List<Quote>>(json, options) ?? [];
+
+        _logger.LogInformation("Database: seeding {Count} quotes from {Path}...", quotes.Count, _seedJsonPath);
 
         // Index lookups to avoid duplicate inserts within this seeding run.
         var sourceIndex    = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
@@ -144,6 +172,8 @@ public sealed class DatabaseInitializer
                 }
             }
         }
+
+        _logger.LogInformation("Database: seeding complete");
     }
 
     private static async Task<Guid> GetOrCreateSourceAsync(
@@ -209,6 +239,23 @@ public sealed class DatabaseInitializer
 
     private static QuoteType ParseQuoteType(string raw)
         => Enum.TryParse<QuoteType>(raw, ignoreCase: true, out var t) ? t : QuoteType.Unknown;
+
+    #endregion
+
+    // -------------------------------------------------------------------------
+    #region Stats
+
+    private async Task LogDatabaseStatsAsync(SqliteConnection connection)
+    {
+        var quotes     = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes      WHERE IsDeleted = 0;");
+        var sources    = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources     WHERE IsDeleted = 0;");
+        var characters = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Characters  WHERE IsDeleted = 0;");
+        var people     = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM People      WHERE IsDeleted = 0;");
+
+        _logger.LogInformation(
+            "Database ready — {Quotes} quotes, {Sources} sources, {Characters} characters, {People} people",
+            quotes, sources, characters, people);
+    }
 
     #endregion
 
