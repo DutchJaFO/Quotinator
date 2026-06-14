@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.0.9] - 2026-06-14
 
 ### Added
 - `log_level` add-on option — controls verbosity of the HA supervisor log; valid values: `trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`; default `info`

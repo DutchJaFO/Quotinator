@@ -4,7 +4,7 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.0.9] - 2026-06-14
 
 ### Added
 - `log_level` configuration option — choose log verbosity from the add-on panel (default: `info`; use `debug` when reporting issues)
