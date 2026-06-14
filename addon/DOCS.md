@@ -25,6 +25,8 @@ The REST API is available at `http://<ha-host>:8080/api/v1/`.
 
 All endpoints accept an optional `lang` query parameter (ISO 639-1 code, e.g. `nl`, `de`) to request a translated quote response. Falls back to the original language if no translation exists. Error message language is controlled separately by the `Accept-Language` request header.
 
+A sliding-window rate limit of **100 requests per minute per IP** applies to all quote endpoints. Excess requests receive `429 Too Many Requests`.
+
 The interactive API reference is available at `http://<ha-host>:8080/scalar/v1`.
 
 ## Configuration

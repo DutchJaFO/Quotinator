@@ -32,7 +32,8 @@ builder.Services.AddOpenApi(options =>
                 "A self-hosted quote REST API. Serves real, verified quotes from films, books, " +
                 "television, and famous people, from a curated dataset seeded from MIT-licensed sources.\n\n" +
                 "**v1 scope:** read-only endpoints for fetching and searching quotes. " +
-                "Write endpoints, authentication, and MCP support are planned for v2/v3.",
+                "Write endpoints, authentication, and MCP support are planned for v2/v3.\n\n" +
+                "**Rate limiting:** sliding-window, 100 requests per minute per IP. Excess requests receive `429 Too Many Requests`.",
             Contact = new() { Name = "GitHub", Url = new Uri("https://github.com/DutchJaFO/Quotinator") }
         };
         return Task.CompletedTask;

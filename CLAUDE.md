@@ -160,6 +160,15 @@ All endpoints are prefixed `/api/v1/`. Always version from the start.
 ### Configuration
 Sensitive or environment-specific config (API keys, ports, data paths) goes in environment variables or `appsettings.local.json`, which is gitignored. Never hardcode these values and never commit them.
 
+### Rate limiting
+
+All quote endpoints (`/api/v1/quotes/**`) use a sliding-window rate limiter configured in `Program.cs`:
+- **Limit:** 100 requests per minute per IP
+- **Window:** 60 seconds, divided into 6 segments of 10 seconds each (`SegmentsPerWindow = 6`)
+- **Queue:** none (`QueueLimit = 0`) — requests over the limit are rejected immediately with `429 Too Many Requests`
+
+These values are intentionally generous for homelab use. Change them in `Program.cs` if a consumer (e.g. a bulk import script) legitimately needs a higher limit.
+
 ### MCP (v3)
 Expose at `/mcp` using the official MCP .NET SDK when available. Do not implement in v1.
 
