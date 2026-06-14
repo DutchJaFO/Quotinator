@@ -182,6 +182,15 @@ src/Quotinator.Api/i18ntext/UI.nl.json
 - **API error messages** (`IApiLocalizer`) — reads the same JSON files at startup into a dictionary. The `IApiLocalizer` indexer (`localizer[ApiMessages.SomeKey]`) resolves to `CultureInfo.CurrentUICulture`, which `RequestLocalizationMiddleware` sets from the `Accept-Language` request header. Inject `IApiLocalizer` into endpoint handlers via DI.
 - `ApiMessages.cs` contains only the string constants (keys) used to look up messages via `IApiLocalizer`. It has no dictionary or translation logic.
 
+**Why `IApiLocalizer` does not use the generated `UI` class:**
+
+`Toolbelt.Blazor.I18nText` generates a `Quotinator.Api.I18nText.UI` class at build time (compiled directly into the assembly — there is no `.cs` source file). It is populated via `await I18nText.GetTextTableAsync<UI>(this)`, where `this` is a Blazor `IComponent`. This makes it unsuitable for REST endpoint use for three reasons:
+1. It is async — minimal API handlers are synchronous at the point of localisation.
+2. It requires a Blazor component owner (`this`) for re-render signalling.
+3. It resolves language from the **Blazor circuit context** (browser session), not from `CultureInfo.CurrentUICulture` — so it would ignore the `Accept-Language` header on REST calls.
+
+`IApiLocalizer` solves all three: it reads the JSON files once at startup, and at call time resolves via `CultureInfo.CurrentUICulture` which the middleware has already set correctly. Do not replace it with `II18nText`.
+
 **The `?lang=` query parameter is a separate concern.** It tells `IQuoteService` which language to use when returning *quote content* (translations in `quotes.json`). It does not affect UI strings or error messages — those always follow `Accept-Language`. Do not conflate the two.
 
 ### Endpoint test pattern
