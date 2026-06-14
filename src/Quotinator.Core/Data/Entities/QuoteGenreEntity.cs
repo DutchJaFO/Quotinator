@@ -1,4 +1,5 @@
 using Dapper.Contrib.Extensions;
+using Quotinator.Data.Models;
 using GenreEnum = Quotinator.Core.Data.Enums.Genre;
 
 namespace Quotinator.Core.Data.Entities;

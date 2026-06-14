@@ -1,7 +1,7 @@
 using System.Data;
 using Microsoft.Data.Sqlite;
 
-namespace Quotinator.Core.Data;
+namespace Quotinator.Data.Data;
 
 public sealed class SqliteConnectionFactory : IDbConnectionFactory
 {

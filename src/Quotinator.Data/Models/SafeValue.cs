@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Quotinator.Core.Data;
+namespace Quotinator.Data.Models;
 
 /// <summary>
 /// Carries both the raw string from the database and the parsed result.
@@ -17,7 +17,7 @@ public sealed record SafeValue<T>(string Raw, T Parsed)
 /// <summary>Factory for creating <see cref="SafeValue{T}"/> instances for date/time values.</summary>
 public static class SafeDateValue
 {
-    internal const string TimestampFormat = "yyyy-MM-dd HH:mm:ss";
+    public const string TimestampFormat = "yyyy-MM-dd HH:mm:ss";
 
     public static SafeValue<DateTime?> Now
     {

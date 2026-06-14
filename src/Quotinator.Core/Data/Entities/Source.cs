@@ -1,5 +1,6 @@
 using Dapper.Contrib.Extensions;
 using Quotinator.Core.Data.Enums;
+using Quotinator.Data.Models;
 
 namespace Quotinator.Core.Data.Entities;
 

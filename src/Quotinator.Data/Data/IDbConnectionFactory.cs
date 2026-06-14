@@ -1,6 +1,6 @@
 using System.Data;
 
-namespace Quotinator.Core.Data;
+namespace Quotinator.Data.Data;
 
 public interface IDbConnectionFactory
 {

@@ -1,6 +1,6 @@
 using Dapper.Contrib.Extensions;
 
-namespace Quotinator.Core.Data;
+namespace Quotinator.Data.Models;
 
 public abstract class RecordBase
 {

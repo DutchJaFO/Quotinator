@@ -48,6 +48,7 @@
     <Project Path="src/Quotinator.Api/Quotinator.Api.csproj" />
     <Project Path="src/Quotinator.Constants/Quotinator.Constants.csproj" />
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
+    <Project Path="src/Quotinator.Data/Quotinator.Data.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />

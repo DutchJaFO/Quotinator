@@ -10,6 +10,7 @@ using Quotinator.Api.Endpoints;
 using Quotinator.Constants;
 using Quotinator.Core.Data;
 using Quotinator.Core.Data.TypeHandlers;
+using Quotinator.Data.Data;
 using Quotinator.Core.Services;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;

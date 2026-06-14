@@ -2,6 +2,8 @@ using Dapper;
 using Quotinator.Core.Data.Enums;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
+using Quotinator.Data.Data;
+using Quotinator.Data.Models;
 using GenreEnum = Quotinator.Core.Data.Enums.Genre;
 
 namespace Quotinator.Core.Data;

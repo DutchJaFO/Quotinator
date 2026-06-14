@@ -1,5 +1,6 @@
 using Dapper;
 using Quotinator.Core.Data.Enums;
+using Quotinator.Data.Helpers;
 
 namespace Quotinator.Core.Data.TypeHandlers;
 

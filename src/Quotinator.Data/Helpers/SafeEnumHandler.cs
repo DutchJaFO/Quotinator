@@ -1,9 +1,10 @@
 using System.Data;
 using Dapper;
+using Quotinator.Data.Models;
 
 #pragma warning disable CS8765 // Nullability mismatch on override: Dapper's TypeHandler base uses non-nullable object but we handle DBNull defensively.
 
-namespace Quotinator.Core.Data.TypeHandlers;
+namespace Quotinator.Data.Helpers;
 
 /// <summary>
 /// Dapper TypeHandler for <see cref="SafeValue{T}"/> where T is a nullable enum.
