@@ -111,7 +111,7 @@ All list endpoints accept `type` and `genre` filters. All endpoints return [RFC 
 
 The interactive API reference (Scalar) is available at `/scalar/v1` and the raw OpenAPI spec at `/openapi/v1.json`.
 
-The web UI includes a language selector in the navbar. It overrides the browser's automatic language detection (Deutsch, Nederlands) and persists the choice as a cookie for one year. Selecting "Auto-detect" clears the override and returns to browser language detection.
+The web UI includes a language selector in the navbar. It overrides the browser's automatic language detection (English, Deutsch, Nederlands) and persists the choice as a cookie for one year. Selecting "Auto-detect" clears the override and returns to browser language detection.
 
 ---
 

@@ -23,9 +23,10 @@ public partial class LanguageSelector
     // Property (not field) because it references Text, which is set in OnInitializedAsync.
     private (string CultureCode, string Label)[] SupportedLanguages =>
     [
-        ("",   Text.LanguageSelectorAutoDetect),
-        ("de", "Deutsch (de)"),
-        ("nl", "Nederlands (nl)"),
+        ("",      Text.LanguageSelectorAutoDetect),
+        ("en-GB", "English (en-GB)"),
+        ("de",    "Deutsch (de)"),
+        ("nl",    "Nederlands (nl)"),
     ];
 
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
