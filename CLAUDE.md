@@ -345,7 +345,7 @@ Bugs and defects confirmed in the running add-on or CI. Fix before or alongside 
 
 | # | Issue | Notes |
 |---|---|---|
-| 1 | **HA ingress bad gateway** | App binds to port 8080 only; HA ingress routes internally to `ingress_port: 8099`. Fix: add `ENV ASPNETCORE_HTTP_PORTS=8080;8099` to `docker/Dockerfile`. |
+| ~~1~~ | ~~**HA ingress bad gateway**~~ | Fixed: `environment: ASPNETCORE_HTTP_PORTS: "8080;8099"` in `addon/config.yaml`. |
 | 2 | **Background task not killed by PowerShell** | A `dotnet run` background task persisted despite `Stop-Process` and needed manual kill from the background tasks panel. Investigate if it recurs. |
 
 ---

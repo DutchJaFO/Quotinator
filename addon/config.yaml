@@ -14,6 +14,11 @@ image: ghcr.io/dutchjafo/quotinator
 startup: application
 boot: auto
 
+# Binds the ASP.NET Core server to both ports so HA ingress (8099) and
+# direct access (8080) both work when running under the supervisor.
+environment:
+  ASPNETCORE_HTTP_PORTS: "8080;8099"
+
 # Direct access port — user can override the host-side port in HA if 8080 is taken.
 ports:
   8080/tcp: 8080
