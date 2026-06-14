@@ -4,6 +4,12 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.0.12] - 2026-06-14
+
+### Added
+- SQLite database backend: quotes are now stored in `quotes.db` on the persistent volume — no action required; the database is created and seeded automatically on first run
+- Startup log now shows database status: schema version applied, seeding progress, and a final count of quotes, sources, characters, and people
+
 ## [1.0.11] - 2026-06-14
 
 ### Added

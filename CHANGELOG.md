@@ -6,19 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.0.12] - 2026-06-14
 
 ### Added
-- SQLite backend (v2): replaces flat-file `QuoteService` with `SqliteQuoteService` backed by Dapper + `Microsoft.Data.Sqlite`
-- Schema: `Sources`, `SourceTranslations`, `Characters`, `CharacterTranslations`, `People`, `Quotes`, `QuoteTranslations`, `QuoteGenres` tables — all with `RecordBase` audit columns (`DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted`)
-- `SchemaVersion` table with numbered migration support — future schema changes are applied once on startup
-- First-run seeding: if the database is empty, all 780 quotes are imported from the bundled `quotes.json` automatically
-- `SafeValue<T>` — wrapper that carries both `Raw` (original DB string) and `Parsed` (converted value); `IsValid` distinguishes missing from corrupt data
-- `SafeEnumHandler<T>` and `SafeDateHandler` — Dapper TypeHandlers; store enum names as TEXT (rename-safe) and date strings; fall back gracefully on unrecognised values
-- `QuoteType` and `Genre` enums; `Unknown` as zero-value default for safe fallback
-- `People` table tracks authors and real-world speakers with optional `DateOfBirth` / `DateOfDeath` (imprecise ISO 8601, e.g. `"1955"`)
-- Characters scoped to their source so same-name characters from different franchises stay separate
-- NuGet packages: `Microsoft.Data.Sqlite 10.0.9`, `Dapper 2.1.79`, `Dapper.Contrib 2.0.78`
+- SQLite backend (v2): replaces flat-file `QuoteService` with `SqliteQuoteService` backed by Dapper + `Microsoft.Data.Sqlite` (closes [#7](https://github.com/DutchJaFO/Quotinator/issues/7))
+- Fully normalised schema: `Sources`, `SourceTranslations`, `Characters`, `CharacterTranslations`, `People`, `Quotes`, `QuoteTranslations`, `QuoteGenres` — all tables include `RecordBase` audit columns (`DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted`) for soft-delete support
+- `SchemaVersion` table with numbered migration support — pending migrations are applied automatically at startup; existing migrations are never edited
+- First-run seeding: if the database is empty on startup, all 780 quotes are imported from the bundled `quotes.json` automatically; no manual migration step required
+- `SafeValue<T>` — diagnostic wrapper that carries both `Raw` (original DB string) and `Parsed` (converted value); corrupt or unrecognised values never crash the application and the original string is preserved for diagnosis
+- `SafeEnumHandler<T>` and `SafeDateHandler` — Dapper TypeHandlers; enum values stored as TEXT names (rename-safe), date fields support imprecise ISO 8601 (`"1994"`, `"1994-06"`, `"1994-06-04"`)
+- `QuoteType` and `Genre` enums with `Unknown = 0` as a safe zero-value fallback
+- `People` table: tracks real people (authors, public figures) with optional `DateOfBirth` / `DateOfDeath` in imprecise ISO 8601 format
+- Characters scoped to their source — same character name from different franchises is stored as separate rows
+- `Quotinator.Data` project: reusable data infrastructure (`RecordBase`, `SafeValue<T>`, `IDbConnectionFactory`, `SqliteConnectionFactory`, `SafeEnumHandler<T>`, `SafeDateHandler`) extracted into its own class library
+- Database startup logging: log lines for schema creation/update, seeding progress, and a final summary (quote / source / character / people counts)
+- XML `<summary>` documentation on all public types and members; CS1591 enforced in `Quotinator.Core` and `Quotinator.Data`
 
 ## [1.0.11] - 2026-06-14
 
@@ -149,6 +151,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - GitHub Actions CI pipeline: build, test, and publish smoke test
 - GitHub Actions release pipeline: builds and pushes Docker image to GHCR on version tags
 
+[1.0.12]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.11...v1.0.12
 [1.0.11]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.8...v1.0.9

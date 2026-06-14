@@ -81,17 +81,27 @@ v1 phase gates — all done:
 - [x] `/api/v1/health` endpoint
 - [x] Docker image builds and runs correctly on amd64 and arm64
 
-**Phase: v2 — SQLite backend (next)**
+**Phase: v2 — SQLite backend — COMPLETE (tagged 1.0.12)**
 
-Focus: replace flat-file JSON with a SQLite database. Keep the REST API surface unchanged. No auth, no Blazor UI, no write endpoints yet — just the persistence layer swap.
+v2 phase gates — all done:
+- [x] SQLite database created at startup with the correct schema (Dapper + `Microsoft.Data.Sqlite`; EF Core not used)
+- [x] Migration from `data/quotes.json` → SQLite on first run
+- [x] `IQuoteService` implementation backed by SQLite (`SqliteQuoteService`)
+- [x] All v1 read endpoints behave identically to v1 flat-file (all tests pass)
+- [x] Docker volume at `/app/data` persists the `.db` file across restarts
+- [x] `data/*.db` excluded from `.gitignore`
+- [x] `Quotinator.Data` project extracted with reusable infrastructure (`RecordBase`, `SafeValue<T>`, type handlers, connection factory)
+- [x] Database startup logging (schema, seeding, stats)
 
-Phase gates (must be done before moving to v2 write endpoints):
-- [ ] SQLite database created at startup with the correct schema (EF Core forbidden — use Dapper or raw ADO.NET)
-- [ ] Migration from `data/quotes.json` → SQLite on first run (or a seeder that imports the JSON)
-- [ ] `IQuoteService` implementation backed by SQLite replacing `QuoteService` (flat-file)
-- [ ] All v1 read endpoints behave identically to v1 flat-file (existing tests pass unchanged)
-- [ ] Docker volume at `/app/data` persists the `.db` file across restarts
-- [ ] `.gitignore` excludes `data/*.db`
+**Phase: v3 — Blazor management UI (next)**
+
+Focus: a Blazor Server management interface for viewing and editing quotes. Requires write endpoints and authentication design first.
+
+Phase gates:
+- [ ] Auth design decided (local user accounts, API key, or HA token)
+- [ ] Write endpoints (`POST /quotes`, `PUT /quotes/{id}`, `DELETE /quotes/{id}`)
+- [ ] Blazor pages: quote list, quote detail/edit, add quote form
+- [ ] Input validation and error display in UI
 
 ---
 
@@ -456,17 +466,12 @@ Bugs, defects, and planned improvements are tracked as **GitHub Issues**. Do not
 
 ---
 
-## Next Milestone: v2 — SQLite Backend
+## Next Milestone: v3 — Blazor Management UI
 
 Starting point for the next development session.
 
-- Replace `QuoteService` (flat-file JSON) with a SQLite-backed implementation
-- **User has an existing Dapper repository class with built-in schema versioning/migration support from a prior project — locate and reuse this before writing anything from scratch**
-- EF Core is forbidden — use Dapper
-- All parameterised query rules from the Architecture Decisions section apply from day one
-- `IQuoteService` contract stays the same — no API surface changes
-- Seeding strategy: on first run, if the DB is empty, import from `data/quotes.json` so existing deployments migrate automatically
-- The `.db` file lives in `/app/data/` (same Docker volume as the JSON file)
-- Add `data/*.db` to `.gitignore` before the first run
-- DataProtection already persists to `dataDir/.keys/` — done in v1.0.7
-- Update the phase gates in this file and the roadmap in `README.md` as items are completed
+- Auth design must come first — decide between local user accounts, API key, or HA token before writing any write endpoint
+- Write endpoints (`POST`, `PUT`, `DELETE` on `/api/v1/quotes`) with full input validation and SQL injection protection (parameterised queries already required by architecture policy)
+- Blazor pages: quote list, quote detail/edit, add quote form
+- `IQuoteService` will need write methods — extend the interface when auth design is settled
+- Existing read endpoints and tests must remain unchanged
