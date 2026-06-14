@@ -357,27 +357,9 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 ---
 
-## Known Issues
+## Issue and improvement tracking
 
-Bugs and defects confirmed in the running add-on or CI. Fix before or alongside the next release.
-
-| # | Issue | Notes |
-|---|---|---|
-| ~~1~~ | ~~**HA ingress bad gateway**~~ | Fixed: `environment: ASPNETCORE_HTTP_PORTS: "8080;8099"` in `addon/config.yaml`. |
-| 2 | **Background task not killed by PowerShell** | A `dotnet run` background task persisted despite `Stop-Process` and needed manual kill from the background tasks panel. Investigate if it recurs. |
-
----
-
-## Planned Improvements
-
-Quality and process improvements that are not bugs but should be done before or during v2.
-
-| # | Item | Notes |
-|---|---|---|
-| ~~1~~ | ~~**HA add-on direct port: default to `null`**~~ | Done. |
-| ~~2~~ | ~~**HA add-on quality score: AppArmor profile**~~ | Done — `addon/apparmor.txt`; supervisor auto-detects it. Needs verification on a real HA instance. |
-| ~~3~~ | ~~**Release workflow: gate on CI passing**~~ | Done — `release.yml` now has a `test` job (build + test + publish smoke) that `build-and-push` depends on via `needs: [test]`. A broken build cannot produce a published image. |
-| ~~4~~ | ~~**Dependabot**~~ | Done — `.github/dependabot.yml` added for weekly NuGet and GitHub Actions updates. |
+Bugs, defects, and planned improvements are tracked as **GitHub Issues**. Do not maintain lists here. Only add a temporary note in this file if something is discovered mid-session and has not yet been filed as a GitHub Issue.
 
 ---
 
