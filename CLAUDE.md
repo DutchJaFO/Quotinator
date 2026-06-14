@@ -356,8 +356,8 @@ Quality and process improvements that are not bugs but should be done before or 
 
 | # | Item | Notes |
 |---|---|---|
-| 1 | **HA add-on direct port: default to `null`** | Set host port to `null` in `addon/config.yaml` so it is disabled by default; users who need direct API access (MagicMirror, automations) enable and set it themselves. Ingress covers UI access. |
-| 2 | **HA add-on quality score: AppArmor profile** | Adding a custom AppArmor profile raises the score from 7 to 8 (base 5 + ingress 2 + AppArmor 1). Low risk, good security posture. |
+| ~~1~~ | ~~**HA add-on direct port: default to `null`**~~ | Done. |
+| ~~2~~ | ~~**HA add-on quality score: AppArmor profile**~~ | Done — `addon/apparmor.txt`; supervisor auto-detects it. Needs verification on a real HA instance. |
 | 3 | **Release workflow: gate on CI passing** | Release and CI run in parallel — a broken build can produce a published image. Add a `workflow_run` trigger so the release only starts after CI passes. |
 | 4 | **Dependabot** | Add `.github/dependabot.yml` for automated NuGet and GitHub Actions version updates. |
 

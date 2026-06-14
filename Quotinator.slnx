@@ -7,6 +7,7 @@
   </Folder>
   <Folder Name="/addon/">
     <File Path="addon/config.yaml" />
+    <File Path="addon/apparmor.txt" />
     <File Path="addon/README.md" />
     <File Path="addon/DOCS.md" />
     <File Path="addon/CHANGELOG.md" />

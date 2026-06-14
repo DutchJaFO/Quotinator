@@ -1,0 +1,39 @@
+#include <tunables/global>
+
+profile quotinator flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # HTTP server on 8080 (direct) and 8099 (HA ingress)
+  network inet tcp,
+  network inet6 tcp,
+
+  # .NET runtime — needs mmap-exec (m) for JIT compilation
+  /usr/share/dotnet/** rixmr,
+
+  # App binaries and static files
+  /app/** rixmr,
+
+  # Persistent data (quotes.json, future .db); HA maps its data dir to /data
+  /app/data/** rwk,
+  /data/** rwk,
+
+  # System libraries
+  /usr/lib/** rixmr,
+  /usr/lib/x86_64-linux-gnu/** rixmr,
+  /usr/lib/aarch64-linux-gnu/** rixmr,
+  /lib/x86_64-linux-gnu/** rixmr,
+  /lib/aarch64-linux-gnu/** rixmr,
+
+  # Read-only system access
+  /etc/** r,
+  /proc/** r,
+  /sys/kernel/mm/transparent_hugepage/** r,
+
+  # Temp files (.NET extracts native libs, writes sockets, etc.)
+  /tmp/** rw,
+
+  # Devices
+  /dev/urandom r,
+  /dev/null rw,
+  /dev/zero r,
+}
