@@ -4,6 +4,11 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.0.13] - 2026-06-15
+
+### Fixed
+- Internal: fixed a race condition in database seeding that caused test failures under parallel test execution — no impact on add-on behaviour
+
 ## [1.0.12] - 2026-06-15
 
 ### Added

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.0.13] - 2026-06-15
+
+### Fixed
+- Race condition in `DatabaseInitializer.SeedIfEmptyAsync`: parallel `WebApplicationFactory` instances (parallel MSTest runs with `ExecutionScope.MethodLevel`) could both observe an empty database and attempt concurrent seeding, causing a `UNIQUE constraint failed: Sources.Title, Sources.Type` error — fixed with a static `SemaphoreSlim` that serialises seed attempts within the same process
+
 ## [1.0.12] - 2026-06-15
 
 ### Added
