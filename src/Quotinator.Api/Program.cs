@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.RateLimiting;
@@ -66,6 +67,7 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
+builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
 var dataPath = builder.Configuration["Quotinator:DataPath"]

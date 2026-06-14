@@ -235,8 +235,7 @@ Bugs and defects confirmed in the running add-on or CI. Fix before or alongside 
 | # | Issue | Notes |
 |---|---|---|
 | 1 | **HA ingress bad gateway** | App binds to port 8080 only; HA ingress routes internally to `ingress_port: 8099`. Fix: add `ENV ASPNETCORE_HTTP_PORTS=8080;8099` to `docker/Dockerfile`. |
-| 2 | **DataProtection warnings in container log** | Two `warn:` lines at startup because ASP.NET Data Protection has nowhere to persist keys. Fix for v1: `builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider()` in `Program.cs` and set `Microsoft.AspNetCore.DataProtection` log level to `None` in `appsettings.json`. In v2 switch to `PersistKeysToFileSystem(new DirectoryInfo("/app/data"))`. |
-| 3 | **Background task not killed by PowerShell** | A `dotnet run` background task persisted despite `Stop-Process` and needed manual kill from the background tasks panel. Investigate if it recurs. |
+| 2 | **Background task not killed by PowerShell** | A `dotnet run` background task persisted despite `Stop-Process` and needed manual kill from the background tasks panel. Investigate if it recurs. |
 
 ---
 
@@ -265,4 +264,5 @@ Starting point for the next development session.
 - Seeding strategy: on first run, if the DB is empty, import from `data/quotes.json` so existing deployments migrate automatically
 - The `.db` file lives in `/app/data/` (same Docker volume as the JSON file)
 - Add `data/*.db` to `.gitignore` before the first run
+- Switch DataProtection from `UseEphemeralDataProtectionProvider()` to `PersistKeysToFileSystem(new DirectoryInfo("/app/data"))` so keys survive container restarts
 - Update the phase gates in this file and the roadmap in `README.md` as items are completed
