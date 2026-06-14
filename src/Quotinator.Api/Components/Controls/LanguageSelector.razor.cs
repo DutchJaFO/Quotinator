@@ -44,6 +44,11 @@ public partial class LanguageSelector
             ? IsAutoMode
             : !IsAutoMode && string.Equals(CultureInfo.CurrentUICulture.Name, cultureCode, StringComparison.OrdinalIgnoreCase);
 
+    // Includes PathBase so the form action works through HA ingress (e.g. /api/hassio_ingress/TOKEN/Culture/Set).
+    // Without PathBase the browser sends to /Culture/Set, which bypasses the ingress proxy entirely.
+    private string CultureSetAction =>
+        (HttpContext?.Request.PathBase.Value ?? string.Empty).TrimEnd('/') + "/Culture/Set";
+
     private string ReturnUri =>
         new Uri(Navigation.Uri).GetComponents(UriComponents.PathAndQuery, UriFormat.Unescaped);
 
