@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 ## [1.0.9] - 2026-06-14
 
 ### Added
+- `log_requests` configuration option — enable to log one line per quote API request; useful for confirming calls arrive without enabling full debug logging (default: `false`)
 - `log_level` configuration option — choose log verbosity from the add-on panel (default: `info`; use `debug` when reporting issues)
 - UTC timestamps on all log lines
 - Clear start and stop markers in the supervisor log (version, data path, quote count)

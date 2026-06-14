@@ -55,6 +55,18 @@ If you use a custom certificate, copy the files to `/ssl/` and reference them by
 
 > **Note:** When using the HA ingress (sidebar), you do not need SSL configured here — the HA supervisor handles TLS termination for ingress traffic.
 
+### Request logging
+
+Controls whether incoming requests to the quote API endpoints are logged. Disabled by default — enable it to confirm your calls are arriving without needing `log_level: debug`.
+
+When enabled, each request to `/api/v1/quotes/*` produces one log line:
+
+```
+GET /api/v1/quotes/random?n=5&lang=nl → 200 in 12ms
+```
+
+Rate-limited requests (`429`) are also logged. Health checks, Blazor traffic, and static assets are not.
+
 ### Log level
 
 Controls the verbosity of the add-on log. Use `debug` when reporting issues. Default: `info`.

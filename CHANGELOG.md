@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [1.0.9] - 2026-06-14
 
 ### Added
+- `log_requests` add-on option — when enabled, logs one line per quote API request (`GET /api/v1/quotes/random?n=5 → 200 in 12ms`); default `false`; 429 responses are included, health/Blazor/static traffic is not
 - `log_level` add-on option — controls verbosity of the HA supervisor log; valid values: `trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`; default `info`
 - UTC timestamps on all log lines (`yyyy-MM-dd HH:mm:ss`)
 - Startup banner logs version, data path, quote count, and keys directory on every start

@@ -206,6 +206,35 @@ app.UseStatusCodePages();
 app.UseRequestLocalization();
 app.UseRateLimiter();
 
+// Optional request logging for /api/v1/quotes/* — off by default so the supervisor log
+// stays clean. Enable with log_requests: true in the add-on config (or Quotinator__LogRequests=true).
+// Uses a dedicated logger category so it can be suppressed independently if needed.
+if (app.Configuration.GetValue<bool>("Quotinator:LogRequests"))
+{
+    var requestLogger = app.Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Quotinator.Requests");
+
+    app.Use(async (context, next) =>
+    {
+        if (!context.Request.Path.StartsWithSegments("/api/v1/quotes"))
+        {
+            await next();
+            return;
+        }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await next();
+        sw.Stop();
+
+        requestLogger.LogInformation("{Method} {Path}{Query} → {Status} in {Ms}ms",
+            context.Request.Method,
+            context.Request.Path,
+            context.Request.QueryString.Value,
+            context.Response.StatusCode,
+            sw.ElapsedMilliseconds);
+    });
+}
+
 app.MapOpenApi();
 app.MapScalarApiReference();
 
