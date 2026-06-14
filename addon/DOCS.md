@@ -35,7 +35,7 @@ Ingress is enabled by default. Quotinator appears in your Home Assistant sidebar
 
 ### Language
 
-The UI adapts to the browser's language preference automatically. A language selector in the navbar lets you override this and choose from the supported languages (English, English UK, Deutsch, Nederlands). The choice is saved as a cookie and persists across sessions.
+The UI adapts to the browser's language preference automatically. A language selector in the navbar lets you override this and choose between Deutsch and Nederlands. Selecting "Auto-detect" clears the override and returns to browser language detection. The choice is saved as a cookie and persists across sessions.
 
 ### Direct access port
 
