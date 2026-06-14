@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.0.11] - 2026-06-14
+
+### Added
+- HA add-on config panel now shows translated option names and descriptions in English, Dutch, and German (`addon/translations/`)
+- GitHub Milestones created to track upcoming work; README roadmap section replaced with a link to the milestone list
+
+### Changed
+- Architecture: extracted `Quotinator.Constants` project (route strings, tag names, error message keys — no dependencies); moved `ApiLocalizer`, `VersionService`, and `InputValidation` to `Quotinator.Core`
+- HA add-on documentation revised: access section now distinguishes ingress (default, no port config needed) from direct port (optional, for external tools); hardcoded `http://<ha-host>:8080/` URLs removed
+
+### Fixed
+- Stale `UI.en.json` references in `docs/localisation.md` and test comments corrected to `UI.en-GB.json` (the actual baseline file)
+
 ## [1.0.10] - 2026-06-14
 
 ### Changed
@@ -122,6 +135,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - GitHub Actions CI pipeline: build, test, and publish smoke test
 - GitHub Actions release pipeline: builds and pushes Docker image to GHCR on version tags
 
+[1.0.11]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.10...v1.0.11
+[1.0.10]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.9...v1.0.10
+[1.0.9]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.5...v1.0.6

@@ -4,6 +4,15 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.0.11] - 2026-06-14
+
+### Added
+- Config panel options now show translated names and descriptions in English, Dutch, and German
+
+### Changed
+- Documentation tab: access section now clearly distinguishes ingress (default, sidebar) from direct port (optional, for external tools such as MagicMirror or curl); misleading hardcoded `http://<ha-host>:8080/api/v1/` URL removed
+- Info tab: updated to describe sidebar (ingress) access instead of showing a hardcoded port URL
+
 ## [1.0.10] - 2026-06-14
 
 ### Changed
