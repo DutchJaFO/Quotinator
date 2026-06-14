@@ -11,6 +11,4 @@ A self-hosted quote REST API. Serves real, verified quotes from films, books, te
 
 ## Usage
 
-After installation, the REST API is available at `http://<ha-host>:8080/api/v1/`.
-
-See the **Documentation** tab for endpoints and configuration options.
+After installation, Quotinator appears in the Home Assistant sidebar. Open it from there, or see the **Documentation** tab for API endpoints and configuration options.
