@@ -431,6 +431,10 @@ Workflow:
 
 Bugs, defects, and planned improvements are tracked as **GitHub Issues**. Do not maintain lists here. Only add a temporary note in this file if something is discovered mid-session and has not yet been filed as a GitHub Issue.
 
+**Closing protocol:** See `CONTRIBUTING.md` — issues are either code-verified (closed automatically via `Fixes #N` in the commit) or deployment-verified (closed manually via `gh issue close` after confirming in the live HA add-on). Deployment-verified issues are tracked in `project_post_deploy_verification.md` in memory until confirmed.
+
+**Deployment-only issues** — anything involving HA ingress routing, supervisor log output, add-on config panel, or container restart behaviour must be classified as deployment-verified and added to the memory checklist before the release.
+
 ---
 
 ## Next Milestone: v2 — SQLite Backend

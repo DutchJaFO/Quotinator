@@ -31,10 +31,37 @@ Quotinator is primarily a personal homelab project. External contributions are w
 
 ## Closing issues
 
-| Scenario | Protocol |
-|---|---|
-| Fix or feature lands in a new commit | Add `Fixes #N` (bug) or `Closes #N` (feature) to the commit message body — GitHub closes the issue automatically on push to `main` |
-| Already fixed in a prior release (no new commit) | Close via `gh issue close N --comment "..."` — include the version, commit SHA, and a one-line explanation |
+Issues fall into two categories depending on how the fix can be verified.
+
+### Code-verified issues
+
+The fix is covered by automated tests or is verifiable locally without deploying to Home Assistant.
+
+- Add `Fixes #N` (bug) or `Closes #N` (feature) to the commit message body
+- GitHub closes the issue automatically when the commit lands on `main`
+
+### Deployment-verified issues
+
+The fix can only be confirmed in a live HA add-on — for example: ingress routing, supervisor log output, config panel options, or container restart behaviour.
+
+**Before the release:**
+- Add the issue to the post-deploy checklist in memory (`project_post_deploy_verification.md`) with steps to verify and the version/commit it was fixed in
+- Do **not** add `Closes #N` to the commit — the issue stays open until confirmed in production
+
+**After deploying and verifying:**
+
+```bash
+gh issue close N --comment "Verified in vX.Y.Z on YYYY-MM-DD. [One sentence: what was tested and what was observed.]"
+```
+
+- Remove the item from `project_post_deploy_verification.md` in memory
+
+**What counts as deployment-only:**
+- Any behaviour that only manifests through the HA ingress proxy
+- Supervisor log output (timestamps, log level, banners)
+- Add-on configuration panel (options, dropdowns)
+- Container restart or data persistence behaviour
+- HA-specific environment variables (`Quotinator__*` via `env_vars`)
 
 ## Running the tests
 
