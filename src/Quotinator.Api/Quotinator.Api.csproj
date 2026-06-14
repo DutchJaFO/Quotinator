@@ -31,13 +31,12 @@
     <Content Include="..\..\data\quotes.json" Link="data\quotes.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- Copy i18ntext JSON files to output so ApiLocalizer can read them at runtime.
-       Toolbelt.Blazor.I18nText consumes these files during build but does not copy them. -->
-  <Target Name="CopyI18nTextJsonFiles" AfterTargets="Build">
-    <ItemGroup>
-      <_I18nTextJson Include="i18ntext\UI.*.json" />
-    </ItemGroup>
-    <Copy SourceFiles="@(_I18nTextJson)" DestinationFolder="$(OutputPath)i18ntext\" SkipUnchangedFiles="true" />
-  </Target>
+  <ItemGroup>
+    <!-- Remove i18ntext files from the Content bucket so Toolbelt does not publish them as static
+         web assets under wwwroot/_content/. ApiLocalizer reads them at runtime from i18ntext/
+         relative to the app root, so they must land there — not in wwwroot. -->
+    <Content Remove="i18ntext\UI.*.json" />
+    <None Include="i18ntext\UI.*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>
