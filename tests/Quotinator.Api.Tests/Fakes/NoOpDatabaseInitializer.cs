@@ -1,0 +1,14 @@
+using Quotinator.Core.Data;
+
+namespace Quotinator.Api.Tests.Fakes;
+
+/// <summary>No-op IDatabaseInitializer for endpoint tests that use FakeQuoteService and must not touch the real database.</summary>
+internal sealed class NoOpDatabaseInitializer : IDatabaseInitializer
+{
+    public int SchemaVersion => 0;
+    public int QuoteCount    => 0;
+    public int SourceCount   => 0;
+    public int CharacterCount => 0;
+    public int PeopleCount   => 0;
+    public Task InitialiseAsync() => Task.CompletedTask;
+}

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
+using Quotinator.Core.Data;
 using Quotinator.Core.Services;
 
 namespace Quotinator.Api.Tests.Endpoints;
@@ -15,7 +16,10 @@ public class QuoteEndpointsTests
     private static WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
-                services.AddSingleton<IQuoteService>(new FakeQuoteService())));
+            {
+                services.AddSingleton<IQuoteService>(new FakeQuoteService());
+                services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
+            }));
 
     // ── /random ──────────────────────────────────────────────────────────
 

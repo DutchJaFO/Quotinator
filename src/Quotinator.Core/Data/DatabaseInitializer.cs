@@ -16,25 +16,25 @@ namespace Quotinator.Core.Data;
 /// Runs schema migrations and seeds the database from quotes.json on first run.
 /// Call <see cref="InitialiseAsync"/> once at startup before serving requests.
 /// </summary>
-public sealed class DatabaseInitializer
+public sealed class DatabaseInitializer : IDatabaseInitializer
 {
     private readonly IDbConnectionFactory _factory;
     private readonly string _seedJsonPath;
     private readonly ILogger<DatabaseInitializer> _logger;
 
-    /// <summary>Schema version applied at startup. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    /// <inheritdoc/>
     public int SchemaVersion { get; private set; }
 
-    /// <summary>Total non-deleted quote rows. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    /// <inheritdoc/>
     public int QuoteCount { get; private set; }
 
-    /// <summary>Total non-deleted source rows. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    /// <inheritdoc/>
     public int SourceCount { get; private set; }
 
-    /// <summary>Total non-deleted character rows. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    /// <inheritdoc/>
     public int CharacterCount { get; private set; }
 
-    /// <summary>Total non-deleted people rows. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    /// <inheritdoc/>
     public int PeopleCount { get; private set; }
 
     // Guards against concurrent seeding when multiple WebApplicationFactory instances start in
@@ -59,7 +59,7 @@ public sealed class DatabaseInitializer
         _logger       = logger;
     }
 
-    /// <summary>Ensures WAL mode is active, applies any pending schema migrations, and seeds the database from <c>quotes.json</c> if empty.</summary>
+    /// <inheritdoc/>
     public async Task InitialiseAsync()
     {
         using var connection = (SqliteConnection)_factory.CreateConnection();

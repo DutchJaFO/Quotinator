@@ -135,7 +135,7 @@ builder.Services.AddSingleton<IVersionService, VersionService>();
 var dbPath = Path.Combine(dataDir, "quotes.db");
 var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
-builder.Services.AddSingleton<DatabaseInitializer>(sp => new DatabaseInitializer(
+builder.Services.AddSingleton<IDatabaseInitializer>(sp => new DatabaseInitializer(
     connectionFactory, dataPath, sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
 builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<IApiLocalizer>(
@@ -179,7 +179,7 @@ builder.Logging.SetMinimumLevel(haLogLevel.ToLowerInvariant() switch
 
 var app = builder.Build();
 
-var dbInitializer = app.Services.GetRequiredService<DatabaseInitializer>();
+var dbInitializer = app.Services.GetRequiredService<IDatabaseInitializer>();
 await dbInitializer.InitialiseAsync();
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
@@ -268,7 +268,7 @@ app.MapGet(ApiRoutes.Health, () => Results.Ok(new { status = "healthy" }))
    .WithSummary("Health check")
    .WithDescription("Returns the current health status of the API. Use this endpoint to verify the service is running.");
 
-app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, DatabaseInitializer db) =>
+app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDatabaseInitializer db) =>
     Results.Ok(new
     {
         version     = vs.Version,
