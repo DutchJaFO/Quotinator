@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.0.14] - 2026-06-15
+
+### Changed
+- `DatabaseInitializer` now implements `IDatabaseInitializer`; `Program.cs` registers and resolves via the interface
+- Endpoint tests register `NoOpDatabaseInitializer` alongside `FakeQuoteService` — no database is created or seeded during tests that have no intent to exercise the database layer
+
 ## [1.0.13] - 2026-06-15
 
 ### Fixed
