@@ -19,11 +19,13 @@ The REST API is available at `http://<ha-host>:8080/api/v1/`.
 | `GET /api/v1/quotes/random?n=10` | N random quotes (1–100) |
 | `GET /api/v1/quotes` | All quotes, paginated |
 | `GET /api/v1/quotes/{id}` | Quote by UUID |
-| `GET /api/v1/quotes/search?q=term` | Search by text, source, character, or author |
+| `GET /api/v1/quotes/search?q=term` | Search quotes; add `&field=quote\|source\|character\|author` to restrict the field |
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/version` | Running version |
 
-All endpoints accept an optional `lang` query parameter (ISO 639-1 code, e.g. `nl`, `de`) to request a translated response. Falls back to the original language if no translation exists.
+All endpoints accept an optional `lang` query parameter (ISO 639-1 code, e.g. `nl`, `de`) to request a translated quote response. Falls back to the original language if no translation exists. Error message language is controlled separately by the `Accept-Language` request header.
+
+The interactive API reference is available at `http://<ha-host>:8080/scalar/v1`.
 
 ## Configuration
 

@@ -103,11 +103,13 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/quotes/random?n=10` | N random quotes (1–100) |
 | GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`) |
 | GET | `/api/v1/quotes/{id}` | Quote by UUID |
-| GET | `/api/v1/quotes/search?q=term` | Search by text, source, character, or author |
+| GET | `/api/v1/quotes/search?q=term` | Search quotes; add `&field=quote\|source\|character\|author` to restrict the field |
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/version` | Running version and environment |
 
-All list endpoints accept `type` and `genre` filters. All endpoints return [RFC 7807 ProblemDetails](https://www.rfc-editor.org/rfc/rfc7807) on error, with localised `detail` messages when `lang` is set. The API applies a sliding-window rate limit of 100 requests per minute per IP.
+All list endpoints accept `type` and `genre` filters. All endpoints return [RFC 7807 ProblemDetails](https://www.rfc-editor.org/rfc/rfc7807) on error, with localised `detail` messages driven by the `Accept-Language` request header. The API applies a sliding-window rate limit of 100 requests per minute per IP.
+
+The interactive API reference (Scalar) is available at `/scalar/v1` and the raw OpenAPI spec at `/openapi/v1.json`.
 
 ---
 

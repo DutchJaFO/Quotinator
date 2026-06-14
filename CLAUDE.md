@@ -33,7 +33,7 @@ dotnet-script scripts/seed.csx -- --no-fetch   # use scripts/cache/ instead of d
 docker build -f docker/Dockerfile -t quotinator:local .
 ```
 
-When running locally, the Scalar API reference is at `http://localhost:5000/scalar/v1` (Development only).
+The Scalar API reference is at `/scalar/v1` and the OpenAPI spec at `/openapi/v1.json` — available in all environments including production.
 
 ---
 
@@ -200,6 +200,16 @@ Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.
 ### Route registration order
 
 `/search` is registered before `/{id}` in `QuoteEndpoints.cs` so the literal segment takes priority over the catch-all parameter. Preserve this order.
+
+### Keeping API documentation in sync
+
+When adding, removing, or changing any endpoint, parameter, or behaviour, update **all three** of these in the same commit:
+
+1. `README.md` — the REST API Endpoints table and any parameter descriptions
+2. `addon/DOCS.md` — the API Endpoints table (HA add-on users read this)
+3. `src/Quotinator.Api/Endpoints/QuoteEndpoints.cs` — the `[Description]` attributes on the endpoint and its parameters (these feed the OpenAPI/Scalar UI)
+
+The Scalar API reference is at `/scalar/v1` and the raw spec at `/openapi/v1.json` — both are available in all environments including production. Do not gate them behind `IsDevelopment()`.
 
 ---
 
