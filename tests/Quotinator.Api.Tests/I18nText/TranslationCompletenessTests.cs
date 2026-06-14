@@ -13,7 +13,7 @@ public class TranslationCompletenessTests
     private static readonly string I18nTextDir =
         Path.Combine(AppContext.BaseDirectory, "i18ntext");
 
-    private static readonly string BaselineFile = Path.Combine(I18nTextDir, "UI.en.json");
+    private static readonly string BaselineFile = Path.Combine(I18nTextDir, "UI.en-GB.json");
 
     private static IReadOnlySet<string> LoadKeys(string path)
     {

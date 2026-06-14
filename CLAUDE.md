@@ -168,16 +168,15 @@ Expose at `/mcp` using the official MCP .NET SDK when available. Do not implemen
 All translated UI strings and API error messages live in a single set of JSON files:
 
 ```
-src/Quotinator.Api/i18ntext/UI.en.json      ← English baseline (source of truth)
-src/Quotinator.Api/i18ntext/UI.en-GB.json
+src/Quotinator.Api/i18ntext/UI.en-GB.json   ← English baseline (source of truth)
 src/Quotinator.Api/i18ntext/UI.de.json
 src/Quotinator.Api/i18ntext/UI.nl.json
 ```
 
-**Rule:** every key that exists in `UI.en.json` must exist (non-empty) in every other file. The test `TranslationCompletenessTests` enforces this.
+**Rule:** every key that exists in `UI.en-GB.json` must exist (non-empty) in every other file. The test `TranslationCompletenessTests` enforces this.
 
 **When adding a new UI string — checklist (all in the same commit):**
-1. Add the key to `UI.en.json`
+1. Add the key to `UI.en-GB.json`
 2. Add translations to `UI.de.json`, `UI.nl.json`, and `UI.en-GB.json`
 3. Reference it in the Razor component as `@Text.KeyName` — **never hardcode English (or any language) directly in `.razor` markup**
 

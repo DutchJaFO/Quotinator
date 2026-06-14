@@ -88,8 +88,8 @@ builder.Services.AddI18nText(options =>
 
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
-    var supported = new[] { "en", "en-GB", "de", "nl" };
-    options.DefaultRequestCulture = new RequestCulture("en");
+    var supported = new[] { "en-GB", "de", "nl" };
+    options.DefaultRequestCulture = new RequestCulture("en-GB");
     options.AddSupportedCultures(supported);
     options.AddSupportedUICultures(supported);
 });

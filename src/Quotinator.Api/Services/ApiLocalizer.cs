@@ -27,7 +27,7 @@ internal sealed class ApiLocalizer : IApiLocalizer
 
         if (TryGet(culture.Name, key, out var v)) return v;
         if (TryGet(culture.TwoLetterISOLanguageName, key, out v)) return v;
-        if (TryGet("en", key, out v)) return v;
+        if (TryGet("en-GB", key, out v)) return v;
         return key;
     }
 
