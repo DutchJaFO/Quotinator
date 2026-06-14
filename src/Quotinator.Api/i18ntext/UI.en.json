@@ -17,6 +17,7 @@
   "TranslationsQuoteContent": "Quote content is stored in its original language. Where a manual translation exists, append ?lang= to any endpoint to request it — for example ?lang=nl for Dutch.",
   "TranslationsUi": "The UI and API error messages follow your browser's language preference automatically.",
   "LanguageSelectorLabel": "Select language",
+  "LanguageSelectorAutoDetect": "Auto-detect",
   "HomeNavLabel": "Home",
   "ErrorSearchQueryRequired": "The q parameter is required. Provide a search term.",
   "ErrorSearchQueryTooLong": "The search term must not exceed 200 characters.",

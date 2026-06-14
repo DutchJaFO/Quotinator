@@ -137,22 +137,22 @@ app.MapGet("/api/v1/version", (IVersionService vs, IWebHostEnvironment env) =>
 
 app.MapQuoteEndpoints();
 
-// Sets the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
-// Cookie format: c={culture}|uic={culture} — read by CookieRequestCultureProvider on every request.
-app.MapGet("/Culture/Set", (string culture, string redirectUri, HttpContext context) =>
+// Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
+// Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.
+// Non-empty culture: sets the cookie (c={culture}|uic={culture}) read by CookieRequestCultureProvider.
+app.MapGet("/Culture/Set", (string? culture, string redirectUri, HttpContext context) =>
 {
-    if (!string.IsNullOrEmpty(culture))
+    if (string.IsNullOrEmpty(culture))
+    {
+        context.Response.Cookies.Delete(CookieRequestCultureProvider.DefaultCookieName,
+            new CookieOptions { SameSite = SameSiteMode.Lax, Secure = true });
+    }
+    else
     {
         context.Response.Cookies.Append(
             CookieRequestCultureProvider.DefaultCookieName,
             CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture, culture)),
-            new CookieOptions
-            {
-                MaxAge = TimeSpan.FromDays(365),
-                IsEssential = true,
-                SameSite = SameSiteMode.Lax,
-                Secure = true
-            });
+            new CookieOptions { MaxAge = TimeSpan.FromDays(365), IsEssential = true, SameSite = SameSiteMode.Lax, Secure = true });
     }
     return TypedResults.LocalRedirect(redirectUri);
 });

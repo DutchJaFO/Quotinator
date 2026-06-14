@@ -1,5 +1,7 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Localization;
 using Toolbelt.Blazor.I18nText;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
@@ -18,21 +20,29 @@ public partial class LanguageSelector
 
     #region Private
 
-    private static readonly (string CultureCode, string Label)[] SupportedLanguages =
+    // Property (not field) because it references Text, which is set in OnInitializedAsync.
+    private (string CultureCode, string Label)[] SupportedLanguages =>
     [
-        ("en",    "English (en)"),
+        ("",      Text.LanguageSelectorAutoDetect),
         ("en-GB", "English UK (en-GB)"),
         ("de",    "Deutsch (de)"),
         ("nl",    "Nederlands (nl)"),
     ];
 
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
     [Inject] private NavigationManager Navigation { get; set; } = default!;
     [Inject] private I18nTextService I18nText { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
 
-    private bool IsSelected(string code) =>
-        string.Equals(CultureInfo.CurrentUICulture.Name, code, StringComparison.OrdinalIgnoreCase);
+    // Auto-detect mode: no culture cookie is set, so the browser's Accept-Language drives the language.
+    private bool IsAutoMode =>
+        string.IsNullOrEmpty(HttpContext?.Request.Cookies[CookieRequestCultureProvider.DefaultCookieName]);
+
+    private bool IsSelected(string cultureCode) =>
+        cultureCode.Length == 0
+            ? IsAutoMode
+            : !IsAutoMode && string.Equals(CultureInfo.CurrentUICulture.Name, cultureCode, StringComparison.OrdinalIgnoreCase);
 
     private string ReturnUri =>
         new Uri(Navigation.Uri).GetComponents(UriComponents.PathAndQuery, UriFormat.Unescaped);

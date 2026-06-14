@@ -17,6 +17,7 @@
   "TranslationsQuoteContent": "Zitatinhalt wird in der Originalsprache gespeichert. Wenn eine manuelle Übersetzung vorhanden ist, kann ?lang= an jeden Endpunkt angehängt werden — zum Beispiel ?lang=nl für Niederländisch.",
   "TranslationsUi": "Die Benutzeroberfläche und API-Fehlermeldungen richten sich automatisch nach der Spracheinstellung des Browsers.",
   "LanguageSelectorLabel": "Sprache auswählen",
+  "LanguageSelectorAutoDetect": "Automatisch",
   "HomeNavLabel": "Startseite",
   "ErrorSearchQueryRequired": "Der Parameter q ist erforderlich. Gib einen Suchbegriff ein.",
   "ErrorSearchQueryTooLong": "Der Suchbegriff darf nicht länger als 200 Zeichen sein.",
