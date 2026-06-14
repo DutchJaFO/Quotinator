@@ -1,0 +1,28 @@
+configuration:
+  log_level:
+    name: Logniveau
+    description: >-
+      Bepaalt de uitgebreidheid van de logs. Gebruik debug bij het melden van problemen.
+      Geldige waarden: trace, debug, info, notice, warning, error, fatal.
+  log_requests:
+    name: Verzoeken loggen
+    description: >-
+      Logt elk inkomend verzoek naar de quote API-eindpunten.
+      Standaard uitgeschakeld — schakel in om te bevestigen dat verzoeken aankomen zonder het debug-logniveau te activeren.
+  ssl:
+    name: SSL / HTTPS
+    description: >-
+      Schakelt HTTPS in op de directe toegangspoort (8080). Vereist een certificaat- en sleutelbestand.
+      Niet nodig bij gebruik van HA ingress of een reverse proxy voor TLS-beëindiging.
+  certfile:
+    name: Certificaatbestand
+    description: >-
+      Bestandsnaam van het certificaat, relatief aan /ssl/.
+      De Let's Encrypt add-on schrijft fullchain.pem automatisch.
+  keyfile:
+    name: Sleutelbestand
+    description: >-
+      Bestandsnaam van de privésleutel, relatief aan /ssl/.
+      De Let's Encrypt add-on schrijft privkey.pem automatisch.
+network:
+  8080/tcp: Directe webtoegang — HTTP (SSL uitgeschakeld) of HTTPS (SSL ingeschakeld)

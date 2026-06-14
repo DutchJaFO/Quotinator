@@ -11,7 +11,10 @@ A self-hosted quote REST API. Serves real, verified quotes from films, books, te
 
 ## API Endpoints
 
-The REST API is available at `http://<ha-host>:8080/api/v1/`.
+The REST API is accessible in two ways:
+
+- **Via HA ingress (default):** Quotinator appears in the Home Assistant sidebar. The API is reachable under the same ingress path — use this for automations and scripts running inside HA.
+- **Via direct port (for external tools):** Enable the direct access port in the add-on configuration (see [Direct access port](#direct-access-port) below), then use `http://<ha-host>:<port>/api/v1/`.
 
 | Endpoint | Description |
 |---|---|
@@ -27,7 +30,7 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1 code, e.g. `n
 
 A sliding-window rate limit of **100 requests per minute per IP** applies to all quote endpoints. Excess requests receive `429 Too Many Requests`.
 
-The interactive API reference is available at `http://<ha-host>:8080/scalar/v1`.
+The interactive API reference (Scalar) is available at `/scalar/v1` under whichever access path you use.
 
 ## Configuration
 
@@ -88,9 +91,12 @@ Quotes are stored in `/data/quotes.json` inside the add-on data directory. This 
 
 ## Access
 
-| Method | URL |
+| Method | How to reach it |
 |---|---|
-| Ingress (default) | Home Assistant sidebar |
-| Direct access (if enabled) | `http://<ha-host>:8080` |
-| Health check (direct) | `http://<ha-host>:8080/api/v1/health` |
-| Random quote (direct) | `http://<ha-host>:8080/api/v1/quotes/random` |
+| Ingress (default) | Home Assistant sidebar — no port configuration needed |
+| Direct access (if port enabled) | `http://<ha-host>:<port>/` |
+| Health check (direct) | `http://<ha-host>:<port>/api/v1/health` |
+| Random quote (direct) | `http://<ha-host>:<port>/api/v1/quotes/random` |
+| API reference (direct) | `http://<ha-host>:<port>/scalar/v1` |
+
+Replace `<port>` with the host port you mapped to `8080/tcp` in the add-on configuration.

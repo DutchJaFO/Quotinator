@@ -1,0 +1,28 @@
+configuration:
+  log_level:
+    name: Protokollstufe
+    description: >-
+      Steuert die Ausführlichkeit der Protokollierung. Verwende debug bei der Meldung von Problemen.
+      Gültige Werte: trace, debug, info, notice, warning, error, fatal.
+  log_requests:
+    name: Anfragen protokollieren
+    description: >-
+      Protokolliert jede eingehende Anfrage an die Quote-API-Endpunkte.
+      Standardmäßig deaktiviert — aktivieren, um eingehende Anfragen ohne Debug-Protokollstufe zu bestätigen.
+  ssl:
+    name: SSL / HTTPS
+    description: >-
+      Aktiviert HTTPS auf dem Direktzugriffsport (8080). Erfordert ein Zertifikat und eine Schlüsseldatei.
+      Nicht erforderlich bei Verwendung von HA Ingress oder einem Reverse-Proxy für TLS-Terminierung.
+  certfile:
+    name: Zertifikatsdatei
+    description: >-
+      Dateiname des Zertifikats, relativ zu /ssl/.
+      Das Let's Encrypt Add-on schreibt fullchain.pem automatisch.
+  keyfile:
+    name: Schlüsseldatei
+    description: >-
+      Dateiname des privaten Schlüssels, relativ zu /ssl/.
+      Das Let's Encrypt Add-on schreibt privkey.pem automatisch.
+network:
+  8080/tcp: Direkter Webzugriff — HTTP (SSL deaktiviert) oder HTTPS (SSL aktiviert)

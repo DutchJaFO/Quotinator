@@ -18,6 +18,9 @@
     <File Path="addon/CHANGELOG.md" />
     <File Path="addon/icon.png" />
     <File Path="addon/logo.png" />
+    <File Path="addon/translations/en.yaml" />
+    <File Path="addon/translations/nl.yaml" />
+    <File Path="addon/translations/de.yaml" />
   </Folder>
   <Folder Name="/data/">
     <File Path="data/quotes.json" />

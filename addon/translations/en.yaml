@@ -1,0 +1,28 @@
+configuration:
+  log_level:
+    name: Log level
+    description: >-
+      Controls log verbosity. Use debug when reporting issues.
+      Valid values: trace, debug, info, notice, warning, error, fatal.
+  log_requests:
+    name: Log requests
+    description: >-
+      Log each incoming request to the quote API endpoints.
+      Disabled by default — enable to confirm calls are arriving without needing debug log level.
+  ssl:
+    name: SSL / HTTPS
+    description: >-
+      Enable HTTPS on the direct access port (8080). Requires a certificate and key file.
+      Not needed when using HA ingress or a reverse proxy for TLS termination.
+  certfile:
+    name: Certificate file
+    description: >-
+      Certificate filename, relative to /ssl/.
+      The Let's Encrypt add-on writes fullchain.pem automatically.
+  keyfile:
+    name: Key file
+    description: >-
+      Private key filename, relative to /ssl/.
+      The Let's Encrypt add-on writes privkey.pem automatically.
+network:
+  8080/tcp: Direct web access — HTTP (ssl disabled) or HTTPS (ssl enabled)
