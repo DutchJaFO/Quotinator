@@ -8,9 +8,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
-### Changed
-- OpenAPI/Scalar documentation is English-only by deliberate decision — documented in `CLAUDE.md` and `docs/testing-policy.md`
-
 ## [1.0.4] - 2026-06-14
 
 ### Added
