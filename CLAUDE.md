@@ -381,7 +381,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
-3. **Changelog updated** — add an entry to `CHANGELOG.md` under `[Unreleased]` for any user-visible change; move entries to a versioned section when tagging a release
+3. **Changelog updated** — add entries to `CHANGELOG.md` under `[Unreleased]` as changes land. When tagging a release, promote the `[Unreleased]` block to a versioned heading (`## [x.y.z] - YYYY-MM-DD`) and **remove the `[Unreleased]` header entirely** — do not leave an empty section. Add the `[Unreleased]` header back only when the next change is ready to document.
 4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
    - `src/Quotinator.Api/Quotinator.Api.csproj` → `<Version>`
    - `addon/config.yaml` → `version`

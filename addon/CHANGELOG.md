@@ -4,11 +4,14 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.0.6] - 2026-06-14
 
 ### Added
 - SSL / HTTPS support on the direct-access port — set `ssl: true` and supply cert/key filenames (relative to `/ssl/`); defaults to disabled
 - Ingress now correctly detects the browser's HTTPS context via `X-Forwarded-Proto` — language selection and session cookies work properly through the HA ingress
+
+### Fixed
+- Blazor interactive components (e.g. the "New quote" button on the home page) did not work in Docker or the HA add-on
 
 ### Changed
 - Language selection cookie is no longer blocked in plain-HTTP direct-access deployments

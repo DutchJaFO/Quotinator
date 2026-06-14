@@ -6,12 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.0.6] - 2026-06-14
 
 ### Added
 - Optional HTTPS on the direct-access port (8080) via Kestrel; configure with `Quotinator__Ssl=true`, `Quotinator__SslCertFile`, and `Quotinator__SslKeyFile` environment variables
 - HA add-on SSL options (`ssl`, `certfile`, `keyfile`) — defaults to `ssl: false`; when enabled, uses certs from `/ssl/` (HA Let's Encrypt add-on writes there)
 - `UseForwardedHeaders()` middleware reads `X-Forwarded-Proto` and `X-Forwarded-For` from upstream proxies so the app knows it is behind HTTPS even when running HTTP internally (required for HA ingress)
+
+### Fixed
+- Blazor interactive components (e.g. the "New quote" button) did not work in Docker — `_framework/blazor.web.js` was missing from the Docker publish output because `--no-restore` reused an incomplete Blazor static web assets manifest generated before source files were copied; fixed by removing `--no-restore` from `dotnet publish`
 
 ### Changed
 - DataProtection keys are now persisted to the data directory (`/app/data`) instead of ephemeral in-memory; antiforgery tokens and Blazor circuit descriptors survive container restarts
@@ -84,7 +87,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - GitHub Actions CI pipeline: build, test, and publish smoke test
 - GitHub Actions release pipeline: builds and pushes Docker image to GHCR on version tags
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.5...HEAD
+[1.0.6]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.2...v1.0.3
