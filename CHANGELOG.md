@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.0.10] - 2026-06-14
+
+### Changed
+- Startup banner now prints as a single log entry (one timestamp) instead of one line per log call
+- Banner config summary added: `log_level`, `log_requests`, `ssl` state, and cert/key paths when SSL is enabled
+
 ## [1.0.9] - 2026-06-14
 
 ### Added

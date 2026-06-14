@@ -4,6 +4,11 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.0.10] - 2026-06-14
+
+### Changed
+- Startup banner prints as a single block (one timestamp) with config summary: log level, request logging state, SSL state, and cert paths when SSL is enabled
+
 ## [1.0.9] - 2026-06-14
 
 ### Added
