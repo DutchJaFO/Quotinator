@@ -373,14 +373,15 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 **Always tag in a separate commit/push cycle from feature work.** The reason: Dependabot may open PRs shortly after a push (NuGet and GitHub Actions updates run weekly). Merging those before tagging means the release includes up-to-date dependencies rather than shipping a version that is immediately out of date.
 
 Workflow:
-1. Push all feature/fix commits to `main`
-2. Wait for any pending Dependabot PRs to finish CI
-3. Review and merge passing Dependabot PRs
-4. `git pull` to bring dependency bumps onto your local branch
-5. Update `CHANGELOG.md` and `addon/CHANGELOG.md` with the dependency bump entries
-6. Bump versions (`csproj`, `addon/config.yaml`, both changelogs) and commit
-7. Run the full pre-push checklist above (including Docker build)
-8. Push the version bump commit, then push the tag:
+1. **At the start of a session** — check for open Dependabot PRs (`gh pr list --state open`) and merge any that are green before starting feature work. This avoids Dependabot reacting to your push mid-session.
+2. Push all feature/fix commits to `main`
+3. Wait for any remaining Dependabot PRs to finish CI
+4. Review and merge passing Dependabot PRs
+5. `git pull` to bring dependency bumps onto your local branch
+6. Update `CHANGELOG.md` and `addon/CHANGELOG.md` with the dependency bump entries
+7. Bump versions (`csproj`, `addon/config.yaml`, both changelogs) and commit
+8. Run the full pre-push checklist above (including Docker build)
+9. Push the version bump commit, then push the tag:
    ```bash
    git tag v1.0.x
    git push origin v1.0.x
