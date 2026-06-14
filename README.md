@@ -24,7 +24,8 @@ A self-hosted quote REST API with MCP support, built in C# / ASP.NET Core, deplo
 Quotinator/
 ├── src/
 │   ├── Quotinator.Api/          # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
-│   └── Quotinator.Core/         # Shared models, services, data access
+│   ├── Quotinator.Core/         # Models, interfaces, service implementations
+│   └── Quotinator.Constants/    # Route strings, tag names, error message keys (no dependencies)
 ├── data/
 │   └── quotes.json              # Quote dataset (seed data + additions)
 ├── docker/
@@ -45,10 +46,10 @@ Quotinator/
 | Language | C# (.NET 10) |
 | API | ASP.NET Core Minimal API |
 | Frontend | Blazor Server |
-| Data | JSON flat-file (SQLite planned for v2) |
+| Data | JSON flat-file (SQLite planned) |
 | Protocol | REST + MCP (Model Context Protocol) |
 | Container | Docker (linux/amd64 + linux/arm64) |
-| Auth | API key (v2), user management via UI (v2) |
+| Auth | Not yet implemented — API is read-only |
 
 ---
 
@@ -93,7 +94,7 @@ API responses include `language`, `originalLanguage`, and `isTranslated` so cons
 
 ---
 
-## REST API Endpoints (v1)
+## REST API Endpoints
 
 All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a specific language. Responses always include `language`, `originalLanguage`, and `isTranslated` so consumers know whether they received a translation or the original. See [`docs/localisation.md`](docs/localisation.md) for details.
 
@@ -115,18 +116,6 @@ The web UI includes a language selector in the navbar. It overrides the browser'
 
 ---
 
-## MCP Support (v3 — planned)
-
-MCP support is planned for v3. The endpoint will be served at `/mcp` and will expose tools for fetching and searching quotes. Not yet implemented.
-
----
-
-## Web Frontend (v2 — planned)
-
-The Blazor Server management UI is planned for v2. Not yet implemented.
-
----
-
 ## Docker
 
 ```bash
@@ -138,7 +127,7 @@ docker run -d \
 
 A `docker-compose.yml` example is included in the `docker/` directory.
 
-> **Note:** Authentication is not implemented in v1. The API is read-only and requires no credentials.
+> **Note:** Authentication is not yet implemented. The API is read-only and requires no credentials.
 
 ### HTTPS / SSL
 
@@ -179,29 +168,7 @@ The API will be available at `https://localhost:7028`. See [`docs/running-locall
 
 ## Roadmap
 
-### v1 — Core ✅ (1.0.0)
-- [x] Project structure
-- [x] Quote data seed + deduplication script (780 quotes)
-- [x] REST API (read endpoints)
-- [x] Docker image (amd64 + arm64)
-
-### v2 — SQLite + Management (next)
-- [ ] SQLite backend (replaces flat-file JSON)
-- [ ] Authenticated write endpoints
-- [ ] Blazor management UI (CRUD)
-- [ ] API key management
-- [ ] User management
-
-### v3 — Integrations
-- [ ] MCP server endpoint
-- [x] Home Assistant add-on manifest and ingress
-
-### Optional / unversioned
-Features that may be added in any future version, or not at all. See [`docs/data-import.md`](docs/data-import.md) for detail on the import strategy variants.
-
-- [ ] Docker build-time seeding (data baked in at image build, no committed file needed)
-- [ ] Container startup seeding (data fetched fresh on first run)
-- [ ] Scheduled or webhook-triggered seed refresh
+Upcoming work is tracked in [GitHub Milestones](https://github.com/DutchJaFO/Quotinator/milestones).
 
 ---
 
