@@ -4,6 +4,7 @@
   "RestApiDescription": "The Quotinator API serves real, verified film quotes over a clean REST interface.",
   "EndpointColumn": "Endpoint",
   "UrlColumn": "URL",
+  "OpenApiButtonLabel": "Open API Reference",
   "OpenApiUiLabel": "OpenAPI UI (Scalar)",
   "OpenApiSpecLabel": "OpenAPI Spec",
   "HealthCheckLabel": "Health check",
