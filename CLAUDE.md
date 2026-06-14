@@ -376,8 +376,8 @@ Quality and process improvements that are not bugs but should be done before or 
 |---|---|---|
 | ~~1~~ | ~~**HA add-on direct port: default to `null`**~~ | Done. |
 | ~~2~~ | ~~**HA add-on quality score: AppArmor profile**~~ | Done — `addon/apparmor.txt`; supervisor auto-detects it. Needs verification on a real HA instance. |
-| 3 | **Release workflow: gate on CI passing** | Release and CI run in parallel — a broken build can produce a published image. Add a `workflow_run` trigger so the release only starts after CI passes. |
-| 4 | **Dependabot** | Add `.github/dependabot.yml` for automated NuGet and GitHub Actions version updates. |
+| ~~3~~ | ~~**Release workflow: gate on CI passing**~~ | Done — `release.yml` now has a `test` job (build + test + publish smoke) that `build-and-push` depends on via `needs: [test]`. A broken build cannot produce a published image. |
+| ~~4~~ | ~~**Dependabot**~~ | Done — `.github/dependabot.yml` added for weekly NuGet and GitHub Actions updates. |
 
 ---
 

@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- Release workflow now gates on CI passing — `build-and-push` depends on a `test` job so a broken build cannot produce a published image
+- Dependabot configured for weekly NuGet and GitHub Actions updates (`.github/dependabot.yml`)
 - Language selector in the navbar: overrides browser language preference, persists as a cookie for one year
 - Open API reference button on the home page
 - Translation support section on the home page

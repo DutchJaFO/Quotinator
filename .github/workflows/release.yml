@@ -10,8 +10,40 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+      - name: Publish smoke test
+        run: |
+          dotnet publish src/Quotinator.Api/Quotinator.Api.csproj \
+            --configuration Release \
+            --no-restore \
+            --output /tmp/publish
+          test -f /tmp/publish/data/quotes.json || \
+            (echo "ERROR: data/quotes.json missing from publish output" && exit 1)
+
   build-and-push:
     name: Build & Push Docker Image
+    needs: [test]
     runs-on: ubuntu-latest
 
     permissions:
