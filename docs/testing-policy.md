@@ -33,8 +33,12 @@ tests/
 
 Every string that appears in Razor markup must come from `@Text.KeyName` — never hardcode English (or any language) directly in `.razor` files. When adding a new UI string:
 
-1. Add the key to `i18ntext/UI.en.json` (the baseline)
-2. Add a translation to `UI.de.json`, `UI.nl.json`, and `UI.en-GB.json` in the same commit
+1. Add the key to `i18ntext/UI.en-GB.json` (the baseline — source of truth)
+2. Add translations to `UI.de.json` and `UI.nl.json` in the same commit
 3. Reference it in the component via `@Text.KeyName`
 
 The `TranslationCompletenessTests` enforces key parity and non-empty values across all language files. It does **not** detect hardcoded strings in markup — that is a code review responsibility.
+
+## OpenAPI documentation language
+
+The Scalar API reference and OpenAPI spec (`/openapi/v1.json`) are intentionally English-only. OpenAPI 3.1 has no native localisation mechanism for spec content, Scalar has no UI language configuration, and developer tooling is English by convention globally. Do not add translated strings to endpoint descriptions, summaries, or parameter descriptions. Revisit only if the OpenAPI specification or Scalar add native localisation support.

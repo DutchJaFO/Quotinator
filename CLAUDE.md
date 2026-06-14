@@ -240,6 +240,19 @@ When adding, removing, or changing any endpoint, parameter, or behaviour, update
 
 The Scalar API reference is at `/scalar/v1` and the raw spec at `/openapi/v1.json` — both are available in all environments including production. Do not gate them behind `IsDevelopment()`.
 
+### OpenAPI and Scalar documentation language
+
+The Scalar API reference (`/scalar/v1`) and the raw OpenAPI spec (`/openapi/v1.json`) are **English-only by deliberate decision** (verified 2026-06-14 against current specs):
+
+- **OpenAPI 3.1 has no native localisation mechanism** for spec content (descriptions, summaries, titles). Providing translations requires maintaining separate spec files per language — non-standard and unsupported by any tooling in the ecosystem.
+- **Scalar has no UI language configuration.** The Scalar interface chrome (buttons, navigation, labels) is English-only and cannot be configured by the API provider.
+- **Developer tooling is English by convention globally.** Virtually all public REST APIs publish English-only API documentation regardless of the developer's country or language selection.
+- **Parameter descriptions are compile-time constants** (`[Description]` attributes) and cannot be changed per-request, so full translation would not be achievable even in principle.
+
+Do not attempt to translate OpenAPI spec content or Scalar UI text. Revisit this decision only if:
+- The OpenAPI specification adds native localisation support, or
+- Scalar adds a documented API for configuring the UI display language.
+
 ---
 
 ## Data Sources
