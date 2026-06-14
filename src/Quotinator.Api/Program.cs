@@ -151,15 +151,39 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Map HA log level names (trace/debug/info/notice/warning/error/fatal) to ASP.NET Core LogLevel.
+// HA uses "info"; ASP.NET Core uses "Information" — the mapping is required, they do not match.
+// Per-category overrides in appsettings.json (Microsoft.AspNetCore: Warning) remain effective
+// because a specific category prefix always wins over the global minimum.
+var haLogLevel = builder.Configuration["Quotinator:LogLevel"] ?? "info";
+builder.Logging.SetMinimumLevel(haLogLevel.ToLowerInvariant() switch
+{
+    "trace"   => LogLevel.Trace,
+    "debug"   => LogLevel.Debug,
+    "notice"  => LogLevel.Information,
+    "info"    => LogLevel.Information,
+    "warning" => LogLevel.Warning,
+    "error"   => LogLevel.Error,
+    "fatal"   => LogLevel.Critical,
+    _         => LogLevel.Information
+});
+
 var app = builder.Build();
 
-// Eager init — resolves the path and loads quotes before the first request.
-// The count appears in both the application log and the VS Debug output window.
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+var versionService = app.Services.GetRequiredService<IVersionService>();
 var quoteService = app.Services.GetRequiredService<IQuoteService>();
-var quoteCount   = quoteService.GetAll(1, 1).TotalCount;
-Console.WriteLine($"[Quotinator] Data: {dataPath}");
-Console.WriteLine($"[Quotinator] Quotes loaded: {quoteCount}");
-app.Logger.LogInformation("Loaded {Count} quotes from {Path}", quoteCount, dataPath);
+var quoteCount = quoteService.GetAll(1, 1).TotalCount;
+
+logger.LogInformation("############################################");
+logger.LogInformation("Quotinator v{Version} starting", versionService.Version);
+logger.LogInformation("Data:  {DataPath} ({Count} quotes)", dataPath, quoteCount);
+logger.LogInformation("Keys:  {KeysDir}", keysDir);
+logger.LogInformation("############################################");
+
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStopping.Register(() =>
+    logger.LogInformation("Quotinator v{Version} stopping", versionService.Version));
 
 // Must be first so all subsequent middleware sees the correct scheme and client IP.
 app.UseForwardedHeaders();

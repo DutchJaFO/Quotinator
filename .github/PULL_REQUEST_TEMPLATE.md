@@ -2,6 +2,10 @@
 
 <!-- One paragraph summary. -->
 
+## Closes
+
+<!-- List any issues this PR closes: "Fixes #N" or "Closes #N" (one per line). GitHub auto-closes them on merge. -->
+
 ## Checklist
 
 - [ ] Tests pass (`dotnet test`)

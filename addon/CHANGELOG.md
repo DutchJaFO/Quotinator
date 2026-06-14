@@ -4,6 +4,13 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- `log_level` configuration option — choose log verbosity from the add-on panel (default: `info`; use `debug` when reporting issues)
+- UTC timestamps on all log lines
+- Clear start and stop markers in the supervisor log (version, data path, quote count)
+
 ## [1.0.8] - 2026-06-14
 
 ### Fixed

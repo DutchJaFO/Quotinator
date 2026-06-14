@@ -55,6 +55,12 @@ If you use a custom certificate, copy the files to `/ssl/` and reference them by
 
 > **Note:** When using the HA ingress (sidebar), you do not need SSL configured here — the HA supervisor handles TLS termination for ingress traffic.
 
+### Log level
+
+Controls the verbosity of the add-on log. Use `debug` when reporting issues. Default: `info`.
+
+Valid values: `trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`.
+
 ### Direct access port
 
 The direct access port is **disabled by default**. Enable it in the add-on configuration if you need to reach the API from outside Home Assistant — for example from MagicMirror², a shell script, or curl:

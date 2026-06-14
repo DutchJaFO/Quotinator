@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [Unreleased]
+
+### Added
+- `log_level` add-on option — controls verbosity of the HA supervisor log; valid values: `trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`; default `info`
+- UTC timestamps on all log lines (`yyyy-MM-dd HH:mm:ss`)
+- Startup banner logs version, data path, quote count, and keys directory on every start
+- Shutdown message logged when the container stops
+
+### Changed
+- `Console.WriteLine` startup output replaced by the structured logger — all output now respects the configured log level and timestamp format
+
 ## [1.0.8] - 2026-06-14
 
 ### Fixed
