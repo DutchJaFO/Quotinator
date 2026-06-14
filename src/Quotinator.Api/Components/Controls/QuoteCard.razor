@@ -1,0 +1,16 @@
+@using Quotinator.Core.Models
+
+@if (_quote is not null)
+{
+    <figure class="quote-card">
+        <blockquote class="quote-card__text">
+            <p>@_quote.Quote</p>
+        </blockquote>
+        <figcaption class="quote-card__attribution">
+            @Attribution
+            <cite class="quote-card__source"> — @_quote.Source@(DateSuffix)</cite>
+        </figcaption>
+    </figure>
+}
+
+<button class="btn btn-outline-secondary btn-sm mt-2" @onclick="LoadQuote">@Text.QuoteCardNewQuote</button>

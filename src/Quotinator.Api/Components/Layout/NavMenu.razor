@@ -1,5 +1,3 @@
-@inject I18nText I18nText
-
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">Quotinator</a>
@@ -17,12 +15,3 @@
         </div>
     </nav>
 </div>
-
-@code {
-    private Quotinator.Api.I18nText.UI Text = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
-    }
-}

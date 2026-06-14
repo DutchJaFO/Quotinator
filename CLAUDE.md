@@ -201,6 +201,17 @@ Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.
 
 `/search` is registered before `/{id}` in `QuoteEndpoints.cs` so the literal segment takes priority over the catch-all parameter. Preserve this order.
 
+### Blazor code style
+
+These rules apply to all Blazor components and pages:
+
+1. **Folder layout** — controls go in `Components/Controls/`, pages in `Components/Pages/`, layout components in `Components/Layout/`. No components at the `Components/` root level.
+2. **Always use code-behind files** — every `.razor` file has a paired `.razor.cs` partial class. No inline `@code { }` blocks, no `@inject` directives. Move `@inject` to `[Inject]` properties and `@using System.*` to the `.razor.cs` using list.
+3. **Member sort order** — public first, then protected, then private. Within each group: constructors, methods, properties, fields (standard C# convention).
+4. **Regions** — use `#region Protected` / `#region Private` (etc.) whenever a class has members from more than one access-modifier group. Omit regions when all members share one modifier level.
+5. **Namespace for generated `UI` class** — `Toolbelt.Blazor.I18nText` is both a namespace and a type. In `.razor.cs` files, alias the service: `using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;` and declare the property as `[Inject] private I18nTextService I18nText { get; set; } = default!;`.
+6. **`[Inject]` requires `using Microsoft.AspNetCore.Components;`** — `.razor.cs` files do not inherit `_Imports.razor` usings; always add this using explicitly.
+
 ### Keeping API documentation in sync
 
 When adding, removing, or changing any endpoint, parameter, or behaviour, update **all three** of these in the same commit:
