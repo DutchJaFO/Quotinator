@@ -29,18 +29,18 @@ The interactive API reference is available at `http://<ha-host>:8080/scalar/v1`.
 
 ## Configuration
 
-### Port
+### Ingress
 
-By default, Quotinator listens on port `8080` for direct access. If port `8080` is already in use, change the host-side port in the add-on configuration:
+Ingress is enabled by default. Quotinator appears in your Home Assistant sidebar and no port configuration is needed for normal use.
+
+### Direct access port
+
+The direct access port is **disabled by default**. Enable it in the add-on configuration if you need to reach the API from outside Home Assistant — for example from MagicMirror², a shell script, or curl:
 
 ```yaml
 ports:
-  8080/tcp: 8081   # change to any available port
+  8080/tcp: 8080   # or any available port on the host
 ```
-
-### Ingress
-
-Ingress is enabled by default. Quotinator will appear in your Home Assistant sidebar. In v1 the ingress panel shows a status page; the full management UI is planned for v2.
 
 ## Data
 
@@ -50,6 +50,7 @@ Quotes are stored in `/data/quotes.json` inside the add-on data directory. This 
 
 | Method | URL |
 |---|---|
-| Direct access | `http://<ha-host>:8080` |
-| Health check | `http://<ha-host>:8080/api/v1/health` |
-| Random quote | `http://<ha-host>:8080/api/v1/quotes/random` |
+| Ingress (default) | Home Assistant sidebar |
+| Direct access (if enabled) | `http://<ha-host>:8080` |
+| Health check (direct) | `http://<ha-host>:8080/api/v1/health` |
+| Random quote (direct) | `http://<ha-host>:8080/api/v1/quotes/random` |

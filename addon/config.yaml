@@ -19,11 +19,12 @@ boot: auto
 environment:
   ASPNETCORE_HTTP_PORTS: "8080;8099"
 
-# Direct access port — user can override the host-side port in HA if 8080 is taken.
+# Direct access port — disabled by default; enable in add-on config for MagicMirror,
+# curl, or other tools that need direct HTTP access outside of HA ingress.
 ports:
-  8080/tcp: 8080
+  8080/tcp: null
 ports_description:
-  8080/tcp: Direct web access (alternative to ingress)
+  8080/tcp: Direct web access (optional — ingress is the default access path)
 
 # Ingress — embeds the UI into the Home Assistant sidebar.
 # Uses a dedicated internal port (8099) separate from the direct access port (8080).
