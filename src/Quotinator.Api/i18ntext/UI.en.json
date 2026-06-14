@@ -8,5 +8,15 @@
   "OpenApiSpecLabel": "OpenAPI Spec",
   "HealthCheckLabel": "Health check",
   "AboutHeading": "About",
-  "HomeNavLabel": "Home"
+  "HomeNavLabel": "Home",
+  "ErrorSearchQueryRequired": "The q parameter is required. Provide a search term.",
+  "ErrorSearchQueryTooLong": "The search term must not exceed 200 characters.",
+  "ErrorLangInvalid": "lang must be a valid ISO 639-1 language code (e.g. en, nl, de).",
+  "ErrorTypeInvalid": "type must be one of: movie, tv, anime, book, person.",
+  "ErrorTooManyRequests": "Too many requests. Please slow down.",
+  "ErrorLimitOutOfRange": "limit must be a whole number between 1 and 100.",
+  "ErrorRandomNOutOfRange": "n must be a whole number between 1 and 100.",
+  "ErrorPageOutOfRange": "page must be a whole number of 1 or greater.",
+  "ErrorPageSizeOutOfRange": "pageSize must be a whole number between 1 and 100.",
+  "ErrorQuoteNotFound": "No quote with the requested ID was found."
 }

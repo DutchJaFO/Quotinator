@@ -8,5 +8,15 @@
   "OpenApiSpecLabel": "OpenAPI-specificatie",
   "HealthCheckLabel": "Statuscontrole",
   "AboutHeading": "Over",
-  "HomeNavLabel": "Startpagina"
+  "HomeNavLabel": "Startpagina",
+  "ErrorSearchQueryRequired": "De parameter q is verplicht. Geef een zoekterm op.",
+  "ErrorSearchQueryTooLong": "De zoekterm mag niet langer zijn dan 200 tekens.",
+  "ErrorLangInvalid": "lang moet een geldige ISO 639-1-taalcode zijn (bijv. en, nl, de).",
+  "ErrorTypeInvalid": "type moet een van de volgende waarden zijn: movie, tv, anime, book, person.",
+  "ErrorTooManyRequests": "Te veel verzoeken. Gelieve rustiger aan te doen.",
+  "ErrorLimitOutOfRange": "limit moet een geheel getal zijn tussen 1 en 100.",
+  "ErrorRandomNOutOfRange": "n moet een geheel getal zijn tussen 1 en 100.",
+  "ErrorPageOutOfRange": "page moet een geheel getal zijn van 1 of groter.",
+  "ErrorPageSizeOutOfRange": "pageSize moet een geheel getal zijn tussen 1 en 100.",
+  "ErrorQuoteNotFound": "Er is geen citaat gevonden met het opgegeven ID."
 }

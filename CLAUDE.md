@@ -1,6 +1,39 @@
-# CLAUDE.md — Quotinator Project Context
+# CLAUDE.md
 
-This file is the primary context document for AI assistants (Claude Code, etc.) working in this repository. Read this before doing anything else.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+It is the primary context document for AI assistants working in this repository. Read this before doing anything else.
+
+---
+
+## Commands
+
+```bash
+# Build (must be 0 warnings, 0 errors)
+dotnet build --configuration Release
+
+# Run all tests
+dotnet test --configuration Release --verbosity normal
+
+# Run a single test by name filter
+dotnet test --configuration Release --filter "FullyQualifiedName~GetRandom_NoN_ReturnsSingleQuote"
+
+# Run only one test project
+dotnet test tests/Quotinator.Core.Tests --configuration Release
+
+# Run the API locally (data path defaults to data/quotes.json relative to output)
+dotnet run --project src/Quotinator.Api
+
+# Re-seed data/quotes.json from the configured sources (run from repo root)
+dotnet-script scripts/seed.csx
+dotnet-script scripts/seed.csx -- --dry-run    # preview stats without writing
+dotnet-script scripts/seed.csx -- --no-fetch   # use scripts/cache/ instead of downloading
+
+# Build the Docker image locally (required before tagging a release)
+docker build -f docker/Dockerfile -t quotinator:local .
+```
+
+When running locally, the Scalar API reference is at `http://localhost:5000/scalar/v1` (Development only).
 
 ---
 
@@ -130,6 +163,35 @@ Sensitive or environment-specific config (API keys, ports, data paths) goes in e
 ### MCP (v3)
 Expose at `/mcp` using the official MCP .NET SDK when available. Do not implement in v1.
 
+### Localisation — two concerns, one string store
+
+All translated UI strings and API error messages live in a single set of JSON files:
+
+```
+src/Quotinator.Api/i18ntext/UI.en.json      ← English baseline (source of truth)
+src/Quotinator.Api/i18ntext/UI.en-GB.json
+src/Quotinator.Api/i18ntext/UI.de.json
+src/Quotinator.Api/i18ntext/UI.nl.json
+```
+
+**Rule:** every key that exists in `UI.en.json` must exist (non-empty) in every other file. The test `TranslationCompletenessTests` enforces this. When adding a new string, add it to all four files in the same commit.
+
+**How each consumer uses these files:**
+
+- **Blazor UI** (`Toolbelt.Blazor.I18nText`) — injects `II18nText` and calls `GetTextTableAsync<UI>(this)` in Razor components. Language is resolved from the browser/session context.
+- **API error messages** (`IApiLocalizer`) — reads the same JSON files at startup into a dictionary. The `IApiLocalizer` indexer (`localizer[ApiMessages.SomeKey]`) resolves to `CultureInfo.CurrentUICulture`, which `RequestLocalizationMiddleware` sets from the `Accept-Language` request header. Inject `IApiLocalizer` into endpoint handlers via DI.
+- `ApiMessages.cs` contains only the string constants (keys) used to look up messages via `IApiLocalizer`. It has no dictionary or translation logic.
+
+**The `?lang=` query parameter is a separate concern.** It tells `IQuoteService` which language to use when returning *quote content* (translations in `quotes.json`). It does not affect UI strings or error messages — those always follow `Accept-Language`. Do not conflate the two.
+
+### Endpoint test pattern
+
+Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.Mvc.Testing`) and replace `IQuoteService` with `FakeQuoteService` via `WithWebHostBuilder`. See `tests/Quotinator.Api.Tests/Endpoints/QuoteEndpointsTests.cs` for the canonical pattern. The `public partial class Program { }` line at the bottom of `Program.cs` is required to expose the entry point to the test project.
+
+### Route registration order
+
+`/search` is registered before `/{id}` in `QuoteEndpoints.cs` so the literal segment takes priority over the catch-all parameter. Preserve this order.
+
 ---
 
 ## Data Sources
@@ -164,6 +226,8 @@ See [`docs/testing-policy.md`](docs/testing-policy.md).
 - Do not generate or invent quotes — all quotes must come from the seeded dataset or be manually added
 - Do not auto-translate quotes — translations must be manually curated
 - Do not commit secrets, local IPs, or environment-specific configuration
+- Do not add translated strings outside the `i18ntext/UI.*.json` files — that is the single source of truth for all UI and error message translations
+- Do not use `?lang=` to drive error message language — error messages use `Accept-Language` via `IApiLocalizer`; `?lang=` is only for quote content language
 
 ---
 

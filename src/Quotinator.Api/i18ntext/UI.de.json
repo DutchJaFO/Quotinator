@@ -8,5 +8,15 @@
   "OpenApiSpecLabel": "OpenAPI-Spezifikation",
   "HealthCheckLabel": "Statusprüfung",
   "AboutHeading": "Über",
-  "HomeNavLabel": "Startseite"
+  "HomeNavLabel": "Startseite",
+  "ErrorSearchQueryRequired": "Der Parameter q ist erforderlich. Gib einen Suchbegriff ein.",
+  "ErrorSearchQueryTooLong": "Der Suchbegriff darf nicht länger als 200 Zeichen sein.",
+  "ErrorLangInvalid": "lang muss ein gültiger ISO-639-1-Sprachcode sein (z. B. en, nl, de).",
+  "ErrorTypeInvalid": "type muss einer der folgenden Werte sein: movie, tv, anime, book, person.",
+  "ErrorTooManyRequests": "Zu viele Anfragen. Bitte langsamer.",
+  "ErrorLimitOutOfRange": "limit muss eine ganze Zahl zwischen 1 und 100 sein.",
+  "ErrorRandomNOutOfRange": "n muss eine ganze Zahl zwischen 1 und 100 sein.",
+  "ErrorPageOutOfRange": "page muss eine ganze Zahl von 1 oder größer sein.",
+  "ErrorPageSizeOutOfRange": "pageSize muss eine ganze Zahl zwischen 1 und 100 sein.",
+  "ErrorQuoteNotFound": "Es wurde kein Zitat mit der angegebenen ID gefunden."
 }

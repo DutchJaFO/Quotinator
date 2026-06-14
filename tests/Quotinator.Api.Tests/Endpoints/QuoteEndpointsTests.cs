@@ -155,12 +155,14 @@ public class QuoteEndpointsTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(detail.GetString()));
     }
 
-    /// <summary>Missing q with lang=nl returns a Dutch ProblemDetails detail.</summary>
+    /// <summary>Missing q with Accept-Language: nl returns a Dutch ProblemDetails detail.</summary>
     [TestMethod]
-    public async Task Search_MissingQuery_WithLang_ReturnsLocalisedError()
+    public async Task Search_MissingQuery_WithAcceptLanguage_ReturnsLocalisedError()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?lang=nl");
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("nl");
+        var response = await client.GetAsync("/api/v1/quotes/search");
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.IsTrue(doc.RootElement.TryGetProperty("detail", out var detail));
         // Verify the response is Dutch, not English

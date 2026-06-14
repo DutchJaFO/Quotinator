@@ -55,14 +55,14 @@ builder.Services.AddRateLimiter(options =>
 
     options.OnRejected = async (context, token) =>
     {
-        var lang = context.HttpContext.Request.Query["lang"].FirstOrDefault();
+        var localizer = context.HttpContext.RequestServices.GetRequiredService<IApiLocalizer>();
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         await context.HttpContext.Response.WriteAsJsonAsync(
             new Microsoft.AspNetCore.Mvc.ProblemDetails
             {
                 Status = StatusCodes.Status429TooManyRequests,
                 Title = "Too Many Requests",
-                Detail = ApiMessages.Get(ApiMessages.TooManyRequests, lang)
+                Detail = localizer[ApiMessages.TooManyRequests]
             }, token);
     };
 });
@@ -74,6 +74,8 @@ var dataPath = builder.Configuration["Quotinator:DataPath"]
     ?? Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
 
 builder.Services.AddSingleton<IQuoteService>(_ => new QuoteService(dataPath));
+builder.Services.AddSingleton<IApiLocalizer>(
+    new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
 builder.Services.AddI18nText();
 
 builder.Services.Configure<RequestLocalizationOptions>(options =>
@@ -99,8 +101,8 @@ app.Logger.LogInformation("Loaded {Count} quotes from {Path}", quoteCount, dataP
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
-app.UseRateLimiter();
 app.UseRequestLocalization();
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
