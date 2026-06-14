@@ -89,6 +89,7 @@ HA renders the config panel in the user's language. The `addon/translations/` fo
 | `description` field in `config.yaml` | ❌ | Hard-coded string, no translation mechanism |
 | `addon/DOCS.md` (Documentation tab) | ❌ | English only — no HA translation mechanism for markdown content |
 | `addon/README.md` (Info tab) | ❌ | English only — same reason |
+| `addon/CHANGELOG.md` (Changelog tab) | ❌ | English only — no per-language changelog mechanism exists in HA |
 
 ### Translation file format
 
