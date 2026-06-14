@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.DataProtection;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Localization;
@@ -76,7 +77,14 @@ var dataPath = builder.Configuration["Quotinator:DataPath"]
 builder.Services.AddSingleton<IQuoteService>(_ => new QuoteService(dataPath));
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
-builder.Services.AddI18nText();
+builder.Services.AddI18nText(options =>
+{
+    // Use ASP.NET Core's culture (set from the .AspNetCore.Culture cookie by
+    // RequestLocalizationMiddleware) instead of the default JS navigator.language detection.
+    // This ensures Interactive Server components respect the cookie-selected language.
+    options.GetInitialLanguageAsync = (_, _) =>
+        ValueTask.FromResult(CultureInfo.CurrentUICulture.Name);
+});
 
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
@@ -138,7 +146,13 @@ app.MapGet("/Culture/Set", (string culture, string redirectUri, HttpContext cont
         context.Response.Cookies.Append(
             CookieRequestCultureProvider.DefaultCookieName,
             CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture, culture)),
-            new CookieOptions { MaxAge = TimeSpan.FromDays(365), IsEssential = true });
+            new CookieOptions
+            {
+                MaxAge = TimeSpan.FromDays(365),
+                IsEssential = true,
+                SameSite = SameSiteMode.Lax,
+                Secure = true
+            });
     }
     return TypedResults.LocalRedirect(redirectUri);
 });
