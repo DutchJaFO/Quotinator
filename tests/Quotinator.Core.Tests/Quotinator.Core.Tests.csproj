@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Quotinator.Constants\Quotinator.Constants.csproj" />
     <ProjectReference Include="..\..\src\Quotinator.Core\Quotinator.Core.csproj" />
   </ItemGroup>
 
