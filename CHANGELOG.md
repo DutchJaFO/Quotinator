@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-06-14
+
 ### Added
 - Release workflow now gates on CI passing — `build-and-push` depends on a `test` job so a broken build cannot produce a published image
 - Dependabot configured for weekly NuGet and GitHub Actions updates (`.github/dependabot.yml`)
@@ -24,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Changed
 - Home Assistant add-on direct access port disabled by default; enable in add-on configuration for direct LAN or tool access
+- `UI.en-GB.json` is now the i18n baseline; `UI.en.json` removed
+- Language selector offers: Auto-detect, English (en-GB), Deutsch, Nederlands
 
 ## [1.0.3] - 2026-06-14
 
@@ -60,7 +64,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - GitHub Actions CI pipeline: build, test, and publish smoke test
 - GitHub Actions release pipeline: builds and pushes Docker image to GHCR on version tags
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.0...v1.0.1

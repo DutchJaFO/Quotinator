@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-06-14
+
 ### Added
 - Language selector in the UI navbar — overrides browser language, persists as a cookie for one year
 - AppArmor profile (`apparmor.txt`) — restricts container filesystem and network access; improves add-on quality score
