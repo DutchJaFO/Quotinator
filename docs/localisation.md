@@ -38,14 +38,13 @@ UI.<language-code>.json
 
 | File | Language |
 |---|---|
-| `UI.en.json` | English (American) — baseline |
-| `UI.en-GB.json` | English (British) |
+| `UI.en-GB.json` | English — baseline (source of truth) |
 | `UI.de.json` | German |
 | `UI.nl.json` | Dutch |
 
 ### Adding a new UI language
 
-1. Copy `UI.en.json` to `UI.<code>.json` (e.g. `UI.fr.json`)
+1. Copy `UI.en-GB.json` to `UI.<code>.json` (e.g. `UI.fr.json`)
 2. Translate all values — **never leave a value empty**
 3. Add the language code to the supported cultures list in `Program.cs`:
 
@@ -57,7 +56,7 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 });
 ```
 
-The build will fail if any language file has missing or extra keys relative to `UI.en.json` — the translation completeness tests in `Quotinator.Api.Tests` enforce this.
+The build will fail if any language file has missing or extra keys relative to `UI.en-GB.json` — the translation completeness tests in `Quotinator.Api.Tests` enforce this.
 
 ### Using localised strings in a Blazor component
 
@@ -74,12 +73,12 @@ The build will fail if any language file has missing or extra keys relative to `
 }
 ```
 
-Then reference strings as `@Text.SomeKey`. The typed class is generated at build time from `UI.en.json` — IntelliSense works.
+Then reference strings as `@Text.SomeKey`. The typed class is generated at build time from `UI.en-GB.json` — IntelliSense works.
 
 ### Rules
 
 - **Never translate the app name** — `"Quotinator"` is a brand name and must appear as a literal string in components, not as a UI resource key.
-- `UI.en.json` is the single source of truth for which keys exist. All other language files must have exactly the same set of keys.
+- `UI.en-GB.json` is the single source of truth for which keys exist. All other language files must have exactly the same set of keys.
 
 ---
 
@@ -160,7 +159,7 @@ Non-English originals must set this field explicitly:
 
 `tests/Quotinator.Api.Tests/I18nText/TranslationCompletenessTests.cs` runs two checks on every build:
 
-1. **Key parity** — every language file has exactly the same keys as `UI.en.json`. Adding a key to the baseline without updating all other files fails CI.
+1. **Key parity** — every language file has exactly the same keys as `UI.en-GB.json`. Adding a key to the baseline without updating all other files fails CI.
 2. **No empty values** — no value in any language file may be blank.
 
 These tests use the i18ntext source files directly via `CopyToOutputDirectory="Always"` in the test project, so no path configuration is needed.

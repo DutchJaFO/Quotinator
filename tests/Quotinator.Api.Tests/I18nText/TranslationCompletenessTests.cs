@@ -4,7 +4,7 @@ namespace Quotinator.Api.Tests.I18nText;
 
 /// <summary>Verifies that every language file contains exactly the same keys as the English baseline.</summary>
 /// <remarks>
-/// A failing test here means a string was added to UI.en.json (or another file) without
+/// A failing test here means a string was added to UI.en-GB.json (or another file) without
 /// updating all other language files. Fix by adding the missing key(s) to the reported file.
 /// </remarks>
 [TestClass]
@@ -21,7 +21,7 @@ public class TranslationCompletenessTests
         return doc.RootElement.EnumerateObject().Select(p => p.Name).ToHashSet();
     }
 
-    /// <summary>Every language file must have exactly the same keys as <c>UI.en.json</c>.</summary>
+    /// <summary>Every language file must have exactly the same keys as <c>UI.en-GB.json</c>.</summary>
     [TestMethod]
     public void AllLanguageFiles_HaveExactlyTheSameKeysAsBaseline()
     {
