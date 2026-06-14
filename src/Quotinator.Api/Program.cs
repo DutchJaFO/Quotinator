@@ -174,12 +174,19 @@ var logger = app.Services.GetRequiredService<ILogger<Program>>();
 var versionService = app.Services.GetRequiredService<IVersionService>();
 var quoteService = app.Services.GetRequiredService<IQuoteService>();
 var quoteCount = quoteService.GetAll(1, 1).TotalCount;
+var logRequests = app.Configuration.GetValue<bool>("Quotinator:LogRequests");
 
-logger.LogInformation("############################################");
-logger.LogInformation("Quotinator v{Version} starting", versionService.Version);
-logger.LogInformation("Data:  {DataPath} ({Count} quotes)", dataPath, quoteCount);
-logger.LogInformation("Keys:  {KeysDir}", keysDir);
-logger.LogInformation("############################################");
+var banner = new System.Text.StringBuilder()
+    .AppendLine("############################################")
+    .AppendLine($"Quotinator v{versionService.Version} starting")
+    .AppendLine($"Data:  {dataPath} ({quoteCount} quotes)")
+    .AppendLine($"Keys:  {keysDir}")
+    .Append($"Cfg:   log_level={haLogLevel}  log_requests={(logRequests ? "on" : "off")}  ssl={( sslEnabled ? "on" : "off")}");
+if (sslEnabled)
+    banner.AppendLine().Append($"SSL:   {sslCertFile}  /  {sslKeyFile}");
+banner.AppendLine().Append("############################################");
+
+logger.LogInformation("{Banner}", banner);
 
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 lifetime.ApplicationStopping.Register(() =>
@@ -209,7 +216,7 @@ app.UseRateLimiter();
 // Optional request logging for /api/v1/quotes/* — off by default so the supervisor log
 // stays clean. Enable with log_requests: true in the add-on config (or Quotinator__LogRequests=true).
 // Uses a dedicated logger category so it can be suppressed independently if needed.
-if (app.Configuration.GetValue<bool>("Quotinator:LogRequests"))
+if (logRequests)
 {
     var requestLogger = app.Services.GetRequiredService<ILoggerFactory>()
         .CreateLogger("Quotinator.Requests");
