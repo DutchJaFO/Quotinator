@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-06-14
+
+### Changed
+- `Microsoft.AspNetCore.OpenApi` updated from 10.0.7 to 10.0.9
+
 ## [1.0.4] - 2026-06-14
 
 ### Added

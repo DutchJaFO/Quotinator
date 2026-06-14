@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-06-14
+
+### Changed
+- `Microsoft.AspNetCore.OpenApi` updated from 10.0.7 to 10.0.9
+- `actions/checkout` updated from v5 to v6 (CI only)
+- `Microsoft.AspNetCore.Mvc.Testing` updated from 10.0.0 to 10.0.9 (test only)
+- `MSTest` updated from 4.0.2 to 4.2.3 (test only)
+- `.gitattributes` normalised to LF for all text files — prevents CRLF/LF mismatches from Dependabot merges
+
 ## [1.0.4] - 2026-06-14
 
 ### Added
@@ -64,7 +73,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - GitHub Actions CI pipeline: build, test, and publish smoke test
 - GitHub Actions release pipeline: builds and pushes Docker image to GHCR on version tags
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.1...v1.0.2
