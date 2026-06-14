@@ -27,8 +27,16 @@
   <ItemGroup>
     <!-- Copy the quote dataset to the build output so it is available at runtime
          regardless of working directory (VS, dotnet run, Docker). -->
-    <Content Include="..\..\data\quotes.json" Link="data\quotes.json"
-             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\data\quotes.json" Link="data\quotes.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- Copy i18ntext JSON files to output so ApiLocalizer can read them at runtime.
+       Toolbelt.Blazor.I18nText consumes these files during build but does not copy them. -->
+  <Target Name="CopyI18nTextJsonFiles" AfterTargets="Build">
+    <ItemGroup>
+      <_I18nTextJson Include="i18ntext\UI.*.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_I18nTextJson)" DestinationFolder="$(OutputPath)i18ntext\" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>
