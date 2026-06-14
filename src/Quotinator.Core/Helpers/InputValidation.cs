@@ -1,13 +1,13 @@
 using System.Text.RegularExpressions;
 
-namespace Quotinator.Api;
+namespace Quotinator.Core.Helpers;
 
-internal static partial class InputValidation
+public static partial class InputValidation
 {
-    internal static readonly HashSet<string> ValidTypes =
+    public static readonly HashSet<string> ValidTypes =
         ["movie", "tv", "anime", "book", "person"];
 
-    internal static readonly HashSet<string> ValidSearchFields =
+    public static readonly HashSet<string> ValidSearchFields =
         ["quote", "source", "character", "author"];
 
     // ISO 639-1: 2-letter code, optionally followed by a region subtag (e.g. en-GB).
@@ -15,6 +15,6 @@ internal static partial class InputValidation
     [GeneratedRegex(@"^[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?$")]
     private static partial Regex LangPattern();
 
-    internal static bool IsValidLang(string lang) =>
+    public static bool IsValidLang(string lang) =>
         lang.Length <= 8 && LangPattern().IsMatch(lang);
 }
