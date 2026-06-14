@@ -1,4 +1,30 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="CLAUDE.md" />
+    <File Path="README.md" />
+    <File Path="SOURCES.md" />
+    <File Path="CHANGELOG.md" />
+  </Folder>
+  <Folder Name="/addon/">
+    <File Path="addon/config.yaml" />
+    <File Path="addon/README.md" />
+    <File Path="addon/DOCS.md" />
+    <File Path="addon/CHANGELOG.md" />
+    <File Path="addon/icon.png" />
+    <File Path="addon/logo.png" />
+  </Folder>
+  <Folder Name="/data/">
+    <File Path="data/quotes.json" />
+  </Folder>
+  <Folder Name="/docker/">
+    <File Path="docker/Dockerfile" />
+    <File Path="docker/docker-compose.yml" />
+  </Folder>
+  <Folder Name="/scripts/">
+    <File Path="scripts/seed.csx" />
+    <File Path="scripts/sources.json" />
+    <File Path="scripts/SOURCES.md" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Quotinator.Api/Quotinator.Api.csproj" />
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />

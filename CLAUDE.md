@@ -185,6 +185,23 @@ See [`docs/testing-policy.md`](docs/testing-policy.md).
 
 ---
 
+## Visual Studio Solution (Quotinator.slnx)
+
+The solution file is the source of truth for what is visible in Visual Studio. The rule is: **all files relevant to the project must be included as solution items, except generated binaries** (build output, `.db` files, etc.).
+
+Current folders and their contents:
+- `/Solution Items/` — `CLAUDE.md`, `README.md`, `SOURCES.md`, `CHANGELOG.md`
+- `/addon/` — all Home Assistant add-on files (`config.yaml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `icon.png`, `logo.png`)
+- `/data/` — `quotes.json`
+- `/docker/` — `Dockerfile`, `docker-compose.yml`
+- `/scripts/` — `seed.csx`, `sources.json`, `SOURCES.md`
+- `/src/` — C# projects
+- `/tests/` — test projects
+
+When adding new files to the repo, add them to the appropriate solution folder in `Quotinator.slnx` as well.
+
+---
+
 ## MagicMirror Integration (example consumer)
 
 The intended v1 consumer calls the random endpoint and maps the response to the format expected by the MagicMirror² compliments module:
