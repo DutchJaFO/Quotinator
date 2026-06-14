@@ -33,6 +33,10 @@ The interactive API reference is available at `http://<ha-host>:8080/scalar/v1`.
 
 Ingress is enabled by default. Quotinator appears in your Home Assistant sidebar and no port configuration is needed for normal use.
 
+### Language
+
+The UI adapts to the browser's language preference automatically. A language selector in the navbar lets you override this and choose from the supported languages (English, English UK, Deutsch, Nederlands). The choice is saved as a cookie and persists across sessions.
+
 ### Direct access port
 
 The direct access port is **disabled by default**. Enable it in the add-on configuration if you need to reach the API from outside Home Assistant — for example from MagicMirror², a shell script, or curl:

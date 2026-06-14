@@ -193,6 +193,14 @@ src/Quotinator.Api/i18ntext/UI.nl.json
 
 **The `?lang=` query parameter is a separate concern.** It tells `IQuoteService` which language to use when returning *quote content* (translations in `quotes.json`). It does not affect UI strings or error messages — those always follow `Accept-Language`. Do not conflate the two.
 
+### Language selector — UI culture override
+
+The navbar `LanguageSelector` control (`Components/Controls/LanguageSelector.razor`) lets users override the browser's `Accept-Language` preference. It submits a GET form to `/Culture/Set?culture={code}&redirectUri={path}`, which sets the `.AspNetCore.Culture` cookie (`c={code}|uic={code}`) and redirects back using `TypedResults.LocalRedirect` (prevents open-redirect attacks). The cookie is read by `CookieRequestCultureProvider` (one of the default providers in `RequestLocalizationOptions`) on every subsequent request. `MaxAge = 365 days`, `IsEssential = true` (no cookie consent required).
+
+**Do not use** `NavigationManager.NavigateTo(..., forceLoad: true)` for this — that requires `InteractiveServer` render mode. The plain HTML form approach works in static SSR and requires no Blazor circuit.
+
+**`@code` is a Razor reserved keyword.** Never use `code` as a loop variable name in `.razor` files — `@code` will be parsed as the `@code` directive. Use `cultureCode`, `langCode`, or similar instead.
+
 ### Endpoint test pattern
 
 Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.Mvc.Testing`) and replace `IQuoteService` with `FakeQuoteService` via `WithWebHostBuilder`. See `tests/Quotinator.Api.Tests/Endpoints/QuoteEndpointsTests.cs` for the canonical pattern. The `public partial class Program { }` line at the bottom of `Program.cs` is required to expose the entry point to the test project.

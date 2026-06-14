@@ -111,6 +111,8 @@ All list endpoints accept `type` and `genre` filters. All endpoints return [RFC 
 
 The interactive API reference (Scalar) is available at `/scalar/v1` and the raw OpenAPI spec at `/openapi/v1.json`.
 
+The web UI includes a language selector in the navbar. It overrides the browser's automatic language detection and persists the choice as a cookie for one year.
+
 ---
 
 ## MCP Support (v3 — planned)

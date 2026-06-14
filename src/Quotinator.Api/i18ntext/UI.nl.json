@@ -16,6 +16,7 @@
   "TranslationsHeading": "Taalondersteuning",
   "TranslationsQuoteContent": "Citaatinhoud wordt opgeslagen in de oorspronkelijke taal. Waar een handmatige vertaling beschikbaar is, voeg je ?lang= toe aan elk endpoint — bijvoorbeeld ?lang=nl voor Nederlands.",
   "TranslationsUi": "De gebruikersinterface en API-foutmeldingen volgen automatisch de taalvoorkeur van de browser.",
+  "LanguageSelectorLabel": "Taal selecteren",
   "HomeNavLabel": "Startpagina",
   "ErrorSearchQueryRequired": "De parameter q is verplicht. Geef een zoekterm op.",
   "ErrorSearchQueryTooLong": "De zoekterm mag niet langer zijn dan 200 tekens.",

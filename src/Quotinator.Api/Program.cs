@@ -129,6 +129,20 @@ app.MapGet("/api/v1/version", (IVersionService vs, IWebHostEnvironment env) =>
 
 app.MapQuoteEndpoints();
 
+// Sets the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
+// Cookie format: c={culture}|uic={culture} — read by CookieRequestCultureProvider on every request.
+app.MapGet("/Culture/Set", (string culture, string redirectUri, HttpContext context) =>
+{
+    if (!string.IsNullOrEmpty(culture))
+    {
+        context.Response.Cookies.Append(
+            CookieRequestCultureProvider.DefaultCookieName,
+            CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture, culture)),
+            new CookieOptions { MaxAge = TimeSpan.FromDays(365), IsEssential = true });
+    }
+    return TypedResults.LocalRedirect(redirectUri);
+});
+
 app.Run();
 
 // Exposes Program to WebApplicationFactory<Program> in the test project.
