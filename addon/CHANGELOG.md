@@ -4,10 +4,16 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.0.7] - 2026-06-14
+
+### Added
+- Quotes and DataProtection keys are now stored on the supervisor-mounted persistent volume (`/data`) so they survive add-on restarts and updates — no manual data migration needed on first install
 
 ### Fixed
 - Blazor assets (CSS, `blazor.web.js`) failed to load in the Home Assistant ingress panel — the sidebar page was broken with an "unhandled error" and the "New quote" button did not work
+- Antiforgery decryption failures after add-on restart: DataProtection keys were written to a non-persistent directory; they now persist across restarts
+- Port 8099 bind warning in the supervisor log: the add-on config previously set `ASPNETCORE_HTTP_PORTS` as well as the application code binding the same port; the environment override is removed
+- Language cookie endpoint no longer appears in the Scalar API reference
 
 ## [1.0.6] - 2026-06-14
 

@@ -70,16 +70,25 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-// Data path drives both the quote dataset and the DataProtection key directory.
+// Data path — configurable so the HA add-on can point this at /data (the supervisor's
+// persistent volume) while standalone Docker keeps the default /app/data.
 var dataPath = builder.Configuration["Quotinator:DataPath"]
     ?? Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
 var dataDir = Path.GetDirectoryName(dataPath) ?? Path.Combine(AppContext.BaseDirectory, "data");
 Directory.CreateDirectory(dataDir);
 
-// Persist DataProtection keys so antiforgery tokens (and Blazor circuit descriptors)
-// survive container restarts. Keys live alongside quotes.json in the data volume.
+// First-run seed: if the configured data path doesn't exist yet (e.g. a fresh HA add-on
+// data volume) copy the bundled quotes.json from the image into the persistent directory.
+var bundledData = Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
+if (!File.Exists(dataPath) && File.Exists(bundledData))
+    File.Copy(bundledData, dataPath);
+
+// Persist DataProtection keys to a subdirectory of the data volume so antiforgery tokens
+// and Blazor circuit descriptors survive container restarts and add-on updates.
+var keysDir = Path.Combine(dataDir, ".keys");
+Directory.CreateDirectory(keysDir);
 builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(dataDir));
+    .PersistKeysToFileSystem(new DirectoryInfo(keysDir));
 
 // Trust X-Forwarded-For / X-Forwarded-Proto from upstream proxies (HA ingress, reverse proxies).
 // This makes Request.IsHttps correct when Quotinator sits behind an HTTPS proxy, which is
@@ -107,8 +116,6 @@ if (isContainer)
     builder.WebHost.ConfigureKestrel(kestrel =>
     {
         // Port 8099 is always plain HTTP — used by the HA ingress (internal traffic only).
-        // ASPNETCORE_HTTP_PORTS in addon/config.yaml also binds 8099; this call is a no-op
-        // for standalone Docker where that env var is cleared in the Dockerfile.
         kestrel.ListenAnyIP(8099);
 
         if (sslEnabled && File.Exists(sslCertFile) && File.Exists(sslKeyFile))
@@ -217,7 +224,8 @@ app.MapGet("/Culture/Set", (string? culture, string redirectUri, HttpContext con
             new CookieOptions { MaxAge = TimeSpan.FromDays(365), IsEssential = true, SameSite = SameSiteMode.Lax, Secure = context.Request.IsHttps });
     }
     return TypedResults.LocalRedirect(redirectUri);
-});
+})
+.ExcludeFromDescription();
 
 app.Run();
 

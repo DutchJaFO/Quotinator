@@ -6,10 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.0.7] - 2026-06-14
+
+### Added
+- First-run seeding: if `Quotinator__DataPath` points to an empty directory (e.g. a fresh HA add-on data volume), the bundled `quotes.json` is automatically copied there on startup so the add-on works immediately without manual setup
 
 ### Fixed
 - Blazor assets (CSS, `blazor.web.js`) failed to load through the Home Assistant ingress panel — the hardcoded `<base href="/" />` caused relative URLs to resolve against HA's own server root instead of the ingress proxy path; fixed by reading `X-Ingress-Path` from the HA supervisor and setting it as the ASP.NET Core `PathBase`, which `<base href>` now reflects dynamically
+- DataProtection keys were not persisted across HA add-on restarts — `Quotinator__DataPath=/data/quotes.json` points the app at the supervisor's persistent volume (`map: data:rw`) so keys survive restarts and updates; antiforgery decryption failures and Blazor circuit descriptor mismatches are resolved
+- Kestrel double-bind warning: `ASPNETCORE_HTTP_PORTS: "8099"` in `addon/config.yaml` clashed with the Kestrel code that also binds port 8099; removed the environment block so port binding is owned entirely by the application
+- DataProtection keys are now written to a `.keys/` subdirectory within the data directory
+- `/Culture/Set` (language cookie endpoint) no longer appears in the Scalar API reference — it is a Blazor UI helper, not a REST API endpoint
 
 ## [1.0.6] - 2026-06-14
 
@@ -92,6 +99,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - GitHub Actions CI pipeline: build, test, and publish smoke test
 - GitHub Actions release pipeline: builds and pushes Docker image to GHCR on version tags
 
+[1.0.7]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/DutchJaFO/Quotinator/compare/v1.0.3...v1.0.4

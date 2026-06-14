@@ -181,7 +181,9 @@ Three access patterns exist and are handled differently:
 
 **ForwardedHeaders** (`UseForwardedHeaders()`) is always enabled. It reads `X-Forwarded-For` and `X-Forwarded-Proto` from any upstream proxy. `KnownNetworks` and `KnownProxies` are intentionally cleared — homelab deployments use trusted LAN proxies, so restricting by IP is unnecessary overhead. **This must be the first middleware in the pipeline** so that all downstream middleware (cookie Secure flags, rate limiting, antiforgery) sees the correct scheme and client IP.
 
-**DataProtection keys** are persisted to the data directory (`/app/data` in Docker, alongside `quotes.json`) via `PersistKeysToFileSystem`. This prevents antiforgery token decryption failures and Blazor circuit descriptor mismatches after container restarts. Never revert to `UseEphemeralDataProtectionProvider`.
+**DataProtection keys** are persisted to a `.keys/` subdirectory within the data directory via `PersistKeysToFileSystem`. This prevents antiforgery token decryption failures and Blazor circuit descriptor mismatches after container restarts. Never revert to `UseEphemeralDataProtectionProvider`.
+
+**HA add-on data path:** The HA supervisor mounts its persistent volume at `/data` inside the container (via `map: data:rw` in `addon/config.yaml`). The add-on env var `Quotinator__DataPath=/data/quotes.json` points the app there. DataProtection keys go in `/data/.keys/`. On standalone Docker the default is `/app/data/quotes.json` (no env override needed). First-run seeding: if `dataPath` does not exist, `Program.cs` copies the bundled `quotes.json` from `AppContext.BaseDirectory/data/` automatically.
 
 **Cookie `Secure` flag** is derived from `context.Request.IsHttps` (set correctly by `UseForwardedHeaders()`). Do not hardcode `Secure = true` — it prevents cookies from being sent over plain HTTP in deployments where Quotinator itself is HTTP (behind a proxy or in development).
 
@@ -441,5 +443,5 @@ Starting point for the next development session.
 - Seeding strategy: on first run, if the DB is empty, import from `data/quotes.json` so existing deployments migrate automatically
 - The `.db` file lives in `/app/data/` (same Docker volume as the JSON file)
 - Add `data/*.db` to `.gitignore` before the first run
-- Switch DataProtection from `UseEphemeralDataProtectionProvider()` to `PersistKeysToFileSystem(new DirectoryInfo("/app/data"))` so keys survive container restarts
+- DataProtection already persists to `dataDir/.keys/` — done in v1.0.7
 - Update the phase gates in this file and the roadmap in `README.md` as items are completed

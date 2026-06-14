@@ -1,5 +1,5 @@
 name: Quotinator
-version: "1.0.6"
+version: "1.0.7"
 slug: quotinator
 description: Self-hosted quote REST API serving real, verified quotes from films, books, TV, and famous people.
 url: https://github.com/DutchJaFO/Quotinator
@@ -14,11 +14,6 @@ image: ghcr.io/dutchjafo/quotinator
 startup: application
 boot: auto
 
-# Binds the ingress port via ASPNETCORE_HTTP_PORTS. Port 8080 (direct access) is
-# managed by the application's Kestrel configuration so SSL can be applied there.
-environment:
-  ASPNETCORE_HTTP_PORTS: "8099"
-
 # SSL — optional HTTPS on the direct-access port (8080).
 # Set ssl: true and supply the cert/key filenames (relative to /ssl/).
 # HA's Let's Encrypt add-on writes fullchain.pem + privkey.pem to /ssl/ automatically.
@@ -32,7 +27,10 @@ schema:
   certfile: str
   keyfile: str
 
-# Map add-on options to environment variables consumed by ASP.NET Core configuration.
+# Map add-on options and HA paths to environment variables consumed by ASP.NET Core.
+# Quotinator__DataPath points to the supervisor-mounted persistent volume (/data), not the
+# image-bundled /app/data directory. Kestrel port binding (8099 + 8080) is handled
+# entirely in code, so ASPNETCORE_HTTP_PORTS is intentionally absent here.
 env_vars:
   - name: Quotinator__Ssl
     value: "{{ ssl }}"
@@ -40,6 +38,8 @@ env_vars:
     value: "/ssl/{{ certfile }}"
   - name: Quotinator__SslKeyFile
     value: "/ssl/{{ keyfile }}"
+  - name: Quotinator__DataPath
+    value: "/data/quotes.json"
 
 # Direct access port — disabled by default; enable for MagicMirror, curl, or other
 # tools that need to reach the API outside of HA ingress.
