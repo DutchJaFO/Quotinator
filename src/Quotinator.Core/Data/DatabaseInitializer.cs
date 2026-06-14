@@ -22,6 +22,21 @@ public sealed class DatabaseInitializer
     private readonly string _seedJsonPath;
     private readonly ILogger<DatabaseInitializer> _logger;
 
+    /// <summary>Schema version applied at startup. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    public int SchemaVersion { get; private set; }
+
+    /// <summary>Total non-deleted quote rows. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    public int QuoteCount { get; private set; }
+
+    /// <summary>Total non-deleted source rows. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    public int SourceCount { get; private set; }
+
+    /// <summary>Total non-deleted character rows. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    public int CharacterCount { get; private set; }
+
+    /// <summary>Total non-deleted people rows. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    public int PeopleCount { get; private set; }
+
     // Numbered migration scripts. Add new entries at the end — never reorder or edit existing ones.
     private static readonly IReadOnlyList<string> Migrations =
     [
@@ -67,6 +82,7 @@ public sealed class DatabaseInitializer
 
         if (current >= Migrations.Count)
         {
+            SchemaVersion = current;
             _logger.LogInformation("Database: schema is up to date at version {Version}", current);
             return;
         }
@@ -86,6 +102,7 @@ public sealed class DatabaseInitializer
                 new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) });
         }
 
+        SchemaVersion = Migrations.Count;
         _logger.LogInformation(
             "Database: schema {Action} at version {Version}",
             current == 0 ? "created" : "updated", Migrations.Count);
@@ -247,14 +264,14 @@ public sealed class DatabaseInitializer
 
     private async Task LogDatabaseStatsAsync(SqliteConnection connection)
     {
-        var quotes     = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes      WHERE IsDeleted = 0;");
-        var sources    = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources     WHERE IsDeleted = 0;");
-        var characters = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Characters  WHERE IsDeleted = 0;");
-        var people     = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM People      WHERE IsDeleted = 0;");
+        QuoteCount     = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes      WHERE IsDeleted = 0;");
+        SourceCount    = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources     WHERE IsDeleted = 0;");
+        CharacterCount = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Characters  WHERE IsDeleted = 0;");
+        PeopleCount    = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM People      WHERE IsDeleted = 0;");
 
         _logger.LogInformation(
             "Database ready — {Quotes} quotes, {Sources} sources, {Characters} characters, {People} people",
-            quotes, sources, characters, people);
+            QuoteCount, SourceCount, CharacterCount, PeopleCount);
     }
 
     #endregion

@@ -4,11 +4,16 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
-## [1.0.12] - 2026-06-14
+## [1.0.12] - 2026-06-15
 
 ### Added
 - SQLite database backend: quotes are now stored in `quotes.db` on the persistent volume — no action required; the database is created and seeded automatically on first run
 - Startup log now shows database status: schema version applied, seeding progress, and a final count of quotes, sources, characters, and people
+- Version endpoint (`GET /api/v1/version`) now returns the database schema version and row counts alongside the API version
+
+### Fixed
+- Startup banner and version endpoint incorrectly reported version `1.0.0` instead of the actual add-on version
+- Docker image build failed when `Quotinator.Data` was introduced — Dockerfile COPY layers have been corrected
 
 ## [1.0.11] - 2026-06-14
 

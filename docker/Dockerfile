@@ -4,12 +4,14 @@ WORKDIR /src
 
 # Restore (layer-cached separately from source copy)
 COPY src/Quotinator.Constants/Quotinator.Constants.csproj src/Quotinator.Constants/
+COPY src/Quotinator.Data/Quotinator.Data.csproj src/Quotinator.Data/
 COPY src/Quotinator.Core/Quotinator.Core.csproj src/Quotinator.Core/
 COPY src/Quotinator.Api/Quotinator.Api.csproj src/Quotinator.Api/
 RUN dotnet restore src/Quotinator.Api/Quotinator.Api.csproj
 
 # Build and publish
 COPY src/Quotinator.Constants/ src/Quotinator.Constants/
+COPY src/Quotinator.Data/ src/Quotinator.Data/
 COPY src/Quotinator.Core/ src/Quotinator.Core/
 COPY src/Quotinator.Api/ src/Quotinator.Api/
 COPY data/ data/

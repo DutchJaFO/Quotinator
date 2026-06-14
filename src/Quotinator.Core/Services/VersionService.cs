@@ -14,8 +14,8 @@ public sealed class VersionService : IVersionService
 {
     /// <inheritdoc/>
     public string Version { get; } =
-        typeof(VersionService).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+        Assembly.GetEntryAssembly()
+            ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion
             // Strip +githash suffix the SDK appends when IncludeSourceRevisionInInformationalVersion is set
             ?.Split('+')[0]

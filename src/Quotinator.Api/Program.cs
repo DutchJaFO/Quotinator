@@ -184,14 +184,13 @@ await dbInitializer.InitialiseAsync();
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 var versionService = app.Services.GetRequiredService<IVersionService>();
-var quoteService = app.Services.GetRequiredService<IQuoteService>();
-var quoteCount = quoteService.GetAll(1, 1).TotalCount;
 var logRequests = app.Configuration.GetValue<bool>("Quotinator:LogRequests");
 
 var banner = new System.Text.StringBuilder()
     .AppendLine("############################################")
     .AppendLine($"Quotinator v{versionService.Version} starting")
-    .AppendLine($"Data:  {dataPath} ({quoteCount} quotes)")
+    .AppendLine($"Data:  {dataPath}")
+    .AppendLine($"DB:    schema v{dbInitializer.SchemaVersion} — {dbInitializer.QuoteCount} quotes  {dbInitializer.SourceCount} sources  {dbInitializer.CharacterCount} characters  {dbInitializer.PeopleCount} people")
     .AppendLine($"Keys:  {keysDir}")
     .Append($"Cfg:   log_level={haLogLevel}  log_requests={(logRequests ? "on" : "off")}  ssl={( sslEnabled ? "on" : "off")}");
 if (sslEnabled)
@@ -269,12 +268,24 @@ app.MapGet(ApiRoutes.Health, () => Results.Ok(new { status = "healthy" }))
    .WithSummary("Health check")
    .WithDescription("Returns the current health status of the API. Use this endpoint to verify the service is running.");
 
-app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env) =>
-    Results.Ok(new { version = vs.Version, environment = env.EnvironmentName }))
+app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, DatabaseInitializer db) =>
+    Results.Ok(new
+    {
+        version     = vs.Version,
+        environment = env.EnvironmentName,
+        database    = new
+        {
+            schemaVersion = db.SchemaVersion,
+            quotes        = db.QuoteCount,
+            sources       = db.SourceCount,
+            characters    = db.CharacterCount,
+            people        = db.PeopleCount
+        }
+    }))
    .WithName("Version")
    .WithTags(ApiTags.System)
    .WithSummary("API version")
-   .WithDescription("Returns the running version and environment.");
+   .WithDescription("Returns the running version, environment, and database schema version with row counts.");
 
 app.MapQuoteEndpoints();
 

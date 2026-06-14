@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [1.0.12] - 2026-06-14
+## [1.0.12] - 2026-06-15
 
 ### Added
 - SQLite backend (v2): replaces flat-file `QuoteService` with `SqliteQuoteService` backed by Dapper + `Microsoft.Data.Sqlite` (closes [#7](https://github.com/DutchJaFO/Quotinator/issues/7))
@@ -21,6 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `Quotinator.Data` project: reusable data infrastructure (`RecordBase`, `SafeValue<T>`, `IDbConnectionFactory`, `SqliteConnectionFactory`, `SafeEnumHandler<T>`, `SafeDateHandler`) extracted into its own class library
 - Database startup logging: log lines for schema creation/update, seeding progress, and a final summary (quote / source / character / people counts)
 - XML `<summary>` documentation on all public types and members; CS1591 enforced in `Quotinator.Core` and `Quotinator.Data`
+- Version endpoint (`GET /api/v1/version`) now returns `database.schemaVersion` and row counts (`quotes`, `sources`, `characters`, `people`)
+- Startup banner now includes a `DB:` line with schema version and row counts
+- `SOURCES.md`: added attribution for Dapper, Dapper.Contrib, `Microsoft.Data.Sqlite`, `Microsoft.Extensions.Logging.Abstractions`; added DB Browser for SQLite under external tools
+
+### Fixed
+- Version endpoint and startup banner reported `1.0.0` instead of the actual release version — `VersionService` was reading the `Quotinator.Core` assembly (no `<Version>` set) instead of the entry assembly; changed to `Assembly.GetEntryAssembly()`
+- Docker build failed: `Quotinator.Data` project was missing from the Dockerfile COPY layers
 
 ## [1.0.11] - 2026-06-14
 

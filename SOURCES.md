@@ -10,7 +10,11 @@ Attribution for all external resources used in this project: quote datasets and 
 
 | Package | Version | License | Purpose | Source |
 |---|---|---|---|---|
-| `Microsoft.AspNetCore.OpenApi` | 10.0.7 | MIT | OpenAPI spec generation (built-in to .NET 10) | [NuGet](https://www.nuget.org/packages/Microsoft.AspNetCore.OpenApi) · [GitHub](https://github.com/dotnet/aspnetcore) |
+| `Dapper` | 2.1.79 | Apache 2.0 | Lightweight SQL micro-ORM for parameterised queries | [NuGet](https://www.nuget.org/packages/Dapper) · [GitHub](https://github.com/DapperLib/Dapper) |
+| `Dapper.Contrib` | 2.0.78 | Apache 2.0 | CRUD extension methods for Dapper (`Insert`, `Update`, `Get`) | [NuGet](https://www.nuget.org/packages/Dapper.Contrib) · [GitHub](https://github.com/DapperLib/Dapper) |
+| `Microsoft.Data.Sqlite` | 10.0.9 | MIT | SQLite ADO.NET provider | [NuGet](https://www.nuget.org/packages/Microsoft.Data.Sqlite) · [GitHub](https://github.com/dotnet/efcore) |
+| `Microsoft.Extensions.Logging.Abstractions` | 10.0.0 | MIT | `ILogger<T>` interface — used in Core without pulling in the full logging stack | [NuGet](https://www.nuget.org/packages/Microsoft.Extensions.Logging.Abstractions) · [GitHub](https://github.com/dotnet/runtime) |
+| `Microsoft.AspNetCore.OpenApi` | 10.0.9 | MIT | OpenAPI spec generation (built-in to .NET 10) | [NuGet](https://www.nuget.org/packages/Microsoft.AspNetCore.OpenApi) · [GitHub](https://github.com/dotnet/aspnetcore) |
 | `Scalar.AspNetCore` | 2.16.3 | MIT | Interactive OpenAPI UI (replaces Swagger UI) | [NuGet](https://www.nuget.org/packages/Scalar.AspNetCore) · [GitHub](https://github.com/scalar/scalar) |
 | `Toolbelt.Blazor.I18nText` | 14.1.1 | MIT | Blazor UI localisation (en, en-GB, de, nl) | [NuGet](https://www.nuget.org/packages/Toolbelt.Blazor.I18nText) · [GitHub](https://github.com/jsakamoto/Toolbelt.Blazor.I18nText) |
 
@@ -18,15 +22,16 @@ Attribution for all external resources used in this project: quote datasets and 
 
 | Package | Version | License | Purpose | Source |
 |---|---|---|---|---|
-| `MSTest` | 4.0.2 | MIT | Unit and integration test framework | [NuGet](https://www.nuget.org/packages/MSTest) · [GitHub](https://github.com/microsoft/testfx) |
-| `Microsoft.AspNetCore.Mvc.Testing` | 10.0.0 | MIT | `WebApplicationFactory` for endpoint integration tests | [NuGet](https://www.nuget.org/packages/Microsoft.AspNetCore.Mvc.Testing) · [GitHub](https://github.com/dotnet/aspnetcore) |
+| `MSTest` | 4.2.3 | MIT | Unit and integration test framework | [NuGet](https://www.nuget.org/packages/MSTest) · [GitHub](https://github.com/microsoft/testfx) |
+| `Microsoft.AspNetCore.Mvc.Testing` | 10.0.9 | MIT | `WebApplicationFactory` for endpoint integration tests | [NuGet](https://www.nuget.org/packages/Microsoft.AspNetCore.Mvc.Testing) · [GitHub](https://github.com/dotnet/aspnetcore) |
 | `Microsoft.VisualStudio.Azure.Containers.Tools.Targets` | 1.23.0 | MIT | Visual Studio Docker tooling integration | [NuGet](https://www.nuget.org/packages/Microsoft.VisualStudio.Azure.Containers.Tools.Targets) |
 
-### Seed script (`scripts/seed.csx`)
+### External tools
 
-| Tool | Version | License | Purpose | Source |
-|---|---|---|---|---|
-| `dotnet-script` | 2.0.1 | MIT | Run `.csx` C# scripts without a project file | [NuGet](https://www.nuget.org/packages/dotnet-script) · [GitHub](https://github.com/dotnet-script/dotnet-script) |
+| Tool | License | Purpose | Source |
+|---|---|---|---|
+| `dotnet-script` | MIT | Run `.csx` C# scripts without a project file (seed script) | [NuGet](https://www.nuget.org/packages/dotnet-script) · [GitHub](https://github.com/dotnet-script/dotnet-script) |
+| DB Browser for SQLite | GPL v3 / LGPL v2.1 | GUI for inspecting and querying the `quotes.db` file directly | [sqlitebrowser.org](https://sqlitebrowser.org) · [GitHub](https://github.com/sqlitebrowser/sqlitebrowser) |
 
 ---
 
