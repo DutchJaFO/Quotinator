@@ -4,11 +4,11 @@
 
 Quotinator ships as a **single container** hosting both the REST API and the Blazor Server frontend. This is required for Home Assistant add-on compatibility (the HA supervisor runs single-container add-ons).
 
-- **Image:** `ghcr.io/<owner>/quotinator`
+- **Image:** `ghcr.io/dutchjafo/quotinator`
 - **Base image:** `mcr.microsoft.com/dotnet/aspnet:10.0`
 - **Platforms:** `linux/amd64`, `linux/arm64`
-- **Port:** `8080` (HTTP only — HTTPS is terminated at the reverse proxy)
-- **Data:** `quotes.json` is mounted as a volume at `/app/data`
+- **Ports:** `8080` (direct access — HTTP or HTTPS), `8099` (Home Assistant ingress — always HTTP)
+- **Data:** `quotes.json` persisted via Docker volume at `/app/data`
 
 ---
 
@@ -24,7 +24,7 @@ Docker Desktop is required to build and run the container locally.
 winget install Docker.DockerDesktop
 ```
 
-2. Restart your machine after installation
+2. Restart your machine after installation.
 
 3. WSL 2 is required on Windows — Docker Desktop will prompt if it is missing. If needed, install it manually in an **Administrator** PowerShell:
 
@@ -65,7 +65,7 @@ Docker Compose builds the image automatically when you run `up --build`. No sepa
 Build the image from the repo root:
 
 ```powershell
-docker build -f docker/Dockerfile -t quotinator .
+docker build -f docker/Dockerfile -t quotinator:local .
 ```
 
 This uses the multi-stage Dockerfile which:
@@ -91,13 +91,11 @@ docker compose -f docker/docker-compose.yml up --build
 
 Once running, the application is available at `http://localhost:8080`.
 
-> **Note:** Scalar and the OpenAPI spec are disabled in Production mode. To enable them in the container, add `ASPNETCORE_ENVIRONMENT=Development` to the compose file or run command. Do not do this in a production deployment.
-
 ### Using Docker directly
 
 ```bash
-docker build -f docker/Dockerfile -t quotinator .
-docker run -d -p 8080:8080 -v ./data:/app/data quotinator
+docker build -f docker/Dockerfile -t quotinator:local .
+docker run -d -p 8080:8080 -v ./data:/app/data quotinator:local
 ```
 
 ---
@@ -108,8 +106,23 @@ docker run -d -p 8080:8080 -v ./data:/app/data quotinator
 docker run -d \
   -p 8080:8080 \
   -v /path/to/data:/app/data \
-  ghcr.io/<owner>/quotinator:latest
+  ghcr.io/dutchjafo/quotinator:latest
 ```
+
+### With SSL
+
+```bash
+docker run -d \
+  -p 8080:8080 \
+  -v /path/to/data:/app/data \
+  -v /path/to/certs:/ssl:ro \
+  -e Quotinator__Ssl=true \
+  -e Quotinator__SslCertFile=/ssl/fullchain.pem \
+  -e Quotinator__SslKeyFile=/ssl/privkey.pem \
+  ghcr.io/dutchjafo/quotinator:latest
+```
+
+See [`home-assistant.md`](home-assistant.md) for the Home Assistant add-on deployment.
 
 ---
 
@@ -117,14 +130,20 @@ docker run -d \
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ASPNETCORE_ENVIRONMENT` | `Production` | Set to `Development` to enable Scalar UI and OpenAPI spec |
-| `ASPNETCORE_HTTP_PORTS` | `8080` | HTTP port the app listens on |
+| `ASPNETCORE_ENVIRONMENT` | `Production` | Controls environment name shown in `/api/v1/version` |
+| `ASPNETCORE_HTTP_PORTS` | _(empty)_ | Cleared in the Dockerfile — port binding is owned by Kestrel configuration in `Program.cs` |
+| `Quotinator__DataPath` | `/app/data/quotes.json` | Path to the quote dataset |
+| `Quotinator__Ssl` | `false` | Enable HTTPS on port 8080 |
+| `Quotinator__SslCertFile` | _(empty)_ | Path to PEM certificate file |
+| `Quotinator__SslKeyFile` | _(empty)_ | Path to PEM private key file |
+
+> The Scalar API reference (`/scalar/v1`) and raw OpenAPI spec (`/openapi/v1.json`) are available in **all** environments including Production.
 
 ---
 
 ## Image naming
 
-Images are published to GitHub Container Registry on every release tag as `ghcr.io/<owner>/quotinator`.
+Images are published to GitHub Container Registry on every release tag as `ghcr.io/dutchjafo/quotinator`.
 
 | Tag pushed | Docker tags produced |
 |---|---|
@@ -139,8 +158,40 @@ See [`ci-cd.md`](ci-cd.md) for the full release process.
 
 ### Layer caching
 
-The Dockerfile copies project files and runs `dotnet restore` before copying source. NuGet restore is cached as a separate layer and only re-runs when a `.csproj` changes.
+The Dockerfile uses a two-step pattern to cache NuGet package downloads separately from source compilation:
+
+```dockerfile
+# Step 1 — restore only (cached unless a .csproj changes)
+COPY src/**/*.csproj ...
+RUN dotnet restore
+
+# Step 2 — copy full source and publish
+COPY src/ ...
+RUN dotnet publish --configuration Release --output /app/publish
+```
+
+This keeps incremental rebuilds fast: if only source files change, Docker skips the package download layer and goes straight to compile.
+
+### Why `--no-restore` is NOT used on `dotnet publish`
+
+The standard Docker optimisation for .NET apps adds `--no-restore` to `dotnet publish` so that the second restore pass is skipped entirely. **This does not work for Blazor projects.**
+
+The Blazor static web assets pipeline generates `_framework/blazor.web.js` during the build phase, and that generation requires `.razor` source files to be present. In the two-step Docker pattern, `dotnet restore` runs before any source is copied — so when restore runs, there are no `.razor` files. The resulting static web asset manifest is incomplete. With `--no-restore`, `dotnet publish` reuses that incomplete manifest and `_framework/blazor.web.js` is never written to the output. The result: Blazor interactivity (button clicks, component events) silently does not work at runtime — the browser fails to load `blazor.web.js` and the Blazor circuit never connects.
+
+Without `--no-restore`, `dotnet publish` regenerates the manifest from scratch with the full source present. NuGet packages are still cached from the first restore layer, so there is no meaningful overhead.
+
+This diverges from the standard `--no-restore` optimisation documented for generic ASP.NET Core apps, which do not have this static web assets dependency. All Blazor-specific deployment guides omit `--no-restore` for exactly this reason.
+
+**References:**
+- [Solved: How to Run Blazor on Docker Containers](https://sqlpey.com/dotnet/solved-how-to-run-blazor-on-docker-containers/) — Blazor-specific Dockerfile, no `--no-restore`
+- [GitHub issue dotnet/aspnetcore #64366](https://github.com/dotnet/aspnetcore/issues/64366) — framework issue tracking Blazor static web asset problems in Docker
+- [Docker deployment for ASP.NET Core API / Blazor apps — C# Corner](https://www.c-sharpcorner.com/article/docker-deployment-for-asp-net-core-api-blazor-apps/) — Blazor Dockerfile pattern, no `--no-restore`
+- [Containerize a .NET app — Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/core/docker/build-container?tabs=windows&pivots=dotnet-10-0) — generic .NET pattern (console app); does not apply to Blazor static web assets
 
 ### Multi-arch
 
 Multi-arch publishing (`linux/amd64` + `linux/arm64`) is handled by `docker buildx` in the GitHub Actions release workflow.
+
+### `ASPNETCORE_HTTP_PORTS`
+
+The .NET base Docker image sets `ASPNETCORE_HTTP_PORTS=8080` by default. The Dockerfile clears this (`ENV ASPNETCORE_HTTP_PORTS=""`), giving Kestrel code in `Program.cs` sole control over port binding. This allows conditional HTTPS on port 8080 and always-HTTP on port 8099 (HA ingress) without conflicting environment variable overrides.

@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+- Optional HTTPS on the direct-access port (8080) via Kestrel; configure with `Quotinator__Ssl=true`, `Quotinator__SslCertFile`, and `Quotinator__SslKeyFile` environment variables
+- HA add-on SSL options (`ssl`, `certfile`, `keyfile`) — defaults to `ssl: false`; when enabled, uses certs from `/ssl/` (HA Let's Encrypt add-on writes there)
+- `UseForwardedHeaders()` middleware reads `X-Forwarded-Proto` and `X-Forwarded-For` from upstream proxies so the app knows it is behind HTTPS even when running HTTP internally (required for HA ingress)
+
+### Changed
+- DataProtection keys are now persisted to the data directory (`/app/data`) instead of ephemeral in-memory; antiforgery tokens and Blazor circuit descriptors survive container restarts
+- Culture cookie `Secure` flag is now derived from `Request.IsHttps` instead of hardcoded `true` — language selection persists in plain-HTTP deployments
+- `UseHttpsRedirection` removed — redirect responsibility belongs to the consumer's reverse proxy, not the app
+- Dockerfile clears `ASPNETCORE_HTTP_PORTS` set by the .NET base image; port binding is now owned entirely by the application's Kestrel configuration
+
 ## [1.0.5] - 2026-06-14
 
 ### Changed

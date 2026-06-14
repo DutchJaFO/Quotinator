@@ -11,17 +11,26 @@ RUN dotnet restore src/Quotinator.Api/Quotinator.Api.csproj
 COPY src/Quotinator.Core/ src/Quotinator.Core/
 COPY src/Quotinator.Api/ src/Quotinator.Api/
 COPY data/ data/
+# Note: --no-restore is intentionally absent. The Blazor static web assets pipeline
+# (which produces _framework/blazor.web.js) needs .razor files present when the
+# assets manifest is generated. The restore-only layer above runs without source files,
+# so the manifest is incomplete; omitting --no-restore lets publish regenerate it
+# correctly with the full source. NuGet packages are still layer-cached from above.
 RUN dotnet publish src/Quotinator.Api/Quotinator.Api.csproj \
     --configuration Release \
-    --no-restore \
     --output /app/publish
 
 # Stage 2 — runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# 8080 — direct access; 8099 — Home Assistant ingress
+# 8080 — direct access (HTTP or HTTPS); 8099 — Home Assistant ingress (always HTTP)
 EXPOSE 8080 8099
+
+# Clear the base-image default (ASPNETCORE_HTTP_PORTS=8080) so port binding is
+# controlled entirely by the application's Kestrel configuration in Program.cs.
+# For HA add-on deployments, addon/config.yaml overrides this with 8099 for ingress.
+ENV ASPNETCORE_HTTP_PORTS=""
 
 COPY --from=build /app/publish .
 

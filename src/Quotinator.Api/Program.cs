@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.RateLimiting;
@@ -69,11 +70,56 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
-builder.Services.AddProblemDetails();
-builder.Services.AddSingleton<IVersionService, VersionService>();
+// Data path drives both the quote dataset and the DataProtection key directory.
 var dataPath = builder.Configuration["Quotinator:DataPath"]
     ?? Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
+var dataDir = Path.GetDirectoryName(dataPath) ?? Path.Combine(AppContext.BaseDirectory, "data");
+Directory.CreateDirectory(dataDir);
+
+// Persist DataProtection keys so antiforgery tokens (and Blazor circuit descriptors)
+// survive container restarts. Keys live alongside quotes.json in the data volume.
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataDir));
+
+// Trust X-Forwarded-For / X-Forwarded-Proto from upstream proxies (HA ingress, reverse proxies).
+// This makes Request.IsHttps correct when Quotinator sits behind an HTTPS proxy, which is
+// required for Secure cookie flags and the Blazor circuit antiforgery handshake to work.
+// Clearing KnownNetworks/KnownProxies is intentional: homelab deployments use trusted LAN proxies.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// Optional HTTPS via Kestrel — for direct-access deployments without a terminating proxy.
+// When running in a container, port binding is handled here instead of ASPNETCORE_HTTP_PORTS
+// so that HTTPS on 8080 and HTTP on 8099 (HA ingress) do not conflict.
+var sslEnabled  = builder.Configuration.GetValue<bool>("Quotinator:Ssl");
+var sslCertFile = builder.Configuration["Quotinator:SslCertFile"] ?? string.Empty;
+var sslKeyFile  = builder.Configuration["Quotinator:SslKeyFile"]  ?? string.Empty;
+var isContainer = string.Equals(
+    Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"), "true",
+    StringComparison.OrdinalIgnoreCase);
+
+if (isContainer)
+{
+    builder.WebHost.ConfigureKestrel(kestrel =>
+    {
+        // Port 8099 is always plain HTTP — used by the HA ingress (internal traffic only).
+        // ASPNETCORE_HTTP_PORTS in addon/config.yaml also binds 8099; this call is a no-op
+        // for standalone Docker where that env var is cleared in the Dockerfile.
+        kestrel.ListenAnyIP(8099);
+
+        if (sslEnabled && File.Exists(sslCertFile) && File.Exists(sslKeyFile))
+            kestrel.ListenAnyIP(8080, lo => lo.UseHttps(sslCertFile, sslKeyFile));
+        else
+            kestrel.ListenAnyIP(8080);
+    });
+}
+
+builder.Services.AddProblemDetails();
+builder.Services.AddSingleton<IVersionService, VersionService>();
 
 builder.Services.AddSingleton<IQuoteService>(_ => new QuoteService(dataPath));
 builder.Services.AddSingleton<IApiLocalizer>(
@@ -108,6 +154,8 @@ Console.WriteLine($"[Quotinator] Data: {dataPath}");
 Console.WriteLine($"[Quotinator] Quotes loaded: {quoteCount}");
 app.Logger.LogInformation("Loaded {Count} quotes from {Path}", quoteCount, dataPath);
 
+// Must be first so all subsequent middleware sees the correct scheme and client IP.
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseRequestLocalization();
@@ -116,7 +164,6 @@ app.UseRateLimiter();
 app.MapOpenApi();
 app.MapScalarApiReference();
 
-app.UseHttpsRedirection();
 app.UseAntiforgery();
 app.MapStaticAssets();
 
@@ -146,14 +193,14 @@ app.MapGet("/Culture/Set", (string? culture, string redirectUri, HttpContext con
     if (string.IsNullOrEmpty(culture))
     {
         context.Response.Cookies.Delete(CookieRequestCultureProvider.DefaultCookieName,
-            new CookieOptions { SameSite = SameSiteMode.Lax, Secure = true });
+            new CookieOptions { SameSite = SameSiteMode.Lax, Secure = context.Request.IsHttps });
     }
     else
     {
         context.Response.Cookies.Append(
             CookieRequestCultureProvider.DefaultCookieName,
             CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture, culture)),
-            new CookieOptions { MaxAge = TimeSpan.FromDays(365), IsEssential = true, SameSite = SameSiteMode.Lax, Secure = true });
+            new CookieOptions { MaxAge = TimeSpan.FromDays(365), IsEssential = true, SameSite = SameSiteMode.Lax, Secure = context.Request.IsHttps });
     }
     return TypedResults.LocalRedirect(redirectUri);
 });

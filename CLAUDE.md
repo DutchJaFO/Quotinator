@@ -169,6 +169,28 @@ All quote endpoints (`/api/v1/quotes/**`) use a sliding-window rate limiter conf
 
 These values are intentionally generous for homelab use. Change them in `Program.cs` if a consumer (e.g. a bulk import script) legitimately needs a higher limit.
 
+### SSL / HTTPS
+
+Three access patterns exist and are handled differently:
+
+| Access path | TLS handled by | What the app needs |
+|---|---|---|
+| HA ingress (sidebar) | HA supervisor (TLS termination) | `UseForwardedHeaders()` to read `X-Forwarded-Proto` |
+| Direct port, behind reverse proxy | NGINX / Caddy / Traefik (user's proxy) | `UseForwardedHeaders()` only |
+| Direct port, raw HTTPS | Kestrel | SSL cert configured in add-on options or env vars |
+
+**ForwardedHeaders** (`UseForwardedHeaders()`) is always enabled. It reads `X-Forwarded-For` and `X-Forwarded-Proto` from any upstream proxy. `KnownNetworks` and `KnownProxies` are intentionally cleared — homelab deployments use trusted LAN proxies, so restricting by IP is unnecessary overhead. **This must be the first middleware in the pipeline** so that all downstream middleware (cookie Secure flags, rate limiting, antiforgery) sees the correct scheme and client IP.
+
+**DataProtection keys** are persisted to the data directory (`/app/data` in Docker, alongside `quotes.json`) via `PersistKeysToFileSystem`. This prevents antiforgery token decryption failures and Blazor circuit descriptor mismatches after container restarts. Never revert to `UseEphemeralDataProtectionProvider`.
+
+**Cookie `Secure` flag** is derived from `context.Request.IsHttps` (set correctly by `UseForwardedHeaders()`). Do not hardcode `Secure = true` — it prevents cookies from being sent over plain HTTP in deployments where Quotinator itself is HTTP (behind a proxy or in development).
+
+**Kestrel HTTPS** is configured when `Quotinator:Ssl=true` AND both cert/key files exist AND `DOTNET_RUNNING_IN_CONTAINER=true`. The container check prevents `ListenAnyIP` from conflicting with `launchSettings.json` in VS development. Port 8080 becomes HTTPS; port 8099 stays HTTP (ingress). `ASPNETCORE_HTTP_PORTS` is cleared in the Dockerfile (`ENV ASPNETCORE_HTTP_PORTS=""`); the HA add-on's `addon/config.yaml` sets it to `8099` for the ingress-only port.
+
+**`UseHttpsRedirection` is intentionally absent.** When behind a proxy, redirects would target an unreachable internal port. When Kestrel terminates HTTPS on 8080 there is no HTTP on 8080 to redirect from.
+
+SSL cert paths come from `Quotinator:SslCertFile` and `Quotinator:SslKeyFile`, set via `env_vars` in `addon/config.yaml`. HA's Let's Encrypt add-on writes to `/ssl/fullchain.pem` and `/ssl/privkey.pem` — these are the defaults.
+
 ### MCP (v3)
 Expose at `/mcp` using the official MCP .NET SDK when available. Do not implement in v1.
 
@@ -315,6 +337,7 @@ See [`docs/testing-policy.md`](docs/testing-policy.md).
 | `src/Quotinator.Core/Models/QuoteTranslation.cs` | Translation entry model |
 | `src/Quotinator.Core/Models/QuoteResponse.cs` | API response DTO |
 | `docker/Dockerfile` | Container build |
+| `docs/docker.md` | Docker build notes, Blazor static web assets caveat, port configuration |
 | `.gitignore` | Must exclude `appsettings.local.json`, `.env`, and `data/*.db` |
 
 ---

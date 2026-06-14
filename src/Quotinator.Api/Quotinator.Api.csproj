@@ -31,12 +31,22 @@
     <Content Include="..\..\data\quotes.json" Link="data\quotes.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Remove i18ntext files from the Content bucket so Toolbelt does not publish them as static
-         web assets under wwwroot/_content/. ApiLocalizer reads them at runtime from i18ntext/
-         relative to the app root, so they must land there — not in wwwroot. -->
-    <Content Remove="i18ntext\UI.*.json" />
-    <None Include="i18ntext\UI.*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-  </ItemGroup>
+  <!-- Copy i18ntext JSON files so ApiLocalizer can read them at runtime from i18ntext/ relative
+       to the app root. Toolbelt.Blazor.I18nText publishes them as static web assets under
+       wwwroot/_content/ (needed by Blazor components), but ApiLocalizer needs them at the root.
+       Two targets are required: AfterBuild for dotnet run, AfterPublish for dotnet publish/Docker. -->
+  <Target Name="CopyI18nTextJsonToBuild" AfterTargets="Build">
+    <ItemGroup>
+      <_I18nTextJson Include="i18ntext\UI.*.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_I18nTextJson)" DestinationFolder="$(OutputPath)i18ntext\" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyI18nTextJsonToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_I18nTextJson Include="i18ntext\UI.*.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_I18nTextJson)" DestinationFolder="$(PublishDir)i18ntext\" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

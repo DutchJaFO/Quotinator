@@ -26,6 +26,16 @@
     <File Path="docker/Dockerfile" />
     <File Path="docker/docker-compose.yml" />
   </Folder>
+  <Folder Name="/docs/">
+    <File Path="docs/ci-cd.md" />
+    <File Path="docs/data-import.md" />
+    <File Path="docs/docker.md" />
+    <File Path="docs/home-assistant.md" />
+    <File Path="docs/localisation.md" />
+    <File Path="docs/openapi.md" />
+    <File Path="docs/running-locally.md" />
+    <File Path="docs/testing-policy.md" />
+  </Folder>
   <Folder Name="/scripts/">
     <File Path="scripts/seed.csx" />
     <File Path="scripts/sources.json" />

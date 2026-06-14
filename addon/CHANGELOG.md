@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- SSL / HTTPS support on the direct-access port — set `ssl: true` and supply cert/key filenames (relative to `/ssl/`); defaults to disabled
+- Ingress now correctly detects the browser's HTTPS context via `X-Forwarded-Proto` — language selection and session cookies work properly through the HA ingress
+
+### Changed
+- Language selection cookie is no longer blocked in plain-HTTP direct-access deployments
+
 ## [1.0.5] - 2026-06-14
 
 ### Changed

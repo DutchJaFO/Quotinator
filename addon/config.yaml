@@ -14,17 +14,39 @@ image: ghcr.io/dutchjafo/quotinator
 startup: application
 boot: auto
 
-# Binds the ASP.NET Core server to both ports so HA ingress (8099) and
-# direct access (8080) both work when running under the supervisor.
+# Binds the ingress port via ASPNETCORE_HTTP_PORTS. Port 8080 (direct access) is
+# managed by the application's Kestrel configuration so SSL can be applied there.
 environment:
-  ASPNETCORE_HTTP_PORTS: "8080;8099"
+  ASPNETCORE_HTTP_PORTS: "8099"
 
-# Direct access port — disabled by default; enable in add-on config for MagicMirror,
-# curl, or other tools that need direct HTTP access outside of HA ingress.
+# SSL — optional HTTPS on the direct-access port (8080).
+# Set ssl: true and supply the cert/key filenames (relative to /ssl/).
+# HA's Let's Encrypt add-on writes fullchain.pem + privkey.pem to /ssl/ automatically.
+# Leave ssl: false when using HA ingress or a reverse proxy for TLS termination.
+options:
+  ssl: false
+  certfile: fullchain.pem
+  keyfile: privkey.pem
+schema:
+  ssl: bool
+  certfile: str
+  keyfile: str
+
+# Map add-on options to environment variables consumed by ASP.NET Core configuration.
+env_vars:
+  - name: Quotinator__Ssl
+    value: "{{ ssl }}"
+  - name: Quotinator__SslCertFile
+    value: "/ssl/{{ certfile }}"
+  - name: Quotinator__SslKeyFile
+    value: "/ssl/{{ keyfile }}"
+
+# Direct access port — disabled by default; enable for MagicMirror, curl, or other
+# tools that need to reach the API outside of HA ingress.
 ports:
   8080/tcp: null
 ports_description:
-  8080/tcp: Direct web access (optional — ingress is the default access path)
+  8080/tcp: Direct web access — HTTP (ssl:false) or HTTPS (ssl:true)
 
 # Ingress — embeds the UI into the Home Assistant sidebar.
 # Uses a dedicated internal port (8099) separate from the direct access port (8080).

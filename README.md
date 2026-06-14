@@ -140,6 +140,23 @@ A `docker-compose.yml` example is included in the `docker/` directory.
 
 > **Note:** Authentication is not implemented in v1. The API is read-only and requires no credentials.
 
+### HTTPS / SSL
+
+SSL is disabled by default. To enable HTTPS on port 8080, mount a certificate and key and pass the paths via environment variables:
+
+```bash
+docker run -d \
+  -p 8080:8080 \
+  -v ./data:/app/data \
+  -v ./certs:/ssl:ro \
+  -e Quotinator__Ssl=true \
+  -e Quotinator__SslCertFile=/ssl/fullchain.pem \
+  -e Quotinator__SslKeyFile=/ssl/privkey.pem \
+  ghcr.io/dutchjafo/quotinator:latest
+```
+
+When running behind a reverse proxy (NGINX, Caddy, Traefik) that terminates TLS, leave `Quotinator__Ssl=false` — the app reads `X-Forwarded-Proto` and sets cookies correctly.
+
 ---
 
 ## Development Setup
