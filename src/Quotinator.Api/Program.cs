@@ -156,6 +156,20 @@ app.Logger.LogInformation("Loaded {Count} quotes from {Path}", quoteCount, dataP
 
 // Must be first so all subsequent middleware sees the correct scheme and client IP.
 app.UseForwardedHeaders();
+
+// The HA supervisor sets X-Ingress-Path to the ingress prefix (e.g. /api/hassio_ingress/TOKEN).
+// Applying it as PathBase makes <base href> render correctly so all relative asset URLs
+// (blazor.web.js, CSS, etc.) resolve through the ingress proxy rather than HA's own server.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Headers.TryGetValue("X-Ingress-Path", out var ingressPath)
+        && !string.IsNullOrEmpty(ingressPath))
+    {
+        context.Request.PathBase = new PathString(ingressPath.ToString());
+    }
+    await next();
+});
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseRequestLocalization();

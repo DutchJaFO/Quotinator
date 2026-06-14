@@ -191,6 +191,8 @@ Three access patterns exist and are handled differently:
 
 SSL cert paths come from `Quotinator:SslCertFile` and `Quotinator:SslKeyFile`, set via `env_vars` in `addon/config.yaml`. HA's Let's Encrypt add-on writes to `/ssl/fullchain.pem` and `/ssl/privkey.pem` — these are the defaults.
 
+**HA ingress base path (`X-Ingress-Path`)** — the HA supervisor proxies the add-on under a path prefix (e.g. `/api/hassio_ingress/TOKEN/`) and sets the `X-Ingress-Path` request header to that prefix. A custom middleware in `Program.cs` reads this header and applies it as `context.Request.PathBase`. `App.razor`'s `<base href>` is derived from `PathBase` at render time so all relative asset URLs (CSS, `blazor.web.js`, component JS) resolve correctly through the ingress proxy. Without this, all assets resolve against HA's own server root and the Blazor circuit never connects. This middleware runs immediately after `UseForwardedHeaders()`.
+
 ### MCP (v3)
 Expose at `/mcp` using the official MCP .NET SDK when available. Do not implement in v1.
 
