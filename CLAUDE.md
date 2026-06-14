@@ -201,6 +201,8 @@ The actual host, port, and file path are configured in the consumer environment,
 
 ## Pre-Push Checklist
 
+> **GitHub CLI auth:** if you see "GitHub CLI authentication expired", run `gh auth login` (choose GitHub.com → HTTPS → browser) before proceeding.
+
 Run these checks before pushing any commit or tag. Tests alone do not cover all failure modes — the Docker build in particular is only verified here and in the release workflow.
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
@@ -235,8 +237,7 @@ Bugs and defects confirmed in the running add-on or CI. Fix before or alongside 
 | 1 | **HA ingress bad gateway** | App binds to port 8080 only; HA ingress routes internally to `ingress_port: 8099`. Fix: add `ENV ASPNETCORE_HTTP_PORTS=8080;8099` to `docker/Dockerfile`. |
 | 2 | **DataProtection warnings in container log** | Two `warn:` lines at startup because ASP.NET Data Protection has nowhere to persist keys. Fix for v1: `builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider()` in `Program.cs` and set `Microsoft.AspNetCore.DataProtection` log level to `None` in `appsettings.json`. In v2 switch to `PersistKeysToFileSystem(new DirectoryInfo("/app/data"))`. |
 | 3 | **`addon/config.yaml` description still mentions Blazor UI** | `description` field still says "Self-hosted quote REST API with Blazor management UI." — update to match the corrected `addon/README.md`. |
-| 4 | **`actions/checkout@v4` Node 20 warning in CI** | Warning only — build succeeds. Upstream issue; revisit when a Node 24-native patch is released. See: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/ |
-| 5 | **Background task not killed by PowerShell** | A `dotnet run` background task persisted despite `Stop-Process` and needed manual kill from the background tasks panel. Investigate if it recurs. |
+| 4 | **Background task not killed by PowerShell** | A `dotnet run` background task persisted despite `Stop-Process` and needed manual kill from the background tasks panel. Investigate if it recurs. |
 
 ---
 
