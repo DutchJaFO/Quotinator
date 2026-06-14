@@ -18,6 +18,7 @@
   "ErrorRandomNOutOfRange": "n must be a whole number between 1 and 100.",
   "ErrorPageOutOfRange": "page must be a whole number of 1 or greater.",
   "ErrorPageSizeOutOfRange": "pageSize must be a whole number between 1 and 100.",
+  "QuoteCardNewQuote": "New quote",
   "ErrorQuoteNotFound": "No quote with the requested ID was found.",
   "ErrorFieldInvalid": "field must be one of: quote, source, character, author."
 }

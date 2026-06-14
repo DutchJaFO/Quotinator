@@ -1,0 +1,39 @@
+@using Quotinator.Core.Models
+@using Quotinator.Core.Services
+@inject IQuoteService QuoteService
+@inject I18nText I18nText
+
+@if (_quote is not null)
+{
+    <figure class="quote-card">
+        <blockquote class="quote-card__text">
+            <p>@_quote.Quote</p>
+        </blockquote>
+        <figcaption class="quote-card__attribution">
+            @Attribution
+            <cite class="quote-card__source"> — @_quote.Source@(DateSuffix)</cite>
+        </figcaption>
+    </figure>
+}
+
+<button class="btn btn-outline-secondary btn-sm mt-2" @onclick="LoadQuote">@Text.QuoteCardNewQuote</button>
+
+@code {
+    private QuoteResponse? _quote;
+    private Quotinator.Api.I18nText.UI Text = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
+        LoadQuote();
+    }
+
+    private void LoadQuote() =>
+        _quote = QuoteService.GetRandom(1).FirstOrDefault();
+
+    private string Attribution =>
+        _quote?.Character ?? _quote?.Author ?? string.Empty;
+
+    private string DateSuffix =>
+        _quote?.Date is { } d ? $" ({d[..4]})" : string.Empty;
+}
