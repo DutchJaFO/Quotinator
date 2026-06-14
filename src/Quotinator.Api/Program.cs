@@ -8,9 +8,13 @@ using Microsoft.OpenApi;
 using Quotinator.Api.Components;
 using Quotinator.Api.Endpoints;
 using Quotinator.Constants;
+using Quotinator.Core.Data;
+using Quotinator.Core.Data.TypeHandlers;
 using Quotinator.Core.Services;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
+
+DapperConfiguration.Configure();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -127,7 +131,11 @@ if (isContainer)
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
 
-builder.Services.AddSingleton<IQuoteService>(_ => new QuoteService(dataPath));
+var dbPath = Path.Combine(dataDir, "quotes.db");
+var connectionFactory = new SqliteConnectionFactory(dbPath);
+builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
+builder.Services.AddSingleton<DatabaseInitializer>(_ => new DatabaseInitializer(connectionFactory, dataPath));
+builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
 builder.Services.AddI18nText(options =>
@@ -168,6 +176,9 @@ builder.Logging.SetMinimumLevel(haLogLevel.ToLowerInvariant() switch
 });
 
 var app = builder.Build();
+
+var dbInitializer = app.Services.GetRequiredService<DatabaseInitializer>();
+await dbInitializer.InitialiseAsync();
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 var versionService = app.Services.GetRequiredService<IVersionService>();

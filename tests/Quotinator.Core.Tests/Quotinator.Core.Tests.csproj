@@ -7,7 +7,8 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- Suppress CS1591: test methods don't require XML doc comments -->
-    <NoWarn>$(NoWarn);1591</NoWarn>
+    <!-- Suppress MSTEST0037: style-only analyzer added in MSTest 4.x, fixing assertions is out of scope here -->
+    <NoWarn>$(NoWarn);1591;MSTEST0037</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

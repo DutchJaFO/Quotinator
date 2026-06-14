@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [Unreleased]
+
+### Added
+- SQLite backend (v2): replaces flat-file `QuoteService` with `SqliteQuoteService` backed by Dapper + `Microsoft.Data.Sqlite`
+- Schema: `Sources`, `SourceTranslations`, `Characters`, `CharacterTranslations`, `People`, `Quotes`, `QuoteTranslations`, `QuoteGenres` tables — all with `RecordBase` audit columns (`DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted`)
+- `SchemaVersion` table with numbered migration support — future schema changes are applied once on startup
+- First-run seeding: if the database is empty, all 780 quotes are imported from the bundled `quotes.json` automatically
+- `SafeValue<T>` — wrapper that carries both `Raw` (original DB string) and `Parsed` (converted value); `IsValid` distinguishes missing from corrupt data
+- `SafeEnumHandler<T>` and `SafeDateHandler` — Dapper TypeHandlers; store enum names as TEXT (rename-safe) and date strings; fall back gracefully on unrecognised values
+- `QuoteType` and `Genre` enums; `Unknown` as zero-value default for safe fallback
+- `People` table tracks authors and real-world speakers with optional `DateOfBirth` / `DateOfDeath` (imprecise ISO 8601, e.g. `"1955"`)
+- Characters scoped to their source so same-name characters from different franchises stay separate
+- NuGet packages: `Microsoft.Data.Sqlite 10.0.9`, `Dapper 2.1.79`, `Dapper.Contrib 2.0.78`
+
 ## [1.0.11] - 2026-06-14
 
 ### Added
