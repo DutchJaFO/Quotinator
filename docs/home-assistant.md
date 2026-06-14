@@ -12,11 +12,14 @@ HA discovers add-ons by searching recursively for `config.yaml` files. No separa
 |---|---|
 | `repository.yaml` | Repository metadata (name, URL, maintainer) |
 | `addon/config.yaml` | Add-on manifest — name, version, arch, ports, ingress |
-| `addon/DOCS.md` | User-facing documentation shown in the HA UI |
-| `addon/icon.png` | Add-on icon (128×128 PNG — currently GitHub avatar placeholder) |
-| `addon/logo.png` | Add-on logo (250×100 PNG — currently GitHub avatar placeholder) |
-| `addon/README.md` | Store listing — short description shown in the add-on store |
+| `addon/DOCS.md` | User-facing documentation shown in the HA UI (Documentation tab) |
+| `addon/README.md` | Short description shown in the add-on store (Info tab) |
 | `addon/CHANGELOG.md` | Add-on version history (Keep a Changelog format) |
+| `addon/translations/en.yaml` | English config UI labels — baseline |
+| `addon/translations/nl.yaml` | Dutch config UI labels |
+| `addon/translations/de.yaml` | German config UI labels |
+| `addon/icon.png` | Add-on icon (128×128 PNG) |
+| `addon/logo.png` | Add-on logo (250×100 PNG) |
 
 ---
 
@@ -55,9 +58,7 @@ The container listens on two ports:
 
 Ingress embeds the UI directly into the HA sidebar. The HA supervisor handles URL routing and authentication automatically — no port forwarding or reverse proxy configuration is needed.
 
-The ingress port (`8099`) is separate from the direct access port (`8080`) so both can be used simultaneously.
-
-> The Blazor management UI is planned for v2. In v1 the ingress panel shows a placeholder page; the REST API is fully functional via direct access on port `8080`.
+The ingress port (`8099`) is separate from the direct access port (`8080`) so both can be used simultaneously. The REST API is reachable under the ingress path for automations and scripts running inside HA; for external tools, enable the direct access port.
 
 ---
 
@@ -72,6 +73,45 @@ Quotes are stored in `/data/quotes.json` inside the add-on data directory, which
 The `version` field in `addon/config.yaml` must match the Docker image tag published to GHCR. The HA Supervisor appends this value as the image tag when pulling — a mismatch causes a 404 or 401 and the install fails.
 
 See [`ci-cd.md`](ci-cd.md) for the full release process and the complete list of files to update before tagging.
+
+---
+
+## Add-on translations
+
+HA renders the config panel in the user's language. The `addon/translations/` folder provides those translations.
+
+### What can be translated
+
+| Scope | Translatable | Notes |
+|---|---|---|
+| Config option names and descriptions | ✅ | Via `translations/<lang>.yaml` |
+| Port descriptions | ✅ | Via `translations/<lang>.yaml` |
+| `description` field in `config.yaml` | ❌ | Hard-coded string, no translation mechanism |
+| `addon/DOCS.md` (Documentation tab) | ❌ | English only — no HA translation mechanism for markdown content |
+| `addon/README.md` (Info tab) | ❌ | English only — same reason |
+
+### Translation file format
+
+```yaml
+configuration:
+  option_name:
+    name: Display name shown in config UI
+    description: Help text shown below the control
+network:
+  8080/tcp: Description of what this port is for
+```
+
+Keys must match the option names in `config.yaml` exactly. HA falls back to `en.yaml` for any key missing from another language file.
+
+### Workflow — when adding or renaming a config option
+
+When you add, remove, or rename an option in `addon/config.yaml`, update **all three** translation files in the same commit:
+
+1. `addon/translations/en.yaml` — English (baseline)
+2. `addon/translations/nl.yaml` — Dutch
+3. `addon/translations/de.yaml` — German
+
+Missing a file will leave that language's config UI showing the raw option key instead of a human-readable label.
 
 ---
 

@@ -220,6 +220,14 @@ src/Quotinator.Api/i18ntext/UI.nl.json
 
 `TranslationCompletenessTests` catches missing or empty keys but does NOT detect hardcoded strings in markup. That is a code review gate.
 
+**When adding or renaming an HA add-on config option — checklist (all in the same commit):**
+1. Add/update the option in `addon/config.yaml` (under `options:` and `schema:`)
+2. Add/update the entry in `addon/translations/en.yaml` (English — baseline)
+3. Add/update the entry in `addon/translations/nl.yaml` (Dutch)
+4. Add/update the entry in `addon/translations/de.yaml` (German)
+
+The translation files cover config option names/descriptions and port descriptions only. The `description` field in `config.yaml`, `addon/DOCS.md`, and `addon/README.md` have no HA translation mechanism and remain English-only. See `docs/home-assistant.md` for the full translation scope table.
+
 **How each consumer uses these files:**
 
 - **Blazor UI** (`Toolbelt.Blazor.I18nText`) — injects `II18nText` and calls `GetTextTableAsync<UI>(this)` in Razor components. Language is resolved from the browser/session context.
