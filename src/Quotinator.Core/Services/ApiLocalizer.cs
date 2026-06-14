@@ -3,15 +3,23 @@ using System.Text.Json;
 
 namespace Quotinator.Core.Services;
 
+/// <summary>Looks up localised API error messages by key, using the current UI culture.</summary>
 public interface IApiLocalizer
 {
+    /// <summary>Returns the localised message for <paramref name="key"/>, falling back through the culture hierarchy to the en-GB baseline.</summary>
     string this[string key] { get; }
 }
 
+/// <summary>
+/// Reads all <c>UI.*.json</c> localisation files at startup and resolves strings
+/// against <see cref="CultureInfo.CurrentUICulture"/> at call time.
+/// </summary>
 public sealed class ApiLocalizer : IApiLocalizer
 {
     private readonly Dictionary<string, IReadOnlyDictionary<string, string>> _tables;
 
+    /// <summary>Initialises the localizer by loading all <c>UI.*.json</c> files from <paramref name="i18nTextDir"/>.</summary>
+    /// <param name="i18nTextDir">Directory that contains the <c>UI.*.json</c> translation files.</param>
     public ApiLocalizer(string i18nTextDir)
     {
         _tables = Directory
@@ -19,6 +27,7 @@ public sealed class ApiLocalizer : IApiLocalizer
             .ToDictionary(ExtractLang, LoadTable);
     }
 
+    /// <inheritdoc/>
     public string this[string key] => Resolve(key);
 
     private string Resolve(string key)

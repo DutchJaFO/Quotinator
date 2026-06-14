@@ -16,6 +16,8 @@ public sealed class SqliteQuoteService : IQuoteService
 {
     private readonly IDbConnectionFactory _factory;
 
+    /// <summary>Initialises the service with the connection factory used for all database queries.</summary>
+    /// <param name="factory">Factory used to open SQLite connections.</param>
     public SqliteQuoteService(IDbConnectionFactory factory)
     {
         _factory = factory;
@@ -24,6 +26,7 @@ public sealed class SqliteQuoteService : IQuoteService
     // -------------------------------------------------------------------------
     #region IQuoteService
 
+    /// <inheritdoc/>
     public QuoteResponse? GetById(string id, string? lang = null)
     {
         using var connection = _factory.CreateConnection();
@@ -38,6 +41,7 @@ public sealed class SqliteQuoteService : IQuoteService
         return ToResponse(row, genres, lang);
     }
 
+    /// <inheritdoc/>
     public IReadOnlyList<QuoteResponse> GetRandom(int count, string? lang = null)
     {
         using var connection = _factory.CreateConnection();
@@ -61,6 +65,7 @@ public sealed class SqliteQuoteService : IQuoteService
         }).ToList();
     }
 
+    /// <inheritdoc/>
     public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string? type = null, string? genre = null, string? lang = null)
     {
         using var connection = _factory.CreateConnection();
@@ -83,6 +88,7 @@ public sealed class SqliteQuoteService : IQuoteService
         return new PagedResult<QuoteResponse>(items, page, pageSize, total);
     }
 
+    /// <inheritdoc/>
     public IReadOnlyList<QuoteResponse> Search(string query, int limit, string? type = null, string? genre = null, string? lang = null, string? field = null)
     {
         using var connection = _factory.CreateConnection();

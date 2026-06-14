@@ -4,14 +4,16 @@ using Quotinator.Data.Models;
 
 namespace Quotinator.Core.Data.Entities;
 
+/// <summary>A film, television series, book, or other source from which quotes are drawn.</summary>
 [Table("Sources")]
 public sealed class Source : RecordBase
 {
+    /// <summary>The title of the source in its original language.</summary>
     public string Title { get; init; } = string.Empty;
 
-    /// <summary>QuoteType stored as TEXT (enum name). Parsed safely on read; <see cref="SafeValue{T}.Raw"/> preserved if unrecognised.</summary>
+    /// <summary>Media category stored as TEXT (enum name). <see cref="SafeValue{T}.Raw"/> is preserved if the stored value is unrecognised.</summary>
     public SafeValue<QuoteType?> Type { get; init; } = SafeValue<QuoteType?>.Empty;
 
-    /// <summary>Publication / release date. Imprecise ISO 8601 text (e.g. "1994", "1994-06"). Separate from audit timestamps.</summary>
+    /// <summary>Publication or release date. Imprecise ISO 8601 text (e.g. "1994", "1994-06"). Separate from audit timestamps.</summary>
     public SafeValue<DateTime?> Date { get; init; } = SafeDateValue.Empty;
 }

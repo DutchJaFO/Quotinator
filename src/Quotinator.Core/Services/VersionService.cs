@@ -12,6 +12,7 @@ public interface IVersionService
 /// <summary>Reads the version from <see cref="AssemblyInformationalVersionAttribute"/> at startup.</summary>
 public sealed class VersionService : IVersionService
 {
+    /// <inheritdoc/>
     public string Version { get; } =
         typeof(VersionService).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()

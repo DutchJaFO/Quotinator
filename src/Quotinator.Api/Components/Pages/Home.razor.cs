@@ -6,10 +6,12 @@ using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
 namespace Quotinator.Api.Components.Pages;
 
+/// <summary>The application home page. Shows a random quote and links to the API reference.</summary>
 public partial class Home
 {
     #region Protected
 
+    /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);

@@ -6,10 +6,12 @@ using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
 namespace Quotinator.Api.Components.Controls;
 
+/// <summary>Displays a single random quote with attribution and a button to load the next one.</summary>
 public partial class QuoteCard
 {
     #region Protected
 
+    /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);

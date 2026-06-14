@@ -25,6 +25,7 @@ public sealed class SafeDateHandler : SqlMapper.TypeHandler<SafeValue<DateTime?>
         "yyyy"
     ];
 
+    /// <inheritdoc/>
     public override SafeValue<DateTime?> Parse(object value)
     {
         if (value is DBNull || value is null)
@@ -44,6 +45,7 @@ public sealed class SafeDateHandler : SqlMapper.TypeHandler<SafeValue<DateTime?>
         return new(raw, parsed);
     }
 
+    /// <inheritdoc/>
     public override void SetValue(IDbDataParameter parameter, SafeValue<DateTime?> value)
     {
         if (string.IsNullOrEmpty(value.Raw))

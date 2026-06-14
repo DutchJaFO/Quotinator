@@ -8,10 +8,12 @@ using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
 namespace Quotinator.Api.Components.Controls;
 
+/// <summary>Navbar language selector. Submits a form to set the culture cookie and redirect back to the current page.</summary>
 public partial class LanguageSelector
 {
     #region Protected
 
+    /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);

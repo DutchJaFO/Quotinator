@@ -15,6 +15,7 @@ namespace Quotinator.Data.Helpers;
 public sealed class SafeEnumHandler<TEnum> : SqlMapper.TypeHandler<SafeValue<TEnum?>>
     where TEnum : struct, Enum
 {
+    /// <inheritdoc/>
     public override SafeValue<TEnum?> Parse(object value)
     {
         if (value is DBNull || value is null)
@@ -27,6 +28,7 @@ public sealed class SafeEnumHandler<TEnum> : SqlMapper.TypeHandler<SafeValue<TEn
         return new(raw, parsed);
     }
 
+    /// <inheritdoc/>
     public override void SetValue(IDbDataParameter parameter, SafeValue<TEnum?> value)
     {
         if (string.IsNullOrEmpty(value.Raw))

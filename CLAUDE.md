@@ -265,6 +265,14 @@ Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.
 
 `/search` is registered before `/{id}` in `QuoteEndpoints.cs` so the literal segment takes priority over the catch-all parameter. Preserve this order.
 
+### Code comments
+
+Two separate rules:
+
+1. **XML `<summary>` tags are required on all non-private types, methods, and properties** in `Quotinator.Core` and `Quotinator.Data`. The build enforces this (CS1591 is active; 0 warnings policy applies). Use `/// <inheritdoc/>` on interface implementations and method overrides rather than duplicating the parent summary. In `Quotinator.Api`, CS1591 is suppressed because the I18nText source-generated `UI` class cannot be annotated — add summaries manually to all Api source files without build enforcement.
+
+2. **No inline `//` comments that explain *what* the code does** — well-named identifiers do that. Only add an inline comment when the *why* is non-obvious: a hidden constraint, a subtle invariant, a workaround for a specific quirk, or a configuration value whose purpose isn't clear from its name.
+
 ### Blazor code style
 
 These rules apply to all Blazor components and pages:

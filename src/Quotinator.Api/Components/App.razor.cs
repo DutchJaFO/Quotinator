@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Quotinator.Api.Components;
 
+/// <summary>Root application component. Sets the HTML language attribute and base href from the active culture and request path base.</summary>
 public partial class App
 {
     [CascadingParameter]

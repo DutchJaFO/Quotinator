@@ -26,12 +26,16 @@ public sealed class DatabaseInitializer
         Migration001_InitialSchema
     ];
 
+    /// <summary>Initialises the instance with the connection factory and the path to the seed data file.</summary>
+    /// <param name="factory">Factory used to open SQLite connections.</param>
+    /// <param name="seedJsonPath">Absolute path to <c>quotes.json</c>. Used only on first run when the database is empty.</param>
     public DatabaseInitializer(IDbConnectionFactory factory, string seedJsonPath)
     {
         _factory  = factory;
         _seedJsonPath = seedJsonPath;
     }
 
+    /// <summary>Ensures WAL mode is active, applies any pending schema migrations, and seeds the database from <c>quotes.json</c> if empty.</summary>
     public async Task InitialiseAsync()
     {
         using var connection = (SqliteConnection)_factory.CreateConnection();

@@ -8,6 +8,7 @@ public sealed class QuoteService : IQuoteService
 {
     private readonly IReadOnlyList<Quote> _quotes;
 
+    /// <summary>Initialises the service and loads quotes from <paramref name="dataPath"/> into memory.</summary>
     /// <param name="dataPath">Absolute or working-directory-relative path to <c>quotes.json</c>. Defaults to <c>data/quotes.json</c>.</param>
     public QuoteService(string dataPath = "data/quotes.json")
     {
