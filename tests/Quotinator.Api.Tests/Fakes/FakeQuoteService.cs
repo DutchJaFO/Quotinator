@@ -81,9 +81,16 @@ internal sealed class FakeQuoteService : IQuoteService
         return new PagedResult<QuoteResponse>(items, page, pageSize, All.Count);
     }
 
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string? type = null, string? genre = null, string? lang = null) =>
-        All.Where(q => q.Quote.Contains(query, StringComparison.OrdinalIgnoreCase)
-                    || q.Source.Contains(query, StringComparison.OrdinalIgnoreCase))
+    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string? type = null, string? genre = null, string? lang = null, string? field = null) =>
+        All.Where(q => field switch
+            {
+                "quote"     => q.Quote.Contains(query, StringComparison.OrdinalIgnoreCase),
+                "source"    => q.Source.Contains(query, StringComparison.OrdinalIgnoreCase),
+                "character" => q.Character?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false,
+                "author"    => q.Author?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false,
+                _           => q.Quote.Contains(query, StringComparison.OrdinalIgnoreCase)
+                            || q.Source.Contains(query, StringComparison.OrdinalIgnoreCase)
+            })
            .Take(limit)
            .ToList();
 }

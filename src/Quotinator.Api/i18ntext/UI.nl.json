@@ -18,5 +18,6 @@
   "ErrorRandomNOutOfRange": "n moet een geheel getal zijn tussen 1 en 100.",
   "ErrorPageOutOfRange": "page moet een geheel getal zijn van 1 of groter.",
   "ErrorPageSizeOutOfRange": "pageSize moet een geheel getal zijn tussen 1 en 100.",
-  "ErrorQuoteNotFound": "Er is geen citaat gevonden met het opgegeven ID."
+  "ErrorQuoteNotFound": "Er is geen citaat gevonden met het opgegeven ID.",
+  "ErrorFieldInvalid": "field moet een van de volgende waarden zijn: quote, source, character, author."
 }

@@ -7,6 +7,9 @@ internal static partial class InputValidation
     internal static readonly HashSet<string> ValidTypes =
         ["movie", "tv", "anime", "book", "person"];
 
+    internal static readonly HashSet<string> ValidSearchFields =
+        ["quote", "source", "character", "author"];
+
     // ISO 639-1: 2-letter code, optionally followed by a region subtag (e.g. en-GB).
     // Accepts up to 8 chars total to cover common BCP 47 subtags without being permissive.
     [GeneratedRegex(@"^[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?$")]

@@ -169,6 +169,66 @@ public class QuoteEndpointsTests
         StringAssert.Contains(detail.GetString(), "verplicht");
     }
 
+    // ── search field filter ───────────────────────────────────────────────
+
+    /// <summary>field=quote matches on quote text only.</summary>
+    [TestMethod]
+    public async Task Search_FieldQuote_MatchesQuoteText()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=back&field=quote");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual(1, items.GetArrayLength());
+        StringAssert.Contains(items[0].GetProperty("quote").GetString(), "back");
+    }
+
+    /// <summary>field=source matches on source only, not quote text.</summary>
+    [TestMethod]
+    public async Task Search_FieldSource_MatchesSourceOnly()
+    {
+        using var factory = CreateFactory();
+        // "Casablanca" is a source; should not match quote text
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Casablanca&field=source");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual(1, items.GetArrayLength());
+        Assert.AreEqual("Casablanca", items[0].GetProperty("source").GetString());
+    }
+
+    /// <summary>field=character matches on character name.</summary>
+    [TestMethod]
+    public async Task Search_FieldCharacter_MatchesCharacter()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Rick&field=character");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual(1, items.GetArrayLength());
+        Assert.AreEqual("Rick Blaine", items[0].GetProperty("character").GetString());
+    }
+
+    /// <summary>field=author matches on author name.</summary>
+    [TestMethod]
+    public async Task Search_FieldAuthor_MatchesAuthor()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Churchill&field=author");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual(1, items.GetArrayLength());
+        Assert.AreEqual("Winston Churchill", items[0].GetProperty("author").GetString());
+    }
+
+    /// <summary>An invalid field value is rejected with 400.</summary>
+    [TestMethod]
+    public async Task Search_InvalidField_ReturnsBadRequest()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=test&field=invalid");
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     // ── input validation (shared) ─────────────────────────────────────────
 
     /// <summary>An invalid lang value is rejected with 400.</summary>

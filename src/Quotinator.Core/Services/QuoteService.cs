@@ -54,14 +54,21 @@ public sealed class QuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string? type = null, string? genre = null, string? lang = null)
+    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string? type = null, string? genre = null, string? lang = null, string? field = null)
     {
         var filtered = Filter(_quotes, type, genre);
         return filtered
-            .Where(q => Contains(q.QuoteText, query)
-                     || Contains(q.Source, query)
-                     || (q.Character is not null && Contains(q.Character, query))
-                     || (q.Author is not null && Contains(q.Author, query)))
+            .Where(q => field switch
+            {
+                "quote"     => Contains(q.QuoteText, query),
+                "source"    => Contains(q.Source, query),
+                "character" => q.Character is not null && Contains(q.Character, query),
+                "author"    => q.Author is not null && Contains(q.Author, query),
+                _           => Contains(q.QuoteText, query)
+                            || Contains(q.Source, query)
+                            || (q.Character is not null && Contains(q.Character, query))
+                            || (q.Author is not null && Contains(q.Author, query))
+            })
             .Take(limit)
             .Select(q => Localise(q, lang))
             .ToList();

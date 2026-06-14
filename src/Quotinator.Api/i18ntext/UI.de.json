@@ -18,5 +18,6 @@
   "ErrorRandomNOutOfRange": "n muss eine ganze Zahl zwischen 1 und 100 sein.",
   "ErrorPageOutOfRange": "page muss eine ganze Zahl von 1 oder größer sein.",
   "ErrorPageSizeOutOfRange": "pageSize muss eine ganze Zahl zwischen 1 und 100 sein.",
-  "ErrorQuoteNotFound": "Es wurde kein Zitat mit der angegebenen ID gefunden."
+  "ErrorQuoteNotFound": "Es wurde kein Zitat mit der angegebenen ID gefunden.",
+  "ErrorFieldInvalid": "field muss einer der folgenden Werte sein: quote, source, character, author."
 }

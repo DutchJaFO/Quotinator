@@ -50,7 +50,7 @@ internal static class QuoteEndpoints
     // Returns a 400 problem result when lang or type are invalid, null when both are fine.
     // Note: lang validation errors use Accept-Language for the error message language,
     // since ?lang is invalid and cannot be used to localise the error itself.
-    private static IResult? ValidateCommon(IApiLocalizer localizer, string? lang, string? type)
+    private static IResult? ValidateCommon(IApiLocalizer localizer, string? lang, string? type, string? field = null)
     {
         if (lang is not null && !InputValidation.IsValidLang(lang))
             return Results.Problem(
@@ -60,6 +60,11 @@ internal static class QuoteEndpoints
         if (type is not null && !InputValidation.ValidTypes.Contains(type.ToLowerInvariant()))
             return Results.Problem(
                 detail: localizer[ApiMessages.TypeInvalid],
+                statusCode: StatusCodes.Status400BadRequest);
+
+        if (field is not null && !InputValidation.ValidSearchFields.Contains(field.ToLowerInvariant()))
+            return Results.Problem(
+                detail: localizer[ApiMessages.FieldInvalid],
                 statusCode: StatusCodes.Status400BadRequest);
 
         return null;
@@ -103,13 +108,14 @@ internal static class QuoteEndpoints
     private static IResult Search(
         IQuoteService service,
         IApiLocalizer localizer,
-        [Description("Search term. Matched case-insensitively against quote text, source, character name, and author.")] string? q = null,
+        [Description("Search term. Matched case-insensitively against the selected field (or all fields when `field` is omitted).")] string? q = null,
         [Description("Maximum number of results to return (1–100)."), DefaultValue(20)] string? limit = null,
         [Description("Filter by type. One of: `movie`, `tv`, `anime`, `book`, `person`.")] string? type = null,
         [Description("Filter by genre tag (e.g. `sci-fi`, `drama`, `non-fiction`).")] string? genre = null,
-        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
+        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null,
+        [Description("Restrict search to a specific field. One of: `quote`, `source`, `character`, `author`. Omit to search all fields.")] string? field = null)
     {
-        if (ValidateCommon(localizer, lang, type) is { } err) return err;
+        if (ValidateCommon(localizer, lang, type, field) is { } err) return err;
 
         if (string.IsNullOrWhiteSpace(q))
             return Results.Problem(
@@ -127,7 +133,7 @@ internal static class QuoteEndpoints
                 detail: localizer[ApiMessages.LimitOutOfRange],
                 statusCode: StatusCodes.Status400BadRequest);
 
-        return Results.Ok(service.Search(q, limitValue, type, genre, lang));
+        return Results.Ok(service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant()));
     }
 
     private static IResult GetAll(

@@ -13,4 +13,5 @@ internal static class ApiMessages
     internal const string LangInvalid         = "ErrorLangInvalid";
     internal const string TypeInvalid         = "ErrorTypeInvalid";
     internal const string TooManyRequests     = "ErrorTooManyRequests";
+    internal const string FieldInvalid        = "ErrorFieldInvalid";
 }
