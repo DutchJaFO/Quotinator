@@ -27,4 +27,14 @@ tests/
 ## What to skip
 
 - Pure DI wiring (no logic to assert)
-- Render-only Blazor components with no code-behind logic
+- Razor components whose code-behind is a stub with no logic (every component must have a code-behind file, but testing a pure stub adds no value)
+
+## Translation rules
+
+Every string that appears in Razor markup must come from `@Text.KeyName` — never hardcode English (or any language) directly in `.razor` files. When adding a new UI string:
+
+1. Add the key to `i18ntext/UI.en.json` (the baseline)
+2. Add a translation to `UI.de.json`, `UI.nl.json`, and `UI.en-GB.json` in the same commit
+3. Reference it in the component via `@Text.KeyName`
+
+The `TranslationCompletenessTests` enforces key parity and non-empty values across all language files. It does **not** detect hardcoded strings in markup — that is a code review responsibility.

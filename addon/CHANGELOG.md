@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- Language selector in the UI navbar — overrides browser language, persists as a cookie for one year
+- AppArmor profile (`apparmor.txt`) — restricts container filesystem and network access; improves add-on quality score
+
+### Fixed
+- Home Assistant ingress now connects correctly: binds to both port 8080 (direct) and 8099 (ingress) via `ASPNETCORE_HTTP_PORTS` environment variable
+- Language cookie now uses `SameSite=Lax` and `Secure=true`
+- UI language now reflects the selected language in all components (Interactive Server components previously showed English regardless of selection)
+- `<html lang>` now reflects the active UI culture, satisfying WCAG SC 3.1.1
+
+### Changed
+- Direct access port disabled by default (`null`); enable in add-on configuration if needed for direct LAN or tool access
+
 ## [1.0.3] - 2026-06-14
 
 ### Fixed

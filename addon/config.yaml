@@ -31,6 +31,11 @@ ports_description:
 ingress: true
 ingress_port: 8099
 
+# AppArmor — custom profile in apparmor.txt restricts filesystem and network access.
+# Explicit true is required: the supervisor checks this key; relying on the default risks
+# the profile being silently ignored if the default is not applied before the check.
+apparmor: true
+
 # Data directory — quotes.json is stored here and persists across updates.
 map:
   - data:rw

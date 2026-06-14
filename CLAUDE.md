@@ -174,7 +174,14 @@ src/Quotinator.Api/i18ntext/UI.de.json
 src/Quotinator.Api/i18ntext/UI.nl.json
 ```
 
-**Rule:** every key that exists in `UI.en.json` must exist (non-empty) in every other file. The test `TranslationCompletenessTests` enforces this. When adding a new string, add it to all four files in the same commit.
+**Rule:** every key that exists in `UI.en.json` must exist (non-empty) in every other file. The test `TranslationCompletenessTests` enforces this.
+
+**When adding a new UI string — checklist (all in the same commit):**
+1. Add the key to `UI.en.json`
+2. Add translations to `UI.de.json`, `UI.nl.json`, and `UI.en-GB.json`
+3. Reference it in the Razor component as `@Text.KeyName` — **never hardcode English (or any language) directly in `.razor` markup**
+
+`TranslationCompletenessTests` catches missing or empty keys but does NOT detect hardcoded strings in markup. That is a code review gate.
 
 **How each consumer uses these files:**
 
@@ -195,7 +202,11 @@ src/Quotinator.Api/i18ntext/UI.nl.json
 
 ### Language selector — UI culture override
 
-The navbar `LanguageSelector` control (`Components/Controls/LanguageSelector.razor`) lets users override the browser's `Accept-Language` preference. It submits a GET form to `/Culture/Set?culture={code}&redirectUri={path}`, which sets the `.AspNetCore.Culture` cookie (`c={code}|uic={code}`) and redirects back using `TypedResults.LocalRedirect` (prevents open-redirect attacks). The cookie is read by `CookieRequestCultureProvider` (one of the default providers in `RequestLocalizationOptions`) on every subsequent request. `MaxAge = 365 days`, `IsEssential = true` (no cookie consent required).
+The navbar `LanguageSelector` control (`Components/Controls/LanguageSelector.razor`) lets users override the browser's `Accept-Language` preference. It submits a GET form to `/Culture/Set?culture={code}&redirectUri={path}`, which sets the `.AspNetCore.Culture` cookie (`c={code}|uic={code}`) and redirects back using `TypedResults.LocalRedirect` (prevents open-redirect attacks). The cookie is read by `CookieRequestCultureProvider` (one of the default providers in `RequestLocalizationOptions`) on every subsequent request.
+
+**Cookie options:** `MaxAge = 365 days`, `IsEssential = true` (no cookie consent banner needed — language preference is functional), `SameSite = Lax` (blocks CSRF cross-site POSTs while allowing top-level navigations), `Secure = true` (HTTPS only — Quotinator is always served behind TLS in production, either via HA ingress or a reverse proxy). Do not remove these flags without an explicit team decision.
+
+**`<html lang>` must be dynamic.** `App.razor` derives `lang` from `CultureInfo.CurrentUICulture.Name` via `App.razor.cs`. This satisfies WCAG SC 3.1.1 (Language of Page — Level A). Never hardcode `lang="en"` — screen readers use this attribute to select the correct pronunciation engine.
 
 **Do not use** `NavigationManager.NavigateTo(..., forceLoad: true)` for this — that requires `InteractiveServer` render mode. The plain HTML form approach works in static SSR and requires no Blazor circuit.
 

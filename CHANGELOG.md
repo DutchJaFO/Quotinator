@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+- Language selector in the navbar: overrides browser language preference, persists as a cookie for one year
+- Open API reference button on the home page
+- Translation support section on the home page
+- AppArmor profile for the Home Assistant add-on (`addon/apparmor.txt`)
+
+### Fixed
+- WCAG SC 3.1.1: `<html lang>` is now dynamic and reflects the active UI culture (was hardcoded `"en"`)
+- Language cookie now uses `SameSite=Lax` and `Secure=true`
+- QuoteCard (Interactive Server component) now respects the language cookie; previously always rendered in English regardless of selected language
+- Home Assistant ingress now connects correctly via `ASPNETCORE_HTTP_PORTS` environment variable
+
+### Changed
+- Home Assistant add-on direct access port disabled by default; enable in add-on configuration for direct LAN or tool access
+
 ## [1.0.3] - 2026-06-14
 
 ### Fixed
@@ -38,7 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - RFC 7807 ProblemDetails error responses with localised messages (en, en-GB, de, nl)
 - Input validation: all query parameters validated; non-integer inputs return 400 instead of 500
 - Sliding-window rate limiter: 100 requests per minute per IP
-- OpenAPI documentation via Scalar UI (`/scalar/v1` in Development)
+- OpenAPI documentation via Scalar UI (`/scalar/v1`) and raw spec (`/openapi/v1.json`), available in all environments including production
 - Multi-arch Docker image (`linux/amd64` + `linux/arm64`)
 - GitHub Actions CI pipeline: build, test, and publish smoke test
 - GitHub Actions release pipeline: builds and pushes Docker image to GHCR on version tags
