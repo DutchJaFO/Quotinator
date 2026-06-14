@@ -37,6 +37,11 @@ public sealed class DatabaseInitializer
     /// <summary>Total non-deleted people rows. Available after <see cref="InitialiseAsync"/> completes.</summary>
     public int PeopleCount { get; private set; }
 
+    // Guards against concurrent seeding when multiple WebApplicationFactory instances start in
+    // the same process (e.g. parallel MSTest runs). Each waiter re-checks COUNT(*) after
+    // acquiring the lock and skips seeding if the previous holder already populated the DB.
+    private static readonly SemaphoreSlim _seedLock = new(1, 1);
+
     // Numbered migration scripts. Add new entries at the end — never reorder or edit existing ones.
     private static readonly IReadOnlyList<string> Migrations =
     [
@@ -114,6 +119,19 @@ public sealed class DatabaseInitializer
     #region Seeding
 
     private async Task SeedIfEmptyAsync(SqliteConnection connection)
+    {
+        await _seedLock.WaitAsync();
+        try
+        {
+            await SeedIfEmptyInternalAsync(connection);
+        }
+        finally
+        {
+            _seedLock.Release();
+        }
+    }
+
+    private async Task SeedIfEmptyInternalAsync(SqliteConnection connection)
     {
         var count = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes;");
         if (count > 0) return;
