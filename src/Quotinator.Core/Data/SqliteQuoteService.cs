@@ -69,12 +69,14 @@ public sealed class SqliteQuoteService : IQuoteService
         string? character = null,
         string? author = null,
         string? source = null,
-        string? lang = null)
+        string? lang = null,
+        int? yearFrom = null,
+        int? yearTo = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var (whereClause, filterParams) = BuildFilterWhere(types, genres, lang, character, author, source);
+        var (whereClause, filterParams) = BuildFilterWhere(types, genres, lang, character, author, source, yearFrom, yearTo);
 
         var totalMatching = connection.ExecuteScalar<int>(
             $"SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 {whereClause}",
@@ -107,12 +109,12 @@ public sealed class SqliteQuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null)
+    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var (whereClause, parameters) = BuildFilterWhere(types, genres, lang);
+        var (whereClause, parameters) = BuildFilterWhere(types, genres, lang, yearFrom, yearTo);
 
         var total = connection.ExecuteScalar<int>(
             $"SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 {whereClause}",
@@ -130,7 +132,7 @@ public sealed class SqliteQuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null)
+    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
@@ -146,7 +148,7 @@ public sealed class SqliteQuoteService : IQuoteService
             _           => "(q.QuoteText LIKE @like OR s.Title LIKE @like OR c.Name LIKE @like OR p.Name LIKE @like)"
         };
 
-        var (typeGenreWhere, filterParams) = BuildFilterWhere(types, genres, lang);
+        var (typeGenreWhere, filterParams) = BuildFilterWhere(types, genres, lang, yearFrom, yearTo);
 
         var sql = QuoteSelectSql
             + $" {typeGenreWhere}"
@@ -211,12 +213,13 @@ public sealed class SqliteQuoteService : IQuoteService
     }
 
     // Overload without text filters — used by GetAll and Search.
-    private static (string Sql, object Parameters) BuildFilterWhere(string[]? types, string[]? genres, string? lang)
-        => BuildFilterWhere(types, genres, lang, null, null, null);
+    private static (string Sql, object Parameters) BuildFilterWhere(string[]? types, string[]? genres, string? lang, int? yearFrom = null, int? yearTo = null)
+        => BuildFilterWhere(types, genres, lang, null, null, null, yearFrom, yearTo);
 
     private static (string Sql, DynamicParameters Parameters) BuildFilterWhere(
         string[]? types, string[]? genres, string? lang,
-        string? character, string? author, string? source)
+        string? character, string? author, string? source,
+        int? yearFrom = null, int? yearTo = null)
     {
         var dbTypes  = types  is { Length: > 0 } ? types.Select(NormaliseType).ToArray()  : null;
         var dbGenres = genres is { Length: > 0 } ? genres.Select(NormaliseGenre).ToArray() : null;
@@ -227,6 +230,8 @@ public sealed class SqliteQuoteService : IQuoteService
         if (character is not null) clauses.Add("c.Name LIKE @characterLike");
         if (author    is not null) clauses.Add("p.Name LIKE @authorLike");
         if (source    is not null) clauses.Add("s.Title LIKE @sourceLike");
+        if (yearFrom  is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom");
+        if (yearTo    is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo");
 
         var p = new DynamicParameters();
         p.Add("lang", (string?)null);
@@ -235,6 +240,8 @@ public sealed class SqliteQuoteService : IQuoteService
         if (character is not null) p.Add("characterLike", $"%{character}%");
         if (author    is not null) p.Add("authorLike",    $"%{author}%");
         if (source    is not null) p.Add("sourceLike",    $"%{source}%");
+        if (yearFrom  is not null) p.Add("yearFrom", yearFrom);
+        if (yearTo    is not null) p.Add("yearTo",   yearTo);
 
         return ("WHERE " + string.Join(" AND ", clauses), p);
     }

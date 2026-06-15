@@ -22,7 +22,9 @@ The REST API is accessible in two ways:
 | `GET /api/v1/quotes/random?n=10` | N random quotes (1–100) |
 | `GET /api/v1/quotes/random?type=movie&type=book` | Random quote from movies or books (repeatable, OR logic) |
 | `GET /api/v1/quotes/random?genre=sci-fi&character=Gandalf` | Filter by genre and character (AND between params) |
-| `GET /api/v1/quotes` | All quotes, paginated; `type` and `genre` are repeatable |
+| `GET /api/v1/quotes/random?decade=1980` | Random quote from the 1980s (`decade` must be divisible by 10) |
+| `GET /api/v1/quotes/random?yearFrom=1970&yearTo=1989` | Random quote from an explicit year range |
+| `GET /api/v1/quotes` | All quotes, paginated; `type`, `genre`, `yearFrom`, `yearTo`, `year`, `decade` all supported |
 | `GET /api/v1/quotes/{id}` | Quote by UUID |
 | `GET /api/v1/quotes/search?q=term` | Search quotes; add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | `GET /api/v1/health` | Health check |
@@ -32,7 +34,7 @@ The REST API is accessible in two ways:
 
 All endpoints accept an optional `lang` query parameter (ISO 639-1 code, e.g. `nl`, `de`) to request a translated quote response. Falls back to the original language if no translation exists. Error message language is controlled separately by the `Accept-Language` request header.
 
-**`/random` filter envelope status values:** `Ok` (results found), `NoResults` (valid filters, no matching data), `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`.
+**`/random` filter envelope status values:** `Ok` (results found), `NoResults` (valid filters, no matching data), `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`. Year filter errors (`decade` not divisible by 10, `yearFrom > yearTo`) also return `InvalidInput` in the envelope.
 
 A sliding-window rate limit of **100 requests per minute per IP** applies to all quote endpoints. Excess requests receive `429 Too Many Requests`.
 

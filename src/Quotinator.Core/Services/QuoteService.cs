@@ -40,9 +40,11 @@ public sealed class QuoteService : IQuoteService
         string? character = null,
         string? author = null,
         string? source = null,
-        string? lang = null)
+        string? lang = null,
+        int? yearFrom = null,
+        int? yearTo = null)
     {
-        IEnumerable<Quote> filtered = Filter(_quotes, types, genres);
+        IEnumerable<Quote> filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
 
         if (character is not null)
             filtered = filtered.Where(q => q.Character is not null && Contains(q.Character, character));
@@ -64,9 +66,9 @@ public sealed class QuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null)
+    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null)
     {
-        var filtered = Filter(_quotes, types, genres);
+        var filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
         var total = filtered.Count;
         var items = filtered
             .Skip((page - 1) * pageSize)
@@ -78,9 +80,9 @@ public sealed class QuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null)
+    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null)
     {
-        var filtered = Filter(_quotes, types, genres);
+        var filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
         return filtered
             .Where(q => field switch
             {
@@ -98,7 +100,7 @@ public sealed class QuoteService : IQuoteService
             .ToList();
     }
 
-    private static IReadOnlyList<Quote> Filter(IReadOnlyList<Quote> quotes, string[]? types, string[]? genres)
+    private static IReadOnlyList<Quote> Filter(IReadOnlyList<Quote> quotes, string[]? types, string[]? genres, int? yearFrom = null, int? yearTo = null)
     {
         IEnumerable<Quote> result = quotes;
 
@@ -108,7 +110,19 @@ public sealed class QuoteService : IQuoteService
         if (genres is { Length: > 0 })
             result = result.Where(q => q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))));
 
+        if (yearFrom is not null)
+            result = result.Where(q => ExtractYear(q.Date) is int y && y >= yearFrom);
+
+        if (yearTo is not null)
+            result = result.Where(q => ExtractYear(q.Date) is int y && y <= yearTo);
+
         return result.ToList();
+    }
+
+    private static int? ExtractYear(string? date)
+    {
+        if (date is null || date.Length < 4) return null;
+        return int.TryParse(date.AsSpan(0, 4), out var y) ? y : null;
     }
 
     private static bool Contains(string haystack, string needle) =>

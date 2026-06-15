@@ -18,4 +18,6 @@ public static class ApiMessages
     public const string NoQuotesMatchFilters = "InfoNoQuotesMatchFilters";
     public const string FilterInputTooLong   = "ErrorFilterInputTooLong";
     public const string FilterInputInvalid   = "ErrorFilterInputInvalid";
+    public const string DecadeInvalid        = "ErrorDecadeInvalid";
+    public const string YearRangeInvalid     = "ErrorYearRangeInvalid";
 }

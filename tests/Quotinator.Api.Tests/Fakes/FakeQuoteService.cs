@@ -87,7 +87,9 @@ internal sealed class FakeQuoteService : IQuoteService
         string? character = null,
         string? author = null,
         string? source = null,
-        string? lang = null)
+        string? lang = null,
+        int? yearFrom = null,
+        int? yearTo = null)
     {
         IEnumerable<QuoteResponse> filtered = All;
 
@@ -101,6 +103,10 @@ internal sealed class FakeQuoteService : IQuoteService
             filtered = filtered.Where(q => q.Author?.Contains(author, StringComparison.OrdinalIgnoreCase) ?? false);
         if (source is not null)
             filtered = filtered.Where(q => q.Source.Contains(source, StringComparison.OrdinalIgnoreCase));
+        if (yearFrom is not null)
+            filtered = filtered.Where(q => ExtractYear(q.Date) is int y && y >= yearFrom);
+        if (yearTo is not null)
+            filtered = filtered.Where(q => ExtractYear(q.Date) is int y && y <= yearTo);
 
         var pool  = filtered.ToList();
         var items = pool.Take(count).ToList();
@@ -112,11 +118,13 @@ internal sealed class FakeQuoteService : IQuoteService
         };
     }
 
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null)
+    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null)
     {
         var items = All
             .Where(q => types is not { Length: > 0 } || types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)))
             .Where(q => genres is not { Length: > 0 } || q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))))
+            .Where(q => yearFrom is null || (ExtractYear(q.Date) is int y1 && y1 >= yearFrom))
+            .Where(q => yearTo   is null || (ExtractYear(q.Date) is int y2 && y2 <= yearTo))
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToList();
@@ -124,7 +132,7 @@ internal sealed class FakeQuoteService : IQuoteService
         return new PagedResult<QuoteResponse>(items, page, pageSize, All.Count);
     }
 
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null) =>
+    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null) =>
         All.Where(q => field switch
             {
                 "quote"     => q.Quote.Contains(query, StringComparison.OrdinalIgnoreCase),
@@ -136,6 +144,14 @@ internal sealed class FakeQuoteService : IQuoteService
             })
            .Where(q => types is not { Length: > 0 } || types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)))
            .Where(q => genres is not { Length: > 0 } || q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))))
+           .Where(q => yearFrom is null || (ExtractYear(q.Date) is int y1 && y1 >= yearFrom))
+           .Where(q => yearTo   is null || (ExtractYear(q.Date) is int y2 && y2 <= yearTo))
            .Take(limit)
            .ToList();
+
+    private static int? ExtractYear(string? date)
+    {
+        if (date is null || date.Length < 4) return null;
+        return int.TryParse(date.AsSpan(0, 4), out var y) ? y : null;
+    }
 }

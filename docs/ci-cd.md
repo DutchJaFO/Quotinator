@@ -69,9 +69,9 @@ Every release requires these file updates — commit them all before creating th
    ```
    The HA Supervisor appends this value as the Docker image tag when pulling from GHCR. If it does not match a published tag the install will fail.
 
-3. **`CHANGELOG.md`** (root) — move items from `[Unreleased]` to a new versioned section and update the comparison links at the bottom.
+3. **`CHANGELOG.md`** (root) — move items from `[Unreleased]` to a new versioned section. Every versioned section must include a `### Highlights` block written in plain, user-facing English — this is what the Blazor frontend displays. For purely internal releases write a short generic phrase (e.g. `Bug fix — no user-facing changes`). Include GitHub issue links in highlight items where applicable.
 
-4. **`addon/CHANGELOG.md`** — add a matching entry for the HA add-on release.
+4. **`addon/CHANGELOG.md`** — add a matching entry for the HA add-on release. Use a flat bullet list with no `### Added/Fixed/Changed` subsections (HA convention).
 
 Then run the [Pre-Push Checklist](../CLAUDE.md#pre-push-checklist) before tagging.
 

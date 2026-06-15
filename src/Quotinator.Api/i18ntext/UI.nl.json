@@ -11,6 +11,7 @@
   "AboutHeading": "Over",
   "ChangelogHeading": "Wijzigingslog",
   "ChangelogFilterPlaceholder": "Versies filteren…",
+  "ChangelogFullDetailsOnGitHub": "Volledige technische details op GitHub →",
   "AboutDescription": "Quotinator is gebouwd met ASP.NET Core (.NET 10) en wordt ingezet als Docker-container voor linux/amd64 en linux/arm64.",
   "AboutRoadmapV1": "REST API — leesendpoints (huidig)",
   "AboutRoadmapV2": "SQLite-backend, schrijfendpoints, beheerinterface",
@@ -38,5 +39,7 @@
   "ErrorGenreInvalid": "Een of meer genrewaarden zijn niet herkend. Geldige genres: action, adventure, animation, comedy, drama, fantasy, fiction, horror, mystery, non-fiction, romance, sci-fi, thriller.",
   "InfoNoQuotesMatchFilters": "Geen citaten komen overeen met de opgegeven filters.",
   "ErrorFilterInputTooLong": "Filterwaarden mogen niet langer zijn dan 200 tekens.",
-  "ErrorFilterInputInvalid": "Een of meer filterwaarden bevatten ongeldige tekens."
+  "ErrorFilterInputInvalid": "Een of meer filterwaarden bevatten ongeldige tekens.",
+  "ErrorDecadeInvalid": "decade moet een jaar zijn dat deelbaar is door 10 (bijv. 1980, 1990, 2000).",
+  "ErrorYearRangeInvalid": "yearFrom mag niet groter zijn dan yearTo."
 }

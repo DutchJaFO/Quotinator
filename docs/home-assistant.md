@@ -14,7 +14,7 @@ HA discovers add-ons by searching recursively for `config.yaml` files. No separa
 | `addon/config.yaml` | Add-on manifest — name, version, arch, ports, ingress |
 | `addon/DOCS.md` | User-facing documentation shown in the HA UI (Documentation tab) |
 | `addon/README.md` | Short description shown in the add-on store (Info tab) |
-| `addon/CHANGELOG.md` | Add-on version history (Keep a Changelog format) |
+| `addon/CHANGELOG.md` | Add-on version history — flat bullet-list per version (HA convention; no `### Added/Fixed/Changed` subsections) |
 | `addon/translations/en.yaml` | English config UI labels — baseline |
 | `addon/translations/nl.yaml` | Dutch config UI labels |
 | `addon/translations/de.yaml` | German config UI labels |

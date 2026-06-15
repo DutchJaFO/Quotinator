@@ -6,7 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.1.0] - 2026-06-15
+
+### Highlights
+- You can now filter quotes by more than one genre or type at once — for example, get only sci-fi comedies or drama films
+- Sci-fi and non-fiction quotes were missing from search and random results; both genres now work correctly
+- Two new admin endpoints let you reseed or fully reset the quote database without restarting the container
 
 ### Added
 - `/random` now accepts multi-value `type` and `genre` filters (repeatable query params, OR logic within each, AND between them), plus `character`, `author`, and `source` text-contains filters (AND logic with other params)
@@ -30,11 +35,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [1.0.15] - 2026-06-15
 
+### Highlights
+- Fixed a session issue in Home Assistant where the interface lost its state after the container restarted
+
 ### Fixed
 - DataProtection keys written to ephemeral container filesystem when `Quotinator__DataPath` env var is absent in HA (e.g. due to supervisor config cache) — `Program.cs` now falls back to `/data` (the HA persistent volume mount point) before the `/app/data` default, so keys are always on a persistent volume and antiforgery tokens survive container restarts
 - OpenAPI UI and spec links in `Home.razor` had `target="_blank"`, which the HA companion app forwarded to the system browser (no HA session) — removing `target="_blank"` keeps navigation within the companion app's webview where the session is active
 
 ## [1.0.14] - 2026-06-15
+
+### Highlights
+- Internal improvement — no user-facing changes
 
 ### Changed
 - `DatabaseInitializer` now implements `IDatabaseInitializer`; `Program.cs` registers and resolves via the interface
@@ -42,10 +53,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [1.0.13] - 2026-06-15
 
+### Highlights
+- Bug fix — no user-facing changes
+
 ### Fixed
 - Race condition in `DatabaseInitializer.SeedIfEmptyAsync`: parallel `WebApplicationFactory` instances (parallel MSTest runs with `ExecutionScope.MethodLevel`) could both observe an empty database and attempt concurrent seeding, causing a `UNIQUE constraint failed: Sources.Title, Sources.Type` error — fixed with a static `SemaphoreSlim` that serialises seed attempts within the same process
 
 ## [1.0.12] - 2026-06-15
+
+### Highlights
+- Quotes are now stored in a local database rather than a flat file — faster, more reliable, and ready for future write support ([#7](https://github.com/DutchJaFO/Quotinator/issues/7))
+- The version endpoint now also reports the database schema version and record counts
 
 ### Added
 - SQLite backend (v2): replaces flat-file `QuoteService` with `SqliteQuoteService` backed by Dapper + `Microsoft.Data.Sqlite` (closes [#7](https://github.com/DutchJaFO/Quotinator/issues/7))
@@ -70,6 +88,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [1.0.11] - 2026-06-14
 
+### Highlights
+- Add-on configuration options now display translated names and descriptions in English, Dutch, and German
+
 ### Added
 - HA add-on config panel now shows translated option names and descriptions in English, Dutch, and German (`addon/translations/`)
 - GitHub Milestones created to track upcoming work; README roadmap section replaced with a link to the milestone list
@@ -83,11 +104,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [1.0.10] - 2026-06-14
 
+### Highlights
+- Startup log now prints as a single, readable block with a configuration summary
+
 ### Changed
 - Startup banner now prints as a single log entry (one timestamp) instead of one line per log call
 - Banner config summary added: `log_level`, `log_requests`, `ssl` state, and cert/key paths when SSL is enabled
 
 ## [1.0.9] - 2026-06-14
+
+### Highlights
+- New option: log one line per API request — useful for confirming calls arrive without enabling full debug logging
+- New option: choose how much detail appears in the supervisor log
+- All log lines now show a UTC timestamp
 
 ### Added
 - `log_requests` add-on option — when enabled, logs one line per quote API request (`GET /api/v1/quotes/random?n=5 → 200 in 12ms`); default `false`; 429 responses are included, health/Blazor/static traffic is not
@@ -101,10 +130,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [1.0.8] - 2026-06-14
 
+### Highlights
+- Fixed: the API Reference, OpenAPI spec, and health check links on the home page did not work through the Home Assistant ingress ([#8](https://github.com/DutchJaFO/Quotinator/issues/8))
+
 ### Fixed
 - Scalar UI button, OpenAPI spec link, and health check link on the home page were broken under the Home Assistant ingress — absolute paths (e.g. `/scalar/v1`) ignored `<base href>` and resolved against HA's server root; changed to relative paths so they resolve correctly through the ingress proxy in all deployment scenarios (closes [#8](https://github.com/DutchJaFO/Quotinator/issues/8))
 
 ## [1.0.7] - 2026-06-14
+
+### Highlights
+- Quotes and session data now survive container restarts and add-on updates — no data loss on update
+- Fixed: the Blazor page (including the "New quote" button) did not load correctly in the Home Assistant sidebar
 
 ### Added
 - First-run seeding: if `Quotinator__DataPath` points to an empty directory (e.g. a fresh HA add-on data volume), the bundled `quotes.json` is automatically copied there on startup so the add-on works immediately without manual setup
@@ -117,6 +153,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `/Culture/Set` (language cookie endpoint) no longer appears in the Scalar API reference — it is a Blazor UI helper, not a REST API endpoint
 
 ## [1.0.6] - 2026-06-14
+
+### Highlights
+- Optional HTTPS on the direct access port — enable ssl in the add-on configuration to use your Let's Encrypt certificate
+- Fixed: interactive elements such as the "New quote" button did not work in Docker or the HA add-on
 
 ### Added
 - Optional HTTPS on the direct-access port (8080) via Kestrel; configure with `Quotinator__Ssl=true`, `Quotinator__SslCertFile`, and `Quotinator__SslKeyFile` environment variables
@@ -134,6 +174,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [1.0.5] - 2026-06-14
 
+### Highlights
+- Dependency updates — no user-facing changes
+
 ### Changed
 - `Microsoft.AspNetCore.OpenApi` updated from 10.0.7 to 10.0.9
 - `actions/checkout` updated from v5 to v6 (CI only)
@@ -142,6 +185,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `.gitattributes` normalised to LF for all text files — prevents CRLF/LF mismatches from Dependabot merges
 
 ## [1.0.4] - 2026-06-14
+
+### Highlights
+- Language selector in the navigation bar — override your browser's language preference; the choice is remembered for a year
+- AppArmor security profile added to the Home Assistant add-on
 
 ### Added
 - Release workflow now gates on CI passing — `build-and-push` depends on a `test` job so a broken build cannot produce a published image
@@ -164,6 +211,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [1.0.3] - 2026-06-14
 
+### Highlights
+- Documentation corrections — no user-facing changes
+
 ### Fixed
 - Documentation corrections: CI/CD steps updated to reflect publish smoke test and GitHub Release creation; Home Assistant docs updated with GHCR visibility requirement; Docker docs corrected for `data/` build context inclusion
 - Add-on store listing and documentation corrected — Blazor management UI is planned for v2, not present in v1
@@ -171,16 +221,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [1.0.2] - 2026-06-14
 
+### Highlights
+- Bug fix — no user-facing changes
+
 ### Fixed
 - GitHub Releases are now created automatically when a version tag is pushed
 
 ## [1.0.1] - 2026-06-13
+
+### Highlights
+- Bug fix — no user-facing changes
 
 ### Fixed
 - Docker image build now succeeds: `data/quotes.json` was excluded from the build context via `.dockerignore`, causing `dotnet publish` to fail
 - Updated all GitHub Actions to Node.js 24-compatible major versions; `actions/checkout@v4` still produces a Node 20 deprecation warning (upstream issue, tracked in session notes)
 
 ## [1.0.0] - 2026-06-13
+
+### Highlights
+- Initial release: 780 curated quotes from films, TV, books, and famous people
+- REST API with random, list, search, and detail endpoints; multi-language support; rate limiting
+- OpenAPI documentation at /scalar/v1
 
 ### Added
 - REST read endpoints: `GET /api/v1/quotes/random`, `/api/v1/quotes`, `/api/v1/quotes/{id}`, `/api/v1/quotes/search`

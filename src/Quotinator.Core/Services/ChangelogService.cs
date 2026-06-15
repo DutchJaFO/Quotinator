@@ -8,10 +8,11 @@ namespace Quotinator.Core.Services;
 public sealed record ChangelogSection(string Category, IReadOnlyList<string> Items);
 
 /// <summary>A single versioned release parsed from <c>CHANGELOG.md</c>.</summary>
-/// <param name="Version">Version string, e.g. <c>1.0.15</c>.</param>
+/// <param name="Version">Version string, e.g. <c>1.1.0</c>.</param>
 /// <param name="Date">Release date string as written in the file, e.g. <c>2026-06-15</c>.</param>
-/// <param name="Sections">Change sections for this release, in the order they appear in the file.</param>
-public sealed record ChangelogRelease(string Version, string Date, IReadOnlyList<ChangelogSection> Sections);
+/// <param name="Highlights">User-friendly summary items from the optional <c>### Highlights</c> section. Empty when no highlights are present.</param>
+/// <param name="Sections">Technical change sections for this release (Added, Fixed, Changed, etc.), in the order they appear in the file. Does not include the Highlights section.</param>
+public sealed record ChangelogRelease(string Version, string Date, IReadOnlyList<string> Highlights, IReadOnlyList<ChangelogSection> Sections);
 
 /// <summary>Provides parsed changelog entries from <c>CHANGELOG.md</c>.</summary>
 public interface IChangelogService
@@ -55,6 +56,7 @@ public sealed class ChangelogService : IChangelogService
             var version = headerMatch.Groups[1].Value.Trim();
             var date = headerMatch.Groups[2].Value.Trim();
 
+            var highlights = new List<string>();
             var sections = new List<ChangelogSection>();
             foreach (var sectionBlock in body.Split("\n### ").Skip(1))
             {
@@ -67,11 +69,15 @@ public sealed class ChangelogService : IChangelogService
                     .Select(l => l[2..])
                     .ToList();
 
-                if (items.Count > 0)
+                if (items.Count == 0) continue;
+
+                if (category == "Highlights")
+                    highlights.AddRange(items);
+                else
                     sections.Add(new ChangelogSection(category, items));
             }
 
-            releases.Add(new ChangelogRelease(version, date, sections));
+            releases.Add(new ChangelogRelease(version, date, highlights, sections));
         }
 
         return releases;

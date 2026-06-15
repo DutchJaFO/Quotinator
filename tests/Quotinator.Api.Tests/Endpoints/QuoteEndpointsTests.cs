@@ -506,4 +506,133 @@ public class QuoteEndpointsTests
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
+
+    // ── /random — year/decade filters ────────────────────────────────────
+
+    /// <summary>yearFrom=1980 excludes Casablanca (1942), Churchill (1940), and Tolkien (1954).</summary>
+    [TestMethod]
+    public async Task GetRandom_YearFrom_ExcludesOlderQuotes()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&yearFrom=1980");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        // Only Terminator (1984) should match
+        Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
+        Assert.AreEqual(FakeQuoteService.Terminator.Id, doc.RootElement.GetProperty("items")[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>yearTo=1942 matches Casablanca (1942) and Churchill (1940) but not Tolkien (1954) or Terminator (1984).</summary>
+    [TestMethod]
+    public async Task GetRandom_YearTo_ExcludesNewerQuotes()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&yearTo=1942");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
+    }
+
+    /// <summary>year=1942 shorthand expands to yearFrom=1942 and yearTo=1942 — only Casablanca matches.</summary>
+    [TestMethod]
+    public async Task GetRandom_YearShorthand_MatchesExactYear()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&year=1942");
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
+        Assert.AreEqual(FakeQuoteService.CasablancaEn.Id, doc.RootElement.GetProperty("items")[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>decade=1940 expands to 1940–1949 — Casablanca (1942) and Churchill (1940) match.</summary>
+    [TestMethod]
+    public async Task GetRandom_DecadeShorthand_MatchesQuotesInRange()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&decade=1940");
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
+    }
+
+    /// <summary>decade not divisible by 10 returns 200 envelope with status=InvalidInput.</summary>
+    [TestMethod]
+    public async Task GetRandom_DecadeNotDivisibleByTen_ReturnsInvalidInputEnvelope()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?decade=1941");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
+    }
+
+    /// <summary>yearFrom greater than yearTo returns 200 envelope with status=InvalidInput.</summary>
+    [TestMethod]
+    public async Task GetRandom_YearFromGreaterThanYearTo_ReturnsInvalidInputEnvelope()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?yearFrom=1984&yearTo=1942");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
+    }
+
+    // ── / (paginated list) — year/decade filters ─────────────────────────
+
+    /// <summary>yearFrom=1980 on / filters to only Terminator (1984).</summary>
+    [TestMethod]
+    public async Task GetAll_YearFrom_FiltersOlderQuotes()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?yearFrom=1980");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = doc.RootElement.GetProperty("items");
+        Assert.AreEqual(1, items.GetArrayLength());
+        Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>decade not divisible by 10 on / returns 400.</summary>
+    [TestMethod]
+    public async Task GetAll_DecadeNotDivisibleByTen_ReturnsBadRequest()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1941");
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // ── /search — year/decade filters ────────────────────────────────────
+
+    /// <summary>year=1984 on /search returns only Terminator.</summary>
+    [TestMethod]
+    public async Task Search_YearShorthand_FiltersResults()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=back&year=1984");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual(1, items.GetArrayLength());
+        Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>decade not divisible by 10 on /search returns 400.</summary>
+    [TestMethod]
+    public async Task Search_DecadeNotDivisibleByTen_ReturnsBadRequest()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&decade=1941");
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

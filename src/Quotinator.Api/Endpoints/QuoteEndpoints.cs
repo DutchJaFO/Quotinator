@@ -24,7 +24,8 @@ internal static class QuoteEndpoints
                  "Returns a result envelope containing one or more randomly selected quotes. " +
                  "Use `n` to request up to 100 quotes. " +
                  "Filter the pool with `type` (repeatable, OR logic), `genre` (repeatable, OR logic), " +
-                 "`character`, `author`, or `source` (case-insensitive contains match). " +
+                 "`character`, `author`, or `source` (case-insensitive contains match), " +
+                 "`yearFrom` / `yearTo` (inclusive year range), `year` (exact year), or `decade` (e.g. `1980` for 1980–1989, must be divisible by 10). " +
                  "Multiple distinct filter parameters combine with AND logic. " +
                  "The envelope always includes `status`, `items`, and `totalMatching` (pool size before random selection). " +
                  "Use `lang` (ISO 639-1) to request a specific language.");
@@ -35,7 +36,8 @@ internal static class QuoteEndpoints
              .WithSummary("Search quotes")
              .WithDescription(
                  "Returns quotes whose text, source, character, or author contain `q` (case-insensitive). " +
-                 "Optionally filter by `type` or `genre` (both repeatable, OR logic within each). " +
+                 "Optionally filter by `type` or `genre` (both repeatable, OR logic within each), " +
+                 "or by `yearFrom` / `yearTo` (inclusive year range), `year` (exact year), or `decade` (must be divisible by 10). " +
                  "Use `lang` to request a specific language.");
 
         group.MapGet("/{id}", GetById)
@@ -51,6 +53,7 @@ internal static class QuoteEndpoints
              .WithDescription(
                  "Returns a paginated list of all quotes. " +
                  "Optionally filter by `type` (movie, tv, anime, book, person) or `genre` — both parameters are repeatable (OR logic within each). " +
+                 "Also supports `yearFrom` / `yearTo` (inclusive year range), `year` (exact year), or `decade` (must be divisible by 10). " +
                  "Use `lang` to request a specific language.");
     }
 
@@ -117,7 +120,11 @@ internal static class QuoteEndpoints
         [Description("Filter by genre tag (repeatable, e.g. `sci-fi`, `drama`). Multiple values use OR logic.")] string[]? genre = null,
         [Description("Filter to quotes whose character field contains this value (case-insensitive).")] string? character = null,
         [Description("Filter to quotes whose author field contains this value (case-insensitive).")] string? author = null,
-        [Description("Filter to quotes whose source field contains this value (case-insensitive).")] string? source = null)
+        [Description("Filter to quotes whose source field contains this value (case-insensitive).")] string? source = null,
+        [Description("Return only quotes from this year or later (inclusive).")] int? yearFrom = null,
+        [Description("Return only quotes from this year or earlier (inclusive).")] int? yearTo = null,
+        [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] int? year = null,
+        [Description("Shorthand for yearFrom=N&yearTo=N+9 — e.g. `1980` matches 1980–1989. Must be divisible by 10.")] int? decade = null)
     {
         if (ValidateCommon(localizer, lang) is { } err) return err;
 
@@ -127,10 +134,26 @@ internal static class QuoteEndpoints
                 detail: localizer[ApiMessages.RandomNOutOfRange],
                 statusCode: StatusCodes.Status400BadRequest);
 
+        if (decade is not null)
+        {
+            if (decade % 10 != 0)
+                return Results.Ok(FilterEnvelope(FilteredResultStatus.InvalidInput, localizer[ApiMessages.DecadeInvalid]));
+            yearFrom = decade;
+            yearTo   = decade + 9;
+        }
+        else if (year is not null)
+        {
+            yearFrom = year;
+            yearTo   = year;
+        }
+
+        if (yearFrom is not null && yearTo is not null && yearFrom > yearTo)
+            return Results.Ok(FilterEnvelope(FilteredResultStatus.InvalidInput, localizer[ApiMessages.YearRangeInvalid]));
+
         if (ValidateFilterParams(localizer, type, genre, character, author, source) is { } invalid)
             return Results.Ok(invalid);
 
-        var result = service.GetRandom(count, type, genre, character, author, source, lang);
+        var result = service.GetRandom(count, type, genre, character, author, source, lang, yearFrom, yearTo);
 
         if (result.Status == FilteredResultStatus.NoResults)
             return Results.Ok(new FilteredQuoteResult<QuoteResponse>
@@ -168,7 +191,11 @@ internal static class QuoteEndpoints
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
         [Description("Filter by genre tag (repeatable, e.g. `sci-fi`, `drama`). Multiple values use OR logic.")] string[]? genre = null,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null,
-        [Description("Restrict search to a specific field. One of: `quote`, `source`, `character`, `author`. Omit to search all fields.")] string? field = null)
+        [Description("Restrict search to a specific field. One of: `quote`, `source`, `character`, `author`. Omit to search all fields.")] string? field = null,
+        [Description("Return only quotes from this year or later (inclusive).")] int? yearFrom = null,
+        [Description("Return only quotes from this year or earlier (inclusive).")] int? yearTo = null,
+        [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] int? year = null,
+        [Description("Shorthand for yearFrom=N&yearTo=N+9 — e.g. `1980` matches 1980–1989. Must be divisible by 10.")] int? decade = null)
     {
         if (ValidateCommon(localizer, lang, field) is { } err) return err;
 
@@ -188,7 +215,23 @@ internal static class QuoteEndpoints
                 detail: localizer[ApiMessages.LimitOutOfRange],
                 statusCode: StatusCodes.Status400BadRequest);
 
-        return Results.Ok(service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant()));
+        if (decade is not null)
+        {
+            if (decade % 10 != 0)
+                return Results.Problem(detail: localizer[ApiMessages.DecadeInvalid], statusCode: StatusCodes.Status400BadRequest);
+            yearFrom = decade;
+            yearTo   = decade + 9;
+        }
+        else if (year is not null)
+        {
+            yearFrom = year;
+            yearTo   = year;
+        }
+
+        if (yearFrom is not null && yearTo is not null && yearFrom > yearTo)
+            return Results.Problem(detail: localizer[ApiMessages.YearRangeInvalid], statusCode: StatusCodes.Status400BadRequest);
+
+        return Results.Ok(service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yearFrom, yearTo));
     }
 
     private static IResult GetAll(
@@ -198,7 +241,11 @@ internal static class QuoteEndpoints
         [Description("Number of quotes per page (1–100)."), DefaultValue(20)] string? pageSize = null,
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
         [Description("Filter by genre tag (repeatable, e.g. `sci-fi`, `drama`). Multiple values use OR logic.")] string[]? genre = null,
-        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
+        [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null,
+        [Description("Return only quotes from this year or later (inclusive).")] int? yearFrom = null,
+        [Description("Return only quotes from this year or earlier (inclusive).")] int? yearTo = null,
+        [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] int? year = null,
+        [Description("Shorthand for yearFrom=N&yearTo=N+9 — e.g. `1980` matches 1980–1989. Must be divisible by 10.")] int? decade = null)
     {
         if (ValidateCommon(localizer, lang) is { } err) return err;
 
@@ -214,6 +261,22 @@ internal static class QuoteEndpoints
                 detail: localizer[ApiMessages.PageSizeOutOfRange],
                 statusCode: StatusCodes.Status400BadRequest);
 
-        return Results.Ok(service.GetAll(pageValue, pageSizeValue, type, genre, lang));
+        if (decade is not null)
+        {
+            if (decade % 10 != 0)
+                return Results.Problem(detail: localizer[ApiMessages.DecadeInvalid], statusCode: StatusCodes.Status400BadRequest);
+            yearFrom = decade;
+            yearTo   = decade + 9;
+        }
+        else if (year is not null)
+        {
+            yearFrom = year;
+            yearTo   = year;
+        }
+
+        if (yearFrom is not null && yearTo is not null && yearFrom > yearTo)
+            return Results.Problem(detail: localizer[ApiMessages.YearRangeInvalid], statusCode: StatusCodes.Status400BadRequest);
+
+        return Results.Ok(service.GetAll(pageValue, pageSizeValue, type, genre, lang, yearFrom, yearTo));
     }
 }

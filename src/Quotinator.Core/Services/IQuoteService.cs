@@ -20,11 +20,13 @@ public interface IQuoteService
         string? character = null,
         string? author = null,
         string? source = null,
-        string? lang = null);
+        string? lang = null,
+        int? yearFrom = null,
+        int? yearTo = null);
 
-    /// <summary>Returns a paginated slice of all quotes, with optional multi-value type and genre filters.</summary>
-    PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null);
+    /// <summary>Returns a paginated slice of all quotes, with optional multi-value type, genre, and year filters.</summary>
+    PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null);
 
     /// <summary>Returns quotes whose text, source, character, or author contain <paramref name="query"/> (case-insensitive). Pass <paramref name="field"/> to restrict which field is searched.</summary>
-    IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null);
+    IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null);
 }

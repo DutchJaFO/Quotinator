@@ -106,7 +106,9 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/quotes/random?genre=sci-fi&genre=drama` | Random quote matching either genre |
 | GET | `/api/v1/quotes/random?character=Gandalf` | Random quote by or featuring Gandalf |
 | GET | `/api/v1/quotes/random?author=Tolkien&source=Fellowship` | Combine filters with AND logic |
-| GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`, `type`, `genre` — all repeatable) |
+| GET | `/api/v1/quotes/random?decade=1980` | Random quote from the 1980s (expands to yearFrom=1980&yearTo=1989) |
+| GET | `/api/v1/quotes/random?yearFrom=1970&yearTo=1989` | Random quote from an explicit year range |
+| GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`, `type`, `genre`, `yearFrom`, `yearTo`, `year`, `decade` — all optional) |
 | GET | `/api/v1/quotes/{id}` | Quote by UUID |
 | GET | `/api/v1/quotes/search?q=term` | Search quotes; add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | GET | `/api/v1/health` | Health check |
@@ -114,7 +116,7 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | POST | `/api/v1/admin/database/reseed` | Clear all data and reimport from `quotes.json` (schema history preserved) |
 | POST | `/api/v1/admin/database/reset` | Full reset: clear data + schema history, reapply migrations, reimport |
 
-**`/random` filter parameters:** `type` and `genre` are repeatable (OR logic within each, AND between them). `character`, `author`, and `source` are case-insensitive contains matches. All filter combinations are ANDed. The response envelope always includes `status` (`Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`), `items`, and `totalMatching` (pool size before random selection).
+**`/random` filter parameters:** `type` and `genre` are repeatable (OR logic within each, AND between them). `character`, `author`, and `source` are case-insensitive contains matches. `yearFrom` / `yearTo` are inclusive year bounds; `year` is shorthand for a single year; `decade` (must be divisible by 10) is shorthand for a 10-year range. All filter combinations are ANDed. The response envelope always includes `status` (`Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`), `items`, and `totalMatching` (pool size before random selection).
 
 All endpoints return [RFC 7807 ProblemDetails](https://www.rfc-editor.org/rfc/rfc7807) on structural errors (invalid `lang`, out-of-range `n`, etc.), with localised `detail` messages driven by the `Accept-Language` request header. The API applies a sliding-window rate limit of 100 requests per minute per IP.
 

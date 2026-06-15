@@ -34,17 +34,31 @@
                     <span class="text-muted ms-2">@release.Date</span>
                 </summary>
                 <div class="mt-2 ps-3">
-                    @foreach (var section in release.Sections)
+                    @if (release.Highlights.Count > 0)
                     {
-                        <h6 class="mt-2 mb-1">
-                            <span class="badge @CategoryBadgeClass(section.Category)">@section.Category</span>
-                        </h6>
                         <ul class="mb-1">
-                            @foreach (var item in section.Items)
+                            @foreach (var item in release.Highlights)
                             {
                                 <li>@FormatInline(item)</li>
                             }
                         </ul>
+                        <a class="small text-muted"
+                           href="https://github.com/DutchJaFO/Quotinator/releases/tag/v@(release.Version)">@Text.ChangelogFullDetailsOnGitHub</a>
+                    }
+                    else
+                    {
+                        @foreach (var section in release.Sections)
+                        {
+                            <h6 class="mt-2 mb-1">
+                                <span class="badge @CategoryBadgeClass(section.Category)">@section.Category</span>
+                            </h6>
+                            <ul class="mb-1">
+                                @foreach (var item in section.Items)
+                                {
+                                    <li>@FormatInline(item)</li>
+                                }
+                            </ul>
+                        }
                     }
                 </div>
             </details>
