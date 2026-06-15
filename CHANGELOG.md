@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.0.15] - 2026-06-15
 
 ### Fixed
 - DataProtection keys written to ephemeral container filesystem when `Quotinator__DataPath` env var is absent in HA (e.g. due to supervisor config cache) — `Program.cs` now falls back to `/data` (the HA persistent volume mount point) before the `/app/data` default, so keys are always on a persistent volume and antiforgery tokens survive container restarts

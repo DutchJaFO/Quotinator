@@ -4,6 +4,12 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.0.15] - 2026-06-15
+
+### Fixed
+- Antiforgery token errors after container restart: DataProtection keys are now reliably written to the persistent volume (`/data/.keys/`) even when the `Quotinator__DataPath` config env var is not applied by the supervisor (e.g. after an update that changes `config.yaml`). The app automatically detects the HA persistent volume mount at `/data` and uses it as a fallback before the bundled `/app/data` path.
+- OpenAPI UI link in the sidebar opened in the system browser when tapped in the HA companion app, losing the HA session and causing a 404. The link now navigates within the companion app's webview, keeping the session active.
+
 ## [1.0.14] - 2026-06-15
 
 ### Changed
