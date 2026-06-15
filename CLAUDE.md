@@ -456,8 +456,6 @@ Workflow:
    git push origin v1.0.x
    ```
 
-> **HA "update available" timing:** The HA supervisor detects new versions by polling the GitHub Release (not the Docker image on GHCR). The GitHub Release is created by the workflow immediately after the tag is pushed — before the multi-arch Docker build completes (~5–10 min). This means the add-on store may show "update available" while the image is still building. Installing at that moment will pull the previous image tag. This is a known limitation of the release ordering and is not a bug — the user just needs to wait a few minutes after the notification appears before installing the update.
-
 ---
 
 ## Issue and improvement tracking
