@@ -21,31 +21,34 @@ public class QuoteEndpointsTests
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
             }));
 
-    // ── /random ──────────────────────────────────────────────────────────
+    // ── /random — envelope shape ──────────────────────────────────────────
 
-    /// <summary>GET /random with no n returns a single quote object.</summary>
+    /// <summary>GET /random returns the FilteredQuoteResult envelope with status=Ok.</summary>
     [TestMethod]
-    public async Task GetRandom_NoN_ReturnsSingleQuote()
+    public async Task GetRandom_NoN_ReturnsEnvelopeWithSingleItem()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.IsTrue(doc.RootElement.TryGetProperty("id", out _));
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(JsonValueKind.Array, doc.RootElement.GetProperty("items").ValueKind);
+        Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
+        Assert.IsTrue(doc.RootElement.GetProperty("totalMatching").GetInt32() > 0);
     }
 
-    /// <summary>GET /random?n=2 returns an array of 2 quotes.</summary>
+    /// <summary>GET /random?n=2 returns an envelope with 2 items.</summary>
     [TestMethod]
-    public async Task GetRandom_WithN_ReturnsArray()
+    public async Task GetRandom_WithN_ReturnsEnvelopeWithNItems()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=2");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        Assert.AreEqual(JsonValueKind.Array, items.ValueKind);
-        Assert.AreEqual(2, items.GetArrayLength());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(2, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
     /// <summary>n=0 is rejected with 400.</summary>
@@ -75,6 +78,173 @@ public class QuoteEndpointsTests
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.IsTrue(doc.RootElement.TryGetProperty("detail", out _));
+    }
+
+    // ── /random — type/genre multi-value filters ──────────────────────────
+
+    /// <summary>type=movie filters the pool to movie quotes.</summary>
+    [TestMethod]
+    public async Task GetRandom_TypeFilter_ReturnsOnlyMatchingType()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&type=movie");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
+            Assert.AreEqual("movie", item.GetProperty("type").GetString());
+    }
+
+    /// <summary>type=movie and type=book filters with OR logic.</summary>
+    [TestMethod]
+    public async Task GetRandom_MultipleTypes_AppliesOrLogic()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&type=movie&type=book");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
+        {
+            var t = item.GetProperty("type").GetString();
+            Assert.IsTrue(t == "movie" || t == "book", $"Unexpected type: {t}");
+        }
+    }
+
+    /// <summary>genre=fantasy and genre=sci-fi filters with OR logic.</summary>
+    [TestMethod]
+    public async Task GetRandom_MultipleGenres_AppliesOrLogic()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&genre=fantasy&genre=sci-fi");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.IsGreaterThan(0, doc.RootElement.GetProperty("items").GetArrayLength());
+    }
+
+    /// <summary>totalMatching reflects the pool size, not n.</summary>
+    [TestMethod]
+    public async Task GetRandom_TotalMatchingReflectsPool()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=1&type=movie");
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        // FakeQuoteService has 2 movie quotes; requesting n=1 should show totalMatching=2
+        Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
+        Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
+    }
+
+    // ── /random — text filters ────────────────────────────────────────────
+
+    /// <summary>character=Rick filters to quotes by that character.</summary>
+    [TestMethod]
+    public async Task GetRandom_CharacterFilter_ReturnsMatchingQuotes()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&character=Rick");
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
+        StringAssert.Contains(doc.RootElement.GetProperty("items")[0].GetProperty("character").GetString(), "Rick");
+    }
+
+    /// <summary>author=Churchill filters to quotes by that author.</summary>
+    [TestMethod]
+    public async Task GetRandom_AuthorFilter_ReturnsMatchingQuotes()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&author=Churchill");
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
+    }
+
+    /// <summary>source=Casablanca filters to quotes from that source.</summary>
+    [TestMethod]
+    public async Task GetRandom_SourceFilter_ReturnsMatchingQuotes()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&source=Casablanca");
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
+    }
+
+    // ── /random — filter validation in envelope ───────────────────────────
+
+    /// <summary>Unknown type value returns 200 envelope with status=InvalidType.</summary>
+    [TestMethod]
+    public async Task GetRandom_UnknownType_ReturnsInvalidTypeEnvelope()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?type=cartoon");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("InvalidType", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
+        Assert.IsFalse(string.IsNullOrEmpty(doc.RootElement.GetProperty("message").GetString()));
+    }
+
+    /// <summary>Unknown genre value returns 200 envelope with status=InvalidGenre.</summary>
+    [TestMethod]
+    public async Task GetRandom_UnknownGenre_ReturnsInvalidGenreEnvelope()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?genre=notarealgenre");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("InvalidGenre", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
+    }
+
+    /// <summary>Character filter longer than 200 chars returns envelope with status=InputTooLong.</summary>
+    [TestMethod]
+    public async Task GetRandom_CharacterTooLong_ReturnsInputTooLongEnvelope()
+    {
+        using var factory = CreateFactory();
+        var longValue = new string('a', 201);
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/random?character={longValue}");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("InputTooLong", doc.RootElement.GetProperty("status").GetString());
+    }
+
+    /// <summary>Suspicious input in a text filter returns envelope with status=InvalidInput.</summary>
+    [TestMethod]
+    public async Task GetRandom_SuspiciousCharacterInput_ReturnsInvalidInputEnvelope()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?character=%27%20OR%201%3D1%20--");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
+    }
+
+    /// <summary>Valid type filter with no matching quotes returns envelope with status=NoResults.</summary>
+    [TestMethod]
+    public async Task GetRandom_ValidFilterNoMatches_ReturnsNoResultsEnvelope()
+    {
+        using var factory = CreateFactory();
+        // FakeQuoteService has no anime quotes
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?type=anime");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("NoResults", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
+        Assert.IsFalse(string.IsNullOrEmpty(doc.RootElement.GetProperty("message").GetString()));
     }
 
     // ── /{id} ─────────────────────────────────────────────────────────────
@@ -169,7 +339,6 @@ public class QuoteEndpointsTests
         var response = await client.GetAsync("/api/v1/quotes/search");
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.IsTrue(doc.RootElement.TryGetProperty("detail", out var detail));
-        // Verify the response is Dutch, not English
         StringAssert.Contains(detail.GetString(), "verplicht");
     }
 
@@ -192,7 +361,6 @@ public class QuoteEndpointsTests
     public async Task Search_FieldSource_MatchesSourceOnly()
     {
         using var factory = CreateFactory();
-        // "Casablanca" is a source; should not match quote text
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Casablanca&field=source");
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
@@ -233,6 +401,25 @@ public class QuoteEndpointsTests
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    // ── search multi-value filters ────────────────────────────────────────
+
+    /// <summary>type=movie and type=person on /search applies OR logic.</summary>
+    [TestMethod]
+    public async Task Search_MultipleTypes_AppliesOrLogic()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&type=movie&type=person");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual(JsonValueKind.Array, items.ValueKind);
+        foreach (var item in items.EnumerateArray())
+        {
+            var t = item.GetProperty("type").GetString();
+            Assert.IsTrue(t == "movie" || t == "person", $"Unexpected type: {t}");
+        }
+    }
+
     // ── input validation (shared) ─────────────────────────────────────────
 
     /// <summary>An invalid lang value is rejected with 400.</summary>
@@ -241,15 +428,6 @@ public class QuoteEndpointsTests
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?lang=not-a-real-lang-code-xyz");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    /// <summary>An unknown type value is rejected with 400.</summary>
-    [TestMethod]
-    public async Task GetAll_InvalidType_ReturnsBadRequest()
-    {
-        using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=invalid");
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -299,5 +477,33 @@ public class QuoteEndpointsTests
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
             Assert.AreEqual("person", item.GetProperty("type").GetString());
+    }
+
+    /// <summary>type=movie and type=book on / applies OR logic.</summary>
+    [TestMethod]
+    public async Task GetAll_MultipleTypes_AppliesOrLogic()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=movie&type=book");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
+        {
+            var t = item.GetProperty("type").GetString();
+            Assert.IsTrue(t == "movie" || t == "book", $"Unexpected type: {t}");
+        }
+    }
+
+    /// <summary>Unknown type on / silently returns empty result (no 400, no envelope).</summary>
+    [TestMethod]
+    public async Task GetAll_UnknownType_ReturnsEmptyPaginatedResult()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=cartoon");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 }

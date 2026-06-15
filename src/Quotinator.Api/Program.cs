@@ -27,6 +27,7 @@ builder.Services.AddOpenApi(options =>
         {
             new() { Name = ApiTags.System,  Description = "Endpoints for monitoring and verifying the health of the API." },
             new() { Name = ApiTags.Quotes,  Description = "Endpoints for fetching and searching quotes." },
+            new() { Name = ApiTags.Admin,   Description = "Administrative endpoints for database maintenance. Protected by a concurrency-1 limiter — only one operation runs at a time; any concurrent request receives `429 Too Many Requests` immediately. No authentication is required in the current release — restrict access via your reverse proxy or firewall if needed." },
         };
 
         document.Info = new()
@@ -57,6 +58,15 @@ builder.Services.AddRateLimiter(options =>
         limiter.Window = TimeSpan.FromMinutes(1);
         limiter.SegmentsPerWindow = 6;
         limiter.QueueLimit = 0;
+        limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+    });
+
+    // Concurrency-1 for admin endpoints: only one destructive operation runs at a time.
+    // QueueLimit = 0 means any concurrent attempt is rejected immediately with 429.
+    options.AddConcurrencyLimiter(RateLimitPolicies.Admin, limiter =>
+    {
+        limiter.PermitLimit = 1;
+        limiter.QueueLimit  = 0;
         limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
     });
 
@@ -300,6 +310,7 @@ app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDat
    .WithDescription("Returns the running version, environment, and database schema version with row counts.");
 
 app.MapQuoteEndpoints();
+app.MapAdminEndpoints();
 
 // Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
 // Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.

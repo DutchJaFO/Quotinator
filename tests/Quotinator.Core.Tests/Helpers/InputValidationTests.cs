@@ -1,3 +1,4 @@
+using Quotinator.Core.Data.Enums;
 using Quotinator.Core.Helpers;
 
 namespace Quotinator.Core.Tests.Helpers;
@@ -76,6 +77,95 @@ public class InputValidationTests
     {
         Assert.IsFalse(InputValidation.ValidSearchFields.Contains("genre"));
         Assert.IsFalse(InputValidation.ValidSearchFields.Contains("Quote")); // case-sensitive
+    }
+
+    #endregion
+
+    #region ValidGenres
+
+    [TestMethod]
+    [DataRow("action")]
+    [DataRow("sci-fi")]
+    [DataRow("non-fiction")]
+    [DataRow("drama")]
+    [DataRow("thriller")]
+    public void ValidGenres_ContainsExpectedValues(string genre)
+    {
+        Assert.IsTrue(InputValidation.ValidGenres.Contains(genre));
+    }
+
+    [TestMethod]
+    public void ValidGenres_DoesNotContainUnknownValues()
+    {
+        Assert.IsFalse(InputValidation.ValidGenres.Contains("scifi"));    // missing hyphen
+        Assert.IsFalse(InputValidation.ValidGenres.Contains("SciFi"));    // wrong casing
+        Assert.IsFalse(InputValidation.ValidGenres.Contains("cartoon"));
+    }
+
+    #endregion
+
+    #region GenreApiToDb
+
+    [TestMethod]
+    public void GenreApiToDb_ContainsAllValidGenres()
+    {
+        foreach (var genre in InputValidation.ValidGenres)
+            Assert.IsTrue(
+                InputValidation.GenreApiToDb.ContainsKey(genre),
+                $"GenreApiToDb is missing a mapping for valid genre '{genre}'");
+    }
+
+    [TestMethod]
+    public void GenreApiToDb_AllMappedValuesAreValidEnumNames()
+    {
+        foreach (var (apiTag, dbName) in InputValidation.GenreApiToDb)
+            Assert.IsTrue(
+                Enum.TryParse<Genre>(dbName, out _),
+                $"GenreApiToDb[\"{apiTag}\"] = \"{dbName}\" is not a valid Genre enum name");
+    }
+
+    [TestMethod]
+    [DataRow("sci-fi",      "SciFi")]
+    [DataRow("non-fiction", "NonFiction")]
+    public void GenreApiToDb_HyphenatedGenresMappedCorrectly(string apiTag, string expectedDbName)
+    {
+        Assert.IsTrue(InputValidation.GenreApiToDb.TryGetValue(apiTag, out var actual),
+            $"GenreApiToDb is missing key '{apiTag}'");
+        Assert.AreEqual(expectedDbName, actual);
+    }
+
+    [TestMethod]
+    public void GenreApiToDb_IsCaseInsensitive()
+    {
+        Assert.IsTrue(InputValidation.GenreApiToDb.ContainsKey("SCI-FI"));
+        Assert.IsTrue(InputValidation.GenreApiToDb.ContainsKey("NON-FICTION"));
+        Assert.IsTrue(InputValidation.GenreApiToDb.ContainsKey("Drama"));
+    }
+
+    #endregion
+
+    #region IsSuspiciousInput
+
+    [TestMethod]
+    [DataRow("' OR 1=1 --")]
+    [DataRow("'; DROP TABLE Quotes --")]
+    [DataRow("UNION SELECT * FROM Users")]
+    [DataRow("/* comment */")]
+    [DataRow("EXEC(xp_cmdshell)")]
+    public void IsSuspiciousInput_KnownInjectionPatterns_ReturnsTrue(string value)
+    {
+        Assert.IsTrue(InputValidation.IsSuspiciousInput(value));
+    }
+
+    [TestMethod]
+    [DataRow("Gandalf")]
+    [DataRow("O'Brien")]           // apostrophe without OR/AND is fine
+    [DataRow("Rick Blaine")]
+    [DataRow("Winston Churchill")]
+    [DataRow("The Lord of the Rings")]
+    public void IsSuspiciousInput_NormalValues_ReturnsFalse(string value)
+    {
+        Assert.IsFalse(InputValidation.IsSuspiciousInput(value));
     }
 
     #endregion

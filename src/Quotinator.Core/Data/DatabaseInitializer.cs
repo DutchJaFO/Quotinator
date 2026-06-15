@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Quotinator.Core.Data.Entities;
 using Quotinator.Core.Data.Enums;
+using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Data.Data;
 using Quotinator.Data.Models;
@@ -45,7 +46,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     // Numbered migration scripts. Add new entries at the end — never reorder or edit existing ones.
     private static readonly IReadOnlyList<string> Migrations =
     [
-        Migration001_InitialSchema
+        Migration001_InitialSchema,
+        Migration002_ReseedGenres
     ];
 
     /// <summary>Initialises the instance with the connection factory and the path to the seed data file.</summary>
@@ -68,6 +70,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         EnableWal(connection);
         await ApplyMigrationsAsync(connection);
         await SeedIfEmptyAsync(connection);
+        await ReSeedGenresIfEmptyAsync(connection);
         await LogDatabaseStatsAsync(connection);
     }
 
@@ -118,6 +121,54 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     // -------------------------------------------------------------------------
     #region Seeding
 
+    /// <inheritdoc/>
+    public async Task ReseedAsync()
+    {
+        using var connection = (SqliteConnection)_factory.CreateConnection();
+        await connection.OpenAsync();
+
+        _logger.LogInformation("Database: reseed requested — clearing all data and reimporting from {Path}...", _seedJsonPath);
+
+        await _seedLock.WaitAsync();
+        try
+        {
+            await TruncateDataAsync(connection);
+            await SeedIfEmptyInternalAsync(connection);
+        }
+        finally
+        {
+            _seedLock.Release();
+        }
+
+        await LogDatabaseStatsAsync(connection);
+        _logger.LogInformation("Database: reseed complete");
+    }
+
+    /// <inheritdoc/>
+    public async Task ResetAsync()
+    {
+        using var connection = (SqliteConnection)_factory.CreateConnection();
+        await connection.OpenAsync();
+
+        _logger.LogInformation("Database: reset requested — rebuilding schema and reimporting from {Path}...", _seedJsonPath);
+
+        await _seedLock.WaitAsync();
+        try
+        {
+            await TruncateDataAsync(connection);
+            await connection.ExecuteAsync("DELETE FROM SchemaVersion;");
+            await ApplyMigrationsAsync(connection);
+            await SeedIfEmptyInternalAsync(connection);
+        }
+        finally
+        {
+            _seedLock.Release();
+        }
+
+        await LogDatabaseStatsAsync(connection);
+        _logger.LogInformation("Database: reset complete");
+    }
+
     private async Task SeedIfEmptyAsync(SqliteConnection connection)
     {
         await _seedLock.WaitAsync();
@@ -129,6 +180,20 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         {
             _seedLock.Release();
         }
+    }
+
+    private static async Task TruncateDataAsync(SqliteConnection connection)
+    {
+        await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+        await connection.ExecuteAsync("DELETE FROM QuoteGenres;");
+        await connection.ExecuteAsync("DELETE FROM QuoteTranslations;");
+        await connection.ExecuteAsync("DELETE FROM SourceTranslations;");
+        await connection.ExecuteAsync("DELETE FROM CharacterTranslations;");
+        await connection.ExecuteAsync("DELETE FROM Quotes;");
+        await connection.ExecuteAsync("DELETE FROM Characters;");
+        await connection.ExecuteAsync("DELETE FROM People;");
+        await connection.ExecuteAsync("DELETE FROM Sources;");
+        await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
     }
 
     private async Task SeedIfEmptyInternalAsync(SqliteConnection connection)
@@ -197,7 +262,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
             foreach (var genre in q.Genres)
             {
-                if (Enum.TryParse<GenreEnum>(genre, ignoreCase: true, out var g))
+                if (TryNormaliseGenre(genre, out var g))
                 {
                     await connection.InsertAsync(new QuoteGenreEntity
                     {
@@ -209,6 +274,47 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         }
 
         _logger.LogInformation("Database: seeding complete");
+    }
+
+    private async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection)
+    {
+        var genreCount = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM QuoteGenres;");
+        if (genreCount > 0) return;
+
+        var quoteCount = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes;");
+        if (quoteCount == 0) return;
+
+        if (!File.Exists(_seedJsonPath))
+        {
+            _logger.LogWarning("Database: cannot re-seed genres — seed file not found at {Path}", _seedJsonPath);
+            return;
+        }
+
+        var json    = await File.ReadAllTextAsync(_seedJsonPath);
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var quotes  = JsonSerializer.Deserialize<List<Quote>>(json, options) ?? [];
+
+        _logger.LogInformation("Database: re-seeding genres for {Count} quotes...", quotes.Count);
+
+        var inserted = 0;
+        foreach (var q in quotes)
+        {
+            var quoteId = Guid.Parse(q.Id);
+            foreach (var genre in q.Genres)
+            {
+                if (TryNormaliseGenre(genre, out var g))
+                {
+                    await connection.InsertAsync(new QuoteGenreEntity
+                    {
+                        QuoteId = quoteId,
+                        Genre   = new SafeValue<GenreEnum?>(g.ToString(), g)
+                    });
+                    inserted++;
+                }
+            }
+        }
+
+        _logger.LogInformation("Database: genre re-seed complete — {Count} genre rows inserted", inserted);
     }
 
     private static async Task<Guid> GetOrCreateSourceAsync(
@@ -275,6 +381,15 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     private static QuoteType ParseQuoteType(string raw)
         => Enum.TryParse<QuoteType>(raw, ignoreCase: true, out var t) ? t : QuoteType.Unknown;
 
+    private static bool TryNormaliseGenre(string raw, out GenreEnum result)
+    {
+        if (InputValidation.GenreApiToDb.TryGetValue(raw, out var dbName) &&
+            Enum.TryParse<GenreEnum>(dbName, out result))
+            return true;
+        result = default;
+        return false;
+    }
+
     #endregion
 
     // -------------------------------------------------------------------------
@@ -296,6 +411,11 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
     // -------------------------------------------------------------------------
     #region Schema
+
+    // Clears QuoteGenres so ReSeedGenresIfEmptyAsync can repopulate using the corrected
+    // normalisation logic. Hyphenated genres ("sci-fi", "non-fiction") were silently dropped
+    // during initial seeding because Enum.TryParse failed on the hyphen.
+    private const string Migration002_ReseedGenres = "DELETE FROM QuoteGenres;";
 
     private const string Migration001_InitialSchema = """
         CREATE TABLE IF NOT EXISTS Sources (

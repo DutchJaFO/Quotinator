@@ -58,7 +58,21 @@ internal sealed class FakeQuoteService : IQuoteService
         Genres = ["non-fiction"]
     };
 
-    private static readonly IReadOnlyList<QuoteResponse> All = [CasablancaEn, Terminator, Churchill];
+    internal static readonly QuoteResponse Tolkien = new()
+    {
+        Id = "aaaaaaaa-0000-0000-0000-000000000004",
+        Quote = "Not all those who wander are lost.",
+        Language = "en",
+        OriginalLanguage = "en",
+        Source = "The Fellowship of the Ring",
+        Date = "1954",
+        Character = "Gandalf",
+        Author = "J.R.R. Tolkien",
+        Type = "book",
+        Genres = ["fantasy", "fiction"]
+    };
+
+    private static readonly IReadOnlyList<QuoteResponse> All = [CasablancaEn, Terminator, Churchill, Tolkien];
 
     public QuoteResponse? GetById(string id, string? lang = null)
     {
@@ -66,14 +80,43 @@ internal sealed class FakeQuoteService : IQuoteService
         return All.FirstOrDefault(q => q.Id == id);
     }
 
-    public IReadOnlyList<QuoteResponse> GetRandom(int count, string? lang = null) =>
-        All.Take(count).ToList();
+    public FilteredQuoteResult<QuoteResponse> GetRandom(
+        int count,
+        string[]? types = null,
+        string[]? genres = null,
+        string? character = null,
+        string? author = null,
+        string? source = null,
+        string? lang = null)
+    {
+        IEnumerable<QuoteResponse> filtered = All;
 
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string? type = null, string? genre = null, string? lang = null)
+        if (types is { Length: > 0 })
+            filtered = filtered.Where(q => types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)));
+        if (genres is { Length: > 0 })
+            filtered = filtered.Where(q => q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))));
+        if (character is not null)
+            filtered = filtered.Where(q => q.Character?.Contains(character, StringComparison.OrdinalIgnoreCase) ?? false);
+        if (author is not null)
+            filtered = filtered.Where(q => q.Author?.Contains(author, StringComparison.OrdinalIgnoreCase) ?? false);
+        if (source is not null)
+            filtered = filtered.Where(q => q.Source.Contains(source, StringComparison.OrdinalIgnoreCase));
+
+        var pool  = filtered.ToList();
+        var items = pool.Take(count).ToList();
+        return new FilteredQuoteResult<QuoteResponse>
+        {
+            Status        = items.Count > 0 ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults,
+            Items         = items,
+            TotalMatching = pool.Count,
+        };
+    }
+
+    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null)
     {
         var items = All
-            .Where(q => type is null || q.Type == type)
-            .Where(q => genre is null || q.Genres.Contains(genre))
+            .Where(q => types is not { Length: > 0 } || types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)))
+            .Where(q => genres is not { Length: > 0 } || q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))))
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToList();
@@ -81,7 +124,7 @@ internal sealed class FakeQuoteService : IQuoteService
         return new PagedResult<QuoteResponse>(items, page, pageSize, All.Count);
     }
 
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string? type = null, string? genre = null, string? lang = null, string? field = null) =>
+    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null) =>
         All.Where(q => field switch
             {
                 "quote"     => q.Quote.Contains(query, StringComparison.OrdinalIgnoreCase),
@@ -91,6 +134,8 @@ internal sealed class FakeQuoteService : IQuoteService
                 _           => q.Quote.Contains(query, StringComparison.OrdinalIgnoreCase)
                             || q.Source.Contains(query, StringComparison.OrdinalIgnoreCase)
             })
+           .Where(q => types is not { Length: > 0 } || types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)))
+           .Where(q => genres is not { Length: > 0 } || q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))))
            .Take(limit)
            .ToList();
 }

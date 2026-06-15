@@ -18,15 +18,21 @@ The REST API is accessible in two ways:
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/v1/quotes/random` | One random quote |
+| `GET /api/v1/quotes/random` | Random quote(s) — returns a result envelope with `status`, `items`, `totalMatching` |
 | `GET /api/v1/quotes/random?n=10` | N random quotes (1–100) |
-| `GET /api/v1/quotes` | All quotes, paginated |
+| `GET /api/v1/quotes/random?type=movie&type=book` | Random quote from movies or books (repeatable, OR logic) |
+| `GET /api/v1/quotes/random?genre=sci-fi&character=Gandalf` | Filter by genre and character (AND between params) |
+| `GET /api/v1/quotes` | All quotes, paginated; `type` and `genre` are repeatable |
 | `GET /api/v1/quotes/{id}` | Quote by UUID |
-| `GET /api/v1/quotes/search?q=term` | Search quotes; add `&field=quote\|source\|character\|author` to restrict the field |
+| `GET /api/v1/quotes/search?q=term` | Search quotes; add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/version` | Running version |
+| `POST /api/v1/admin/database/reseed` | Clear all data and reimport from `quotes.json` |
+| `POST /api/v1/admin/database/reset` | Full reset: clear data + schema history, reapply migrations, reimport |
 
 All endpoints accept an optional `lang` query parameter (ISO 639-1 code, e.g. `nl`, `de`) to request a translated quote response. Falls back to the original language if no translation exists. Error message language is controlled separately by the `Accept-Language` request header.
+
+**`/random` filter envelope status values:** `Ok` (results found), `NoResults` (valid filters, no matching data), `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`.
 
 A sliding-window rate limit of **100 requests per minute per IP** applies to all quote endpoints. Excess requests receive `429 Too Many Requests`.
 

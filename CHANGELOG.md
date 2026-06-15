@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [Unreleased]
+
+### Added
+- `/random` now accepts multi-value `type` and `genre` filters (repeatable query params, OR logic within each, AND between them), plus `character`, `author`, and `source` text-contains filters (AND logic with other params)
+- `/search` and `/` (paginated list) now accept multi-value `type` and `genre` filters with OR logic
+- `FilteredQuoteResult<T>` response envelope on `/random` — always returned, includes `status` (enum), `items`, `totalMatching` (pool size before random selection), and `message` (non-null for non-Ok statuses)
+- `FilteredResultStatus` enum: `Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`
+- `ValidGenres` set added to `InputValidation`; `IsSuspiciousInput` regex detects common SQL injection patterns and surfaces them as `InvalidInput` status (parameterised queries already prevent actual injection)
+- `ValidGenres` and `IsSuspiciousInput` tests added to `InputValidationTests`
+- `POST /api/v1/admin/database/reseed` — clears all data and reimports from `quotes.json`; schema migration history is preserved
+- `POST /api/v1/admin/database/reset` — clears data and schema version history, reapplies all migrations, then reimports from `quotes.json`; equivalent to a fresh database
+- `GenreApiToDb` contract tests in `InputValidationTests`: every valid genre has a mapping, every mapped value is a valid enum name, hyphenated genres (`sci-fi`, `non-fiction`) map correctly
+
+### Changed
+- **Breaking:** `/random` response shape changed from a single quote object or array to the `FilteredQuoteResult` envelope in all cases
+- Genre normalisation in `SqliteQuoteService` now correctly maps `sci-fi` → `SciFi` and `non-fiction` → `NonFiction` for DB queries, and reverse-maps on read (previously hyphenated genres were not matched correctly)
+- Unknown `type`/`genre` values on `/random` now return a 200 `InvalidType`/`InvalidGenre` envelope instead of 400; on `/search` and `/` they silently match nothing
+
+### Fixed
+- `SqliteQuoteService.ToResponse` was serialising `Genre.SciFi` as `"scifi"` and `Genre.NonFiction` as `"nonfiction"`; both now return the correct API tag strings (`"sci-fi"`, `"non-fiction"`)
+- `DatabaseInitializer` silently dropped `sci-fi` and `non-fiction` genres during seeding because `Enum.TryParse("sci-fi")` fails on hyphenated strings — `TryNormaliseGenre` now maps through `InputValidation.GenreApiToDb` before parsing; `Migration002` truncates the affected `QuoteGenres` rows so existing databases are automatically re-seeded on next startup; `GenreApiToDb` is moved from private in `SqliteQuoteService` to public in `InputValidation` so both consumers share one definition
+
 ## [1.0.15] - 2026-06-15
 
 ### Fixed

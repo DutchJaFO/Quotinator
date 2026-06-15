@@ -100,15 +100,23 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/v1/quotes/random` | One random quote |
+| GET | `/api/v1/quotes/random` | Random quote(s) — returns a `FilteredQuoteResult` envelope |
 | GET | `/api/v1/quotes/random?n=10` | N random quotes (1–100) |
-| GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`) |
+| GET | `/api/v1/quotes/random?type=movie&type=book` | Random quote from movies or books (multi-value OR logic) |
+| GET | `/api/v1/quotes/random?genre=sci-fi&genre=drama` | Random quote matching either genre |
+| GET | `/api/v1/quotes/random?character=Gandalf` | Random quote by or featuring Gandalf |
+| GET | `/api/v1/quotes/random?author=Tolkien&source=Fellowship` | Combine filters with AND logic |
+| GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`, `type`, `genre` — all repeatable) |
 | GET | `/api/v1/quotes/{id}` | Quote by UUID |
-| GET | `/api/v1/quotes/search?q=term` | Search quotes; add `&field=quote\|source\|character\|author` to restrict the field |
+| GET | `/api/v1/quotes/search?q=term` | Search quotes; add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/version` | Running version and environment |
+| POST | `/api/v1/admin/database/reseed` | Clear all data and reimport from `quotes.json` (schema history preserved) |
+| POST | `/api/v1/admin/database/reset` | Full reset: clear data + schema history, reapply migrations, reimport |
 
-All list endpoints accept `type` and `genre` filters. All endpoints return [RFC 7807 ProblemDetails](https://www.rfc-editor.org/rfc/rfc7807) on error, with localised `detail` messages driven by the `Accept-Language` request header. The API applies a sliding-window rate limit of 100 requests per minute per IP.
+**`/random` filter parameters:** `type` and `genre` are repeatable (OR logic within each, AND between them). `character`, `author`, and `source` are case-insensitive contains matches. All filter combinations are ANDed. The response envelope always includes `status` (`Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`), `items`, and `totalMatching` (pool size before random selection).
+
+All endpoints return [RFC 7807 ProblemDetails](https://www.rfc-editor.org/rfc/rfc7807) on structural errors (invalid `lang`, out-of-range `n`, etc.), with localised `detail` messages driven by the `Accept-Language` request header. The API applies a sliding-window rate limit of 100 requests per minute per IP.
 
 The interactive API reference (Scalar) is available at `/scalar/v1` and the raw OpenAPI spec at `/openapi/v1.json`.
 

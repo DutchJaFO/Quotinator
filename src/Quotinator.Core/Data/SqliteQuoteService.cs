@@ -1,5 +1,6 @@
 using Dapper;
 using Quotinator.Core.Data.Enums;
+using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Data;
@@ -15,6 +16,25 @@ namespace Quotinator.Core.Data;
 public sealed class SqliteQuoteService : IQuoteService
 {
     private readonly IDbConnectionFactory _factory;
+
+    // Maps DB enum name back to the API genre tag for response serialisation.
+    private static readonly IReadOnlyDictionary<string, string> GenreDbToApi =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Action"]     = "action",
+            ["Adventure"]  = "adventure",
+            ["Animation"]  = "animation",
+            ["Comedy"]     = "comedy",
+            ["Drama"]      = "drama",
+            ["Fantasy"]    = "fantasy",
+            ["Fiction"]    = "fiction",
+            ["Horror"]     = "horror",
+            ["Mystery"]    = "mystery",
+            ["NonFiction"] = "non-fiction",
+            ["Romance"]    = "romance",
+            ["SciFi"]      = "sci-fi",
+            ["Thriller"]   = "thriller",
+        };
 
     /// <summary>Initialises the service with the connection factory used for all database queries.</summary>
     /// <param name="factory">Factory used to open SQLite connections.</param>
@@ -42,16 +62,30 @@ public sealed class SqliteQuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<QuoteResponse> GetRandom(int count, string? lang = null)
+    public FilteredQuoteResult<QuoteResponse> GetRandom(
+        int count,
+        string[]? types = null,
+        string[]? genres = null,
+        string? character = null,
+        string? author = null,
+        string? source = null,
+        string? lang = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var rows = connection.Query<QuoteRow>(
-            QuoteSelectSql + " WHERE q.IsDeleted = 0 ORDER BY RANDOM() LIMIT @count",
-            new { count, lang = (string?)null }).ToList();
+        var (whereClause, filterParams) = BuildFilterWhere(types, genres, lang, character, author, source);
 
-        return rows.Select(r =>
+        var totalMatching = connection.ExecuteScalar<int>(
+            $"SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 {whereClause}",
+            filterParams);
+
+        var rp = new DynamicParameters(filterParams);
+        rp.Add("count", count);
+        var rows = connection.Query<QuoteRow>(
+            QuoteSelectSql + $" {whereClause} ORDER BY RANDOM() LIMIT @count", rp).ToList();
+
+        var items = rows.Select(r =>
         {
             var translationLang = TranslationLang(lang, r.OriginalLanguage);
             if (translationLang is not null)
@@ -63,15 +97,22 @@ public sealed class SqliteQuoteService : IQuoteService
             }
             return ToResponse(r, LoadGenres(connection, r.Id), lang);
         }).ToList();
+
+        return new FilteredQuoteResult<QuoteResponse>
+        {
+            Status        = items.Count > 0 ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults,
+            Items         = items,
+            TotalMatching = totalMatching,
+        };
     }
 
     /// <inheritdoc/>
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string? type = null, string? genre = null, string? lang = null)
+    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var (whereClause, parameters) = BuildFilterWhere(type, genre, lang);
+        var (whereClause, parameters) = BuildFilterWhere(types, genres, lang);
 
         var total = connection.ExecuteScalar<int>(
             $"SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 {whereClause}",
@@ -89,7 +130,7 @@ public sealed class SqliteQuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string? type = null, string? genre = null, string? lang = null, string? field = null)
+    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
@@ -105,7 +146,7 @@ public sealed class SqliteQuoteService : IQuoteService
             _           => "(q.QuoteText LIKE @like OR s.Title LIKE @like OR c.Name LIKE @like OR p.Name LIKE @like)"
         };
 
-        var (typeGenreWhere, filterParams) = BuildFilterWhere(type, genre, lang);
+        var (typeGenreWhere, filterParams) = BuildFilterWhere(types, genres, lang);
 
         var sql = QuoteSelectSql
             + $" {typeGenreWhere}"
@@ -159,30 +200,50 @@ public sealed class SqliteQuoteService : IQuoteService
                                ?? row.SourceType?.Raw.ToLowerInvariant()
                                ?? string.Empty,
             Genres           = genres
-                .Select(g => g.Parsed?.ToString().ToLowerInvariant() ?? g.Raw.ToLowerInvariant())
+                .Select(g =>
+                {
+                    var enumName = g.Parsed?.ToString() ?? g.Raw;
+                    return GenreDbToApi.TryGetValue(enumName, out var api) ? api : enumName.ToLowerInvariant();
+                })
                 .Where(g => !string.IsNullOrEmpty(g))
                 .ToList()
         };
     }
 
-    private static (string Sql, object Parameters) BuildFilterWhere(string? type, string? genre, string? lang)
+    // Overload without text filters — used by GetAll and Search.
+    private static (string Sql, object Parameters) BuildFilterWhere(string[]? types, string[]? genres, string? lang)
+        => BuildFilterWhere(types, genres, lang, null, null, null);
+
+    private static (string Sql, DynamicParameters Parameters) BuildFilterWhere(
+        string[]? types, string[]? genres, string? lang,
+        string? character, string? author, string? source)
     {
-        var typeStr  = type  is not null ? NormaliseType(type)  : null;
-        var genreStr = genre is not null ? NormaliseGenre(genre) : null;
+        var dbTypes  = types  is { Length: > 0 } ? types.Select(NormaliseType).ToArray()  : null;
+        var dbGenres = genres is { Length: > 0 } ? genres.Select(NormaliseGenre).ToArray() : null;
 
         var clauses = new List<string> { "q.IsDeleted = 0", "s.IsDeleted = 0" };
-        if (typeStr  is not null) clauses.Add("s.Type = @typeStr");
-        if (genreStr is not null) clauses.Add("EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre = @genreStr AND qg.IsDeleted = 0)");
+        if (dbTypes  is not null) clauses.Add("s.Type IN @dbTypes");
+        if (dbGenres is not null) clauses.Add("EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)");
+        if (character is not null) clauses.Add("c.Name LIKE @characterLike");
+        if (author    is not null) clauses.Add("p.Name LIKE @authorLike");
+        if (source    is not null) clauses.Add("s.Title LIKE @sourceLike");
 
-        return ("WHERE " + string.Join(" AND ", clauses),
-                new { lang = (string?)null, typeStr, genreStr });
+        var p = new DynamicParameters();
+        p.Add("lang", (string?)null);
+        if (dbTypes  is not null) p.Add("dbTypes",  dbTypes);
+        if (dbGenres is not null) p.Add("dbGenres", dbGenres);
+        if (character is not null) p.Add("characterLike", $"%{character}%");
+        if (author    is not null) p.Add("authorLike",    $"%{author}%");
+        if (source    is not null) p.Add("sourceLike",    $"%{source}%");
+
+        return ("WHERE " + string.Join(" AND ", clauses), p);
     }
 
     private static string NormaliseType(string raw)
         => Enum.TryParse<QuoteType>(raw, ignoreCase: true, out var t) ? t.ToString() : raw;
 
     private static string NormaliseGenre(string raw)
-        => Enum.TryParse<GenreEnum>(raw, ignoreCase: true, out var g) ? g.ToString() : raw;
+        => InputValidation.GenreApiToDb.TryGetValue(raw, out var db) ? db : raw;
 
     #endregion
 

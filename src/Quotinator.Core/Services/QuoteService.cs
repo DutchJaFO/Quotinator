@@ -33,17 +33,40 @@ public sealed class QuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<QuoteResponse> GetRandom(int count, string? lang = null)
+    public FilteredQuoteResult<QuoteResponse> GetRandom(
+        int count,
+        string[]? types = null,
+        string[]? genres = null,
+        string? character = null,
+        string? author = null,
+        string? source = null,
+        string? lang = null)
     {
-        if (_quotes.Count == 0) return [];
-        var picks = _quotes.OrderBy(_ => Random.Shared.Next()).Take(count);
-        return picks.Select(q => Localise(q, lang)).ToList();
+        IEnumerable<Quote> filtered = Filter(_quotes, types, genres);
+
+        if (character is not null)
+            filtered = filtered.Where(q => q.Character is not null && Contains(q.Character, character));
+        if (author is not null)
+            filtered = filtered.Where(q => q.Author is not null && Contains(q.Author, author));
+        if (source is not null)
+            filtered = filtered.Where(q => Contains(q.Source, source));
+
+        var pool = filtered.ToList();
+        var totalMatching = pool.Count;
+        var picks = pool.OrderBy(_ => Random.Shared.Next()).Take(count).Select(q => Localise(q, lang)).ToList();
+
+        return new FilteredQuoteResult<QuoteResponse>
+        {
+            Status        = picks.Count > 0 ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults,
+            Items         = picks,
+            TotalMatching = totalMatching,
+        };
     }
 
     /// <inheritdoc/>
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string? type = null, string? genre = null, string? lang = null)
+    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null)
     {
-        var filtered = Filter(_quotes, type, genre);
+        var filtered = Filter(_quotes, types, genres);
         var total = filtered.Count;
         var items = filtered
             .Skip((page - 1) * pageSize)
@@ -55,9 +78,9 @@ public sealed class QuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string? type = null, string? genre = null, string? lang = null, string? field = null)
+    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null)
     {
-        var filtered = Filter(_quotes, type, genre);
+        var filtered = Filter(_quotes, types, genres);
         return filtered
             .Where(q => field switch
             {
@@ -75,15 +98,15 @@ public sealed class QuoteService : IQuoteService
             .ToList();
     }
 
-    private static IReadOnlyList<Quote> Filter(IReadOnlyList<Quote> quotes, string? type, string? genre)
+    private static IReadOnlyList<Quote> Filter(IReadOnlyList<Quote> quotes, string[]? types, string[]? genres)
     {
         IEnumerable<Quote> result = quotes;
 
-        if (type is not null)
-            result = result.Where(q => q.Type.Equals(type, StringComparison.OrdinalIgnoreCase));
+        if (types is { Length: > 0 })
+            result = result.Where(q => types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)));
 
-        if (genre is not null)
-            result = result.Where(q => q.Genres.Any(g => g.Equals(genre, StringComparison.OrdinalIgnoreCase)));
+        if (genres is { Length: > 0 })
+            result = result.Where(q => q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))));
 
         return result.ToList();
     }

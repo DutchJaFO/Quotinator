@@ -29,7 +29,7 @@ public partial class QuoteCard
     private Quotinator.Api.I18nText.UI Text = new();
 
     private void LoadQuote() =>
-        _quote = QuoteService.GetRandom(1).FirstOrDefault();
+        _quote = QuoteService.GetRandom(1).Items.FirstOrDefault();
 
     private string Attribution =>
         _quote?.Character ?? _quote?.Author ?? string.Empty;
