@@ -76,7 +76,18 @@ builder.Services.AddRateLimiter(options =>
 
 // Data path — configurable so the HA add-on can point this at /data (the supervisor's
 // persistent volume) while standalone Docker keeps the default /app/data.
+// The HA supervisor sets Quotinator__DataPath via config.yaml env_vars. When that env var
+// is absent (e.g. HA caches an older config), fall back to /data if it is already a mounted
+// volume (writable directory owned by the HA supervisor), so DataProtection keys are always
+// on a persistent volume rather than the ephemeral container filesystem.
+static string? HaFallbackPath()
+{
+    const string haData = "/data";
+    try { return Directory.Exists(haData) ? Path.Combine(haData, "quotes.json") : null; }
+    catch { return null; }
+}
 var dataPath = builder.Configuration["Quotinator:DataPath"]
+    ?? HaFallbackPath()
     ?? Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
 var dataDir = Path.GetDirectoryName(dataPath) ?? Path.Combine(AppContext.BaseDirectory, "data");
 Directory.CreateDirectory(dataDir);
