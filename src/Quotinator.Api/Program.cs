@@ -142,6 +142,7 @@ if (isContainer)
 
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
+builder.Services.AddSingleton<IChangelogService, ChangelogService>();
 
 var dbPath = Path.Combine(dataDir, "quotes.db");
 var connectionFactory = new SqliteConnectionFactory(dbPath);

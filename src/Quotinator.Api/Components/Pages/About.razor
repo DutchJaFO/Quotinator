@@ -1,0 +1,53 @@
+@page "/about"
+
+<PageTitle>@Text.AboutHeading — Quotinator</PageTitle>
+
+<h1>
+    @Text.AboutHeading
+    <span class="badge bg-secondary ms-2 fs-6 align-middle">v@(VersionService.Version)</span>
+</h1>
+
+<p>@Text.AboutDescription</p>
+<ul>
+    <li>@Text.AboutRoadmapV1</li>
+    <li>@Text.AboutRoadmapV2</li>
+    <li>@Text.AboutRoadmapV3</li>
+</ul>
+
+@if (ChangelogService.Releases.Count > 0)
+{
+    <hr />
+
+    <h2>@Text.ChangelogHeading</h2>
+
+    <input type="search" class="form-control form-control-sm mb-2"
+           placeholder="@Text.ChangelogFilterPlaceholder"
+           oninput="var q=this.value.toLowerCase();document.querySelectorAll('.changelog-entry').forEach(function(el){el.style.display=el.dataset.version.toLowerCase().includes(q)?'':'none';});" />
+
+    <div class="changelog-scroll">
+        @for (int i = 0; i < ChangelogService.Releases.Count; i++)
+        {
+            var release = ChangelogService.Releases[i];
+            <details class="mb-2 changelog-entry" data-version="@release.Version" open="@(i == 0)">
+                <summary class="py-1 user-select-none" style="cursor:pointer">
+                    <strong>v@(release.Version)</strong>
+                    <span class="text-muted ms-2">@release.Date</span>
+                </summary>
+                <div class="mt-2 ps-3">
+                    @foreach (var section in release.Sections)
+                    {
+                        <h6 class="mt-2 mb-1">
+                            <span class="badge @CategoryBadgeClass(section.Category)">@section.Category</span>
+                        </h6>
+                        <ul class="mb-1">
+                            @foreach (var item in section.Items)
+                            {
+                                <li>@FormatInline(item)</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </details>
+        }
+    </div>
+}

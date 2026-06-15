@@ -3,8 +3,8 @@ using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
 namespace Quotinator.Api.Components.Pages;
 
-/// <summary>The application home page. Shows a random quote.</summary>
-public partial class Home
+/// <summary>REST API reference page. Shows endpoints and language support information.</summary>
+public partial class RestApi
 {
     #region Protected
 

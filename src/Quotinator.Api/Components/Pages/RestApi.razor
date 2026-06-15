@@ -1,0 +1,39 @@
+@page "/rest-api"
+
+<PageTitle>@Text.RestApiHeading — Quotinator</PageTitle>
+
+<h1>@Text.RestApiHeading</h1>
+<p>@Text.RestApiDescription</p>
+
+<p>
+    <a class="btn btn-primary" href="@ApiRoutes.ScalarUi.AsLink()">@Text.OpenApiButtonLabel</a>
+</p>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>@Text.EndpointColumn</th>
+            <th>@Text.UrlColumn</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>@Text.OpenApiUiLabel</td>
+            <td><a href="@ApiRoutes.ScalarUi.AsLink()">@ApiRoutes.ScalarUi.AsLink()</a></td>
+        </tr>
+        <tr>
+            <td>@Text.OpenApiSpecLabel</td>
+            <td><a href="@ApiRoutes.OpenApiSpec.AsLink()">@ApiRoutes.OpenApiSpec.AsLink()</a></td>
+        </tr>
+        <tr>
+            <td>@Text.HealthCheckLabel</td>
+            <td><a href="@ApiRoutes.Health.AsLink()">@ApiRoutes.Health.AsLink()</a></td>
+        </tr>
+    </tbody>
+</table>
+
+<hr />
+
+<h2>@Text.TranslationsHeading</h2>
+<p>@Text.TranslationsQuoteContent</p>
+<p>@Text.TranslationsUi</p>
