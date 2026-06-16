@@ -6,9 +6,11 @@ This document explains how to add a new external dataset to Quotinator's seed pi
 
 ## How the pipeline works
 
-`scripts/seed.csx` reads `scripts/sources.json`, downloads each source (or uses a local cache), normalises every entry to the [canonical quote schema](../CLAUDE.md#quote-schema-canonical), deduplicates across all sources, and writes `data/quotes.json`.
+`scripts/seed.csx` reads `scripts/sources.json`, downloads each source (or uses a local cache), normalises every entry to the [canonical quote schema](../CLAUDE.md#quote-schema-canonical), and writes one JSON file per source to `data/sources/`. IDs are deterministically derived from quote text and source name via SHA-256 so they are stable across re-seeds.
 
-All deduplication is done on normalised quote text (lowercased, whitespace-collapsed). When the same quote appears in multiple sources, the first source listed in `sources.json` wins — put richer sources (those with year/type/character data) before simpler ones.
+There is no merge step and no deduplication. Each source file is independent. Conflict resolution (same quote appearing in multiple sources) is handled at import time by the startup seeder, and eventually by a review UI in the import milestone.
+
+`data/sources/manifest.json` lists files in the preferred import order. The manifest is created automatically if it does not exist; if it already exists, `seed.csx` does not overwrite it.
 
 ---
 
@@ -26,21 +28,21 @@ dotnet tool install -g dotnet-script
 dotnet-script scripts/seed.csx
 ```
 
-**Dry run (prints stats, does not write `data/quotes.json`):**
+**Dry run (prints stats, does not write any files):**
 
 ```bash
-dotnet-script scripts/seed.csx --dry-run
+dotnet-script scripts/seed.csx -- --dry-run
 ```
 
 **Use local cache (skips download, uses `scripts/cache/`):**
 
 ```bash
-dotnet-script scripts/seed.csx --no-fetch
+dotnet-script scripts/seed.csx -- --no-fetch
 ```
 
 ---
 
-## Adding a new source
+## Adding a new external source
 
 ### 1. Check the license
 
@@ -100,18 +102,22 @@ If your source uses a different layout, add a new adapter function in `seed.csx`
 | `type` | `movie`, `tv`, `anime`, `book`, or `person` — unknown values fall back to `defaultType` |
 | `year` | Release or publication year (integer); values outside 1900–2100 are discarded |
 
-### 4. Add attribution to `SOURCES.md`
-
-Add a row to the attribution table in [`SOURCES.md`](../SOURCES.md) at the repo root.
-
-### 5. Run the seed script and review the output
+### 4. Run the seed script
 
 ```bash
-dotnet-script scripts/seed.csx --dry-run   # verify counts
-dotnet-script scripts/seed.csx             # write data/quotes.json
+dotnet-script scripts/seed.csx -- --dry-run   # verify counts
+dotnet-script scripts/seed.csx                # write data/sources/<name>.json
 ```
 
-Spot-check a sample of new entries in `data/quotes.json` before committing.
+The output file is named after the `name` field with `/` replaced by `_` (e.g. `author/repo-name` → `author_repo-name.json`).
+
+### 5. Add attribution to `SOURCES.md`
+
+Add an entry to the **Quote datasets** section in [`SOURCES.md`](../SOURCES.md) at the repo root. Include the file path, schema reference, repository URL, author, license, and contents.
+
+### 6. Update `manifest.json`
+
+Add the new file to `data/sources/manifest.json` in the desired import position. External sources should come after `quotinator-curated.json`.
 
 ---
 
@@ -129,4 +135,6 @@ Keep adapters pure functions — they receive a `JsonNode` and return a list. Ne
 
 ## Manually curated entries
 
-Entries that are not in any external dataset (specific book quotes, speeches, etc.) should be added **directly to `data/quotes.json`** rather than through the seed pipeline. Use a proper UUID v4 for the `id` field and follow the canonical schema. These entries will survive re-seeding because deduplication is quote-text-based, not ID-based.
+Entries that are not in any external dataset (specific book quotes, speeches, conversations, etc.) belong in `data/sources/quotinator-curated.json`. This file uses the **extended format** (`schemas/source-extended.schema.json`) which supports `quotes`, `stageDirections`, `soundCues`, and `conversations` sections.
+
+Do **not** run `seed.csx` for curated entries — add them directly to `quotinator-curated.json` with a manually assigned UUID and verify them before committing. The `SourceDataIntegrityTests` will validate the file against the schema automatically on the next build.

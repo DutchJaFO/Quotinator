@@ -1,0 +1,30 @@
+[
+  {
+    "id": "588334be-d4ac-6948-9a7e-81a01090a660",
+    "quote": "Surely you can't be serious.",
+    "originalLanguage": "en",
+    "source": "Airplane!",
+    "date": "1980",
+    "character": "Ted Striker",
+    "author": null,
+    "type": "movie",
+    "genres": [
+      "comedy"
+    ],
+    "translations": {}
+  },
+  {
+    "id": "72f8e7e1-0b7a-624a-aa59-c97fd9d79f29",
+    "quote": "I am serious. And don't call me Shirley.",
+    "originalLanguage": "en",
+    "source": "Airplane!",
+    "date": "1980",
+    "character": "Dr. Rumack",
+    "author": null,
+    "type": "movie",
+    "genres": [
+      "comedy"
+    ],
+    "translations": {}
+  }
+]

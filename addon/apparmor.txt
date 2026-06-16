@@ -13,7 +13,7 @@ profile quotinator flags=(attach_disconnected,mediate_deleted) {
   # App binaries and static files
   /app/** rixmr,
 
-  # Persistent data (quotes.json, future .db); HA maps its data dir to /data
+  # Persistent data (source files, .db, keys); HA maps its data dir to /data
   /app/data/** rwk,
   /data/** rwk,
 

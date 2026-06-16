@@ -14,7 +14,7 @@ Steps:
 1. Restore NuGet packages
 2. Build (Release configuration) — must produce 0 warnings and 0 errors
 3. Run all MSTest tests — must all pass with 0 warnings and 0 errors
-4. Publish smoke test — runs `dotnet publish` and asserts `data/quotes.json` is present in the output
+4. Publish smoke test — runs `dotnet publish` and asserts `data/sources/` directory is present and non-empty in the output
 
 > CI does **not** build the Docker image. A broken Dockerfile will only be caught by the release workflow. Always do a local `docker build` before tagging — see the [Pre-Push Checklist](../CLAUDE.md#pre-push-checklist).
 

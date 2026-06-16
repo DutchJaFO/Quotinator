@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/DutchJaFO/Quotinator/main/schemas/source-extended.schema.json",
+  "title": "Quotinator Quote Source (extended)",
+  "description": "Extended object format for curated and user import files. Supports quotes, stage directions, sound cues, and conversation groupings. Backwards-compatible with the flat array format — importers that receive a top-level array treat it as { 'quotes': [...] } with no other sections.",
+  "type": "object",
+  "required": ["quotes"],
+  "additionalProperties": false,
+  "properties": {
+    "quotes": {
+      "type": "array",
+      "description": "Canonical quote entries. Same schema as source-flat.schema.json.",
+      "items": { "$ref": "#/$defs/quote" }
+    },
+    "stageDirections": {
+      "type": "array",
+      "description": "Reusable scene-setting and action descriptions that appear in conversations.",
+      "items": { "$ref": "#/$defs/stageDirection" }
+    },
+    "soundCues": {
+      "type": "array",
+      "description": "Reusable audio elements — sound effects, timing cues, ambient sound.",
+      "items": { "$ref": "#/$defs/soundCue" }
+    },
+    "conversations": {
+      "type": "array",
+      "description": "Ordered groupings of quotes, stage directions, and sound cues.",
+      "items": { "$ref": "#/$defs/conversation" }
+    }
+  },
+  "$defs": {
+    "quote": {
+      "type": "object",
+      "required": ["id", "quote", "originalLanguage", "source", "type", "genres", "translations"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "quote":            { "type": "string", "minLength": 1 },
+        "originalLanguage": { "type": "string", "minLength": 2, "maxLength": 5 },
+        "source":           { "type": "string", "minLength": 1 },
+        "date":             { "type": ["string", "null"] },
+        "character":        { "type": ["string", "null"] },
+        "author":           { "type": ["string", "null"] },
+        "type":             { "type": "string", "enum": ["movie", "tv", "anime", "book", "person"] },
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "action", "adventure", "animation", "comedy", "drama",
+              "fantasy", "fiction", "horror", "mystery", "non-fiction",
+              "romance", "sci-fi", "thriller"
+            ]
+          }
+        },
+        "translations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["quote"],
+            "additionalProperties": false,
+            "properties": {
+              "quote":  { "type": "string", "minLength": 1 },
+              "source": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "stageDirection": {
+      "type": "object",
+      "required": ["id", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id":       { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "text":     { "type": "string", "minLength": 1, "description": "e.g. '[EXT. AIRPORT - DAY]'" },
+        "imageUrl": { "type": ["string", "null"], "format": "uri" },
+        "translations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["text"],
+            "additionalProperties": false,
+            "properties": { "text": { "type": "string", "minLength": 1 } }
+          }
+        }
+      }
+    },
+    "soundCue": {
+      "type": "object",
+      "required": ["id", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id":           { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "text":         { "type": "string", "minLength": 1, "description": "e.g. '[rimshot]', '[awkward silence]'" },
+        "soundFileUrl": { "type": ["string", "null"], "format": "uri" },
+        "imageUrl":     { "type": ["string", "null"], "format": "uri" },
+        "translations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["text"],
+            "additionalProperties": false,
+            "properties": { "text": { "type": "string", "minLength": 1 } }
+          }
+        }
+      }
+    },
+    "conversation": {
+      "type": "object",
+      "required": ["id", "lines"],
+      "additionalProperties": false,
+      "properties": {
+        "id":          { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "description": { "type": ["string", "null"] },
+        "lines": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["order", "type", "quoteId"],
+                "additionalProperties": false,
+                "properties": {
+                  "order":   { "type": "integer", "minimum": 1 },
+                  "type":    { "const": "quote" },
+                  "quoteId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["order", "type", "stageDirectionId"],
+                "additionalProperties": false,
+                "properties": {
+                  "order":            { "type": "integer", "minimum": 1 },
+                  "type":             { "const": "stage_direction" },
+                  "stageDirectionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["order", "type", "soundCueId"],
+                "additionalProperties": false,
+                "properties": {
+                  "order":      { "type": "integer", "minimum": 1 },
+                  "type":       { "const": "sound_cue" },
+                  "soundCueId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

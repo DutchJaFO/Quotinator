@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/DutchJaFO/Quotinator/main/schemas/source-flat.schema.json",
+  "title": "Quotinator Quote Source (flat)",
+  "description": "A flat JSON array of quotes in the canonical Quotinator schema. Used for external seed sources such as vilaboim/movie-quotes and NikhilNamal17/popular-movie-quotes.",
+  "type": "array",
+  "items": { "$ref": "#/$defs/quote" },
+  "$defs": {
+    "quote": {
+      "type": "object",
+      "required": ["id", "quote", "originalLanguage", "source", "type", "genres", "translations"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "UUID v4, deterministically derived from the quote text and source name. Never changes once assigned."
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The quote text in its original language."
+        },
+        "originalLanguage": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 5,
+          "description": "ISO 639-1 language code (e.g. 'en', 'fr', 'nl')."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Film title, TV series, book title, or speech occasion."
+        },
+        "date": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 date, as precise as the source allows: '1994', '1940-06', or '1940-06-04'."
+        },
+        "character": {
+          "type": ["string", "null"],
+          "description": "Fictional character who said the quote (for movie, tv, anime, book types)."
+        },
+        "author": {
+          "type": ["string", "null"],
+          "description": "Real person who said or wrote the quote (for person type) or book author."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["movie", "tv", "anime", "book", "person"],
+          "description": "Media type of the source."
+        },
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "action", "adventure", "animation", "comedy", "drama",
+              "fantasy", "fiction", "horror", "mystery", "non-fiction",
+              "romance", "sci-fi", "thriller"
+            ]
+          },
+          "description": "Genre tags from the standard vocabulary. May be empty."
+        },
+        "translations": {
+          "type": "object",
+          "description": "Manually curated translations keyed by ISO 639-1 language code.",
+          "additionalProperties": { "$ref": "#/$defs/translation" }
+        }
+      }
+    },
+    "translation": {
+      "type": "object",
+      "required": ["quote"],
+      "additionalProperties": false,
+      "properties": {
+        "quote": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Translated quote text."
+        },
+        "source": {
+          "type": ["string", "null"],
+          "description": "Translated source title, if applicable."
+        }
+      }
+    }
+  }
+}

@@ -3,7 +3,7 @@
 Quotinator supports multiple languages in two distinct areas:
 
 1. **Blazor UI strings** — page text, labels, and navigation, managed with `Toolbelt.Blazor.I18nText`
-2. **Quote content** — the quote text and source title stored per-entry in `data/quotes.json`
+2. **Quote content** — the quote text and source title stored per-entry in the source files under `data/sources/`
 
 These are handled differently by design: UI strings change with the user's browser language; quote translations are optional, curated per-entry, and served on request.
 
@@ -84,7 +84,7 @@ Then reference strings as `@Text.SomeKey`. The typed class is generated at build
 
 ## Quote-level translations
 
-Translations are stored directly in `data/quotes.json` alongside each entry:
+Translations are stored directly in each source file under `data/sources/` alongside each quote entry:
 
 ```json
 {

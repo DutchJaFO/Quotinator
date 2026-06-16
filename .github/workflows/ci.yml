@@ -38,5 +38,6 @@ jobs:
             --configuration Release \
             --no-restore \
             --output /tmp/publish
-          test -f /tmp/publish/data/quotes.json || \
-            (echo "ERROR: data/quotes.json missing from publish output" && exit 1)
+          test -d /tmp/publish/data/sources && \
+            ls /tmp/publish/data/sources/*.json > /dev/null 2>&1 || \
+            (echo "ERROR: data/sources/ missing or empty in publish output" && exit 1)

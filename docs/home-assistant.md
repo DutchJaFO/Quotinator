@@ -64,7 +64,7 @@ The ingress port (`8099`) is separate from the direct access port (`8080`) so bo
 
 ## Data persistence
 
-Quotes are stored in `/data/quotes.json` inside the add-on data directory, which HA maps to a persistent volume. The data survives add-on updates and restarts.
+The SQLite database and source files are stored inside the add-on data directory (`/data`), which HA maps to a persistent volume. The data survives add-on updates and restarts.
 
 ---
 

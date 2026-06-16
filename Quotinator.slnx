@@ -23,7 +23,12 @@
     <File Path="addon/translations/de.yaml" />
   </Folder>
   <Folder Name="/data/">
-    <File Path="data/quotes.json" />
+    <Folder Name="/data/sources/">
+      <File Path="data/sources/manifest.json" />
+      <File Path="data/sources/quotinator-curated.json" />
+      <File Path="data/sources/vilaboim_movie-quotes.json" />
+      <File Path="data/sources/NikhilNamal17_popular-movie-quotes.json" />
+    </Folder>
   </Folder>
   <Folder Name="/docker/">
     <File Path="docker/Dockerfile" />
@@ -38,6 +43,14 @@
     <File Path="docs/openapi.md" />
     <File Path="docs/running-locally.md" />
     <File Path="docs/testing-policy.md" />
+  </Folder>
+  <Folder Name="/schemas/">
+    <File Path="schemas/manifest.schema.json" />
+    <File Path="schemas/source-flat.schema.json" />
+    <File Path="schemas/source-extended.schema.json" />
+    <File Path="schemas/seed-sources.schema.json" />
+    <File Path="schemas/upstream-quoted-string.schema.json" />
+    <File Path="schemas/upstream-object-array.schema.json" />
   </Folder>
   <Folder Name="/scripts/">
     <File Path="scripts/seed.csx" />

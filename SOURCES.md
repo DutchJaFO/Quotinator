@@ -25,6 +25,7 @@ Attribution for all external resources used in this project: quote datasets and 
 | `MSTest` | 4.2.3 | MIT | Unit and integration test framework | [NuGet](https://www.nuget.org/packages/MSTest) · [GitHub](https://github.com/microsoft/testfx) |
 | `Microsoft.AspNetCore.Mvc.Testing` | 10.0.9 | MIT | `WebApplicationFactory` for endpoint integration tests | [NuGet](https://www.nuget.org/packages/Microsoft.AspNetCore.Mvc.Testing) · [GitHub](https://github.com/dotnet/aspnetcore) |
 | `Microsoft.VisualStudio.Azure.Containers.Tools.Targets` | 1.23.0 | MIT | Visual Studio Docker tooling integration | [NuGet](https://www.nuget.org/packages/Microsoft.VisualStudio.Azure.Containers.Tools.Targets) |
+| `JsonSchema.Net` | 9.2.2 | MIT | JSON Schema Draft 2020-12 validation — used in `SourceDataIntegrityTests` to validate source files and the manifest against their schemas | [NuGet](https://www.nuget.org/packages/JsonSchema.Net) · [GitHub](https://github.com/gregsdennis/json-everything) |
 
 ### External tools
 
@@ -35,24 +36,47 @@ Attribution for all external resources used in this project: quote datasets and 
 
 ---
 
+## JSON Schemas
+
+Three schemas in `schemas/` define and validate the import file formats. They are used by `SourceDataIntegrityTests` at build time and by editors (VS Code, JetBrains) for IntelliSense when editing source files.
+
+| Schema file | Validates |
+|---|---|
+| `schemas/manifest.schema.json` | `data/sources/manifest.json` and `data/imports/manifest.json` — ordered list of source files |
+| `schemas/source-flat.schema.json` | External source files in `data/sources/` — flat JSON array of canonical quote objects |
+| `schemas/source-extended.schema.json` | `data/sources/quotinator-curated.json` and user import files — object with `quotes`, `stageDirections`, `soundCues`, `conversations` |
+| `schemas/seed-sources.schema.json` | `scripts/sources.json` — seed pipeline configuration (external source URLs, formats, field mappings) |
+| `schemas/upstream-quoted-string.schema.json` | `scripts/cache/vilaboim_*.json` — raw upstream format used by [vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes) |
+| `schemas/upstream-object-array.schema.json` | `scripts/cache/NikhilNamal17_*.json` — raw upstream format used by [NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes) |
+
+The schemas implement [JSON Schema Draft 2020-12](https://json-schema.org/draft/2020-12/schema).
+
+The two upstream schemas (`upstream-quoted-string`, `upstream-object-array`) were derived from the respective packages' own test suites — neither repo ships a schema file. They are candidates for upstream PRs.
+
+---
+
 ## Quote datasets
 
-The `data/quotes.json` dataset is seeded from the following open-source projects and extended with manually curated entries. All seed sources are MIT licensed. Data has been normalised to the Quotinator quote schema and deduplicated.
+The `data/sources/` directory contains one JSON file per dataset, normalised to the Quotinator canonical schema. All seed sources are MIT licensed.
 
 ---
 
 ## vilaboim/movie-quotes
 
+- **File:** `data/sources/vilaboim_movie-quotes.json`
+- **Schema:** `schemas/source-flat.schema.json`
 - **Repository:** https://github.com/vilaboim/movie-quotes
 - **Author:** Lucas Vilaboim
 - **License:** MIT © Lucas Vilaboim
-- **Contents:** AFI Top 100 movie quotes
+- **Contents:** AFI Top 100 movie quotes (~99 entries)
 - **npm:** https://www.npmjs.com/package/movie-quotes
 
 ---
 
 ## NikhilNamal17/popular-movie-quotes
 
+- **File:** `data/sources/NikhilNamal17_popular-movie-quotes.json`
+- **Schema:** `schemas/source-flat.schema.json`
 - **Repository:** https://github.com/NikhilNamal17/popular-movie-quotes
 - **Author:** Nikhil N Namal
 - **License:** MIT
@@ -61,14 +85,13 @@ The `data/quotes.json` dataset is seeded from the following open-source projects
 
 ---
 
-## Manually curated entries
+## quotinator/curated
 
-Entries not sourced from the above datasets are added manually. These include:
+- **File:** `data/sources/quotinator-curated.json`
+- **Schema:** `schemas/source-extended.schema.json`
+- **Contents:** Manually verified entries not sourced from the datasets above. Includes quotes with enriched metadata (character names, genres, conversation groupings), books, and famous people.
 
-- Quotes from books — attributed to the author and work
-- Quotes from famous people — attributed to the person and occasion where known
-
-All manually added entries must be accurately attributed. Do not add quotes of uncertain origin or attribution.
+All entries must be accurately attributed and verified before adding. Do not add quotes of uncertain origin or attribution.
 
 ---
 

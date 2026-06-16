@@ -8,7 +8,7 @@ Quotinator ships as a **single container** hosting both the REST API and the Bla
 - **Base image:** `mcr.microsoft.com/dotnet/aspnet:10.0`
 - **Platforms:** `linux/amd64`, `linux/arm64`
 - **Ports:** `8080` (direct access — HTTP or HTTPS), `8099` (Home Assistant ingress — always HTTP)
-- **Data:** `quotes.json` persisted via Docker volume at `/app/data`
+- **Data:** SQLite database and source files persisted via Docker volume at `/app/data`
 
 ---
 
@@ -50,7 +50,7 @@ You should see system information. If you see a connection error, Docker Desktop
 |---|---|
 | `docker/Dockerfile` | Multi-stage build for the combined API + UI |
 | `docker/docker-compose.yml` | Local development and testing |
-| `.dockerignore` | Excludes `bin/`, `obj/`, docs, scripts from the build context. `data/` is intentionally included so `dotnet publish` can copy `quotes.json` into the image. |
+| `.dockerignore` | Excludes `bin/`, `obj/`, docs, scripts from the build context. `data/` is intentionally included so `dotnet publish` can copy `data/sources/` into the image. |
 
 ---
 

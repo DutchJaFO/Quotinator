@@ -1,0 +1,28 @@
+{
+  "json.schemas": [
+    {
+      "fileMatch": ["data/sources/manifest.json", "data/imports/manifest.json"],
+      "url": "./schemas/manifest.schema.json"
+    },
+    {
+      "fileMatch": ["data/sources/quotinator-curated.json", "data/imports/*.json"],
+      "url": "./schemas/source-extended.schema.json"
+    },
+    {
+      "fileMatch": ["data/sources/vilaboim_*.json", "data/sources/NikhilNamal17_*.json"],
+      "url": "./schemas/source-flat.schema.json"
+    },
+    {
+      "fileMatch": ["scripts/sources.json"],
+      "url": "./schemas/seed-sources.schema.json"
+    },
+    {
+      "fileMatch": ["scripts/cache/vilaboim_*.json"],
+      "url": "./schemas/upstream-quoted-string.schema.json"
+    },
+    {
+      "fileMatch": ["scripts/cache/NikhilNamal17_*.json"],
+      "url": "./schemas/upstream-object-array.schema.json"
+    }
+  ]
+}

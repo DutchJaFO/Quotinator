@@ -32,12 +32,13 @@ Quotinator/
 │   └── Quotinator.Api.Tests/    # Endpoint integration tests (WebApplicationFactory)
 ├── addon/                       # Home Assistant add-on manifest, config, and translations
 ├── data/
-│   └── quotes.json              # Quote dataset (seed data + additions)
+│   └── sources/                 # Bundled source files (one JSON per dataset) + manifest
 ├── docker/
 │   ├── Dockerfile
 │   └── docker-compose.yml
+├── schemas/                     # JSON Schema files for source file validation and editor IntelliSense
 ├── scripts/
-│   └── seed.csx                 # Seed/merge/dedup script
+│   └── seed.csx                 # Per-source seed script
 ├── SOURCES.md                   # Attribution for seed data sources
 ├── CLAUDE.md                    # AI assistant context (read this first)
 └── README.md
@@ -61,12 +62,13 @@ Quotinator/
 
 ## Quote Data
 
-Quotinator uses a curated `quotes.json` dataset seeded from two MIT-licensed sources:
+Quotinator's quote data lives in `data/sources/` — one JSON file per dataset, normalised to the canonical schema. The bundled sources are:
 
-- **[vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes)** — AFI Top 100 movie quotes
-- **[NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes)** — broader community dataset (~732 quotes)
+- **`quotinator-curated.json`** — manually verified entries with enriched metadata (character names, genres, conversations)
+- **[vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes)** — AFI Top 100 movie quotes (~99 entries)
+- **[NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes)** — popular movie, TV, and anime quotes (~732 entries)
 
-Both sources are MIT licensed. See [SOURCES.md](SOURCES.md) for full attribution.
+All external sources are MIT licensed. See [SOURCES.md](SOURCES.md) for full attribution and JSON Schema documentation.
 
 The canonical quote schema is:
 
@@ -119,8 +121,8 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/quotes/search?q=term` | Search quotes; add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/version` | Running version and environment |
-| POST | `/api/v1/admin/database/reseed` | Clear all data and reimport from `quotes.json` (schema history preserved) |
-| POST | `/api/v1/admin/database/reset` | Full reset: clear data + schema history, reapply migrations, reimport |
+| POST | `/api/v1/admin/database/reseed` | Clear all data and reimport from `data/sources/` (schema history preserved) |
+| POST | `/api/v1/admin/database/reset` | Full reset: clear data + schema history, reapply migrations, reimport from `data/sources/` |
 
 **`/random` filter parameters:** `type` and `genre` are repeatable (OR logic within each, AND between them). `character`, `author`, and `source` are case-insensitive contains matches. `yearFrom` / `yearTo` are inclusive year bounds; `year` is shorthand for a single year; `decade` (must be divisible by 10) is shorthand for a 10-year range. All filter combinations are ANDed. The response envelope always includes `status` (`Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`), `items`, and `totalMatching` (pool size before random selection).
 
@@ -149,7 +151,6 @@ The volume at `/app/data` contains everything Quotinator persists across restart
 
 | Path | Purpose | Safe to delete? |
 |---|---|---|
-| `quotes.json` | Quote dataset — seed source and custom additions | Only if you want to reset to bundled data |
 | `quotinatordata.db` | SQLite database — the live data store | **No** — this is your data |
 | `backups/` | Pre-migration database snapshots, named `quotinatordata_v{N}_{timestamp}Z.db` | Yes — old backups can be pruned freely |
 | `keys/` | ASP.NET Core Data Protection keys — used to sign antiforgery tokens and Blazor session descriptors | **No** — deleting this invalidates all active browser sessions; the app recovers on restart but users will need to reload |
