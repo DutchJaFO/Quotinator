@@ -93,24 +93,24 @@ builder.Services.AddRateLimiter(options =>
 static string? HaFallbackPath()
 {
     const string haData = "/data";
-    try { return Directory.Exists(haData) ? Path.Combine(haData, "quotes.json") : null; }
+    try { return Directory.Exists(haData) ? Path.Combine(haData, DataPaths.SeedFile) : null; }
     catch { return null; }
 }
 var dataPath = builder.Configuration["Quotinator:DataPath"]
     ?? HaFallbackPath()
-    ?? Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
+    ?? Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SeedFile);
 var dataDir = Path.GetDirectoryName(dataPath) ?? Path.Combine(AppContext.BaseDirectory, "data");
 Directory.CreateDirectory(dataDir);
 
 // First-run seed: if the configured data path doesn't exist yet (e.g. a fresh HA add-on
 // data volume) copy the bundled quotes.json from the image into the persistent directory.
-var bundledData = Path.Combine(AppContext.BaseDirectory, "data", "quotes.json");
+var bundledData = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SeedFile);
 if (!File.Exists(dataPath) && File.Exists(bundledData))
     File.Copy(bundledData, dataPath);
 
 // Persist DataProtection keys to a subdirectory of the data volume so antiforgery tokens
 // and Blazor circuit descriptors survive container restarts and add-on updates.
-var keysDir = Path.Combine(dataDir, ".keys");
+var keysDir = Path.Combine(dataDir, DataPaths.DataProtectionFolder);
 Directory.CreateDirectory(keysDir);
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(keysDir));
@@ -154,11 +154,14 @@ builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
 builder.Services.AddSingleton<IChangelogService, ChangelogService>();
 
-var dbPath = Path.Combine(dataDir, "quotinatordata.db");
+var dbPath     = Path.Combine(dataDir, DataPaths.DatabaseFile);
+var backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0 } customBackupPath
+    ? customBackupPath
+    : Path.Combine(dataDir, DataPaths.BackupsFolder);
 var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddSingleton<IDatabaseInitializer>(sp => new DatabaseInitializer(
-    connectionFactory, dataPath, sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
+    connectionFactory, dbPath, backupsDir, dataPath, sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
 builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
@@ -211,13 +214,14 @@ var logRequests = app.Configuration.GetValue<bool>("Quotinator:LogRequests");
 var banner = new System.Text.StringBuilder()
     .AppendLine("############################################")
     .AppendLine($"Quotinator v{versionService.Version} starting")
-    .AppendLine($"Data:  {dataPath}")
-    .AppendLine($"DB:    {dbPath}")
-    .AppendLine($"       schema v{dbInitializer.SchemaVersion} — {dbInitializer.QuoteCount} quotes  {dbInitializer.SourceCount} sources  {dbInitializer.CharacterCount} characters  {dbInitializer.PeopleCount} people")
-    .AppendLine($"Keys:  {keysDir}")
-    .Append($"Cfg:   log_level={haLogLevel}  log_requests={(logRequests ? "on" : "off")}  ssl={( sslEnabled ? "on" : "off")}");
+    .AppendLine($"Data:           {dataPath}")
+    .AppendLine($"Database:       {dbPath}")
+    .AppendLine($"                schema v{dbInitializer.SchemaVersion} — {dbInitializer.QuoteCount} quotes  {dbInitializer.SourceCount} sources  {dbInitializer.CharacterCount} characters  {dbInitializer.PeopleCount} people")
+    .AppendLine($"Backups:        {backupsDir}")
+    .AppendLine($"DataProtection: {keysDir}")
+    .Append($"Config:         log_level={haLogLevel}  log_requests={(logRequests ? "on" : "off")}  ssl={( sslEnabled ? "on" : "off")}");
 if (sslEnabled)
-    banner.AppendLine().Append($"SSL:   {sslCertFile}  /  {sslKeyFile}");
+    banner.AppendLine().Append($"SSL:            {sslCertFile}  /  {sslKeyFile}");
 banner.AppendLine().Append("############################################");
 
 Console.WriteLine();

@@ -20,6 +20,8 @@ namespace Quotinator.Core.Data;
 public sealed class DatabaseInitializer : IDatabaseInitializer
 {
     private readonly IDbConnectionFactory _factory;
+    private readonly string _dbPath;
+    private readonly string _backupsDir;
     private readonly string _seedJsonPath;
     private readonly ILogger<DatabaseInitializer> _logger;
 
@@ -52,11 +54,15 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
     /// <summary>Initialises the instance with the connection factory and the path to the seed data file.</summary>
     /// <param name="factory">Factory used to open SQLite connections.</param>
+    /// <param name="dbPath">Absolute path to the <c>.db</c> file. Used for pre-migration backups and legacy filename migration.</param>
+    /// <param name="backupsDir">Directory where pre-migration backups are written. Defaults to a <c>backups/</c> subfolder next to the database file.</param>
     /// <param name="seedJsonPath">Absolute path to <c>quotes.json</c>. Used only on first run when the database is empty.</param>
     /// <param name="logger">Logger for startup diagnostics.</param>
-    public DatabaseInitializer(IDbConnectionFactory factory, string seedJsonPath, ILogger<DatabaseInitializer> logger)
+    public DatabaseInitializer(IDbConnectionFactory factory, string dbPath, string backupsDir, string seedJsonPath, ILogger<DatabaseInitializer> logger)
     {
         _factory      = factory;
+        _dbPath       = dbPath;
+        _backupsDir   = backupsDir;
         _seedJsonPath = seedJsonPath;
         _logger       = logger;
     }
@@ -64,6 +70,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     /// <inheritdoc/>
     public async Task InitialiseAsync()
     {
+        MigrateFilenameIfNeeded();
+
         using var connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
 
@@ -73,6 +81,43 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         await ReSeedGenresIfEmptyAsync(connection);
         await LogDatabaseStatsAsync(connection);
     }
+
+    // -------------------------------------------------------------------------
+    #region File management
+
+    private void MigrateFilenameIfNeeded()
+    {
+        var dataDir    = Path.GetDirectoryName(_dbPath)!;
+        var legacyPath = Path.Combine(dataDir, DataPaths.LegacyDatabaseFile);
+        if (!File.Exists(legacyPath) || File.Exists(_dbPath)) return;
+
+        _logger.LogInformation("Database: migrating legacy filename quotes.db → {NewName}", Path.GetFileName(_dbPath));
+        foreach (var suffix in new[] { "", "-wal", "-shm" })
+        {
+            var src = legacyPath + suffix;
+            var dst = _dbPath + suffix;
+            if (!File.Exists(src)) continue;
+            _logger.LogInformation("Database: moving {Src} → {Dst}", Path.GetFileName(src), Path.GetFileName(dst));
+            File.Move(src, dst);
+        }
+        _logger.LogInformation("Database: filename migration complete → {Path}", _dbPath);
+    }
+
+    private void CreateBackup(SqliteConnection connection, int fromVersion)
+    {
+        Directory.CreateDirectory(_backupsDir);
+        var timestamp  = DateTime.UtcNow.ToString("yyyyMMddTHHmmss");
+        var backupName = $"{Path.GetFileNameWithoutExtension(_dbPath)}_v{fromVersion}_{timestamp}Z.db";
+        var backupPath = Path.Combine(_backupsDir, backupName);
+
+        _logger.LogInformation("Database: backing up v{Version} → {Path}", fromVersion, backupPath);
+        using var dest = new SqliteConnection($"Data Source={backupPath}");
+        dest.Open();
+        connection.BackupDatabase(dest);
+        _logger.LogInformation("Database: backup complete");
+    }
+
+    #endregion
 
     // -------------------------------------------------------------------------
     #region Migrations
@@ -96,11 +141,16 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         }
 
         if (current == 0)
+        {
             _logger.LogInformation("Database: creating schema...");
+        }
         else
+        {
             _logger.LogInformation(
                 "Database: applying {Count} pending migration(s) (version {Current} → {Target})...",
                 Migrations.Count - current, current, Migrations.Count);
+            CreateBackup(connection, current);
+        }
 
         for (var i = current; i < Migrations.Count; i++)
         {
