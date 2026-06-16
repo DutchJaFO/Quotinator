@@ -4,6 +4,10 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.2.2] - 2026-06-16
+
+- Fixed: the GitHub changelog link in the add-on UI opened inside the HA frame and was blocked — it now opens in a new tab correctly
+
 ## [1.2.1] - 2026-06-16
 
 - Database file renamed from `quotes.db` to `quotinatordata.db` — the old file is renamed automatically on first startup after upgrade, no data loss

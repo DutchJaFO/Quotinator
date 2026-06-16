@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.2.2] - 2026-06-16
+
+### Highlights
+- Fixed: the GitHub changelog link in the UI opened inside the HA frame and was blocked by GitHub's security policy — it now opens in a new tab correctly
+
+### Fixed
+- GitHub release link on the About/Changelog page now opens in a new tab (`target="_blank"`) so it escapes the HA ingress frame; without this, GitHub's `X-Frame-Options` policy caused a browser error instead of the page loading
+
 ## [1.2.1] - 2026-06-16
 
 ### Highlights
