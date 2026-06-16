@@ -1,3 +1,4 @@
+using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Constants;
 using Quotinator.Core.Data;
 
@@ -10,7 +11,8 @@ internal static class AdminEndpoints
     {
         var group = app.MapGroup("/api/v1/admin")
                        .WithTags(ApiTags.Admin)
-                       .RequireRateLimiting(RateLimitPolicies.Admin);
+                       .RequireRateLimiting(RateLimitPolicies.Admin)
+                       .AddEndpointFilter<AdminApiKeyFilter>();
 
         group.MapPost("/database/reseed", async (IDatabaseInitializer db) =>
         {
@@ -29,7 +31,8 @@ internal static class AdminEndpoints
             "Clears all data tables and reimports every quote from the bundled `quotes.json`. " +
             "The schema version history is preserved — no migrations are re-applied. " +
             "Returns the row counts after the operation completes. " +
-            "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately.");
+            "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
+            "Requires `Authorization: Bearer <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
         group.MapPost("/database/reset", async (IDatabaseInitializer db) =>
         {
@@ -49,6 +52,7 @@ internal static class AdminEndpoints
             "then reimports every quote from the bundled `quotes.json`. " +
             "Equivalent to deleting the database file and restarting. " +
             "Returns the row counts after the operation completes. " +
-            "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately.");
+            "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
+            "Requires `Authorization: Bearer <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
     }
 }

@@ -24,5 +24,11 @@ configuration:
     description: >-
       Dateiname des privaten Schlüssels, relativ zu /ssl/.
       Das Let's Encrypt Add-on schreibt privkey.pem automatisch.
+  admin_api_key:
+    name: Admin-API-Schlüssel
+    description: >-
+      Geheimer Schlüssel, der zum Aufrufen der destruktiven Admin-Endpunkte (Reseed, Reset) erforderlich ist.
+      Clients müssen Authorization: Bearer <Schlüssel> senden.
+      Leer lassen, um die Admin-Endpunkte vollständig zu deaktivieren.
 network:
   8080/tcp: Direkter Webzugriff — HTTP (SSL deaktiviert) oder HTTPS (SSL aktiviert)

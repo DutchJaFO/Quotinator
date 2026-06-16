@@ -24,5 +24,11 @@ configuration:
     description: >-
       Private key filename, relative to /ssl/.
       The Let's Encrypt add-on writes privkey.pem automatically.
+  admin_api_key:
+    name: Admin API key
+    description: >-
+      Secret key required to call the destructive admin endpoints (reseed, reset).
+      Clients must supply Authorization: Bearer <key>.
+      Leave empty to disable the admin endpoints entirely.
 network:
   8080/tcp: Direct web access — HTTP (ssl disabled) or HTTPS (ssl enabled)

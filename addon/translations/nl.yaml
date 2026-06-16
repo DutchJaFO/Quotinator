@@ -24,5 +24,11 @@ configuration:
     description: >-
       Bestandsnaam van de privésleutel, relatief aan /ssl/.
       De Let's Encrypt add-on schrijft privkey.pem automatisch.
+  admin_api_key:
+    name: Admin API-sleutel
+    description: >-
+      Geheime sleutel vereist om de destructieve admin-eindpunten (reseed, reset) aan te roepen.
+      Clients moeten Authorization: Bearer <sleutel> meesturen.
+      Laat leeg om de admin-eindpunten volledig uit te schakelen.
 network:
   8080/tcp: Directe webtoegang — HTTP (SSL uitgeschakeld) of HTTPS (SSL ingeschakeld)

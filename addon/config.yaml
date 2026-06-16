@@ -30,6 +30,7 @@ schema:
   ssl: bool
   certfile: str
   keyfile: str
+  admin_api_key: str?
 
 # Map add-on options and HA paths to environment variables consumed by ASP.NET Core.
 # Quotinator__DataPath points to the supervisor-mounted persistent volume (/data), not the
@@ -48,6 +49,8 @@ env_vars:
     value: "/ssl/{{ keyfile }}"
   - name: Quotinator__DataPath
     value: "/data/quotes.json"
+  - name: Quotinator__AdminApiKey
+    value: "{{ admin_api_key }}"
 
 # Direct access port — disabled by default; enable for MagicMirror, curl, or other
 # tools that need to reach the API outside of HA ingress.
