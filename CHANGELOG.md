@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.2.0] - 2026-06-16
+
+### Highlights
+- Admin endpoints (reseed, reset) are now protected by an API key — they return 401 by default and only accept requests with the correct `Authorization: Bearer <key>` header
+
+### Added
+- `AdminApiKeyFilter` endpoint filter guards `POST /api/v1/admin/database/reseed` and `POST /api/v1/admin/database/reset` with a static API key
+- `Quotinator:AdminApiKey` config key (env var `Quotinator__AdminApiKey`) — must be set explicitly to enable the endpoints; no bundled default
+- Key comparison uses `CryptographicOperations.FixedTimeEquals` to prevent timing attacks
+- HA add-on: optional `admin_api_key` config option with translations in English, Dutch, and German
+
 ## [1.1.0] - 2026-06-15
 
 ### Highlights

@@ -4,6 +4,11 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.2.0] - 2026-06-16
+
+- Admin endpoints (reseed, reset) now require `Authorization: Bearer <key>` — they return 401 by default until `admin_api_key` is set in the add-on configuration
+- New `admin_api_key` option in the add-on configuration panel
+
 ## [1.1.0] - 2026-06-15
 
 - Filter quotes by multiple genres or types at once (e.g. sci-fi comedies) using repeatable query parameters on `/random`, `/search`, and the paginated list
