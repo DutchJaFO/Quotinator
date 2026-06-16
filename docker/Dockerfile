@@ -15,6 +15,7 @@ COPY src/Quotinator.Data/ src/Quotinator.Data/
 COPY src/Quotinator.Core/ src/Quotinator.Core/
 COPY src/Quotinator.Api/ src/Quotinator.Api/
 COPY data/ data/
+COPY CHANGELOG.md .
 # Note: --no-restore is intentionally absent. The Blazor static web assets pipeline
 # (which produces _framework/blazor.web.js) needs .razor files present when the
 # assets manifest is generated. The restore-only layer above runs without source files,
