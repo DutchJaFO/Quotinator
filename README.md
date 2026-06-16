@@ -137,6 +137,17 @@ docker run -d \
 
 A `docker-compose.yml` example is included in the `docker/` directory.
 
+### Data directory
+
+The volume at `/app/data` contains everything Quotinator persists across restarts:
+
+| Path | Purpose | Safe to delete? |
+|---|---|---|
+| `quotes.json` | Quote dataset — seed source and custom additions | Only if you want to reset to bundled data |
+| `quotinatordata.db` | SQLite database — the live data store | **No** — this is your data |
+| `backups/` | Pre-migration database snapshots, named `quotinatordata_v{N}_{timestamp}Z.db` | Yes — old backups can be pruned freely |
+| `keys/` | ASP.NET Core Data Protection keys — used to sign antiforgery tokens and Blazor session descriptors | **No** — deleting this invalidates all active browser sessions; the app recovers on restart but users will need to reload |
+
 > **Note:** Authentication is not yet implemented. The API is read-only and requires no credentials.
 
 ### HTTPS / SSL

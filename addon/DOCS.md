@@ -95,7 +95,16 @@ ports:
 
 ## Data
 
-Quotes are stored in `/data/quotes.json` inside the add-on data directory. This directory persists across add-on updates and restarts. You can replace the file with a custom dataset — the format is documented at `https://github.com/DutchJaFO/Quotinator`.
+The add-on data directory (`/data`) persists across updates and restarts. It contains:
+
+| Path | Purpose | Safe to delete? |
+|---|---|---|
+| `quotes.json` | Quote dataset — seed source and custom additions | Only if you want to reset to bundled data |
+| `quotinatordata.db` | SQLite database — the live data store | **No** — this is your data |
+| `backups/` | Pre-migration database snapshots, named `quotinatordata_v{N}_{timestamp}Z.db` | Yes — old backups can be pruned freely |
+| `keys/` | ASP.NET Core Data Protection keys — used to sign antiforgery tokens and Blazor session descriptors | **No** — deleting this invalidates all active browser sessions; the add-on recovers on restart but users will need to reload |
+
+You can replace `quotes.json` with a custom dataset — the format is documented at `https://github.com/DutchJaFO/Quotinator`.
 
 ## Access
 
