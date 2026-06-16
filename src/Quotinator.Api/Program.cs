@@ -154,7 +154,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
 builder.Services.AddSingleton<IChangelogService, ChangelogService>();
 
-var dbPath = Path.Combine(dataDir, "quotes.db");
+var dbPath = Path.Combine(dataDir, "quotinatordata.db");
 var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddSingleton<IDatabaseInitializer>(sp => new DatabaseInitializer(
@@ -212,14 +212,16 @@ var banner = new System.Text.StringBuilder()
     .AppendLine("############################################")
     .AppendLine($"Quotinator v{versionService.Version} starting")
     .AppendLine($"Data:  {dataPath}")
-    .AppendLine($"DB:    schema v{dbInitializer.SchemaVersion} — {dbInitializer.QuoteCount} quotes  {dbInitializer.SourceCount} sources  {dbInitializer.CharacterCount} characters  {dbInitializer.PeopleCount} people")
+    .AppendLine($"DB:    {dbPath}")
+    .AppendLine($"       schema v{dbInitializer.SchemaVersion} — {dbInitializer.QuoteCount} quotes  {dbInitializer.SourceCount} sources  {dbInitializer.CharacterCount} characters  {dbInitializer.PeopleCount} people")
     .AppendLine($"Keys:  {keysDir}")
     .Append($"Cfg:   log_level={haLogLevel}  log_requests={(logRequests ? "on" : "off")}  ssl={( sslEnabled ? "on" : "off")}");
 if (sslEnabled)
     banner.AppendLine().Append($"SSL:   {sslCertFile}  /  {sslKeyFile}");
 banner.AppendLine().Append("############################################");
 
-logger.LogInformation("{Banner}", banner);
+Console.WriteLine();
+Console.WriteLine(banner);
 
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 lifetime.ApplicationStopping.Register(() =>
