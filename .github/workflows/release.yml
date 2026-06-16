@@ -95,8 +95,9 @@ jobs:
 
       - name: Verify image is pullable (amd64 + arm64)
         run: |
-          docker pull --platform linux/amd64 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-          docker pull --platform linux/arm64 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}" | tr '[:upper:]' '[:lower:]')
+          docker pull --platform linux/amd64 "$IMAGE"
+          docker pull --platform linux/arm64 "$IMAGE"
 
       - name: Extract release notes from CHANGELOG.md
         id: changelog
