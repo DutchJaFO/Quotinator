@@ -30,5 +30,10 @@ configuration:
       Geheime sleutel vereist om de destructieve admin-eindpunten (reseed, reset) aan te roepen.
       Clients moeten Authorization: Bearer <sleutel> meesturen.
       Laat leeg om de admin-eindpunten volledig uit te schakelen.
+  backup_path:
+    name: Back-upmap
+    description: >-
+      Map waar back-ups van de database vóór migraties worden opgeslagen.
+      Laat leeg voor de standaardwaarde: een backups/-submap in de gegevensmap.
 network:
   8080/tcp: Directe webtoegang — HTTP (SSL uitgeschakeld) of HTTPS (SSL ingeschakeld)

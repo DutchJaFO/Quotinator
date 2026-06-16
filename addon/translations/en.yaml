@@ -30,5 +30,10 @@ configuration:
       Secret key required to call the destructive admin endpoints (reseed, reset).
       Clients must supply Authorization: Bearer <key>.
       Leave empty to disable the admin endpoints entirely.
+  backup_path:
+    name: Backup folder
+    description: >-
+      Directory where pre-migration database backups are stored.
+      Leave empty to use the default: a backups/ subfolder inside the data directory.
 network:
   8080/tcp: Direct web access — HTTP (ssl disabled) or HTTPS (ssl enabled)

@@ -30,5 +30,10 @@ configuration:
       Geheimer Schlüssel, der zum Aufrufen der destruktiven Admin-Endpunkte (Reseed, Reset) erforderlich ist.
       Clients müssen Authorization: Bearer <Schlüssel> senden.
       Leer lassen, um die Admin-Endpunkte vollständig zu deaktivieren.
+  backup_path:
+    name: Sicherungsordner
+    description: >-
+      Verzeichnis, in dem Datenbanksicherungen vor Migrationen gespeichert werden.
+      Leer lassen für den Standardwert: ein backups/-Unterordner im Datenverzeichnis.
 network:
   8080/tcp: Direkter Webzugriff — HTTP (SSL deaktiviert) oder HTTPS (SSL aktiviert)
