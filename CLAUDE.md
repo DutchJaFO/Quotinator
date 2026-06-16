@@ -456,6 +456,8 @@ Workflow:
    git push origin v1.0.x
    ```
 
+> **Cloud/mobile Claude Code cannot push tags.** The Claude Code cloud and mobile environments receive a `403` when attempting `git push origin <tag>`. Tag pushes must always be done from a local terminal. This is a known platform limitation — do not attempt workarounds or assume the push failed for another reason.
+
 ---
 
 ## Issue and improvement tracking
