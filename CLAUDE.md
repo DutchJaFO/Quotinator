@@ -210,7 +210,9 @@ SSL cert paths come from `Quotinator:SslCertFile` and `Quotinator:SslKeyFile`, s
 
 **HA ingress base path (`X-Ingress-Path`)** — the HA supervisor proxies the add-on under a path prefix (e.g. `/api/hassio_ingress/TOKEN/`) and sets the `X-Ingress-Path` request header to that prefix. A custom middleware in `Program.cs` reads this header and applies it as `context.Request.PathBase`. `App.razor`'s `<base href>` is derived from `PathBase` at render time so all relative asset URLs (CSS, `blazor.web.js`, component JS) resolve correctly through the ingress proxy. Without this, all assets resolve against HA's own server root and the Blazor circuit never connects. This middleware runs immediately after `UseForwardedHeaders()`.
 
-**Links in Blazor pages must NOT use `target="_blank"`.** The HA companion app (iOS/Android) forwards `target="_blank"` links to the system browser, which has no HA session cookie. HA then blocks the ingress URL before it reaches Quotinator, producing a 404. All internal navigation (including the OpenAPI UI and spec links in `Home.razor`) must use plain `<a href="…">` without `target="_blank"` so navigation stays within the companion app's webview where the session is active. This restriction applies to all links whose destination goes through the HA ingress.
+**Links in Blazor pages: `target="_blank"` rules differ by destination.** The HA companion app (iOS/Android) forwards `target="_blank"` links to the system browser, which has no HA session cookie. HA then blocks the ingress URL before it reaches Quotinator, producing a 404. Therefore:
+- **Internal / HA ingress links** (anything routed through the HA supervisor, including the OpenAPI UI and spec links): must use plain `<a href="…">` without `target="_blank"`.
+- **External links** (GitHub, external docs, etc.): must use `target="_blank" rel="noopener noreferrer"`. Without it, the external site loads inside the HA ingress frame and browsers block it via X-Frame-Options, showing an error instead of the page.
 
 ### MCP (v3)
 Expose at `/mcp` using the official MCP .NET SDK when available. Do not implement in v1.
