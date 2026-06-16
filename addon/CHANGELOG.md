@@ -4,6 +4,15 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.2.1] - 2026-06-16
+
+- Database file renamed from `quotes.db` to `quotinatordata.db` — the old file is renamed automatically on first startup after upgrade, no data loss
+- A backup of the database is created before any schema migration and stored in the `backups/` subfolder of the data directory; old backups are safe to delete
+- New optional `backup_path` config option to store backups in a custom location
+- DataProtection keys folder renamed from `.keys` to `keys`
+- Container log output now uses single-line format — easier to read in the HA log panel
+- Startup banner shows all data paths at a glance
+
 ## [1.2.0] - 2026-06-16
 
 - Admin endpoints (reseed, reset) now require `Authorization: Bearer <key>` — they return 401 by default until `admin_api_key` is set in the add-on configuration

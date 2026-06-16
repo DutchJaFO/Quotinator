@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.2.1] - 2026-06-16
+
+### Highlights
+- The database file is now named `quotinatordata.db` — on first startup after upgrading, the old `quotes.db` is renamed automatically with no data loss
+- A backup of the database is created automatically before any schema migration
+- Container log output is now single-line and easier to read; the startup banner shows all data paths at a glance
+
+### Added
+- Pre-migration database backup using the SQLite backup API — written to `{dataDir}/backups/quotinatordata_v{N}_{timestamp}Z.db` before any schema version bump; old backups are safe to delete
+- Configurable backup directory via `Quotinator:BackupPath` env var (defaults to `{dataDir}/backups`)
+- HA add-on: optional `backup_path` config option with translations in English, Dutch, and German
+- `DataPaths` constants class (`Quotinator.Core.Data`) for all file and folder names in the data directory — named and documented so future changes stay in one place
+- Data directory structure documented in `README.md` and `addon/DOCS.md` with safe-to-delete guidance for each folder
+
+### Changed
+- Database file renamed from `quotes.db` to `quotinatordata.db`; the legacy file (including WAL and SHM journal files) is renamed automatically on first startup after upgrade
+- DataProtection keys folder renamed from `.keys` to `keys` — visible name is easier to discover and document
+- Console log formatter switched from `simple` (two lines per entry) to `systemd` (single line per entry) for cleaner container log output
+- Startup banner rewritten with full readable labels (`Database:`, `Backups:`, `DataProtection:`, `Config:`) aligned to a single column; no abbreviations
+
 ## [1.2.0] - 2026-06-16
 
 ### Highlights
