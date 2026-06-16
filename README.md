@@ -24,12 +24,18 @@ A self-hosted quote REST API with MCP support, built in C# / ASP.NET Core, deplo
 Quotinator/
 ├── src/
 │   ├── Quotinator.Api/          # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
-│   ├── Quotinator.Core/         # Models, interfaces, service implementations
+│   ├── Quotinator.Core/         # Models, interfaces, service implementations, SQLite services
+│   ├── Quotinator.Data/         # SQLite infrastructure — connection factory, type handlers, base types
 │   └── Quotinator.Constants/    # Route strings, tag names, error message keys (no dependencies)
+├── tests/
+│   ├── Quotinator.Core.Tests/   # Unit tests for core logic and input validation
+│   └── Quotinator.Api.Tests/    # Endpoint integration tests (WebApplicationFactory)
+├── addon/                       # Home Assistant add-on manifest, config, and translations
 ├── data/
 │   └── quotes.json              # Quote dataset (seed data + additions)
 ├── docker/
-│   └── Dockerfile
+│   ├── Dockerfile
+│   └── docker-compose.yml
 ├── scripts/
 │   └── seed.csx                 # Seed/merge/dedup script
 ├── SOURCES.md                   # Attribution for seed data sources
@@ -46,10 +52,10 @@ Quotinator/
 | Language | C# (.NET 10) |
 | API | ASP.NET Core Minimal API |
 | Frontend | Blazor Server |
-| Data | JSON flat-file (SQLite planned) |
-| Protocol | REST + MCP (Model Context Protocol) |
+| Data | SQLite (Dapper — no EF Core) |
+| Protocol | REST (MCP planned) |
 | Container | Docker (linux/amd64 + linux/arm64) |
-| Auth | Not yet implemented — API is read-only |
+| Auth | API key required for admin endpoints; quote endpoints are public |
 
 ---
 
