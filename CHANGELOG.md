@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.3.0] - 2026-06-17
 
 ### Highlights
 - Quotes are now loaded from multiple source files in `data/sources/` — bundled datasets and optional user imports in `{dataDir}/imports/`
