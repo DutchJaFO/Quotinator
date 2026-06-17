@@ -4,6 +4,12 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+- Quote data now loaded from multiple source files in `data/sources/` — one file per bundled dataset, plus optional user imports in the `imports/` subfolder of the data directory
+- New `GET /api/v1/admin/database/seed/preview` endpoint shows what would be imported without writing to the database (requires `admin_api_key`)
+- `Quotinator__DataDir` env var replaces `Quotinator__DataPath` — set to the data directory, not a file path
+
 ## [1.2.2] - 2026-06-16
 
 - Fixed: the GitHub changelog link in the add-on UI opened inside the HA frame and was blocked — it now opens in a new tab correctly

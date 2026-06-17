@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [Unreleased]
+
+### Highlights
+- Quotes are now loaded from multiple source files in `data/sources/` — bundled datasets and optional user imports in `{dataDir}/imports/`
+- New `GET /api/v1/admin/database/seed/preview` endpoint shows what would be imported without writing to the database
+- `Quotinator__DataDir` env var replaces `Quotinator__DataPath` — set to the data directory, not a file path
+
+### Added
+- `data/sources/` folder with one JSON file per dataset and a `manifest.json` controlling import order and duplicate-resolution policy
+- `data/sources/quotinator-curated.json` — manually curated and verified quotes (Airplane! to start)
+- Optional user imports: place `.json` files in `{dataDir}/imports/` to seed additional quotes on startup
+- Duplicate-resolution policy per batch: `skip` (default) or `overwrite`; configurable in `manifest.json` or via `Quotinator:DuplicateResolution:*` env vars
+- `GET /api/v1/admin/database/seed/preview` — dry-run scan returning file counts, quote counts, and cross-file duplicates (requires `AdminApiKey`)
+- Reseed and reset responses now include a `duplicates` count
+- Six JSON schemas in `schemas/` covering all source file formats and the manifest
+
+### Changed
+- `Quotinator__DataDir` env var replaces `Quotinator__DataPath` — value is the data directory, not a file path
+
+### Fixed
+- Seeder FK constraint failure on first startup caused by a Guid case mismatch between Dapper.Contrib (UPPERCASE) and raw SQL parameters (lowercase); SQLite text comparison is case-sensitive
+
+---
+
 ## [1.2.2] - 2026-06-16
 
 ### Highlights
