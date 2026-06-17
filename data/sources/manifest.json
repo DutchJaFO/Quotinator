@@ -1,5 +1,8 @@
 {
   "$schema": "../../schemas/manifest.schema.json",
+  "duplicateResolution": {
+    "default": "skip"
+  },
   "files": [
     {
       "file": "quotinator-curated.json",

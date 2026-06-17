@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Threading.RateLimiting;
@@ -84,29 +85,145 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-// Data path — configurable so the HA add-on can point this at /data (the supervisor's
+// Data directory — configurable so the HA add-on can point this at /data (the supervisor's
 // persistent volume) while standalone Docker keeps the default /app/data.
-// The HA supervisor sets Quotinator__DataPath via config.yaml env_vars. When that env var
+// The HA supervisor sets Quotinator__DataDir via config.yaml env_vars. When that env var
 // is absent (e.g. HA caches an older config), fall back to /data if it is already a mounted
-// volume (writable directory owned by the HA supervisor), so DataProtection keys are always
-// on a persistent volume rather than the ephemeral container filesystem.
-static string? HaFallbackPath()
+// volume (writable directory owned by the HA supervisor), so the database and DataProtection
+// keys are always on a persistent volume rather than the ephemeral container filesystem.
+static string? HaFallbackDir()
 {
     const string haData = "/data";
-    try { return Directory.Exists(haData) ? Path.Combine(haData, DataPaths.SeedFile) : null; }
+    try { return Directory.Exists(haData) ? haData : null; }
     catch { return null; }
 }
-var dataPath = builder.Configuration["Quotinator:DataPath"]
-    ?? HaFallbackPath()
-    ?? Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SeedFile);
-var dataDir = Path.GetDirectoryName(dataPath) ?? Path.Combine(AppContext.BaseDirectory, "data");
+var dataDir = builder.Configuration["Quotinator:DataDir"]
+    ?? HaFallbackDir()
+    ?? Path.Combine(AppContext.BaseDirectory, "data");
 Directory.CreateDirectory(dataDir);
 
-// First-run seed: if the configured data path doesn't exist yet (e.g. a fresh HA add-on
-// data volume) copy the bundled quotes.json from the image into the persistent directory.
-var bundledData = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SeedFile);
-if (!File.Exists(dataPath) && File.Exists(bundledData))
-    File.Copy(bundledData, dataPath);
+// Duplicate-resolution policy from config — lowest-priority tier; a manifest's own
+// duplicateResolution section overrides this when present.
+static DuplicateResolutionPolicy ParseResolutionPolicy(string? value) =>
+    value?.ToLowerInvariant() == "overwrite"
+        ? DuplicateResolutionPolicy.Overwrite
+        : DuplicateResolutionPolicy.Skip;
+
+static DuplicateResolutionPolicy? ParseNullableResolutionPolicy(string? value) =>
+    value?.ToLowerInvariant() switch
+    {
+        "overwrite" => DuplicateResolutionPolicy.Overwrite,
+        "skip"      => DuplicateResolutionPolicy.Skip,
+        _           => null
+    };
+
+var configPolicy = new ManifestPolicy(
+    Default:      ParseResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Default"]),
+    Quotes:       ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Quotes"]),
+    Sources:      ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Sources"]),
+    Characters:   ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Characters"]),
+    People:       ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:People"]),
+    Translations: ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Translations"]));
+
+// Bundled sources are always read from the Docker image (AppContext.BaseDirectory/data/sources/).
+// No file copy to the persistent volume is needed — only the database and DataProtection keys
+// need to be on a writable, persistent path.
+var bundledSourcesDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SourcesFolder);
+
+// User imports: optional directory in the data volume. Create it so users can drop files in.
+var importsDir = Path.Combine(dataDir, DataPaths.ImportsFolder);
+
+static IReadOnlyList<SeedBatch> BuildSeedBatches(
+    string bundledDir, string importsDir, ManifestPolicy configPolicy, ILogger<Program> log)
+{
+    var batches = new List<SeedBatch>();
+
+    if (Directory.Exists(bundledDir))
+    {
+        var (files, policy) = OrderedByManifest(bundledDir, configPolicy, log);
+        if (files.Count > 0)
+            batches.Add(new SeedBatch(files, policy, "bundled sources"));
+    }
+    else
+    {
+        log.LogWarning("Database: bundled sources directory not found at {Dir} — database will be empty on first run", bundledDir);
+    }
+
+    if (Directory.Exists(importsDir))
+    {
+        var (files, policy) = OrderedByManifest(importsDir, configPolicy, log);
+        if (files.Count > 0)
+            batches.Add(new SeedBatch(files, policy, "user imports"));
+    }
+
+    return batches;
+}
+
+static (IReadOnlyList<string> Files, ManifestPolicy Policy) OrderedByManifest(
+    string dir, ManifestPolicy configPolicy, ILogger<Program> log)
+{
+    var allJson = Directory.GetFiles(dir, "*.json")
+                           .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
+                           .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                           .ToList();
+
+    var manifestPath = Path.Combine(dir, "manifest.json");
+    if (!File.Exists(manifestPath))
+    {
+        log.LogInformation("Database: no manifest in {Dir} — importing {Count} JSON file(s) in alphabetical order", dir, allJson.Count);
+        return (allJson, configPolicy);
+    }
+
+    try
+    {
+        var root              = JsonNode.Parse(File.ReadAllText(manifestPath));
+        var manifestPolicyNode = root?["duplicateResolution"];
+        var fromManifest      = manifestPolicyNode is null ? null : ParseManifestPolicyNode(manifestPolicyNode);
+        var resolvedPolicy    = ManifestPolicy.Resolve(fromManifest, configPolicy);
+
+        var listed = (root?["files"]?.AsArray() ?? [])
+            .Select(e => Path.Combine(dir, e!["file"]!.GetValue<string>()))
+            .Where(File.Exists)
+            .ToList();
+
+        var listedSet = new HashSet<string>(listed, StringComparer.OrdinalIgnoreCase);
+        var unlisted  = allJson.Where(f => !listedSet.Contains(f)).ToList();
+        if (unlisted.Count > 0)
+            log.LogInformation("Database: {Count} file(s) not listed in manifest will be appended: {Files}",
+                unlisted.Count, string.Join(", ", unlisted.Select(Path.GetFileName)));
+
+        return ([.. listed, .. unlisted], resolvedPolicy);
+    }
+    catch (Exception ex)
+    {
+        log.LogWarning(ex, "Database: failed to read manifest at {Path} — falling back to alphabetical order", manifestPath);
+        return (allJson, configPolicy);
+    }
+}
+
+static ManifestPolicy ParseManifestPolicyNode(JsonNode node)
+{
+    static DuplicateResolutionPolicy ParsePol(JsonNode? n) =>
+        n?.GetValue<string>().ToLowerInvariant() == "overwrite"
+            ? DuplicateResolutionPolicy.Overwrite
+            : DuplicateResolutionPolicy.Skip;
+
+    static DuplicateResolutionPolicy? ParseNullPol(JsonNode? n) =>
+        n?.GetValue<string>().ToLowerInvariant() switch
+        {
+            "overwrite" => DuplicateResolutionPolicy.Overwrite,
+            "skip"      => DuplicateResolutionPolicy.Skip,
+            _           => null
+        };
+
+    return new ManifestPolicy(
+        Default:      ParsePol(node["default"]),
+        Quotes:       ParseNullPol(node["quotes"]),
+        Sources:      ParseNullPol(node["sources"]),
+        Characters:   ParseNullPol(node["characters"]),
+        People:       ParseNullPol(node["people"]),
+        Translations: ParseNullPol(node["translations"]));
+}
 
 // Persist DataProtection keys to a subdirectory of the data volume so antiforgery tokens
 // and Blazor circuit descriptors survive container restarts and add-on updates.
@@ -160,8 +277,14 @@ var backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0
     : Path.Combine(dataDir, DataPaths.BackupsFolder);
 var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
+
+// Resolve seed batches before building the host — uses the early logger factory so errors
+// surface before the DI container starts up. Batches are captured into the lambda closure.
+var earlyLoggerFactory = LoggerFactory.Create(b => b.AddConsole());
+var earlyLogger        = earlyLoggerFactory.CreateLogger<Program>();
+var seedBatches        = BuildSeedBatches(bundledSourcesDir, importsDir, configPolicy, earlyLogger);
 builder.Services.AddSingleton<IDatabaseInitializer>(sp => new DatabaseInitializer(
-    connectionFactory, dbPath, backupsDir, dataPath, sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
+    connectionFactory, dbPath, backupsDir, seedBatches, sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
 builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
@@ -214,7 +337,7 @@ var logRequests = app.Configuration.GetValue<bool>("Quotinator:LogRequests");
 var banner = new System.Text.StringBuilder()
     .AppendLine("############################################")
     .AppendLine($"Quotinator v{versionService.Version} starting")
-    .AppendLine($"Data:           {dataPath}")
+    .AppendLine($"Data:           {dataDir}")
     .AppendLine($"Database:       {dbPath}")
     .AppendLine($"                schema v{dbInitializer.SchemaVersion} — {dbInitializer.QuoteCount} quotes  {dbInitializer.SourceCount} sources  {dbInitializer.CharacterCount} characters  {dbInitializer.PeopleCount} people")
     .AppendLine($"Backups:        {backupsDir}")

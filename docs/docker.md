@@ -132,7 +132,7 @@ See [`home-assistant.md`](home-assistant.md) for the Home Assistant add-on deplo
 |---|---|---|
 | `ASPNETCORE_ENVIRONMENT` | `Production` | Controls environment name shown in `/api/v1/version` |
 | `ASPNETCORE_HTTP_PORTS` | _(empty)_ | Cleared in the Dockerfile — port binding is owned by Kestrel configuration in `Program.cs` |
-| `Quotinator__DataPath` | `/app/data/quotes.json` | Path to the quote dataset |
+| `Quotinator__DataDir` | `/app/data` | Directory for the database, DataProtection keys, and optional user imports |
 | `Quotinator__Ssl` | `false` | Enable HTTPS on port 8080 |
 | `Quotinator__SslCertFile` | _(empty)_ | Path to PEM certificate file |
 | `Quotinator__SslKeyFile` | _(empty)_ | Path to PEM private key file |

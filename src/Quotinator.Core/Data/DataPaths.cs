@@ -3,8 +3,11 @@ namespace Quotinator.Core.Data;
 /// <summary>File and folder names used within the Quotinator data directory.</summary>
 public static class DataPaths
 {
-    /// <summary>Default quote dataset file (seed source and custom additions).</summary>
-    public const string SeedFile = "quotes.json";
+    /// <summary>Subdirectory containing one JSON file per bundled quote dataset plus a <c>manifest.json</c>.</summary>
+    public const string SourcesFolder = "sources";
+
+    /// <summary>Subdirectory for user-supplied import files. Optional — omitted in the default install.</summary>
+    public const string ImportsFolder = "imports";
 
     /// <summary>SQLite database file.</summary>
     public const string DatabaseFile = "quotinatordata.db";
