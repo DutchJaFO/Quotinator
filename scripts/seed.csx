@@ -2,13 +2,14 @@
 #nullable enable
 // Quotinator seed script
 // Reads sources.json, downloads each source, normalises to the canonical schema,
-// deduplicates, and writes data/quotes.json.
+// and writes one data/sources/{name}.json file per source.
+// Writes data/sources/manifest.json only if it does not already exist.
 //
 // Usage:
 //   dotnet-script scripts/seed.csx
 //
 // Options:
-//   --dry-run    Print stats without writing data/quotes.json
+//   --dry-run    Print what would be written without creating any files
 //   --no-fetch   Use cached files in scripts/cache/ instead of downloading
 //
 // Adding a new source: see scripts/SOURCES.md
@@ -25,16 +26,17 @@ using System.Text.RegularExpressions;
 
 // ── CLI flags ─────────────────────────────────────────────────────────────────
 
-var dryRun   = Args.Contains("--dry-run");
-var noFetch  = Args.Contains("--no-fetch");
+var dryRun  = Args.Contains("--dry-run");
+var noFetch = Args.Contains("--no-fetch");
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
 // Run from the repo root: dotnet-script scripts/seed.csx
-var repoRoot    = Directory.GetCurrentDirectory();
-var sourcesJson = Path.Combine(repoRoot, "scripts", "sources.json");
-var cacheDir    = Path.Combine(repoRoot, "scripts", "cache");
-var outputPath  = Path.Combine(repoRoot, "data", "quotes.json");
+var repoRoot     = Directory.GetCurrentDirectory();
+var sourcesJson  = Path.Combine(repoRoot, "scripts", "sources.json");
+var cacheDir     = Path.Combine(repoRoot, "scripts", "cache");
+var outputDir    = Path.Combine(repoRoot, "data", "sources");
+var manifestPath = Path.Combine(outputDir, "manifest.json");
 
 Directory.CreateDirectory(cacheDir);
 
@@ -107,10 +109,10 @@ static List<(string Quote, string Source, string? Date, string Type)>
     ParseObjectArray(JsonNode root, JsonNode fieldMap, string defaultType)
 {
     var results = new List<(string, string, string?, string)>();
-    var qField = fieldMap["quote"]?.GetValue<string>()  ?? "quote";
-    var sField = fieldMap["source"]?.GetValue<string>() ?? "source";
-    var tField = fieldMap["type"]?.GetValue<string>()   ?? "type";
-    var yField = fieldMap["year"]?.GetValue<string>()   ?? "year";
+    var qField  = fieldMap["quote"]?.GetValue<string>()  ?? "quote";
+    var sField  = fieldMap["source"]?.GetValue<string>() ?? "source";
+    var tField  = fieldMap["type"]?.GetValue<string>()   ?? "type";
+    var yField  = fieldMap["year"]?.GetValue<string>()   ?? "year";
 
     foreach (var item in root.AsArray())
     {
@@ -128,10 +130,16 @@ static List<(string Quote, string Source, string? Date, string Type)>
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-var allQuotes = new List<(string Quote, string Source, string? Date, string Type)>();
+var opts = new JsonSerializerOptions
+{
+    WriteIndented = true,
+    DefaultIgnoreCondition = JsonIgnoreCondition.Never
+};
 
 var http = new HttpClient();
 http.DefaultRequestHeaders.Add("User-Agent", "Quotinator-seed/1.0");
+
+var manifestEntries = new List<object>();
 
 foreach (var src in sources)
 {
@@ -139,7 +147,9 @@ foreach (var src in sources)
     var url         = src["url"]!.GetValue<string>();
     var format      = src["format"]!.GetValue<string>();
     var defaultType = src["defaultType"]?.GetValue<string>() ?? "movie";
-    var cacheFile   = Path.Combine(cacheDir, $"{name.Replace("/", "_")}.json");
+    var outputFile  = $"{name.Replace("/", "_")}.json";
+    var outputPath  = Path.Combine(outputDir, outputFile);
+    var cacheFile   = Path.Combine(cacheDir, outputFile);
 
     Console.WriteLine($"\n[{name}]");
 
@@ -157,7 +167,7 @@ foreach (var src in sources)
         Console.WriteLine("done");
     }
 
-    var root = JsonNode.Parse(json)!;
+    var root   = JsonNode.Parse(json)!;
     var parsed = format switch
     {
         "quoted-string" => ParseQuotedString(root, defaultType),
@@ -165,54 +175,54 @@ foreach (var src in sources)
         _               => throw new InvalidOperationException($"Unknown format: {format}")
     };
 
-    Console.WriteLine($"  parsed {parsed.Count} quotes");
-    allQuotes.AddRange(parsed);
+    Console.WriteLine($"  parsed:  {parsed.Count} quotes");
+    Console.WriteLine($"  output:  {outputPath}");
+
+    if (!dryRun)
+    {
+        Directory.CreateDirectory(outputDir);
+
+        var output = parsed.Select(q => new Dictionary<string, object?>
+        {
+            ["id"]               = StableId(q.Quote, q.Source),
+            ["quote"]            = q.Quote,
+            ["originalLanguage"] = "en",
+            ["source"]           = q.Source,
+            ["date"]             = q.Date,
+            ["character"]        = (object?)null,
+            ["author"]           = null,
+            ["type"]             = q.Type,
+            ["genres"]           = Array.Empty<string>(),
+            ["translations"]     = new Dictionary<string, object>()
+        }).ToList();
+
+        File.WriteAllText(outputPath, JsonSerializer.Serialize(output, opts));
+        Console.WriteLine($"  wrote:   {output.Count} quotes");
+    }
+
+    manifestEntries.Add(new { file = outputFile, name });
 }
 
 http.Dispose();
 
-// ── Merge and dedup ───────────────────────────────────────────────────────────
+// ── Manifest ──────────────────────────────────────────────────────────────────
 
-Console.WriteLine($"\n[merge]");
-Console.WriteLine($"  total before dedup: {allQuotes.Count}");
+Console.WriteLine($"\n[manifest]");
 
-var seen   = new HashSet<string>();
-var merged = new List<(string Quote, string Source, string? Date, string Type)>();
-
-foreach (var q in allQuotes)
+if (File.Exists(manifestPath))
 {
-    if (seen.Add(Normalise(q.Quote)))
-        merged.Add(q);
-}
-
-Console.WriteLine($"  duplicates removed: {allQuotes.Count - merged.Count}");
-Console.WriteLine($"  unique quotes:      {merged.Count}");
-
-// ── Output ────────────────────────────────────────────────────────────────────
-
-if (dryRun)
-{
-    Console.WriteLine("\n[dry-run] skipping write.");
+    Console.WriteLine($"  exists, skipping: {manifestPath}");
 }
 else
 {
-    var output = merged.Select(q => new Dictionary<string, object?>
+    Console.WriteLine($"  output: {manifestPath}");
+    if (!dryRun)
     {
-        ["id"]               = StableId(q.Quote, q.Source),
-        ["quote"]            = q.Quote,
-        ["originalLanguage"] = "en",
-        ["source"]           = q.Source,
-        ["date"]             = q.Date,
-        ["character"]        = null,
-        ["author"]           = null,
-        ["type"]             = q.Type,
-        ["genres"]           = Array.Empty<string>(),
-        ["translations"]     = new Dictionary<string, object>()
-    }).ToList();
-
-    Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-    var opts = new JsonSerializerOptions { WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.Never };
-    File.WriteAllText(outputPath, JsonSerializer.Serialize(output, opts));
-    Console.WriteLine($"\n[output]  wrote {output.Count} quotes → {outputPath}");
+        Directory.CreateDirectory(outputDir);
+        var manifest = new { files = manifestEntries };
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, opts));
+        Console.WriteLine("  wrote.");
+    }
 }
+
+Console.WriteLine(dryRun ? "\n[dry-run] no files written." : "\n[done]");

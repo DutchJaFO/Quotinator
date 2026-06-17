@@ -29,7 +29,7 @@ The REST API is accessible in two ways:
 | `GET /api/v1/quotes/search?q=term` | Search quotes; add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/version` | Running version |
-| `POST /api/v1/admin/database/reseed` | Clear all data and reimport from `quotes.json` |
+| `POST /api/v1/admin/database/reseed` | Clear all data and reimport from the bundled source files |
 | `POST /api/v1/admin/database/reset` | Full reset: clear data + schema history, reapply migrations, reimport |
 
 All endpoints accept an optional `lang` query parameter (ISO 639-1 code, e.g. `nl`, `de`) to request a translated quote response. Falls back to the original language if no translation exists. Error message language is controlled separately by the `Accept-Language` request header.
@@ -99,12 +99,9 @@ The add-on data directory (`/data`) persists across updates and restarts. It con
 
 | Path | Purpose | Safe to delete? |
 |---|---|---|
-| `quotes.json` | Quote dataset — seed source and custom additions | Only if you want to reset to bundled data |
 | `quotinatordata.db` | SQLite database — the live data store | **No** — this is your data |
 | `backups/` | Pre-migration database snapshots, named `quotinatordata_v{N}_{timestamp}Z.db` | Yes — old backups can be pruned freely |
 | `keys/` | ASP.NET Core Data Protection keys — used to sign antiforgery tokens and Blazor session descriptors | **No** — deleting this invalidates all active browser sessions; the add-on recovers on restart but users will need to reload |
-
-You can replace `quotes.json` with a custom dataset — the format is documented at `https://github.com/DutchJaFO/Quotinator`.
 
 ## Access
 

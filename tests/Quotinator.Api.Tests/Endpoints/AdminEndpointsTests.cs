@@ -36,6 +36,52 @@ public class AdminEndpointsTests
         return client;
     }
 
+    // ── GET /admin/database/seed/preview ─────────────────────────────────────
+
+    /// <summary>GET /admin/database/seed/preview returns 401 when AdminApiKey is not configured.</summary>
+    [TestMethod]
+    public async Task PreviewSeed_NoKeyConfigured_Returns401()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/admin/database/seed/preview");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>GET /admin/database/seed/preview returns 401 when the Authorization header is missing.</summary>
+    [TestMethod]
+    public async Task PreviewSeed_MissingAuthHeader_Returns401()
+    {
+        using var factory = CreateFactory(TestKey);
+        var response = await factory.CreateClient().GetAsync("/api/v1/admin/database/seed/preview");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>GET /admin/database/seed/preview returns 401 when the wrong key is supplied.</summary>
+    [TestMethod]
+    public async Task PreviewSeed_WrongKey_Returns401()
+    {
+        using var factory = CreateFactory(TestKey);
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "wrong-key");
+        var response = await client.GetAsync("/api/v1/admin/database/seed/preview");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>GET /admin/database/seed/preview returns 200 with the expected shape when the correct key is supplied.</summary>
+    [TestMethod]
+    public async Task PreviewSeed_CorrectKey_Returns200WithPreviewShape()
+    {
+        using var factory = CreateFactory(TestKey);
+        var response = await CreateClientWithKey(factory).GetAsync("/api/v1/admin/database/seed/preview");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.IsTrue(doc.RootElement.TryGetProperty("files",               out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("totalQuotes",         out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("uniqueQuotes",        out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("crossFileDuplicates", out _));
+    }
+
     // ── POST /admin/database/reseed ───────────────────────────────────────────
 
     /// <summary>POST /admin/database/reseed returns 401 when AdminApiKey is not configured.</summary>

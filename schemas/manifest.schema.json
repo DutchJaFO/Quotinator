@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/DutchJaFO/Quotinator/main/schemas/manifest.schema.json",
+  "title": "Quotinator Source Manifest",
+  "description": "Ordered list of source files to import from a data/sources/ directory. Files are imported in the order listed; files not listed are appended alphabetically after listed entries.",
+  "type": "object",
+  "required": ["files"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference — used by editors for validation and IntelliSense."
+    },
+    "duplicateResolution": {
+      "type": "object",
+      "description": "How the seeder handles duplicate records when the same primary key appears in more than one file. Omit to inherit the policy from application configuration (Quotinator:DuplicateResolution). When present, this section overrides all configuration-level settings for this directory.",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "$ref": "#/$defs/policy",
+          "description": "Policy applied to all entity types that do not have a type-specific override."
+        },
+        "quotes":       { "$ref": "#/$defs/policy" },
+        "sources":      { "$ref": "#/$defs/policy" },
+        "characters":   { "$ref": "#/$defs/policy" },
+        "people":       { "$ref": "#/$defs/policy" },
+        "translations": { "$ref": "#/$defs/policy" }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["file", "name"],
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filename relative to this manifest's directory (e.g. 'vilaboim_movie-quotes.json')."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable source identifier shown in the import log and management UI (e.g. 'vilaboim/movie-quotes')."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "policy": {
+      "type": "string",
+      "enum": ["skip", "overwrite"],
+      "description": "skip — keep the first occurrence and ignore later files with the same ID. overwrite — replace the existing record with the version from the later file."
+    }
+  }
+}

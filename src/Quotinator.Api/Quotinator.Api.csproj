@@ -28,9 +28,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Copy the quote dataset to the build output so it is available at runtime
+    <!-- Copy bundled source files to the build output so the startup seeder can find them
          regardless of working directory (VS, dotnet run, Docker). -->
-    <Content Include="..\..\data\quotes.json" Link="data\quotes.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\data\sources\**\*" Link="data\sources\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Copy the changelog so ChangelogService can read it at runtime. -->
     <Content Include="..\..\CHANGELOG.md" Link="CHANGELOG.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

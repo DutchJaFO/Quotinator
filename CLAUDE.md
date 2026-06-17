@@ -21,12 +21,12 @@ dotnet test --configuration Release --filter "FullyQualifiedName~GetRandom_NoN_R
 # Run only one test project
 dotnet test tests/Quotinator.Core.Tests --configuration Release
 
-# Run the API locally (data path defaults to data/quotes.json relative to output)
+# Run the API locally
 dotnet run --project src/Quotinator.Api
 
-# Re-seed data/quotes.json from the configured sources (run from repo root)
+# Re-seed data/sources/ from the configured sources (run from repo root)
 dotnet-script scripts/seed.csx
-dotnet-script scripts/seed.csx -- --dry-run    # preview stats without writing
+dotnet-script scripts/seed.csx -- --dry-run    # preview what would be written without creating files
 dotnet-script scripts/seed.csx -- --no-fetch   # use scripts/cache/ instead of downloading
 
 # Build the Docker image locally (required before tagging a release)
@@ -117,8 +117,8 @@ Phase gates:
 src/Quotinator.Constants/ # Route strings, tag names, error message keys — no dependencies
 src/Quotinator.Core/      # Models, interfaces, all service implementations
 src/Quotinator.Api/       # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
-data/quotes.json          # The quote dataset
-scripts/seed.csx          # Seed/merge/dedup script (dotnet-script)
+data/sources/             # Bundled source files (one JSON per dataset) + manifest
+scripts/seed.csx          # Per-source seed script (dotnet-script)
 docker/Dockerfile         # Multi-stage build, targets linux/amd64 + linux/arm64
 addon/                    # Home Assistant add-on manifest and assets
 ```
@@ -130,7 +130,7 @@ Dependency direction: `Quotinator.Api` → `Quotinator.Core` → (no deps); `Quo
 The Web and API were merged into a single project so that Quotinator ships as one container. This is required for the Home Assistant add-on (the HA supervisor runs single-container add-ons) and simplifies all deployment scenarios. The Blazor UI and REST endpoints share one process, one port, and one image.
 
 ### Quote schema (canonical)
-All quotes must conform to this schema in `quotes.json`:
+All quotes must conform to this schema (see `schemas/source-flat.schema.json` for the machine-readable version):
 ```json
 {
   "id": "uuid-v4",
@@ -196,9 +196,9 @@ Three access patterns exist and are handled differently:
 
 **DataProtection keys** are persisted to a `keys/` subdirectory within the data directory via `PersistKeysToFileSystem`. This prevents antiforgery token decryption failures and Blazor circuit descriptor mismatches after container restarts. Never revert to `UseEphemeralDataProtectionProvider`.
 
-**HA add-on data path:** The HA supervisor mounts its persistent volume at `/data` inside the container (via `map: data:rw` in `addon/config.yaml`). The add-on env var `Quotinator__DataPath=/data/quotes.json` points the app there. DataProtection keys go in `/data/keys/`. On standalone Docker the default is `/app/data/quotes.json` (no env override needed). First-run seeding: if `dataPath` does not exist, `Program.cs` copies the bundled `quotes.json` from `AppContext.BaseDirectory/data/` automatically.
+**HA add-on data directory:** The HA supervisor mounts its persistent volume at `/data` inside the container (via `map: data:rw` in `addon/config.yaml`). The add-on env var `Quotinator__DataDir=/data` points the app there. The database (`quotinatordata.db`) and DataProtection keys (`keys/`) are written to this directory. Bundled source files are read directly from the Docker image (`/app/data/sources/`) — no file copy to the persistent volume is needed. User imports can be placed in `{dataDir}/imports/` and are imported after the bundled sources.
 
-**Data path fallback for HA:** The HA supervisor should apply `Quotinator__DataPath=/data/quotes.json` via `config.yaml` env_vars, but the supervisor may serve a cached config after an update (symptom: startup log shows `Data: /app/data/…` instead of `Data: /data/…`). To protect against this, `Program.cs` contains an `HaFallbackPath()` function that checks whether `/data` exists and, if so, uses it as the data directory before falling back to `/app/data`. This ensures DataProtection keys always land on the persistent volume. The priority order is: (1) `Quotinator:DataPath` config value, (2) `/data` if it exists (HA persistent volume), (3) `{AppContext.BaseDirectory}/data` (standalone Docker default). Never remove this fallback.
+**Data directory fallback for HA:** The HA supervisor should apply `Quotinator__DataDir=/data` via `config.yaml` env_vars, but the supervisor may serve a cached config after an update (symptom: startup log shows `Data: /app/data` instead of `Data: /data`). To protect against this, `Program.cs` contains an `HaFallbackDir()` function that checks whether `/data` exists and, if so, uses it as the data directory before falling back to `/app/data`. This ensures the database and DataProtection keys always land on the persistent volume. The priority order is: (1) `Quotinator:DataDir` config value, (2) `/data` if it exists (HA persistent volume), (3) `{AppContext.BaseDirectory}/data` (standalone Docker default). Never remove this fallback.
 
 **Cookie `Secure` flag** is derived from `context.Request.IsHttps` (set correctly by `UseForwardedHeaders()`). Do not hardcode `Secure = true` — it prevents cookies from being sent over plain HTTP in deployments where Quotinator itself is HTTP (behind a proxy or in development).
 
@@ -259,7 +259,7 @@ The translation files cover config option names/descriptions and port descriptio
 
 `IApiLocalizer` solves all three: it reads the JSON files once at startup, and at call time resolves via `CultureInfo.CurrentUICulture` which the middleware has already set correctly. Do not replace it with `II18nText`.
 
-**The `?lang=` query parameter is a separate concern.** It tells `IQuoteService` which language to use when returning *quote content* (translations in `quotes.json`). It does not affect UI strings or error messages — those always follow `Accept-Language`. Do not conflate the two.
+**The `?lang=` query parameter is a separate concern.** It tells `IQuoteService` which language to use when returning *quote content* (translations stored in the source files under `data/sources/`). It does not affect UI strings or error messages — those always follow `Accept-Language`. Do not conflate the two.
 
 ### Language selector — UI culture override
 
@@ -327,16 +327,16 @@ Do not attempt to translate OpenAPI spec content or Scalar UI text. Revisit this
 
 ## Data Sources
 
-The `quotes.json` dataset is seeded from two MIT-licensed sources:
+Each source produces one file in `data/sources/`. Two MIT-licensed external sources are bundled:
 
-| Source | License | Schema |
-|---|---|---|
-| [vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes) | MIT | `{ quote, movie }` |
-| [NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes) | MIT | `{ quote, movie, type, year }` |
+| Source | Output file | License | Schema |
+|---|---|---|---|
+| [vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes) | `vilaboim_movie-quotes.json` | MIT | `{ quote, movie }` |
+| [NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes) | `NikhilNamal17_popular-movie-quotes.json` | MIT | `{ quote, movie, type, year }` |
 
-Both are attributed in `SOURCES.md`. The seed/merge/dedup script lives at `scripts/seed.csx`.
+Both are attributed in `SOURCES.md`. The seed script lives at `scripts/seed.csx` — run it to regenerate the source files from upstream; it writes `manifest.json` only when it does not already exist.
 
-Additional curated entries (books, famous people) are added manually and must be accurately attributed.
+Manually curated and verified entries live in `data/sources/quotinator-curated.json`. All entries must be accurately attributed and verified before adding.
 
 ---
 
@@ -369,8 +369,9 @@ See [`docs/testing-policy.md`](docs/testing-policy.md).
 | `README.md` | Public-facing project documentation and roadmap |
 | `CLAUDE.md` | This file — AI assistant context |
 | `SOURCES.md` | Attribution for seed data |
-| `data/quotes.json` | The quote dataset |
-| `scripts/seed.csx` | Seed/merge/dedup script |
+| `data/sources/` | Bundled source files — one JSON per dataset + `manifest.json` |
+| `data/sources/quotinator-curated.json` | Manually verified curated entries |
+| `scripts/seed.csx` | Per-source seed script — writes one file per source, manifest only when missing |
 | `src/Quotinator.Api/Program.cs` | API entry point |
 | `src/Quotinator.Core/Models/Quote.cs` | Canonical Quote model |
 | `src/Quotinator.Core/Models/QuoteTranslation.cs` | Translation entry model |
@@ -388,7 +389,7 @@ The solution file is the source of truth for what is visible in Visual Studio. T
 Current folders and their contents:
 - `/Solution Items/` — `CLAUDE.md`, `README.md`, `SOURCES.md`, `CHANGELOG.md`
 - `/addon/` — all Home Assistant add-on files (`config.yaml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `icon.png`, `logo.png`)
-- `/data/` — `quotes.json`
+- `/data/sources/` — `manifest.json`, `quotinator-curated.json`, `vilaboim_movie-quotes.json`, `NikhilNamal17_popular-movie-quotes.json`
 - `/docker/` — `Dockerfile`, `docker-compose.yml`
 - `/scripts/` — `seed.csx`, `sources.json`, `SOURCES.md`
 - `/src/` — C# projects
@@ -437,7 +438,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    curl -s http://localhost:8080/api/v1/quotes/random
    ```
 
-> The CI pipeline runs `dotnet publish` and asserts `data/quotes.json` is present in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
+> The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle
 

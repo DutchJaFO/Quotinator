@@ -39,8 +39,8 @@ ENV ASPNETCORE_HTTP_PORTS=""
 
 COPY --from=build /app/publish .
 
-# data/quotes.json is included in the publish output (CopyToPublishDirectory=PreserveNewest).
-# Mount a volume at /app/data to override with a custom dataset at runtime.
+# data/sources/ is included in the publish output (CopyToPublishDirectory=PreserveNewest).
+# Mount a volume at /app/data for the SQLite database and user import files.
 VOLUME ["/app/data"]
 
 ENTRYPOINT ["dotnet", "Quotinator.Api.dll"]

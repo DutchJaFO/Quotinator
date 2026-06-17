@@ -1,113 +1,108 @@
-# Data import strategies
+# Data import architecture
 
-This document describes the three ways quote data can reach a running Quotinator instance. The current implementation uses **Option A**. Options B and C are documented here as candidates for future versions.
-
----
-
-## Option A — Committed file (current)
-
-The seed script is run manually by the developer. The resulting `data/quotes.json` is committed to the repository and baked into the Docker image at build time.
-
-```
-developer runs seed.csx
-        ↓
-data/quotes.json committed to repo
-        ↓
-docker build copies file into image
-        ↓
-QuoteService loads it at startup
-```
-
-**Pros**
-- Fully reproducible — the exact dataset is pinned in git history
-- Auditable — every change to the dataset is a commit with a diff
-- No network access needed at build or runtime
-- Simple to reason about; works identically locally and in Docker
-
-**Cons**
-- Developer must remember to re-seed and commit when upstream sources are updated
-- The image embeds the data; a data-only update requires a new image build and deploy
-
-**When to use:** homelab, personal use, any case where you want to know exactly what data is in production.
+This document describes how quote data enters a running Quotinator instance — from the bundled source files baked into the image, through startup seeding, to planned user imports.
 
 ---
 
-## Option B — Build-time seeding
+## Overview
 
-The seed script runs during `docker build`, so the image always contains freshly fetched data at the moment it was built. `data/quotes.json` is not committed to the repository.
+Quotinator separates **source files** (the canonical data on disk) from the **SQLite database** (the live data store the API queries). At startup the seeder reads source files and populates the database. After the first seed, the database is the source of truth; re-seeding is an explicit admin action.
 
 ```
-docker build
-        ↓
-Dockerfile runs seed.csx (requires network access)
-        ↓
-data/quotes.json written into the image layer
-        ↓
-QuoteService loads it at startup
+data/sources/          ←  committed to git, baked into the Docker image
+      ↓  startup seeder
+quotinatordata.db      ←  live data store; persisted on Docker volume at /app/data
+      ↓  REST API
+consumers (MagicMirror², HA automations, etc.)
 ```
-
-**Pros**
-- Data is always current as of the build date without a manual commit step
-- No large JSON file in the git repository
-
-**Cons**
-- Build requires outbound internet access — breaks air-gapped or offline builds
-- Builds are not reproducible: the same Dockerfile may produce different images on different days
-- Upstream source changes can break the build unexpectedly
-- CI/CD pipelines must handle build failures due to network issues
-
-**Implementation notes**
-- The `dotnet-script` global tool would need to be installed in the build stage
-- The Dockerfile would need a `RUN dotnet-script scripts/seed.csx` step before the publish stage
-- Consider pinning source file content via a hash check if reproducibility matters
-
-**When to use:** scheduled nightly builds where current data matters more than reproducibility.
 
 ---
 
-## Option C — Startup seeding
-
-The seed script (or equivalent logic) runs when the container starts for the first time. `data/quotes.json` is written to the mounted data volume, not into the image.
+## Source file layout
 
 ```
-container starts
-        ↓
-startup check: does /app/data/quotes.json exist?
-    no  → run seed, write to volume, continue
-    yes → skip seed, continue
-        ↓
-QuoteService loads from volume
+data/sources/
+├── manifest.json                        ← import order
+├── quotinator-curated.json              ← manually verified entries (extended format)
+├── vilaboim_movie-quotes.json           ← external seed source (flat format)
+└── NikhilNamal17_popular-movie-quotes.json
 ```
 
-**Pros**
-- Image stays small — no data embedded
-- Data can be refreshed without rebuilding the image (delete the file, restart)
-- Naturally handles the case where the data volume is empty on first run
+### Two formats
 
-**Cons**
-- Container requires outbound internet access on first start
-- First startup is slower
-- Seed failures on startup prevent the service from starting
-- Behaviour differs between first run (slow, network-dependent) and subsequent runs (fast)
-- More complex orchestration: the health check must account for seed time
+| Format | Schema | Used by |
+|---|---|---|
+| **Flat** — top-level JSON array | `schemas/source-flat.schema.json` | External seed sources produced by `seed.csx` |
+| **Extended** — top-level object with `quotes`, `stageDirections`, `soundCues`, `conversations` | `schemas/source-extended.schema.json` | Curated file and future user imports |
 
-**Implementation notes**
-- An entrypoint script (shell or C#) would check for the file and conditionally run the seed
-- A `QUOTINATOR_SEED_ON_START=true` environment variable could control this behaviour
-- The mounted volume path must be writable by the container user
+Both formats share the same canonical quote object schema. The extended format is a superset.
 
-**When to use:** deployments where the data volume is ephemeral or where you want the data to be refreshed on each new deployment without rebuilding the image.
+### Manifest
+
+`data/sources/manifest.json` lists files in the preferred import order. Files not listed are appended alphabetically after those that are.
+
+```json
+{
+  "files": [
+    { "file": "quotinator-curated.json",                 "name": "quotinator/curated" },
+    { "file": "vilaboim_movie-quotes.json",              "name": "vilaboim/movie-quotes" },
+    { "file": "NikhilNamal17_popular-movie-quotes.json", "name": "NikhilNamal17/popular-movie-quotes" }
+  ]
+}
+```
+
+The manifest is committed to git and baked into the Docker image alongside the source files.
 
 ---
 
-## Comparison
+## Stable IDs
 
-| | A — Committed | B — Build-time | C — Startup |
-|---|---|---|---|
-| Data in git | Yes | No | No |
-| Reproducible builds | Yes | No | No |
-| Network at build | No | Yes | No |
-| Network at runtime | No | No | Yes (first run) |
-| Manual update step | Yes | No | No |
-| Data auditable in git | Yes | No | No |
-| Works air-gapped | Yes | No | No |
+Quote IDs are deterministically derived from the quote text and source name using SHA-256. The same quote from the same source always receives the same UUID, so re-seeding does not create duplicates.
+
+> **Note on UUID byte layout:** `new Guid(byte[])` interprets bytes 6–7 little-endian, placing the version nibble at position 3 of the third UUID group rather than position 1. The IDs are therefore not strict RFC 4122 v4 UUIDs, but they are stable and unique within the dataset. The JSON schemas use a relaxed UUID pattern that accepts any well-formed UUID string.
+
+---
+
+## Conflict resolution
+
+When the same stable ID appears in multiple source files (same text from the same source), the seeder skips the duplicate — first listed in the manifest wins.
+
+When the same quote text appears with different sources or IDs (e.g. the same line appears in both the vilaboim and NikhilNamal17 datasets under different films), both entries are imported. Deduplication across sources is not applied automatically; a review UI in the import milestone will surface these for manual resolution.
+
+---
+
+## Re-seeding
+
+Two admin endpoints trigger re-seeding:
+
+| Endpoint | Behaviour |
+|---|---|
+| `POST /api/v1/admin/database/reseed` | Clears quote data, reimports all source files. Schema history (migrations) is preserved. |
+| `POST /api/v1/admin/database/reset` | Full reset: clears data **and** schema history, reapplies migrations, reimports. Use to recover from a corrupted migration state. |
+
+Both endpoints read from the `data/sources/` directory baked into the image. They do not re-download external sources.
+
+---
+
+## User imports (planned — import milestone)
+
+Future versions will allow users to supply their own source files. The planned design:
+
+- A configurable `imports/` directory (separate from the bundled `sources/` directory) where users drop JSON files in flat or extended format
+- The same manifest mechanism and stable-ID logic applies
+- An import UI (Blazor management page) for reviewing conflicts and approving new entries before they reach the database
+- A "reset to defaults" option that clears user-imported data and re-seeds from bundled sources only
+
+See the [Data Import & Sources milestone](https://github.com/DutchJaFO/Quotinator/milestone/5) for the full scope.
+
+---
+
+## Adding data
+
+### External datasets
+
+Use `seed.csx` to add a new external source. See [`scripts/SOURCES.md`](../scripts/SOURCES.md) for the full workflow.
+
+### Curated entries
+
+Add manually to `data/sources/quotinator-curated.json` using the extended format. Assign a UUID manually, verify attribution, and run `dotnet test` to confirm schema validity before committing.

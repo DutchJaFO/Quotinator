@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/DutchJaFO/Quotinator/main/schemas/upstream-quoted-string.schema.json",
+  "title": "Movie Quotes — quoted-string format",
+  "description": "Raw format used by vilaboim/movie-quotes (https://github.com/vilaboim/movie-quotes, MIT). A flat JSON array where every entry is a string of the form: \"Quote text.\" Movie Title. The field contract is derived from the package's own test suite (test.js). This schema was authored by DutchJaFO/Quotinator and may be proposed upstream.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "string",
+    "minLength": 5,
+    "description": "Typically: '\"Quote text.\" Movie Title'. Multi-character exchanges appear as a single combined string (e.g. 'Character: \"...\" Character: \"...\" Movie'). No strict pattern is enforced — the essential contract is a non-empty string array."
+  }
+}

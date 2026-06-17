@@ -18,12 +18,25 @@ public interface IDatabaseInitializer
     /// <summary>Total non-deleted people rows. Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
     int PeopleCount { get; }
 
-    /// <summary>Ensures WAL mode is active, applies any pending schema migrations, and seeds the database from <c>quotes.json</c> if empty.</summary>
+    /// <summary>
+    /// Duplicate records encountered during the last seeding operation.
+    /// Populated after <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, or <see cref="ResetAsync"/> completes.
+    /// Empty on a fresh database with no cross-file conflicts.
+    /// </summary>
+    IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates { get; }
+
+    /// <summary>Ensures WAL mode is active, applies any pending schema migrations, and seeds the database from source files if empty.</summary>
     Task InitialiseAsync();
 
-    /// <summary>Clears all data tables and reimports from <c>quotes.json</c>. Schema migration history is preserved. Updates the row-count properties when done.</summary>
+    /// <summary>Clears all data tables and reimports from all configured source files. Schema migration history is preserved. Updates the row-count properties when done.</summary>
     Task ReseedAsync();
 
-    /// <summary>Clears all data tables and schema migration history, reapplies all migrations, then reimports from <c>quotes.json</c>. Updates the row-count properties when done.</summary>
+    /// <summary>Clears all data tables and schema migration history, reapplies all migrations, then reimports from all configured source files. Updates the row-count properties when done.</summary>
     Task ResetAsync();
+
+    /// <summary>
+    /// Scans all configured source files without touching the database and returns a preview of what a
+    /// full import would do — file quote counts and any cross-file duplicate quote IDs.
+    /// </summary>
+    Task<SeedPreviewResult> PreviewSeedAsync();
 }

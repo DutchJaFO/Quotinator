@@ -48,8 +48,8 @@ env_vars:
     value: "/ssl/{{ certfile }}"
   - name: Quotinator__SslKeyFile
     value: "/ssl/{{ keyfile }}"
-  - name: Quotinator__DataPath
-    value: "/data/quotes.json"
+  - name: Quotinator__DataDir
+    value: "/data"
   - name: Quotinator__AdminApiKey
     value: "{{ admin_api_key }}"
   - name: Quotinator__BackupPath

@@ -1,0 +1,20 @@
+{
+  "$schema": "../../schemas/manifest.schema.json",
+  "duplicateResolution": {
+    "default": "skip"
+  },
+  "files": [
+    {
+      "file": "quotinator-curated.json",
+      "name": "quotinator/curated"
+    },
+    {
+      "file": "vilaboim_movie-quotes.json",
+      "name": "vilaboim/movie-quotes"
+    },
+    {
+      "file": "NikhilNamal17_popular-movie-quotes.json",
+      "name": "NikhilNamal17/popular-movie-quotes"
+    }
+  ]
+}
