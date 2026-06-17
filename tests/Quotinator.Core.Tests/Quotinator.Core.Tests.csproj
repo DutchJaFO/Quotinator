@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="JsonSchema.Net" Version="9.2.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
     <PackageReference Include="MSTest" Version="4.0.2" />
   </ItemGroup>
 
@@ -23,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Quotinator.Constants\Quotinator.Constants.csproj" />
     <ProjectReference Include="..\..\src\Quotinator.Core\Quotinator.Core.csproj" />
+    <ProjectReference Include="..\..\src\Quotinator.Data\Quotinator.Data.csproj" />
   </ItemGroup>
 
 </Project>

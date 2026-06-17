@@ -367,9 +367,9 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                             {
                                 text = q.QuoteText,
                                 lang = q.OriginalLanguage,
-                                sid  = owSourceId.ToString(),
-                                cid  = owCharacterId?.ToString(),
-                                pid  = owPersonId?.ToString(),
+                                sid  = owSourceId,
+                                cid  = owCharacterId,
+                                pid  = owPersonId,
                                 mod  = now,
                                 id   = q.Id
                             });
@@ -399,9 +399,9 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                             Id               = q.Id,
                             QuoteText        = q.QuoteText,
                             OriginalLanguage = q.OriginalLanguage,
-                            SourceId         = sourceId.ToString(),
-                            CharacterId      = characterId?.ToString(),
-                            PersonId         = personId?.ToString(),
+                            SourceId         = sourceId,
+                            CharacterId      = characterId,
+                            PersonId         = personId,
                             DateCreated      = now
                         });
 
@@ -447,10 +447,13 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                     {
                         if (TryNormaliseGenre(genre, out var g))
                         {
+                            // WHERE EXISTS guards against FK violation when source-file IDs differ
+                            // from the IDs already in the database (e.g. after a UUID scheme change).
                             await connection.ExecuteAsync(
                                 "INSERT OR IGNORE INTO QuoteGenres " +
                                 "(Id, QuoteId, Genre, DateCreated, DateModified, DateDeleted, IsDeleted) " +
-                                "VALUES (@Id, @QuoteId, @Genre, @DateCreated, NULL, NULL, 0);",
+                                "SELECT @Id, @QuoteId, @Genre, @DateCreated, NULL, NULL, 0 " +
+                                "WHERE EXISTS (SELECT 1 FROM Quotes WHERE Id = @QuoteId AND IsDeleted = 0);",
                                 new { Id = Guid.NewGuid().ToString(), QuoteId = q.Id, Genre = g.ToString(), DateCreated = now });
                             inserted++;
                         }
@@ -484,7 +487,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
             {
                 var exists = await connection.ExecuteScalarAsync<int>(
                     "SELECT COUNT(*) FROM SourceTranslations WHERE SourceId = @sid AND Language = @lang AND IsDeleted = 0;",
-                    new { sid = sourceId.ToString(), lang });
+                    new { sid = sourceId, lang });
                 if (exists == 0)
                     await connection.InsertAsync(new SourceTranslation
                     {
