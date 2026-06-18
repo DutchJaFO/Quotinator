@@ -15,7 +15,7 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 ## Dependency map
 
 ```
-#57 (dedup) → closed by design via #61
+#57 (dedup) → Problems 1–3 closed by design via #61; Problem 4 (ImportBatch) requires #58
 #61 (per-source files) → #62, #63, #68 depend on it
 #63 (manifest) → #62 reads it; #64 references it
 #62 (folder seeder) → prerequisite for #64 per-source overrides
@@ -37,8 +37,8 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 
 | # | Issue | Title | Status |
 |---|-------|-------|--------|
-| 1 | #57 | Seed script: dedup inconsistent | Closed by design (#61 eliminates the concern) |
-| 2 | #61 | Seed script: one file per source | Partially done — CI check still references old path |
+| 1 | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 blocked on #58 |
+| 2 | #61 | Seed script: one file per source | Closed ✅ |
 | 3 | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
 | 4 | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources` and `ImportsPath` config keys missing |
 | 5 | #64 | Conflict resolution policy | Partially done — naming mismatch (`overwrite` vs `newest-wins`), wrong default |

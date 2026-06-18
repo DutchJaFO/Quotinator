@@ -1,6 +1,6 @@
 # #57 — Seed script: dedup inconsistent
 
-**Status:** Closed by design  
+**Status:** Partially resolved — awaiting #58  
 **GitHub issue:** #57  
 **Closed by:** #61
 
@@ -12,18 +12,13 @@ The seed script accumulated duplicates because the old `data/quotes.json` was re
 
 ## Resolution
 
-#61 (one file per source) eliminates the concern architecturally: each source dataset now writes its own file. Cross-file deduplication happens in `DatabaseInitializer` at seeding time, not in the seed script. Duplicates are identified by quote text similarity and resolved by the conflict-resolution policy (#64).
+Problems 1–3 are eliminated by #61: each source writes its own file; cross-source deduplication and conflict resolution happen in `DatabaseInitializer` at seeding time, driven by the conflict-resolution policy (#64).
+
+Problem 4 (ImportBatch entries) cannot be implemented until #58 lands. Once #58 is done, the seed script must create one `ImportBatch` row per source dataset and link all records from that source to it via `ImportBatchId`.
 
 ## Verification
 
-- [ ] Confirm `gh issue close` was run with a justification comment referencing #61
-- [ ] No `data/quotes.json` exists in the repo
-- [ ] `dotnet-script scripts/seed.csx` produces separate per-source files without a combined output
-
-## Notes
-
-This issue does not need implementation work. If it was not formally closed on GitHub with a `--comment`, do so:
-
-```
-gh issue close 57 --comment "Closed by design: #61 writes one file per source; cross-file dedup is handled in DatabaseInitializer at seed time."
-```
+| # | Status | Requirement | Method | Verification |
+|---|--------|-------------|--------|--------------|
+| 1–3 | ✅ | Dedup/conflict/overwrite concerns eliminated | Unit test | `RepositoryStructureTests.SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — one file per source, no combined output |
+| 4 | ❌ | Seed script creates one ImportBatch per source | Unit test | Requires #58 — test to be written when #58 lands |
