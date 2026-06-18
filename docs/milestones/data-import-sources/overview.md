@@ -35,17 +35,17 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 
 ## Order of operations
 
-| # | Issue | Title | Status |
-|---|-------|-------|--------|
-| 1 | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 blocked on #58 |
-| 2 | #61 | Seed script: one file per source | Closed ✅ |
-| 3 | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
-| 4 | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources` and `ImportsPath` config keys missing |
-| 5 | #64 | Conflict resolution policy | Partially done — naming mismatch (`overwrite` vs `newest-wins`), wrong default |
-| 6 | #58 | ImportBatches schema | Not started |
-| 7 | #45 | Import endpoint | Not started |
-| 8 | #65 | Import endpoint: preview/dry-run | Partially done — wrong endpoint shape (needs #45) |
-| 9 | #55 | Record completeness flag | Not started |
+| #  | Issue | Title | Status |
+|----|-------|-------|--------|
+| 1  | #61 | Seed script: one file per source | Closed ✅ |
+| 2  | #58 | ImportBatches schema | Not started — no dependencies; unblocks #57 P4, #64, #45, #56, #59, #67 |
+| 3  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 can close after #58 |
+| 4  | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
+| 5  | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources` and `ImportsPath` config keys missing |
+| 6  | #64 | Conflict resolution policy | Partially done — naming mismatch (`overwrite` vs `newest-wins`), wrong default |
+| 7  | #45 | Import endpoint | Not started |
+| 8  | #65 | Import endpoint: preview/dry-run | Partially done — wrong endpoint shape (needs #45) |
+| 9  | #55 | Record completeness flag | Not started |
 | 10 | #56 | Audit log | Not started |
 | 11 | #59 | Admin: soft-reset by batch | Not started |
 | 12 | #67 | Conversations schema | Not started |
