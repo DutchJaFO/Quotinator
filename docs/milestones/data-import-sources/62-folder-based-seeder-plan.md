@@ -51,3 +51,18 @@ At startup, check `Environment.GetEnvironmentVariable("Quotinator__DataPath")`. 
 ### ImportBatch rows
 
 Deferred to #58. When #58 is implemented, `DatabaseInitializer` should create one `ImportBatch` row per source file before seeding its quotes and reference the batch ID on all `INSERT` statements for that file's records.
+
+---
+
+## Verification
+
+| # | Status | Requirement | Method | Verification |
+|---|--------|-------------|--------|--------------|
+| 1 | ❌ | `Quotinator__DataDir` replaces `Quotinator__DataPath` | Unit test | No test verifies config key behaviour |
+| 2 | ❌ | Seeder scans bundled sources dir at startup | Unit test | No test verifies seeder behaviour |
+| 3 | ❌ | Seeder scans `{DataDir}/imports/` when it exists; silently skips when missing | Unit test | No test exists |
+| 4 | ❌ | `HaFallbackDir()` updated to use `DataDir` semantics | Unit test | No test verifies fallback logic |
+| 5 | ❌ | `Quotinator__IncludeDefaultSources` config key (default `true`); when `false`, bundled sources skipped | Unit test | Not implemented |
+| 6 | ❌ | `Quotinator__ImportsPath` config key (default `{DataDir}/imports`) | Unit test | Not implemented |
+| 7 | ❌ | Startup warning logged when `Quotinator__DataPath` still set in environment | Unit test | Not implemented |
+| 8 | ❌ | One `ImportBatch` row per source file (deferred to #58) | Unit test | Requires #58 |

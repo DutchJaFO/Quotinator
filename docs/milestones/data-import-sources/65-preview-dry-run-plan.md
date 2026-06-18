@@ -46,3 +46,16 @@ This issue is a subset of #45. When #45 is implemented, the `preview=true` query
 No additional endpoint is needed — `preview=true` is a query parameter on the import endpoint.
 
 This issue can be closed when #45 is complete and the `preview=true` path is tested.
+
+---
+
+## Verification
+
+| # | Status | Requirement | Method | Verification |
+|---|--------|-------------|--------|--------------|
+| 1 | ❌ | `POST /api/v1/quotes/import?preview=true` runs full pipeline without committing (transaction rollback) | Unit test | Requires #45 |
+| 2 | ❌ | Response includes `summary` with `new`, `skipped`, `conflicts.sameId`, `conflicts.sameText` counts | Unit test | Requires #45 |
+| 3 | ❌ | `sameId` conflicts include `fieldDiffs` listing only changed fields | Unit test | Requires #45 |
+| 4 | ❌ | `sameText` conflicts have no `fieldDiffs` | Unit test | Requires #45 |
+| 5 | ❌ | Active conflict policy (#64) applied during preview; policy-skipped records counted in `skipped` | Unit test | Requires #45 and #64 |
+| 6 | ❌ | No `ImportBatch` row created for a preview run | Unit test | Requires #45 and #58 |
