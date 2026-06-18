@@ -99,6 +99,7 @@ public class RepositoryStructureTests
     /// match the current baseline in data/sources/.
     /// </summary>
     [TestMethod]
+    [TestCategory("Live")]
     public void SeedScript_WithNoFetch_ProducesFilesMatchingBaseline()
     {
         var schema = JsonSchema.FromText(

@@ -37,11 +37,11 @@ One verification step per requirement. Unit test preferred; live command where n
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ✅ | Writes one file per source to `data/sources/` | Unit test | `RepositoryStructureTests.SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — runs script into temp dir, validates against `source-flat.schema.json`, asserts IDs exactly match baseline |
-| 2 | ✅ | File names use `{owner}_{repo}.json` | Unit test | Covered by `SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — expected filenames derived from `sources.json` and asserted present |
+| 1 | ❌ | Writes one file per source to `data/sources/` | Live | `RepositoryStructureTests.SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — `[TestCategory("Live")]`; requires `dotnet-script` installed and `scripts/cache/` populated |
+| 2 | ❌ | File names use `{owner}_{repo}.json` | Live | Covered by `SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — same prerequisites |
 | 3 | ✅ | `data/quotes.json` deleted | Unit test | `RepositoryStructureTests.DataQuotesJson_DoesNotExistOnDisk` |
 | 4 | ✅ | `--dry-run` works | Live | `dotnet-script scripts/seed.csx -- --dry-run` — expected output: `[dry-run] no files written.` |
 | 5 | ✅ | `--no-fetch` works | Live | `dotnet-script scripts/seed.csx -- --no-fetch` — expected output: `using cache:` for both sources, no fetch lines |
 | 6 | ✅ | CI smoke-test checks `data/sources/` | Live | CI pipeline passes — assertion in both `ci.yml` and `release.yml` |
 | 7 | ✅ | `Quotinator.slnx` updated | Unit test | `RepositoryStructureTests.SlnxDataSourcesEntries_AllExistOnDisk`, `DataSourcesFiles_OnDisk_AreAllInSlnx`, `DataQuotesJson_IsNotInSlnx` |
-| 8 | ✅ | `--output-dir DIR` redirects output | Unit test | Covered by `SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — explicitly passes `--output-dir <tempdir>` and asserts files land there, not in `data/sources/` |
+| 8 | ❌ | `--output-dir DIR` redirects output | Live | `SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — `[TestCategory("Live")]`; same prerequisites as #1 |
