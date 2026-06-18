@@ -22,13 +22,11 @@
     <File Path="addon/translations/nl.yaml" />
     <File Path="addon/translations/de.yaml" />
   </Folder>
-  <Folder Name="/data/">
-    <Folder Name="/data/sources/">
-      <File Path="data/sources/manifest.json" />
-      <File Path="data/sources/quotinator-curated.json" />
-      <File Path="data/sources/vilaboim_movie-quotes.json" />
-      <File Path="data/sources/NikhilNamal17_popular-movie-quotes.json" />
-    </Folder>
+  <Folder Name="/data/sources/">
+    <File Path="data/sources/manifest.json" />
+    <File Path="data/sources/quotinator-curated.json" />
+    <File Path="data/sources/vilaboim_movie-quotes.json" />
+    <File Path="data/sources/NikhilNamal17_popular-movie-quotes.json" />
   </Folder>
   <Folder Name="/docker/">
     <File Path="docker/Dockerfile" />
@@ -43,29 +41,27 @@
     <File Path="docs/openapi.md" />
     <File Path="docs/running-locally.md" />
     <File Path="docs/testing-policy.md" />
-    <Folder Name="/docs/milestones/">
-      <Folder Name="/docs/milestones/data-import-sources/">
-        <File Path="docs/milestones/data-import-sources/overview.md" />
-        <File Path="docs/milestones/data-import-sources/45-import-endpoint-plan.md" />
-        <File Path="docs/milestones/data-import-sources/55-record-completeness-plan.md" />
-        <File Path="docs/milestones/data-import-sources/56-audit-log-plan.md" />
-        <File Path="docs/milestones/data-import-sources/57-seed-script-dedup-plan.md" />
-        <File Path="docs/milestones/data-import-sources/58-import-batches-schema-plan.md" />
-        <File Path="docs/milestones/data-import-sources/59-admin-soft-reset-plan.md" />
-        <File Path="docs/milestones/data-import-sources/61-seed-script-per-source-plan.md" />
-        <File Path="docs/milestones/data-import-sources/62-folder-based-seeder-plan.md" />
-        <File Path="docs/milestones/data-import-sources/63-import-manifest-plan.md" />
-        <File Path="docs/milestones/data-import-sources/64-conflict-resolution-plan.md" />
-        <File Path="docs/milestones/data-import-sources/65-preview-dry-run-plan.md" />
-        <File Path="docs/milestones/data-import-sources/67-conversations-schema-plan.md" />
-        <File Path="docs/milestones/data-import-sources/68-curated-json-conversations-plan.md" />
-        <File Path="docs/milestones/data-import-sources/69-api-conversations-plan.md" />
-      </Folder>
-    </Folder>
-    <Folder Name="/docs/workflow/">
-      <File Path="docs/workflow/checklist.md" />
-      <File Path="docs/workflow/process.md" />
-    </Folder>
+  </Folder>
+  <Folder Name="/docs/milestones/data-import-sources/">
+    <File Path="docs/milestones/data-import-sources/overview.md" />
+    <File Path="docs/milestones/data-import-sources/45-import-endpoint-plan.md" />
+    <File Path="docs/milestones/data-import-sources/55-record-completeness-plan.md" />
+    <File Path="docs/milestones/data-import-sources/56-audit-log-plan.md" />
+    <File Path="docs/milestones/data-import-sources/57-seed-script-dedup-plan.md" />
+    <File Path="docs/milestones/data-import-sources/58-import-batches-schema-plan.md" />
+    <File Path="docs/milestones/data-import-sources/59-admin-soft-reset-plan.md" />
+    <File Path="docs/milestones/data-import-sources/61-seed-script-per-source-plan.md" />
+    <File Path="docs/milestones/data-import-sources/62-folder-based-seeder-plan.md" />
+    <File Path="docs/milestones/data-import-sources/63-import-manifest-plan.md" />
+    <File Path="docs/milestones/data-import-sources/64-conflict-resolution-plan.md" />
+    <File Path="docs/milestones/data-import-sources/65-preview-dry-run-plan.md" />
+    <File Path="docs/milestones/data-import-sources/67-conversations-schema-plan.md" />
+    <File Path="docs/milestones/data-import-sources/68-curated-json-conversations-plan.md" />
+    <File Path="docs/milestones/data-import-sources/69-api-conversations-plan.md" />
+  </Folder>
+  <Folder Name="/docs/workflow/">
+    <File Path="docs/workflow/checklist.md" />
+    <File Path="docs/workflow/process.md" />
   </Folder>
   <Folder Name="/schemas/">
     <File Path="schemas/manifest.schema.json" />
@@ -89,5 +85,8 @@
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Quotinator.Api.Tests/Solution/">
+    <File Path="tests/Quotinator.Api.Tests/Solution/RepositoryStructureTests.cs" />
   </Folder>
 </Solution>

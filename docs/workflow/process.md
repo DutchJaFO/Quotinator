@@ -59,18 +59,51 @@ At the start of every session working on a milestone:
 
 1. Read the full issue spec: `gh issue view <N>`
 2. Read the plan doc.
-3. Implement. Update plan doc step status as work progresses.
-4. Before declaring done: re-read **every requirement** in the GitHub issue spec and verify each one is implemented and tested.
+3. Check the dependency map in `overview.md`. Verify that all blocking issues are fully complete before starting — a partially-done dependency means this issue cannot be closed either.
+4. For each requirement in the spec, create a verification checklist entry in the plan doc.
+   This is part of planning — it must exist before implementation starts. Each entry must state:
+   - **Unit test preferred:** if a unit test can cover it, name the exact test class and method.
+     Write the test as part of the issue if it does not yet exist.
+   - **Live test fallback:** if no unit test is possible, document the exact command to run
+     and the observable output that confirms the requirement is met.
+   Checklist items start red (test failing or command not yet passing) and turn green as
+   implementation progresses. A green item means the test passes or the command produces
+   the expected output — not that the code looks right.
 
-An issue is done only when every requirement in its GitHub spec is met. Partial implementation means the issue stays open.
+   The verification checklist in the plan doc must use this table format:
+
+   | # | Status | Requirement | Method | Verification |
+   |---|--------|-------------|--------|--------------|
+   | 1 | ❌ / ✅ | Description | Unit test / Live | Test class.Method or exact command + expected output |
+
+   `Status` is a standalone column between `#` and `Requirement` — never embed ✅ or ❌ inside the Verification column.
+
+   **Bug fixes:** before writing any fix, first confirm the bug is reproducible. Write a
+   failing unit test that demonstrates the bug, or document the exact steps and observed
+   output that prove it exists. The fix is complete only when that test passes or those
+   steps no longer reproduce the bug.
+5. Implement. Update plan doc step status as work progresses.
+6. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each documented verification step against the actual code.
+
+An issue is done only when every requirement in its GitHub spec is met and verified against actual code. Partial implementation means the issue stays open.
 
 ---
 
 ## Completing an issue
 
+An issue may only be closed when **all** of the following are true:
+
+- Every requirement in the GitHub issue spec is implemented and tested
+- All related/blocking issues it depends on are themselves closed
+- All changes are merged to `main`
+- The changes are included in a tagged release
+
+Steps:
+
 1. Update the plan doc status to `Complete`.
 2. Update the status column in `overview.md`.
-3. Close on GitHub:
+3. Re-verify the order of operations table — a completed issue may unblock others or change the correct sequence. Update the table if needed before picking the next issue.
+4. Close on GitHub:
    ```
    gh issue close <N> --comment "<short note on what was done>"
    ```

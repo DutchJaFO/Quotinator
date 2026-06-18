@@ -46,3 +46,17 @@ When scanning the imports directory and no `manifest.json` is found:
 ### Config key
 
 Add `Quotinator__CreateMissingManifest` to `appsettings.json` defaulting to `true`.
+
+---
+
+## Verification
+
+| # | Status | Requirement | Method | Verification |
+|---|--------|-------------|--------|--------------|
+| 1 | ❌ | `data/sources/manifest.json` exists and lists bundled source files | Unit test | No test verifies manifest content |
+| 2 | ❌ | `manifest.schema.json` validates the manifest format | Unit test | No test verifies this specifically |
+| 3 | ❌ | Seeder reads manifest and processes files in declared order | Unit test | No test exists |
+| 4 | ❌ | Unlisted files appended alphabetically after listed entries | Unit test | Not implemented |
+| 5 | ❌ | Auto-create `manifest.json` in user imports folder when missing | Unit test | Not implemented |
+| 6 | ❌ | `Quotinator__CreateMissingManifest` config key (default `true`); when `false`, no manifest written | Unit test | Not implemented |
+| 7 | ❌ | Warning logged when manifest is auto-created | Unit test | Not implemented |

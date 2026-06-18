@@ -15,13 +15,14 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 ## Dependency map
 
 ```
-#57 (dedup) → closed by design via #61
+#71 (generic repository) → prerequisite for #58; unblocks all future repository implementations
+#57 (dedup) → Problems 1–3 closed by design via #61; Problem 4 (ImportBatch) requires #58
 #61 (per-source files) → #62, #63, #68 depend on it
 #63 (manifest) → #62 reads it; #64 references it
 #62 (folder seeder) → prerequisite for #64 per-source overrides
 #64 (conflict policy) → requires #63 for manifest field, #45 for per-run override, #58 for batch recording
 #65 (preview) → requires #45 for the correct endpoint shape
-#58 (ImportBatches) → unblocks #56, #59, #45 (batch row), #67, #68, #69
+#58 (ImportBatches) → requires #71; unblocks #56, #59, #45 (batch row), #67, #68, #69
 #45 (import endpoint) → unblocks remaining #64 requirements and #65 final shape
 #55 (completeness flag) → independent; connects to #56 (no-value-known)
 #56 (audit log) → requires #58 for batch actor; connects to #45, #55, #59
@@ -35,27 +36,29 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 
 ## Order of operations
 
-| # | Issue | Title | Status |
-|---|-------|-------|--------|
-| 1 | #57 | Seed script: dedup inconsistent | Closed by design (#61 eliminates the concern) |
-| 2 | #61 | Seed script: one file per source | Partially done — CI check still references old path |
-| 3 | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
-| 4 | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources` and `ImportsPath` config keys missing |
-| 5 | #64 | Conflict resolution policy | Partially done — naming mismatch (`overwrite` vs `newest-wins`), wrong default |
-| 6 | #58 | ImportBatches schema | Not started |
-| 7 | #45 | Import endpoint | Not started |
-| 8 | #65 | Import endpoint: preview/dry-run | Partially done — wrong endpoint shape (needs #45) |
-| 9 | #55 | Record completeness flag | Not started |
-| 10 | #56 | Audit log | Not started |
-| 11 | #59 | Admin: soft-reset by batch | Not started |
-| 12 | #67 | Conversations schema | Not started |
-| 13 | #68 | Curated JSON conversations | Not started |
-| 14 | #69 | API conversations | Not started |
+| #  | Issue | Title | Status |
+|----|-------|-------|--------|
+| 1  | #61 | Seed script: one file per source | Closed ✅ |
+| 2  | #71 | Generic repository pattern | Not started — no dependencies; prerequisite for #58 |
+| 3  | #58 | ImportBatches schema | Not started — requires #71 |
+| 4  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 can close after #58 |
+| 5  | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
+| 6  | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources` and `ImportsPath` config keys missing |
+| 7  | #64 | Conflict resolution policy | Partially done — naming mismatch (`overwrite` vs `newest-wins`), wrong default |
+| 8  | #45 | Import endpoint | Not started |
+| 9  | #65 | Import endpoint: preview/dry-run | Partially done — wrong endpoint shape (needs #45) |
+| 10 | #55 | Record completeness flag | Not started |
+| 11 | #56 | Audit log | Not started |
+| 12 | #59 | Admin: soft-reset by batch | Not started |
+| 13 | #67 | Conversations schema | Not started |
+| 14 | #68 | Curated JSON conversations | Not started |
+| 15 | #69 | API conversations | Not started |
 
 ---
 
 ## Plan documents
 
+- [#71 — Generic repository pattern](71-generic-repository-plan.md)
 - [#57 — Seed script dedup](57-seed-script-dedup-plan.md)
 - [#61 — Seed script per source](61-seed-script-per-source-plan.md)
 - [#63 — Import manifest](63-import-manifest-plan.md)

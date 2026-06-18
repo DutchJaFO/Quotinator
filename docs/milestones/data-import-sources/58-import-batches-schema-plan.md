@@ -2,38 +2,53 @@
 
 **Status:** Not started  
 **GitHub issue:** #58  
-**Unblocks:** #56, #59, #45 (batch row), #64 (policy recording), #67, #68, #69
+**Depends on:** #71 (generic repository pattern)  
+**Unblocks:** #56, #57 (Problem 4), #59, #45 (batch row), #64 (policy recording), #67, #68, #69
 
 ---
 
 ## Spec requirements
 
-1. New `ImportBatches` table tracking every seeding or import run
-2. Columns: `Id` (UUID), `SourceFile` (TEXT), `ImportedAt` (TEXT ISO 8601), `ConflictPolicy` (TEXT), `RecordCount` (INTEGER), `Actor` (TEXT — `"seeder"` for startup, `"api"` for import endpoint)
-3. New nullable `ImportBatchId` (UUID FK → `ImportBatches.Id`) column on `Quotes`, `Characters`, `Sources`, `People`
-4. Pre-seed batch rows for existing data (vilaboim, NikhilNamal17 datasets — `Actor = "seeder"`, `ImportedAt = NULL` or epoch)
-5. Seeder creates one `ImportBatch` row per source file before seeding, writes `ImportBatchId` on all inserts for that file
+1. New `ImportBatches` table with columns: `Id` (UUID, PK), `Name` (TEXT NOT NULL), `Type` (TEXT NOT NULL — `seed` | `import` | `system`), `Url` (TEXT, nullable), `ImportedAt` (TEXT NOT NULL, ISO 8601 UTC), `ImportedBy` (TEXT, nullable), `RecordCount` (INT NOT NULL DEFAULT 0)
+2. Type values: `seed` (external dataset, has a `Url`), `import` (via bulk import endpoint, `ImportedBy` = user UUID), `system` (startup seeding from bundled sources)
+3. Nullable `ImportBatchId TEXT REFERENCES ImportBatches(Id)` column on `Quotes`, `Characters`, `Sources`, `People`
+4. Pre-seeded batch rows for vilaboim and NikhilNamal17 (Type = `seed`); existing records stay `NULL` — provenance not captured retroactively
+5. Seeder creates one `ImportBatch` row per source file before seeding; writes `ImportBatchId` on all inserts for that file
 6. Schema migration version bump
 
 ---
 
 ## Implementation steps
 
-- [ ] Bump schema version in `DatabaseInitializer` (or equivalent migration table)
-- [ ] Add `ImportBatches` table to schema DDL with all columns and indexes
+- [ ] Bump schema version in `DatabaseInitializer`
+- [ ] Add `ImportBatches` table to schema DDL
 - [ ] Add nullable `ImportBatchId TEXT REFERENCES ImportBatches(Id)` column to `Quotes`, `Characters`, `Sources`, `People`
-- [ ] Add `ImportBatch` C# record/class in `Quotinator.Core`
+- [ ] Add `ImportBatch` C# record in `Quotinator.Core`
 - [ ] Add `IImportBatchRepository` and `SqliteImportBatchRepository` in `Quotinator.Data`
 - [ ] Register in DI
-- [ ] Update `DatabaseInitializer.SeedBatch` to create one `ImportBatch` row per source file and pass the ID to all insert calls
-- [ ] Pre-seed batch rows for existing bundled data (vilaboim, NikhilNamal17) with known file names
-- [ ] Tests: schema created correctly, FK constraints hold, pre-seed rows present
-- [ ] Integration test: seeding two source files produces two distinct `ImportBatch` rows
+- [ ] Update seeder to create one `ImportBatch` row per source file and pass `ImportBatchId` to all insert calls
+- [ ] Insert pre-seed rows for vilaboim and NikhilNamal17 on migration (existing records stay `NULL`)
+- [ ] Integration tests (see verification table)
+
+---
+
+## Verification
+
+| # | Status | Requirement | Method | Verification |
+|---|--------|-------------|--------|--------------|
+| 1 | ❌ | `ImportBatches` table created with correct columns | Unit test | `ImportBatchesTests.Schema_ImportBatchesTable_HasAllRequiredColumns` |
+| 2 | ❌ | Nullable `ImportBatchId` FK on all four entity tables | Unit test | `ImportBatchesTests.Schema_EntityTables_HaveNullableImportBatchIdFK` |
+| 3 | ❌ | Pre-seed rows for vilaboim and NikhilNamal17 present after migration | Unit test | `ImportBatchesTests.Seeding_PreSeedBatches_ExistAfterMigration` |
+| 4 | ❌ | Seeder creates one `ImportBatch` row per source file | Unit test | `ImportBatchesTests.Seeding_TwoSourceFiles_ProduceTwoDistinctBatches` |
+| 5 | ❌ | Existing records retain `NULL` `ImportBatchId` after migration | Unit test | `ImportBatchesTests.Migration_ExistingRecords_HaveNullImportBatchId` |
+| 6 | ❌ | Schema migration version bumped | Unit test | `ImportBatchesTests.Schema_MigrationVersion_IsBumped` |
 
 ---
 
 ## Notes
 
-The `Actor` field distinguishes startup seeding (`"seeder"`) from API imports (`"api"`). This enables soft-reset (#59) to target only records from a specific run.
+`RecordCount` is denormalised for display performance; updated after each import run and after targeted resets.
 
-`ImportedAt` for pre-seed rows can be `NULL` (unknown) or a fixed sentinel like the epoch to avoid confusing real import timestamps.
+`ImportBatches` is excluded from any export endpoint — it is instance-specific provenance data.
+
+`NULL` `ImportBatchId` means the record predates provenance tracking or was created via the management UI with no associated import.

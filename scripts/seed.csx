@@ -9,8 +9,9 @@
 //   dotnet-script scripts/seed.csx
 //
 // Options:
-//   --dry-run    Print what would be written without creating any files
-//   --no-fetch   Use cached files in scripts/cache/ instead of downloading
+//   --dry-run         Print what would be written without creating any files
+//   --no-fetch        Use cached files in scripts/cache/ instead of downloading
+//   --output-dir DIR  Write output files to DIR instead of data/sources/
 //
 // Adding a new source: see scripts/SOURCES.md
 
@@ -26,8 +27,9 @@ using System.Text.RegularExpressions;
 
 // ── CLI flags ─────────────────────────────────────────────────────────────────
 
-var dryRun  = Args.Contains("--dry-run");
-var noFetch = Args.Contains("--no-fetch");
+var dryRun       = Args.Contains("--dry-run");
+var noFetch      = Args.Contains("--no-fetch");
+var outputDirArg = Args.SkipWhile(a => a != "--output-dir").Skip(1).FirstOrDefault();
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -35,7 +37,7 @@ var noFetch = Args.Contains("--no-fetch");
 var repoRoot     = Directory.GetCurrentDirectory();
 var sourcesJson  = Path.Combine(repoRoot, "scripts", "sources.json");
 var cacheDir     = Path.Combine(repoRoot, "scripts", "cache");
-var outputDir    = Path.Combine(repoRoot, "data", "sources");
+var outputDir    = outputDirArg ?? Path.Combine(repoRoot, "data", "sources");
 var manifestPath = Path.Combine(outputDir, "manifest.json");
 
 Directory.CreateDirectory(cacheDir);
