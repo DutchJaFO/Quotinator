@@ -386,6 +386,29 @@ See [`docs/testing-policy.md`](docs/testing-policy.md).
 
 The solution file is the source of truth for what is visible in Visual Studio. The rule is: **all files relevant to the project must be included as solution items, except generated binaries** (build output, `.db` files, etc.).
 
+### Folder syntax
+
+The `.slnx` format does **not** support nested `<Folder>` elements. Subfolders must be declared as flat top-level `<Folder>` elements with path-style names. Nesting a `<Folder>` inside another `<Folder>` causes the inner folder and its files to be invisible in Visual Studio Solution Explorer.
+
+```xml
+<!-- Wrong: nested Folder inside Folder -->
+<Folder Name="/docs/">
+  <Folder Name="/docs/workflow/">   ← invisible in VS
+    <File Path="docs/workflow/process.md" />
+  </Folder>
+</Folder>
+
+<!-- Correct: flat top-level elements with path-style names -->
+<Folder Name="/docs/">
+  <File Path="docs/README.md" />
+</Folder>
+<Folder Name="/docs/workflow/">
+  <File Path="docs/workflow/process.md" />
+</Folder>
+```
+
+Source: verified against [microsoft/vs-solutionpersistence](https://github.com/microsoft/vs-solutionpersistence) — their own `SolutionPersistence.slnx` uses this flat pattern.
+
 Current folders and their contents:
 - `/Solution Items/` — `CLAUDE.md`, `README.md`, `SOURCES.md`, `CHANGELOG.md`
 - `/addon/` — all Home Assistant add-on files (`config.yaml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `icon.png`, `logo.png`)

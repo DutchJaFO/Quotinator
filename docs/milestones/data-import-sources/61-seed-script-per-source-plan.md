@@ -1,6 +1,6 @@
 # #61 — Seed script: one file per source
 
-**Status:** Partially done  
+**Status:** Complete  
 **GitHub issue:** #61
 
 ---
@@ -25,16 +25,20 @@
 - [x] `--dry-run` works
 - [x] `--no-fetch` works
 - [x] `Quotinator.slnx` updated with new source files
-- [ ] CI smoke-test path updated from `data/quotes.json` to `data/sources/` — **verify `.github/workflows/` CI file**
+- [x] CI smoke-test path updated from `data/quotes.json` to `data/sources/`
 
 ---
 
-## Remaining work
+## Verification steps
 
-Check the CI workflow file for any assertion that still references `data/quotes.json`:
+One verification step per requirement. Unit test preferred; live command where no test is possible.
 
-```bash
-grep -r "quotes.json" .github/
-```
-
-Update to assert `data/sources/` exists and contains at least one `.json` file.
+| # | Requirement | Method | Verification | Status |
+|---|-------------|--------|--------------|--------|
+| 1 | Writes one file per source to `data/sources/` | Live | `dotnet-script scripts/seed.csx -- --no-fetch` — expected output: `wrote: 99 quotes` and `wrote: 732 quotes`, files present in `data/sources/` | ✅ |
+| 2 | File names use `{owner}_{repo}.json` | Live | Confirmed by req 1 output: `vilaboim_movie-quotes.json` and `NikhilNamal17_popular-movie-quotes.json` | ✅ |
+| 3 | `data/quotes.json` deleted | Unit test | `RepositoryStructureTests.DataQuotesJson_DoesNotExistOnDisk` | ✅ |
+| 4 | `--dry-run` works | Live | `dotnet-script scripts/seed.csx -- --dry-run` — expected output: `[dry-run] no files written.` | ✅ |
+| 5 | `--no-fetch` works | Live | `dotnet-script scripts/seed.csx -- --no-fetch` — expected output: `using cache:` for both sources, no fetch lines | ✅ |
+| 6 | CI smoke-test checks `data/sources/` | Live | CI pipeline passes — assertion in both `ci.yml` and `release.yml` | ✅ |
+| 7 | `Quotinator.slnx` updated | Unit test | `RepositoryStructureTests.SlnxDataSourcesEntries_AllExistOnDisk`, `DataSourcesFiles_OnDisk_AreAllInSlnx`, `DataQuotesJson_IsNotInSlnx` | ✅ |

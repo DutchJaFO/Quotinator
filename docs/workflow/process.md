@@ -60,10 +60,24 @@ At the start of every session working on a milestone:
 1. Read the full issue spec: `gh issue view <N>`
 2. Read the plan doc.
 3. Check the dependency map in `overview.md`. Verify that all blocking issues are fully complete before starting — a partially-done dependency means this issue cannot be closed either.
-4. Implement. Update plan doc step status as work progresses.
-5. Before declaring done: re-read **every requirement** in the GitHub issue spec and verify each one is implemented and tested.
+4. For each requirement in the spec, create a verification checklist entry in the plan doc.
+   This is part of planning — it must exist before implementation starts. Each entry must state:
+   - **Unit test preferred:** if a unit test can cover it, name the exact test class and method.
+     Write the test as part of the issue if it does not yet exist.
+   - **Live test fallback:** if no unit test is possible, document the exact command to run
+     and the observable output that confirms the requirement is met.
+   Checklist items start red (test failing or command not yet passing) and turn green as
+   implementation progresses. A green item means the test passes or the command produces
+   the expected output — not that the code looks right.
 
-An issue is done only when every requirement in its GitHub spec is met. Partial implementation means the issue stays open.
+   **Bug fixes:** before writing any fix, first confirm the bug is reproducible. Write a
+   failing unit test that demonstrates the bug, or document the exact steps and observed
+   output that prove it exists. The fix is complete only when that test passes or those
+   steps no longer reproduce the bug.
+5. Implement. Update plan doc step status as work progresses.
+6. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each documented verification step against the actual code.
+
+An issue is done only when every requirement in its GitHub spec is met and verified against actual code. Partial implementation means the issue stays open.
 
 ---
 

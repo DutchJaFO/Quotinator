@@ -29,8 +29,11 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 - [ ] Verify all blocking/related issues in the dependency map are fully closed first
 - [ ] Re-read the **full** issue spec: `gh issue view <N>`
-- [ ] Map every requirement bullet, table cell, and endpoint shape from the spec to the actual implementation in code
-- [ ] Confirm every requirement is implemented and tested — if anything is missing, the issue stays open
+- [ ] Confirm the plan doc has a verification checklist entry for every requirement, each naming either the exact unit test (class + method) or the exact live command and expected output
+- [ ] For bug fixes: confirm a failing test or reproducible steps existed before the fix was written — the bug must have been demonstrably red before turning green
+- [ ] All unit tests named in the checklist pass (green)
+- [ ] All live verification commands have been run and produced the expected output (green)
+- [ ] No requirement is still red — if anything is unverified, the issue stays open
 - [ ] Confirm all changes are merged to `main` and included in a tagged release
 - [ ] Update the plan doc status to `Complete`
 - [ ] Update the status column in `overview.md`
