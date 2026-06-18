@@ -70,6 +70,14 @@ At the start of every session working on a milestone:
    implementation progresses. A green item means the test passes or the command produces
    the expected output — not that the code looks right.
 
+   The verification checklist in the plan doc must use this table format:
+
+   | # | Status | Requirement | Method | Verification |
+   |---|--------|-------------|--------|--------------|
+   | 1 | ❌ / ✅ | Description | Unit test / Live | Test class.Method or exact command + expected output |
+
+   `Status` is a standalone column between `#` and `Requirement` — never embed ✅ or ❌ inside the Verification column.
+
    **Bug fixes:** before writing any fix, first confirm the bug is reproducible. Write a
    failing unit test that demonstrates the bug, or document the exact steps and observed
    output that prove it exists. The fix is complete only when that test passes or those

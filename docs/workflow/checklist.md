@@ -29,7 +29,7 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 - [ ] Verify all blocking/related issues in the dependency map are fully closed first
 - [ ] Re-read the **full** issue spec: `gh issue view <N>`
-- [ ] Confirm the plan doc has a verification checklist entry for every requirement, each naming either the exact unit test (class + method) or the exact live command and expected output
+- [ ] Confirm the plan doc has a verification checklist entry for every requirement, each naming either the exact unit test (class + method) or the exact live command and expected output — Status must be its own column between # and Requirement, never embedded in the Verification column
 - [ ] For bug fixes: confirm a failing test or reproducible steps existed before the fix was written — the bug must have been demonstrably red before turning green
 - [ ] All unit tests named in the checklist pass (green)
 - [ ] All live verification commands have been run and produced the expected output (green)
