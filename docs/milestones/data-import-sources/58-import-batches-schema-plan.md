@@ -2,6 +2,7 @@
 
 **Status:** Not started  
 **GitHub issue:** #58  
+**Depends on:** #71 (generic repository pattern)  
 **Unblocks:** #56, #57 (Problem 4), #59, #45 (batch row), #64 (policy recording), #67, #68, #69
 
 ---
