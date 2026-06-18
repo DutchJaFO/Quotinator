@@ -1,4 +1,8 @@
+using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
+using Json.Schema;
 
 namespace Quotinator.Api.Tests.Solution;
 
@@ -88,5 +92,93 @@ public class RepositoryStructureTests
 
         Assert.IsEmpty(failures,
             $"Files exist in data/sources/ on disk but are missing from Quotinator.slnx:\n{string.Join("\n", failures)}");
+    }
+
+    /// <summary>
+    /// Seed script with --no-fetch produces schema-valid files whose entry IDs exactly
+    /// match the current baseline in data/sources/.
+    /// </summary>
+    [TestMethod]
+    public void SeedScript_WithNoFetch_ProducesFilesMatchingBaseline()
+    {
+        var schema = JsonSchema.FromText(
+            File.ReadAllText(Path.Combine(RepoRoot, "schemas", "source-flat.schema.json")));
+
+        var sources = JsonNode.Parse(
+            File.ReadAllText(Path.Combine(RepoRoot, "scripts", "sources.json")))!.AsArray();
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName               = "dotnet-script",
+                Arguments              = $"scripts/seed.csx -- --no-fetch --output-dir \"{tempDir}\"",
+                WorkingDirectory       = RepoRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError  = true,
+                UseShellExecute        = false
+            })!;
+            process.WaitForExit();
+
+            Assert.AreEqual(0, process.ExitCode,
+                $"Seed script failed:\n{process.StandardError.ReadToEnd()}");
+
+            var failures = new List<string>();
+
+            foreach (var src in sources)
+            {
+                var name     = src!["name"]!.GetValue<string>();
+                var fileName = name.Replace("/", "_") + ".json";
+
+                var outputPath   = Path.Combine(tempDir, fileName);
+                var baselinePath = Path.Combine(RepoRoot, "data", "sources", fileName);
+
+                if (!File.Exists(outputPath))
+                {
+                    failures.Add($"{fileName}: output file not found");
+                    continue;
+                }
+
+                // Schema validation
+                using var outputDoc = JsonDocument.Parse(File.ReadAllText(outputPath));
+                var result = schema.Evaluate(outputDoc.RootElement,
+                    new EvaluationOptions { OutputFormat = OutputFormat.List });
+
+                if (!result.IsValid)
+                {
+                    var errors = (result.Details ?? [])
+                        .Where(d => !d.IsValid && d.Errors is not null)
+                        .SelectMany(d => d.Errors!.Select(e => $"  {d.InstanceLocation}: {e.Value}"));
+                    failures.Add($"{fileName}: schema validation failed:\n{string.Join("\n", errors)}");
+                }
+
+                // ID set must exactly match baseline
+                static HashSet<string> LoadIds(JsonElement root) =>
+                    root.EnumerateArray()
+                        .Select(e => e.GetProperty("id").GetString()!)
+                        .ToHashSet();
+
+                var outputIds   = LoadIds(outputDoc.RootElement);
+                using var baselineDoc = JsonDocument.Parse(File.ReadAllText(baselinePath));
+                var baselineIds = LoadIds(baselineDoc.RootElement);
+
+                var missing = baselineIds.Except(outputIds).ToList();
+                var extra   = outputIds.Except(baselineIds).ToList();
+
+                if (missing.Count > 0)
+                    failures.Add($"{fileName}: {missing.Count} IDs present in baseline are missing from output");
+                if (extra.Count > 0)
+                    failures.Add($"{fileName}: {extra.Count} IDs in output are not in baseline");
+            }
+
+            Assert.IsEmpty(failures,
+                $"Seed script output does not match baseline:\n{string.Join("\n", failures)}");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
     }
 }

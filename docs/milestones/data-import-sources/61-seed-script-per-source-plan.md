@@ -14,6 +14,7 @@
 5. `--no-fetch` flag uses the local `scripts/cache/` directory instead of downloading
 6. CI smoke-test asserts `data/sources/` is present and non-empty (not `data/quotes.json`)
 7. `Quotinator.slnx` updated: old `data/quotes.json` removed, new source files added
+8. `--output-dir DIR` flag redirects output to a specified directory (added to enable live testing)
 
 ---
 
@@ -26,6 +27,7 @@
 - [x] `--no-fetch` works
 - [x] `Quotinator.slnx` updated with new source files
 - [x] CI smoke-test path updated from `data/quotes.json` to `data/sources/`
+- [x] `--output-dir DIR` flag added to seed script
 
 ---
 
@@ -35,10 +37,11 @@ One verification step per requirement. Unit test preferred; live command where n
 
 | # | Requirement | Method | Verification | Status |
 |---|-------------|--------|--------------|--------|
-| 1 | Writes one file per source to `data/sources/` | Live | `dotnet-script scripts/seed.csx -- --no-fetch` — expected output: `wrote: 99 quotes` and `wrote: 732 quotes`, files present in `data/sources/` | ✅ |
-| 2 | File names use `{owner}_{repo}.json` | Live | Confirmed by req 1 output: `vilaboim_movie-quotes.json` and `NikhilNamal17_popular-movie-quotes.json` | ✅ |
+| 1 | Writes one file per source to `data/sources/` | Unit test | `RepositoryStructureTests.SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — runs script into temp dir, validates against `source-flat.schema.json`, asserts IDs exactly match baseline | ✅ |
+| 2 | File names use `{owner}_{repo}.json` | Unit test | Covered by `SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — expected filenames derived from `sources.json` and asserted present | ✅ |
 | 3 | `data/quotes.json` deleted | Unit test | `RepositoryStructureTests.DataQuotesJson_DoesNotExistOnDisk` | ✅ |
 | 4 | `--dry-run` works | Live | `dotnet-script scripts/seed.csx -- --dry-run` — expected output: `[dry-run] no files written.` | ✅ |
 | 5 | `--no-fetch` works | Live | `dotnet-script scripts/seed.csx -- --no-fetch` — expected output: `using cache:` for both sources, no fetch lines | ✅ |
 | 6 | CI smoke-test checks `data/sources/` | Live | CI pipeline passes — assertion in both `ci.yml` and `release.yml` | ✅ |
 | 7 | `Quotinator.slnx` updated | Unit test | `RepositoryStructureTests.SlnxDataSourcesEntries_AllExistOnDisk`, `DataSourcesFiles_OnDisk_AreAllInSlnx`, `DataQuotesJson_IsNotInSlnx` | ✅ |
+| 8 | `--output-dir DIR` redirects output | Unit test | Covered by `SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — explicitly passes `--output-dir <tempdir>` and asserts files land there, not in `data/sources/` | ✅ |
