@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [Unreleased]
+
+### Added
+- `seed.csx --output-dir DIR` flag redirects seed output to a custom directory, making it possible to test seeding without overwriting `data/sources/`
+
+---
+
 ## [1.3.0] - 2026-06-17
 
 ### Highlights
