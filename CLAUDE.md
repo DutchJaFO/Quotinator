@@ -281,6 +281,12 @@ Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.
 
 `/search` is registered before `/{id}` in `QuoteEndpoints.cs` so the literal segment takes priority over the catch-all parameter. Preserve this order.
 
+### Vocabulary and abbreviations
+
+`docs/vocabulary.md` is the authoritative reference for abbreviations and domain terms used in this project. Do not introduce a new abbreviation in code, comments, or documentation without adding it to that file in the same commit. Domain terms that carry a project-specific meaning (especially where a common word is used in a narrower sense) belong there too.
+
+This policy does not affect XML `<summary>` tags — those follow standard C# documentation conventions and are a build requirement independent of the vocabulary.
+
 ### Code comments
 
 Two separate rules:
