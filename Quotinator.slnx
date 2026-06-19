@@ -98,5 +98,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
+    <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
   </Folder>
 </Solution>

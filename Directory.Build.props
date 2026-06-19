@@ -1,0 +1,15 @@
+<Project>
+
+  <PropertyGroup>
+    <!--
+      NU1903: SQLitePCLRaw.lib.e_sqlite3 ≤ 2.1.11 bundles a SQLite version affected by CVE-2025-6965.
+      No patched NuGet version exists as of 2026-06-20 (first_patched_version: null).
+      Our queries are audited and the pattern cannot be triggered — see:
+        docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md
+        docs/sql-safety.md
+      Remove this suppression when SQLitePCLRaw.lib.e_sqlite3 > 2.1.11 ships and we upgrade.
+    -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+</Project>

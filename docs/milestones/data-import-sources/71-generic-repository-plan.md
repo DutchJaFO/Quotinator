@@ -44,15 +44,15 @@ See [`docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md`](../
 
 ## Implementation steps
 
-- [ ] Add `IRepository<T>` interface to `Quotinator.Data/Repositories/`
-- [ ] Add `SqliteRepository<T>` base class to `Quotinator.Data/Repositories/`
-- [ ] Add `SqlAggregateGuard` to `Quotinator.Data/Diagnostics/`
-- [ ] Create `tests/Quotinator.Data.Tests` project
-- [ ] Add `SqliteRepositoryTests` — CRUD round-trip against in-memory SQLite
-- [ ] Add `SqlAggregateGuardTests` — detector unit tests (known-dangerous and known-safe cases)
-- [ ] Add `SqlSourceScanTests` to `Quotinator.Core.Tests` — scans `src/` for vulnerable patterns
-- [ ] Add new test project to `Quotinator.slnx`
-- [ ] Update `docs/README.md`, `docs/sql-safety.md`, `docs/architecture-decisions/001-...`
+- [x] Add `IRepository<T>` interface to `Quotinator.Data/Repositories/`
+- [x] Add `SqliteRepository<T>` base class to `Quotinator.Data/Repositories/`
+- [x] Add `SqlAggregateGuard` to `Quotinator.Data/Diagnostics/`
+- [x] Create `tests/Quotinator.Data.Tests` project
+- [x] Add `SqliteRepositoryTests` — CRUD round-trip against file-based SQLite
+- [x] Add `SqlAggregateGuardTests` — detector unit tests (known-dangerous and known-safe cases)
+- [x] Add `SqlSourceScanTests` to `Quotinator.Core.Tests` — scans `src/` for vulnerable patterns
+- [x] Add new test project to `Quotinator.slnx`
+- [x] Update `docs/README.md`, `docs/sql-safety.md`, `docs/architecture-decisions/001-...`
 
 ---
 
@@ -60,17 +60,17 @@ See [`docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md`](../
 
 | # | Status | Requirement | Test |
 |---|--------|-------------|------|
-| 1 | ❌ | `IRepository<T>` interface exists with correct members | `SqliteRepositoryTests.IRepository_HasRequiredMembers` |
-| 2 | ❌ | `SqliteRepository<T>` implements `IRepository<T>` | `SqliteRepositoryTests.SqliteRepository_ImplementsIRepository` |
-| 3 | ❌ | `InsertAsync` writes a record readable via `GetByIdAsync` | `SqliteRepositoryTests.InsertAsync_ThenGetById_ReturnsRecord` |
-| 4 | ❌ | `UpdateAsync` persists changes | `SqliteRepositoryTests.UpdateAsync_PersistsChanges` |
-| 5 | ❌ | `SoftDeleteAsync` sets `IsDeleted=1` and `DateDeleted`; `GetByIdAsync` returns null | `SqliteRepositoryTests.SoftDeleteAsync_HidesRecord` |
-| 6 | ❌ | Guard flags GROUP BY + aggregate as dangerous | `SqlAggregateGuardTests.GroupByWithAggregate_IsFlagged` |
-| 7 | ❌ | Guard passes simple COUNT(*) as safe | `SqlAggregateGuardTests.SimpleCountStar_IsSafe` |
-| 8 | ❌ | Guard flags SQLite-specific GROUP_CONCAT with GROUP BY | `SqlAggregateGuardTests.GroupConcatWithGroupBy_IsFlagged` |
-| 9 | ❌ | Guard flags HAVING with aggregate | `SqlAggregateGuardTests.HavingWithAggregate_IsFlagged` |
-| 10 | ❌ | Guard passes MAX without GROUP BY | `SqlAggregateGuardTests.MaxWithoutGroupBy_IsSafe` |
-| 11 | ❌ | All SQL in `src/` passes the aggregate guard | `SqlSourceScanTests.AllSqlInSourceFiles_NoVulnerableAggregatePatterns` |
+| 1 | ✅ | `IRepository<T>` interface exists with correct members | `SqliteRepositoryTests.IRepository_HasRequiredMembers` |
+| 2 | ✅ | `SqliteRepository<T>` implements `IRepository<T>` | `SqliteRepositoryTests.SqliteRepository_ImplementsIRepository` |
+| 3 | ✅ | `InsertAsync` writes a record readable via `GetByIdAsync` | `SqliteRepositoryTests.InsertAsync_ThenGetById_ReturnsRecord` |
+| 4 | ✅ | `UpdateAsync` persists changes | `SqliteRepositoryTests.UpdateAsync_PersistsChanges` |
+| 5 | ✅ | `SoftDeleteAsync` sets `IsDeleted=1` and `DateDeleted`; `GetByIdAsync` returns null | `SqliteRepositoryTests.SoftDeleteAsync_HidesRecord` |
+| 6 | ✅ | Guard flags GROUP BY + aggregate as dangerous | `SqlAggregateGuardTests.GroupByWithAggregate_IsFlagged` |
+| 7 | ✅ | Guard passes simple COUNT(*) as safe | `SqlAggregateGuardTests.SimpleCountStar_IsSafe` |
+| 8 | ✅ | Guard flags SQLite-specific GROUP_CONCAT with GROUP BY | `SqlAggregateGuardTests.GroupConcatWithGroupBy_IsFlagged` |
+| 9 | ✅ | Guard flags HAVING with aggregate | `SqlAggregateGuardTests.HavingWithAggregate_IsFlagged` |
+| 10 | ✅ | Guard passes MAX without GROUP BY | `SqlAggregateGuardTests.MaxWithoutGroupBy_IsSafe` |
+| 11 | ✅ | All SQL in `src/` passes the aggregate guard | `SqlSourceScanTests.AllSqlInSourceFiles_NoVulnerableAggregatePatterns` |
 
 ---
 
@@ -80,7 +80,12 @@ Bulk seeding in `DatabaseInitializer` uses a shared connection across many inser
 Repository methods open their own connection per operation and are not suitable for bulk use —
 those stay inline in `DatabaseInitializer` for now.
 
-`GetByIdAsync` uses Dapper.Contrib `GetAsync<T>` then filters `IsDeleted` in C# — no raw SQL.
-`SoftDeleteAsync` uses a hand-written `UPDATE` parameterised on `Id`; the table name comes from
-the `[Table]` attribute on `T` (developer-controlled metadata, not user input — not a SQL injection
-risk). This is the only raw SQL in `SqliteRepository<T>`.
+`GetByIdAsync` uses a hand-written `SELECT * FROM {TableName} WHERE Id = @id AND IsDeleted = 0`.
+`SoftDeleteAsync` uses a hand-written `UPDATE` parameterised on `Id`; the table name in both cases
+comes from the `[Table]` attribute on `T` (developer-controlled metadata, not user input — not a
+SQL injection risk). `InsertAsync` and `UpdateAsync` delegate to Dapper.Contrib.
+
+**Guid storage format:** Microsoft.Data.Sqlite stores `Guid` values as uppercase TEXT by default
+(e.g. `"A3F2..."`). `GuidHandler` matches this format so that all paths — Dapper.Contrib inserts,
+Dapper reads, and hand-written WHERE clauses — use the same uppercase representation. This handler
+is registered in `DapperConfiguration.Configure()` (production) and in the test `ClassInitialize`.
