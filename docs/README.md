@@ -17,7 +17,7 @@
 | Folder | Contents |
 |---|---|
 | `architecture-decisions/` | Architecture Decision Records — numbered, one file per decision |
-| `decisions/` | Lightweight design notes, spike writeups, open questions |
+| `decisions/` | Lightweight design notes, spike writeups, open questions (see `decisions/README.md`) |
 
 ## Architecture Decision Records
 

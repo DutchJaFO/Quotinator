@@ -37,8 +37,8 @@ Shipping the infrastructure now keeps #71 self-contained and testable.
 CVE-2025-6965 affects `SQLitePCLRaw.lib.e_sqlite3` ≤ 2.1.11. No patched version is available.
 A `SqlAggregateGuard` utility and supporting tests are introduced here as the preventive guardrail.
 
-See [`docs/sql-safety.md`](../../../sql-safety.md) for the full design rationale.
-See [`docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md`](../../../architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md) for the Quotinator-level decision record.
+See [`docs/sql-safety.md`](../../sql-safety.md) for the full design rationale.
+See [`docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md`](../../architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md) for the Quotinator-level decision record.
 
 ---
 
