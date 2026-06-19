@@ -17,11 +17,14 @@
     <File Path="addon/DOCS.md" />
     <File Path="addon/CHANGELOG.md" />
     <File Path="addon/icon.png" />
+    <File Path="addon/icon.svg" />
     <File Path="addon/logo.png" />
+    <File Path="addon/logo.svg" />
     <File Path="addon/translations/en.yaml" />
     <File Path="addon/translations/nl.yaml" />
     <File Path="addon/translations/de.yaml" />
   </Folder>
+  <Folder Name="/data/" />
   <Folder Name="/data/sources/">
     <File Path="data/sources/manifest.json" />
     <File Path="data/sources/quotinator-curated.json" />
@@ -42,6 +45,7 @@
     <File Path="docs/running-locally.md" />
     <File Path="docs/testing-policy.md" />
   </Folder>
+  <Folder Name="/docs/milestones/" />
   <Folder Name="/docs/milestones/data-import-sources/">
     <File Path="docs/milestones/data-import-sources/overview.md" />
     <File Path="docs/milestones/data-import-sources/45-import-endpoint-plan.md" />
@@ -76,6 +80,9 @@
     <File Path="scripts/sources.json" />
     <File Path="scripts/SOURCES.md" />
   </Folder>
+  <Folder Name="/Solution/">
+    <File Path="tests/Quotinator.Api.Tests/Solution/RepositoryStructureTests.cs" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Quotinator.Api/Quotinator.Api.csproj" />
     <Project Path="src/Quotinator.Constants/Quotinator.Constants.csproj" />
@@ -85,8 +92,5 @@
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Quotinator.Api.Tests/Solution/">
-    <File Path="tests/Quotinator.Api.Tests/Solution/RepositoryStructureTests.cs" />
   </Folder>
 </Solution>

@@ -1,0 +1,22 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="lg-c"><circle cx="256" cy="256" r="248"/></clipPath>
+  </defs>
+  <circle cx="256" cy="256" r="256" fill="#0C1E3C"/>
+  <g clip-path="url(#lg-c)">
+    <text x="28" y="120" font-family="Georgia,serif" font-size="56" font-weight="700" fill="#5DCAA5" opacity="0.60">&#x201C;</text>
+    <text x="26" y="340" font-family="Georgia,serif" font-size="46" font-weight="700" fill="#5DCAA5" opacity="0.50">&#x201D;</text>
+    <text x="56" y="492" font-family="Georgia,serif" font-size="52" font-weight="700" fill="#5DCAA5" opacity="0.55">&#x201C;</text>
+    <text x="416" y="72" font-family="Georgia,serif" font-size="50" font-weight="700" fill="#5DCAA5" opacity="0.50">&#x201D;</text>
+    <text x="448" y="296" font-family="Georgia,serif" font-size="54" font-weight="700" fill="#5DCAA5" opacity="0.55">&#x201C;</text>
+    <text x="432" y="492" font-family="Georgia,serif" font-size="52" font-weight="700" fill="#5DCAA5" opacity="0.50">&#x201D;</text>
+    <rect x="115" y="52" width="352" height="218" rx="38" fill="white"/>
+    <polygon points="135,268 197,268 130,320" fill="white"/>
+    <text x="155" y="218" font-family="Georgia,serif" font-size="158" font-weight="700" fill="#5DCAA5">&#x201C;</text>
+    <text x="453" y="264" font-family="Georgia,serif" font-size="112" font-weight="700" fill="#9FE1CB" text-anchor="end">&#x201D;</text>
+    <path d="M 168,353 C 192,342 222,360 225,385 C 225,398 215,408 212,418 C 210,428 228,430 235,438 C 238,445 222,452 215,460 C 214,466 212,472 210,478 C 208,485 204,492 198,512 L 250,512 L 0,512 L 0,490 C 22,482 50,476 76,470 C 96,465 115,458 117,444 C 119,428 117,410 114,394 C 111,378 108,365 110,356 C 112,347 126,340 143,338 C 157,336 163,343 168,353 Z" fill="white"/>
+    <ellipse cx="100" cy="412" rx="18" ry="24" fill="white"/>
+    <circle cx="218" cy="402" r="9" fill="#0C1E3C"/>
+  </g>
+  <circle cx="256" cy="256" r="248" fill="none" stroke="#1D9E75" stroke-width="10"/>
+</svg>
