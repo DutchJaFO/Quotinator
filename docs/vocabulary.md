@@ -48,8 +48,10 @@ and follow standard C# documentation conventions.
 
 | Term | Definition |
 |---|---|
+| aggregate root | An entity that owns a cluster of related objects and is the single entry point for operations on that cluster. In the repository layer, an aggregate root repository may write to more than one table in a single transaction (see #75). |
 | `character` | A fictional character in a film, series, book, or other fictional work who delivers a quote. Distinct from `person`. |
 | `ImportBatch` | A single import operation — one run of the seed script or one call to the import endpoint. Tracks the provenance of records. Distinct from `SeedBatch`. |
+| junction table | An associative table that implements a many-to-many relationship by holding pairs of foreign keys (e.g. `QuoteTag` linking `Quotes` to `Tags`). All junction tables in Quotinator extend `RecordBase` — see ADR 002. |
 | `person` | A real-world individual (author, public figure) who said or wrote a quote. Distinct from `character`. |
 | `RecordBase` | The abstract base class for all database-backed entities. Provides a UUID primary key and soft-delete audit columns (`DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted`). |
 | `SafeValue<T>` | A wrapper for database column values that may be imprecisely formatted (e.g. a date stored as `"1994"` rather than a full timestamp). Preserves the raw string alongside the parsed value. |

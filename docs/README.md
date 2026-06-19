@@ -24,6 +24,7 @@
 | # | Title | Status |
 |---|---|---|
 | [001](architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md) | CVE-2025-6965: SQL aggregate guard | Accepted |
+| [002](architecture-decisions/002-recordbase-on-all-tables.md) | RecordBase applies to all tables without exception | Accepted |
 
 ## Architecture Decision Record format
 

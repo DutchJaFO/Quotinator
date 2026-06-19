@@ -49,6 +49,7 @@
   </Folder>
   <Folder Name="/docs/architecture-decisions/">
     <File Path="docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md" />
+    <File Path="docs/architecture-decisions/002-recordbase-on-all-tables.md" />
   </Folder>
   <Folder Name="/docs/milestones/" />
   <Folder Name="/docs/milestones/data-import-sources/">
