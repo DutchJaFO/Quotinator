@@ -89,11 +89,24 @@ An issue is done only when every requirement in its GitHub spec is met and verif
 
 ---
 
+## Scope changes and deferrals
+
+If during planning or implementation a requirement from the GitHub issue spec is deferred to a later issue:
+
+1. Post a comment on the GitHub issue documenting what was deferred, why, and which issue it moves to.
+2. Update the plan doc with a **Scope changes** section listing the same information.
+3. Update the downstream issue's plan doc to reflect the deferred work — describe what the upstream issue delivered and what the downstream issue needs to decide or build on top of it.
+4. The closing verification table covers only the requirements that remain in scope. Deferred items are listed separately with a pointer to the issue that owns them.
+
+An issue may only close when its GitHub issue page reflects the actual scope — either the spec was never changed, or a comment documents every deferral. Never close an issue whose spec contains requirements that were silently dropped.
+
+---
+
 ## Completing an issue
 
 An issue may only be closed when **all** of the following are true:
 
-- Every requirement in the GitHub issue spec is implemented and tested
+- Every requirement in the GitHub issue spec is implemented and tested, **or** any deferred requirements are documented via a comment on the issue (see Scope changes above)
 - All related/blocking issues it depends on are themselves closed
 - All changes are merged to `main`
 - The changes are included in a tagged release

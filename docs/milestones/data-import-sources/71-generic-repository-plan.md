@@ -1,6 +1,6 @@
 # #71 — Generic repository pattern for database entities
 
-**Status:** In progress  
+**Status:** Complete  
 **GitHub issue:** #71  
 **Unblocks:** #58 (ImportBatches), all future entity repositories
 
@@ -8,13 +8,27 @@
 
 ## Scope decision: Option B
 
-The first concrete implementation (`IImportBatchRepository` / `SqliteImportBatchRepository`)
-is deferred to issue #58, which owns the `ImportBatch` entity and schema migration.
-This issue delivers only the base infrastructure in `Quotinator.Data`.
+This issue delivers only the base infrastructure in `Quotinator.Data`:
+`IRepository<T>` and `SqliteRepository<T>`.
 
 **Reason:** The `ImportBatch` entity does not exist yet — #58 adds it alongside the schema
 migration. Coupling #71 to #58 would make this issue impossible to close independently.
 Shipping the infrastructure now keeps #71 self-contained and testable.
+
+---
+
+## Scope changes
+
+The original GitHub issue spec included:
+
+> - Add first concrete implementation: `IImportBatchRepository` / `SqliteImportBatchRepository` in `Quotinator.Core`
+> - Register in DI
+
+These items are **deferred to #58**, which owns the `ImportBatch` entity, the schema
+migration, and the decision of whether the concrete repository needs to subclass
+`SqliteRepository<T>` or simply use `IRepository<ImportBatch>` via DI directly.
+
+A comment on GitHub issue #71 documents this deferral.
 
 ---
 
@@ -56,21 +70,37 @@ See [`docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md`](../
 
 ---
 
+## Scope additions
+
+The following were built beyond the original spec and are covered in the verification table below:
+
+- `IRestorableRepository<T>` — extends `IRepository<T>` with soft-delete recovery: `GetDeletedAsync`, `RestoreAsync`, `HardDeleteAsync`, `PurgeAsync`
+- `SqliteRestorableRepository<T>` — extends `SqliteRepository<T>` and implements `IRestorableRepository<T>`
+- `RepositorySql.cs` — centralised SQL constants and factory methods for repository queries, verified against the aggregate guard
+
+---
+
 ## Verification
 
-| # | Status | Requirement | Test |
-|---|--------|-------------|------|
-| 1 | ✅ | `IRepository<T>` interface exists with correct members | `SqliteRepositoryTests.IRepository_HasRequiredMembers` |
-| 2 | ✅ | `SqliteRepository<T>` implements `IRepository<T>` | `SqliteRepositoryTests.SqliteRepository_ImplementsIRepository` |
-| 3 | ✅ | `InsertAsync` writes a record readable via `GetByIdAsync` | `SqliteRepositoryTests.InsertAsync_ThenGetById_ReturnsRecord` |
-| 4 | ✅ | `UpdateAsync` persists changes | `SqliteRepositoryTests.UpdateAsync_PersistsChanges` |
-| 5 | ✅ | `SoftDeleteAsync` sets `IsDeleted=1` and `DateDeleted`; `GetByIdAsync` returns null | `SqliteRepositoryTests.SoftDeleteAsync_HidesRecord` |
-| 6 | ✅ | Guard flags GROUP BY + aggregate as dangerous | `SqlAggregateGuardTests.GroupByWithAggregate_IsFlagged` |
-| 7 | ✅ | Guard passes simple COUNT(*) as safe | `SqlAggregateGuardTests.SimpleCountStar_IsSafe` |
-| 8 | ✅ | Guard flags SQLite-specific GROUP_CONCAT with GROUP BY | `SqlAggregateGuardTests.GroupConcatWithGroupBy_IsFlagged` |
-| 9 | ✅ | Guard flags HAVING with aggregate | `SqlAggregateGuardTests.HavingWithAggregate_IsFlagged` |
-| 10 | ✅ | Guard passes MAX without GROUP BY | `SqlAggregateGuardTests.MaxWithoutGroupBy_IsSafe` |
-| 11 | ✅ | All SQL in `src/` passes the aggregate guard | `SqlSourceScanTests.AllSqlInSourceFiles_NoVulnerableAggregatePatterns` |
+| # | Status | Requirement | Method | Verification |
+|---|--------|-------------|--------|--------------|
+| 1 | ✅ | `IRepository<T>` interface exists with correct members (`GetByIdAsync`, `InsertAsync`, `UpdateAsync`, `SoftDeleteAsync`) | Unit test | `SqliteRepositoryTests.SqliteRepository_ImplementsIRepository` — compile-time contract; interface must be satisfied for the test to build and run |
+| 2 | ✅ | `SqliteRepository<T>` implements `IRepository<T>` | Unit test | `SqliteRepositoryTests.SqliteRepository_ImplementsIRepository` |
+| 3 | ✅ | `InsertAsync` writes a record readable via `GetByIdAsync` | Unit test | `SqliteRepositoryTests.InsertAsync_ThenGetById_ReturnsRecord` |
+| 4 | ✅ | `UpdateAsync` persists changes | Unit test | `SqliteRepositoryTests.UpdateAsync_PersistsChanges` |
+| 5 | ✅ | `SoftDeleteAsync` sets `IsDeleted=1` and `DateDeleted`; `GetByIdAsync` returns null | Unit test | `SqliteRepositoryTests.SoftDeleteAsync_HidesRecordFromGetById` |
+| 6 | ✅ | Guard flags GROUP BY + aggregate as dangerous | Unit test | `SqlAggregateGuardTests.IsVulnerablePattern_GroupByWithCount_ReturnsTrue` |
+| 7 | ✅ | Guard passes simple COUNT(*) as safe | Unit test | `SqlAggregateGuardTests.IsVulnerablePattern_SimpleCountStar_ReturnsFalse` |
+| 8 | ✅ | Guard flags SQLite-specific GROUP_CONCAT with GROUP BY | Unit test | `SqlAggregateGuardTests.IsVulnerablePattern_GroupByWithGroupConcat_ReturnsTrue` |
+| 9 | ✅ | Guard flags HAVING with aggregate | Unit test | `SqlAggregateGuardTests.IsVulnerablePattern_HavingWithCount_ReturnsTrue` |
+| 10 | ✅ | Guard passes MAX/COALESCE(MAX) without GROUP BY as safe | Unit test | `SqlAggregateGuardTests.IsVulnerablePattern_CoalesceMax_ReturnsFalse` |
+| 11 | ✅ | All SQL in `src/` passes the aggregate guard | Unit test | `SqlSourceScanTests.AllSqlInSourceFiles_NoVulnerableAggregatePatterns` |
+| 12 | ✅ | `IRestorableRepository<T>` extends `IRepository<T>` with recovery methods | Unit test | `SqliteRestorableRepositoryTests.SqliteRestorableRepository_ImplementsIRestorableRepository` |
+| 13 | ✅ | `GetDeletedAsync` returns only soft-deleted records | Unit test | `SqliteRestorableRepositoryTests.GetDeletedAsync_ReturnsOnlySoftDeletedRecords` |
+| 14 | ✅ | `RestoreAsync` makes a soft-deleted record visible via `GetByIdAsync` | Unit test | `SqliteRestorableRepositoryTests.RestoreAsync_MakesRecordVisibleViaGetById` |
+| 15 | ✅ | `HardDeleteAsync` permanently removes a soft-deleted record | Unit test | `SqliteRestorableRepositoryTests.HardDeleteAsync_RemovesSoftDeletedRecord` |
+| 16 | ✅ | `PurgeAsync` removes all soft-deleted records and returns the count | Unit test | `SqliteRestorableRepositoryTests.PurgeAsync_ReturnsPurgedCount` |
+| 17 | ✅ | All SQL in repository classes passes the aggregate guard | Unit test | `RepositorySqlGuardTests.RepositorySqlFactory_PassesAggregateGuard` |
 
 ---
 

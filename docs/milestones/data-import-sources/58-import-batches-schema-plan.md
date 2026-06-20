@@ -45,6 +45,19 @@
 
 ---
 
+## Repository design decision (deferred from #71)
+
+#71 delivered `IRepository<T>` and `SqliteRepository<T>` in `Quotinator.Data`. This issue adds the first concrete repository for `ImportBatch`.
+
+At the start of #58, decide which shape fits:
+
+- **Option A — plain injection:** `ImportBatch` extends `RecordBase`; use `IRepository<ImportBatch>` directly via DI with no subclass. Choose this if the four base methods (`GetByIdAsync`, `InsertAsync`, `UpdateAsync`, `SoftDeleteAsync`) are sufficient.
+- **Option B — subclass:** Create `IImportBatchRepository` extending `IRepository<ImportBatch>` and `SqliteImportBatchRepository` extending `SqliteRepository<ImportBatch>`. Choose this if additional query methods are needed (e.g. list all batches, find by type, update `RecordCount`).
+
+Record the decision and reasoning in this plan doc before implementing.
+
+---
+
 ## Notes
 
 `RecordCount` is denormalised for display performance; updated after each import run and after targeted resets.
