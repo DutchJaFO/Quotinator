@@ -104,9 +104,10 @@ Verify: entry count in JSON matches version count in `scripts/changelog-referenc
 - Private deserialization DTO lives in the project; not part of the public interface
 - Path: `AppContext.BaseDirectory + "changelog.json"` (note: file lives in `Quotinator.Api` output; see constraint in Decisions)
 - No reference to `Quotinator.Core` or `Quotinator.Data`
-- `src/Quotinator.Changelog/CVE/` folder created with a `README.md` explaining its purpose (same pattern as `Quotinator.Data`)
+- `src/Quotinator.Changelog/CVE/` folder with a `README.md` explaining its purpose
 
 **Test project** — create `tests/Quotinator.Changelog.Tests/` (net10.0, MSTest, same package set as other test projects). `ChangelogSchemaTests` lives here.
+- `tests/Quotinator.Changelog.Tests/CVE/` folder with a `README.md` (CVE workflow requires both the source project and its test project to have a CVE folder)
 
 Add a project reference from `Quotinator.Api` to `Quotinator.Changelog`. Remove now-empty type references from `Quotinator.Core`. Add both new projects to `Quotinator.slnx`.
 
