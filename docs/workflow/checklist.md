@@ -56,6 +56,7 @@ CI enforces build and test pass. The additional check before opening a PR:
 - [ ] Every completed issue on the branch is either self-contained, or its incomplete dependencies leave it inert (new infrastructure that nothing currently calls)
 - [ ] No in-progress issue leaves a partially-wired feature reachable under normal use (half-registered services, failing endpoints, broken migrations)
 - [ ] If a dependency gap exists, confirm a workaround covers the gap until the remaining issues land (e.g. re-seed for data gaps)
+- [ ] **Do NOT use `--delete-branch`** unless the milestone is fully closed — the feature branch is the workspace for remaining issues and must survive the merge
 - [ ] After merge: close only the fully verified issues; leave in-progress issues open
 
 ---
@@ -68,5 +69,6 @@ CI enforces build and test pass. The additional check before opening a PR:
 - [ ] Docker build succeeds: `docker build -f docker/Dockerfile -t quotinator:local .`
 - [ ] Changelogs updated (`CHANGELOG.md` and `addon/CHANGELOG.md`)
 - [ ] Version bumped (`src/Quotinator.Api/Quotinator.Api.csproj`, `addon/config.yaml`, both changelogs)
+- [ ] Final PR merged to `main` with `--delete-branch` (only safe at milestone close — not before)
 - [ ] Pushed to `main` and tagged: `git tag vX.Y.Z && git push origin vX.Y.Z`
 - [ ] Milestone closed on GitHub: `gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed`
