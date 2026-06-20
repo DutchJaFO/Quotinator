@@ -126,8 +126,13 @@
   </Folder>
   <Folder Name="/scripts/">
     <File Path="scripts/seed.csx" />
+    <File Path="scripts/changelog.csx" />
     <File Path="scripts/sources.json" />
     <File Path="scripts/SOURCES.md" />
+  </Folder>
+  <Folder Name="/scripts/changelog-reference/">
+    <File Path="scripts/changelog-reference/CHANGELOG.md" />
+    <File Path="scripts/changelog-reference/addon-CHANGELOG.md" />
   </Folder>
   <Folder Name="/scripts/hooks/">
     <File Path="scripts/hooks/README.md" />
