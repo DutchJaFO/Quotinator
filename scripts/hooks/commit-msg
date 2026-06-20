@@ -1,0 +1,49 @@
+#!/bin/sh
+#
+# commit-msg hook: block commit messages that would auto-close a GitHub issue.
+#
+# GitHub closes issues when a commit merged to the default branch contains:
+#   close/closes/closed/fix/fixes/fixed/resolve/resolves/resolved #N
+# Ending a commit title with (#N) can also trigger auto-close.
+#
+# Issues in this project are closed explicitly via:
+#   gh issue close <N> --comment "<verification summary>"
+# Never via commit message.
+#
+# Install: cp scripts/hooks/commit-msg .git/hooks/commit-msg
+#          chmod +x .git/hooks/commit-msg
+
+MSG_FILE="$1"
+MSG=$(cat "$MSG_FILE")
+
+# Check for GitHub closing keywords followed by an issue number.
+if echo "$MSG" | grep -qiE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\s+#[0-9]+'; then
+    echo ""
+    echo "ERROR: commit message contains a GitHub issue-closing keyword."
+    echo ""
+    echo "  Patterns like 'Fixes #71', 'Closes #45', 'Resolves #58' auto-close"
+    echo "  issues when merged to main. Issues must be closed explicitly via:"
+    echo ""
+    echo "    gh issue close <N> --comment \"<verification summary>\""
+    echo ""
+    echo "  Remove the closing keyword from your commit message and try again."
+    echo "  To reference an issue without closing it, use: 'refs #N' or '[#N]'."
+    echo ""
+    exit 1
+fi
+
+# Warn (but do not block) if the commit title ends with (#N) — this pattern
+# links a commit to an issue and can trigger auto-close in some merge contexts.
+FIRST_LINE=$(head -1 "$MSG_FILE")
+if echo "$FIRST_LINE" | grep -qE '\(#[0-9]+\)\s*$'; then
+    echo ""
+    echo "WARNING: commit title ends with (#N), which links this commit to a"
+    echo "GitHub issue and may auto-close it when merged to main."
+    echo ""
+    echo "  If you do not intend to close the issue, consider using [#N] instead."
+    echo "  Continuing anyway — press Ctrl-C within 5 seconds to abort."
+    echo ""
+    sleep 5
+fi
+
+exit 0

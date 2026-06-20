@@ -31,6 +31,10 @@ dotnet-script scripts/seed.csx -- --no-fetch   # use scripts/cache/ instead of d
 
 # Build the Docker image locally (required before tagging a release)
 docker build -f docker/Dockerfile -t quotinator:local .
+
+# Install git hooks (run once per clone — prevents accidental GitHub issue auto-close via commit message)
+cp scripts/hooks/commit-msg .git/hooks/commit-msg
+chmod +x .git/hooks/commit-msg
 ```
 
 The Scalar API reference is at `/scalar/v1` and the OpenAPI spec at `/openapi/v1.json` — available in all environments including production.

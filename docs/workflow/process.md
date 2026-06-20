@@ -102,6 +102,29 @@ An issue may only close when its GitHub issue page reflects the actual scope —
 
 ---
 
+## GitHub auto-close behavior
+
+GitHub closes an issue automatically when a commit merged to the default branch contains any of the following patterns in its message (case-insensitive):
+
+```
+close #N    closes #N    closed #N
+fix #N      fixes #N     fixed #N
+resolve #N  resolves #N  resolved #N
+```
+
+Ending a commit title with `(#N)` links the commit to the issue and can also trigger auto-close depending on how the merge reaches the default branch.
+
+**Rule: never use any of these patterns in a commit message.** Issue closure is always done explicitly via `gh issue close <N> --comment "..."` after the full closing checklist is complete. A commit that accidentally closes an issue violates the workflow — the issue will have no closing verification comment and will show as closed without evidence of testing.
+
+A `commit-msg` hook in `scripts/hooks/commit-msg` guards against this. Install it once per clone:
+
+```bash
+cp scripts/hooks/commit-msg .git/hooks/commit-msg
+chmod +x .git/hooks/commit-msg
+```
+
+---
+
 ## Completing an issue
 
 An issue may only be closed when **all** of the following are true:

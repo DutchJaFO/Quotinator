@@ -102,6 +102,10 @@
     <File Path="scripts/sources.json" />
     <File Path="scripts/SOURCES.md" />
   </Folder>
+  <Folder Name="/scripts/hooks/">
+    <File Path="scripts/hooks/README.md" />
+    <File Path="scripts/hooks/commit-msg" />
+  </Folder>
   <Folder Name="/scripts/cache/">
     <File Path="scripts/cache/README.md" />
   </Folder>
