@@ -566,7 +566,7 @@ Workflow:
 
 Bugs, defects, and planned improvements are tracked as **GitHub Issues**. Do not maintain lists here. Only add a temporary note in this file if something is discovered mid-session and has not yet been filed as a GitHub Issue.
 
-**Closing protocol:** See `CONTRIBUTING.md` — issues are either code-verified (closed automatically via `Fixes #N` in the commit) or deployment-verified (closed manually via `gh issue close` after confirming in the live HA add-on). Deployment-verified issues are tracked in `project_post_deploy_verification.md` in memory until confirmed.
+**Closing protocol:** Issues are always closed explicitly via `gh issue close <N> --comment "..."` after the full closing checklist is complete. Never use `Fixes #N`, `Closes #N`, or any GitHub auto-close keyword in a **commit message or PR body** — these trigger auto-close on merge and bypass the verification comment requirement. The `commit-msg` hook guards commit messages; PR bodies must be checked manually. Deployment-verified issues are tracked in `project_post_deploy_verification.md` in memory until confirmed in the live HA add-on.
 
 **Milestone workflow:** The full process for planning, executing, and closing milestones is in `docs/workflow/process.md`. The session-start and issue-close checklists are in `docs/workflow/checklist.md`. Always read these before starting a milestone session or closing an issue.
 
