@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.4.1] - 2026-06-20
+
+### Highlights
+- Fixed: the changelog page now shows plain-English release summaries for all versions instead of technical details.
+- Internal improvements in preparation for upcoming data import features.
+
+### Fixed
+- `### Highlights` sections for 1.4.0 and 1.3.0 were not displaying in the Blazor changelog page — 1.4.0 used prose instead of a bullet list (silently ignored by the parser); 1.3.0 contained technical terms. Both rewritten in plain user-facing English.
+
+### Added
+- `IUnitOfWork` and `SqliteUnitOfWork` — transaction and shared-connection support across repository operations; required by the upcoming import endpoint (#45) for atomic batch inserts
+- Repository methods (`IRepository<T>`, `IRestorableRepository<T>`) accept an optional `IUnitOfWork?` parameter; all existing callers require no changes
+
+---
+
 ## [1.4.0] - 2026-06-20
 
 ### Highlights

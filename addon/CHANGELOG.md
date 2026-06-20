@@ -4,6 +4,11 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.4.1] - 2026-06-20
+
+- Fixed: the changelog page now shows plain-English release summaries for all versions instead of technical details.
+- Internal improvements in preparation for upcoming data import features.
+
 ## [1.4.0] - 2026-06-20
 
 - Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected.
