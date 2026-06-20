@@ -76,6 +76,7 @@
     <File Path="docs/milestones/data-import-sources/68-curated-json-conversations-plan.md" />
     <File Path="docs/milestones/data-import-sources/69-api-conversations-plan.md" />
     <File Path="docs/milestones/data-import-sources/71-generic-repository-plan.md" />
+    <File Path="docs/milestones/data-import-sources/78-repository-transaction-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

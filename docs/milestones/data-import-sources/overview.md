@@ -15,14 +15,15 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 ## Dependency map
 
 ```
-#71 (generic repository) → prerequisite for #58; unblocks all future repository implementations
+#71 (generic repository) → prerequisite for #78 and #58; unblocks all future repository implementations
+#78 (transaction support) → requires #71; prerequisite for #45 and #58 (seeder needs atomic batch inserts)
 #57 (dedup) → Problems 1–3 closed by design via #61; Problem 4 (ImportBatch) requires #58
 #61 (per-source files) → #62, #63, #68 depend on it
 #63 (manifest) → #62 reads it; #64 references it
 #62 (folder seeder) → prerequisite for #64 per-source overrides
 #64 (conflict policy) → requires #63 for manifest field, #45 for per-run override, #58 for batch recording
 #65 (preview) → requires #45 for the correct endpoint shape
-#58 (ImportBatches) → requires #71; unblocks #56, #59, #45 (batch row), #67, #68, #69
+#58 (ImportBatches) → requires #71 and #78; unblocks #56, #59, #45 (batch row), #67, #68, #69
 #45 (import endpoint) → unblocks remaining #64 requirements and #65 final shape
 #55 (completeness flag) → independent; connects to #56 (no-value-known)
 #56 (audit log) → requires #58 for batch actor; connects to #45, #55, #59
@@ -39,26 +40,28 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 | #  | Issue | Title | Status |
 |----|-------|-------|--------|
 | 1  | #61 | Seed script: one file per source | Closed ✅ |
-| 2  | #71 | Generic repository pattern | Not started — no dependencies; prerequisite for #58 |
-| 3  | #58 | ImportBatches schema | Not started — requires #71 |
-| 4  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 can close after #58 |
-| 5  | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
-| 6  | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources` and `ImportsPath` config keys missing |
-| 7  | #64 | Conflict resolution policy | Partially done — naming mismatch (`overwrite` vs `newest-wins`), wrong default |
-| 8  | #45 | Import endpoint | Not started |
-| 9  | #65 | Import endpoint: preview/dry-run | Partially done — wrong endpoint shape (needs #45) |
-| 10 | #55 | Record completeness flag | Not started |
-| 11 | #56 | Audit log | Not started |
-| 12 | #59 | Admin: soft-reset by batch | Not started |
-| 13 | #67 | Conversations schema | Not started |
-| 14 | #68 | Curated JSON conversations | Not started |
-| 15 | #69 | API conversations | Not started |
+| 2  | #71 | Generic repository pattern | In progress — closing checklist underway |
+| 3  | #78 | Repository: transaction and shared connection support | Not started — requires #71; prerequisite for #58 and #45 |
+| 4  | #58 | ImportBatches schema | Not started — requires #71 and #78 |
+| 5  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 can close after #58 |
+| 6  | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
+| 7  | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources` and `ImportsPath` config keys missing |
+| 8  | #64 | Conflict resolution policy | Partially done — naming mismatch (`overwrite` vs `newest-wins`), wrong default |
+| 9  | #45 | Import endpoint | Not started |
+| 10 | #65 | Import endpoint: preview/dry-run | Partially done — wrong endpoint shape (needs #45) |
+| 11 | #55 | Record completeness flag | Not started |
+| 12 | #56 | Audit log | Not started |
+| 13 | #59 | Admin: soft-reset by batch | Not started |
+| 14 | #67 | Conversations schema | Not started |
+| 15 | #68 | Curated JSON conversations | Not started |
+| 16 | #69 | API conversations | Not started |
 
 ---
 
 ## Plan documents
 
 - [#71 — Generic repository pattern](71-generic-repository-plan.md)
+- [#78 — Repository: transaction and shared connection support](78-repository-transaction-plan.md)
 - [#57 — Seed script dedup](57-seed-script-dedup-plan.md)
 - [#61 — Seed script per source](61-seed-script-per-source-plan.md)
 - [#63 — Import manifest](63-import-manifest-plan.md)
