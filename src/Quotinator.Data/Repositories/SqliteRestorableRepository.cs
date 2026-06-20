@@ -18,38 +18,56 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
     public SqliteRestorableRepository(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<T>> GetDeletedAsync()
+    public async Task<IReadOnlyList<T>> GetDeletedAsync(IUnitOfWork? unitOfWork = null)
     {
+        if (unitOfWork is SqliteUnitOfWork uow)
+        {
+            var results = await uow.Connection.QueryAsync<T>(
+                RepositorySql.SelectDeleted(TableName), transaction: uow.Transaction);
+            return results.ToList();
+        }
         using var conn = Factory.CreateConnection();
         conn.Open();
-        var results = await conn.QueryAsync<T>(RepositorySql.SelectDeleted(TableName));
-        return results.ToList();
+        var rows = await conn.QueryAsync<T>(RepositorySql.SelectDeleted(TableName));
+        return rows.ToList();
     }
 
     /// <inheritdoc/>
-    public async Task RestoreAsync(Guid id)
+    public async Task RestoreAsync(Guid id, IUnitOfWork? unitOfWork = null)
     {
-        var now = SafeDateValue.Now.Raw;
+        var param = new { now = SafeDateValue.Now.Raw, id = id.ToString("D").ToUpperInvariant() };
+        if (unitOfWork is SqliteUnitOfWork uow)
+        {
+            await uow.Connection.ExecuteAsync(
+                RepositorySql.Restore(TableName), param, uow.Transaction);
+            return;
+        }
         using var conn = Factory.CreateConnection();
         conn.Open();
-        await conn.ExecuteAsync(
-            RepositorySql.Restore(TableName),
-            new { now, id = id.ToString("D").ToUpperInvariant() });
+        await conn.ExecuteAsync(RepositorySql.Restore(TableName), param);
     }
 
     /// <inheritdoc/>
-    public async Task HardDeleteAsync(Guid id)
+    public async Task HardDeleteAsync(Guid id, IUnitOfWork? unitOfWork = null)
     {
+        var param = new { id = id.ToString("D").ToUpperInvariant() };
+        if (unitOfWork is SqliteUnitOfWork uow)
+        {
+            await uow.Connection.ExecuteAsync(
+                RepositorySql.HardDelete(TableName), param, uow.Transaction);
+            return;
+        }
         using var conn = Factory.CreateConnection();
         conn.Open();
-        await conn.ExecuteAsync(
-            RepositorySql.HardDelete(TableName),
-            new { id = id.ToString("D").ToUpperInvariant() });
+        await conn.ExecuteAsync(RepositorySql.HardDelete(TableName), param);
     }
 
     /// <inheritdoc/>
-    public async Task<int> PurgeAsync()
+    public async Task<int> PurgeAsync(IUnitOfWork? unitOfWork = null)
     {
+        if (unitOfWork is SqliteUnitOfWork uow)
+            return await uow.Connection.ExecuteAsync(
+                RepositorySql.Purge(TableName), transaction: uow.Transaction);
         using var conn = Factory.CreateConnection();
         conn.Open();
         return await conn.ExecuteAsync(RepositorySql.Purge(TableName));

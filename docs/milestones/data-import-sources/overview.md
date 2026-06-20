@@ -41,7 +41,7 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 |----|-------|-------|--------|
 | 1  | #61 | Seed script: one file per source | Closed ✅ |
 | 2  | #71 | Generic repository pattern | Closed ✅ |
-| 3  | #78 | Repository: transaction and shared connection support | Not started — requires #71; prerequisite for #58 and #45 |
+| 3  | #78 | Repository: transaction and shared connection support | Closed ✅ |
 | 4  | #58 | ImportBatches schema | Not started — requires #71 and #78 |
 | 5  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 can close after #58 |
 | 6  | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
@@ -55,6 +55,8 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 | 14 | #67 | Conversations schema | Not started |
 | 15 | #68 | Curated JSON conversations | Not started |
 | 16 | #69 | API conversations | Not started |
+| 17 | #79 | Fix Highlights sections in CHANGELOG.md for 1.3.0 and 1.4.0 | In progress — no plan doc (pure content fix, no implementation decisions) |
+| 18 | #80 | Replace hand-edited changelogs with JSON-driven changelog system | Not started — no plan doc yet; plan doc required before implementation |
 
 ---
 

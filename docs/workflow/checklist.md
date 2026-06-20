@@ -21,6 +21,7 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 - [ ] Check for new issues: `gh issue list --milestone "<Name>" --state open --json number,title`
 - [ ] Update `overview.md` and create plan docs for any issues added since last session
+- [ ] For any new issue without a plan doc: confirm the no-plan-doc decision is logged in the GitHub issue and in `overview.md`
 - [ ] Review plan docs for issues being worked on today
 
 ---
@@ -29,18 +30,21 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 - [ ] Verify all blocking/related issues in the dependency map are fully closed first
 - [ ] Re-read the **full** issue spec: `gh issue view <N>`
+- [ ] **Plan doc check** — either a plan doc exists, OR the GitHub issue and `overview.md` both contain an explicit note explaining why one was not needed (e.g. "pure content fix, no implementation decisions required"). A missing plan doc with no logged reason is never acceptable.
 - [ ] If any requirement from the spec was deferred to a later issue: confirm a comment exists on the GitHub issue documenting what was deferred, why, and which issue owns it — a silent drop is never acceptable
 - [ ] Confirm the plan doc spec and the GitHub issue spec are in agreement — either the scope is unchanged, or the plan doc has a **Scope changes** section and the issue has a matching comment
-- [ ] Confirm the plan doc has a verification checklist entry for every in-scope requirement, each naming either the exact unit test (class + method) or the exact live command and expected output — Status must be its own column between # and Requirement, never embedded in the Verification column
+- [ ] Confirm the verification table covers every in-scope requirement. Each row must name either: the exact unit test (class + method), an exact live command and expected output, or — for documentation/content issues — the exact document/UI location the user must confirm. Status must be its own column between # and Requirement, never embedded in the Verification column.
 - [ ] For bug fixes: confirm a failing test or reproducible steps existed before the fix was written — the bug must have been demonstrably red before turning green
-- [ ] All unit tests named in the checklist pass (green)
-- [ ] All live verification commands have been run and produced the expected output (green)
-- [ ] No requirement is still red — if anything is unverified, the issue stays open
+- [ ] All unit tests named in the table pass (green)
+- [ ] All live commands have been run and produced the expected output (green)
+- [ ] **User manual test** — user starts the app in Visual Studio and confirms it starts without error. For documentation/content issues: user reads or views every item listed in the verification table and confirms each one explicitly.
+- [ ] No requirement is still unconfirmed — if anything is unverified, the issue stays open
 - [ ] Confirm all changes are merged to `main` and included in a tagged release
-- [ ] Update the plan doc status to `Complete`
+- [ ] Update the plan doc status to `Complete` (or note "no plan doc — by decision" if none exists)
 - [ ] Update the status column in `overview.md`
 - [ ] Re-verify the order of operations table — update if this issue's completion changes the correct sequence
-- [ ] Close: `gh issue close <N> --comment "<brief note>"`
+- [ ] **User confirms closure** — show the user the closing comment and verification table and wait for explicit approval before running `gh issue close`
+- [ ] Close: `gh issue close <N> --comment "<verification table>"`
 
 ---
 

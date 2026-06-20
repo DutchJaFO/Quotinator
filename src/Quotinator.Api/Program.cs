@@ -12,6 +12,7 @@ using Quotinator.Constants;
 using Quotinator.Core.Data;
 using Quotinator.Core.Data.TypeHandlers;
 using Quotinator.Data.Data;
+using Quotinator.Data.Repositories;
 using Quotinator.Core.Services;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
@@ -277,6 +278,8 @@ var backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0
     : Path.Combine(dataDir, DataPaths.BackupsFolder);
 var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
+builder.Services.AddTransient<IUnitOfWork>(sp =>
+    new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
 
 // Resolve seed batches before building the host — uses the early logger factory so errors
 // surface before the DI container starts up. Batches are captured into the lambda closure.

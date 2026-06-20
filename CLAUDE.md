@@ -481,7 +481,15 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
-3. **Changelog updated** — add entries to `CHANGELOG.md` under `[Unreleased]` as changes land. When tagging a release, promote the `[Unreleased]` block to a versioned heading (`## [x.y.z] - YYYY-MM-DD`) and **remove the `[Unreleased]` header entirely** — do not leave an empty section. Add the `[Unreleased]` header back only when the next change is ready to document. Every versioned section must have a `### Highlights` block in plain user-facing English — this is the only part shown in the Blazor UI. For purely internal releases use a short generic phrase (e.g. `Bug fix — no user-facing changes`). The `addon/CHANGELOG.md` uses a flat bullet list per version with no `### Added/Fixed/Changed` subsections (HA convention); update it alongside the root changelog.
+3. **Changelog updated** — add entries to `CHANGELOG.md` under `[Unreleased]` as changes land. When tagging a release, promote the `[Unreleased]` block to a versioned heading (`## [x.y.z] - YYYY-MM-DD`) and **remove the `[Unreleased]` header entirely** — do not leave an empty section. Add the `[Unreleased]` header back only when the next change is ready to document. Every versioned section must have a `### Highlights` block — this is the **only** part shown in the Blazor UI. Rules for `### Highlights`:
+   - **Always a bullet list** (one or more `- ` items) — the parser only reads bullet lines; prose text is silently ignored and the UI falls back to the full technical sections
+   - **Plain user-facing English only** — no CVE IDs, no API paths, no class names, no config key names, no technical implementation details
+   - **For purely internal releases** use exactly: `- Internal improvements — no user-facing changes.`
+   - **Bad:** `- SQL queries centralised as mitigation for CVE-2025-6965` / `- New GET /api/v1/admin/... endpoint`
+   - **Good:** `- Internal improvements — no user-facing changes.` / `- Quotes can now be loaded from multiple data sources.` / `- Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected.`
+   - **Security fixes** should always appear in Highlights — include the CVE ID so users can verify, but keep the surrounding language non-technical
+
+   The `addon/CHANGELOG.md` uses a flat bullet list per version with no `### Added/Fixed/Changed` subsections (HA convention); update it alongside the root changelog. The addon entries follow the same plain-English rule — no CVE IDs or technical terms.
 4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
    - `src/Quotinator.Api/Quotinator.Api.csproj` → `<Version>`
    - `addon/config.yaml` → `version`

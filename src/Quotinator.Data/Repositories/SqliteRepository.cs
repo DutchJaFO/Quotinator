@@ -8,7 +8,8 @@ namespace Quotinator.Data.Repositories;
 
 /// <summary>
 /// SQLite implementation of <see cref="IRepository{T}"/> using Dapper and Dapper.Contrib.
-/// Each method opens and closes its own connection via <see cref="IDbConnectionFactory"/>.
+/// Each method opens its own connection when no <see cref="IUnitOfWork"/> is supplied.
+/// When a <see cref="IUnitOfWork"/> is supplied, the operation runs on its connection and transaction.
 /// All SQL is delegated to <see cref="RepositorySql"/> and fully parameterised.
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
@@ -33,41 +34,60 @@ public class SqliteRepository<T> : IRepository<T> where T : RecordBase
     }
 
     /// <inheritdoc/>
-    public async Task<T?> GetByIdAsync(Guid id)
+    public async Task<T?> GetByIdAsync(Guid id, IUnitOfWork? unitOfWork = null)
     {
+        var param = new { id = id.ToString("D").ToUpperInvariant() };
+        if (unitOfWork is SqliteUnitOfWork uow)
+        {
+            var results = await uow.Connection.QueryAsync<T>(
+                RepositorySql.SelectById(TableName), param, uow.Transaction);
+            return results.FirstOrDefault();
+        }
         using var conn = Factory.CreateConnection();
         conn.Open();
-        var results = await conn.QueryAsync<T>(
-            RepositorySql.SelectById(TableName),
-            new { id = id.ToString("D").ToUpperInvariant() });
-        return results.FirstOrDefault();
+        var rows = await conn.QueryAsync<T>(RepositorySql.SelectById(TableName), param);
+        return rows.FirstOrDefault();
     }
 
     /// <inheritdoc/>
-    public async Task InsertAsync(T entity)
+    public async Task InsertAsync(T entity, IUnitOfWork? unitOfWork = null)
     {
+        if (unitOfWork is SqliteUnitOfWork uow)
+        {
+            await uow.Connection.InsertAsync(entity, uow.Transaction);
+            return;
+        }
         using var conn = Factory.CreateConnection();
         conn.Open();
         await conn.InsertAsync(entity);
     }
 
     /// <inheritdoc/>
-    public async Task UpdateAsync(T entity)
+    public async Task UpdateAsync(T entity, IUnitOfWork? unitOfWork = null)
     {
         entity.DateModified = SafeDateValue.Now;
+        if (unitOfWork is SqliteUnitOfWork uow)
+        {
+            await uow.Connection.UpdateAsync(entity, uow.Transaction);
+            return;
+        }
         using var conn = Factory.CreateConnection();
         conn.Open();
         await conn.UpdateAsync(entity);
     }
 
     /// <inheritdoc/>
-    public async Task SoftDeleteAsync(Guid id)
+    public async Task SoftDeleteAsync(Guid id, IUnitOfWork? unitOfWork = null)
     {
-        var now = SafeDateValue.Now.Raw;
+        var param = new { now = SafeDateValue.Now.Raw, id = id.ToString("D").ToUpperInvariant() };
+        if (unitOfWork is SqliteUnitOfWork uow)
+        {
+            await uow.Connection.ExecuteAsync(
+                RepositorySql.SoftDelete(TableName), param, uow.Transaction);
+            return;
+        }
         using var conn = Factory.CreateConnection();
         conn.Open();
-        await conn.ExecuteAsync(
-            RepositorySql.SoftDelete(TableName),
-            new { now, id = id.ToString("D").ToUpperInvariant() });
+        await conn.ExecuteAsync(RepositorySql.SoftDelete(TableName), param);
     }
 }
