@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <Description>Shared constants for Quotinator — route strings, tag names, and error message keys.</Description>
   </PropertyGroup>
 
 </Project>

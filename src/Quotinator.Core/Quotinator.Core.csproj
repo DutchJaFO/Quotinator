@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Description>Core domain models, interfaces, and service implementations for Quotinator.</Description>
   </PropertyGroup>
 
   <ItemGroup>

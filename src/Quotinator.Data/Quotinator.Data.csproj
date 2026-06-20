@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Description>SQLite data access infrastructure for Quotinator — repositories, unit of work, type handlers, and connection factory.</Description>
   </PropertyGroup>
 
   <ItemGroup>

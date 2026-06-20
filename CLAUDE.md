@@ -491,7 +491,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
    The `addon/CHANGELOG.md` uses a flat bullet list per version with no `### Added/Fixed/Changed` subsections (HA convention); update it alongside the root changelog. The addon entries follow the same plain-English rule — no CVE IDs or technical terms.
 4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
-   - `src/Quotinator.Api/Quotinator.Api.csproj` → `<Version>`
+   - `Directory.Build.props` → `<Version>` (shared across all projects — this is the single place to update)
    - `addon/config.yaml` → `version`
    - `CHANGELOG.md` and `addon/CHANGELOG.md` → versioned section heading
 5. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:

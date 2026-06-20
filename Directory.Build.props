@@ -1,6 +1,15 @@
 <Project>
 
   <PropertyGroup>
+    <Version>1.4.1</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <Product>Quotinator</Product>
+    <Authors>DutchJaFO</Authors>
+    <Copyright>Copyright © 2026 DutchJaFO</Copyright>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <!--
       NU1903: SQLitePCLRaw.lib.e_sqlite3 ≤ 2.1.11 bundles a SQLite version affected by CVE-2025-6965.
       No patched NuGet version exists as of 2026-06-20 (first_patched_version: null).
