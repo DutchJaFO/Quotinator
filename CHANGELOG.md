@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [1.4.0] - 2026-06-20
 
 ### Highlights
-- Internal improvements — no user-facing changes.
+- Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected.
 
 ### Added
 - `seed.csx --output-dir DIR` flag redirects seed output to a custom directory, making it possible to test seeding without overwriting `data/sources/`

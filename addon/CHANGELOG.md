@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [1.4.0] - 2026-06-20
 
-- Internal improvements — no user-facing changes.
+- Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected.
 
 ## [1.3.0] - 2026-06-17
 

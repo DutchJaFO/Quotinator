@@ -486,7 +486,8 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    - **Plain user-facing English only** — no CVE IDs, no API paths, no class names, no config key names, no technical implementation details
    - **For purely internal releases** use exactly: `- Internal improvements — no user-facing changes.`
    - **Bad:** `- SQL queries centralised as mitigation for CVE-2025-6965` / `- New GET /api/v1/admin/... endpoint`
-   - **Good:** `- Internal improvements — no user-facing changes.` / `- Quotes can now be loaded from multiple data sources.`
+   - **Good:** `- Internal improvements — no user-facing changes.` / `- Quotes can now be loaded from multiple data sources.` / `- Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected.`
+   - **Security fixes** should always appear in Highlights — include the CVE ID so users can verify, but keep the surrounding language non-technical
 
    The `addon/CHANGELOG.md` uses a flat bullet list per version with no `### Added/Fixed/Changed` subsections (HA convention); update it alongside the root changelog. The addon entries follow the same plain-English rule — no CVE IDs or technical terms.
 4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
