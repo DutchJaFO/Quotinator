@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [1.4.0] - 2026-06-20
 
 ### Highlights
-Internal infrastructure release — no user-facing API or UI changes. SQL queries centralised and audited as mitigation for CVE-2025-6965 (SQLite aggregate vulnerability); automated guard tests added to prevent regressions.
+- Internal improvements — no user-facing changes.
 
 ### Added
 - `seed.csx --output-dir DIR` flag redirects seed output to a custom directory, making it possible to test seeding without overwriting `data/sources/`
@@ -30,9 +30,9 @@ Internal infrastructure release — no user-facing API or UI changes. SQL querie
 ## [1.3.0] - 2026-06-17
 
 ### Highlights
-- Quotes are now loaded from multiple source files in `data/sources/` — bundled datasets and optional user imports in `{dataDir}/imports/`
-- New `GET /api/v1/admin/database/seed/preview` endpoint shows what would be imported without writing to the database
-- `Quotinator__DataDir` env var replaces `Quotinator__DataPath` — set to the data directory, not a file path
+- Quotes can now be loaded from multiple data sources — bundled datasets and your own custom files placed in the imports folder.
+- New preview endpoint lets you see what would be imported before committing any changes.
+- Configuration: the data directory is now set by pointing to a folder, not a file path — update `Quotinator__DataDir` if you have a custom setup.
 
 ### Added
 - `data/sources/` folder with one JSON file per dataset and a `manifest.json` controlling import order and duplicate-resolution policy
