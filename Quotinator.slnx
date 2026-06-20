@@ -145,6 +145,9 @@
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
     <Project Path="src/Quotinator.Data/Quotinator.Data.csproj" />
   </Folder>
+  <Folder Name="/src/Quotinator.Api/">
+    <File Path="src/Quotinator.Api/changelog.json" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
