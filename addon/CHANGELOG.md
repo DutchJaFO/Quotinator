@@ -1,3 +1,5 @@
+# GENERATED FILE — do not edit by hand. Edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx
+
 # Changelog
 
 All notable changes to this add-on will be documented in this file.

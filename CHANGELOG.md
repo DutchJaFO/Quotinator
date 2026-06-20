@@ -1,4 +1,4 @@
-<!-- GENERATED FILE — edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx -->
+# GENERATED FILE — do not edit by hand. Edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx
 
 # Changelog
 

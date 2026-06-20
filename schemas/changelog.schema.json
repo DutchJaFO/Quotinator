@@ -7,6 +7,16 @@
   "required": ["releases"],
   "additionalProperties": false,
   "properties": {
+    "sourceLanguage": {
+      "type": "string",
+      "description": "ISO 639-1 code of the language used in top-level content arrays (highlights, added, etc.). Defaults to 'en' when absent. The generator falls back to this language when a requested translation is missing.",
+      "default": "en"
+    },
+    "sectionHeaders": {
+      "type": "object",
+      "description": "Localised display names for the five changelog sections, keyed by ISO 639-1 language code. Optional — when absent the generator uses built-in English strings. Individual language blocks and section keys are also optional; missing entries fall back to the sourceLanguage block, then to built-in English.",
+      "additionalProperties": { "$ref": "#/$defs/sectionHeadersEntry" }
+    },
     "releases": {
       "type": "array",
       "description": "Ordered list of releases, newest first.",
@@ -14,6 +24,34 @@
     }
   },
   "$defs": {
+    "sectionHeadersEntry": {
+      "type": "object",
+      "description": "Display names for all five sections in one language. All keys are optional.",
+      "additionalProperties": false,
+      "properties": {
+        "highlights": { "type": "string", "minLength": 1 },
+        "added":      { "type": "string", "minLength": 1 },
+        "changed":    { "type": "string", "minLength": 1 },
+        "fixed":      { "type": "string", "minLength": 1 },
+        "removed":    { "type": "string", "minLength": 1 }
+      }
+    },
+    "translationItem": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The translated string."
+        },
+        "machineTranslated": {
+          "type": "boolean",
+          "description": "Whether this item was machine-generated. When absent the generator's --machine-translated parameter applies (default: true). Set to false when a native speaker has verified the translation."
+        }
+      }
+    },
     "release": {
       "type": "object",
       "required": ["version", "date"],
@@ -31,63 +69,42 @@
         },
         "highlights": {
           "type": "array",
-          "description": "User-facing plain-English summary. Each item is one sentence. No CVE IDs, API paths, class names, or technical terms. Omit or leave empty for internal-only releases.",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
+          "description": "User-facing plain-language summary in the source language. Each item is one sentence. No CVE IDs, API paths, class names, or technical terms. Omit or leave empty for internal-only releases.",
+          "items": { "type": "string", "minLength": 1 }
         },
         "added": {
           "type": "array",
           "description": "Technical description of new features added in this release. Developer-facing; not shown in the Blazor UI highlights.",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
+          "items": { "type": "string", "minLength": 1 }
         },
         "changed": {
           "type": "array",
           "description": "Technical description of changes to existing behaviour.",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
+          "items": { "type": "string", "minLength": 1 }
         },
         "fixed": {
           "type": "array",
           "description": "Technical description of bug fixes.",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
+          "items": { "type": "string", "minLength": 1 }
         },
         "removed": {
           "type": "array",
           "description": "Technical description of removed features or behaviour.",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
+          "items": { "type": "string", "minLength": 1 }
         },
         "issues": {
           "type": "array",
           "description": "GitHub issue numbers addressed by this release.",
-          "items": {
-            "type": "integer",
-            "minimum": 1
-          }
+          "items": { "type": "integer", "minimum": 1 }
         },
         "cves": {
           "type": "array",
           "description": "CVE IDs addressed by this release (e.g. 'CVE-2025-6965').",
-          "items": {
-            "type": "string",
-            "pattern": "^CVE-\\d{4}-\\d{4,}$"
-          }
+          "items": { "type": "string", "pattern": "^CVE-\\d{4}-\\d{4,}$" }
         },
         "translations": {
           "type": "object",
-          "description": "Manually curated translations of highlights keyed by ISO 639-1 language code (e.g. 'nl', 'de'). Never auto-generated. Ignored by the ha-addon format generator.",
+          "description": "Translations of release content keyed by ISO 639-1 language code. All sections and items are optional. Items that omit machineTranslated inherit the generator's --machine-translated default.",
           "additionalProperties": { "$ref": "#/$defs/releaseTranslation" }
         }
       }
@@ -98,11 +115,28 @@
       "properties": {
         "highlights": {
           "type": "array",
-          "description": "Translated plain-English highlights for this release in the target language.",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
+          "description": "Translated highlight items.",
+          "items": { "$ref": "#/$defs/translationItem" }
+        },
+        "added": {
+          "type": "array",
+          "description": "Translated added-section items.",
+          "items": { "$ref": "#/$defs/translationItem" }
+        },
+        "changed": {
+          "type": "array",
+          "description": "Translated changed-section items.",
+          "items": { "$ref": "#/$defs/translationItem" }
+        },
+        "fixed": {
+          "type": "array",
+          "description": "Translated fixed-section items.",
+          "items": { "$ref": "#/$defs/translationItem" }
+        },
+        "removed": {
+          "type": "array",
+          "description": "Translated removed-section items.",
+          "items": { "$ref": "#/$defs/translationItem" }
         }
       }
     }

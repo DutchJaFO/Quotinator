@@ -1,4 +1,27 @@
 {
+  "sectionHeaders": {
+    "en": {
+      "highlights": "Highlights",
+      "added": "Added",
+      "changed": "Changed",
+      "fixed": "Fixed",
+      "removed": "Removed"
+    },
+    "nl": {
+      "highlights": "Hoogtepunten",
+      "added": "Toegevoegd",
+      "changed": "Gewijzigd",
+      "fixed": "Opgelost",
+      "removed": "Verwijderd"
+    },
+    "de": {
+      "highlights": "Höhepunkte",
+      "added": "Hinzugefügt",
+      "changed": "Geändert",
+      "fixed": "Behoben",
+      "removed": "Entfernt"
+    }
+  },
   "releases": [
     {
       "version": "1.5.1",
@@ -135,16 +158,16 @@
       "translations": {
         "nl": {
           "highlights": [
-            "Quotes kunnen nu worden geladen vanuit meerdere databronnen — meegeleverde datasets en je eigen bestanden in de imports-map.",
-            "Nieuw preview-eindpunt waarmee je kunt zien wat er geïmporteerd wordt vóór de wijzigingen worden opgeslagen.",
-            "Configuratie: de datadirectory wordt nu ingesteld via een mappad in plaats van een bestandspad — pas Quotinator__DataDir aan als je een aangepaste configuratie hebt."
+            { "text": "Quotes kunnen nu worden geladen vanuit meerdere databronnen — meegeleverde datasets en je eigen bestanden in de imports-map." },
+            { "text": "Nieuw preview-eindpunt waarmee je kunt zien wat er geïmporteerd wordt vóór de wijzigingen worden opgeslagen." },
+            { "text": "Configuratie: de datadirectory wordt nu ingesteld via een mappad in plaats van een bestandspad — pas Quotinator__DataDir aan als je een aangepaste configuratie hebt." }
           ]
         },
         "de": {
           "highlights": [
-            "Zitate können jetzt aus mehreren Datenquellen geladen werden — mitgelieferte Datensätze und eigene Dateien im Imports-Ordner.",
-            "Neuer Vorschau-Endpunkt, mit dem Sie sehen können, was importiert würde, bevor Änderungen gespeichert werden.",
-            "Konfiguration: Das Datenverzeichnis wird jetzt über einen Ordnerpfad angegeben, nicht über einen Dateipfad — aktualisieren Sie Quotinator__DataDir, wenn Sie eine benutzerdefinierte Konfiguration verwenden."
+            { "text": "Zitate können jetzt aus mehreren Datenquellen geladen werden — mitgelieferte Datensätze und eigene Dateien im Imports-Ordner." },
+            { "text": "Neuer Vorschau-Endpunkt, mit dem Sie sehen können, was importiert würde, bevor Änderungen gespeichert werden." },
+            { "text": "Konfiguration: Das Datenverzeichnis wird jetzt über einen Ordnerpfad angegeben, nicht über einen Dateipfad — aktualisieren Sie Quotinator__DataDir, wenn Sie eine benutzerdefinierte Konfiguration verwenden." }
           ]
         }
       }

@@ -8,11 +8,15 @@
 //   dotnet-script scripts/changelog.csx -- --format ha-addon        --output addon/CHANGELOG.md
 //
 // Options:
-//   --input  <path>   JSON source file (default: src/Quotinator.Api/changelog.json)
-//   --output <path>   Destination file path; omit to write to stdout
-//   --format <name>   keepachangelog | ha-addon  (required)
-//   --lang   <code>   ISO 639-1 language code (default: en)
-//                     Resolves highlights from translations.<code>.highlights when available
+//   --input              <path>    JSON source file (default: src/Quotinator.Api/changelog.json)
+//   --output             <path>    Destination file path; omit to write to stdout
+//   --format             <name>    keepachangelog | ha-addon  (required)
+//   --lang               <code>    ISO 639-1 language code (default: en)
+//                                  Resolves content from translations.<code>.* when available;
+//                                  falls back to source language content when translation is absent.
+//   --machine-translated <bool>    Default value for machineTranslated on translation items
+//                                  that do not specify the property (default: true).
+//                                  Pass false when all translations in the JSON were done by hand.
 
 #r "nuget: System.Text.Json, 8.0.0"
 
@@ -21,14 +25,16 @@ using System.Text.Json;
 
 // ── CLI arguments ─────────────────────────────────────────────────────────────
 
-var inputArg  = Args.SkipWhile(a => a != "--input").Skip(1).FirstOrDefault();
-var outputArg = Args.SkipWhile(a => a != "--output").Skip(1).FirstOrDefault();
-var formatArg = Args.SkipWhile(a => a != "--format").Skip(1).FirstOrDefault();
-var langArg   = Args.SkipWhile(a => a != "--lang").Skip(1).FirstOrDefault() ?? "en";
+var inputArg             = Args.SkipWhile(a => a != "--input").Skip(1).FirstOrDefault();
+var outputArg            = Args.SkipWhile(a => a != "--output").Skip(1).FirstOrDefault();
+var formatArg            = Args.SkipWhile(a => a != "--format").Skip(1).FirstOrDefault();
+var langArg              = Args.SkipWhile(a => a != "--lang").Skip(1).FirstOrDefault() ?? "en";
+var machineTranslatedArg = Args.SkipWhile(a => a != "--machine-translated").Skip(1).FirstOrDefault();
+var defaultMachineTranslated = machineTranslatedArg?.ToLowerInvariant() != "false";
 
 if (string.IsNullOrEmpty(formatArg))
 {
-    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog.csx -- --format <keepachangelog|ha-addon> [--output <path>] [--input <path>] [--lang <code>]");
+    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog.csx -- --format <keepachangelog|ha-addon> [--output <path>] [--input <path>] [--lang <code>] [--machine-translated <true|false>]");
     Environment.Exit(1);
 }
 
@@ -45,19 +51,22 @@ if (!File.Exists(inputPath))
 
 // ── Parse JSON ────────────────────────────────────────────────────────────────
 
-var json = File.ReadAllText(inputPath);
-var doc      = JsonDocument.Parse(json);
-var releases = doc.RootElement.GetProperty("releases").EnumerateArray().ToList();
+var json           = File.ReadAllText(inputPath);
+var doc            = JsonDocument.Parse(json);
+var root           = doc.RootElement;
+var releases       = root.GetProperty("releases").EnumerateArray().ToList();
+var sourceLang     = root.TryGetProperty("sourceLanguage", out var sl) ? sl.GetString() ?? "en" : "en";
+var sectionHeaders = ParseSectionHeaders(root);
 
 // ── Generate ──────────────────────────────────────────────────────────────────
 
-var sb = new StringBuilder();
+var sb     = new StringBuilder();
 var format = formatArg.ToLowerInvariant();
 
 if (format == "keepachangelog")
-    GenerateKeepAChangelog(sb, releases, langArg);
+    GenerateKeepAChangelog(sb, releases, langArg, sourceLang, sectionHeaders);
 else if (format == "ha-addon")
-    GenerateHaAddon(sb, releases, langArg);
+    GenerateHaAddon(sb, releases, langArg, sourceLang);
 else
 {
     Console.Error.WriteLine($"Unknown format: {formatArg}. Use keepachangelog or ha-addon.");
@@ -81,10 +90,9 @@ else
 
 // ── Format implementations ────────────────────────────────────────────────────
 
-static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, string lang)
+static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders)
 {
-    var langNote = lang != "en" ? $" ({lang})" : "";
-    sb.AppendLine($"<!-- GENERATED FILE{langNote} — edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx -->");
+    sb.AppendLine("# GENERATED FILE — do not edit by hand. Edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx");
     sb.AppendLine();
     sb.AppendLine("# Changelog");
     sb.AppendLine();
@@ -103,19 +111,19 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
         sb.AppendLine();
         sb.AppendLine($"## [{version}] - {date}");
 
-        var highlights = GetHighlights(r, lang);
+        var highlights = GetItems(r, "highlights", lang, sourceLang);
         if (highlights.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("### Highlights");
+            sb.AppendLine($"### {GetSectionHeader("highlights", lang, sourceLang, sectionHeaders)}");
             foreach (var h in highlights)
                 sb.AppendLine($"- {h}");
         }
 
-        AppendSection(sb, r, "added",   "### Added");
-        AppendSection(sb, r, "changed", "### Changed");
-        AppendSection(sb, r, "fixed",   "### Fixed");
-        AppendSection(sb, r, "removed", "### Removed");
+        AppendSection(sb, r, "added",   lang, sourceLang, sectionHeaders);
+        AppendSection(sb, r, "changed", lang, sourceLang, sectionHeaders);
+        AppendSection(sb, r, "fixed",   lang, sourceLang, sectionHeaders);
+        AppendSection(sb, r, "removed", lang, sourceLang, sectionHeaders);
 
         if (i < releases.Count - 1)
         {
@@ -143,8 +151,10 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
     }
 }
 
-static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string lang)
+static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string lang, string sourceLang)
 {
+    sb.AppendLine("# GENERATED FILE — do not edit by hand. Edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx");
+    sb.AppendLine();
     sb.AppendLine("# Changelog");
     sb.AppendLine();
     sb.AppendLine("All notable changes to this add-on will be documented in this file.");
@@ -160,7 +170,7 @@ static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string
         sb.AppendLine();
         sb.AppendLine($"## [{version}] - {date}");
 
-        var highlights = GetHighlights(r, lang);
+        var highlights = GetItems(r, "highlights", lang, sourceLang);
         if (highlights.Count > 0)
         {
             sb.AppendLine();
@@ -178,39 +188,90 @@ static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-static List<string> GetHighlights(JsonElement r, string lang)
+static List<string> GetItems(JsonElement r, string key, string lang, string sourceLang)
 {
-    if (lang != "en" &&
-        r.TryGetProperty("translations", out var trans) &&
+    if (lang == sourceLang)
+        return GetTopLevelItems(r, key);
+
+    if (r.TryGetProperty("translations", out var trans) &&
         trans.TryGetProperty(lang, out var langTrans) &&
-        langTrans.TryGetProperty("highlights", out var transHighlights))
+        langTrans.TryGetProperty(key, out var transItems))
     {
-        var translated = transHighlights.EnumerateArray()
-            .Select(h => h.GetString() ?? "")
-            .Where(h => !string.IsNullOrEmpty(h))
+        var items = transItems.EnumerateArray()
+            .Select(GetItemText)
+            .Where(s => !string.IsNullOrEmpty(s))
+            .Select(s => s!)
             .ToList();
-        if (translated.Count > 0) return translated;
+        if (items.Count > 0) return items;
     }
 
-    if (r.TryGetProperty("highlights", out var highlights))
-        return highlights.EnumerateArray()
-            .Select(h => h.GetString() ?? "")
-            .Where(h => !string.IsNullOrEmpty(h))
-            .ToList();
-
-    return [];
+    return GetTopLevelItems(r, key);
 }
 
-static void AppendSection(StringBuilder sb, JsonElement r, string key, string header)
+static List<string> GetTopLevelItems(JsonElement r, string key)
 {
-    if (!r.TryGetProperty(key, out var arr) || arr.GetArrayLength() == 0) return;
+    if (!r.TryGetProperty(key, out var arr)) return [];
+    return arr.EnumerateArray()
+        .Select(i => i.GetString() ?? "")
+        .Where(s => !string.IsNullOrEmpty(s))
+        .ToList();
+}
+
+static string? GetItemText(JsonElement item)
+{
+    if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("text", out var text))
+        return text.GetString();
+    return item.GetString();
+}
+
+static string GetSectionHeader(string key, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders)
+{
+    var builtin = key switch
+    {
+        "highlights" => "Highlights",
+        "added"      => "Added",
+        "changed"    => "Changed",
+        "fixed"      => "Fixed",
+        "removed"    => "Removed",
+        _            => key.Length > 0 ? char.ToUpper(key[0]) + key[1..] : key
+    };
+
+    if (sectionHeaders is null) return builtin;
+
+    if (sectionHeaders.TryGetValue(lang, out var langHeaders) &&
+        langHeaders.TryGetValue(key, out var header) &&
+        !string.IsNullOrEmpty(header))
+        return header;
+
+    if (sectionHeaders.TryGetValue(sourceLang, out var sourceHeaders) &&
+        sourceHeaders.TryGetValue(key, out var sourceHeader) &&
+        !string.IsNullOrEmpty(sourceHeader))
+        return sourceHeader;
+
+    return builtin;
+}
+
+static void AppendSection(StringBuilder sb, JsonElement r, string key, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders)
+{
+    var items = GetItems(r, key, lang, sourceLang);
+    if (items.Count == 0) return;
 
     sb.AppendLine();
-    sb.AppendLine(header);
-    foreach (var item in arr.EnumerateArray())
+    sb.AppendLine($"### {GetSectionHeader(key, lang, sourceLang, sectionHeaders)}");
+    foreach (var item in items)
+        sb.AppendLine($"- {item}");
+}
+
+static Dictionary<string, Dictionary<string, string>>? ParseSectionHeaders(JsonElement root)
+{
+    if (!root.TryGetProperty("sectionHeaders", out var headersEl)) return null;
+    var result = new Dictionary<string, Dictionary<string, string>>();
+    foreach (var langEntry in headersEl.EnumerateObject())
     {
-        var s = item.GetString();
-        if (!string.IsNullOrEmpty(s))
-            sb.AppendLine($"- {s}");
+        var langDict = new Dictionary<string, string>();
+        foreach (var sectionEntry in langEntry.Value.EnumerateObject())
+            langDict[sectionEntry.Name] = sectionEntry.Value.GetString() ?? "";
+        result[langEntry.Name] = langDict;
     }
+    return result;
 }

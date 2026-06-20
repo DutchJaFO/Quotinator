@@ -68,18 +68,47 @@ public sealed class ChangelogSchemaTests
     }
 
     [TestMethod]
-    public void AllReleases_Translations_HaveNoNullHighlights()
+    public void AllReleases_TranslationItems_HaveNonEmptyText()
     {
+        var sectionNames = new[] { "highlights", "added", "changed", "fixed", "removed" };
         foreach (var r in Releases())
         {
             var version = r.GetProperty("version").GetString();
             if (!r.TryGetProperty("translations", out var translations)) continue;
             foreach (var lang in translations.EnumerateObject())
             {
-                if (!lang.Value.TryGetProperty("highlights", out var highlights)) continue;
-                foreach (var item in highlights.EnumerateArray())
-                    Assert.AreNotEqual(JsonValueKind.Null, item.ValueKind,
-                        $"null entry in translations.{lang.Name}.highlights for version {version}");
+                foreach (var section in sectionNames)
+                {
+                    if (!lang.Value.TryGetProperty(section, out var items)) continue;
+                    foreach (var item in items.EnumerateArray())
+                    {
+                        Assert.AreEqual(JsonValueKind.Object, item.ValueKind,
+                            $"translations.{lang.Name}.{section} item in version {version} must be an object with a 'text' property");
+                        Assert.IsTrue(item.TryGetProperty("text", out var text),
+                            $"translations.{lang.Name}.{section} item in version {version} is missing required 'text' property");
+                        Assert.IsFalse(string.IsNullOrWhiteSpace(text.GetString()),
+                            $"translations.{lang.Name}.{section} item in version {version} has empty 'text'");
+                        if (item.TryGetProperty("machineTranslated", out var mt))
+                            Assert.IsTrue(mt.ValueKind is JsonValueKind.True or JsonValueKind.False,
+                                $"translations.{lang.Name}.{section} item in version {version}: machineTranslated must be a boolean");
+                    }
+                }
+            }
+        }
+    }
+
+    [TestMethod]
+    public void SectionHeaders_WhenPresent_HaveNonEmptyValues()
+    {
+        if (!_doc.RootElement.TryGetProperty("sectionHeaders", out var sectionHeaders)) return;
+        var expectedKeys = new[] { "highlights", "added", "changed", "fixed", "removed" };
+        foreach (var lang in sectionHeaders.EnumerateObject())
+        {
+            foreach (var key in expectedKeys)
+            {
+                if (!lang.Value.TryGetProperty(key, out var value)) continue;
+                Assert.IsFalse(string.IsNullOrWhiteSpace(value.GetString()),
+                    $"sectionHeaders.{lang.Name}.{key} must not be empty when present");
             }
         }
     }
