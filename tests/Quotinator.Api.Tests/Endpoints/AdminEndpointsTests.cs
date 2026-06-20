@@ -107,6 +107,17 @@ public class AdminEndpointsTests
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    /// <summary>GET /admin/database/seed/preview returns 401 when X-Api-Key contains a Bearer prefix — clients migrating from OAuth may send this by mistake.</summary>
+    [TestMethod]
+    public async Task PreviewSeed_MalformedAuthHeader_Returns401()
+    {
+        using var factory = CreateFactory(TestKey);
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Api-Key", $"Bearer {TestKey}");
+        var response = await client.GetAsync("/api/v1/admin/database/seed/preview");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     // ── POST /admin/database/reseed ───────────────────────────────────────────
 
     /// <summary>POST /admin/database/reseed returns 401 when AdminApiKey is not configured.</summary>
