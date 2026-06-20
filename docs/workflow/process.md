@@ -160,17 +160,23 @@ Steps:
 
 ---
 
-## Merges to main must never break the application
+## What makes an issue safe to include in a PR
 
-Every merge to `main` — whether a full milestone, a partial milestone, a hotfix, or a dependency bump — must leave `main` in a working state:
+The CI pipeline and branch protection already enforce that `main` builds and tests pass on every merge. The question is not "does it break?" — the pipeline answers that. The question is: **is this issue ready to ship on its own?**
 
-- `dotnet build --configuration Release` — 0 warnings, 0 errors
-- `dotnet test --configuration Release` — all tests pass, 0 warnings
-- The application starts and serves requests correctly
+An issue is safe to include in a PR if either:
 
-This applies regardless of how complete the milestone is. Incomplete issues are fine on `main` as long as their in-progress code does not break existing behaviour. Incomplete work must be either not yet wired into the request path, or safely inert (e.g. a new table that existing endpoints do not touch). Never merge half-registered services, failing migrations, or endpoints that return 500.
+1. **It is self-contained** — its changes work fully without any other incomplete issue, or
+2. **Its incomplete dependencies leave it inert** — the issue adds infrastructure that existing behaviour does not depend on. A new table, a new repository, or a new seeder step that nothing currently calls is safe to include even if the feature that *uses* it is not done yet.
 
-Issues that are not yet started or still in progress stay open after a partial merge. Only fully verified issues (spec complete + tests green + PR merged) may be closed.
+An issue is **not** safe to include without its dependencies when:
+
+- The issue's output is only reachable or meaningful through another incomplete issue (e.g. a write endpoint that the Blazor UI for it is not done, where the endpoint itself is the deliverable)
+- The issue leaves a partially-wired feature that returns errors or behaves incorrectly under normal use
+
+**When dependencies are not yet done:** check whether a workaround exists for the gap. For example, if quote data can only be added via seeding, a re-seed covers any data-integrity gap from an incomplete import feature — buying time to finish the dependent issues before the gap matters in production.
+
+Issues not yet started or still in progress stay open after a partial merge. Only fully verified issues (spec complete + tests green + PR merged) may be closed.
 
 ---
 

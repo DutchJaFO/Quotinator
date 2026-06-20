@@ -51,9 +51,11 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 ## Before any merge to main
 
-- [ ] Build clean: `dotnet build --configuration Release` — 0 warnings, 0 errors
-- [ ] Tests pass: `dotnet test --configuration Release` — all tests pass, 0 warnings
-- [ ] No in-progress issue leaves broken code in the request path (half-wired services, failing endpoints, broken migrations)
+CI enforces build and test pass. The additional check before opening a PR:
+
+- [ ] Every completed issue on the branch is either self-contained, or its incomplete dependencies leave it inert (new infrastructure that nothing currently calls)
+- [ ] No in-progress issue leaves a partially-wired feature reachable under normal use (half-registered services, failing endpoints, broken migrations)
+- [ ] If a dependency gap exists, confirm a workaround covers the gap until the remaining issues land (e.g. re-seed for data gaps)
 - [ ] After merge: close only the fully verified issues; leave in-progress issues open
 
 ---
