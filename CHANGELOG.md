@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Fixed
 - Admin endpoints were documented as requiring `Authorization: Bearer <key>` but the correct header is `X-Api-Key: <key>`.
 - The startup banner was not visible in Visual Studio — it now goes through the logger so it appears in the Output window alongside other log messages.
+- `appsettings.local.json` was being included in the Docker image via `COPY . .`, allowing a local developer override to silently win over environment variables (including the HA `admin_api_key` env var). Added to `.dockerignore`.
+- Intermittent test failure under parallel execution: three test classes each called `SqlMapper.AddTypeHandler` in `[ClassInitialize]`, causing a race on the global static handler dictionary. Registrations moved to `[AssemblyInitialize]` so they run once before any tests start.
 
 ### Added
 - `X-Api-Key` OpenAPI security scheme: admin endpoints are tagged in the spec so Scalar shows an Authentication panel pre-filled with the header name.

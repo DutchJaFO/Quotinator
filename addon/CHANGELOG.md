@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - The startup log now shows whether an admin API key is configured (`set` / `not set`).
 - The REST API page in the UI shows the admin endpoints when a key is active.
 - Fixed: admin endpoint documentation incorrectly stated `Authorization: Bearer` — the correct header is `X-Api-Key`.
+- Fixed: `appsettings.local.json` was included in the Docker image, allowing a local developer override to silently take priority over the `admin_api_key` env var set by the HA supervisor.
 
 ## [1.4.3] - 2026-06-20
 
