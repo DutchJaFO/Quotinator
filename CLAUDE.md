@@ -409,6 +409,9 @@ See [`docs/testing-policy.md`](docs/testing-policy.md).
 | `docker/Dockerfile` | Container build |
 | `docs/docker.md` | Docker build notes, Blazor static web assets caveat, port configuration |
 | `.gitignore` | Must exclude `appsettings.local.json`, `.env`, and `data/*.db` |
+| `docs/security/README.md` | Summary of all known CVEs and their current status across all projects |
+| `docs/workflow/cve.md` | CVE handling workflow; template is at `docs/workflow/cve-template.md` |
+| `src/[project]/CVE/` | Per-project CVE tracking — `CVE-YYYY-NNNNN.md` per alert; closed CVEs in `CVE/archived/` |
 
 ---
 

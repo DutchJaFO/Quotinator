@@ -15,18 +15,7 @@ Only the latest release is supported.
 
 ## Known vulnerabilities
 
-### CVE-2025-6965 — SQLite aggregate memory corruption
-
-**Status: mitigated; upstream patch pending**
-
-CVE-2025-6965 describes a SQLite bug where the number of aggregate terms in a query exceeds the number of output columns, causing memory corruption. The upstream fix will ship in a future `Microsoft.Data.Sqlite` release.
-
-**Our mitigation (shipped in v1.4.0):**
-- All SQL statements are centralised in `Sql.cs` and `RepositorySql.cs` — no inline SQL anywhere else in the codebase
-- Automated guard tests scan every SQL constant and every dynamically-assembled query for the vulnerable pattern (`aggregate function + GROUP BY/HAVING`) on every build
-- Audit confirmed that none of our queries use `GROUP BY` or `HAVING` with aggregate functions — the vulnerability cannot be triggered by any query we execute
-
-The upstream patch will be applied as soon as it ships in a stable `Microsoft.Data.Sqlite` release.
+See [`docs/security/README.md`](docs/security/README.md) for the current CVE tracking summary and per-project mitigation details.
 
 ## Reporting a vulnerability
 
