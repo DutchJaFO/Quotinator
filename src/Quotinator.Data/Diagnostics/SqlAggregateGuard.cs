@@ -19,6 +19,17 @@ public static partial class SqlAggregateGuard
     private static partial Regex GroupByHavingPattern();
 
     /// <summary>
+    /// Returns <c>true</c> when <paramref name="sql"/> contains an aggregate function call,
+    /// regardless of whether <c>GROUP BY</c> or <c>HAVING</c> is present.
+    /// Use <see cref="IsVulnerablePattern"/> for the full CVE-2025-6965 guard.
+    /// </summary>
+    public static bool HasAggregateFunction(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return false;
+        return AggregatePattern().IsMatch(sql);
+    }
+
+    /// <summary>
     /// Returns <c>true</c> when <paramref name="sql"/> contains both an aggregate function call
     /// and a <c>GROUP BY</c> or <c>HAVING</c> clause — the combination that triggers CVE-2025-6965.
     /// </summary>

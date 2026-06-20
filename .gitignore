@@ -38,7 +38,8 @@ PublishScripts/
 
 # ===== Seed script =====
 # Downloaded source files — fetched on demand, not committed
-scripts/cache/
+scripts/cache/*
+!scripts/cache/README.md
 
 ## Test results
 TestResults/

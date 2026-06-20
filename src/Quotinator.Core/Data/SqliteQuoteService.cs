@@ -52,7 +52,7 @@ public sealed class SqliteQuoteService : IQuoteService
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var row = connection.QueryFirstOrDefault<QuoteRow>(QuoteSelectSql + " WHERE q.Id = @id AND q.IsDeleted = 0",
+        var row = connection.QueryFirstOrDefault<QuoteRow>(Sql.Quotes.SelectById(),
             new { id, lang = TranslationLang(lang, null) });
 
         if (row is null) return null;
@@ -79,13 +79,13 @@ public sealed class SqliteQuoteService : IQuoteService
         var (whereClause, filterParams) = BuildFilterWhere(types, genres, lang, character, author, source, yearFrom, yearTo);
 
         var totalMatching = connection.ExecuteScalar<int>(
-            $"SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 {whereClause}",
+            Sql.Quotes.CountRandom(whereClause),
             filterParams);
 
         var rp = new DynamicParameters(filterParams);
         rp.Add("count", count);
         var rows = connection.Query<QuoteRow>(
-            QuoteSelectSql + $" {whereClause} ORDER BY RANDOM() LIMIT @count", rp).ToList();
+            Sql.Quotes.SelectRandom(whereClause), rp).ToList();
 
         var items = rows.Select(r =>
         {
@@ -93,7 +93,7 @@ public sealed class SqliteQuoteService : IQuoteService
             if (translationLang is not null)
             {
                 var translated = connection.QueryFirstOrDefault<QuoteRow>(
-                    QuoteSelectSql + " WHERE q.Id = @id AND q.IsDeleted = 0",
+                    Sql.Quotes.SelectById(),
                     new { id = r.Id, lang = translationLang });
                 if (translated is not null) r = translated;
             }
@@ -117,7 +117,7 @@ public sealed class SqliteQuoteService : IQuoteService
         var (whereClause, parameters) = BuildFilterWhere(types, genres, lang, yearFrom, yearTo);
 
         var total = connection.ExecuteScalar<int>(
-            $"SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 {whereClause}",
+            Sql.Quotes.CountGetAll(whereClause),
             parameters);
 
         var offset = (page - 1) * pageSize;
@@ -125,7 +125,7 @@ public sealed class SqliteQuoteService : IQuoteService
         p.Add("pageSize", pageSize);
         p.Add("offset",   offset);
         var rows = connection.Query<QuoteRow>(
-            QuoteSelectSql + $" {whereClause} ORDER BY q.Id LIMIT @pageSize OFFSET @offset", p).ToList();
+            Sql.Quotes.SelectPaged(whereClause), p).ToList();
 
         var items = rows.Select(r => ToResponse(r, LoadGenres(connection, r.Id), lang)).ToList();
         return new PagedResult<QuoteResponse>(items, page, pageSize, total);
@@ -141,19 +141,16 @@ public sealed class SqliteQuoteService : IQuoteService
 
         var fieldFilter = field switch
         {
-            "quote"     => "q.QuoteText LIKE @like",
-            "source"    => "s.Title LIKE @like",
-            "character" => "c.Name LIKE @like",
-            "author"    => "p.Name LIKE @like",
-            _           => "(q.QuoteText LIKE @like OR s.Title LIKE @like OR c.Name LIKE @like OR p.Name LIKE @like)"
+            "quote"     => Sql.SearchField.Quote,
+            "source"    => Sql.SearchField.Source,
+            "character" => Sql.SearchField.Character,
+            "author"    => Sql.SearchField.Author,
+            _           => Sql.SearchField.All
         };
 
         var (typeGenreWhere, filterParams) = BuildFilterWhere(types, genres, lang, yearFrom, yearTo);
 
-        var sql = QuoteSelectSql
-            + $" {typeGenreWhere}"
-            + $" AND {fieldFilter}"
-            + " LIMIT @limit";
+        var sql = Sql.Quotes.SelectSearch(typeGenreWhere, fieldFilter);
 
         var p = new DynamicParameters(filterParams);
         p.Add("like",  like);
@@ -179,7 +176,7 @@ public sealed class SqliteQuoteService : IQuoteService
 
     private static IReadOnlyList<SafeValue<GenreEnum?>> LoadGenres(System.Data.IDbConnection connection, string quoteId)
         => connection.Query<SafeValue<GenreEnum?>>(
-            "SELECT Genre FROM QuoteGenres WHERE QuoteId = @id AND IsDeleted = 0",
+            Sql.QuoteGenres.LoadForQuote,
             new { id = quoteId }).ToList();
 
     private static QuoteResponse ToResponse(QuoteRow row, IReadOnlyList<SafeValue<GenreEnum?>> genres, string? requestedLang)
@@ -213,10 +210,10 @@ public sealed class SqliteQuoteService : IQuoteService
     }
 
     // Overload without text filters — used by GetAll and Search.
-    private static (string Sql, object Parameters) BuildFilterWhere(string[]? types, string[]? genres, string? lang, int? yearFrom = null, int? yearTo = null)
+    internal static (string Sql, object Parameters) BuildFilterWhere(string[]? types, string[]? genres, string? lang, int? yearFrom = null, int? yearTo = null)
         => BuildFilterWhere(types, genres, lang, null, null, null, yearFrom, yearTo);
 
-    private static (string Sql, DynamicParameters Parameters) BuildFilterWhere(
+    internal static (string Sql, DynamicParameters Parameters) BuildFilterWhere(
         string[]? types, string[]? genres, string? lang,
         string? character, string? author, string? source,
         int? yearFrom = null, int? yearTo = null)
@@ -251,33 +248,6 @@ public sealed class SqliteQuoteService : IQuoteService
 
     private static string NormaliseGenre(string raw)
         => InputValidation.GenreApiToDb.TryGetValue(raw, out var db) ? db : raw;
-
-    #endregion
-
-    // -------------------------------------------------------------------------
-    #region SQL
-
-    // The @lang parameter is substituted into the LEFT JOINs so COALESCE picks up
-    // translations when available, falling back to the original value silently.
-    private const string QuoteSelectSql = """
-        SELECT
-            q.Id,
-            COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
-            q.OriginalLanguage,
-            COALESCE(st.Title,      s.Title)       AS Source,
-            s.Date,
-            s.Type                                 AS SourceType,
-            COALESCE(ct.Name,       c.Name)        AS Character,
-            p.Name                                 AS Author,
-            CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
-        FROM   Quotes          q
-        JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
-        LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
-        LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
-        LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
-        LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
-        LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0
-        """;
 
     #endregion
 

@@ -78,4 +78,25 @@ public class SqlAggregateGuardTests
     public void IsVulnerablePattern_NonSqlInput_ReturnsFalse()
         => Assert.IsFalse(SqlAggregateGuard.IsVulnerablePattern(
             "This is not SQL at all"));
+
+    // ── HasAggregateFunction ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public void HasAggregateFunction_QueryWithCount_ReturnsTrue()
+        => Assert.IsTrue(SqlAggregateGuard.HasAggregateFunction(
+            "SELECT COUNT(*) FROM Quotes WHERE IsDeleted = 0"));
+
+    [TestMethod]
+    public void HasAggregateFunction_QueryWithCoalesceMax_ReturnsTrue()
+        => Assert.IsTrue(SqlAggregateGuard.HasAggregateFunction(
+            "SELECT COALESCE(MAX(Version), 0) FROM SchemaVersion"));
+
+    [TestMethod]
+    public void HasAggregateFunction_PlainSelect_ReturnsFalse()
+        => Assert.IsFalse(SqlAggregateGuard.HasAggregateFunction(
+            "SELECT * FROM Quotes WHERE Id = @id AND IsDeleted = 0"));
+
+    [TestMethod]
+    public void HasAggregateFunction_EmptyString_ReturnsFalse()
+        => Assert.IsFalse(SqlAggregateGuard.HasAggregateFunction(string.Empty));
 }

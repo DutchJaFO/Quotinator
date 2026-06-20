@@ -51,11 +51,15 @@
     <File Path="docs/decisions/README.md" />
   </Folder>
   <Folder Name="/docs/architecture-decisions/">
+    <File Path="docs/architecture-decisions/README.md" />
     <File Path="docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md" />
     <File Path="docs/architecture-decisions/002-recordbase-on-all-tables.md" />
   </Folder>
-  <Folder Name="/docs/milestones/" />
+  <Folder Name="/docs/milestones/">
+    <File Path="docs/milestones/README.md" />
+  </Folder>
   <Folder Name="/docs/milestones/data-import-sources/">
+    <File Path="docs/milestones/data-import-sources/README.md" />
     <File Path="docs/milestones/data-import-sources/overview.md" />
     <File Path="docs/milestones/data-import-sources/45-import-endpoint-plan.md" />
     <File Path="docs/milestones/data-import-sources/55-record-completeness-plan.md" />
@@ -74,6 +78,7 @@
     <File Path="docs/milestones/data-import-sources/71-generic-repository-plan.md" />
   </Folder>
   <Folder Name="/docs/workflow/">
+    <File Path="docs/workflow/README.md" />
     <File Path="docs/workflow/checklist.md" />
     <File Path="docs/workflow/process.md" />
   </Folder>
@@ -89,6 +94,9 @@
     <File Path="scripts/seed.csx" />
     <File Path="scripts/sources.json" />
     <File Path="scripts/SOURCES.md" />
+  </Folder>
+  <Folder Name="/scripts/cache/">
+    <File Path="scripts/cache/README.md" />
   </Folder>
   <Folder Name="/Solution/">
     <File Path="tests/Quotinator.Api.Tests/Solution/RepositoryStructureTests.cs" />

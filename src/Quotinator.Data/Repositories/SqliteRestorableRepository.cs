@@ -22,8 +22,7 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
     {
         using var conn = Factory.CreateConnection();
         conn.Open();
-        var results = await conn.QueryAsync<T>(
-            $"SELECT * FROM {TableName} WHERE IsDeleted = 1");
+        var results = await conn.QueryAsync<T>(RepositorySql.SelectDeleted(TableName));
         return results.ToList();
     }
 
@@ -34,7 +33,7 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
         using var conn = Factory.CreateConnection();
         conn.Open();
         await conn.ExecuteAsync(
-            $"UPDATE {TableName} SET IsDeleted = 0, DateDeleted = NULL, DateModified = @now WHERE Id = @id AND IsDeleted = 1",
+            RepositorySql.Restore(TableName),
             new { now, id = id.ToString("D").ToUpperInvariant() });
     }
 
@@ -44,7 +43,7 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
         using var conn = Factory.CreateConnection();
         conn.Open();
         await conn.ExecuteAsync(
-            $"DELETE FROM {TableName} WHERE Id = @id AND IsDeleted = 1",
+            RepositorySql.HardDelete(TableName),
             new { id = id.ToString("D").ToUpperInvariant() });
     }
 
@@ -53,7 +52,6 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
     {
         using var conn = Factory.CreateConnection();
         conn.Open();
-        return await conn.ExecuteAsync(
-            $"DELETE FROM {TableName} WHERE IsDeleted = 1");
+        return await conn.ExecuteAsync(RepositorySql.Purge(TableName));
     }
 }

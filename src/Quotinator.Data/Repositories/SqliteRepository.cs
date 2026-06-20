@@ -9,7 +9,7 @@ namespace Quotinator.Data.Repositories;
 /// <summary>
 /// SQLite implementation of <see cref="IRepository{T}"/> using Dapper and Dapper.Contrib.
 /// Each method opens and closes its own connection via <see cref="IDbConnectionFactory"/>.
-/// Exposes no raw SQL surface — all SQL is internal to this class and fully parameterised.
+/// All SQL is delegated to <see cref="RepositorySql"/> and fully parameterised.
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
 public class SqliteRepository<T> : IRepository<T> where T : RecordBase
@@ -18,7 +18,7 @@ public class SqliteRepository<T> : IRepository<T> where T : RecordBase
     protected readonly IDbConnectionFactory Factory;
 
     // Resolved once per T. The table name comes from the [Table] attribute — developer-controlled
-    // metadata, not user input. The interpolation in hand-written SQL is therefore safe.
+    // metadata, not user input. See RepositorySql for why interpolating it into SQL is safe.
     /// <summary>SQLite table name resolved from the <c>[Table]</c> attribute on <typeparamref name="T"/>. Accessible to derived repository classes.</summary>
     protected static readonly string TableName =
         typeof(T).GetCustomAttribute<TableAttribute>()?.Name
@@ -38,7 +38,7 @@ public class SqliteRepository<T> : IRepository<T> where T : RecordBase
         using var conn = Factory.CreateConnection();
         conn.Open();
         var results = await conn.QueryAsync<T>(
-            $"SELECT * FROM {TableName} WHERE Id = @id AND IsDeleted = 0",
+            RepositorySql.SelectById(TableName),
             new { id = id.ToString("D").ToUpperInvariant() });
         return results.FirstOrDefault();
     }
@@ -67,7 +67,7 @@ public class SqliteRepository<T> : IRepository<T> where T : RecordBase
         using var conn = Factory.CreateConnection();
         conn.Open();
         await conn.ExecuteAsync(
-            $"UPDATE {TableName} SET IsDeleted = 1, DateDeleted = @now, DateModified = @now WHERE Id = @id AND IsDeleted = 0;",
+            RepositorySql.SoftDelete(TableName),
             new { now, id = id.ToString("D").ToUpperInvariant() });
     }
 }
