@@ -113,8 +113,49 @@ public sealed class ChangelogSchemaTests
         }
     }
 
+    [TestMethod]
+    public void GeneratedChangelog_MinusNotice_MatchesReference()
+    {
+        var repoRoot  = FindRepoRoot();
+        var generated = File.ReadAllText(Path.Combine(repoRoot, "CHANGELOG.md"));
+        var reference = File.ReadAllText(Path.Combine(repoRoot, "scripts", "changelog-reference", "CHANGELOG.md"));
+
+        var withoutNotice = StripGeneratedNotice(generated);
+
+        Assert.AreEqual(reference, withoutNotice,
+            "CHANGELOG.md content differs from the reference snapshot. " +
+            "If changelog.json was updated, re-run: dotnet-script scripts/changelog.csx -- --format keepachangelog --output CHANGELOG.md " +
+            "then update the reference: tail -n +3 CHANGELOG.md > scripts/changelog-reference/CHANGELOG.md");
+    }
+
+    private static string StripGeneratedNotice(string content)
+    {
+        const string noticePrefix = "# GENERATED FILE";
+        if (!content.StartsWith(noticePrefix, StringComparison.Ordinal)) return content;
+
+        var afterNotice = content.IndexOf('\n');
+        if (afterNotice < 0) return content;
+
+        var rest = content[(afterNotice + 1)..];
+        return rest.StartsWith("\r\n", StringComparison.Ordinal) ? rest[2..]
+             : rest.StartsWith("\n",   StringComparison.Ordinal) ? rest[1..]
+             : rest;
+    }
+
     private static IEnumerable<JsonElement> Releases()
         => _doc.RootElement.GetProperty("releases").EnumerateArray().ToList();
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "src", "Quotinator.Api", "changelog.json")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+        throw new DirectoryNotFoundException("Repo root not found from " + AppContext.BaseDirectory);
+    }
 
     private static string FindChangelogJson()
     {
