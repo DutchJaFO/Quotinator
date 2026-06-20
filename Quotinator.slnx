@@ -54,6 +54,7 @@
     <File Path="docs/architecture-decisions/README.md" />
     <File Path="docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md" />
     <File Path="docs/architecture-decisions/002-recordbase-on-all-tables.md" />
+    <File Path="docs/architecture-decisions/003-unit-of-work-and-data-project-design-goals.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />

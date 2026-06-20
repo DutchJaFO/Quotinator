@@ -24,3 +24,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 |---|---|---|
 | 001 | [001-cve-2025-6965-sql-aggregate-guard.md](001-cve-2025-6965-sql-aggregate-guard.md) | CVE-2025-6965: SQL aggregate guard |
 | 002 | [002-recordbase-on-all-tables.md](002-recordbase-on-all-tables.md) | RecordBase applies to all tables without exception |
+| 003 | [003-unit-of-work-and-data-project-design-goals.md](003-unit-of-work-and-data-project-design-goals.md) | Unit of Work pattern and Quotinator.Data design goals |

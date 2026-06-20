@@ -27,7 +27,13 @@ Repository methods accept an optional `(IDbConnection, IDbTransaction?)` pair. S
 
 ## Decision
 
-*(Record chosen approach and reasoning here before implementing)*
+**Option A — Unit of Work** is adopted. See [ADR 003](../../architecture-decisions/003-unit-of-work-and-data-project-design-goals.md) for the full rationale and binding design goals for `Quotinator.Data`.
+
+Summary:
+- `IUnitOfWork` exposes `BeginTransactionAsync`, `CommitAsync`, `RollbackAsync`, `Dispose` — no Dapper or `IDbConnection` types visible to callers
+- Repository methods accept an optional `IUnitOfWork?` — callers that need atomicity pass one; all others omit it and behaviour is unchanged
+- `SqliteUnitOfWork` is the only concrete implementation; MS SQL is out of scope
+- An ADR was written because this decision binds all future `Quotinator.Data` work
 
 ---
 
