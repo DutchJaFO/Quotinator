@@ -116,6 +116,7 @@
     <File Path="schemas/seed-sources.schema.json" />
     <File Path="schemas/upstream-quoted-string.schema.json" />
     <File Path="schemas/upstream-object-array.schema.json" />
+    <File Path="schemas/changelog.schema.json" />
   </Folder>
   <Folder Name="/scripts/">
     <File Path="scripts/seed.csx" />
