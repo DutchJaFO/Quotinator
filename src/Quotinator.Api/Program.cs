@@ -16,6 +16,7 @@ using Quotinator.Core.Data.Repositories;
 using Quotinator.Core.Data.TypeHandlers;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Repositories;
+using Quotinator.Changelog.Services;
 using Quotinator.Core.Services;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;

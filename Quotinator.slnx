@@ -141,19 +141,30 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Quotinator.Api/Quotinator.Api.csproj" />
+    <Project Path="src/Quotinator.Changelog/Quotinator.Changelog.csproj" />
     <Project Path="src/Quotinator.Constants/Quotinator.Constants.csproj" />
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
     <Project Path="src/Quotinator.Data/Quotinator.Data.csproj" />
+  </Folder>
+  <Folder Name="/src/Quotinator.Changelog/">
+    <File Path="src/Quotinator.Changelog/CVE/.gitkeep" />
   </Folder>
   <Folder Name="/src/Quotinator.Api/">
     <File Path="src/Quotinator.Api/changelog.json" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
+    <Project Path="tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
     <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
   </Folder>
   <Folder Name="/CVE/" />
+  <Folder Name="/CVE/Quotinator.Changelog/">
+    <File Path="src/Quotinator.Changelog/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Changelog.Tests/">
+    <File Path="tests/Quotinator.Changelog.Tests/CVE/.gitkeep" />
+  </Folder>
   <Folder Name="/CVE/Quotinator.Core/">
     <File Path="src/Quotinator.Core/CVE/CVE-2025-6965.md" />
   </Folder>

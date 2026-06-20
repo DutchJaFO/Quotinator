@@ -1,0 +1,74 @@
+using System.Text.Json;
+using Quotinator.Changelog.Models;
+
+namespace Quotinator.Changelog.Services;
+
+/// <summary>Reads and deserialises <c>changelog.json</c> from <see cref="AppContext.BaseDirectory"/> at startup.</summary>
+public sealed class ChangelogService : IChangelogService
+{
+    /// <inheritdoc/>
+    public IReadOnlyList<ChangelogRelease> Releases { get; }
+
+    /// <summary>Initialises the service; reads the file if it exists, returns an empty list otherwise.</summary>
+    public ChangelogService()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "changelog.json");
+        Releases = File.Exists(path) ? Load(path) : [];
+    }
+
+    private static IReadOnlyList<ChangelogRelease> Load(string path)
+    {
+        var json = File.ReadAllText(path);
+        var dto = JsonSerializer.Deserialize<ChangelogDto>(json, JsonOptions);
+        if (dto?.Releases is null) return [];
+
+        return dto.Releases
+            .Where(r => r.Version is not null && r.Date is not null)
+            .Select(r => new ChangelogRelease(
+                r.Version!,
+                r.Date!,
+                r.Highlights ?? [],
+                BuildSections(r),
+                r.Issues ?? [],
+                r.Cves ?? [],
+                BuildTranslations(r.Translations)))
+            .ToList();
+    }
+
+    private static IReadOnlyList<ChangelogSection> BuildSections(ReleaseDto r)
+    {
+        var sections = new List<ChangelogSection>(4);
+        if (r.Added   is { Count: > 0 }) sections.Add(new ChangelogSection("Added",   r.Added));
+        if (r.Changed is { Count: > 0 }) sections.Add(new ChangelogSection("Changed", r.Changed));
+        if (r.Fixed   is { Count: > 0 }) sections.Add(new ChangelogSection("Fixed",   r.Fixed));
+        if (r.Removed is { Count: > 0 }) sections.Add(new ChangelogSection("Removed", r.Removed));
+        return sections;
+    }
+
+    private static IReadOnlyDictionary<string, ChangelogReleaseTranslation> BuildTranslations(
+        Dictionary<string, TranslationDto>? translations)
+    {
+        if (translations is null) return new Dictionary<string, ChangelogReleaseTranslation>();
+        return translations.ToDictionary(
+            kvp => kvp.Key,
+            kvp => new ChangelogReleaseTranslation(kvp.Value.Highlights ?? []));
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+    private sealed record ChangelogDto(List<ReleaseDto>? Releases);
+
+    private sealed record ReleaseDto(
+        string? Version,
+        string? Date,
+        List<string>? Highlights,
+        List<string>? Added,
+        List<string>? Changed,
+        List<string>? Fixed,
+        List<string>? Removed,
+        List<int>? Issues,
+        List<string>? Cves,
+        Dictionary<string, TranslationDto>? Translations);
+
+    private sealed record TranslationDto(List<string>? Highlights);
+}

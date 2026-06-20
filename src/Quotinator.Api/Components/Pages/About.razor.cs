@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
+using Quotinator.Changelog.Services;
 using Quotinator.Core.Services;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
