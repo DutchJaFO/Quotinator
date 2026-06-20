@@ -4,6 +4,13 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.5.1] - 2026-06-20
+
+- Fixed: startup banner was collapsed to a single line in the supervisor log.
+- Fixed: admin API key and other options were not being read from the add-on config — the app now reads `/data/options.json` directly, which is the source the supervisor writes.
+
+---
+
 ## [1.5.0] - 2026-06-20
 
 - Admin endpoints (reseed, reset) now require an API key via the `X-Api-Key` request header — set `admin_api_key` in the add-on options.

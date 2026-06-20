@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.5.1] - 2026-06-20
+
+### Highlights
+- Internal improvements — no user-facing changes.
+
+### Fixed
+- Startup banner was collapsed to a single line in the HA supervisor log — restored `Console.WriteLine` so newlines are preserved.
+- Admin API key and other add-on options were not being read from `/data/options.json`; the `env_vars` template mechanism is unreliable for optional options. The app now reads `/data/options.json` directly at startup.
+
+### Added
+- Diagnostic log lines at startup showing which `Quotinator__*` environment variables are present (API key value is never logged — only whether it is set).
+
+---
+
 ## [1.5.0] - 2026-06-20
 
 ### Highlights
