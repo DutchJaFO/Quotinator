@@ -1,6 +1,6 @@
 # #78 — Repository: transaction and shared connection support
 
-**Status:** In progress  
+**Status:** Complete  
 **GitHub issue:** #78  
 **Depends on:** #71 (generic repository pattern)  
 **Unblocks:** #58 (ImportBatches schema), #45 (import endpoint)
@@ -18,7 +18,7 @@
 **Option A — Unit of Work** is adopted. See [ADR 003](../../architecture-decisions/003-unit-of-work-and-data-project-design-goals.md) for the full rationale and binding design goals for `Quotinator.Data`.
 
 Summary:
-- `IUnitOfWork` exposes `BeginTransactionAsync`, `CommitAsync`, `RollbackAsync`, `Dispose` — no Dapper or `IDbConnection` types visible to callers
+- `IUnitOfWork` exposes `BeginTransactionAsync`, `CommitAsync`, `RollbackAsync`, `DisposeAsync` — no Dapper or `IDbConnection` types visible to callers
 - Repository methods accept an optional `IUnitOfWork?` — callers that need atomicity pass one; all others omit it and behaviour is unchanged
 - `SqliteUnitOfWork` is the only concrete implementation; MS SQL is out of scope
 - An ADR was written because this decision binds all future `Quotinator.Data` work
@@ -27,7 +27,7 @@ Summary:
 
 ## Spec requirements
 
-1. `IUnitOfWork` interface in `Quotinator.Data` with `BeginTransactionAsync`, `CommitAsync`, `RollbackAsync`, `Dispose` — no Dapper or `IDbConnection` types on the public interface
+1. `IUnitOfWork` interface in `Quotinator.Data` with `BeginTransactionAsync`, `CommitAsync`, `RollbackAsync`, `DisposeAsync` — no Dapper or `IDbConnection` types on the public interface
 2. `SqliteUnitOfWork` implements `IUnitOfWork` in `Quotinator.Data`
 3. `IRepository<T>` methods (`GetByIdAsync`, `InsertAsync`, `UpdateAsync`, `SoftDeleteAsync`) each accept an optional `IUnitOfWork?` parameter — existing call sites require no changes
 4. `SqliteRepository<T>` uses the connection and transaction from the supplied `IUnitOfWork` when provided; opens its own connection when not
@@ -44,16 +44,16 @@ Summary:
 
 - [x] Evaluate options and record decision
 - [x] Write ADR 003
-- [ ] Write `SqliteRepositoryTransactionTests` with all expected tests (confirm red before implementing)
-- [ ] Run full test suite to establish baseline (confirm no pre-existing failures)
-- [ ] Add `IUnitOfWork` interface to `Quotinator.Data`
-- [ ] Add `SqliteUnitOfWork` to `Quotinator.Data`
-- [ ] Update `IRepository<T>` methods to accept optional `IUnitOfWork?`
-- [ ] Update `SqliteRepository<T>` to use supplied `IUnitOfWork` when provided
-- [ ] Update `IRestorableRepository<T>` methods to accept optional `IUnitOfWork?`
-- [ ] Update `SqliteRestorableRepository<T>` accordingly
-- [ ] Register `IUnitOfWork` / `SqliteUnitOfWork` in DI
-- [ ] Confirm all existing tests still pass
+- [x] Write `SqliteRepositoryTransactionTests` with all expected tests (confirm red before implementing)
+- [x] Run full test suite to establish baseline (confirmed 300 green, 0 failures)
+- [x] Add `IUnitOfWork` interface to `Quotinator.Data`
+- [x] Add `SqliteUnitOfWork` to `Quotinator.Data`
+- [x] Update `IRepository<T>` methods to accept optional `IUnitOfWork?`
+- [x] Update `SqliteRepository<T>` to use supplied `IUnitOfWork` when provided
+- [x] Update `IRestorableRepository<T>` methods to accept optional `IUnitOfWork?`
+- [x] Update `SqliteRestorableRepository<T>` accordingly
+- [x] Register `IUnitOfWork` / `SqliteUnitOfWork` in DI
+- [x] Confirm all existing tests still pass (306 green, 0 failures)
 
 ---
 
@@ -61,13 +61,13 @@ Summary:
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `IUnitOfWork` interface exists with `BeginTransactionAsync`, `CommitAsync`, `RollbackAsync`, `Dispose` | Unit test | `SqliteRepositoryTransactionTests.SqliteUnitOfWork_ImplementsIUnitOfWork` |
-| 2 | ❌ | `IUnitOfWork` public interface exposes no Dapper or `IDbConnection` types | Unit test | `SqliteRepositoryTransactionTests.IUnitOfWork_HasNoDapperTypesOnPublicInterface` |
-| 3 | ❌ | `IRepository<T>` methods accept optional `IUnitOfWork?` without breaking existing callers | Unit test | All existing `SqliteRepositoryTests` pass unchanged |
-| 4 | ❌ | Commit path: operations within a `IUnitOfWork` are persisted on `CommitAsync` | Unit test | `SqliteRepositoryTransactionTests.InsertAsync_WithSharedConnection_CommitPersistsRecord` |
-| 5 | ❌ | Rollback path: operations within a `IUnitOfWork` are removed on `RollbackAsync` | Unit test | `SqliteRepositoryTransactionTests.InsertAsync_WithSharedConnection_RollbackRemovesRecord` |
-| 6 | ❌ | Multiple inserts within one transaction are atomic | Unit test | `SqliteRepositoryTransactionTests.MultipleInserts_WithinTransaction_AreAtomic` |
-| 7 | ❌ | Dispose without commit rolls back all operations | Unit test | `SqliteRepositoryTransactionTests.Dispose_WithoutCommit_RollsBack` |
-| 8 | ❌ | `IRestorableRepository<T>` methods accept optional `IUnitOfWork?` without breaking existing callers | Unit test | All existing `SqliteRestorableRepositoryTests` pass unchanged |
-| 9 | ❌ | Single-operation callers (no `IUnitOfWork`) work identically to before | Unit test | All existing `SqliteRepositoryTests` and `SqliteRestorableRepositoryTests` pass |
-| 10 | ❌ | `IUnitOfWork` registered in DI and resolvable at runtime | Live | `dotnet run --project src/Quotinator.Api` starts without exception; `curl http://localhost:8080/api/v1/health` returns 200 |
+| 1 | ✅ | `IUnitOfWork` interface exists with `BeginTransactionAsync`, `CommitAsync`, `RollbackAsync`, `DisposeAsync` | Unit test | `SqliteRepositoryTransactionTests.SqliteUnitOfWork_ImplementsIUnitOfWork` |
+| 2 | ✅ | `IUnitOfWork` public interface exposes no Dapper or `IDbConnection` types | Unit test | `SqliteRepositoryTransactionTests.IUnitOfWork_HasNoDapperTypesOnPublicInterface` |
+| 3 | ✅ | `IRepository<T>` methods accept optional `IUnitOfWork?` without breaking existing callers | Unit test | All existing `SqliteRepositoryTests` pass unchanged |
+| 4 | ✅ | Commit path: operations within a `IUnitOfWork` are persisted on `CommitAsync` | Unit test | `SqliteRepositoryTransactionTests.InsertAsync_WithSharedConnection_CommitPersistsRecord` |
+| 5 | ✅ | Rollback path: operations within a `IUnitOfWork` are removed on `RollbackAsync` | Unit test | `SqliteRepositoryTransactionTests.InsertAsync_WithSharedConnection_RollbackRemovesRecord` |
+| 6 | ✅ | Multiple inserts within one transaction are atomic | Unit test | `SqliteRepositoryTransactionTests.MultipleInserts_WithinTransaction_AreAtomic` |
+| 7 | ✅ | Dispose without commit rolls back all operations | Unit test | `SqliteRepositoryTransactionTests.Dispose_WithoutCommit_RollsBack` |
+| 8 | ✅ | `IRestorableRepository<T>` methods accept optional `IUnitOfWork?` without breaking existing callers | Unit test | All existing `SqliteRestorableRepositoryTests` pass unchanged |
+| 9 | ✅ | Single-operation callers (no `IUnitOfWork`) work identically to before | Unit test | All existing `SqliteRepositoryTests` and `SqliteRestorableRepositoryTests` pass |
+| 10 | ✅ | `IUnitOfWork` registered in DI and resolvable at runtime | Live | `dotnet run --project src/Quotinator.Api` starts without exception; `curl http://localhost:5043/api/v1/health` returns `{"status":"healthy"}` — verified 2026-06-20 |

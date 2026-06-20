@@ -18,6 +18,7 @@ public interface IRestorableRepository<T> : IRepository<T> where T : Models.Reco
     /// Reverses a soft-delete, making the record visible again via <see cref="IRepository{T}.GetByIdAsync"/>.
     /// No-op if the record is not found or is already active.
     /// </summary>
+    /// <param name="id">The identifier of the record to restore.</param>
     /// <param name="unitOfWork">Optional. When supplied, the restore participates in the unit of work's transaction.</param>
     Task RestoreAsync(Guid id, IUnitOfWork? unitOfWork = null);
 
