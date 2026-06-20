@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Quotinator.Core.Data.Entities;
 using Quotinator.Core.Data.Enums;
+using Quotinator.Core.Data.Repositories;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
@@ -20,10 +21,11 @@ namespace Quotinator.Core.Data;
 /// </summary>
 public sealed class DatabaseInitializer : IDatabaseInitializer
 {
-    private readonly IDbConnectionFactory       _factory;
-    private readonly string                     _dbPath;
-    private readonly string                     _backupsDir;
-    private readonly IReadOnlyList<SeedBatch>   _batches;
+    private readonly IDbConnectionFactory         _factory;
+    private readonly string                       _dbPath;
+    private readonly string                       _backupsDir;
+    private readonly IReadOnlyList<SeedBatch>     _batches;
+    private readonly IImportBatchRepository       _importBatches;
     private readonly ILogger<DatabaseInitializer> _logger;
 
     private List<SeedDuplicateRecord> _lastSeedDuplicates = [];
@@ -55,7 +57,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     private static readonly IReadOnlyList<string> Migrations =
     [
         Migration001_InitialSchema,
-        Migration002_ReseedGenres
+        Migration002_ReseedGenres,
+        Migration003_ImportBatches
     ];
 
     /// <summary>Initialises the instance with the connection factory and the ordered list of source batches to seed from.</summary>
@@ -63,19 +66,22 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     /// <param name="dbPath">Absolute path to the <c>.db</c> file. Used for pre-migration backups and legacy filename migration.</param>
     /// <param name="backupsDir">Directory where pre-migration backups are written. Defaults to a <c>backups/</c> subfolder next to the database file.</param>
     /// <param name="batches">Source file batches in import order, each with its resolved duplicate-resolution policy.</param>
+    /// <param name="importBatches">Repository used to record provenance for each seeded file.</param>
     /// <param name="logger">Logger for startup diagnostics.</param>
     public DatabaseInitializer(
         IDbConnectionFactory         factory,
         string                       dbPath,
         string                       backupsDir,
         IReadOnlyList<SeedBatch>     batches,
+        IImportBatchRepository       importBatches,
         ILogger<DatabaseInitializer> logger)
     {
-        _factory    = factory;
-        _dbPath     = dbPath;
-        _backupsDir = backupsDir;
-        _batches    = batches;
-        _logger     = logger;
+        _factory       = factory;
+        _dbPath        = dbPath;
+        _backupsDir    = backupsDir;
+        _batches       = batches;
+        _importBatches = importBatches;
+        _logger        = logger;
     }
 
     /// <inheritdoc/>
@@ -295,6 +301,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         await connection.ExecuteAsync(Sql.Characters.DeleteAll);
         await connection.ExecuteAsync(Sql.People.DeleteAll);
         await connection.ExecuteAsync(Sql.Sources.DeleteAll);
+        await connection.ExecuteAsync(Sql.ImportBatches.DeleteAll);
         await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
     }
 
@@ -324,10 +331,14 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         {
             foreach (var file in batch.Files)
             {
-                var fileName = Path.GetFileName(file);
-                var quotes   = LoadQuotesFromFile(file);
+                var fileName    = Path.GetFileName(file);
+                var quotes      = LoadQuotesFromFile(file);
+                var importBatch = await CreateImportBatchAsync(file, batch.Label);
+
                 _logger.LogInformation("Database: importing {Count} quotes from {File} ({Batch})...",
                     quotes.Count, fileName, batch.Label);
+
+                var fileQuoteCount = 0;
 
                 foreach (var q in quotes)
                 {
@@ -354,21 +365,22 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                         await connection.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote,      new { id = q.Id });
                         await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteForQuote, new { id = q.Id });
 
-                        var owSourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex);
-                        var owCharacterId = await GetOrCreateCharacterAsync(connection, q, owSourceId, characterIndex);
-                        var owPersonId    = await GetOrCreatePersonAsync(connection, q, personIndex);
+                        var owSourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex, importBatch.Id);
+                        var owCharacterId = await GetOrCreateCharacterAsync(connection, q, owSourceId, characterIndex, importBatch.Id);
+                        var owPersonId    = await GetOrCreatePersonAsync(connection, q, personIndex, importBatch.Id);
 
                         await connection.ExecuteAsync(
                             Sql.Quotes.UpdateOnOverwrite,
                             new
                             {
-                                text = q.QuoteText,
-                                lang = q.OriginalLanguage,
-                                sid  = owSourceId,
-                                cid  = owCharacterId,
-                                pid  = owPersonId,
-                                mod  = now,
-                                id   = q.Id
+                                text    = q.QuoteText,
+                                lang    = q.OriginalLanguage,
+                                sid     = owSourceId,
+                                cid     = owCharacterId,
+                                pid     = owPersonId,
+                                batchId = importBatch.Id,
+                                mod     = now,
+                                id      = q.Id
                             });
 
                         seenIds[q.Id] = file;
@@ -382,9 +394,9 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                     // First occurrence — normal insert.
                     seenIds[q.Id] = file;
 
-                    var sourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex);
-                    var characterId = await GetOrCreateCharacterAsync(connection, q, sourceId, characterIndex);
-                    var personId    = await GetOrCreatePersonAsync(connection, q, personIndex);
+                    var sourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex, importBatch.Id);
+                    var characterId = await GetOrCreateCharacterAsync(connection, q, sourceId, characterIndex, importBatch.Id);
+                    var personId    = await GetOrCreatePersonAsync(connection, q, personIndex, importBatch.Id);
                     var quoteId     = Guid.Parse(q.Id);
 
                     await connection.ExecuteAsync(
@@ -397,12 +409,16 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                             SourceId         = sourceId,
                             CharacterId      = characterId,
                             PersonId         = personId,
+                            ImportBatchId    = importBatch.Id,
                             DateCreated      = now
                         });
 
                     await InsertTranslationsAsync(connection, q, quoteId, sourceId, now);
                     await InsertGenresAsync(connection, q, quoteId, now);
+                    fileQuoteCount++;
                 }
+
+                await _importBatches.UpdateRecordCountAsync(importBatch.Id, fileQuoteCount);
             }
         }
 
@@ -502,8 +518,21 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         }
     }
 
+    private async Task<ImportBatch> CreateImportBatchAsync(string filePath, string batchLabel)
+    {
+        var fileName = Path.GetFileName(filePath);
+        var batch = new ImportBatch
+        {
+            Name       = fileName,
+            Type       = ImportBatchType.System.ToString(),
+            ImportedAt = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat)
+        };
+        await _importBatches.InsertAsync(batch);
+        return batch;
+    }
+
     private static async Task<Guid> GetOrCreateSourceAsync(
-        SqliteConnection connection, Quote q, Dictionary<string, Guid> index)
+        SqliteConnection connection, Quote q, Dictionary<string, Guid> index, Guid importBatchId)
     {
         var typeStr = NormaliseType(q.Type);
         var key     = $"{q.Source}|{typeStr}";
@@ -512,10 +541,11 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         var id = Guid.NewGuid();
         await connection.InsertAsync(new Source
         {
-            Id    = id,
-            Title = q.Source,
-            Type  = new SafeValue<QuoteType?>(typeStr, ParseQuoteType(q.Type)),
-            Date  = string.IsNullOrEmpty(q.Date) ? SafeDateValue.Empty : new SafeValue<DateTime?>(q.Date, null)
+            Id            = id,
+            Title         = q.Source,
+            Type          = new SafeValue<QuoteType?>(typeStr, ParseQuoteType(q.Type)),
+            Date          = string.IsNullOrEmpty(q.Date) ? SafeDateValue.Empty : new SafeValue<DateTime?>(q.Date, null),
+            ImportBatchId = importBatchId
         });
 
         index[key] = id;
@@ -523,7 +553,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     }
 
     private static async Task<Guid?> GetOrCreateCharacterAsync(
-        SqliteConnection connection, Quote q, Guid sourceId, Dictionary<string, Guid> index)
+        SqliteConnection connection, Quote q, Guid sourceId, Dictionary<string, Guid> index, Guid importBatchId)
     {
         if (string.IsNullOrWhiteSpace(q.Character)) return null;
 
@@ -533,9 +563,10 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         var id = Guid.NewGuid();
         await connection.InsertAsync(new Character
         {
-            Id       = id,
-            SourceId = sourceId,
-            Name     = q.Character
+            Id            = id,
+            SourceId      = sourceId,
+            Name          = q.Character,
+            ImportBatchId = importBatchId
         });
 
         index[key] = id;
@@ -543,7 +574,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     }
 
     private static async Task<Guid?> GetOrCreatePersonAsync(
-        SqliteConnection connection, Quote q, Dictionary<string, Guid> index)
+        SqliteConnection connection, Quote q, Dictionary<string, Guid> index, Guid importBatchId)
     {
         if (string.IsNullOrWhiteSpace(q.Author)) return null;
 
@@ -552,8 +583,9 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         var id = Guid.NewGuid();
         await connection.InsertAsync(new Person
         {
-            Id   = id,
-            Name = q.Author
+            Id            = id,
+            Name          = q.Author,
+            ImportBatchId = importBatchId
         });
 
         index[q.Author] = id;
@@ -622,6 +654,45 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     // normalisation logic. Hyphenated genres ("sci-fi", "non-fiction") were silently dropped
     // during initial seeding because Enum.TryParse failed on the hyphen.
     private const string Migration002_ReseedGenres = "DELETE FROM QuoteGenres;";
+
+    // Adds the ImportBatches provenance table and nullable ImportBatchId FK columns on all
+    // entity tables. Pre-seed rows for the two bundled external datasets are inserted only
+    // when upgrading (Quotes already contains data) — fresh installs receive provenance from
+    // the seeder instead.
+    private const string Migration003_ImportBatches = """
+        CREATE TABLE IF NOT EXISTS ImportBatches (
+            Id           TEXT    PRIMARY KEY,
+            Name         TEXT    NOT NULL,
+            Type         TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System')),
+            Url          TEXT,
+            ImportedAt   TEXT    NOT NULL,
+            ImportedBy   TEXT,
+            RecordCount  INTEGER NOT NULL DEFAULT 0,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0
+        );
+
+        ALTER TABLE Quotes     ADD COLUMN ImportBatchId TEXT REFERENCES ImportBatches(Id);
+        ALTER TABLE Sources    ADD COLUMN ImportBatchId TEXT REFERENCES ImportBatches(Id);
+        ALTER TABLE Characters ADD COLUMN ImportBatchId TEXT REFERENCES ImportBatches(Id);
+        ALTER TABLE People     ADD COLUMN ImportBatchId TEXT REFERENCES ImportBatches(Id);
+
+        INSERT INTO ImportBatches (Id, Name, Type, Url, ImportedAt, ImportedBy, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890', 'vilaboim_movie-quotes.json', 'Seed',
+               'https://github.com/vilaboim/movie-quotes',
+               strftime('%Y-%m-%d %H:%M:%S', 'now'), NULL, 0,
+               strftime('%Y-%m-%d %H:%M:%S', 'now'), NULL, NULL, 0
+        WHERE EXISTS (SELECT 1 FROM Quotes LIMIT 1);
+
+        INSERT INTO ImportBatches (Id, Name, Type, Url, ImportedAt, ImportedBy, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT 'B2C3D4E5-F6A7-8901-BCDE-F12345678901', 'NikhilNamal17_popular-movie-quotes.json', 'Seed',
+               'https://github.com/NikhilNamal17/popular-movie-quotes',
+               strftime('%Y-%m-%d %H:%M:%S', 'now'), NULL, 0,
+               strftime('%Y-%m-%d %H:%M:%S', 'now'), NULL, NULL, 0
+        WHERE EXISTS (SELECT 1 FROM Quotes LIMIT 1);
+        """;
 
     private const string Migration001_InitialSchema = """
         CREATE TABLE IF NOT EXISTS Sources (

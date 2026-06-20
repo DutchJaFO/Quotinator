@@ -89,6 +89,18 @@ An issue is done only when every requirement in its GitHub spec is met and verif
 
 ---
 
+## New issues discovered during milestone work
+
+When a new issue is identified during an active milestone session — whether it is a bug, improvement idea, or downstream dependency — file it immediately while the context is fresh. Before calling `gh issue create`:
+
+1. **Decide the milestone** — ask the user which milestone the new issue belongs to. Do not assume it belongs to the current milestone. Present the options and wait for an explicit decision.
+2. **Decide the branch** — if the issue belongs to the current milestone, it will be worked on the current feature branch. If it belongs to a different milestone, note it and leave it for that milestone's feature branch.
+3. **Never file without a milestone** — an issue with no milestone is invisible to planning. Always assign one before creating.
+
+This rule applies to all issue actions: assigning, moving, labelling. Always ask; never assume.
+
+---
+
 ## Scope changes and deferrals
 
 If during planning or implementation a requirement from the GitHub issue spec is deferred to a later issue:
@@ -134,15 +146,52 @@ An issue may only be closed when **all** of the following are true:
 - All changes are merged to `main`
 - The changes are included in a tagged release
 
+**Timing on feature branches:** while working on a feature branch, an issue can reach "spec complete, all tests green" status before the PR is merged. Do not run `gh issue close` at that point. The issue stays open until the PR is merged to `main`. Once merged, verify one final time that the main branch is green, then close.
+
 Steps:
 
 1. Update the plan doc status to `Complete`.
 2. Update the status column in `overview.md`.
 3. Re-verify the order of operations table — a completed issue may unblock others or change the correct sequence. Update the table if needed before picking the next issue.
-4. Close on GitHub:
+4. **After the PR is merged to `main`:** close on GitHub:
    ```
    gh issue close <N> --comment "<short note on what was done>"
    ```
+
+---
+
+## PR merge plan in overview.md
+
+Every milestone `overview.md` must contain a **PR merge plan** section. The default assumption is that the full milestone is completed before any code merges to `main`. Departures from that default must be explicitly evaluated and recorded in the plan.
+
+The PR merge plan answers: *which issues, if any, are safe to merge to `main` before the milestone is complete, and why?*
+
+For each candidate for an early merge, record:
+- Which issues it depends on for full functionality
+- Whether those incomplete dependencies leave it inert on `main` (new infrastructure nothing currently calls)
+- Whether a workaround exists for the gap (e.g. re-seed for data gaps)
+
+The order of operations table drives this evaluation — an issue that is early in the dependency chain and has no incomplete issues that call its outputs is the most likely candidate for early merge.
+
+---
+
+## What makes an issue safe to include in a PR
+
+The CI pipeline and branch protection already enforce that `main` builds and tests pass on every merge. The question is not "does it break?" — the pipeline answers that. The question is: **is this issue ready to ship on its own?**
+
+An issue is safe to include in a PR if either:
+
+1. **It is self-contained** — its changes work fully without any other incomplete issue, or
+2. **Its incomplete dependencies leave it inert** — the issue adds infrastructure that existing behaviour does not depend on. A new table, a new repository, or a new seeder step that nothing currently calls is safe to include even if the feature that *uses* it is not done yet.
+
+An issue is **not** safe to include without its dependencies when:
+
+- The issue's output is only reachable or meaningful through another incomplete issue (e.g. a write endpoint that the Blazor UI for it is not done, where the endpoint itself is the deliverable)
+- The issue leaves a partially-wired feature that returns errors or behaves incorrectly under normal use
+
+**When dependencies are not yet done:** check whether a workaround exists for the gap. For example, if quote data can only be added via seeding, a re-seed covers any data-integrity gap from an incomplete import feature — buying time to finish the dependent issues before the gap matters in production.
+
+Issues not yet started or still in progress stay open after a partial merge. Only fully verified issues (spec complete + tests green + PR merged) may be closed.
 
 ---
 

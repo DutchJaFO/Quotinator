@@ -12,6 +12,7 @@ using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
 using Quotinator.Core.Data;
+using Quotinator.Core.Data.Repositories;
 using Quotinator.Core.Data.TypeHandlers;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Repositories;
@@ -288,8 +289,11 @@ builder.Services.AddTransient<IUnitOfWork>(sp =>
 var earlyLoggerFactory = LoggerFactory.Create(b => b.AddConsole());
 var earlyLogger        = earlyLoggerFactory.CreateLogger<Program>();
 var seedBatches        = BuildSeedBatches(bundledSourcesDir, importsDir, configPolicy, earlyLogger);
+builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepository>();
 builder.Services.AddSingleton<IDatabaseInitializer>(sp => new DatabaseInitializer(
-    connectionFactory, dbPath, backupsDir, seedBatches, sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
+    connectionFactory, dbPath, backupsDir, seedBatches,
+    sp.GetRequiredService<IImportBatchRepository>(),
+    sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
 builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));

@@ -34,12 +34,12 @@ internal static class Sql
 
         internal const string Insert =
             "INSERT OR IGNORE INTO Quotes " +
-            "(Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
-            "VALUES (@Id, @QuoteText, @OriginalLanguage, @SourceId, @CharacterId, @PersonId, @DateCreated, NULL, NULL, 0);";
+            "(Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
+            "VALUES (@Id, @QuoteText, @OriginalLanguage, @SourceId, @CharacterId, @PersonId, @ImportBatchId, @DateCreated, NULL, NULL, 0);";
 
         internal const string UpdateOnOverwrite =
             "UPDATE Quotes SET QuoteText=@text, OriginalLanguage=@lang, SourceId=@sid, " +
-            "CharacterId=@cid, PersonId=@pid, DateModified=@mod WHERE Id=@id;";
+            "CharacterId=@cid, PersonId=@pid, ImportBatchId=@batchId, DateModified=@mod WHERE Id=@id;";
 
         // Shared SELECT projection used by all read factory methods below.
         // @lang is always bound — null when no translation is requested.
@@ -181,5 +181,20 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Sources WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Sources;";
+    }
+
+    /// <summary>ImportBatches table.</summary>
+    internal static class ImportBatches
+    {
+        internal const string SelectAll =
+            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 ORDER BY ImportedAt DESC;";
+
+        internal const string SelectByType =
+            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC;";
+
+        internal const string UpdateRecordCount =
+            "UPDATE ImportBatches SET RecordCount = @count, DateModified = @now WHERE Id = @id;";
+
+        internal const string DeleteAll = "DELETE FROM ImportBatches;";
     }
 }

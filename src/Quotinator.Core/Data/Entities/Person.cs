@@ -15,4 +15,7 @@ public sealed class Person : RecordBase
 
     /// <summary>Imprecise ISO 8601 death date. Empty when the person is still living or the date is unknown.</summary>
     public SafeValue<DateTime?> DateOfDeath { get; init; } = SafeDateValue.Empty;
+
+    /// <summary>The import batch that introduced this record. Null for records predating provenance tracking.</summary>
+    public Guid? ImportBatchId { get; init; }
 }

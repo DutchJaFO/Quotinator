@@ -21,4 +21,7 @@ public sealed class QuoteEntity : RecordBase
 
     /// <summary>The real person who said or wrote the quote. Null for fictional sources.</summary>
     public Guid?  PersonId         { get; init; }
+
+    /// <summary>The import batch that introduced this record. Null for records predating provenance tracking.</summary>
+    public Guid?  ImportBatchId    { get; init; }
 }

@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Data;
+using Quotinator.Core.Data.Repositories;
 using Quotinator.Core.Data.TypeHandlers;
 using Quotinator.Data.Connections;
 
@@ -45,9 +46,10 @@ public class DatabaseInitializerTests
 
     private DatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches)
     {
-        var factory = new SqliteConnectionFactory(_dbPath);
-        var logger  = NullLogger<DatabaseInitializer>.Instance;
-        return new DatabaseInitializer(factory, _dbPath, _backups, batches, logger);
+        var factory       = new SqliteConnectionFactory(_dbPath);
+        var importBatches = new SqliteImportBatchRepository(factory);
+        var logger        = NullLogger<DatabaseInitializer>.Instance;
+        return new DatabaseInitializer(factory, _dbPath, _backups, batches, importBatches, logger);
     }
 
     private static SeedBatch AllFilesBatch() => new(

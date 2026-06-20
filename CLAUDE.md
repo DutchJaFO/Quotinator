@@ -148,6 +148,14 @@ Routes/        → Quotinator.Constants.Routes     (ApiRoutes, RouteExtensions)
 
 **Razor caveat:** `.razor` files are not always caught by the build when a namespace or component reference changes. A `dotnet build` may report 0 errors while a `.razor` file still references the old namespace at runtime. After any namespace refactor, manually check every `.razor` and `_Imports.razor` file that references the changed namespace and run the app to confirm the Blazor UI loads correctly.
 
+### Dependency injection policy
+
+**Default: always use DI registration.** Services, repositories, and infrastructure types must be registered with the DI container and received via constructor injection. Using `new` to instantiate a dependency is a code smell — it bypasses DI, makes testing harder, and prevents lifetime management by the container.
+
+**The only permitted exception:** `new` may be used when the DI container itself cannot supply a required parameter at registration time (e.g. a computed path, a runtime config value, or a factory-constructed primitive). In that case, use the service-provider factory overload (`builder.Services.AddSingleton<T>(sp => new T(sp.GetRequiredService<IDep>(), computedValue))`) rather than a bare `new` call at the call site.
+
+Any use of bare `new` for a type that could reasonably be registered must have a comment explaining why DI was not used.
+
 ### Why Quotinator.Api hosts the Blazor UI
 
 The Web and API were merged into a single project so that Quotinator ships as one container. This is required for the Home Assistant add-on (the HA supervisor runs single-container add-ons) and simplifies all deployment scenarios. The Blazor UI and REST endpoints share one process, one port, and one image.
