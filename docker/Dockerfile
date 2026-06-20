@@ -2,20 +2,18 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Restore (layer-cached separately from source copy)
+# Restore layer — selective copy of .csproj files and SDK config so NuGet packages
+# are layer-cached independently of source changes. Add a line here for each new project.
+COPY Directory.Build.props .
 COPY src/Quotinator.Constants/Quotinator.Constants.csproj src/Quotinator.Constants/
 COPY src/Quotinator.Data/Quotinator.Data.csproj src/Quotinator.Data/
 COPY src/Quotinator.Core/Quotinator.Core.csproj src/Quotinator.Core/
 COPY src/Quotinator.Api/Quotinator.Api.csproj src/Quotinator.Api/
 RUN dotnet restore src/Quotinator.Api/Quotinator.Api.csproj
 
-# Build and publish
-COPY src/Quotinator.Constants/ src/Quotinator.Constants/
-COPY src/Quotinator.Data/ src/Quotinator.Data/
-COPY src/Quotinator.Core/ src/Quotinator.Core/
-COPY src/Quotinator.Api/ src/Quotinator.Api/
-COPY data/ data/
-COPY CHANGELOG.md .
+# Build layer — copy everything not excluded by .dockerignore so no file is ever
+# accidentally omitted when new projects or root-level SDK files are added.
+COPY . .
 # Note: --no-restore is intentionally absent. The Blazor static web assets pipeline
 # (which produces _framework/blazor.web.js) needs .razor files present when the
 # assets manifest is generated. The restore-only layer above runs without source files,

@@ -3,7 +3,7 @@ using Quotinator.Core.Data.Enums;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
-using Quotinator.Data.Data;
+using Quotinator.Data.Connections;
 using Quotinator.Data.Models;
 using GenreEnum = Quotinator.Core.Data.Enums.Genre;
 

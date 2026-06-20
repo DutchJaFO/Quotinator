@@ -2,7 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Data;
 using Quotinator.Core.Data.TypeHandlers;
-using Quotinator.Data.Data;
+using Quotinator.Data.Connections;
 
 namespace Quotinator.Core.Tests.Data;
 

@@ -1,7 +1,7 @@
 using System.Data;
 using Microsoft.Data.Sqlite;
 
-namespace Quotinator.Data.Data;
+namespace Quotinator.Data.Connections;
 
 /// <summary>SQLite implementation of <see cref="IDbConnectionFactory"/> using a file-based connection string.</summary>
 public sealed class SqliteConnectionFactory : IDbConnectionFactory

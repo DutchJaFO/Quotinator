@@ -5,7 +5,11 @@
 **/*.user
 **/TestResults
 
-# Docs and scripts are not needed in the image
+# Not needed in the image
+tests/
 docs/
 scripts/
 docker/
+addon/
+schemas/
+.github/

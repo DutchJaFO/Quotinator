@@ -8,7 +8,7 @@ using Quotinator.Core.Data.Entities;
 using Quotinator.Core.Data.Enums;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
-using Quotinator.Data.Data;
+using Quotinator.Data.Connections;
 using Quotinator.Data.Models;
 using GenreEnum = Quotinator.Core.Data.Enums.Genre;
 
