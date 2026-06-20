@@ -40,9 +40,9 @@ git checkout -b feature/{slug}
 
 All code and plan doc updates go on this branch. Milestone content does not go directly to `main` after the initial commit — updates travel through the feature branch and merge with the code.
 
-**The feature branch lives for the entire milestone.** Do not delete it when doing a partial merge to `main`. A partial merge is a sync point — the branch continues to exist as the workspace for remaining issues. Only delete the branch when the milestone is fully closed and no further work will happen on it.
+**The feature branch lives for the entire milestone.** Do not delete it when doing a partial merge to `main`. A partial merge is a sync point — the branch continues to exist as the workspace for remaining issues.
 
-When merging a PR for a partial milestone, always omit `--delete-branch`. Deleting the branch mid-milestone destroys the workspace and requires manual recovery.
+**Branch deletion is never done by the AI assistant.** Only the developer deletes branches, and only when they have decided the branch is no longer needed. Never use `--delete-branch` or `git branch -d` or any equivalent. If a PR needs to be merged, merge it without the delete flag and let the developer decide what happens to the branch.
 
 ---
 
