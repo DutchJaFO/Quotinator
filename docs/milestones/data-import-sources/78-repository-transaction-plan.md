@@ -1,6 +1,6 @@
 # #78 — Repository: transaction and shared connection support
 
-**Status:** Not started  
+**Status:** In progress  
 **GitHub issue:** #78  
 **Depends on:** #71 (generic repository pattern)  
 **Unblocks:** #58 (ImportBatches schema), #45 (import endpoint)
@@ -13,19 +13,7 @@
 
 ---
 
-## Approach decision (decide before implementing)
-
-Evaluate both options and record the chosen approach in a **Decision** section below. Write an ADR in `docs/architecture-decisions/` if the decision involves a non-obvious trade-off.
-
-**Option A — Unit of Work**  
-`IUnitOfWork` owns one connection and transaction. Repositories accept it as an optional dependency. Callers that need atomicity create a unit of work, pass it to each repository call, and commit or roll back at the end.
-
-**Option B — Optional connection/transaction parameter**  
-Repository methods accept an optional `(IDbConnection, IDbTransaction?)` pair. Single-operation callers omit them; multi-step callers supply their own.
-
----
-
-## Decision
+## Approach decision
 
 **Option A — Unit of Work** is adopted. See [ADR 003](../../architecture-decisions/003-unit-of-work-and-data-project-design-goals.md) for the full rationale and binding design goals for `Quotinator.Data`.
 
@@ -39,25 +27,33 @@ Summary:
 
 ## Spec requirements
 
-1. Multiple repository calls can be wrapped in a single transaction
-2. Single-operation callers (no transaction needed) continue to work unchanged — no breaking change to existing call sites or tests
-3. `IRepository<T>`, `SqliteRepository<T>`, `IRestorableRepository<T>`, and `SqliteRestorableRepository<T>` updated to support the chosen approach
-4. Commit path: all operations within a transaction are persisted together
-5. Rollback path: a failed or cancelled transaction leaves no partial state in the database
-6. DI registration updated if the chosen approach requires it
+1. `IUnitOfWork` interface in `Quotinator.Data` with `BeginTransactionAsync`, `CommitAsync`, `RollbackAsync`, `Dispose` — no Dapper or `IDbConnection` types on the public interface
+2. `SqliteUnitOfWork` implements `IUnitOfWork` in `Quotinator.Data`
+3. `IRepository<T>` methods (`GetByIdAsync`, `InsertAsync`, `UpdateAsync`, `SoftDeleteAsync`) each accept an optional `IUnitOfWork?` parameter — existing call sites require no changes
+4. `SqliteRepository<T>` uses the connection and transaction from the supplied `IUnitOfWork` when provided; opens its own connection when not
+5. `IRestorableRepository<T>` methods (`GetDeletedAsync`, `RestoreAsync`, `HardDeleteAsync`, `PurgeAsync`) each accept an optional `IUnitOfWork?` parameter
+6. `SqliteRestorableRepository<T>` uses the supplied `IUnitOfWork` when provided
+7. Commit path: all operations within one `IUnitOfWork` scope are persisted when `CommitAsync` is called
+8. Rollback path: all operations within one `IUnitOfWork` scope are discarded when `RollbackAsync` is called or the unit of work is disposed without committing
+9. Single-operation callers (no `IUnitOfWork` passed) work identically to before — no regression
+10. `IUnitOfWork` registered in DI and resolvable at runtime
 
 ---
 
 ## Implementation steps
 
-- [ ] Evaluate options and record decision above
-- [ ] Write ADR if warranted
-- [ ] Update `IRepository<T>`
-- [ ] Update `SqliteRepository<T>`
-- [ ] Update `IRestorableRepository<T>` and `SqliteRestorableRepository<T>` if affected
-- [ ] Add `SqliteRepositoryTransactionTests` with commit and rollback tests
-- [ ] Confirm all existing `SqliteRepositoryTests` and `SqliteRestorableRepositoryTests` still pass
-- [ ] Update DI registration if needed
+- [x] Evaluate options and record decision
+- [x] Write ADR 003
+- [ ] Write `SqliteRepositoryTransactionTests` with all expected tests (confirm red before implementing)
+- [ ] Run full test suite to establish baseline (confirm no pre-existing failures)
+- [ ] Add `IUnitOfWork` interface to `Quotinator.Data`
+- [ ] Add `SqliteUnitOfWork` to `Quotinator.Data`
+- [ ] Update `IRepository<T>` methods to accept optional `IUnitOfWork?`
+- [ ] Update `SqliteRepository<T>` to use supplied `IUnitOfWork` when provided
+- [ ] Update `IRestorableRepository<T>` methods to accept optional `IUnitOfWork?`
+- [ ] Update `SqliteRestorableRepository<T>` accordingly
+- [ ] Register `IUnitOfWork` / `SqliteUnitOfWork` in DI
+- [ ] Confirm all existing tests still pass
 
 ---
 
@@ -65,7 +61,13 @@ Summary:
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Multiple repository calls can share a connection and transaction | Unit test | `SqliteRepositoryTransactionTests.InsertAsync_WithSharedConnection_CommitPersistsRecord` |
-| 2 | ❌ | Rollback removes all operations in the transaction | Unit test | `SqliteRepositoryTransactionTests.InsertAsync_WithSharedConnection_RollbackRemovesRecord` |
-| 3 | ❌ | Multiple inserts within one transaction are atomic | Unit test | `SqliteRepositoryTransactionTests.MultipleInserts_WithinTransaction_AreAtomic` |
-| 4 | ❌ | Single-operation callers work unchanged (no regression) | Unit test | All existing `SqliteRepositoryTests` and `SqliteRestorableRepositoryTests` pass |
+| 1 | ❌ | `IUnitOfWork` interface exists with `BeginTransactionAsync`, `CommitAsync`, `RollbackAsync`, `Dispose` | Unit test | `SqliteRepositoryTransactionTests.SqliteUnitOfWork_ImplementsIUnitOfWork` |
+| 2 | ❌ | `IUnitOfWork` public interface exposes no Dapper or `IDbConnection` types | Unit test | `SqliteRepositoryTransactionTests.IUnitOfWork_HasNoDapperTypesOnPublicInterface` |
+| 3 | ❌ | `IRepository<T>` methods accept optional `IUnitOfWork?` without breaking existing callers | Unit test | All existing `SqliteRepositoryTests` pass unchanged |
+| 4 | ❌ | Commit path: operations within a `IUnitOfWork` are persisted on `CommitAsync` | Unit test | `SqliteRepositoryTransactionTests.InsertAsync_WithSharedConnection_CommitPersistsRecord` |
+| 5 | ❌ | Rollback path: operations within a `IUnitOfWork` are removed on `RollbackAsync` | Unit test | `SqliteRepositoryTransactionTests.InsertAsync_WithSharedConnection_RollbackRemovesRecord` |
+| 6 | ❌ | Multiple inserts within one transaction are atomic | Unit test | `SqliteRepositoryTransactionTests.MultipleInserts_WithinTransaction_AreAtomic` |
+| 7 | ❌ | Dispose without commit rolls back all operations | Unit test | `SqliteRepositoryTransactionTests.Dispose_WithoutCommit_RollsBack` |
+| 8 | ❌ | `IRestorableRepository<T>` methods accept optional `IUnitOfWork?` without breaking existing callers | Unit test | All existing `SqliteRestorableRepositoryTests` pass unchanged |
+| 9 | ❌ | Single-operation callers (no `IUnitOfWork`) work identically to before | Unit test | All existing `SqliteRepositoryTests` and `SqliteRestorableRepositoryTests` pass |
+| 10 | ❌ | `IUnitOfWork` registered in DI and resolvable at runtime | Live | `dotnet run --project src/Quotinator.Api` starts without exception; `curl http://localhost:8080/api/v1/health` returns 200 |
