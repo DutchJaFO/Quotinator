@@ -6,7 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.4.0] - 2026-06-20
+
+### Highlights
+Internal infrastructure release — no user-facing API or UI changes.
 
 ### Added
 - `seed.csx --output-dir DIR` flag redirects seed output to a custom directory, making it possible to test seeding without overwriting `data/sources/`

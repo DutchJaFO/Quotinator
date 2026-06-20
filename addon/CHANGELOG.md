@@ -4,6 +4,10 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.4.0] - 2026-06-20
+
+- Internal infrastructure release — no user-facing changes
+
 ## [1.3.0] - 2026-06-17
 
 - Quote data now loaded from multiple source files in `data/sources/` — one file per bundled dataset, plus optional user imports in the `imports/` subfolder of the data directory
