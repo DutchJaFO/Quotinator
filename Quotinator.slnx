@@ -3,12 +3,28 @@
     <File Path=".github/dependabot.yml" />
     <File Path=".github/workflows/ci.yml" />
     <File Path=".github/workflows/release.yml" />
+    <File Path=".github/PULL_REQUEST_TEMPLATE.md" />
+  </Folder>
+  <Folder Name="/.github/ISSUE_TEMPLATE/">
+    <File Path=".github/ISSUE_TEMPLATE/bug_report.md" />
+    <File Path=".github/ISSUE_TEMPLATE/feature_request.md" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path="CLAUDE.md" />
     <File Path="README.md" />
     <File Path="SOURCES.md" />
     <File Path="CHANGELOG.md" />
+    <File Path="CONTRIBUTING.md" />
+    <File Path="CODE_OF_CONDUCT.md" />
+    <File Path="SECURITY.md" />
+    <File Path="LICENSE" />
+    <File Path="repository.yaml" />
+    <File Path="Directory.Build.props" />
+    <File Path=".gitignore" />
+    <File Path=".gitattributes" />
+  </Folder>
+  <Folder Name="/.claude/">
+    <File Path=".claude/settings.json" />
   </Folder>
   <Folder Name="/addon/">
     <File Path="addon/config.yaml" />
@@ -34,8 +50,10 @@
   <Folder Name="/docker/">
     <File Path="docker/Dockerfile" />
     <File Path="docker/docker-compose.yml" />
+    <File Path=".dockerignore" />
   </Folder>
   <Folder Name="/docs/">
+    <File Path="docs/README.md" />
     <File Path="docs/ci-cd.md" />
     <File Path="docs/data-import.md" />
     <File Path="docs/docker.md" />
@@ -77,6 +95,7 @@
     <File Path="docs/milestones/data-import-sources/68-curated-json-conversations-plan.md" />
     <File Path="docs/milestones/data-import-sources/69-api-conversations-plan.md" />
     <File Path="docs/milestones/data-import-sources/71-generic-repository-plan.md" />
+    <File Path="docs/milestones/data-import-sources/72-cve-sql-audit-plan.md" />
     <File Path="docs/milestones/data-import-sources/78-repository-transaction-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
