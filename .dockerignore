@@ -5,6 +5,9 @@
 **/*.user
 **/TestResults
 
+# Local developer overrides — must never reach the image
+**/appsettings.local.json
+
 # Not needed in the image
 tests/
 docs/

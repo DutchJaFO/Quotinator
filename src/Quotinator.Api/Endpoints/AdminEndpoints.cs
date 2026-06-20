@@ -40,7 +40,7 @@ internal static class AdminEndpoints
             "Scans all configured source files without touching the database. " +
             "Returns the quote count per file, total and unique quote counts, and any cross-file duplicate IDs with the policy that would be applied. " +
             "Use this before calling `reseed` to understand what will be imported. " +
-            "Requires `Authorization: Bearer <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
         group.MapPost("/database/reseed", async (IDatabaseInitializer db) =>
         {
@@ -61,7 +61,7 @@ internal static class AdminEndpoints
             "The schema version history is preserved — no migrations are re-applied. " +
             "Returns the row counts and duplicate count after the operation completes. " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
-            "Requires `Authorization: Bearer <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
         group.MapPost("/database/reset", async (IDatabaseInitializer db) =>
         {
@@ -83,6 +83,6 @@ internal static class AdminEndpoints
             "Equivalent to deleting the database file and restarting. " +
             "Returns the row counts and duplicate count after the operation completes. " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
-            "Requires `Authorization: Bearer <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
     }
 }

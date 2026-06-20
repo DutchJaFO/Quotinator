@@ -23,6 +23,7 @@ using Toolbelt.Blazor.Extensions.DependencyInjection;
 DapperConfiguration.Configure();
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false);
 
 builder.Services.AddOpenApi(options =>
 {
@@ -32,7 +33,7 @@ builder.Services.AddOpenApi(options =>
         {
             new() { Name = ApiTags.System,  Description = "Endpoints for monitoring and verifying the health of the API." },
             new() { Name = ApiTags.Quotes,  Description = "Endpoints for fetching and searching quotes." },
-            new() { Name = ApiTags.Admin,   Description = "Administrative endpoints for database maintenance. Protected by a concurrency-1 limiter — only one operation runs at a time; any concurrent request receives `429 Too Many Requests` immediately. No authentication is required in the current release — restrict access via your reverse proxy or firewall if needed." },
+            new() { Name = ApiTags.Admin,   Description = "Administrative endpoints for database maintenance. Require `X-Api-Key` authentication. Protected by a concurrency-1 limiter — only one operation runs at a time; any concurrent request receives `429 Too Many Requests` immediately." },
         };
 
         document.Info = new()
@@ -47,6 +48,31 @@ builder.Services.AddOpenApi(options =>
                 "**Rate limiting:** sliding-window, 100 requests per minute per IP. Excess requests receive `429 Too Many Requests`.",
             Contact = new() { Name = "GitHub", Url = new Uri("https://github.com/DutchJaFO/Quotinator") }
         };
+
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
+        {
+            ["ApiKey"] = new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.ApiKey,
+                In   = ParameterLocation.Header,
+                Name = "X-Api-Key",
+                Description = "Admin API key. Set this once to authenticate all admin endpoint requests."
+            }
+        };
+
+        return Task.CompletedTask;
+    });
+
+    options.AddOperationTransformer((operation, context, cancellationToken) =>
+    {
+        if (operation.Tags?.Any(t => t.Name == ApiTags.Admin) == true)
+        {
+            operation.Security = new List<OpenApiSecurityRequirement>
+            {
+                new() { [new OpenApiSecuritySchemeReference("ApiKey")] = new List<string>() }
+            };
+        }
         return Task.CompletedTask;
     });
 });
@@ -343,6 +369,7 @@ var logger = app.Services.GetRequiredService<ILogger<Program>>();
 var versionService = app.Services.GetRequiredService<IVersionService>();
 var logRequests = app.Configuration.GetValue<bool>("Quotinator:LogRequests");
 
+var adminKeyConfigured = !string.IsNullOrEmpty(app.Configuration["Quotinator:AdminApiKey"]);
 var banner = new System.Text.StringBuilder()
     .AppendLine("############################################")
     .AppendLine($"Quotinator v{versionService.Version} starting")
@@ -351,13 +378,16 @@ var banner = new System.Text.StringBuilder()
     .AppendLine($"                schema v{dbInitializer.SchemaVersion} — {dbInitializer.QuoteCount} quotes  {dbInitializer.SourceCount} sources  {dbInitializer.CharacterCount} characters  {dbInitializer.PeopleCount} people")
     .AppendLine($"Backups:        {backupsDir}")
     .AppendLine($"DataProtection: {keysDir}")
-    .Append($"Config:         log_level={haLogLevel}  log_requests={(logRequests ? "on" : "off")}  ssl={( sslEnabled ? "on" : "off")}");
+    .AppendLine($"Log level:      {haLogLevel}")
+    .AppendLine($"Log requests:   {(logRequests ? "on" : "off")}")
+    .AppendLine($"SSL:            {(sslEnabled ? "on" : "off")}");
 if (sslEnabled)
-    banner.AppendLine().Append($"SSL:            {sslCertFile}  /  {sslKeyFile}");
-banner.AppendLine().Append("############################################");
+    banner.AppendLine($"  cert:         {sslCertFile}")
+          .AppendLine($"  key:          {sslKeyFile}");
+banner.AppendLine($"Admin API key:  {(adminKeyConfigured ? "set" : "not set")}")
+      .Append("############################################");
 
-Console.WriteLine();
-Console.WriteLine(banner);
+logger.LogInformation("{Banner}", banner);
 
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 lifetime.ApplicationStopping.Register(() =>

@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <UserSecretsId>quotinator-api-dev</UserSecretsId>
     <!-- Suppress CS1591 (missing XML doc) on source-generated code we cannot annotate -->
     <NoWarn>$(NoWarn);1591</NoWarn>
     <Description>Self-hosted quote REST API and Blazor management UI. Serves real, verified quotes from films, books, TV, and famous people.</Description>

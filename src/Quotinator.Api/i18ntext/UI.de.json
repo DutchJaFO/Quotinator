@@ -42,5 +42,10 @@
   "ErrorFilterInputTooLong": "Filterwerte dürfen nicht länger als 200 Zeichen sein.",
   "ErrorFilterInputInvalid": "Ein oder mehrere Filterwerte enthalten ungültige Zeichen.",
   "ErrorDecadeInvalid": "decade muss ein durch 10 teilbares Jahr sein (z. B. 1980, 1990, 2000).",
-  "ErrorYearRangeInvalid": "yearFrom darf nicht größer als yearTo sein."
+  "ErrorYearRangeInvalid": "yearFrom darf nicht größer als yearTo sein.",
+  "AdminEndpointsHeading": "Admin-Endpunkte",
+  "AdminEndpointsDescription": "Diese Endpunkte erfordern einen X-Api-Key-Header, der mit dem in den Add-on-Optionen konfigurierten admin_api_key übereinstimmt. Sie sind nicht verfügbar, wenn kein Schlüssel konfiguriert ist.",
+  "AdminPreviewSeedLabel": "Importvorschau anzeigen",
+  "AdminReseedLabel": "Datenbank neu befüllen",
+  "AdminResetLabel": "Datenbank zurücksetzen"
 }

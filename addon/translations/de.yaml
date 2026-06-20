@@ -28,7 +28,7 @@ configuration:
     name: Admin-API-Schlüssel
     description: >-
       Geheimer Schlüssel, der zum Aufrufen der destruktiven Admin-Endpunkte (Reseed, Reset) erforderlich ist.
-      Clients müssen Authorization: Bearer <Schlüssel> senden.
+      Clients müssen X-Api-Key: <Schlüssel> senden.
       Leer lassen, um die Admin-Endpunkte vollständig zu deaktivieren.
   backup_path:
     name: Sicherungsordner

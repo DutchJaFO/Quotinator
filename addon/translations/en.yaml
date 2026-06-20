@@ -28,7 +28,7 @@ configuration:
     name: Admin API key
     description: >-
       Secret key required to call the destructive admin endpoints (reseed, reset).
-      Clients must supply Authorization: Bearer <key>.
+      Clients must supply X-Api-Key: <key>.
       Leave empty to disable the admin endpoints entirely.
   backup_path:
     name: Backup folder

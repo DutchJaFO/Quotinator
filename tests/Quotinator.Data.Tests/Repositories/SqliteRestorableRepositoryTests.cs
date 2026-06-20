@@ -13,13 +13,6 @@ public class SqliteRestorableRepositoryTests
     private string _dbPath  = null!;
     private SqliteRestorableRepository<Widget> _repository = null!;
 
-    [ClassInitialize]
-    public static void ClassInitialize(TestContext _)
-    {
-        SqlMapper.AddTypeHandler(new GuidHandler());
-        SqlMapper.AddTypeHandler(new SafeDateHandler());
-    }
-
     [TestInitialize]
     public void TestInitialize()
     {
