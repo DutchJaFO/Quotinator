@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.4.2] - 2026-06-20
+
+### Highlights
+- Fixed: the Docker image was incorrectly reporting version 1.0.0 — the actual version is now shown correctly.
+- The REST API page now includes a direct link to the version endpoint.
+- Internal improvements — no other user-facing changes.
+
+### Fixed
+- Docker image embedded `1.0.0` as the API version — `Directory.Build.props` was not included in the build context; now copied before the restore layer so the correct version is embedded at publish time
+- Docker build layer switched from per-project `COPY` statements to `COPY . .` to prevent files being silently omitted when new projects or root SDK files are added
+
+### Added
+- Version endpoint row (`api/v1/version`) on the REST API page; translated in English, Dutch, and German
+
+### Changed
+- `Quotinator.Constants` source files moved from project root into namespace-matched subfolders: `Api/` (`ApiMessages`, `ApiTags`), `Routes/` (`ApiRoutes`, `RouteExtensions`), `RateLimiting/` (`RateLimitPolicies`)
+- `Quotinator.Data.Data` namespace renamed to `Quotinator.Data.Connections`
+
+---
+
 ## [1.4.1] - 2026-06-20
 
 ### Highlights
