@@ -87,9 +87,12 @@ At the start of every session working on a milestone:
    output that prove it exists. The fix is complete only when that test passes or those
    steps no longer reproduce the bug.
 5. Implement. Update plan doc step status as work progresses.
-6. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each documented verification step against the actual code.
+6. As each verification item is confirmed, check it off in the PR test plan (GitHub UI or `gh pr edit`) and update the Status column in the issue verification table. Do not batch these updates at the end — keep them current so the PR always reflects actual state.
+7. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each documented verification step against the actual code.
 
 An issue is done only when every requirement in its GitHub spec is met and verified against actual code. Partial implementation means the issue stays open.
+
+**Deployment-verified items** (HA ingress, supervisor log, add-on config panel, container restart behaviour) cannot be confirmed from code alone. Mark them in the verification table with `Method: Live (HA)` and leave their Status as ❌ until confirmed in the running add-on. Update the table and check the PR checkbox only after live confirmation.
 
 ---
 

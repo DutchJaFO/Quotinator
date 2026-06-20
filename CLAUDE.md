@@ -580,6 +580,8 @@ Bugs, defects, and planned improvements are tracked as **GitHub Issues**. Do not
 
 The closing comment posted on the GitHub issue must reproduce this same table (not a custom format). See issue #61 for a canonical example.
 
+**Keep checklists current as items are confirmed** — when a verification item is confirmed (unit test passes, live command produces expected output, or deployment step observed), immediately update the Status column in the table and check off the corresponding item in the PR test plan. Do not batch updates at the end. The PR test plan and issue verification table must reflect actual state at all times.
+
 **Deployment-only issues** — anything involving HA ingress routing, supervisor log output, add-on config panel, or container restart behaviour must be classified as deployment-verified and added to the memory checklist before the release.
 
 ---

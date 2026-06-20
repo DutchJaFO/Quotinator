@@ -44,6 +44,8 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 - [ ] Update the plan doc status to `Complete` (or note "no plan doc — by decision" if none exists)
 - [ ] Update the status column in `overview.md`
 - [ ] Re-verify the order of operations table — update if this issue's completion changes the correct sequence
+- [ ] **Update PR test plan checkboxes** — as each test plan item in the PR description is confirmed, check it off via `gh pr edit` or the GitHub UI. Do not leave confirmed items unchecked at merge time.
+- [ ] **Update issue verification table** — if the issue has a verification table (either in the body or in a comment), update the Status column to ✅ for every confirmed item before closing. The table in the closing comment is the canonical record.
 - [ ] **User confirms closure** — show the user the closing comment and verification table and wait for explicit approval before running `gh issue close`
 - [ ] Close: `gh issue close <N> --comment "<verification table>"`
 
