@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 - `seed.csx --output-dir DIR` flag redirects seed output to a custom directory, making it possible to test seeding without overwriting `data/sources/`
+- Generic repository infrastructure: `IRepository<T>` and `SqliteRepository<T>` (base CRUD), `IRestorableRepository<T>` and `SqliteRestorableRepository<T>` (opt-in soft-delete management — get deleted, restore, hard-delete, purge)
+- `GuidHandler` Dapper type handler — forces `Guid` storage as uppercase TEXT to match Microsoft.Data.Sqlite's default, fixing a case-sensitivity mismatch that silently dropped results from parameterised queries
+- ADR 002 documenting the RecordBase-everywhere decision — all tables carry audit columns; junction tables use a synthetic GUID primary key with a UNIQUE constraint on the natural key pair
+- `README.md` in each reserved-but-empty folder (`docs/architecture-decisions/`, `docs/milestones/`, `docs/milestones/data-import-sources/`, `docs/workflow/`, `scripts/cache/`, `src/Quotinator.Core/Configuration/`) explaining the folder's purpose and expected contents
+- `Directory.Build.props` suppressing NU1903 (CVE-2025-6965) globally with a rationale comment
+- `Quotinator.Core.Data.Sql` static class centralising every SQL statement as named constants or factory methods; all inline SQL removed from `DatabaseInitializer` and `SqliteQuoteService`
+- `SqlQueryGuardTests` — reflection-based test covering all `Sql.*` constants and all dynamic query factory methods with a full filter matrix; replaces the fragile file-scan approach
+- `RepositorySql` class in `Quotinator.Data.Repositories` — centralises the six `SqliteRepository`/`SqliteRestorableRepository` template queries (previously inline); `SqlAggregateGuard.HasAggregateFunction` public helper exposes the aggregate-detection regex for use in tests
+- `AggregateQueries_MatchDocumentedInventory` test — documents and locks the exact set of SQL constants that contain aggregate functions; fails when new aggregate queries are added without review
+- `AllSqlStringLiterals_AreInCentralisedFiles` scan test — enforces that no C# source file outside `Sql.cs`, `RepositorySql.cs`, and `DatabaseInitializer.cs` contains DML string literals; closes the CVE-2025-6965 DoD item 1 gate
+- String centralisation policy documented in `CLAUDE.md` — no inline strings for SQL, UI, or error messages; audit grep commands and test gates included
 
 ---
 

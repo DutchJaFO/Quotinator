@@ -281,6 +281,12 @@ Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.
 
 `/search` is registered before `/{id}` in `QuoteEndpoints.cs` so the literal segment takes priority over the catch-all parameter. Preserve this order.
 
+### Vocabulary and abbreviations
+
+`docs/vocabulary.md` is the authoritative reference for abbreviations and domain terms used in this project. Do not introduce a new abbreviation in code, comments, or documentation without adding it to that file in the same commit. Domain terms that carry a project-specific meaning (especially where a common word is used in a narrower sense) belong there too.
+
+This policy does not affect XML `<summary>` tags — those follow standard C# documentation conventions and are a build requirement independent of the vocabulary.
+
 ### Code comments
 
 Two separate rules:
@@ -322,6 +328,30 @@ The Scalar API reference (`/scalar/v1`) and the raw OpenAPI spec (`/openapi/v1.j
 Do not attempt to translate OpenAPI spec content or Scalar UI text. Revisit this decision only if:
 - The OpenAPI specification adds native localisation support, or
 - Scalar adds a documented API for configuring the UI display language.
+
+### String centralisation policy
+
+**Rule: no inline strings for any string that communicates with an external system or user-facing surface. Every such string must live in a named, discoverable location.**
+
+The same principle applies across three domains in this project:
+
+| Domain | Where strings live | Enforcement |
+|---|---|---|
+| **SQL** | `Quotinator.Core.Data.Sql` — fixed queries as `const` fields, dynamic queries as `static` factory methods | `SqlQueryGuardTests` reflects over `Sql.*` and drives all factory methods with a full filter matrix |
+| **UI / error messages** | `src/Quotinator.Api/i18ntext/UI.*.json` — keyed by `ApiMessages` constants | `TranslationCompletenessTests` enforces every key in every locale |
+| **OpenAPI descriptions** | `[Description]` attributes in `QuoteEndpoints.cs` | **Permitted exception** — C# requires attribute arguments to be compile-time constants; there is no mechanism to centralise them without losing the attribute. They are English-only by the decision above. |
+
+**What "no inline strings" means in practice:**
+
+- A SQL string typed anywhere outside `Sql.cs` is a violation. If the query is dynamic (WHERE clause appended at runtime), write a factory method in the appropriate `Sql.*` nested class and call it from the service. The method is then testable in isolation.
+- A UI string or error message typed anywhere outside an `i18ntext/*.json` file is a violation — including inside `.razor` markup (see localisation checklist).
+- When adding a new query or string, the corresponding test (`SqlQueryGuardTests`, `TranslationCompletenessTests`) must pass before the commit is pushed.
+
+**How to audit:**
+
+- SQL: `grep -rn '"SELECT\|"INSERT\|"UPDATE\|"DELETE' src/ --include="*.cs"` — any hit outside `Sql.cs` or migration constants is a violation.
+- UI strings: run `dotnet test --filter TranslationCompleteness` — missing or empty keys fail the test.
+- Factory method coverage: `SqlQueryGuardTests.AssembledQueryCases` must include a case for every call shape a factory method can produce.
 
 ---
 

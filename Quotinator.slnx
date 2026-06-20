@@ -43,10 +43,23 @@
     <File Path="docs/localisation.md" />
     <File Path="docs/openapi.md" />
     <File Path="docs/running-locally.md" />
+    <File Path="docs/sql-safety.md" />
     <File Path="docs/testing-policy.md" />
+    <File Path="docs/vocabulary.md" />
   </Folder>
-  <Folder Name="/docs/milestones/" />
+  <Folder Name="/docs/decisions/">
+    <File Path="docs/decisions/README.md" />
+  </Folder>
+  <Folder Name="/docs/architecture-decisions/">
+    <File Path="docs/architecture-decisions/README.md" />
+    <File Path="docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md" />
+    <File Path="docs/architecture-decisions/002-recordbase-on-all-tables.md" />
+  </Folder>
+  <Folder Name="/docs/milestones/">
+    <File Path="docs/milestones/README.md" />
+  </Folder>
   <Folder Name="/docs/milestones/data-import-sources/">
+    <File Path="docs/milestones/data-import-sources/README.md" />
     <File Path="docs/milestones/data-import-sources/overview.md" />
     <File Path="docs/milestones/data-import-sources/45-import-endpoint-plan.md" />
     <File Path="docs/milestones/data-import-sources/55-record-completeness-plan.md" />
@@ -62,8 +75,10 @@
     <File Path="docs/milestones/data-import-sources/67-conversations-schema-plan.md" />
     <File Path="docs/milestones/data-import-sources/68-curated-json-conversations-plan.md" />
     <File Path="docs/milestones/data-import-sources/69-api-conversations-plan.md" />
+    <File Path="docs/milestones/data-import-sources/71-generic-repository-plan.md" />
   </Folder>
   <Folder Name="/docs/workflow/">
+    <File Path="docs/workflow/README.md" />
     <File Path="docs/workflow/checklist.md" />
     <File Path="docs/workflow/process.md" />
   </Folder>
@@ -80,6 +95,9 @@
     <File Path="scripts/sources.json" />
     <File Path="scripts/SOURCES.md" />
   </Folder>
+  <Folder Name="/scripts/cache/">
+    <File Path="scripts/cache/README.md" />
+  </Folder>
   <Folder Name="/Solution/">
     <File Path="tests/Quotinator.Api.Tests/Solution/RepositoryStructureTests.cs" />
   </Folder>
@@ -92,5 +110,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
+    <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
   </Folder>
 </Solution>

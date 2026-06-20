@@ -138,11 +138,9 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
     private async Task ApplyMigrationsAsync(SqliteConnection connection)
     {
-        await connection.ExecuteAsync(
-            "CREATE TABLE IF NOT EXISTS SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);");
+        await connection.ExecuteAsync(Sql.Schema.CreateTable);
 
-        var current = await connection.ExecuteScalarAsync<int>(
-            "SELECT COALESCE(MAX(Version), 0) FROM SchemaVersion;");
+        var current = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetCurrentVersion);
 
         if (current >= Migrations.Count)
         {
@@ -167,7 +165,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         {
             await connection.ExecuteAsync(Migrations[i]);
             await connection.ExecuteAsync(
-                "INSERT INTO SchemaVersion (Version, AppliedAt) VALUES (@v, @at);",
+                Sql.Schema.InsertVersion,
                 new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) });
         }
 
@@ -219,7 +217,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         try
         {
             await TruncateDataAsync(connection);
-            await connection.ExecuteAsync("DELETE FROM SchemaVersion;");
+            await connection.ExecuteAsync(Sql.Schema.DeleteAll);
             await ApplyMigrationsAsync(connection);
             await SeedIfEmptyInternalAsync(connection);
         }
@@ -289,20 +287,20 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     private static async Task TruncateDataAsync(SqliteConnection connection)
     {
         await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
-        await connection.ExecuteAsync("DELETE FROM QuoteGenres;");
-        await connection.ExecuteAsync("DELETE FROM QuoteTranslations;");
-        await connection.ExecuteAsync("DELETE FROM SourceTranslations;");
-        await connection.ExecuteAsync("DELETE FROM CharacterTranslations;");
-        await connection.ExecuteAsync("DELETE FROM Quotes;");
-        await connection.ExecuteAsync("DELETE FROM Characters;");
-        await connection.ExecuteAsync("DELETE FROM People;");
-        await connection.ExecuteAsync("DELETE FROM Sources;");
+        await connection.ExecuteAsync(Sql.QuoteGenres.DeleteAll);
+        await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteAll);
+        await connection.ExecuteAsync(Sql.SourceTranslations.DeleteAll);
+        await connection.ExecuteAsync(Sql.CharacterTranslations.DeleteAll);
+        await connection.ExecuteAsync(Sql.Quotes.DeleteAll);
+        await connection.ExecuteAsync(Sql.Characters.DeleteAll);
+        await connection.ExecuteAsync(Sql.People.DeleteAll);
+        await connection.ExecuteAsync(Sql.Sources.DeleteAll);
         await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
     }
 
     private async Task SeedIfEmptyInternalAsync(SqliteConnection connection)
     {
-        var count = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes;");
+        var count = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
         if (count > 0) return;
 
         if (_batches.Count == 0)
@@ -353,16 +351,15 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                             "Database: overwriting duplicate quote {Id} in {File} (was {First})",
                             q.Id, fileName, Path.GetFileName(firstFile));
 
-                        await connection.ExecuteAsync("DELETE FROM QuoteGenres      WHERE QuoteId = @id;", new { id = q.Id });
-                        await connection.ExecuteAsync("DELETE FROM QuoteTranslations WHERE QuoteId = @id;", new { id = q.Id });
+                        await connection.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote,      new { id = q.Id });
+                        await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteForQuote, new { id = q.Id });
 
                         var owSourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex);
                         var owCharacterId = await GetOrCreateCharacterAsync(connection, q, owSourceId, characterIndex);
                         var owPersonId    = await GetOrCreatePersonAsync(connection, q, personIndex);
 
                         await connection.ExecuteAsync(
-                            "UPDATE Quotes SET QuoteText=@text, OriginalLanguage=@lang, SourceId=@sid, " +
-                            "CharacterId=@cid, PersonId=@pid, DateModified=@mod WHERE Id=@id;",
+                            Sql.Quotes.UpdateOnOverwrite,
                             new
                             {
                                 text = q.QuoteText,
@@ -391,9 +388,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                     var quoteId     = Guid.Parse(q.Id);
 
                     await connection.ExecuteAsync(
-                        "INSERT OR IGNORE INTO Quotes " +
-                        "(Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
-                        "VALUES (@Id, @QuoteText, @OriginalLanguage, @SourceId, @CharacterId, @PersonId, @DateCreated, NULL, NULL, 0);",
+                        Sql.Quotes.Insert,
                         new
                         {
                             Id               = q.Id,
@@ -419,10 +414,10 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
     private async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection)
     {
-        var genreCount = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM QuoteGenres;");
+        var genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
         if (genreCount > 0) return;
 
-        var quoteCount = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes;");
+        var quoteCount = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
         if (quoteCount == 0) return;
 
         if (_batches.Count == 0)
@@ -450,10 +445,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                             // WHERE EXISTS guards against FK violation when source-file IDs differ
                             // from the IDs already in the database (e.g. after a UUID scheme change).
                             await connection.ExecuteAsync(
-                                "INSERT OR IGNORE INTO QuoteGenres " +
-                                "(Id, QuoteId, Genre, DateCreated, DateModified, DateDeleted, IsDeleted) " +
-                                "SELECT @Id, @QuoteId, @Genre, @DateCreated, NULL, NULL, 0 " +
-                                "WHERE EXISTS (SELECT 1 FROM Quotes WHERE Id = @QuoteId AND IsDeleted = 0);",
+                                Sql.QuoteGenres.InsertWithExistsGuard,
                                 new { Id = Guid.NewGuid().ToString(), QuoteId = q.Id, Genre = g.ToString(), DateCreated = now });
                             inserted++;
                         }
@@ -471,9 +463,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         foreach (var (lang, t) in q.Translations)
         {
             await connection.ExecuteAsync(
-                "INSERT OR IGNORE INTO QuoteTranslations " +
-                "(Id, QuoteId, Language, QuoteText, DateCreated, DateModified, DateDeleted, IsDeleted) " +
-                "VALUES (@Id, @QuoteId, @Language, @QuoteText, @DateCreated, NULL, NULL, 0);",
+                Sql.QuoteTranslations.Insert,
                 new
                 {
                     Id        = Guid.NewGuid().ToString(),
@@ -486,7 +476,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
             if (t.Source is not null)
             {
                 var exists = await connection.ExecuteScalarAsync<int>(
-                    "SELECT COUNT(*) FROM SourceTranslations WHERE SourceId = @sid AND Language = @lang AND IsDeleted = 0;",
+                    Sql.SourceTranslations.CountForSource,
                     new { sid = sourceId, lang });
                 if (exists == 0)
                     await connection.InsertAsync(new SourceTranslation
@@ -506,9 +496,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
             if (TryNormaliseGenre(genre, out var g))
             {
                 await connection.ExecuteAsync(
-                    "INSERT OR IGNORE INTO QuoteGenres " +
-                    "(Id, QuoteId, Genre, DateCreated, DateModified, DateDeleted, IsDeleted) " +
-                    "VALUES (@Id, @QuoteId, @Genre, @DateCreated, NULL, NULL, 0);",
+                    Sql.QuoteGenres.Insert,
                     new { Id = Guid.NewGuid().ToString(), QuoteId = quoteId.ToString(), Genre = g.ToString(), DateCreated = now });
             }
         }
@@ -615,10 +603,10 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
     private async Task LogDatabaseStatsAsync(SqliteConnection connection)
     {
-        QuoteCount     = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes      WHERE IsDeleted = 0;");
-        SourceCount    = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources     WHERE IsDeleted = 0;");
-        CharacterCount = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Characters  WHERE IsDeleted = 0;");
-        PeopleCount    = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM People      WHERE IsDeleted = 0;");
+        QuoteCount     = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountActive);
+        SourceCount    = await connection.ExecuteScalarAsync<int>(Sql.Sources.CountActive);
+        CharacterCount = await connection.ExecuteScalarAsync<int>(Sql.Characters.CountActive);
+        PeopleCount    = await connection.ExecuteScalarAsync<int>(Sql.People.CountActive);
 
         _logger.LogInformation(
             "Database ready — {Quotes} quotes, {Sources} sources, {Characters} characters, {People} people",
