@@ -89,6 +89,18 @@ An issue is done only when every requirement in its GitHub spec is met and verif
 
 ---
 
+## New issues discovered during milestone work
+
+When a new issue is identified during an active milestone session — whether it is a bug, improvement idea, or downstream dependency — file it immediately while the context is fresh. Before calling `gh issue create`:
+
+1. **Decide the milestone** — ask the user which milestone the new issue belongs to. Do not assume it belongs to the current milestone. Present the options and wait for an explicit decision.
+2. **Decide the branch** — if the issue belongs to the current milestone, it will be worked on the current feature branch. If it belongs to a different milestone, note it and leave it for that milestone's feature branch.
+3. **Never file without a milestone** — an issue with no milestone is invisible to planning. Always assign one before creating.
+
+This rule applies to all issue actions: assigning, moving, labelling. Always ask; never assume.
+
+---
+
 ## Scope changes and deferrals
 
 If during planning or implementation a requirement from the GitHub issue spec is deferred to a later issue:

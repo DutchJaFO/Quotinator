@@ -12,4 +12,7 @@ public sealed class Character : RecordBase
 
     /// <summary>The character's name in the source's original language.</summary>
     public string Name     { get; init; } = string.Empty;
+
+    /// <summary>The import batch that introduced this record. Null for records predating provenance tracking.</summary>
+    public Guid? ImportBatchId { get; init; }
 }
