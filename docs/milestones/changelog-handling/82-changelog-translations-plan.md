@@ -6,7 +6,7 @@ Once #80 introduces `src/Quotinator.Api/changelog.json` as the source of truth, 
 
 ## Dependency
 
-**#80 must be fully closed before this issue begins.** This plan assumes `changelog.json` exists, `IChangelogService` / `ChangelogService` are reading it, and the `ChangelogEntry` control is in place.
+**#80 must be fully closed before this issue begins.** This plan assumes `changelog.json` exists with the complete schema (including `translations`), `IChangelogService` / `ChangelogService` are reading it, and the `ChangelogEntry` control is in place. The `translations` field is defined and validated in #80 — this issue adds only the resolution logic and frontend wiring.
 
 ## Decisions
 
@@ -21,33 +21,6 @@ Once #80 introduces `src/Quotinator.Api/changelog.json` as the source of truth, 
 | 7 | `scripts/changelog.csx` unchanged — generates English markdown only | Translations are frontend-only; not surfaced in the markdown changelogs. |
 | 8 | Schema validation test extended to cover `translations` structure | Ensures translation entries are well-formed arrays, not accidentally null. Does not assert non-empty content — that is a human gate. |
 | 9 | At least one `changelog.json` entry has Dutch and German translations | Proof of concept; demonstrates the full path works end-to-end before shipping. |
-
-## JSON schema extension
-
-Add to each entry in `releases[]` (optional):
-
-```json
-{
-  "translations": {
-    "nl": { "highlights": ["Dutch plain-English sentence."] },
-    "de": { "highlights": ["German plain-English sentence."] }
-  }
-}
-```
-
-`schemas/changelog.schema.json` is updated to include:
-
-```json
-"translations": {
-  "type": "object",
-  "additionalProperties": {
-    "type": "object",
-    "properties": {
-      "highlights": { "type": "array", "items": { "type": "string" } }
-    }
-  }
-}
-```
 
 ## `IChangelogService` extension
 
@@ -66,11 +39,11 @@ The private DTO deserialized from JSON includes the `translations` object. `Chan
 
 ## Implementation steps
 
-### Step 1 — Update `schemas/changelog.schema.json`
+### Step 1 — Confirm schema is complete
 
-Add the optional `translations` property to the entry schema. Validate that the existing entries still validate.
+`schemas/changelog.schema.json` already includes the `translations` property (defined in #80). Confirm the at-least-one proof-of-concept entry in `changelog.json` has Dutch and German translations. No schema changes needed.
 
-Verify: schema file is valid JSON Schema; existing entries validate against the updated schema.
+Verify: `ChangelogSchemaTests` still passes; at least one entry has `translations.nl` and `translations.de`.
 
 ### Step 2 — Update private DTO in `ChangelogService`
 
@@ -116,7 +89,7 @@ Verify: browser shows correct translated highlight for Dutch; English fallback w
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `schemas/changelog.schema.json` updated with optional `translations` property | Manual | File updated; existing entries still validate against the updated schema |
+| 1 | ❌ | `schemas/changelog.schema.json` includes `translations` (defined in #80) and at least one entry has Dutch and German translations | Manual | `ChangelogSchemaTests` passes; at least one `changelog.json` entry has `translations.nl` and `translations.de` |
 | 2 | ❌ | Private DTO deserializes `translations`; `ChangelogService` builds correctly | Build | `dotnet build --configuration Release`: 0 warnings, 0 errors |
 | 3 | ❌ | `IChangelogService.GetReleasesForCulture` exists; resolves with English fallback | Build + unit test | `ChangelogServiceTests.GetReleasesForCulture_TranslationPresent_ReturnsTranslated` and `_NoTranslation_ReturnsFallback` pass |
 | 4 | ❌ | `About.razor.cs` uses `GetReleasesForCulture(CultureInfo.CurrentUICulture)` | Build | `dotnet build --configuration Release`: 0 warnings, 0 errors |

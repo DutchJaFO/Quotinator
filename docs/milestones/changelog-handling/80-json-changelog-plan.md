@@ -36,6 +36,8 @@
 
 File: `schemas/changelog.schema.json`
 
+The schema is defined completely in #80 — including `translations` — so the content migration produces a finished JSON file that #82 only needs to read from. No schema changes in #82.
+
 Each entry in the `releases` array:
 
 ```json
@@ -51,7 +53,11 @@ Each entry in the `releases` array:
   "fixed": [],
   "removed": [],
   "issues": [71, 78, 79],
-  "cves": []
+  "cves": [],
+  "translations": {
+    "nl": { "highlights": ["Dutch plain-English sentence."] },
+    "de": { "highlights": ["German plain-English sentence."] }
+  }
 }
 ```
 
@@ -62,6 +68,7 @@ Field rules (enforced by schema and the schema validation test):
 - `added`, `changed`, `fixed`, `removed` — optional arrays of technical strings (developer-facing); omit when unused
 - `issues` — optional array of GitHub issue numbers (integers)
 - `cves` — optional array of CVE ID strings (e.g. `"CVE-2025-6965"`)
+- `translations` — optional object keyed by ISO 639-1 code; each value has an optional `highlights` array; mirrors the quote translation model; manually curated only, never auto-generated; ignored by the `ha-addon` format generator (HA Store has no multi-language changelog support)
 
 ## Implementation steps
 
