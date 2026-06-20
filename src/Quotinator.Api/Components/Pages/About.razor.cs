@@ -1,5 +1,3 @@
-using System.Net;
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
 using Quotinator.Changelog.Services;
 using Quotinator.Core.Services;
@@ -27,23 +25,6 @@ public partial class About
     [Inject] private I18nTextService I18nText { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
-
-    private static Microsoft.AspNetCore.Components.MarkupString FormatInline(string text)
-    {
-        var encoded = WebUtility.HtmlEncode(text);
-        var result = Regex.Replace(encoded, @"\[([^\]]+)\]\(([^)]+)\)", "<a href=\"$2\">$1</a>");
-        result = Regex.Replace(result, @"`([^`]+)`", "<code>$1</code>");
-        return new Microsoft.AspNetCore.Components.MarkupString(result);
-    }
-
-    private static string CategoryBadgeClass(string category) => category switch
-    {
-        "Added" => "bg-success",
-        "Fixed" => "bg-danger",
-        "Changed" => "bg-primary",
-        "Removed" => "bg-warning text-dark",
-        _ => "bg-secondary"
-    };
 
     #endregion
 }
