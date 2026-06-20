@@ -54,9 +54,9 @@ public class SqliteRepositoryTransactionTests
     // ── Contract ──────────────────────────────────────────────────────────────
 
     [TestMethod]
-    public void SqliteUnitOfWork_ImplementsIUnitOfWork()
+    public async Task SqliteUnitOfWork_ImplementsIUnitOfWork()
     {
-        using var uow = new SqliteUnitOfWork(new SqliteConnectionFactory(_dbPath));
+        await using var uow = new SqliteUnitOfWork(new SqliteConnectionFactory(_dbPath));
         Assert.IsInstanceOfType<IUnitOfWork>(uow);
     }
 
