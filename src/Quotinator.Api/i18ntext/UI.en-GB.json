@@ -8,6 +8,7 @@
   "OpenApiUiLabel": "OpenAPI UI (Scalar)",
   "OpenApiSpecLabel": "OpenAPI Spec",
   "HealthCheckLabel": "Health check",
+  "VersionLabel": "Version",
   "AboutHeading": "About",
   "ChangelogHeading": "Changelog",
   "ChangelogFilterPlaceholder": "Filter versions…",

@@ -4,6 +4,12 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## [1.4.2] - 2026-06-20
+
+- Fixed: the Docker image was incorrectly reporting version 1.0.0 — the actual version is now shown correctly.
+- The REST API page now includes a direct link to the version endpoint.
+- Internal improvements — no other user-facing changes.
+
 ## [1.4.1] - 2026-06-20
 
 - Fixed: the changelog page now shows plain-English release summaries for all versions instead of technical details.

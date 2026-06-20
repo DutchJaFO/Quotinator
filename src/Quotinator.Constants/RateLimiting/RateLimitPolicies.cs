@@ -1,4 +1,4 @@
-namespace Quotinator.Constants;
+namespace Quotinator.Constants.RateLimiting;
 
 /// <summary>Rate-limiter policy names.</summary>
 public static class RateLimitPolicies

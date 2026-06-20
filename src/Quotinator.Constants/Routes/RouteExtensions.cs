@@ -1,4 +1,4 @@
-namespace Quotinator.Constants;
+namespace Quotinator.Constants.Routes;
 
 /// <summary>Extension methods for route string constants.</summary>
 public static class RouteExtensions
