@@ -96,16 +96,19 @@ Manually convert all entries from the archived `CHANGELOG.md` to the JSON format
 
 Verify: entry count in JSON matches version count in `scripts/changelog-reference/CHANGELOG.md`; JSON is valid against the schema.
 
-### Step 4 — Create `Quotinator.Changelog` project
+### Step 4 — Create `Quotinator.Changelog` project and test project
 
-Create `src/Quotinator.Changelog/` as a new class library (net10.0). Move `ChangelogRelease`, `ChangelogSection`, `IChangelogService`, and `ChangelogService` out of `Quotinator.Core` and into this project in a single step. Update the service to deserialise `changelog.json` (replacing the markdown parser) in the same move — no intermediate state where the moved service still reads markdown.
+**Source project** — create `src/Quotinator.Changelog/` as a new class library (net10.0). Move `ChangelogRelease`, `ChangelogSection`, `IChangelogService`, and `ChangelogService` out of `Quotinator.Core` and into this project in a single step. Update the service to deserialise `changelog.json` (replacing the markdown parser) in the same move — no intermediate state where the moved service still reads markdown.
 
 - `ChangelogSection` maps: `added` → `ChangelogSection("Added", ...)`, etc.
 - Private deserialization DTO lives in the project; not part of the public interface
 - Path: `AppContext.BaseDirectory + "changelog.json"` (note: file lives in `Quotinator.Api` output; see constraint in Decisions)
 - No reference to `Quotinator.Core` or `Quotinator.Data`
+- `src/Quotinator.Changelog/CVE/` folder created with a `README.md` explaining its purpose (same pattern as `Quotinator.Data`)
 
-Add a project reference from `Quotinator.Api` to `Quotinator.Changelog`. Remove now-empty type references from `Quotinator.Core`. Add `Quotinator.Changelog` to `Quotinator.slnx`.
+**Test project** — create `tests/Quotinator.Changelog.Tests/` (net10.0, MSTest, same package set as other test projects). `ChangelogSchemaTests` lives here.
+
+Add a project reference from `Quotinator.Api` to `Quotinator.Changelog`. Remove now-empty type references from `Quotinator.Core`. Add both new projects to `Quotinator.slnx`.
 
 Verify: `dotnet build --configuration Release`: 0 warnings, 0 errors; `Quotinator.Changelog.csproj` has no reference to `Quotinator.Core` or `Quotinator.Data`.
 
@@ -166,9 +169,12 @@ Verify: `dotnet-script scripts/changelog.csx -- --format ha-addon --output addon
 
 Once both formats are verified:
 - Commit `CHANGELOG.md` and `addon/CHANGELOG.md` (generated, replacing the now-archived originals)
-- Add `scripts/changelog.csx` to `Quotinator.slnx` under `/scripts/`
-- Add `scripts/changelog-reference/` entries to `Quotinator.slnx` under a new `/scripts/changelog-reference/` folder
-- Add `src/Quotinator.Api/changelog.json` to `Quotinator.slnx`
+- Confirm `Quotinator.slnx` includes all new items (added in Step 4, but verify nothing was missed):
+  - `src/Quotinator.Changelog/` project and `CVE/README.md` under `/src/Quotinator.Changelog/` and `/src/Quotinator.Changelog/CVE/` folders
+  - `tests/Quotinator.Changelog.Tests/` project under `/tests/`
+  - `scripts/changelog.csx` under `/scripts/`
+  - `scripts/changelog-reference/CHANGELOG.md` and `scripts/changelog-reference/addon-CHANGELOG.md` under `/scripts/changelog-reference/`
+  - `src/Quotinator.Api/changelog.json` under `/src/Quotinator.Api/` (or `/src/`)
 
 ### Step 10 — `ChangelogEntry` Blazor control
 
@@ -223,7 +229,7 @@ Run the app locally and open the About page. Confirm:
 | 6 | ❌ | Schema validation test covers all field types including `translations` | Unit test | `ChangelogSchemaTests` passes under `dotnet test --configuration Release --filter ChangelogSchema` |
 | 7 | ❌ | Generator `keepachangelog` output matches archived reference | Manual diff | `dotnet-script scripts/changelog.csx -- --format keepachangelog --output CHANGELOG.md` then `diff CHANGELOG.md scripts/changelog-reference/CHANGELOG.md` — only the generated-file comment differs (plus any documented inconsistencies in the original) |
 | 8 | ❌ | Generator `ha-addon` output matches archived reference | Manual diff | `dotnet-script scripts/changelog.csx -- --format ha-addon --output addon/CHANGELOG.md` then `diff addon/CHANGELOG.md scripts/changelog-reference/addon-CHANGELOG.md` |
-| 9 | ❌ | Generated markdown files committed; solution updated | Git | `CHANGELOG.md` and `addon/CHANGELOG.md` present; `.slnx` includes `Quotinator.Changelog`, `Quotinator.Changelog.Tests`, `changelog.json`, `changelog.csx`, `changelog.schema.json`, `changelog-reference/` files |
+| 9 | ❌ | Generated markdown files committed; solution updated | Git | `CHANGELOG.md` and `addon/CHANGELOG.md` present; `.slnx` includes `Quotinator.Changelog`, `Quotinator.Changelog/CVE/`, `Quotinator.Changelog.Tests`, `changelog.json`, `changelog.csx`, `changelog.schema.json`, `changelog-reference/` files |
 | 10 | ❌ | `ChangelogEntry` renders correctly for all three paths | Unit test | `ChangelogEntryTests` in `Quotinator.Api.Tests` covers highlights-present, sections-fallback, both-empty paths; `dotnet test --configuration Release` passes |
 | 11 | ❌ | Blazor About page confirmed in browser | Browser | All versions listed; highlights shown; version filter search works |
 | 12 | ❌ | `CLAUDE.md` and pre-push checklist updated | Manual review | Changelog rule and checklist reference `src/Quotinator.Api/changelog.json` and both `dotnet-script` invocations |
