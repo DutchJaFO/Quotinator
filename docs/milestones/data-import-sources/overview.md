@@ -55,6 +55,8 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 | 14 | #67 | Conversations schema | Not started |
 | 15 | #68 | Curated JSON conversations | Not started |
 | 16 | #69 | API conversations | Not started |
+| 17 | #79 | Fix Highlights sections in CHANGELOG.md for 1.3.0 and 1.4.0 | In progress — no plan doc (pure content fix, no implementation decisions) |
+| 18 | #80 | Replace hand-edited changelogs with JSON-driven changelog system | Not started — no plan doc yet; plan doc required before implementation |
 
 ---
 
