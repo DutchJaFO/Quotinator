@@ -40,7 +40,9 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 - [ ] Update the plan doc status to `Complete`
 - [ ] Update the status column in `overview.md`
 - [ ] Re-verify the order of operations table — update if this issue's completion changes the correct sequence
-- [ ] Close: `gh issue close <N> --comment "<brief note>"`
+- [ ] **User manual test** — user builds and runs the app in Visual Studio and confirms it starts and works; any findings are filed as new issues before proceeding
+- [ ] **User confirms closure** — show the user the closing comment and verification table and wait for explicit approval before running `gh issue close`
+- [ ] Close: `gh issue close <N> --comment "<verification table>"`
 
 ---
 
