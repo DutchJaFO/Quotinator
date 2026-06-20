@@ -32,14 +32,9 @@ Replace hand-edited markdown changelogs with a JSON-driven system. A single `src
 
 ## PR merge plan
 
-**Default assumption:** both issues completed before any merge to `main`.
+**Decision: complete both issues before any merge to `main`.**
 
-### Evaluation
-
-| Issue | Safe to merge early? | Reasoning |
-|-------|---------------------|-----------|
-| #80 | ✅ Yes | Self-contained — replaces the markdown-parsing runtime path with JSON deserialization. #82 depends on it but is inert on `main` without it. |
-| #82 | ❌ Only after #80 | Adds translation resolution on top of #80. Must be merged together with or after #80. |
+The purpose of this milestone is to eliminate manual changelog editing. Merging #80 without #82 would leave the changelog files in a transitional state during the window between merges — any release in that window would require reasoning about whether to hand-edit the markdown or hold off. That is exactly the problem this milestone solves. The two issues ship as a single PR.
 
 ---
 
