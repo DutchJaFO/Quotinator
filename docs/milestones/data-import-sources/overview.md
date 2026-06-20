@@ -40,7 +40,7 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 | #  | Issue | Title | Status |
 |----|-------|-------|--------|
 | 1  | #61 | Seed script: one file per source | Closed ✅ |
-| 2  | #71 | Generic repository pattern | In progress — closing checklist underway |
+| 2  | #71 | Generic repository pattern | Closed ✅ |
 | 3  | #78 | Repository: transaction and shared connection support | Not started — requires #71; prerequisite for #58 and #45 |
 | 4  | #58 | ImportBatches schema | Not started — requires #71 and #78 |
 | 5  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 can close after #58 |
