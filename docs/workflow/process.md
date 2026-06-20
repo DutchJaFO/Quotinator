@@ -160,20 +160,17 @@ Steps:
 
 ---
 
-## Partial milestone PRs
+## Merges to main must never break the application
 
-A milestone may span many issues. It is acceptable to merge a feature branch to `main` while the milestone is still in progress, rather than accumulating all issues into one large PR.
+Every merge to `main` — whether a full milestone, a partial milestone, a hotfix, or a dependency bump — must leave `main` in a working state:
 
-**When doing a partial milestone PR, the following must hold:**
+- `dotnet build --configuration Release` — 0 warnings, 0 errors
+- `dotnet test --configuration Release` — all tests pass, 0 warnings
+- The application starts and serves requests correctly
 
-- All completed issues on the branch have their verification tables fully green
-- The branch is up to date with `main` (rebase or merge before opening the PR)
-- `dotnet build --configuration Release` — 0 warnings, 0 errors on the merged result
-- `dotnet test --configuration Release` — all tests pass on the merged result
-- No in-progress issue leaves any feature partially wired up in a way that could break existing behaviour (e.g. a half-registered service, an endpoint returning 500, a broken migration)
-- Incomplete work must be either: fully behind a feature flag, or not yet wired into the request path at all — never half-present in production code
+This applies regardless of how complete the milestone is. Incomplete issues are fine on `main` as long as their in-progress code does not break existing behaviour. Incomplete work must be either not yet wired into the request path, or safely inert (e.g. a new table that existing endpoints do not touch). Never merge half-registered services, failing migrations, or endpoints that return 500.
 
-Issues that are not yet started or still in progress stay open. Only issues that are fully verified (spec complete + tests green) may be closed after the partial PR merges.
+Issues that are not yet started or still in progress stay open after a partial merge. Only fully verified issues (spec complete + tests green + PR merged) may be closed.
 
 ---
 

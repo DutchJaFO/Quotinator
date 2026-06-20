@@ -49,14 +49,12 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 ---
 
-## Partial milestone PR (merging before the milestone is complete)
+## Before any merge to main
 
-- [ ] Branch is up to date with `main`
-- [ ] Build clean on the merged result: `dotnet build --configuration Release` — 0 warnings, 0 errors
-- [ ] Tests pass on the merged result: `dotnet test --configuration Release` — all tests pass, 0 warnings
+- [ ] Build clean: `dotnet build --configuration Release` — 0 warnings, 0 errors
+- [ ] Tests pass: `dotnet test --configuration Release` — all tests pass, 0 warnings
 - [ ] No in-progress issue leaves broken code in the request path (half-wired services, failing endpoints, broken migrations)
-- [ ] Every completed issue on the branch has a fully green verification table
-- [ ] After merge: close only the fully verified issues via `gh issue close`; leave in-progress issues open
+- [ ] After merge: close only the fully verified issues; leave in-progress issues open
 
 ---
 
