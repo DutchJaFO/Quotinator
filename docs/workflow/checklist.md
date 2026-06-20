@@ -39,12 +39,24 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 - [ ] All live commands have been run and produced the expected output (green)
 - [ ] **User manual test** — user starts the app in Visual Studio and confirms it starts without error. For documentation/content issues: user reads or views every item listed in the verification table and confirms each one explicitly.
 - [ ] No requirement is still unconfirmed — if anything is unverified, the issue stays open
+- [ ] **PR merged to `main`** — do not run `gh issue close` while still on the feature branch; the issue stays open until the merge lands
 - [ ] Confirm all changes are merged to `main` and included in a tagged release
 - [ ] Update the plan doc status to `Complete` (or note "no plan doc — by decision" if none exists)
 - [ ] Update the status column in `overview.md`
 - [ ] Re-verify the order of operations table — update if this issue's completion changes the correct sequence
 - [ ] **User confirms closure** — show the user the closing comment and verification table and wait for explicit approval before running `gh issue close`
 - [ ] Close: `gh issue close <N> --comment "<verification table>"`
+
+---
+
+## Partial milestone PR (merging before the milestone is complete)
+
+- [ ] Branch is up to date with `main`
+- [ ] Build clean on the merged result: `dotnet build --configuration Release` — 0 warnings, 0 errors
+- [ ] Tests pass on the merged result: `dotnet test --configuration Release` — all tests pass, 0 warnings
+- [ ] No in-progress issue leaves broken code in the request path (half-wired services, failing endpoints, broken migrations)
+- [ ] Every completed issue on the branch has a fully green verification table
+- [ ] After merge: close only the fully verified issues via `gh issue close`; leave in-progress issues open
 
 ---
 

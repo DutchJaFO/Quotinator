@@ -146,15 +146,34 @@ An issue may only be closed when **all** of the following are true:
 - All changes are merged to `main`
 - The changes are included in a tagged release
 
+**Timing on feature branches:** while working on a feature branch, an issue can reach "spec complete, all tests green" status before the PR is merged. Do not run `gh issue close` at that point. The issue stays open until the PR is merged to `main`. Once merged, verify one final time that the main branch is green, then close.
+
 Steps:
 
 1. Update the plan doc status to `Complete`.
 2. Update the status column in `overview.md`.
 3. Re-verify the order of operations table — a completed issue may unblock others or change the correct sequence. Update the table if needed before picking the next issue.
-4. Close on GitHub:
+4. **After the PR is merged to `main`:** close on GitHub:
    ```
    gh issue close <N> --comment "<short note on what was done>"
    ```
+
+---
+
+## Partial milestone PRs
+
+A milestone may span many issues. It is acceptable to merge a feature branch to `main` while the milestone is still in progress, rather than accumulating all issues into one large PR.
+
+**When doing a partial milestone PR, the following must hold:**
+
+- All completed issues on the branch have their verification tables fully green
+- The branch is up to date with `main` (rebase or merge before opening the PR)
+- `dotnet build --configuration Release` — 0 warnings, 0 errors on the merged result
+- `dotnet test --configuration Release` — all tests pass on the merged result
+- No in-progress issue leaves any feature partially wired up in a way that could break existing behaviour (e.g. a half-registered service, an endpoint returning 500, a broken migration)
+- Incomplete work must be either: fully behind a feature flag, or not yet wired into the request path at all — never half-present in production code
+
+Issues that are not yet started or still in progress stay open. Only issues that are fully verified (spec complete + tests green) may be closed after the partial PR merges.
 
 ---
 

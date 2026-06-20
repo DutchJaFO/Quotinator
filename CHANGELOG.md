@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [Unreleased]
+
+### Highlights
+- Internal improvements in preparation for upcoming data import features.
+
+### Added
+- `ImportBatches` table tracks the origin of every seeded or imported record (`Id`, `Name`, `Type`, `Url`, `ImportedAt`, `ImportedBy`, `RecordCount`)
+- Nullable `ImportBatchId` foreign key added to `Quotes`, `Sources`, `Characters`, and `People` — links each record to the import batch that introduced it
+- `IImportBatchRepository` / `SqliteImportBatchRepository` in `Quotinator.Core` with `GetAllAsync`, `GetByTypeAsync`, `UpdateRecordCountAsync`
+- Seeder creates one `ImportBatch` row per source file and writes `ImportBatchId` on all inserts for that file
+- Migration003: upgrades existing databases with the new table and columns; inserts placeholder `Seed`-type rows for the two bundled external datasets (existing records keep `NULL` ImportBatchId — provenance not captured retroactively)
+
+---
+
 ## [1.4.2] - 2026-06-20
 
 ### Highlights
