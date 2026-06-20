@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <Version>1.4.1</Version>
-    <AssemblyVersion>$(Version)</AssemblyVersion>
-    <FileVersion>$(Version)</FileVersion>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
     <Product>Quotinator</Product>
     <Authors>DutchJaFO</Authors>
     <Copyright>Copyright © 2026 DutchJaFO</Copyright>
