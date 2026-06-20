@@ -491,9 +491,11 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
    The `addon/CHANGELOG.md` uses a flat bullet list per version with no `### Added/Fixed/Changed` subsections (HA convention); update it alongside the root changelog. The addon entries follow the same plain-English rule — no CVE IDs or technical terms.
 4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
-   - `Directory.Build.props` → `<Version>` (shared across all projects — this is the single place to update)
+   - `Directory.Build.props` → `<Version>` (shared across all projects — **this is the only file to update**)
    - `addon/config.yaml` → `version`
    - `CHANGELOG.md` and `addon/CHANGELOG.md` → versioned section heading
+
+   `AssemblyVersion` and `FileVersion` are derived automatically as `$(Version).0` (e.g. `1.4.1` → `1.4.1.0`). Do not set them manually.
 5. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
    ```bash
    docker build -f docker/Dockerfile -t quotinator:local .
@@ -519,7 +521,7 @@ Workflow:
 4. Review and merge passing Dependabot PRs
 5. `git pull` to bring dependency bumps onto your local branch
 6. Update `CHANGELOG.md` and `addon/CHANGELOG.md` with the dependency bump entries
-7. Bump versions (`csproj`, `addon/config.yaml`, both changelogs) and commit
+7. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, both changelogs) and commit
 8. Run the full pre-push checklist above (including Docker build)
 9. Push the version bump commit, then push the tag:
    ```bash
@@ -527,7 +529,7 @@ Workflow:
    git push origin v1.0.x
    ```
 
-> **Cloud/mobile Claude Code cannot push tags.** The Claude Code cloud and mobile environments receive a `403` when attempting `git push origin <tag>`. Tag pushes must always be done from a local terminal. This is a known platform limitation — do not attempt workarounds or assume the push failed for another reason.
+> **Tag push environment note.** Claude Code Desktop can push tags directly. Claude Code cloud and mobile environments receive a `403` on tag pushes — if running in those environments, the tag must be pushed from a local terminal instead.
 
 ---
 
