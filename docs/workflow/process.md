@@ -130,7 +130,7 @@ resolve #N  resolves #N  resolved #N
 
 Ending a commit title with `(#N)` links the commit to the issue and can also trigger auto-close depending on how the merge reaches the default branch.
 
-**Rule: never use any of these patterns in a commit message.** Issue closure is always done explicitly via `gh issue close <N> --comment "..."` after the full closing checklist is complete. A commit that accidentally closes an issue violates the workflow — the issue will have no closing verification comment and will show as closed without evidence of testing.
+**Rule: never use any of these patterns in a commit message or PR body.** The same keywords in a PR description trigger auto-close when the PR is merged to the default branch. Issue closure is always done explicitly via `gh issue close <N> --comment "..."` after the full closing checklist is complete. An issue that auto-closes violates the workflow — it will have no closing verification comment and will show as closed without evidence of testing.
 
 A `commit-msg` hook in `scripts/hooks/commit-msg` guards against this. Install it once per clone:
 
