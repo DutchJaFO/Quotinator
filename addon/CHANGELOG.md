@@ -4,7 +4,7 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.5.0] - 2026-06-20
 
 - Admin endpoints (reseed, reset) now require an API key via the `X-Api-Key` request header — set `admin_api_key` in the add-on options.
 - The Scalar API reference shows an Authentication panel — enter your key once and it is sent automatically on all admin requests.
