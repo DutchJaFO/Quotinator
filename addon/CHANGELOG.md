@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [1.4.0] - 2026-06-20
 
-- Internal infrastructure release — no user-facing changes
+- Internal infrastructure release — SQL queries audited and centralised as mitigation for CVE-2025-6965 (SQLite aggregate vulnerability); no user-facing changes
 
 ## [1.3.0] - 2026-06-17
 

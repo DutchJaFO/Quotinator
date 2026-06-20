@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [1.4.0] - 2026-06-20
 
 ### Highlights
-Internal infrastructure release — no user-facing API or UI changes.
+Internal infrastructure release — no user-facing API or UI changes. SQL queries centralised and audited as mitigation for CVE-2025-6965 (SQLite aggregate vulnerability); automated guard tests added to prevent regressions.
 
 ### Added
 - `seed.csx --output-dir DIR` flag redirects seed output to a custom directory, making it possible to test seeding without overwriting `data/sources/`
