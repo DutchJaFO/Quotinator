@@ -4,7 +4,7 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.4.3] - 2026-06-20
 
 - Internal improvements in preparation for upcoming data import features.
 
