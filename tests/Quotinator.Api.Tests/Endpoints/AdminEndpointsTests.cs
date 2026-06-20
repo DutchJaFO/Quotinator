@@ -1,7 +1,7 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
 using Quotinator.Core.Data;
@@ -23,16 +23,21 @@ public class AdminEndpointsTests
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
             });
 
-            if (adminApiKey is not null)
+            // ConfigureAppConfiguration runs after all file-based sources (including
+            // appsettings.local.json), so the in-memory value wins for the test.
+            builder.ConfigureAppConfiguration((_, config) =>
             {
-                builder.UseSetting("Quotinator:AdminApiKey", adminApiKey);
-            }
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Quotinator:AdminApiKey"] = adminApiKey
+                });
+            });
         });
 
     private static HttpClient CreateClientWithKey(WebApplicationFactory<Program> factory)
     {
         var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestKey);
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Api-Key", TestKey);
         return client;
     }
 
@@ -62,7 +67,7 @@ public class AdminEndpointsTests
     {
         using var factory = CreateFactory(TestKey);
         var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "wrong-key");
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Api-Key", "wrong-key");
         var response = await client.GetAsync("/api/v1/admin/database/seed/preview");
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -80,6 +85,37 @@ public class AdminEndpointsTests
         Assert.IsTrue(doc.RootElement.TryGetProperty("totalQuotes",         out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("uniqueQuotes",        out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("crossFileDuplicates", out _));
+    }
+
+    /// <summary>GET /admin/database/seed/preview returns 401 when AdminApiKey is an empty string.</summary>
+    [TestMethod]
+    public async Task PreviewSeed_EmptyKeyConfigured_Returns401()
+    {
+        using var factory = CreateFactory(string.Empty);
+        var response = await factory.CreateClient().GetAsync("/api/v1/admin/database/seed/preview");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>GET /admin/database/seed/preview returns 401 when the Authorization header is supplied instead of X-Api-Key.</summary>
+    [TestMethod]
+    public async Task PreviewSeed_WrongHeader_Returns401()
+    {
+        using var factory = CreateFactory(TestKey);
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {TestKey}");
+        var response = await client.GetAsync("/api/v1/admin/database/seed/preview");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>GET /admin/database/seed/preview returns 401 when X-Api-Key contains a Bearer prefix — clients migrating from OAuth may send this by mistake.</summary>
+    [TestMethod]
+    public async Task PreviewSeed_MalformedAuthHeader_Returns401()
+    {
+        using var factory = CreateFactory(TestKey);
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Api-Key", $"Bearer {TestKey}");
+        var response = await client.GetAsync("/api/v1/admin/database/seed/preview");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     // ── POST /admin/database/reseed ───────────────────────────────────────────
@@ -108,7 +144,7 @@ public class AdminEndpointsTests
     {
         using var factory = CreateFactory(TestKey);
         var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "wrong-key");
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Api-Key", "wrong-key");
         var response = await client.PostAsync("/api/v1/admin/database/reseed", null);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -154,7 +190,7 @@ public class AdminEndpointsTests
     {
         using var factory = CreateFactory(TestKey);
         var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "wrong-key");
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Api-Key", "wrong-key");
         var response = await client.PostAsync("/api/v1/admin/database/reset", null);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }

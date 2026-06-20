@@ -28,7 +28,7 @@ configuration:
     name: Admin API-sleutel
     description: >-
       Geheime sleutel vereist om de destructieve admin-eindpunten (reseed, reset) aan te roepen.
-      Clients moeten Authorization: Bearer <sleutel> meesturen.
+      Clients moeten X-Api-Key: <sleutel> meesturen.
       Laat leeg om de admin-eindpunten volledig uit te schakelen.
   backup_path:
     name: Back-upmap

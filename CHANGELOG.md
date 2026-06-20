@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [1.5.0] - 2026-06-20
+
+### Highlights
+- Admin endpoints (reseed, reset) now require an API key supplied via the `X-Api-Key` request header.
+- The Scalar API reference now shows an Authentication panel at the top — enter your key once and it is sent automatically on all admin requests.
+- The startup log now shows whether an admin API key is configured.
+- The REST API page in the UI shows the admin endpoints when a key is active.
+
+### Fixed
+- Admin endpoints were documented as requiring `Authorization: Bearer <key>` but the correct header is `X-Api-Key: <key>`.
+- The startup banner was not visible in Visual Studio — it now goes through the logger so it appears in the Output window alongside other log messages.
+- `appsettings.local.json` was being included in the Docker image via `COPY . .`, allowing a local developer override to silently win over environment variables (including the HA `admin_api_key` env var). Added to `.dockerignore`.
+- Intermittent test failure under parallel execution: three test classes each called `SqlMapper.AddTypeHandler` in `[ClassInitialize]`, causing a race on the global static handler dictionary. Registrations moved to `[AssemblyInitialize]` so they run once before any tests start.
+
+### Added
+- `X-Api-Key` OpenAPI security scheme: admin endpoints are tagged in the spec so Scalar shows an Authentication panel pre-filled with the header name.
+- Admin API key status (`set` / `not set`) added to the startup banner.
+- `appsettings.local.template.json` — committed template for local development overrides (copy to `appsettings.local.json`, gitignored).
+- User Secrets support enabled on `Quotinator.Api` (`UserSecretsId: quotinator-api-dev`) — use VS "Manage User Secrets" as an alternative to the local settings file.
+- `docs/running-locally.md` documents both local config approaches and how to test admin endpoints in Scalar.
+- Startup banner reformatted: each config setting on its own line for easier reading in logs.
+
+---
+
 ## [1.4.3] - 2026-06-20
 
 ### Highlights

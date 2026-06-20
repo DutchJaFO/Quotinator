@@ -36,6 +36,37 @@
     </tbody>
 </table>
 
+@if (AdminKeyConfigured)
+{
+    <hr />
+
+    <h2>@Text.AdminEndpointsHeading</h2>
+    <p>@Text.AdminEndpointsDescription</p>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>@Text.EndpointColumn</th>
+                <th>@Text.UrlColumn</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>@Text.AdminPreviewSeedLabel</td>
+                <td><code>GET @ApiRoutes.DatabaseSeedPreview</code></td>
+            </tr>
+            <tr>
+                <td>@Text.AdminReseedLabel</td>
+                <td><code>POST @ApiRoutes.DatabaseReseed</code></td>
+            </tr>
+            <tr>
+                <td>@Text.AdminResetLabel</td>
+                <td><code>POST @ApiRoutes.DatabaseReset</code></td>
+            </tr>
+        </tbody>
+    </table>
+}
+
 <hr />
 
 <h2>@Text.TranslationsHeading</h2>

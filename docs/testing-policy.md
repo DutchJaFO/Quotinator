@@ -24,6 +24,18 @@ tests/
 - Utility / helper functions
 - **Translation completeness** — `Quotinator.Api.Tests` verifies that all i18n language files have the same keys as the English baseline and no empty values. These tests must pass on every build.
 
+## Parallel execution
+
+All test projects run with `[assembly: Parallelize(Scope = ExecutionScope.MethodLevel)]` — every test method runs concurrently. This is fast but requires discipline:
+
+**Global state must only be written once, before tests run.** The only safe place to write global state is `[AssemblyInitialize]` in `MSTestSettings.cs`. Never write global state in `[ClassInitialize]` or `[TestInitialize]` — those run in parallel and will race.
+
+**What counts as global state:**
+- `SqlMapper.AddTypeHandler(...)` — Dapper's handler dictionary is a global static; registering from multiple `[ClassInitialize]` methods causes intermittent failures under parallel execution. All Dapper type handler registrations live in `AssemblySetup.RegisterTypeHandlers` in `Quotinator.Data.Tests/MSTestSettings.cs`.
+- Any other static/singleton mutation (caches, registries, logging sinks).
+
+**Each test must own its own resources.** Database tests create a temp directory and SQLite file in `[TestInitialize]` and delete them in `[TestCleanup]`. Never share a file path or connection between tests.
+
 ## What to skip
 
 - Pure DI wiring (no logic to assert)

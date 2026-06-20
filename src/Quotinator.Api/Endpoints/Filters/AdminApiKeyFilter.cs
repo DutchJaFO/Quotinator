@@ -6,12 +6,12 @@ namespace Quotinator.Api.Endpoints.Filters;
 
 /// <summary>
 /// Endpoint filter that guards admin endpoints with a static API key.
-/// Clients must supply <c>Authorization: Bearer &lt;key&gt;</c>.
+/// Clients must supply <c>X-Api-Key: &lt;key&gt;</c>.
 /// If <c>Quotinator:AdminApiKey</c> is not configured the endpoints return 401 — disabled by default.
 /// </summary>
 internal sealed class AdminApiKeyFilter : IEndpointFilter
 {
-    /// <summary>Validates the Authorization header before invoking the endpoint.</summary>
+    /// <summary>Validates the X-Api-Key header before invoking the endpoint.</summary>
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var config = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
@@ -20,10 +20,7 @@ internal sealed class AdminApiKeyFilter : IEndpointFilter
         if (string.IsNullOrEmpty(expectedKey))
             return Results.Unauthorized();
 
-        var authHeader = context.HttpContext.Request.Headers.Authorization.ToString();
-        var providedKey = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-            ? authHeader["Bearer ".Length..].Trim()
-            : string.Empty;
+        var providedKey = context.HttpContext.Request.Headers["X-Api-Key"].ToString().Trim();
 
         if (!KeysMatch(expectedKey, providedKey))
             return Results.Unauthorized();

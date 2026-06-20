@@ -73,6 +73,57 @@ VS will build the image and start the container. The browser opens at `http://lo
 
 ---
 
+## Local configuration
+
+Some settings require a local override — for example, enabling the admin API key so you can test the admin endpoints in Scalar. Two approaches are supported; choose either:
+
+### Option A — `appsettings.local.json` (recommended)
+
+Copy the template and fill in your values:
+
+```
+src/Quotinator.Api/appsettings.local.template.json  →  src/Quotinator.Api/appsettings.local.json
+```
+
+The file is gitignored. Example:
+
+```json
+{
+  "Quotinator": {
+    "AdminApiKey": "dev-admin-key",
+    "LogRequests": true
+  }
+}
+```
+
+This file is loaded in all environments and takes the highest priority, overriding `appsettings.json`, `appsettings.Development.json`, and User Secrets. Use it for any local override, not just secrets.
+
+### Option B — Visual Studio User Secrets
+
+Right-click **`Quotinator.Api`** in Solution Explorer → **Manage User Secrets**. This opens `secrets.json` stored outside the repo (`%APPDATA%\Microsoft\UserSecrets\quotinator-api-dev\secrets.json`). Example:
+
+```json
+{
+  "Quotinator": {
+    "AdminApiKey": "dev-admin-key"
+  }
+}
+```
+
+User Secrets load in Development only and take lower priority than `appsettings.local.json`. They are the idiomatic VS approach for sensitive values you never want near the repo.
+
+### Testing admin endpoints in Scalar
+
+Once either option is configured and the app is running, the startup banner will show `Admin API key: set`. In Scalar, add the header:
+
+```
+X-Api-Key: <your key>
+```
+
+The REST API page in the Blazor UI also shows the admin endpoints section when a key is active.
+
+---
+
 ## Running from the command line
 
 ```bash
