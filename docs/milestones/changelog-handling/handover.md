@@ -1,8 +1,8 @@
 # Handover — Changelog Handling Milestone (#15)
 
-**Written:** 2026-06-20  
-**Branch:** `feature/changelog-handling` (5 commits ahead of origin/main)  
-**Next action:** Step 3 — write `src/Quotinator.Api/changelog.json`
+**Written:** 2026-06-20 (updated end of session 2)
+**Branch:** `feature/changelog-handling` (10 commits ahead of origin/main)
+**Next action:** Step 5 — update Dockerfile
 
 ---
 
@@ -12,144 +12,125 @@
 |------|-------------|--------|
 | Step 1 | `schemas/changelog.schema.json` written and committed | ✅ |
 | Step 2 | `CHANGELOG.md` and `addon/CHANGELOG.md` archived via `git mv` to `scripts/changelog-reference/` and committed | ✅ |
+| Step 3 | `src/Quotinator.Api/changelog.json` written (28 releases, 1.0.0-beta.1–1.5.1); `.csproj` and `.slnx` updated | ✅ |
+| Step 4 | `Quotinator.Changelog` project created; `ChangelogService` rewrites to read JSON; `Quotinator.Changelog.Tests` scaffolded; CVE `.gitkeep` folders added; `Quotinator.Api` references new project; old `ChangelogService.cs` deleted from `Quotinator.Core` | ✅ |
+| Hotfix | `CHANGELOG.md` and `addon/CHANGELOG.md` restored to their original paths (were missing from disk, breaking VS) — these are copies from the archive and will be replaced by the generator in Step 9 | ✅ |
 
-The two archived files are now the reference against which the generator output will be diffed. They must not be modified.
-
----
-
-## What comes next (Steps 3–13 of #80, then #82)
-
-### Immediate: Step 3 — Convert to `src/Quotinator.Api/changelog.json`
-
-This is the manual content migration. Read `scripts/changelog-reference/CHANGELOG.md` and `scripts/changelog-reference/addon-CHANGELOG.md` and produce a single `src/Quotinator.Api/changelog.json` that validates against `schemas/changelog.schema.json`.
-
-**Critical facts for the conversion:**
-
-1. **Root CHANGELOG.md** has 27 entries: `1.5.1`, `1.5.0`, `1.4.3`, `1.4.2`, `1.4.1`, `1.4.0`, `1.3.0`, `1.2.2`, `1.2.1`, `1.2.0`, `1.1.0`, `1.0.15`, `1.0.14`, `1.0.13`, `1.0.12`, `1.0.11`, `1.0.10`, `1.0.9`, `1.0.8`, `1.0.7`, `1.0.6`, `1.0.5`, `1.0.4`, `1.0.3`, `1.0.2`, `1.0.1`, `1.0.0`
-
-2. **Addon CHANGELOG.md** has the same versions plus `1.0.0-beta.1` (the oldest entry, not in the root changelog). Include `1.0.0-beta.1` in the JSON.
-
-3. **Dates:** all release dates appear in `scripts/changelog-reference/CHANGELOG.md`. The most recent entries that weren't in the root markdown should have dates inferred from the addon markdown.
-
-4. **`highlights` field** maps to the `### Highlights` bullet list in the root changelog. Each bullet (`- `) becomes one string. Remove the leading `- `.
-
-5. **`added/changed/fixed/removed` fields** map to the corresponding `### Added`, `### Changed`, `### Fixed`, `### Removed` sections in the root changelog. Same per-bullet-to-string conversion.
-
-6. **`addon/CHANGELOG.md` content** — the addon uses a flat bullet list with no subsection headers. Each bullet is typically a highlight or a `Fixed:` note. The addon does NOT have separate `added/changed/fixed` subsections. Map the addon's `Fixed:` bullets to `fixed` in the JSON, and all other non-"Fixed:" bullets to `added`/`changed` as appropriate. For the few versions where the content differs between root and addon, use the **root** changelog as the authoritative source for `added/changed/fixed/removed` — the addon view is derived from the JSON.
-
-7. **`issues` and `cves`** — populate where the content makes the link obvious (e.g., CVE-2025-6965 appears in the 1.4.0 section). Most older releases can have empty arrays or be omitted.
-
-8. **`translations`** — leave empty (`{}` or omit the field) for all entries except one proof-of-concept entry for #82. The next session should add at least one entry with `translations.nl` and `translations.de` as the proof of concept required by #82 verification row 1.
-
-9. **JSON structure:** the root key is `"releases"` — an array ordered newest-first.
-
-10. **File location:** `src/Quotinator.Api/changelog.json` (not in `data/`, not at repo root).
-
-After writing the JSON, add a `<Content>` entry to `src/Quotinator.Api/Quotinator.Api.csproj` so it is copied to the publish output, and add `changelog.json` to the `/src/Quotinator.Api/` folder in `Quotinator.slnx`.
-
-Verification row 3 (entry count matches reference, file validates against schema).
+Build: 0 warnings, 0 errors. Tests: 195 passed.
 
 ---
 
-### Steps 4–13 (after Step 3 is committed)
+## Key decisions made (carry forward)
 
-See `docs/milestones/changelog-handling/80-json-changelog-plan.md` for the full description of each step. Brief summary:
+- `scripts/changelog-reference/` holds the archived originals for generator diffing — **not in the slnx** (temporary test fixture)
+- `CHANGELOG.md` and `addon/CHANGELOG.md` live at their permanent paths in the slnx — currently restored copies, replaced by generator output in Step 9
+- `ChangelogRelease` now has `Issues`, `Cves`, and `Translations` fields (ready for Steps 6 and 13)
+- Translations on 1.3.0 are the proof-of-concept for #82 — AI-generated, banner disclaimer planned
+- `Quotinator.Changelog` has no dependency on `Quotinator.Core` or `Quotinator.Data`
+- Generator runs at tag time; Step 13 documents this in `CLAUDE.md` pre-push checklist
+
+---
+
+## Steps remaining (5–13 + #82)
 
 | Step | What | Key output |
 |------|------|-----------|
-| 4 | Create `Quotinator.Changelog` project; move/rewrite `ChangelogService`; create `Quotinator.Changelog.Tests`; CVE folders on both | New project builds; no `Quotinator.Core`/`Quotinator.Data` reference |
-| 5 | Update `.csproj` and Dockerfile to reference new project | Docker build succeeds |
-| 6 | Schema validation test (`ChangelogSchemaTests`) | Passes under filter |
-| 7 | Generator script — `keepachangelog` format; `--lang` support | Diff against reference is clean |
-| 8 | Generator script — `ha-addon` format | Diff against reference is clean |
-| 9 | Commit generated files; update `Quotinator.slnx` | Both markdown files at original paths |
-| 10 | `ChangelogEntry` Blazor control; `About.razor` loops it | 3-path unit tests pass |
-| 11 | Browser confirmation: About page lists all versions | Visual check |
-| 12 | Update `CLAUDE.md` pre-push checklist | References `changelog.json` and both script invocations |
-| 13 | Then #82: `GetReleasesForCulture`, `About.razor.cs` update, browser language switch | See `82-changelog-translations-plan.md` |
+| **5** | Update Dockerfile — remove old `COPY CHANGELOG.md .`; `changelog.json` is already copied via `COPY . .` | Docker build succeeds; `dotnet publish` output contains `changelog.json` |
+| **6** | `ChangelogSchemaTests` in `Quotinator.Changelog.Tests` — validates every entry has version/date, arrays have no nulls, translations structure correct | `dotnet test --filter ChangelogSchema` passes |
+| **7** | `scripts/changelog.csx` — `keepachangelog` format with `--lang` support | diff against `scripts/changelog-reference/CHANGELOG.md` is clean (modulo known inconsistencies) |
+| **8** | Extend `scripts/changelog.csx` — `ha-addon` format | diff against `scripts/changelog-reference/addon-CHANGELOG.md` is clean |
+| **9** | Commit generated files; confirm `.slnx` is complete | Both markdown files generated and committed at permanent paths |
+| **10** | `ChangelogEntry` Blazor control; `About.razor` loops it; `FormatInline` moves from `About.razor.cs` | Build clean |
+| **11** | Browser confirmation: About page lists all versions | Visual check |
+| **12** | `ChangelogEntry` unit tests (3 rendering paths) | `dotnet test --configuration Release` passes |
+| **13** | Update `CLAUDE.md` pre-push checklist; reference `changelog.json` and both `dotnet-script` invocations | Checklist updated |
+| **#82** | `GetReleasesForCulture()` on `IChangelogService`; `About.razor.cs` reads culture; browser language switch shows translated highlights | See `82-changelog-translations-plan.md` |
 
 ---
 
-## Design decisions made (key ones to remember)
+## Step 5 detail
 
-### Language selection in the generator (Decision 13 — added this session)
-
-The `--lang` argument on `scripts/changelog.csx` controls the output language for `highlights` in both formats. **English is the default, not the enforced language.** Users who want a Dutch or German changelog can run:
-
+The Dockerfile currently has (around line 18):
 ```
-dotnet-script scripts/changelog.csx -- --format keepachangelog --output CHANGELOG.nl.md --lang nl
-dotnet-script scripts/changelog.csx -- --format ha-addon --output addon/CHANGELOG.md --lang nl
+COPY CHANGELOG.md .
 ```
+This must be removed — `CHANGELOG.md` is no longer read at runtime (the app reads `changelog.json`). `changelog.json` is already included via the earlier `COPY . .` layer in the Dockerfile (or the per-project copy structure — verify exact Dockerfile contents before editing).
 
-This applies equally to `keepachangelog` and `ha-addon` formats. The `added/changed/fixed/removed` sections are always English (developer-facing). `ha-addon` has no subsections — only highlights — so `--lang` fully controls its content.
+Note from plan (Decision in Step 5): "CHANGELOG.md stays in the image root as a human-readable reference when shelling into the container" — but since it is now a generated file and the source of truth is `changelog.json`, keeping it in the image is optional. Simplest: just remove the `COPY CHANGELOG.md .` line and don't add it back.
 
-The `<!-- GENERATED FILE -->` comment in `keepachangelog` output includes the language code when non-English: `<!-- GENERATED FILE (nl) — … -->`.
-
-`ha-addon` format never includes the generated-file notice (HA Store renders the file verbatim).
-
-### No enforcement of English for generated changelogs
-
-Both `CHANGELOG.md` and `addon/CHANGELOG.md` are generated in English by default as a convenience. The Quotinator project will keep them in English because the developer documentation convention is English and the HA Store is used globally. But the generator does not enforce this — it is a consumer choice.
-
-### Translations in `changelog.json` are for the Blazor UI only
-
-`translations` in the JSON is consumed by `IChangelogService.GetReleasesForCulture()` (issue #82) for the Blazor About page. The generator script also reads translations for the `highlights` field when `--lang` is non-English. Technical sections (`added/changed/fixed/removed`) remain English regardless.
-
-### Single PR for both issues (#80 + #82)
-
-Both issues ship as one PR. Merging #80 without #82 would leave the project in a transitional state during any release between merges.
-
-### `Quotinator.Changelog` project — standalone, no app dependencies
-
-No reference to `Quotinator.Core`, `Quotinator.Data`, or `Quotinator.Api`. Same pattern as `Quotinator.Data`. Dependency direction: `Quotinator.Api` → `Quotinator.Changelog`.
-
-### CVE folders at project creation time
-
-Per `docs/workflow/cve.md`: create `src/Quotinator.Changelog/CVE/` AND `tests/Quotinator.Changelog.Tests/CVE/` when the projects are created (Step 4). Include a `.gitkeep` in each. Add both to `Quotinator.slnx`.
+Verify: `dotnet publish` output contains `changelog.json`; `docker build -f docker/Dockerfile -t quotinator:local .` exits 0.
 
 ---
 
-## Reference file structure
+## Step 6 detail
+
+Test class `ChangelogSchemaTests` in `tests/Quotinator.Changelog.Tests/`. It reads `src/Quotinator.Api/changelog.json` directly (not via the service — the path is relative to the repo root, found by walking up from `AppContext.BaseDirectory`). Asserts:
+- Every entry: non-null/empty `version` and `date`
+- `highlights`, `added`, `changed`, `fixed`, `removed`: when present, arrays with no null entries
+- `issues`: when present, contains only integers (already enforced by the type, but validate the count is sane)
+- `cves`: when present, each matches `^CVE-\d{4}-\d{4,}$`
+- `translations`: when present, each value has a `highlights` array with no null entries
+
+Does NOT assert `highlights` is non-empty — empty is valid for internal releases.
+
+---
+
+## Step 7 detail — known diff exceptions
+
+The generator output will differ from the reference in these documented ways (do NOT fix the reference files):
+- Footer comparison links: reference has links only up to `1.0.12`; generator should produce complete footer for all versions. Expected diff.
+- `---` separators between entries: inconsistent in the original; generator should produce consistent separators. Expected diff.
+- Versions `1.0.13` and `1.0.14`: reference `### Highlights` sections say "Internal: …" (technical). In `changelog.json` these are normalised to "Internal improvements — no user-facing changes." so the generated output differs. Expected and intentional clean-up.
+
+---
+
+## New project layout
 
 ```
-scripts/changelog-reference/
-  CHANGELOG.md              ← archived root changelog (27 versions, 1.0.0–1.5.1)
-  addon-CHANGELOG.md        ← archived addon changelog (28 entries incl. 1.0.0-beta.1)
+src/Quotinator.Changelog/
+  Quotinator.Changelog.csproj    (net10.0, no external deps, InternalsVisibleTo: Quotinator.Changelog.Tests)
+  Models/
+    ChangelogRelease.cs          (Version, Date, Highlights, Sections, Issues, Cves, Translations)
+    ChangelogReleaseTranslation.cs (Highlights)
+    ChangelogSection.cs          (Category, Items)
+  Services/
+    IChangelogService.cs
+    ChangelogService.cs          (reads changelog.json via System.Text.Json; private DTOs inside)
+  CVE/
+    .gitkeep
 
-schemas/
-  changelog.schema.json     ← JSON Schema Draft 2020-12; complete including translations
-
-src/Quotinator.Api/
-  changelog.json            ← to be created in Step 3 (not yet exists)
+tests/Quotinator.Changelog.Tests/
+  Quotinator.Changelog.Tests.csproj  (MSTest 4.2.3)
+  CVE/
+    .gitkeep
 ```
 
 ---
 
-## Known inconsistencies in the archived reference files
+## Namespace changes consumers must know
 
-These will cause the diff in Steps 7 and 8 to be non-clean. Document them rather than fixing the reference files:
-
-- The root `CHANGELOG.md` has version comparison links at the footer only up to `1.0.12` — newer versions are missing their comparison links. The generator should produce a complete footer (all versions linked). This means the generated file will differ from the reference in the footer section, which is expected and documented here.
-- Separator `---` lines between entries are inconsistent in the original (missing between some older entries). The generator should produce consistent separators. Expected diff.
-- Versions `1.0.13` and `1.0.14` in the root changelog have `### Highlights` sections saying "Internal: …" (technical content) — these violate the current highlights rule. In the JSON, map them to the `changed` or `fixed` array and leave `highlights` empty (or use `- Internal improvements — no user-facing changes.`). This means the generated `### Highlights` will differ from the reference for those two versions. Document this as an intentional clean-up.
+- `IChangelogService`, `ChangelogService` moved from `Quotinator.Core.Services` → `Quotinator.Changelog.Services`
+- `ChangelogRelease`, `ChangelogSection` moved from `Quotinator.Core.Services` → `Quotinator.Changelog.Models`
+- `ChangelogReleaseTranslation` is new in `Quotinator.Changelog.Models`
+- `About.razor.cs` now has both `using Quotinator.Changelog.Services;` and `using Quotinator.Core.Services;`
+- `Program.cs` now has `using Quotinator.Changelog.Services;` alongside existing Core usings
 
 ---
 
 ## Git state
 
-Branch: `feature/changelog-handling`  
-Commits ahead of origin: 5 (4 planning commits + Step 1 + Step 2)  
-No uncommitted changes expected.
+Branch: `feature/changelog-handling`
+Commits ahead of origin: 10
+No uncommitted changes.
 
-Verify with: `git log --oneline -6`
+Verify with: `git log --oneline -10`
 
 ---
 
 ## Workflow reminders
 
-- Read `docs/workflow/checklist.md` for the session-start checklist before beginning
-- The milestone folder is `docs/milestones/changelog-handling/`
-- Plan documents: `80-json-changelog-plan.md`, `82-changelog-translations-plan.md`, `overview.md`
-- Do NOT push to origin without explicit user approval (memory rule)
-- Do NOT delete branches (memory rule)
-- Failing tests must not land on `main` (memory rule) — but mid-feature failing tests on `feature/changelog-handling` are acceptable while steps are incomplete
+- Read `docs/workflow/checklist.md` for the session-start checklist
+- Do NOT push to origin without explicit user approval
+- Do NOT delete branches
+- Failing tests must not land on `main` — mid-feature failures on this branch are acceptable
+- Single PR for both #80 and #82
