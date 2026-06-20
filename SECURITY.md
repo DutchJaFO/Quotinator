@@ -2,16 +2,31 @@
 
 ## Scope
 
-Quotinator v1 is a read-only API with no authentication, no write endpoints, and no database. The attack surface is intentionally minimal.
+Quotinator is a self-hosted, read-only quote API backed by SQLite. The attack surface is intentionally minimal:
 
-Known non-issues for v1:
-- SQL injection — no database in v1 (flat-file JSON only)
-- Authentication bypass — no auth to bypass
-- Data exfiltration — the entire dataset is publicly served
+- All read endpoints are public — the entire dataset is intended to be served openly
+- Write endpoints and authentication are not yet implemented (planned for v3)
+- All SQL uses parameterised queries — user input is never concatenated into SQL strings
+- Rate limiting is applied to all quote endpoints (100 requests/minute per IP)
 
 ## Supported versions
 
 Only the latest release is supported.
+
+## Known vulnerabilities
+
+### CVE-2025-6965 — SQLite aggregate memory corruption
+
+**Status: mitigated; upstream patch pending**
+
+CVE-2025-6965 describes a SQLite bug where the number of aggregate terms in a query exceeds the number of output columns, causing memory corruption. The upstream fix will ship in a future `Microsoft.Data.Sqlite` release.
+
+**Our mitigation (shipped in v1.4.0):**
+- All SQL statements are centralised in `Sql.cs` and `RepositorySql.cs` — no inline SQL anywhere else in the codebase
+- Automated guard tests scan every SQL constant and every dynamically-assembled query for the vulnerable pattern (`aggregate function + GROUP BY/HAVING`) on every build
+- Audit confirmed that none of our queries use `GROUP BY` or `HAVING` with aggregate functions — the vulnerability cannot be triggered by any query we execute
+
+The upstream patch will be applied as soon as it ships in a stable `Microsoft.Data.Sqlite` release.
 
 ## Reporting a vulnerability
 
