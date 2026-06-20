@@ -522,6 +522,18 @@ Bugs, defects, and planned improvements are tracked as **GitHub Issues**. Do not
 
 **Closing protocol:** See `CONTRIBUTING.md` — issues are either code-verified (closed automatically via `Fixes #N` in the commit) or deployment-verified (closed manually via `gh issue close` after confirming in the live HA add-on). Deployment-verified issues are tracked in `project_post_deploy_verification.md` in memory until confirmed.
 
+**Milestone workflow:** The full process for planning, executing, and closing milestones is in `docs/workflow/process.md`. The session-start and issue-close checklists are in `docs/workflow/checklist.md`. Always read these before starting a milestone session or closing an issue.
+
+**Verification checklist format:** Every plan doc must include a verification table using exactly this format (from `docs/workflow/process.md`) — `Status` is always its own column, never embedded in `Verification`:
+
+```
+| # | Status | Requirement | Method | Verification |
+|---|--------|-------------|--------|--------------|
+| 1 | ✅ / ❌ | Description | Unit test / Live | TestClass.MethodName or exact command + expected output |
+```
+
+The closing comment posted on the GitHub issue must reproduce this same table (not a custom format). See issue #61 for a canonical example.
+
 **Deployment-only issues** — anything involving HA ingress routing, supervisor log output, add-on config panel, or container restart behaviour must be classified as deployment-verified and added to the memory checklist before the release.
 
 ---
