@@ -160,6 +160,21 @@ Steps:
 
 ---
 
+## PR merge plan in overview.md
+
+Every milestone `overview.md` must contain a **PR merge plan** section. The default assumption is that the full milestone is completed before any code merges to `main`. Departures from that default must be explicitly evaluated and recorded in the plan.
+
+The PR merge plan answers: *which issues, if any, are safe to merge to `main` before the milestone is complete, and why?*
+
+For each candidate for an early merge, record:
+- Which issues it depends on for full functionality
+- Whether those incomplete dependencies leave it inert on `main` (new infrastructure nothing currently calls)
+- Whether a workaround exists for the gap (e.g. re-seed for data gaps)
+
+The order of operations table drives this evaluation — an issue that is early in the dependency chain and has no incomplete issues that call its outputs is the most likely candidate for early merge.
+
+---
+
 ## What makes an issue safe to include in a PR
 
 The CI pipeline and branch protection already enforce that `main` builds and tests pass on every merge. The question is not "does it break?" — the pipeline answers that. The question is: **is this issue ready to ship on its own?**
