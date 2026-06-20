@@ -1,8 +1,8 @@
 # Handover — Changelog Handling Milestone (#15)
 
-**Written:** 2026-06-20 (updated end of session 2)
-**Branch:** `feature/changelog-handling` (10 commits ahead of origin/main)
-**Next action:** Step 5 — update Dockerfile
+**Written:** 2026-06-20 (updated end of session 3)
+**Branch:** `feature/changelog-handling` (12 commits ahead of origin/main)
+**Next action:** Step 11 visual — browser confirmation (Step 12); then PR
 
 ---
 
@@ -15,8 +15,16 @@
 | Step 3 | `src/Quotinator.Api/changelog.json` written (28 releases, 1.0.0-beta.1–1.5.1); `.csproj` and `.slnx` updated | ✅ |
 | Step 4 | `Quotinator.Changelog` project created; `ChangelogService` rewrites to read JSON; `Quotinator.Changelog.Tests` scaffolded; CVE `.gitkeep` folders added; `Quotinator.Api` references new project; old `ChangelogService.cs` deleted from `Quotinator.Core` | ✅ |
 | Hotfix | `CHANGELOG.md` and `addon/CHANGELOG.md` restored to their original paths (were missing from disk, breaking VS) — these are copies from the archive and will be replaced by the generator in Step 9 | ✅ |
+| Step 5 | Dockerfile: no change needed — `changelog.json` already in publish output via `<Content>` entry; no old `COPY CHANGELOG.md .` line existed | ✅ |
+| Step 6 | `ChangelogSchemaTests` in `Quotinator.Changelog.Tests`: 4 tests covering version/date presence, no-null arrays, CVE format, translations structure | ✅ |
+| Step 7-8 | `scripts/changelog.csx`: generates `keepachangelog` and `ha-addon` formats; `--lang`, `--input`, `--output`, `--format` flags; complete footer links for all 28 versions | ✅ |
+| Step 9 | `CHANGELOG.md` and `addon/CHANGELOG.md` replaced with generator output; `Quotinator.slnx` updated with `changelog.csx` and `changelog-reference/` folder | ✅ |
+| Step 10 | `ChangelogEntry.razor` + `.razor.cs` created; `FormatInline` and `CategoryBadgeClass` moved from `About.razor.cs`; `About.razor` now uses `<ChangelogEntry>` | ✅ |
+| Step 11 | `ChangelogEntryTests` (12 tests): FormatInline (markdown link, backtick, HTML encoding, plain text), CategoryBadgeClass (all categories + unknown), 3 rendering path model states; `InternalsVisibleTo` added | ✅ |
+| Step 12 | Browser visual confirmation — **PENDING user action** | ❌ |
+| Step 13 | `CLAUDE.md` pre-push checklist updated: `changelog.json` is source of truth; `dotnet-script` invocations added; tagging workflow updated | ✅ |
 
-Build: 0 warnings, 0 errors. Tests: 195 passed.
+Build: 0 warnings, 0 errors. Tests: 335 passed (4 Changelog, 82 Api, 195 Core, 54 Data).
 
 ---
 
@@ -31,20 +39,17 @@ Build: 0 warnings, 0 errors. Tests: 195 passed.
 
 ---
 
-## Steps remaining (5–13 + #82)
+## Steps remaining (#82 only)
 
-| Step | What | Key output |
-|------|------|-----------|
-| **5** | Update Dockerfile — remove old `COPY CHANGELOG.md .`; `changelog.json` is already copied via `COPY . .` | Docker build succeeds; `dotnet publish` output contains `changelog.json` |
-| **6** | `ChangelogSchemaTests` in `Quotinator.Changelog.Tests` — validates every entry has version/date, arrays have no nulls, translations structure correct | `dotnet test --filter ChangelogSchema` passes |
-| **7** | `scripts/changelog.csx` — `keepachangelog` format with `--lang` support | diff against `scripts/changelog-reference/CHANGELOG.md` is clean (modulo known inconsistencies) |
-| **8** | Extend `scripts/changelog.csx` — `ha-addon` format | diff against `scripts/changelog-reference/addon-CHANGELOG.md` is clean |
-| **9** | Commit generated files; confirm `.slnx` is complete | Both markdown files generated and committed at permanent paths |
-| **10** | `ChangelogEntry` Blazor control; `About.razor` loops it; `FormatInline` moves from `About.razor.cs` | Build clean |
-| **11** | Browser confirmation: About page lists all versions | Visual check |
-| **12** | `ChangelogEntry` unit tests (3 rendering paths) | `dotnet test --configuration Release` passes |
-| **13** | Update `CLAUDE.md` pre-push checklist; reference `changelog.json` and both `dotnet-script` invocations | Checklist updated |
+| Issue | What | Key output |
+|-------|------|-----------|
 | **#82** | `GetReleasesForCulture()` on `IChangelogService`; `About.razor.cs` reads culture; browser language switch shows translated highlights | See `82-changelog-translations-plan.md` |
+
+**Before opening the PR:** run the app locally and confirm the About page in the browser (Step 12):
+- All 28 release versions appear
+- Highlights render as plain-English bullets
+- GitHub release link appears per entry
+- Version filter search works
 
 ---
 
