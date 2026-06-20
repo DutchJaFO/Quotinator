@@ -129,6 +129,25 @@ addon/                    # Home Assistant add-on manifest and assets
 
 Dependency direction: `Quotinator.Api` → `Quotinator.Core` → (no deps); `Quotinator.Api` → `Quotinator.Constants` (no deps). Core does not reference Constants.
 
+### File placement rule
+
+Files at a project root must be kept to a minimum. The only permitted root-level file is `Program.cs` in `Quotinator.Api` (the ASP.NET Core entry point). All other source files must live in a subfolder whose name corresponds to the namespace segment it adds.
+
+**Rules:**
+- Folder name = namespace segment after the project root namespace. A file in `Quotinator.Constants/Routes/` must have namespace `Quotinator.Constants.Routes`.
+- Namespace must always match folder path — never place a file in a subfolder to organise it while keeping the parent namespace.
+- Single-file folders are acceptable when a concept is clearly distinct (e.g. `RateLimiting/RateLimitPolicies.cs`).
+- Avoid redundant folder names. A `Data/` subfolder inside `Quotinator.Data` would produce `Quotinator.Data.Data` — rename the folder to something descriptive (e.g. `Connections/`).
+
+**Current layout of `Quotinator.Constants`:**
+```
+Api/           → Quotinator.Constants.Api        (ApiMessages, ApiTags)
+RateLimiting/  → Quotinator.Constants.RateLimiting (RateLimitPolicies)
+Routes/        → Quotinator.Constants.Routes     (ApiRoutes, RouteExtensions)
+```
+
+**Razor caveat:** `.razor` files are not always caught by the build when a namespace or component reference changes. A `dotnet build` may report 0 errors while a `.razor` file still references the old namespace at runtime. After any namespace refactor, manually check every `.razor` and `_Imports.razor` file that references the changed namespace and run the app to confirm the Blazor UI loads correctly.
+
 ### Why Quotinator.Api hosts the Blazor UI
 
 The Web and API were merged into a single project so that Quotinator ships as one container. This is required for the Home Assistant add-on (the HA supervisor runs single-container add-ons) and simplifies all deployment scenarios. The Blazor UI and REST endpoints share one process, one port, and one image.
@@ -505,8 +524,10 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    ```bash
    docker run --rm -p 8080:8080 quotinator:local
    curl -s http://localhost:8080/api/v1/health
+   curl -s http://localhost:8080/api/v1/version
    curl -s http://localhost:8080/api/v1/quotes/random
    ```
+   Check that `/version` returns the expected version number — a missing `Directory.Build.props` in the build context silently produces `1.0.0` while `/health` still returns healthy.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 

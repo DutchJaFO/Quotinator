@@ -1,4 +1,4 @@
-namespace Quotinator.Constants;
+namespace Quotinator.Constants.Api;
 
 /// <summary>Keys for localised API error messages stored in i18ntext/UI.*.json.</summary>
 public static class ApiMessages

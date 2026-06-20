@@ -1,5 +1,5 @@
 using Dapper;
-using Quotinator.Data.Data;
+using Quotinator.Data.Connections;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Repositories;

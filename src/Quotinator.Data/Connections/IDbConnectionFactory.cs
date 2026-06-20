@@ -1,6 +1,6 @@
 using System.Data;
 
-namespace Quotinator.Data.Data;
+namespace Quotinator.Data.Connections;
 
 /// <summary>Creates and returns database connections.</summary>
 public interface IDbConnectionFactory

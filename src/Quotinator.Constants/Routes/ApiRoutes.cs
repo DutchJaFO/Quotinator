@@ -1,4 +1,4 @@
-namespace Quotinator.Constants;
+namespace Quotinator.Constants.Routes;
 
 /// <summary>Route strings for all Quotinator endpoints and UI paths.</summary>
 public static class ApiRoutes

@@ -1,4 +1,4 @@
-using Quotinator.Constants;
+using Quotinator.Constants.Routes;
 
 namespace Quotinator.Core.Tests.Constants;
 

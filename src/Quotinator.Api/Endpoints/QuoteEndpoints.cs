@@ -1,5 +1,6 @@
 using System.ComponentModel;
-using Quotinator.Constants;
+using Quotinator.Constants.Api;
+using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;

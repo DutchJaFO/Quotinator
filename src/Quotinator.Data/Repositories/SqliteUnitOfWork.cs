@@ -1,5 +1,5 @@
 using System.Data;
-using Quotinator.Data.Data;
+using Quotinator.Data.Connections;
 
 namespace Quotinator.Data.Repositories;
 

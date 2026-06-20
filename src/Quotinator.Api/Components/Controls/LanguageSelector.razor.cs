@@ -2,7 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Localization;
-using Quotinator.Constants;
+using Quotinator.Constants.Routes;
 using Toolbelt.Blazor.I18nText;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
