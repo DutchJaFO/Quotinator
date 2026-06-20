@@ -31,6 +31,7 @@
 | 10 | `<!-- GENERATED FILE -->` HTML comment added to `CHANGELOG.md` | GitHub renders it in the repo view but it is invisible in rendered markdown; makes it clear not to hand-edit. |
 | 11 | Generation script is format-agnostic and driven by arguments | `scripts/changelog.csx` accepts `--input <path>`, `--output <path>`, and `--format <keepachangelog\|ha-addon>`. Running it twice with different `--format` and `--output` values produces both files. This makes the script reusable in any project that conforms to `schemas/changelog.schema.json` without modification. If full genericity cannot be achieved cleanly in dotnet-script, document the parameterisation points so a copy can be adapted with minimal effort. |
 | 12 | **Pending architectural decision — namespace for reusable projects** | `Quotinator.Changelog` follows the existing `Quotinator.*` convention. A future architecture decision will evaluate whether reusable projects (currently `Quotinator.Data` and `Quotinator.Changelog`) should move to a different namespace and/or repository. No action required now; see memory note. All names in this milestone use `Quotinator.Changelog` pending that decision. |
+| 13 | Generator supports `--lang` for output language; English is the default, not the only option | The script adds `--lang <ISO 639-1 code>` (default: `en`). When a non-English code is supplied, `highlights` is resolved from `translations.<code>.highlights`, falling back to the top-level `highlights` when no translation exists. This means `CHANGELOG.md` and `addon/CHANGELOG.md` can be generated in any language the translations support. The Quotinator defaults (both files in English) are a convenience, not an enforcement. Users are free to generate localised changelogs. The `<!-- GENERATED FILE -->` comment in `CHANGELOG.md` must include the language when non-English: `<!-- GENERATED FILE (nl) — edit … -->`. `addon/CHANGELOG.md` omits the notice regardless of language. |
 
 ## JSON schema
 
@@ -145,11 +146,14 @@ Write `scripts/changelog.csx` with argument support:
 - `--input <path>` — path to the JSON file (default: `src/Quotinator.Api/changelog.json`)
 - `--output <path>` — destination file path
 - `--format <keepachangelog|ha-addon>` — output format
+- `--lang <ISO 639-1 code>` — output language (default: `en`); resolves `highlights` from `translations.<code>.highlights`, falls back to top-level `highlights` when no translation exists; no language is enforced — English is a default convenience, not a requirement
 
 Implement `keepachangelog` format first:
-- HTML `<!-- GENERATED FILE — edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx -->` comment at line 1
+- When `--lang en` (default): HTML `<!-- GENERATED FILE — edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx -->` comment at line 1
+- When `--lang <other>`: `<!-- GENERATED FILE (nl) — edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx -->` — include the language code so readers know which language was generated
 - Keep-a-Changelog header
 - One `## [version] - date` block per entry with `### Highlights`, `### Added`, `### Changed`, `### Fixed`, `### Removed` subsections (omit empty subsections)
+- `added/changed/fixed/removed` sections are always English (developer-facing); only `highlights` is language-resolved
 
 If full parameterisation cannot be achieved cleanly in dotnet-script, document the configurable values as clearly labelled constants at the top of the script.
 
@@ -159,10 +163,9 @@ Verify: `dotnet-script scripts/changelog.csx -- --format keepachangelog --output
 
 Add `ha-addon` format to the same script:
 - One `## [version] - date` block per entry
-- Highlights as flat `- ` bullet items
+- Highlights resolved via `--lang` (same resolution logic as `keepachangelog`), output as flat `- ` bullet items
 - No subsection headers
-- No generated-file notice (HA Store renders the file verbatim)
-- `translations` ignored — English highlights only
+- No generated-file notice (HA Store renders the file verbatim; a notice would appear in the add-on listing)
 
 Verify: `dotnet-script scripts/changelog.csx -- --format ha-addon --output addon/CHANGELOG.md` produces output that diffs cleanly against `scripts/changelog-reference/addon-CHANGELOG.md`.
 
