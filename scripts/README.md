@@ -121,6 +121,51 @@ No options — all paths are hardcoded to the Quotinator reference files.
 
 ---
 
+## Integration test — verifying script changes
+
+Run this whenever `changelog-import.csx`, `changelog-upgrade.csx`, or `changelog.csx` is modified. It verifies that the scripts correctly reconstruct a `changelog.json`-equivalent from the reference markdown files.
+
+### Step 1 — Regenerate from reference markdown
+
+```bash
+dotnet-script scripts/changelog-upgrade.csx
+```
+
+This re-runs the full import + assembly pipeline and writes `scripts/changelog-reference/target-changelog.json`.
+
+### Step 2 — Diff against the live changelog
+
+```bash
+diff scripts/changelog-reference/target-changelog.json src/Quotinator.Api/changelog.json
+```
+
+### Step 3 — Review the known delta
+
+The diff will always contain fields that cannot be recovered from markdown. These differences are expected and must not be treated as regressions:
+
+| Field | Recoverable from markdown? | Notes |
+|---|---|---|
+| `issues` | No — manual only | `#N` in prose is ambiguous; must be set by hand |
+| `cves` | Yes — auto-detected | Regex `CVE-\d{4}-\d{4,}` applied to all section text |
+| `audienceHighlights` | Yes — assembled from both markdowns | Present in `target-changelog.json` |
+| `translations` | No — not in markdown | Must be added manually to `changelog.json` |
+| `unreleased` | Yes — if `[Unreleased]` block exists | Not present in the reference markdowns |
+| `sectionHeaders` / `sourceLanguage` | No — global settings | Not recoverable from content |
+
+Any diff line **outside** this known delta indicates a regression in the scripts.
+
+### Step 4 — Promote if clean
+
+If the diff contains only expected delta, no action is needed. If you changed the scripts to produce additional structured output (e.g. auto-detecting issue numbers), promote `target-changelog.json` to `src/Quotinator.Api/changelog.json`:
+
+```bash
+cp scripts/changelog-reference/target-changelog.json src/Quotinator.Api/changelog.json
+```
+
+Review the result before committing — `changelog.json` may contain manually curated fields (`issues`, `translations`) that must be preserved.
+
+---
+
 ## Reference files
 
 `scripts/changelog-reference/` holds hand-written originals and derived comparison files:
