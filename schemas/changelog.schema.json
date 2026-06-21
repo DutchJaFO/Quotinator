@@ -66,6 +66,7 @@
     },
     "release": {
       "type": "object",
+      "description": "Recommended property order: version, date, issues, cves, highlights, audienceHighlights, added, changed, fixed, removed, translations. JSON Schema cannot enforce ordering; generators must apply it explicitly.",
       "required": ["version", "date"],
       "additionalProperties": false,
       "properties": {

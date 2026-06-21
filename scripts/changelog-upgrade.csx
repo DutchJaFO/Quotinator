@@ -77,6 +77,10 @@ foreach (var release in rootReleases)
     obj["version"] = version;
     obj["date"]    = release["date"]!.GetValue<string>();
 
+    // issues and cves before content — metadata that identifies what this release addresses
+    if (release["issues"] is JsonNode issues) obj["issues"] = issues.DeepClone();
+    if (release["cves"]   is JsonNode cves)   obj["cves"]   = cves.DeepClone();
+
     // highlights ← ha-addon bullets for this version
     if (haAddonByVersion.TryGetValue(version, out var haRelease))
     {
@@ -94,8 +98,8 @@ foreach (var release in rootReleases)
             obj["audienceHighlights"] = new JsonObject { ["ha-addon"] = hlHighlights.DeepClone() };
     }
 
-    // Copy remaining sections from root (no highlights)
-    foreach (var key in new[] { "added", "changed", "fixed", "removed", "issues", "cves", "translations" })
+    // Content sections from root
+    foreach (var key in new[] { "added", "changed", "fixed", "removed", "translations" })
     {
         if (release[key] is JsonNode node)
             obj[key] = node.DeepClone();

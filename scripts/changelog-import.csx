@@ -290,25 +290,33 @@ record UnreleasedEntry
             .Where(l => l is not null).SelectMany(l => l!);
 }
 
-record Release(string Version, string Date)
+record Release(
+    [property: JsonPropertyOrder(0)] string Version,
+    [property: JsonPropertyOrder(1)] string Date)
 {
+    [JsonPropertyOrder(2)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Cves { get; set; }
+
+    [JsonPropertyOrder(3)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Highlights { get; set; }
 
+    [JsonPropertyOrder(4)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Added { get; set; }
 
+    [JsonPropertyOrder(5)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Changed { get; set; }
 
+    [JsonPropertyOrder(6)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Fixed { get; set; }
 
+    [JsonPropertyOrder(7)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Removed { get; set; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<string>? Cves { get; set; }
 
     public IEnumerable<string> AllText() =>
         new[] { Highlights, Added, Changed, Fixed, Removed }
