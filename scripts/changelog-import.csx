@@ -79,6 +79,12 @@ var (unreleased, releases) = format == "keepachangelog"
     ? ParseKeepAChangelog(lines)
     : (null, ParseHaAddon(lines));
 
+// CVE IDs are detected automatically from all section text before any stripping.
+// Issue numbers are not auto-detected — they are ambiguous (#N could be a PR, footnote, etc.)
+// and must be added manually to the issues array.
+if (unreleased is not null) unreleased.Cves = ExtractCves(unreleased.AllText());
+foreach (var r in releases) r.Cves = ExtractCves(r.AllText());
+
 if (highlightsOnly)
 {
     if (unreleased is not null)
@@ -275,6 +281,13 @@ record UnreleasedEntry
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Removed { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Cves { get; set; }
+
+    public IEnumerable<string> AllText() =>
+        new[] { Highlights, Added, Changed, Fixed, Removed }
+            .Where(l => l is not null).SelectMany(l => l!);
 }
 
 record Release(string Version, string Date)
@@ -293,4 +306,23 @@ record Release(string Version, string Date)
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Removed { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Cves { get; set; }
+
+    public IEnumerable<string> AllText() =>
+        new[] { Highlights, Added, Changed, Fixed, Removed }
+            .Where(l => l is not null).SelectMany(l => l!);
+}
+
+static readonly Regex CvePattern = new(@"CVE-\d{4}-\d{4,}", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+static List<string>? ExtractCves(IEnumerable<string> text)
+{
+    var cves = text
+        .SelectMany(t => CvePattern.Matches(t).Select(m => m.Value.ToUpperInvariant()))
+        .Distinct()
+        .OrderBy(c => c)
+        .ToList();
+    return cves.Count > 0 ? cves : null;
 }
