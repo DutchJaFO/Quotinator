@@ -6,7 +6,7 @@ Three scripts manage the Quotinator changelog workflow:
 |---|---|---|
 | `changelog.csx` | JSON → markdown | Generate `CHANGELOG.md` and `addon/CHANGELOG.md` from a `changelog.json` source |
 | `changelog-import.csx` | markdown → JSON | Import an existing markdown changelog into the JSON format for round-trip verification |
-| `changelog-build.csx` | markdown → JSON | Orchestrate the full build of `target-changelog.json` from the reference changelogs |
+| `changelog-upgrade.csx` | markdown → JSON | One-time migration tool: assembled `changelog.json` from Quotinator's two hand-written reference changelogs during the v1.5.1 upgrade |
 
 Both scripts are run with [dotnet-script](https://github.com/dotnet-script/dotnet-script) from the repo root.
 
@@ -88,15 +88,15 @@ dotnet-script scripts/changelog-import.csx -- --format ha-addon        --highlig
 
 ---
 
-## changelog-build.csx — build orchestrator
+## changelog-upgrade.csx — one-time migration tool
 
-Assembles `target-changelog.json` from the two reference changelogs in a single command. Calls `changelog-import.csx` internally for each import step.
+**Quotinator-specific.** Used during the v1.5.1 → changelog-json standard upgrade to assemble `src/Quotinator.Api/changelog.json` from Quotinator's two hand-written reference changelogs. Kept for historical reference; not intended as a reusable tool.
 
 ```bash
-dotnet-script scripts/changelog-build.csx
+dotnet-script scripts/changelog-upgrade.csx
 ```
 
-No options — all paths are fixed relative to the repo root.
+No options — all paths are hardcoded to the Quotinator reference files.
 
 ### What it does
 

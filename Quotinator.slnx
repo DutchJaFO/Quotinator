@@ -130,7 +130,7 @@
     <File Path="scripts/seed.csx" />
     <File Path="scripts/changelog.csx" />
     <File Path="scripts/changelog-import.csx" />
-    <File Path="scripts/changelog-build.csx" />
+    <File Path="scripts/changelog-upgrade.csx" />
     <File Path="scripts/sources.json" />
     <File Path="scripts/SOURCES.md" />
   </Folder>

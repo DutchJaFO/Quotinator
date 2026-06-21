@@ -1,10 +1,14 @@
 #!/usr/bin/env dotnet-script
 #nullable enable
-// Quotinator changelog build script
-// Assembles target-changelog.json from the two reference changelogs.
+// ONE-TIME MIGRATION TOOL — Quotinator-specific
 //
-// Usage (run from repo root):
-//   dotnet-script scripts/changelog-build.csx
+// Used during the v1.5.1 → changelog-json standard upgrade to assemble
+// src/Quotinator.Api/changelog.json from Quotinator's two hand-written reference
+// changelogs. Not a general-purpose tool — the hardcoded paths and merge logic
+// are specific to reconciling Quotinator's root CHANGELOG.md and addon/CHANGELOG.md.
+//
+// Kept for historical reference. To regenerate target-changelog.json:
+//   dotnet-script scripts/changelog-upgrade.csx
 //
 // Reads from:
 //   scripts/changelog-reference/CHANGELOG.md
@@ -20,8 +24,8 @@
 //
 // Assembly rules for target-changelog.json:
 //   - Base structure comes from changelog-root.json, without the highlights section
-//   - highlights field  ← ha-addon bullets for matching versions
-//   - audienceHighlights.ha-addon ← root highlights for matching versions
+//   - highlights field             ← ha-addon bullets for matching versions
+//   - audienceHighlights.ha-addon  ← root highlights for matching versions
 //   - Versions present in ha-addon but absent from root are appended (oldest last)
 
 #r "nuget: System.Text.Json, 8.0.0"
