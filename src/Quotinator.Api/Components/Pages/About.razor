@@ -27,12 +27,11 @@
     <div class="changelog-scroll">
         @if (ChangelogService.Unreleased is not null)
         {
-            <ChangelogEntry Release="ChangelogService.Unreleased" IsUnreleased="true" />
+            <ChangelogUnreleasedEntry Unreleased="ChangelogService.Unreleased" />
         }
         @for (int i = 0; i < ChangelogService.Releases.Count; i++)
         {
-            int idx = ChangelogService.Unreleased is not null ? i + 1 : i;
-            <ChangelogEntry Release="ChangelogService.Releases[i]" Index="idx" />
+            <ChangelogEntry Release="ChangelogService.Releases[i]" Index="i" />
         }
     </div>
 }

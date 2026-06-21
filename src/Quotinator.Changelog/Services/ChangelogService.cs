@@ -7,7 +7,7 @@ namespace Quotinator.Changelog.Services;
 public sealed class ChangelogService : IChangelogService
 {
     /// <inheritdoc/>
-    public ChangelogRelease? Unreleased { get; }
+    public ChangelogUnreleased? Unreleased { get; }
 
     /// <inheritdoc/>
     public IReadOnlyList<ChangelogRelease> Releases { get; }
@@ -22,136 +22,32 @@ public sealed class ChangelogService : IChangelogService
     public ChangelogService()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "resources", "changelog.json");
-        if (File.Exists(path))
-        {
-            var (lang, headers, unreleased, releases) = Load(path);
-            SourceLanguage = lang;
-            SectionHeaders = headers;
-            Unreleased     = unreleased;
-            Releases       = releases;
-        }
-        else
+        if (!File.Exists(path))
         {
             SourceLanguage = "en";
             SectionHeaders = new Dictionary<string, ChangelogSectionHeaders>();
             Releases       = [];
+            return;
         }
-    }
 
-    private static (string SourceLanguage, IReadOnlyDictionary<string, ChangelogSectionHeaders> SectionHeaders, ChangelogRelease? Unreleased, IReadOnlyList<ChangelogRelease> Releases) Load(string path)
-    {
-        var json = File.ReadAllText(path);
-        var dto  = JsonSerializer.Deserialize<ChangelogDto>(json, JsonOptions);
-        if (dto is null) return ("en", new Dictionary<string, ChangelogSectionHeaders>(), null, []);
+        var root = JsonSerializer.Deserialize<ChangelogRoot>(
+            File.ReadAllText(path), JsonOptions);
 
-        var sourceLang = dto.SourceLanguage ?? "en";
-        var headers    = BuildSectionHeaders(dto.SectionHeaders);
+        if (root is null)
+        {
+            SourceLanguage = "en";
+            SectionHeaders = new Dictionary<string, ChangelogSectionHeaders>();
+            Releases       = [];
+            return;
+        }
 
-        var unreleased = dto.Unreleased is { } u
-            ? new ChangelogRelease(
-                "", "",
-                u.Highlights ?? [],
-                BuildSections(u.Added, u.Changed, u.Fixed, u.Removed),
-                u.Issues ?? [],
-                u.Cves ?? [],
-                new Dictionary<string, ChangelogReleaseTranslation>())
-            : null;
-
-        var releases = (dto.Releases ?? [])
-            .Where(r => r.Version is not null && r.Date is not null)
-            .Select(r => new ChangelogRelease(
-                r.Version!,
-                r.Date!,
-                r.Highlights ?? [],
-                BuildSections(r.Added, r.Changed, r.Fixed, r.Removed),
-                r.Issues ?? [],
-                r.Cves ?? [],
-                BuildTranslations(r.Translations)))
+        SourceLanguage = root.SourceLanguage ?? "en";
+        SectionHeaders = root.SectionHeaders ?? new Dictionary<string, ChangelogSectionHeaders>();
+        Unreleased     = root.Unreleased;
+        Releases       = (root.Releases ?? [])
+            .Where(r => !string.IsNullOrEmpty(r.Version) && !string.IsNullOrEmpty(r.Date))
             .ToList();
-
-        return (sourceLang, headers, unreleased, releases);
     }
-
-    private static IReadOnlyDictionary<string, ChangelogSectionHeaders> BuildSectionHeaders(
-        Dictionary<string, Dictionary<string, string>>? dto)
-    {
-        if (dto is null) return new Dictionary<string, ChangelogSectionHeaders>();
-        return dto.ToDictionary(
-            kvp => kvp.Key,
-            kvp => new ChangelogSectionHeaders(
-                kvp.Value.GetValueOrDefault("highlights", ""),
-                kvp.Value.GetValueOrDefault("added",      ""),
-                kvp.Value.GetValueOrDefault("changed",    ""),
-                kvp.Value.GetValueOrDefault("fixed",      ""),
-                kvp.Value.GetValueOrDefault("removed",    "")));
-    }
-
-    private static IReadOnlyList<ChangelogSection> BuildSections(
-        List<string>? added, List<string>? changed, List<string>? fixed_, List<string>? removed)
-    {
-        var sections = new List<ChangelogSection>(4);
-        if (added   is { Count: > 0 }) sections.Add(new ChangelogSection("Added",   added));
-        if (changed is { Count: > 0 }) sections.Add(new ChangelogSection("Changed", changed));
-        if (fixed_  is { Count: > 0 }) sections.Add(new ChangelogSection("Fixed",   fixed_));
-        if (removed is { Count: > 0 }) sections.Add(new ChangelogSection("Removed", removed));
-        return sections;
-    }
-
-    private static IReadOnlyDictionary<string, ChangelogReleaseTranslation> BuildTranslations(
-        Dictionary<string, TranslationDto>? translations)
-    {
-        if (translations is null) return new Dictionary<string, ChangelogReleaseTranslation>();
-        return translations.ToDictionary(
-            kvp => kvp.Key,
-            kvp => new ChangelogReleaseTranslation(
-                MapItems(kvp.Value.Highlights),
-                MapItems(kvp.Value.Added),
-                MapItems(kvp.Value.Changed),
-                MapItems(kvp.Value.Fixed),
-                MapItems(kvp.Value.Removed)));
-    }
-
-    private static IReadOnlyList<ChangelogTranslationItem> MapItems(List<TranslationItemDto>? items)
-        => (items ?? [])
-            .Where(i => !string.IsNullOrEmpty(i.Text))
-            .Select(i => new ChangelogTranslationItem(i.Text!, i.MachineTranslated))
-            .ToList();
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
-    private sealed record ChangelogDto(
-        string? SourceLanguage,
-        Dictionary<string, Dictionary<string, string>>? SectionHeaders,
-        UnreleasedDto? Unreleased,
-        List<ReleaseDto>? Releases);
-
-    private sealed record UnreleasedDto(
-        List<string>? Highlights,
-        List<string>? Added,
-        List<string>? Changed,
-        List<string>? Fixed,
-        List<string>? Removed,
-        List<int>? Issues,
-        List<string>? Cves);
-
-    private sealed record ReleaseDto(
-        string? Version,
-        string? Date,
-        List<string>? Highlights,
-        List<string>? Added,
-        List<string>? Changed,
-        List<string>? Fixed,
-        List<string>? Removed,
-        List<int>? Issues,
-        List<string>? Cves,
-        Dictionary<string, TranslationDto>? Translations);
-
-    private sealed record TranslationDto(
-        List<TranslationItemDto>? Highlights,
-        List<TranslationItemDto>? Added,
-        List<TranslationItemDto>? Changed,
-        List<TranslationItemDto>? Fixed,
-        List<TranslationItemDto>? Removed);
-
-    private sealed record TranslationItemDto(string? Text, bool? MachineTranslated);
 }

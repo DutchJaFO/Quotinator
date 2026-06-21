@@ -17,9 +17,6 @@ public partial class ChangelogEntry
     /// <summary>Zero-based position in the release list; entry 0 is expanded by default.</summary>
     [Parameter] public int Index { get; set; }
 
-    /// <summary>When <see langword="true"/>, renders the entry as the unreleased block: no version prefix, no date, no GitHub release link; always expanded.</summary>
-    [Parameter] public bool IsUnreleased { get; set; }
-
     #endregion
 
     #region Protected
@@ -38,7 +35,7 @@ public partial class ChangelogEntry
 
     private Quotinator.Api.I18nText.UI Text = new();
 
-    private bool IsOpen => IsUnreleased || Index == 0;
+    private bool IsOpen => Index == 0;
 
     private bool HasReferences => Release.Issues.Count > 0 || Release.Cves.Count > 0;
 

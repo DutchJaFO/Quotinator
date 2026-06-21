@@ -162,6 +162,10 @@
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
     <Project Path="src/Quotinator.Data/Quotinator.Data.csproj" />
     <File Path="src/Quotinator.Api/resources/changelog.json" />
+    <File Path="src/Quotinator.Changelog/Models/ChangelogRoot.cs" />
+    <File Path="src/Quotinator.Changelog/Models/ChangelogUnreleased.cs" />
+    <File Path="src/Quotinator.Api/Components/Controls/ChangelogUnreleasedEntry.razor" />
+    <File Path="src/Quotinator.Api/Components/Controls/ChangelogUnreleasedEntry.razor.cs" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />

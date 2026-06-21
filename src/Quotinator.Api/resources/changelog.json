@@ -617,6 +617,9 @@
     {
       "version": "1.0.1",
       "date": "2026-06-13",
+      "highlights": [
+        "Bug fix \u2014 no user-facing changes"
+      ],
       "audienceHighlights": {
         "ha-addon": [
           "Bug fix \u2014 no user-facing changes"
@@ -630,6 +633,11 @@
     {
       "version": "1.0.0",
       "date": "2026-06-13",
+      "highlights": [
+        "Initial release: 780 curated quotes from films, TV, books, and famous people",
+        "REST API with random, list, search, and detail endpoints; multi-language support; rate limiting",
+        "OpenAPI documentation at /scalar/v1"
+      ],
       "audienceHighlights": {
         "ha-addon": [
           "Initial release: 780 curated quotes from films, TV, books, and famous people",

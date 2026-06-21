@@ -60,80 +60,86 @@ public sealed class ChangelogEntryTests
     public void CategoryBadgeClass_Unknown_ReturnsSecondary()
         => Assert.AreEqual("bg-secondary", ChangelogEntry.CategoryBadgeClass("Security"));
 
-    // ── Rendering paths — model state that drives the three if/else branches ──
+    // ── Rendering paths — model state that drives the two display branches ────
 
     [TestMethod]
-    public void RenderPath_HighlightsPresent_ModelHasHighlightsAndEmptySections()
+    public void RenderPath_HighlightsPresent_NoTechnicalLists()
     {
-        // Path 1: highlights list + GitHub link shown; section badges hidden
-        var release = new ChangelogRelease(
-            "1.0.0", "2026-01-01",
-            ["Quote support added."],
-            [],
-            [], [], new Dictionary<string, ChangelogReleaseTranslation>());
+        // Path 1: highlights shown; Added/Changed/Fixed/Removed blocks hidden
+        var release = new ChangelogRelease
+        {
+            Version    = "1.0.0",
+            Date       = "2026-01-01",
+            Highlights = ["Quote support added."]
+        };
 
-        Assert.IsTrue(release.Highlights.Count > 0, "highlights must be non-empty for this path");
-        Assert.AreEqual(0, release.Sections.Count);
+        Assert.IsTrue(release.Highlights.Count > 0);
+        Assert.AreEqual(0, release.Added.Count);
+        Assert.AreEqual(0, release.Changed.Count);
+        Assert.AreEqual(0, release.Fixed.Count);
+        Assert.AreEqual(0, release.Removed.Count);
     }
 
     [TestMethod]
-    public void RenderPath_HighlightsEmptySectionsPresent_ModelHasSectionsOnly()
+    public void RenderPath_HighlightsEmpty_TechnicalListsShown()
     {
-        // Path 2: section badges shown; highlights list + GitHub link hidden
-        var release = new ChangelogRelease(
-            "1.0.0", "2026-01-01",
-            [],
-            [new ChangelogSection("Added", ["New endpoint added."])],
-            [], [], new Dictionary<string, ChangelogReleaseTranslation>());
-
-        Assert.AreEqual(0, release.Highlights.Count, "highlights must be empty for this path");
-        Assert.IsTrue(release.Sections.Count > 0, "at least one section must be present");
-    }
-
-    [TestMethod]
-    public void RenderPath_BothEmpty_ModelHasNoHighlightsAndNoSections()
-    {
-        // Path 3: only the summary header renders; no error
-        var release = new ChangelogRelease(
-            "1.0.0", "2026-01-01",
-            [],
-            [],
-            [], [], new Dictionary<string, ChangelogReleaseTranslation>());
+        // Path 2: Added/Changed/Fixed/Removed blocks shown; highlights hidden
+        var release = new ChangelogRelease
+        {
+            Version = "1.0.0",
+            Date    = "2026-01-01",
+            Added   = ["New endpoint added."],
+            Fixed   = ["Rate limit header fixed."]
+        };
 
         Assert.AreEqual(0, release.Highlights.Count);
-        Assert.AreEqual(0, release.Sections.Count);
+        Assert.IsTrue(release.Added.Count > 0);
+        Assert.IsTrue(release.Fixed.Count > 0);
+    }
+
+    [TestMethod]
+    public void RenderPath_AllEmpty_OnlySummaryHeaderShown()
+    {
+        // Path 3: nothing to render; no error expected
+        var release = new ChangelogRelease { Version = "1.0.0", Date = "2026-01-01" };
+
+        Assert.AreEqual(0, release.Highlights.Count);
+        Assert.AreEqual(0, release.Added.Count);
+        Assert.AreEqual(0, release.Changed.Count);
+        Assert.AreEqual(0, release.Fixed.Count);
+        Assert.AreEqual(0, release.Removed.Count);
     }
 
     [TestMethod]
     public void RenderPath_ReferencesPresent_ModelHasIssuesAndCves()
     {
-        // References block shown when Issues or Cves are non-empty
-        var release = new ChangelogRelease(
-            "1.0.0", "2026-01-01",
-            ["Something changed."],
-            [],
-            [80, 82], ["CVE-2025-6965"], new Dictionary<string, ChangelogReleaseTranslation>());
+        var release = new ChangelogRelease
+        {
+            Version    = "1.0.0",
+            Date       = "2026-01-01",
+            Highlights = ["Something changed."],
+            Issues     = [80, 82],
+            Cves       = ["CVE-2025-6965"]
+        };
 
-        Assert.IsTrue(release.Issues.Count > 0,  "issues must be non-empty to trigger references block");
-        Assert.IsTrue(release.Cves.Count > 0,    "cves must be non-empty to trigger references block");
-        Assert.AreEqual(80,             release.Issues[0]);
+        Assert.IsTrue(release.Issues.Count > 0);
+        Assert.IsTrue(release.Cves.Count > 0);
+        Assert.AreEqual(80,              release.Issues[0]);
         Assert.AreEqual("CVE-2025-6965", release.Cves[0]);
     }
 
-    [TestMethod]
-    public void RenderPath_Unreleased_HasHighlightsNoVersionNoDate()
-    {
-        // Unreleased entries: IsUnreleased=true on the component suppresses version/date/GitHub link;
-        // the model uses empty version and date strings.
-        var release = new ChangelogRelease(
-            "", "",
-            ["New feature in progress."],
-            [],
-            [80], [], new Dictionary<string, ChangelogReleaseTranslation>());
+    // ── Unreleased — same model, no Version or Date ───────────────────────────
 
-        Assert.IsTrue(release.Highlights.Count > 0);
-        Assert.AreEqual("", release.Version, "version is empty for unreleased entries");
-        Assert.AreEqual("", release.Date,    "date is empty for unreleased entries");
-        Assert.AreEqual(80, release.Issues[0]);
+    [TestMethod]
+    public void RenderPath_Unreleased_HasHighlightsAndReferences()
+    {
+        var unreleased = new ChangelogUnreleased
+        {
+            Highlights = ["New feature in progress."],
+            Issues     = [80]
+        };
+
+        Assert.IsTrue(unreleased.Highlights.Count > 0);
+        Assert.AreEqual(80, unreleased.Issues[0]);
     }
 }

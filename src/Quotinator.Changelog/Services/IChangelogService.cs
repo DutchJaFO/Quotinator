@@ -6,7 +6,7 @@ namespace Quotinator.Changelog.Services;
 public interface IChangelogService
 {
     /// <summary>Pending changes not yet included in a release. <see langword="null"/> when no <c>unreleased</c> block is present in the JSON.</summary>
-    ChangelogRelease? Unreleased { get; }
+    ChangelogUnreleased? Unreleased { get; }
 
     /// <summary>All releases, newest first.</summary>
     IReadOnlyList<ChangelogRelease> Releases { get; }
@@ -16,7 +16,6 @@ public interface IChangelogService
 
     /// <summary>
     /// Section display names per language, keyed by ISO 639-1 code.
-    /// Falls back to <see cref="SourceLanguage"/> per section key when the requested language block is absent or incomplete.
     /// Empty when no <c>sectionHeaders</c> block is present in the JSON.
     /// </summary>
     IReadOnlyDictionary<string, ChangelogSectionHeaders> SectionHeaders { get; }

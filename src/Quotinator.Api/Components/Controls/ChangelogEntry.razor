@@ -1,19 +1,18 @@
 @using Quotinator.Changelog.Models
 
-<details class="mb-2 changelog-entry" data-version="@(IsUnreleased ? "unreleased" : Release.Version)" open="@IsOpen">
+<details class="mb-2 changelog-entry" data-version="@Release.Version" open="@IsOpen">
     <summary class="py-1 user-select-none" style="cursor:pointer">
-        @if (IsUnreleased)
-        {
-            <strong>@Text.ChangelogUnreleased</strong>
-        }
-        else
-        {
-            <strong>v@(Release.Version)</strong>
-            <span class="text-muted ms-2">@Release.Date</span>
-        }
+        <strong>v@(Release.Version)</strong>
+        <span class="text-muted ms-2">@Release.Date</span>
     </summary>
     <div class="mt-2 ps-3">
-        @if (Release.Highlights.Count > 0)
+        @if (Release.Highlights.Count == 1)
+        {
+            <p class="mb-1">@FormatInline(Release.Highlights[0])</p>
+            <a class="small text-muted" target="_blank" rel="noopener noreferrer"
+               href="https://github.com/DutchJaFO/Quotinator/releases/tag/v@(Release.Version)">@Text.ChangelogFullDetailsOnGitHub</a>
+        }
+        else if (Release.Highlights.Count > 1)
         {
             <ul class="mb-1">
                 @foreach (var item in Release.Highlights)
@@ -21,25 +20,30 @@
                     <li>@FormatInline(item)</li>
                 }
             </ul>
-            @if (!IsUnreleased)
-            {
-                <a class="small text-muted" target="_blank" rel="noopener noreferrer"
-                   href="https://github.com/DutchJaFO/Quotinator/releases/tag/v@(Release.Version)">@Text.ChangelogFullDetailsOnGitHub</a>
-            }
+            <a class="small text-muted" target="_blank" rel="noopener noreferrer"
+               href="https://github.com/DutchJaFO/Quotinator/releases/tag/v@(Release.Version)">@Text.ChangelogFullDetailsOnGitHub</a>
         }
         else
         {
-            @foreach (var section in Release.Sections)
+            @if (Release.Added.Count > 0)
             {
-                <h6 class="mt-2 mb-1">
-                    <span class="badge @CategoryBadgeClass(section.Category)">@section.Category</span>
-                </h6>
-                <ul class="mb-1">
-                    @foreach (var item in section.Items)
-                    {
-                        <li>@FormatInline(item)</li>
-                    }
-                </ul>
+                <h6 class="mt-2 mb-1"><span class="badge @CategoryBadgeClass("Added")">Added</span></h6>
+                <ul class="mb-1">@foreach (var item in Release.Added) { <li>@FormatInline(item)</li> }</ul>
+            }
+            @if (Release.Changed.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @CategoryBadgeClass("Changed")">Changed</span></h6>
+                <ul class="mb-1">@foreach (var item in Release.Changed) { <li>@FormatInline(item)</li> }</ul>
+            }
+            @if (Release.Fixed.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @CategoryBadgeClass("Fixed")">Fixed</span></h6>
+                <ul class="mb-1">@foreach (var item in Release.Fixed) { <li>@FormatInline(item)</li> }</ul>
+            }
+            @if (Release.Removed.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @CategoryBadgeClass("Removed")">Removed</span></h6>
+                <ul class="mb-1">@foreach (var item in Release.Removed) { <li>@FormatInline(item)</li> }</ul>
             }
         }
         @if (HasReferences)
