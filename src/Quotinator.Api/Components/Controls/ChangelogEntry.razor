@@ -6,20 +6,29 @@
         <span class="text-muted ms-2">@Release.Date</span>
     </summary>
     <div class="mt-2 ps-3">
-        @if (Release.Highlights.Count == 1)
+        @{ var highlights = Release.GetHighlights(Culture); }
+        @if (highlights.Count == 1)
         {
-            <p class="mb-1">@FormatInline(Release.Highlights[0])</p>
+            <p class="mb-1">@FormatInline(highlights[0])</p>
+            @if (Release.AreHighlightsMachineTranslated(Culture))
+            {
+                <p class="small text-muted fst-italic mb-1">@Text.ChangelogMachineTranslatedDisclaimer</p>
+            }
             <a class="small text-muted" target="_blank" rel="noopener noreferrer"
                href="https://github.com/DutchJaFO/Quotinator/releases/tag/v@(Release.Version)">@Text.ChangelogFullDetailsOnGitHub</a>
         }
-        else if (Release.Highlights.Count > 1)
+        else if (highlights.Count > 1)
         {
             <ul class="mb-1">
-                @foreach (var item in Release.Highlights)
+                @foreach (var item in highlights)
                 {
                     <li>@FormatInline(item)</li>
                 }
             </ul>
+            @if (Release.AreHighlightsMachineTranslated(Culture))
+            {
+                <p class="small text-muted fst-italic mb-1">@Text.ChangelogMachineTranslatedDisclaimer</p>
+            }
             <a class="small text-muted" target="_blank" rel="noopener noreferrer"
                href="https://github.com/DutchJaFO/Quotinator/releases/tag/v@(Release.Version)">@Text.ChangelogFullDetailsOnGitHub</a>
         }

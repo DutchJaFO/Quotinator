@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
@@ -38,6 +39,8 @@ public partial class ChangelogEntry
     private bool IsOpen => Index == 0;
 
     private bool HasReferences => Release.Issues.Count > 0 || Release.Cves.Count > 0;
+
+    private string Culture => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
 
     internal static MarkupString FormatInline(string text)
     {

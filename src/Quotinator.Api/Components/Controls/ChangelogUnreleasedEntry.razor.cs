@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Quotinator.Changelog.Models;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
@@ -31,6 +32,8 @@ public partial class ChangelogUnreleasedEntry
     private Quotinator.Api.I18nText.UI Text = new();
 
     private bool HasReferences => Unreleased.Issues.Count > 0 || Unreleased.Cves.Count > 0;
+
+    private string Culture => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
 
     #endregion
 }
