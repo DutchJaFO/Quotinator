@@ -132,6 +132,7 @@
           "Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected."
         ]
       },
+      "cves": ["CVE-2025-6965"],
       "added": [
         "\u0060seed.csx --output-dir DIR\u0060 flag redirects seed output to a custom directory, making it possible to test seeding without overwriting \u0060data/sources/\u0060",
         "Generic repository infrastructure: \u0060IRepository\u003CT\u003E\u0060 and \u0060SqliteRepository\u003CT\u003E\u0060 (base CRUD), \u0060IRestorableRepository\u003CT\u003E\u0060 and \u0060SqliteRestorableRepository\u003CT\u003E\u0060 (opt-in soft-delete management \u2014 get deleted, restore, hard-delete, purge)",
