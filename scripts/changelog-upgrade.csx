@@ -24,8 +24,9 @@
 //
 // Assembly rules for target-changelog.json:
 //   - Base structure comes from changelog-root.json, without the highlights section
-//   - highlights field             ← ha-addon bullets for matching versions
-//   - audienceHighlights.ha-addon  ← root highlights for matching versions
+//   - highlights field             ← ha-addon bullets when ha-addon has an entry for the version;
+//                                    falls back to root highlights when ha-addon has no entry
+//   - audienceHighlights.ha-addon  ← root highlights for matching versions (omitted when ha-addon has no entry)
 //   - Versions present in ha-addon but absent from root are appended (oldest last)
 
 #r "nuget: System.Text.Json, 8.0.0"
@@ -82,20 +83,31 @@ foreach (var release in rootReleases)
     if (release["cves"]   is JsonNode cves)   obj["cves"]   = cves.DeepClone();
 
     // highlights ← ha-addon bullets for this version
+    var hasHighlights = false;
     if (haAddonByVersion.TryGetValue(version, out var haRelease))
     {
         var haHighlights = haRelease["highlights"]?.AsArray();
         if (haHighlights?.Count > 0)
+        {
             obj["highlights"] = haHighlights.DeepClone();
+            hasHighlights = true;
+        }
         consumedHaAddon.Add(version);
     }
 
-    // audienceHighlights.ha-addon ← root highlights for this version
+    // audienceHighlights.ha-addon ← root highlights for this version.
+    // When ha-addon has no entry at all, root highlights become the generic highlights instead
+    // (no audience-specific override to write, so no audienceHighlights block is emitted).
     if (highlightsByVersion.TryGetValue(version, out var hlRelease))
     {
         var hlHighlights = hlRelease["highlights"]?.AsArray();
         if (hlHighlights?.Count > 0)
-            obj["audienceHighlights"] = new JsonObject { ["ha-addon"] = hlHighlights.DeepClone() };
+        {
+            if (hasHighlights)
+                obj["audienceHighlights"] = new JsonObject { ["ha-addon"] = hlHighlights.DeepClone() };
+            else
+                obj["highlights"] = hlHighlights.DeepClone();
+        }
     }
 
     // Content sections from root
