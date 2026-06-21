@@ -15,6 +15,7 @@
   "ChangelogUnreleased": "Unreleased",
   "ChangelogReferencesSummary": "Issues & CVEs",
   "ChangelogFullDetailsOnGitHub": "Full technical details on GitHub →",
+  "ChangelogMachineTranslatedDisclaimer": "This summary was machine-translated and may contain errors.",
   "AboutDescription": "Quotinator is built with ASP.NET Core (.NET 10) and deployed as a Docker container targeting linux/amd64 and linux/arm64.",
   "AboutRoadmapV1": "REST API — read endpoints (current)",
   "AboutRoadmapV2": "SQLite backend, write endpoints, management UI",
