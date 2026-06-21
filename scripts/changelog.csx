@@ -75,7 +75,7 @@ else
 
 // ── Write output ──────────────────────────────────────────────────────────────
 
-var output = sb.ToString().TrimEnd() + Environment.NewLine;
+var output = sb.ToString().ReplaceLineEndings("\n").TrimEnd() + "\n";
 
 if (outputArg is not null)
 {
