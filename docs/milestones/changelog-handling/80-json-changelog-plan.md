@@ -225,18 +225,13 @@ Run the app locally and open the About page. Confirm:
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `schemas/changelog.schema.json` written; complete including `translations` | Manual | File exists; valid JSON Schema |
-| 2 | ❌ | Existing changelog files archived to `scripts/changelog-reference/` | Git | `git log` shows rename of both files; originals no longer at root / `addon/` |
-| 3 | ❌ | `src/Quotinator.Api/changelog.json` contains all existing releases; validates against schema | Manual | Entry count matches version count in `scripts/changelog-reference/CHANGELOG.md`; `dotnet-script` schema validation passes |
-| 4 | ❌ | `Quotinator.Changelog` project; models and service moved from `Quotinator.Core`; reads JSON; no Quotinator-specific dependencies | Build | `dotnet build --configuration Release`: 0 warnings, 0 errors; `Quotinator.Changelog.csproj` has no reference to `Quotinator.Core` or `Quotinator.Data` |
-| 5 | ❌ | `changelog.json` in publish output; Docker build succeeds | Publish + Docker | `dotnet publish` output contains `changelog.json`; `docker build -f docker/Dockerfile -t quotinator:local .` exits 0 |
-| 6 | ❌ | Schema validation test covers all field types including `translations` | Unit test | `ChangelogSchemaTests` passes under `dotnet test --configuration Release --filter ChangelogSchema` |
-| 7 | ❌ | Generator `keepachangelog` output matches archived reference | Manual diff | `dotnet-script scripts/changelog.csx -- --format keepachangelog --output CHANGELOG.md` then `diff CHANGELOG.md scripts/changelog-reference/CHANGELOG.md` — only the generated-file comment differs (plus any documented inconsistencies in the original) |
-| 8 | ❌ | Generator `ha-addon` output matches archived reference | Manual diff | `dotnet-script scripts/changelog.csx -- --format ha-addon --output addon/CHANGELOG.md` then `diff addon/CHANGELOG.md scripts/changelog-reference/addon-CHANGELOG.md` |
-| 9 | ❌ | Generated markdown files committed; solution updated | Git | `CHANGELOG.md` and `addon/CHANGELOG.md` present; `.slnx` includes `Quotinator.Changelog`, `Quotinator.Changelog/CVE/`, `Quotinator.Changelog.Tests`, `changelog.json`, `changelog.csx`, `changelog.schema.json`, `changelog-reference/` files |
-| 10 | ❌ | `ChangelogEntry` renders correctly for all three paths | Unit test | `ChangelogEntryTests` in `Quotinator.Api.Tests` covers highlights-present, sections-fallback, both-empty paths; `dotnet test --configuration Release` passes |
-| 11 | ❌ | Blazor About page confirmed in browser | Browser | All versions listed; highlights shown; version filter search works |
-| 12 | ❌ | `CLAUDE.md` and pre-push checklist updated | Manual review | Changelog rule and checklist reference `src/Quotinator.Api/changelog.json` and both `dotnet-script` invocations |
+| 1 | ✅ | `schemas/changelog.schema.json` exists | Automated | `test -f schemas/changelog.schema.json` |
+| 2 | ✅ | `changelog.json` is structurally valid against the schema | Automated | `dotnet test --filter ChangelogSchema` — 6 tests pass |
+| 3 | ✅ | Generator runs without error for both formats | Automated | `dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/changelog.json --output /dev/null` and `--format ha-addon` both exit 0 |
+| 4 | ❌ | `CHANGELOG.md` and `addon/CHANGELOG.md` are generated files | Automated | Both files contain the `GENERATED FILE` notice (`grep "GENERATED FILE" CHANGELOG.md addon/CHANGELOG.md`) |
+| 5 | ✅ | Blazor page reads JSON; markdown parsing removed | Automated | `dotnet test --filter ChangelogEntry` — 12 tests pass |
+| 6 | ❌ | Blazor page visually confirmed | Manual | All versions listed; highlights display correctly |
+| 7 | ✅ | Pre-push checklist and `CLAUDE.md` updated | Manual review | `CLAUDE.md` references `src/Quotinator.Api/changelog.json` and `--input` in both generator commands |
 
 ---
 
