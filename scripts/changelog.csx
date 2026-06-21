@@ -71,6 +71,7 @@ var json           = File.ReadAllText(inputPath);
 var doc            = JsonDocument.Parse(json);
 var root           = doc.RootElement;
 var releases       = root.GetProperty("releases").EnumerateArray().ToList();
+var unreleased     = root.TryGetProperty("unreleased", out var u) ? u : (JsonElement?)null;
 var sourceLang     = root.TryGetProperty("sourceLanguage", out var sl) ? sl.GetString() ?? "en" : "en";
 var sectionHeaders = ParseSectionHeaders(root);
 
@@ -91,7 +92,7 @@ var sb     = new StringBuilder();
 var format = formatArg.ToLowerInvariant();
 
 if (format == "keepachangelog")
-    GenerateKeepAChangelog(sb, releases, langArg, sourceLang, sectionHeaders, inputArg!, regenerateCmd);
+    GenerateKeepAChangelog(sb, releases, unreleased, langArg, sourceLang, sectionHeaders, inputArg!, regenerateCmd);
 else if (format == "ha-addon")
     GenerateHaAddon(sb, releases, langArg, sourceLang, inputArg!, regenerateCmd);
 else
@@ -117,7 +118,7 @@ else
 
 // ── Format implementations ────────────────────────────────────────────────────
 
-static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders, string inputPath, string regenerateCmd)
+static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, JsonElement? unreleased, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders, string inputPath, string regenerateCmd)
 {
     // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
     sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd));
@@ -129,6 +130,36 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
     sb.AppendLine("The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).");
     sb.AppendLine();
     sb.AppendLine("---");
+
+    if (unreleased.HasValue)
+    {
+        var u = unreleased.Value;
+        var hasContent = new[] { "highlights", "added", "changed", "fixed", "removed" }
+            .Any(key => u.TryGetProperty(key, out var arr) && arr.GetArrayLength() > 0);
+
+        if (hasContent)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## [Unreleased]");
+
+            var unreleasedHighlights = GetTopLevelItems(u, "highlights");
+            if (unreleasedHighlights.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"### {GetSectionHeader("highlights", lang, sourceLang, sectionHeaders)}");
+                foreach (var h in unreleasedHighlights)
+                    sb.AppendLine($"- {h}");
+            }
+
+            AppendSection(sb, u, "added",   lang, sourceLang, sectionHeaders);
+            AppendSection(sb, u, "changed", lang, sourceLang, sectionHeaders);
+            AppendSection(sb, u, "fixed",   lang, sourceLang, sectionHeaders);
+            AppendSection(sb, u, "removed", lang, sourceLang, sectionHeaders);
+
+            sb.AppendLine();
+            sb.AppendLine("---");
+        }
+    }
 
     for (int i = 0; i < releases.Count; i++)
     {
@@ -162,6 +193,11 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
 
     // Footer comparison links
     sb.AppendLine();
+    if (unreleased.HasValue && releases.Count > 0)
+    {
+        var latest = releases[0].GetProperty("version").GetString()!;
+        sb.AppendLine($"[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v{latest}...HEAD");
+    }
     for (int i = 0; i < releases.Count; i++)
     {
         var version = releases[i].GetProperty("version").GetString()!;

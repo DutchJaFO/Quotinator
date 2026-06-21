@@ -75,11 +75,19 @@ if (format != "keepachangelog" && format != "ha-addon")
     Environment.Exit(1);
 }
 
-var releases = format == "keepachangelog"
+var (unreleased, releases) = format == "keepachangelog"
     ? ParseKeepAChangelog(lines)
-    : ParseHaAddon(lines);
+    : (null, ParseHaAddon(lines));
 
 if (highlightsOnly)
+{
+    if (unreleased is not null)
+    {
+        unreleased.Added   = null;
+        unreleased.Changed = null;
+        unreleased.Fixed   = null;
+        unreleased.Removed = null;
+    }
     foreach (var r in releases)
     {
         r.Added   = null;
@@ -87,10 +95,11 @@ if (highlightsOnly)
         r.Fixed   = null;
         r.Removed = null;
     }
+}
 
 // ── Write JSON ────────────────────────────────────────────────────────────────
 
-var json = ToJson(releases, lineEnding);
+var json = ToJson(unreleased, releases, lineEnding);
 
 if (outputArg is not null)
 {
@@ -105,16 +114,19 @@ else
 
 // ── Format parsers ────────────────────────────────────────────────────────────
 
-static List<Release> ParseKeepAChangelog(string[] lines)
+static (UnreleasedEntry? unreleased, List<Release> releases) ParseKeepAChangelog(string[] lines)
 {
-    var releases = new List<Release>();
-    Release? current  = null;
-    string?  section  = null;
+    var releases   = new List<Release>();
+    Release?          current    = null;
+    UnreleasedEntry?  unreleased = null;
+    string?           section    = null;
+    bool              inUnreleased = false;
 
-    var reVersion = new Regex(@"^## \[(.+?)\] - (\d{4}(?:-\d{2}(?:-\d{2})?)?)");
-    var reSection = new Regex(@"^### (.+)$");
-    var reBullet  = new Regex(@"^- (.+)$");
-    var reLink    = new Regex(@"^\[.+?\]: https?://");
+    var reVersion    = new Regex(@"^## \[(.+?)\] - (\d{4}(?:-\d{2}(?:-\d{2})?)?)");
+    var reUnreleased = new Regex(@"^## \[Unreleased\]$", RegexOptions.IgnoreCase);
+    var reSection    = new Regex(@"^### (.+)$");
+    var reBullet     = new Regex(@"^- (.+)$");
+    var reLink       = new Regex(@"^\[.+?\]: https?://");
 
     var knownSections = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         { "highlights", "added", "changed", "fixed", "removed" };
@@ -126,16 +138,26 @@ static List<Release> ParseKeepAChangelog(string[] lines)
         if (string.IsNullOrEmpty(line) || line == "---" || reLink.IsMatch(line))
             continue;
 
+        if (reUnreleased.IsMatch(line))
+        {
+            unreleased   = new UnreleasedEntry();
+            inUnreleased = true;
+            current      = null;
+            section      = null;
+            continue;
+        }
+
         var vm = reVersion.Match(line);
         if (vm.Success)
         {
-            current = new Release(vm.Groups[1].Value, vm.Groups[2].Value);
+            current      = new Release(vm.Groups[1].Value, vm.Groups[2].Value);
+            inUnreleased = false;
             releases.Add(current);
             section = null;
             continue;
         }
 
-        if (current is null) continue;
+        if (!inUnreleased && current is null) continue;
 
         var sm = reSection.Match(line);
         if (sm.Success)
@@ -148,20 +170,37 @@ static List<Release> ParseKeepAChangelog(string[] lines)
         var bm = reBullet.Match(line);
         if (!bm.Success) continue;
 
-        var text   = bm.Groups[1].Value;
-        var target = section switch
+        var text = bm.Groups[1].Value;
+
+        if (inUnreleased && unreleased is not null)
         {
-            "highlights" => current.Highlights ??= [],
-            "added"      => current.Added      ??= [],
-            "changed"    => current.Changed    ??= [],
-            "fixed"      => current.Fixed      ??= [],
-            "removed"    => current.Removed    ??= [],
-            _            => current.Highlights ??= []
-        };
-        target.Add(text);
+            var target = section switch
+            {
+                "highlights" => unreleased.Highlights ??= [],
+                "added"      => unreleased.Added      ??= [],
+                "changed"    => unreleased.Changed    ??= [],
+                "fixed"      => unreleased.Fixed      ??= [],
+                "removed"    => unreleased.Removed    ??= [],
+                _            => unreleased.Highlights ??= []
+            };
+            target.Add(text);
+        }
+        else if (current is not null)
+        {
+            var target = section switch
+            {
+                "highlights" => current.Highlights ??= [],
+                "added"      => current.Added      ??= [],
+                "changed"    => current.Changed    ??= [],
+                "fixed"      => current.Fixed      ??= [],
+                "removed"    => current.Removed    ??= [],
+                _            => current.Highlights ??= []
+            };
+            target.Add(text);
+        }
     }
 
-    return releases;
+    return (unreleased, releases);
 }
 
 static List<Release> ParseHaAddon(string[] lines)
@@ -199,18 +238,44 @@ static List<Release> ParseHaAddon(string[] lines)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-static string ToJson(List<Release> releases, string lineEnding)
+static string ToJson(UnreleasedEntry? unreleased, List<Release> releases, string lineEnding)
 {
     var options = new JsonSerializerOptions
     {
-        WriteIndented      = true,
+        WriteIndented        = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
-    return JsonSerializer.Serialize(new ChangelogDocument(releases), options)
-                         .ReplaceLineEndings(lineEnding);
+    var doc = new ChangelogDocument { Unreleased = unreleased, Releases = releases };
+    return JsonSerializer.Serialize(doc, options).ReplaceLineEndings(lineEnding);
 }
 
-record ChangelogDocument(List<Release> Releases);
+record ChangelogDocument
+{
+    [JsonPropertyOrder(0)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public UnreleasedEntry? Unreleased { get; init; }
+
+    [JsonPropertyOrder(1)]
+    public List<Release> Releases { get; init; } = [];
+}
+
+record UnreleasedEntry
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Highlights { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Added { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Changed { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Fixed { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Removed { get; set; }
+}
 
 record Release(string Version, string Date)
 {

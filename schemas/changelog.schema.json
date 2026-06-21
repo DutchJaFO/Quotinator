@@ -7,6 +7,18 @@
   "required": ["releases"],
   "additionalProperties": false,
   "properties": {
+    "unreleased": {
+      "type": "object",
+      "description": "Changes not yet in a release, following the Keep a Changelog [Unreleased] convention. Rendered as ## [Unreleased] at the top of keepachangelog format output. Omitted from ha-addon format — HA Store shows only released versions.",
+      "additionalProperties": false,
+      "properties": {
+        "highlights": { "type": "array", "description": "User-facing plain-language summary of unreleased changes.", "items": { "type": "string", "minLength": 1 } },
+        "added":      { "type": "array", "description": "New features added but not yet released.",                 "items": { "type": "string", "minLength": 1 } },
+        "changed":    { "type": "array", "description": "Changes to existing behaviour not yet released.",           "items": { "type": "string", "minLength": 1 } },
+        "fixed":      { "type": "array", "description": "Bug fixes not yet released.",                               "items": { "type": "string", "minLength": 1 } },
+        "removed":    { "type": "array", "description": "Removed features or behaviour not yet released.",           "items": { "type": "string", "minLength": 1 } }
+      }
+    },
     "sourceLanguage": {
       "type": "string",
       "description": "ISO 639-1 code of the language used in top-level content arrays (highlights, added, etc.). Defaults to 'en' when absent. The generator falls back to this language when a requested translation is missing.",

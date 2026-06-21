@@ -516,7 +516,13 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
-3. **Changelog updated** — add entries to `src/Quotinator.Api/changelog.json` as changes land. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.** When tagging a release, add the new version entry to the JSON (at the top of the `releases` array) and run the generator to regenerate both markdown files before committing. Rules for `highlights` in `changelog.json`:
+3. **Changelog updated** — `src/Quotinator.Api/changelog.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
+
+   **During development** (after closing each issue or committing a meaningful change): add entries to the `unreleased` section at the top of `changelog.json`. This follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `[Unreleased]` convention and keeps the changelog in sync without waiting for a release. Decide at the time of writing whether the change deserves a `highlights` entry (user-facing impact) or only `added`/`changed`/`fixed`/`removed` (technical).
+
+   **When tagging a release**: promote the `unreleased` entries into a new release entry at the top of the `releases` array, set the `version` and `date` fields, and clear (or remove) the `unreleased` section. Then run the generator to regenerate both markdown files before committing.
+
+   Rules for `highlights` in `changelog.json`:
    - **An array of plain-English strings** (one sentence per element) — the Blazor UI renders each element as a bullet
    - **Plain user-facing English only** — no CVE IDs, no API paths, no class names, no config key names, no technical implementation details
    - **For purely internal releases** use exactly: `["Internal improvements — no user-facing changes."]`

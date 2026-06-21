@@ -38,6 +38,12 @@ The purpose of this milestone is to eliminate manual changelog editing. Merging 
 
 ---
 
+## Post-merge: complete translations
+
+Issue #82 requires **at least one** proof-of-concept entry with Dutch and German `highlights` translations. After the PR is merged, add Dutch and German translations to **all** entries in `changelog.json` that have user-facing highlights — not just the proof-of-concept entry. This is not a gate for this PR; it is the first follow-up task after the merge.
+
+---
+
 ## Plan documents
 
 - [#80 — JSON-driven changelog system](80-json-changelog-plan.md)
