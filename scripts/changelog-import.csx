@@ -10,9 +10,10 @@
 //   dotnet-script scripts/changelog-import.csx -- --format ha-addon        --input scripts/changelog-reference/addon-CHANGELOG.md
 //
 // Options:
-//   --input    <path>   Source markdown file (required)
-//   --output   <path>   Destination JSON file; omit to write to stdout
-//   --format   <name>   keepachangelog | ha-addon (required)
+//   --input           <path>   Source markdown file (required)
+//   --output          <path>   Destination JSON file; omit to write to stdout
+//   --format          <name>   keepachangelog | ha-addon (required)
+//   --highlights-only          Strip added/changed/fixed/removed; keep only highlights
 //
 // The keepachangelog format recognises ### Highlights, ### Added, ### Changed,
 // ### Fixed, ### Removed sections. All other ### headings are ignored.
@@ -28,9 +29,10 @@ using System.Text.RegularExpressions;
 
 // ── CLI arguments ─────────────────────────────────────────────────────────────
 
-var inputArg  = Args.SkipWhile(a => a != "--input").Skip(1).FirstOrDefault();
-var outputArg = Args.SkipWhile(a => a != "--output").Skip(1).FirstOrDefault();
-var formatArg = Args.SkipWhile(a => a != "--format").Skip(1).FirstOrDefault();
+var inputArg        = Args.SkipWhile(a => a != "--input").Skip(1).FirstOrDefault();
+var outputArg       = Args.SkipWhile(a => a != "--output").Skip(1).FirstOrDefault();
+var formatArg       = Args.SkipWhile(a => a != "--format").Skip(1).FirstOrDefault();
+var highlightsOnly  = Args.Contains("--highlights-only");
 
 if (string.IsNullOrEmpty(formatArg) || string.IsNullOrEmpty(inputArg))
 {
@@ -61,6 +63,15 @@ if (format != "keepachangelog" && format != "ha-addon")
 var releases = format == "keepachangelog"
     ? ParseKeepAChangelog(lines)
     : ParseHaAddon(lines);
+
+if (highlightsOnly)
+    foreach (var r in releases)
+    {
+        r.Added.Clear();
+        r.Changed.Clear();
+        r.Fixed.Clear();
+        r.Removed.Clear();
+    }
 
 // ── Write JSON ────────────────────────────────────────────────────────────────
 

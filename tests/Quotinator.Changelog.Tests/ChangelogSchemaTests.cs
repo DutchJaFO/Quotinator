@@ -98,6 +98,22 @@ public sealed class ChangelogSchemaTests
     }
 
     [TestMethod]
+    public void AllReleases_AudienceHighlights_ContainNoNullEntries()
+    {
+        foreach (var r in Releases())
+        {
+            var version = r.GetProperty("version").GetString();
+            if (!r.TryGetProperty("audienceHighlights", out var audienceHighlights)) continue;
+            foreach (var audience in audienceHighlights.EnumerateObject())
+            {
+                foreach (var item in audience.Value.EnumerateArray())
+                    Assert.AreNotEqual(JsonValueKind.Null, item.ValueKind,
+                        $"null entry in audienceHighlights.{audience.Name} for version {version}");
+            }
+        }
+    }
+
+    [TestMethod]
     public void SectionHeaders_WhenPresent_HaveNonEmptyValues()
     {
         if (!_doc.RootElement.TryGetProperty("sectionHeaders", out var sectionHeaders)) return;

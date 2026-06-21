@@ -137,6 +137,8 @@
     <File Path="scripts/changelog-reference/addon-CHANGELOG.md" />
     <File Path="scripts/changelog-reference/changelog-from-reference.json" />
     <File Path="scripts/changelog-reference/addon-changelog-from-reference.json" />
+    <File Path="scripts/changelog-reference/changelog-highlights.json" />
+    <File Path="scripts/changelog-reference/addon-changelog-highlights.json" />
   </Folder>
   <Folder Name="/scripts/hooks/">
     <File Path="scripts/hooks/README.md" />

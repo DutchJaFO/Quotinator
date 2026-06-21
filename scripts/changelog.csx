@@ -170,7 +170,7 @@ static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string
         sb.AppendLine();
         sb.AppendLine($"## [{version}] - {date}");
 
-        var highlights = GetItems(r, "highlights", lang, sourceLang);
+        var highlights = GetAudienceHighlights(r, "ha-addon", lang, sourceLang);
         if (highlights.Count > 0)
         {
             sb.AppendLine();
@@ -206,6 +206,23 @@ static List<string> GetItems(JsonElement r, string key, string lang, string sour
     }
 
     return GetTopLevelItems(r, key);
+}
+
+static List<string> GetAudienceHighlights(JsonElement r, string audience, string lang, string sourceLang)
+{
+    if (r.TryGetProperty("audienceHighlights", out var audienceHighlights) &&
+        audienceHighlights.TryGetProperty(audience, out var audienceItems))
+    {
+        if (audienceItems.GetArrayLength() == 0)
+            return ["No user-facing changes."];
+
+        return audienceItems.EnumerateArray()
+            .Select(i => i.GetString() ?? "")
+            .Where(s => !string.IsNullOrEmpty(s))
+            .ToList();
+    }
+
+    return GetItems(r, "highlights", lang, sourceLang);
 }
 
 static List<string> GetTopLevelItems(JsonElement r, string key)

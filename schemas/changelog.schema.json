@@ -92,6 +92,14 @@
           "description": "Technical description of removed features or behaviour.",
           "items": { "type": "string", "minLength": 1 }
         },
+        "audienceHighlights": {
+          "type": "object",
+          "description": "Audience-specific highlight overrides keyed by audience identifier (e.g. 'ha-addon'). When a key is present and non-empty, the generator uses those items for that audience instead of the standard highlights. When present but empty ([]), the generator emits 'No user-facing changes.' When the key is absent, the standard highlights are used as fallback.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
         "issues": {
           "type": "array",
           "description": "GitHub issue numbers addressed by this release.",
