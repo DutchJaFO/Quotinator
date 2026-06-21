@@ -49,6 +49,9 @@
       "date": "2026-06-20",
       "highlights": [
         "Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected."
+      ],
+      "cves": [
+        "CVE-2025-6965"
       ]
     },
     {

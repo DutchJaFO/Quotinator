@@ -106,6 +106,9 @@
         "\u0060AggregateQueries_MatchDocumentedInventory\u0060 test \u2014 documents and locks the exact set of SQL constants that contain aggregate functions; fails when new aggregate queries are added without review",
         "\u0060AllSqlStringLiterals_AreInCentralisedFiles\u0060 scan test \u2014 enforces that no C# source file outside \u0060Sql.cs\u0060, \u0060RepositorySql.cs\u0060, and \u0060DatabaseInitializer.cs\u0060 contains DML string literals; closes the CVE-2025-6965 DoD item 1 gate",
         "String centralisation policy documented in \u0060CLAUDE.md\u0060 \u2014 no inline strings for SQL, UI, or error messages; audit grep commands and test gates included"
+      ],
+      "cves": [
+        "CVE-2025-6965"
       ]
     },
     {
