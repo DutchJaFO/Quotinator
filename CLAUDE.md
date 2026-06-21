@@ -527,8 +527,8 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
    After editing `changelog.json`, regenerate the markdown files (run from repo root):
    ```bash
-   dotnet-script scripts/changelog.csx -- --format keepachangelog --output CHANGELOG.md
-   dotnet-script scripts/changelog.csx -- --format ha-addon        --output addon/CHANGELOG.md
+   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/changelog.json --output CHANGELOG.md
+   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/changelog.json --output addon/CHANGELOG.md
    ```
    Commit the regenerated files alongside the JSON change.
 4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):

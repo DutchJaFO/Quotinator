@@ -32,16 +32,16 @@ var langArg              = Args.SkipWhile(a => a != "--lang").Skip(1).FirstOrDef
 var machineTranslatedArg = Args.SkipWhile(a => a != "--machine-translated").Skip(1).FirstOrDefault();
 var defaultMachineTranslated = machineTranslatedArg?.ToLowerInvariant() != "false";
 
-if (string.IsNullOrEmpty(formatArg))
+if (string.IsNullOrEmpty(formatArg) || string.IsNullOrEmpty(inputArg))
 {
-    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog.csx -- --format <keepachangelog|ha-addon> [--output <path>] [--input <path>] [--lang <code>] [--machine-translated <true|false>]");
+    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog.csx -- --format <keepachangelog|ha-addon> --input <path> [--output <path>] [--lang <code>] [--machine-translated <true|false>]");
     Environment.Exit(1);
 }
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
 var repoRoot  = Directory.GetCurrentDirectory();
-var inputPath = inputArg ?? Path.Combine(repoRoot, "src", "Quotinator.Api", "changelog.json");
+var inputPath = inputArg;
 
 if (!File.Exists(inputPath))
 {

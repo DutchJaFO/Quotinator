@@ -16,8 +16,8 @@ Both scripts are run with [dotnet-script](https://github.com/dotnet-script/dotne
 Reads `src/Quotinator.Api/changelog.json` and writes a markdown changelog in one of two formats.
 
 ```bash
-dotnet-script scripts/changelog.csx -- --format keepachangelog --output CHANGELOG.md
-dotnet-script scripts/changelog.csx -- --format ha-addon        --output addon/CHANGELOG.md
+dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/changelog.json --output CHANGELOG.md
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/changelog.json --output addon/CHANGELOG.md
 ```
 
 ### Options
@@ -25,7 +25,7 @@ dotnet-script scripts/changelog.csx -- --format ha-addon        --output addon/C
 | Option | Default | Description |
 |---|---|---|
 | `--format <name>` | *(required)* | `keepachangelog` or `ha-addon` |
-| `--input <path>` | `src/Quotinator.Api/changelog.json` | JSON source file |
+| `--input <path>` | *(required)* | JSON source file |
 | `--output <path>` | stdout | Destination file path |
 | `--lang <code>` | `en` | ISO 639-1 language code; resolves from `translations.<code>.*` with fallback to source language |
 | `--machine-translated <bool>` | `true` | Default `machineTranslated` value for translation items that do not specify the property |
