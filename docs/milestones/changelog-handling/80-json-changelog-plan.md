@@ -226,11 +226,11 @@ Run the app locally and open the About page. Confirm:
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | `schemas/changelog.schema.json` exists | Automated | `test -f schemas/changelog.schema.json` |
-| 2 | ✅ | `changelog.json` is structurally valid against the schema | Automated | `dotnet test --filter ChangelogSchema` — 6 tests pass |
+| 2 | ✅ | `changelog.json` is structurally valid against the schema | Automated | `dotnet test --filter ChangelogSchema` — 6 tests pass; `GeneratedFileHeader.Build()` — 7 tests pass |
 | 3 | ✅ | Generator runs without error for both formats | Automated | `dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/changelog.json --output /dev/null` and `--format ha-addon` both exit 0 |
-| 4 | ❌ | `CHANGELOG.md` and `addon/CHANGELOG.md` are generated files | Automated | Both files contain the `GENERATED FILE` notice (`grep "GENERATED FILE" CHANGELOG.md addon/CHANGELOG.md`) |
+| 4 | ✅ | `CHANGELOG.md` and `addon/CHANGELOG.md` are generated files | Automated | `RepositoryStructureTests` confirms all three files exist; first line of each markdown starts with the generated-file notice |
 | 5 | ✅ | Blazor page reads JSON; markdown parsing removed | Automated | `dotnet test --filter ChangelogEntry` — 12 tests pass |
-| 6 | ❌ | Blazor page visually confirmed | Manual | All versions listed; highlights display correctly |
+| 6 | ✅ | Blazor page visually confirmed | Manual | Confirmed 2026-06-21: all versions listed; highlights display correctly; source confirmed as `changelog.json` not markdown |
 | 7 | ✅ | Pre-push checklist and `CLAUDE.md` updated | Manual review | `CLAUDE.md` references `src/Quotinator.Api/changelog.json` and `--input` in both generator commands |
 
 ---
