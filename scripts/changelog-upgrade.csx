@@ -3,7 +3,7 @@
 // ONE-TIME MIGRATION TOOL — Quotinator-specific
 //
 // Used during the v1.5.1 → changelog-json standard upgrade to assemble
-// src/Quotinator.Api/changelog.json from Quotinator's two hand-written reference
+// src/Quotinator.Api/resources/changelog.json from Quotinator's two hand-written reference
 // changelogs. Not a general-purpose tool — the hardcoded paths and merge logic
 // are specific to reconciling Quotinator's root CHANGELOG.md and addon/CHANGELOG.md.
 //

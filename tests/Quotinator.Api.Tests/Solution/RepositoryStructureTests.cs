@@ -40,13 +40,13 @@ public class RepositoryStructureTests
             .ToHashSet();
     }
 
-    /// <summary>src/Quotinator.Api/changelog.json must exist on disk.</summary>
+    /// <summary>src/Quotinator.Api/resources/changelog.json must exist on disk.</summary>
     [TestMethod]
     public void ChangelogJson_ExistsOnDisk()
     {
         Assert.IsTrue(
-            File.Exists(Path.Combine(RepoRoot, "src", "Quotinator.Api", "changelog.json")),
-            "src/Quotinator.Api/changelog.json does not exist.");
+            File.Exists(Path.Combine(RepoRoot, "src", "Quotinator.Api", "resources", "changelog.json")),
+            "src/Quotinator.Api/resources/changelog.json does not exist.");
     }
 
     /// <summary>CHANGELOG.md must exist on disk as a generated file.</summary>

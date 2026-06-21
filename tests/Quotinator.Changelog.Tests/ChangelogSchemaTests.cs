@@ -137,11 +137,11 @@ public sealed class ChangelogSchemaTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
-            var candidate = Path.Combine(dir.FullName, "src", "Quotinator.Api", "changelog.json");
+            var candidate = Path.Combine(dir.FullName, "src", "Quotinator.Api", "resources", "changelog.json");
             if (File.Exists(candidate)) return candidate;
             dir = dir.Parent;
         }
         throw new FileNotFoundException(
-            "changelog.json not found — expected at src/Quotinator.Api/changelog.json under the repo root.");
+            "changelog.json not found — expected at src/Quotinator.Api/resources/changelog.json under the repo root.");
     }
 }

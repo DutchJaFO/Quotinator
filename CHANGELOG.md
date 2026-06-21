@@ -1,14 +1,34 @@
-### *GENERATED FILE [2026-06-21 12:42 UTC] — do not edit by hand.*
+### *GENERATED FILE [2026-06-21 14:17 UTC] — do not edit by hand.*
 
-*Edit: `src/Quotinator.Api/changelog.json`*
+*Edit: `src/Quotinator.Api/resources/changelog.json`*
 
-*To regenerate: `dotnet-script changelog.csx -- --format keepachangelog --input src/Quotinator.Api/changelog.json --output CHANGELOG.md`*
+*To regenerate: `dotnet-script changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.json --output CHANGELOG.md`*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Highlights
+- Release notes on the About page now come from a structured data file, enabling richer content and future language translations.
+
+### Added
+- `src/Quotinator.Api/changelog.json` — single source of truth for all changelog content; replaces hand-edited markdown
+- `scripts/changelog.csx` — generates `CHANGELOG.md` and `addon/CHANGELOG.md` from `changelog.json`; supports `keepachangelog` and `ha-addon` formats, `[Unreleased]` sections, audience-specific highlights, and optional language output
+- `scripts/changelog-import.csx` — imports an existing markdown changelog into JSON format; auto-detects CVE IDs from section text; supports `[Unreleased]` blocks
+- `schemas/changelog.schema.json` — JSON Schema validating `changelog.json` structure including `unreleased`, `cves`, `issues`, `audienceHighlights`, and `translations`
+- `GeneratedFileHeader.Build()` in `Quotinator.Changelog.Formatting` — builds the generated-file notice header embedded in both markdown outputs
+- Structured `cves` and `issues` arrays on release entries for machine-readable cross-referencing
+
+### Changed
+- Blazor About page reads from `changelog.json` directly — markdown parsing removed
+- `CHANGELOG.md` and `addon/CHANGELOG.md` are now generated files; never edit by hand
+- Pre-push checklist updated: add entries to the `unreleased` section as work lands; promote to a release entry at tag time
 
 ---
 
@@ -495,6 +515,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.1...HEAD
 [1.5.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.4.2...v1.4.3

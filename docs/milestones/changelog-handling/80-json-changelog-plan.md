@@ -19,7 +19,7 @@
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| 1 | JSON file at `src/Quotinator.Api/changelog.json` | Not at repo root (files there must be required). Not in `data/` (that is quote source data and the HA persistent volume). Lives inside the API project alongside the i18ntext JSON files; `.csproj` `<Content>` entry uses a local path with no `..\..\` traversal. The generation script references it as `src/Quotinator.Api/changelog.json` from repo root. |
+| 1 | JSON file at `src/Quotinator.Api/resources/changelog.json` | Not at repo root (files there must be required). Not in `data/` (that is quote source data and the HA persistent volume). In `resources/` within the API project — the file placement rule requires non-code files in named subfolders; `resources/` is the correct name for non-source assets. `.csproj` `<Content>` entry uses a local path with no `..\..\` traversal. The generation script references it as `src/Quotinator.Api/resources/changelog.json` from repo root. |
 | 2 | `highlights` in JSON is an optional array of strings | Empty or absent is valid — some releases have nothing user-facing to say. Each string is one plain-English sentence. Schema validates structure; content quality is a human gate. |
 | 3 | Extract `Quotinator.Changelog` as a new standalone project | The changelog system has no dependency on Quotinator-specific models, services, or data infrastructure. Making it a separate project with no `Quotinator.Core` or `Quotinator.Data` reference keeps it reusable in future projects. Same pattern as `Quotinator.Data`. Dependency direction: `Quotinator.Api` → `Quotinator.Changelog`; `Quotinator.Core` does NOT reference it. |
 | 4 | `ChangelogService` deserializes JSON; markdown parser removed | `CHANGELOG.md` becomes generated-only; no longer the runtime source. |
@@ -91,7 +91,7 @@ Commit. The archived files must not be modified after this step — they are the
 
 Verify: both files present in `scripts/changelog-reference/`; originals gone from their previous locations.
 
-### Step 3 — Convert existing entries to `src/Quotinator.Api/changelog.json`
+### Step 3 — Convert existing entries to `src/Quotinator.Api/resources/changelog.json`
 
 Manually convert all entries from the archived `CHANGELOG.md` to the JSON format. Each `### Highlights` bullet becomes one string in the `highlights` array. `added`, `changed`, `fixed`, `removed` arrays populated from the corresponding sections. `issues` and `cves` populated where known. `translations` omitted for now — added in #82.
 
@@ -121,14 +121,14 @@ In `Quotinator.Api.csproj`:
 - Remove the existing `<Content>` entry for `CHANGELOG.md` — it is no longer read at runtime
 
 In `docker/Dockerfile`:
-- Add `COPY src/Quotinator.Api/changelog.json ./` so the app can read it at runtime
+- Add `COPY src/Quotinator.Api/resources/changelog.json ./` so the app can read it at runtime
 - `CHANGELOG.md` stays in the image root (keep existing `COPY CHANGELOG.md .`) as a human-readable reference when shelling into the container; it is not read by the app
 
 Verify: `dotnet publish` output contains `changelog.json`; `docker build -f docker/Dockerfile -t quotinator:local .` exits 0.
 
 ### Step 6 — Schema validation test
 
-Add `ChangelogSchemaTests` to `Quotinator.Changelog.Tests` (new test project, consistent with `Quotinator.Data` having its own test project). The test reads `src/Quotinator.Api/changelog.json` and asserts:
+Add `ChangelogSchemaTests` to `Quotinator.Changelog.Tests` (new test project, consistent with `Quotinator.Data` having its own test project). The test reads `src/Quotinator.Api/resources/changelog.json` and asserts:
 - Every entry has a non-null, non-empty `version` string
 - Every entry has a non-null, non-empty `date` string
 - `highlights`, `added`, `changed`, `fixed`, `removed` — when present, are arrays with no null entries
@@ -143,14 +143,14 @@ Verify: `dotnet test --configuration Release --filter ChangelogSchema` passes.
 ### Step 7 — Write generator: `keepachangelog` format
 
 Write `scripts/changelog.csx` with argument support:
-- `--input <path>` — path to the JSON file (default: `src/Quotinator.Api/changelog.json`)
+- `--input <path>` — path to the JSON file (default: `src/Quotinator.Api/resources/changelog.json`)
 - `--output <path>` — destination file path
 - `--format <keepachangelog|ha-addon>` — output format
 - `--lang <ISO 639-1 code>` — output language (default: `en`); resolves `highlights` from `translations.<code>.highlights`, falls back to top-level `highlights` when no translation exists; no language is enforced — English is a default convenience, not a requirement
 
 Implement `keepachangelog` format first:
-- When `--lang en` (default): HTML `<!-- GENERATED FILE — edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx -->` comment at line 1
-- When `--lang <other>`: `<!-- GENERATED FILE (nl) — edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx -->` — include the language code so readers know which language was generated
+- When `--lang en` (default): HTML `<!-- GENERATED FILE — edit src/Quotinator.Api/resources/changelog.json and run scripts/changelog.csx -->` comment at line 1
+- When `--lang <other>`: `<!-- GENERATED FILE (nl) — edit src/Quotinator.Api/resources/changelog.json and run scripts/changelog.csx -->` — include the language code so readers know which language was generated
 - Keep-a-Changelog header
 - One `## [version] - date` block per entry with `### Highlights`, `### Added`, `### Changed`, `### Fixed`, `### Removed` subsections (omit empty subsections)
 - `added/changed/fixed/removed` sections are always English (developer-facing); only `highlights` is language-resolved
@@ -178,7 +178,7 @@ Once both formats are verified:
   - `tests/Quotinator.Changelog.Tests/` project under `/tests/`
   - `scripts/changelog.csx` under `/scripts/`
   - `scripts/changelog-reference/CHANGELOG.md` and `scripts/changelog-reference/addon-CHANGELOG.md` under `/scripts/changelog-reference/`
-  - `src/Quotinator.Api/changelog.json` under `/src/Quotinator.Api/` (or `/src/`)
+  - `src/Quotinator.Api/resources/changelog.json` under `/src/Quotinator.Api/` (or `/src/`)
 
 ### Step 10 — `ChangelogEntry` Blazor control
 
@@ -215,7 +215,7 @@ Run the app locally and open the About page. Confirm:
 
 ### Step 13 — Update CLAUDE.md and pre-push checklist
 
-- Replace the changelog editing rule: edit `src/Quotinator.Api/changelog.json`, run `scripts/changelog.csx` (both formats), commit the regenerated markdown files
+- Replace the changelog editing rule: edit `src/Quotinator.Api/resources/changelog.json`, run `scripts/changelog.csx` (both formats), commit the regenerated markdown files
 - Add the two `dotnet-script` invocations to the pre-push checklist before the build step
 - Update `### Highlights` rules to reference the JSON field and the schema test gate
 
@@ -227,17 +227,17 @@ Run the app locally and open the About page. Confirm:
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | `schemas/changelog.schema.json` exists | Automated | `test -f schemas/changelog.schema.json` |
 | 2 | ✅ | `changelog.json` is structurally valid against the schema | Automated | `dotnet test --filter ChangelogSchema` — 6 tests pass; `GeneratedFileHeader.Build()` — 7 tests pass |
-| 3 | ✅ | Generator runs without error for both formats | Automated | `dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/changelog.json --output /dev/null` and `--format ha-addon` both exit 0 |
+| 3 | ✅ | Generator runs without error for both formats | Automated | `dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.json --output /dev/null` and `--format ha-addon` both exit 0 |
 | 4 | ✅ | `CHANGELOG.md` and `addon/CHANGELOG.md` are generated files | Automated | `RepositoryStructureTests` confirms all three files exist; first line of each markdown starts with the generated-file notice |
 | 5 | ✅ | Blazor page reads JSON; markdown parsing removed | Automated | `dotnet test --filter ChangelogEntry` — 12 tests pass |
 | 6 | ✅ | Blazor page visually confirmed | Manual | Confirmed 2026-06-21: all versions listed; highlights display correctly; source confirmed as `changelog.json` not markdown |
-| 7 | ✅ | Pre-push checklist and `CLAUDE.md` updated | Manual review | `CLAUDE.md` references `src/Quotinator.Api/changelog.json` and `--input` in both generator commands |
+| 7 | ✅ | Pre-push checklist and `CLAUDE.md` updated | Manual review | `CLAUDE.md` references `src/Quotinator.Api/resources/changelog.json` and `--input` in both generator commands |
 
 ---
 
 ## What the issue proposes that differs from this plan
 
-- Issue says `data/changelog.json` — this plan uses `src/Quotinator.Api/changelog.json` (not a data/runtime directory; co-located with the project that publishes it)
+- Issue says `data/changelog.json` — this plan uses `src/Quotinator.Api/resources/changelog.json` (not a data/runtime directory; co-located with the project that publishes it)
 - Issue says `highlights` is "1–3 sentences" (prose, single string) — this plan keeps it as an array of strings to preserve the existing rendering loop
 - Issue does not mention a dedicated `ChangelogEntry` control — this plan extracts one
 - Issue does not mention a dedicated `ChangelogEntry` control or rendering tests — both added here

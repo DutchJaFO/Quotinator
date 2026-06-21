@@ -267,6 +267,13 @@ record ChangelogDocument
 
 record UnreleasedEntry
 {
+    // Issues are not auto-detected (ambiguous in prose) — must be set manually after import.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<int>? Issues { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Cves { get; set; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Highlights { get; set; }
 
@@ -281,9 +288,6 @@ record UnreleasedEntry
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? Removed { get; set; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<string>? Cves { get; set; }
 
     public IEnumerable<string> AllText() =>
         new[] { Highlights, Added, Changed, Fixed, Removed }

@@ -516,7 +516,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
-3. **Changelog updated** — `src/Quotinator.Api/changelog.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
+3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
 
    **During development** (after closing each issue or committing a meaningful change): add entries to the `unreleased` section at the top of `changelog.json`. This follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `[Unreleased]` convention and keeps the changelog in sync without waiting for a release. Decide at the time of writing whether the change deserves a `highlights` entry (user-facing impact) or only `added`/`changed`/`fixed`/`removed` (technical).
 
@@ -533,8 +533,8 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
    After editing `changelog.json`, regenerate the markdown files (run from repo root):
    ```bash
-   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/changelog.json --output CHANGELOG.md
-   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/changelog.json --output addon/CHANGELOG.md
+   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.json --output CHANGELOG.md
+   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.json --output addon/CHANGELOG.md
    ```
    Commit the regenerated files alongside the JSON change.
 4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
@@ -569,7 +569,7 @@ Workflow:
 3. Wait for any remaining Dependabot PRs to finish CI
 4. Review and merge passing Dependabot PRs
 5. `git pull` to bring dependency bumps onto your local branch
-6. Add the dependency bump entry to `src/Quotinator.Api/changelog.json`; regenerate both markdown files with `scripts/changelog.csx`
+6. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.json`; regenerate both markdown files with `scripts/changelog.csx`
 7. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, `changelog.json` version entry) and commit
 8. Run the full pre-push checklist above (including Docker build)
 9. Push the version bump commit, then push the tag:

@@ -14,11 +14,11 @@ Both scripts are run with [dotnet-script](https://github.com/dotnet-script/dotne
 
 ## changelog.csx — generator
 
-Reads `src/Quotinator.Api/changelog.json` and writes a markdown changelog in one of two formats.
+Reads `src/Quotinator.Api/resources/changelog.json` and writes a markdown changelog in one of two formats.
 
 ```bash
-dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/changelog.json --output CHANGELOG.md
-dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/changelog.json --output addon/CHANGELOG.md
+dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.json --output CHANGELOG.md
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.json --output addon/CHANGELOG.md
 ```
 
 ### Options
@@ -28,6 +28,9 @@ dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quot
 | `--format <name>` | *(required)* | `keepachangelog` or `ha-addon` |
 | `--input <path>` | *(required)* | JSON source file |
 | `--output <path>` | stdout | Destination file path |
+| `--audience <name>` | `ha-addon` | Audience key for `ha-addon` format `audienceHighlights` lookup. Pass a custom key (e.g. `customer`) to produce output tailored to a different audience. |
+| `--fallback <bool>` | `true` | When a release has no highlights content: `true` skips the Highlights section; `false` emits `--fallback-message` instead. For `ha-addon`, "no content" means no `audienceHighlights.<audience>` key; for `keepachangelog` it means an empty or absent `highlights` array. |
+| `--fallback-message <text>` | `"No user-facing changes."` | Message emitted when `--fallback false` and a release has no highlights content. |
 | `--lang <code>` | `en` | ISO 639-1 language code; resolves from `translations.<code>.*` with fallback to source language |
 | `--machine-translated <bool>` | `true` | Default `machineTranslated` value for translation items that do not specify the property |
 | `--line-endings <style>` | `lf` | Line ending style for the output file: `lf` or `crlf` |
@@ -40,15 +43,15 @@ dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quot
 
 ### Audience highlights (`audienceHighlights`)
 
-The `ha-addon` format checks for an `audienceHighlights.ha-addon` key in each release before falling back to `highlights`:
+The `ha-addon` format checks for an `audienceHighlights.<audience>` key in each release (where `<audience>` is the value of `--audience`, defaulting to `ha-addon`) before falling back to `highlights`:
 
-| State | Output |
-|---|---|
-| Key absent | Use standard `highlights` |
-| Key present, array empty (`[]`) | Emit `"No user-facing changes."` |
-| Key present, array non-empty | Use those items |
+| State | `--fallback true` (default) | `--fallback false` |
+|---|---|---|
+| Key absent | Use standard `highlights` | Emit `--fallback-message` (default: `"No user-facing changes."`) |
+| Key present, array empty (`[]`) | Emit `"No user-facing changes."` | Emit `"No user-facing changes."` |
+| Key present, array non-empty | Use those items | Use those items |
 
-This lets a single `changelog.json` produce tailored output for different audiences without duplicating content.
+This lets a single `changelog.json` produce tailored output for different audiences without duplicating content. Use `--fallback false` when generating for an audience that has not been explicitly configured — every unconfigured entry will emit the fallback message rather than leaking standard highlights to that audience. The same flag applies to `keepachangelog`: releases with no highlights emit the fallback message in the Highlights section instead of omitting it.
 
 ---
 
@@ -92,7 +95,7 @@ dotnet-script scripts/changelog-import.csx -- --format ha-addon        --highlig
 
 ## changelog-upgrade.csx — one-time migration tool
 
-**Quotinator-specific.** Used during the v1.5.1 → changelog-json standard upgrade to assemble `src/Quotinator.Api/changelog.json` from Quotinator's two hand-written reference changelogs. Kept for historical reference; not intended as a reusable tool.
+**Quotinator-specific.** Used during the v1.5.1 → changelog-json standard upgrade to assemble `src/Quotinator.Api/resources/changelog.json` from Quotinator's two hand-written reference changelogs. Kept for historical reference; not intended as a reusable tool.
 
 ```bash
 dotnet-script scripts/changelog-upgrade.csx
@@ -136,7 +139,7 @@ This re-runs the full import + assembly pipeline and writes `scripts/changelog-r
 ### Step 2 — Diff against the live changelog
 
 ```bash
-diff scripts/changelog-reference/target-changelog.json src/Quotinator.Api/changelog.json
+diff scripts/changelog-reference/target-changelog.json src/Quotinator.Api/resources/changelog.json
 ```
 
 ### Step 3 — Review the known delta
@@ -156,10 +159,10 @@ Any diff line **outside** this known delta indicates a regression in the scripts
 
 ### Step 4 — Promote if clean
 
-If the diff contains only expected delta, no action is needed. If you changed the scripts to produce additional structured output (e.g. auto-detecting issue numbers), promote `target-changelog.json` to `src/Quotinator.Api/changelog.json`:
+If the diff contains only expected delta, no action is needed. If you changed the scripts to produce additional structured output (e.g. auto-detecting issue numbers), promote `target-changelog.json` to `src/Quotinator.Api/resources/changelog.json`:
 
 ```bash
-cp scripts/changelog-reference/target-changelog.json src/Quotinator.Api/changelog.json
+cp scripts/changelog-reference/target-changelog.json src/Quotinator.Api/resources/changelog.json
 ```
 
 Review the result before committing — `changelog.json` may contain manually curated fields (`issues`, `translations`) that must be preserved.

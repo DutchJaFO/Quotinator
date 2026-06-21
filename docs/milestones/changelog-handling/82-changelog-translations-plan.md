@@ -2,7 +2,7 @@
 
 ## Problem
 
-Once #80 introduces `src/Quotinator.Api/changelog.json` as the source of truth, translated highlights for changelog entries are achievable. The Blazor UI already supports multiple UI languages; changelog highlights on the About page should follow the user's selected language rather than always displaying English.
+Once #80 introduces `src/Quotinator.Api/resources/changelog.json` as the source of truth, translated highlights for changelog entries are achievable. The Blazor UI already supports multiple UI languages; changelog highlights on the About page should follow the user's selected language rather than always displaying English.
 
 ## Dependency
 

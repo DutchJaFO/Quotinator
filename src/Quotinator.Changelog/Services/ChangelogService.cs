@@ -18,7 +18,7 @@ public sealed class ChangelogService : IChangelogService
     /// <summary>Initialises the service; reads the file if it exists, returns empty data otherwise.</summary>
     public ChangelogService()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "changelog.json");
+        var path = Path.Combine(AppContext.BaseDirectory, "resources", "changelog.json");
         if (File.Exists(path))
         {
             var (lang, headers, releases) = Load(path);

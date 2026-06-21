@@ -1,4 +1,23 @@
 {
+  "unreleased": {
+    "issues": [80],
+    "highlights": [
+      "Release notes on the About page now come from a structured data file, enabling richer content and future language translations."
+    ],
+    "added": [
+      "`src/Quotinator.Api/changelog.json` — single source of truth for all changelog content; replaces hand-edited markdown",
+      "`scripts/changelog.csx` — generates `CHANGELOG.md` and `addon/CHANGELOG.md` from `changelog.json`; supports `keepachangelog` and `ha-addon` formats, `[Unreleased]` sections, audience-specific highlights, and optional language output",
+      "`scripts/changelog-import.csx` — imports an existing markdown changelog into JSON format; auto-detects CVE IDs from section text; supports `[Unreleased]` blocks",
+      "`schemas/changelog.schema.json` — JSON Schema validating `changelog.json` structure including `unreleased`, `cves`, `issues`, `audienceHighlights`, and `translations`",
+      "`GeneratedFileHeader.Build()` in `Quotinator.Changelog.Formatting` — builds the generated-file notice header embedded in both markdown outputs",
+      "Structured `cves` and `issues` arrays on release entries for machine-readable cross-referencing"
+    ],
+    "changed": [
+      "Blazor About page reads from `changelog.json` directly — markdown parsing removed",
+      "`CHANGELOG.md` and `addon/CHANGELOG.md` are now generated files; never edit by hand",
+      "Pre-push checklist updated: add entries to the `unreleased` section as work lands; promote to a release entry at tag time"
+    ]
+  },
   "releases": [
     {
       "version": "1.5.1",

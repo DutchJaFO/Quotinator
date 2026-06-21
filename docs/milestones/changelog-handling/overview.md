@@ -8,7 +8,7 @@
 
 ## Description
 
-Replace hand-edited markdown changelogs with a JSON-driven system. A single `src/Quotinator.Api/changelog.json` file becomes the source of truth; a generation script produces both markdown files from it. The Blazor UI reads JSON directly — no markdown parsing. Issue #82 extends the schema with per-language translated highlights.
+Replace hand-edited markdown changelogs with a JSON-driven system. A single `src/Quotinator.Api/resources/changelog.json` file becomes the source of truth; a generation script produces both markdown files from it. The Blazor UI reads JSON directly — no markdown parsing. Issue #82 extends the schema with per-language translated highlights.
 
 ---
 

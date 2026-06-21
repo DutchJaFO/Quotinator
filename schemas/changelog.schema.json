@@ -12,6 +12,16 @@
       "description": "Changes not yet in a release, following the Keep a Changelog [Unreleased] convention. Rendered as ## [Unreleased] at the top of keepachangelog format output. Omitted from ha-addon format — HA Store shows only released versions.",
       "additionalProperties": false,
       "properties": {
+        "issues": {
+          "type": "array",
+          "description": "GitHub issue numbers this unreleased work addresses. Must be set manually — issue numbers are ambiguous in prose and cannot be auto-detected.",
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "cves": {
+          "type": "array",
+          "description": "CVE IDs this unreleased work addresses (e.g. 'CVE-2025-6965').",
+          "items": { "type": "string", "pattern": "^CVE-\\d{4}-\\d{4,}$" }
+        },
         "highlights": { "type": "array", "description": "User-facing plain-language summary of unreleased changes.", "items": { "type": "string", "minLength": 1 } },
         "added":      { "type": "array", "description": "New features added but not yet released.",                 "items": { "type": "string", "minLength": 1 } },
         "changed":    { "type": "array", "description": "Changes to existing behaviour not yet released.",           "items": { "type": "string", "minLength": 1 } },

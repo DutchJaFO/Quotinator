@@ -1,7 +1,7 @@
 #!/usr/bin/env dotnet-script
 #nullable enable
 // Quotinator changelog generator
-// Reads src/Quotinator.Api/changelog.json and writes CHANGELOG.md in one of two formats.
+// Reads src/Quotinator.Api/resources/changelog.json and writes CHANGELOG.md in one of two formats.
 //
 // Usage (run from repo root):
 //   dotnet-script scripts/changelog.csx -- --format keepachangelog --output CHANGELOG.md
@@ -11,6 +11,12 @@
 //   --input              <path>    JSON source file (required)
 //   --output             <path>    Destination file path; omit to write to stdout
 //   --format             <name>    keepachangelog | ha-addon  (required)
+//   --audience           <name>    Audience key for ha-addon format audienceHighlights lookup (default: ha-addon)
+//   --fallback           <bool>    ha-addon: when audienceHighlights.<audience> is absent, fall back to
+//                                  standard highlights (default: true). Pass false to emit --fallback-message
+//                                  instead of standard highlights.
+//   --fallback-message   <text>    Message emitted when --fallback false and no audience key is present
+//                                  (default: "No user-facing changes.")
 //   --lang               <code>    ISO 639-1 language code (default: en)
 //                                  Resolves content from translations.<code>.* when available;
 //                                  falls back to source language content when translation is absent.
@@ -30,6 +36,10 @@ using System.Text.Json;
 var inputArg             = Args.SkipWhile(a => a != "--input").Skip(1).FirstOrDefault();
 var outputArg            = Args.SkipWhile(a => a != "--output").Skip(1).FirstOrDefault();
 var formatArg            = Args.SkipWhile(a => a != "--format").Skip(1).FirstOrDefault();
+var audienceArg          = Args.SkipWhile(a => a != "--audience").Skip(1).FirstOrDefault() ?? "ha-addon";
+var fallbackArg          = Args.SkipWhile(a => a != "--fallback").Skip(1).FirstOrDefault();
+var doFallback           = fallbackArg?.ToLowerInvariant() != "false";
+var fallbackMessage      = Args.SkipWhile(a => a != "--fallback-message").Skip(1).FirstOrDefault() ?? "No user-facing changes.";
 var langArg              = Args.SkipWhile(a => a != "--lang").Skip(1).FirstOrDefault() ?? "en";
 var machineTranslatedArg = Args.SkipWhile(a => a != "--machine-translated").Skip(1).FirstOrDefault();
 var defaultMachineTranslated = machineTranslatedArg?.ToLowerInvariant() != "false";
@@ -37,7 +47,7 @@ var lineEndingsArg       = Args.SkipWhile(a => a != "--line-endings").Skip(1).Fi
 
 if (string.IsNullOrEmpty(formatArg) || string.IsNullOrEmpty(inputArg))
 {
-    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog.csx -- --format <keepachangelog|ha-addon> --input <path> [--output <path>] [--lang <code>] [--machine-translated <true|false>] [--line-endings <lf|crlf>]");
+    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog.csx -- --format <keepachangelog|ha-addon> --input <path> [--output <path>] [--audience <name>] [--fallback <true|false>] [--fallback-message <text>] [--lang <code>] [--machine-translated <true|false>] [--line-endings <lf|crlf>]");
     Environment.Exit(1);
 }
 
@@ -81,6 +91,12 @@ var cmdBuilder = new StringBuilder("dotnet-script changelog.csx --");
 cmdBuilder.Append($" --format {formatArg}");
 cmdBuilder.Append($" --input {inputArg}");
 if (outputArg is not null)              cmdBuilder.Append($" --output {outputArg}");
+if (audienceArg != "ha-addon")          cmdBuilder.Append($" --audience {audienceArg}");
+if (!doFallback)
+{
+    cmdBuilder.Append(" --fallback false");
+    if (fallbackMessage != "No user-facing changes.") cmdBuilder.Append($" --fallback-message \"{fallbackMessage}\"");
+}
 if (langArg != "en")                    cmdBuilder.Append($" --lang {langArg}");
 if (!defaultMachineTranslated)          cmdBuilder.Append(" --machine-translated false");
 if (lineEndingsArg != "lf")             cmdBuilder.Append($" --line-endings {lineEndingsArg}");
@@ -92,9 +108,9 @@ var sb     = new StringBuilder();
 var format = formatArg.ToLowerInvariant();
 
 if (format == "keepachangelog")
-    GenerateKeepAChangelog(sb, releases, unreleased, langArg, sourceLang, sectionHeaders, inputArg!, regenerateCmd);
+    GenerateKeepAChangelog(sb, releases, unreleased, doFallback, fallbackMessage, langArg, sourceLang, sectionHeaders, inputArg!, regenerateCmd);
 else if (format == "ha-addon")
-    GenerateHaAddon(sb, releases, langArg, sourceLang, inputArg!, regenerateCmd);
+    GenerateHaAddon(sb, releases, audienceArg, doFallback, fallbackMessage, langArg, sourceLang, inputArg!, regenerateCmd);
 else
 {
     Console.Error.WriteLine($"Unknown format: {formatArg}. Use keepachangelog or ha-addon.");
@@ -118,7 +134,7 @@ else
 
 // ── Format implementations ────────────────────────────────────────────────────
 
-static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, JsonElement? unreleased, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders, string inputPath, string regenerateCmd)
+static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, JsonElement? unreleased, bool fallback, string fallbackMessage, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders, string inputPath, string regenerateCmd)
 {
     // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
     sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd));
@@ -142,7 +158,7 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
             sb.AppendLine();
             sb.AppendLine("## [Unreleased]");
 
-            var unreleasedHighlights = GetTopLevelItems(u, "highlights");
+            var unreleasedHighlights = GetHighlights(u, lang, sourceLang, fallback, fallbackMessage);
             if (unreleasedHighlights.Count > 0)
             {
                 sb.AppendLine();
@@ -170,7 +186,7 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
         sb.AppendLine();
         sb.AppendLine($"## [{version}] - {date}");
 
-        var highlights = GetItems(r, "highlights", lang, sourceLang);
+        var highlights = GetHighlights(r, lang, sourceLang, fallback, fallbackMessage);
         if (highlights.Count > 0)
         {
             sb.AppendLine();
@@ -215,7 +231,7 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
     }
 }
 
-static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string lang, string sourceLang, string inputPath, string regenerateCmd)
+static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string audience, bool fallback, string fallbackMessage, string lang, string sourceLang, string inputPath, string regenerateCmd)
 {
     // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
     sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd));
@@ -235,7 +251,7 @@ static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string
         sb.AppendLine();
         sb.AppendLine($"## [{version}] - {date}");
 
-        var highlights = GetAudienceHighlights(r, "ha-addon", lang, sourceLang);
+        var highlights = GetAudienceHighlights(r, audience, fallback, fallbackMessage, lang, sourceLang);
         if (highlights.Count > 0)
         {
             sb.AppendLine();
@@ -273,7 +289,15 @@ static List<string> GetItems(JsonElement r, string key, string lang, string sour
     return GetTopLevelItems(r, key);
 }
 
-static List<string> GetAudienceHighlights(JsonElement r, string audience, string lang, string sourceLang)
+static List<string> GetHighlights(JsonElement r, string lang, string sourceLang, bool fallback, string fallbackMessage)
+{
+    var items = GetItems(r, "highlights", lang, sourceLang);
+    if (items.Count > 0) return items;
+    if (!fallback) return [fallbackMessage];
+    return [];
+}
+
+static List<string> GetAudienceHighlights(JsonElement r, string audience, bool fallback, string fallbackMessage, string lang, string sourceLang)
 {
     if (r.TryGetProperty("audienceHighlights", out var audienceHighlights) &&
         audienceHighlights.TryGetProperty(audience, out var audienceItems))
@@ -286,6 +310,10 @@ static List<string> GetAudienceHighlights(JsonElement r, string audience, string
             .Where(s => !string.IsNullOrEmpty(s))
             .ToList();
     }
+
+    // Audience key absent: --fallback false means do not leak standard highlights to this audience.
+    if (!fallback)
+        return [fallbackMessage];
 
     return GetItems(r, "highlights", lang, sourceLang);
 }
