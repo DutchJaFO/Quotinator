@@ -24,8 +24,8 @@
 
 #r "nuget: System.Text.Json, 8.0.0"
 
-using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 // ── CLI arguments ─────────────────────────────────────────────────────────────
@@ -82,10 +82,10 @@ var releases = format == "keepachangelog"
 if (highlightsOnly)
     foreach (var r in releases)
     {
-        r.Added.Clear();
-        r.Changed.Clear();
-        r.Fixed.Clear();
-        r.Removed.Clear();
+        r.Added   = null;
+        r.Changed = null;
+        r.Fixed   = null;
+        r.Removed = null;
     }
 
 // ── Write JSON ────────────────────────────────────────────────────────────────
@@ -151,12 +151,12 @@ static List<Release> ParseKeepAChangelog(string[] lines)
         var text   = bm.Groups[1].Value;
         var target = section switch
         {
-            "highlights" => current.Highlights,
-            "added"      => current.Added,
-            "changed"    => current.Changed,
-            "fixed"      => current.Fixed,
-            "removed"    => current.Removed,
-            _            => current.Highlights   // no section header yet — treat as highlights
+            "highlights" => current.Highlights ??= [],
+            "added"      => current.Added      ??= [],
+            "changed"    => current.Changed    ??= [],
+            "fixed"      => current.Fixed      ??= [],
+            "removed"    => current.Removed    ??= [],
+            _            => current.Highlights ??= []
         };
         target.Add(text);
     }
@@ -191,7 +191,7 @@ static List<Release> ParseHaAddon(string[] lines)
 
         var bm = reBullet.Match(line);
         if (bm.Success)
-            current.Highlights.Add(bm.Groups[1].Value);
+            (current.Highlights ??= []).Add(bm.Groups[1].Value);
     }
 
     return releases;
@@ -201,44 +201,31 @@ static List<Release> ParseHaAddon(string[] lines)
 
 static string ToJson(List<Release> releases, string lineEnding)
 {
-    var options = new JsonWriterOptions { Indented = true };
-    var stream  = new MemoryStream();
-    var writer  = new Utf8JsonWriter(stream, options);
-
-    writer.WriteStartObject();
-    writer.WriteStartArray("releases");
-    foreach (var r in releases)
+    var options = new JsonSerializerOptions
     {
-        writer.WriteStartObject();
-        writer.WriteString("version", r.Version);
-        writer.WriteString("date",    r.Date);
-        WriteSection(writer, "highlights", r.Highlights);
-        WriteSection(writer, "added",      r.Added);
-        WriteSection(writer, "changed",    r.Changed);
-        WriteSection(writer, "fixed",      r.Fixed);
-        WriteSection(writer, "removed",    r.Removed);
-        writer.WriteEndObject();
-    }
-    writer.WriteEndArray();
-    writer.WriteEndObject();
-
-    writer.Flush();
-    return Encoding.UTF8.GetString(stream.ToArray()).ReplaceLineEndings(lineEnding);
+        WriteIndented      = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+    return JsonSerializer.Serialize(new ChangelogDocument(releases), options)
+                         .ReplaceLineEndings(lineEnding);
 }
 
-static void WriteSection(Utf8JsonWriter writer, string key, List<string> items)
-{
-    if (items.Count == 0) return;
-    writer.WriteStartArray(key);
-    foreach (var item in items) writer.WriteStringValue(item);
-    writer.WriteEndArray();
-}
+record ChangelogDocument(List<Release> Releases);
 
 record Release(string Version, string Date)
 {
-    public List<string> Highlights { get; } = [];
-    public List<string> Added      { get; } = [];
-    public List<string> Changed    { get; } = [];
-    public List<string> Fixed      { get; } = [];
-    public List<string> Removed    { get; } = [];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Highlights { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Added { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Changed { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Fixed { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Removed { get; set; }
 }
