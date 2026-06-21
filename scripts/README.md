@@ -30,6 +30,7 @@ dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quot
 | `--output <path>` | stdout | Destination file path |
 | `--lang <code>` | `en` | ISO 639-1 language code; resolves from `translations.<code>.*` with fallback to source language |
 | `--machine-translated <bool>` | `true` | Default `machineTranslated` value for translation items that do not specify the property |
+| `--line-endings <style>` | `lf` | Line ending style for the output file: `lf` or `crlf` |
 
 ### Formats
 
@@ -68,6 +69,7 @@ dotnet-script scripts/changelog-import.csx -- --format ha-addon        --input s
 | `--input <path>` | *(required)* | Source markdown file |
 | `--output <path>` | stdout | Destination JSON file |
 | `--highlights-only` | off | Strip `added`, `changed`, `fixed`, `removed`; keep only `highlights` |
+| `--line-endings <style>` | `lf` | Line ending style for the output file: `lf` or `crlf` |
 
 ### Formats
 

@@ -10,10 +10,11 @@
 //   dotnet-script scripts/changelog-import.csx -- --format ha-addon        --input scripts/changelog-reference/addon-CHANGELOG.md
 //
 // Options:
-//   --input           <path>   Source markdown file (required)
-//   --output          <path>   Destination JSON file; omit to write to stdout
-//   --format          <name>   keepachangelog | ha-addon (required)
-//   --highlights-only          Strip added/changed/fixed/removed; keep only highlights
+//   --input           <path>    Source markdown file (required)
+//   --output          <path>    Destination JSON file; omit to write to stdout
+//   --format          <name>    keepachangelog | ha-addon (required)
+//   --highlights-only           Strip added/changed/fixed/removed; keep only highlights
+//   --line-endings    <style>   lf | crlf (default: lf)
 //
 // The keepachangelog format recognises ### Highlights, ### Added, ### Changed,
 // ### Fixed, ### Removed sections. All other ### headings are ignored.
@@ -33,10 +34,24 @@ var inputArg        = Args.SkipWhile(a => a != "--input").Skip(1).FirstOrDefault
 var outputArg       = Args.SkipWhile(a => a != "--output").Skip(1).FirstOrDefault();
 var formatArg       = Args.SkipWhile(a => a != "--format").Skip(1).FirstOrDefault();
 var highlightsOnly  = Args.Contains("--highlights-only");
+var lineEndingsArg  = Args.SkipWhile(a => a != "--line-endings").Skip(1).FirstOrDefault() ?? "lf";
 
 if (string.IsNullOrEmpty(formatArg) || string.IsNullOrEmpty(inputArg))
 {
-    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog-import.csx -- --format <keepachangelog|ha-addon> --input <path> [--output <path>]");
+    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog-import.csx -- --format <keepachangelog|ha-addon> --input <path> [--output <path>] [--line-endings <lf|crlf>]");
+    Environment.Exit(1);
+}
+
+var lineEnding = lineEndingsArg.ToLowerInvariant() switch
+{
+    "lf"   => "\n",
+    "crlf" => "\r\n",
+    _      => null
+};
+
+if (lineEnding is null)
+{
+    Console.Error.WriteLine($"Unknown --line-endings value '{lineEndingsArg}'. Use lf or crlf.");
     Environment.Exit(1);
 }
 
@@ -75,12 +90,12 @@ if (highlightsOnly)
 
 // ── Write JSON ────────────────────────────────────────────────────────────────
 
-var json = ToJson(releases);
+var json = ToJson(releases, lineEnding);
 
 if (outputArg is not null)
 {
     var outPath = Path.IsPathRooted(outputArg) ? outputArg : Path.Combine(repoRoot, outputArg);
-    File.WriteAllText(outPath, json + "\n");
+    File.WriteAllText(outPath, json + lineEnding);
     Console.WriteLine($"Written: {outPath}");
 }
 else
@@ -184,7 +199,7 @@ static List<Release> ParseHaAddon(string[] lines)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-static string ToJson(List<Release> releases)
+static string ToJson(List<Release> releases, string lineEnding)
 {
     var options = new JsonWriterOptions { Indented = true };
     var stream  = new MemoryStream();
@@ -208,7 +223,7 @@ static string ToJson(List<Release> releases)
     writer.WriteEndObject();
 
     writer.Flush();
-    return Encoding.UTF8.GetString(stream.ToArray()).ReplaceLineEndings("\n");
+    return Encoding.UTF8.GetString(stream.ToArray()).ReplaceLineEndings(lineEnding);
 }
 
 static void WriteSection(Utf8JsonWriter writer, string key, List<string> items)

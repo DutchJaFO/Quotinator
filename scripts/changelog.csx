@@ -8,7 +8,7 @@
 //   dotnet-script scripts/changelog.csx -- --format ha-addon        --output addon/CHANGELOG.md
 //
 // Options:
-//   --input              <path>    JSON source file (default: src/Quotinator.Api/changelog.json)
+//   --input              <path>    JSON source file (required)
 //   --output             <path>    Destination file path; omit to write to stdout
 //   --format             <name>    keepachangelog | ha-addon  (required)
 //   --lang               <code>    ISO 639-1 language code (default: en)
@@ -17,6 +17,8 @@
 //   --machine-translated <bool>    Default value for machineTranslated on translation items
 //                                  that do not specify the property (default: true).
 //                                  Pass false when all translations in the JSON were done by hand.
+//   --line-endings       <style>   lf | crlf (default: lf)
+//                                  Line ending style for the output file.
 
 #r "nuget: System.Text.Json, 8.0.0"
 
@@ -31,10 +33,24 @@ var formatArg            = Args.SkipWhile(a => a != "--format").Skip(1).FirstOrD
 var langArg              = Args.SkipWhile(a => a != "--lang").Skip(1).FirstOrDefault() ?? "en";
 var machineTranslatedArg = Args.SkipWhile(a => a != "--machine-translated").Skip(1).FirstOrDefault();
 var defaultMachineTranslated = machineTranslatedArg?.ToLowerInvariant() != "false";
+var lineEndingsArg       = Args.SkipWhile(a => a != "--line-endings").Skip(1).FirstOrDefault() ?? "lf";
 
 if (string.IsNullOrEmpty(formatArg) || string.IsNullOrEmpty(inputArg))
 {
-    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog.csx -- --format <keepachangelog|ha-addon> --input <path> [--output <path>] [--lang <code>] [--machine-translated <true|false>]");
+    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog.csx -- --format <keepachangelog|ha-addon> --input <path> [--output <path>] [--lang <code>] [--machine-translated <true|false>] [--line-endings <lf|crlf>]");
+    Environment.Exit(1);
+}
+
+var lineEnding = lineEndingsArg.ToLowerInvariant() switch
+{
+    "lf"   => "\n",
+    "crlf" => "\r\n",
+    _      => null
+};
+
+if (lineEnding is null)
+{
+    Console.Error.WriteLine($"Unknown --line-endings value '{lineEndingsArg}'. Use lf or crlf.");
     Environment.Exit(1);
 }
 
