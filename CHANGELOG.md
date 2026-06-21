@@ -1,4 +1,4 @@
-### *GENERATED FILE [2026-06-21 14:17 UTC] — do not edit by hand.*
+### *GENERATED FILE [2026-06-21 16:54 UTC] — do not edit by hand.*
 
 *Edit: `src/Quotinator.Api/resources/changelog.json`*
 
@@ -15,20 +15,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Highlights
-- Release notes on the About page now come from a structured data file, enabling richer content and future language translations.
+- Changelog is now driven by a single JSON source — both markdown files are generated from it, and the Blazor changelog page reads it directly with no markdown parsing.
+- Unreleased changes are now shown at the top of the changelog page.
+- Each release now shows which GitHub issues and CVEs it addresses in a collapsible section.
 
 ### Added
-- `src/Quotinator.Api/changelog.json` — single source of truth for all changelog content; replaces hand-edited markdown
-- `scripts/changelog.csx` — generates `CHANGELOG.md` and `addon/CHANGELOG.md` from `changelog.json`; supports `keepachangelog` and `ha-addon` formats, `[Unreleased]` sections, audience-specific highlights, and optional language output
-- `scripts/changelog-import.csx` — imports an existing markdown changelog into JSON format; auto-detects CVE IDs from section text; supports `[Unreleased]` blocks
-- `schemas/changelog.schema.json` — JSON Schema validating `changelog.json` structure including `unreleased`, `cves`, `issues`, `audienceHighlights`, and `translations`
-- `GeneratedFileHeader.Build()` in `Quotinator.Changelog.Formatting` — builds the generated-file notice header embedded in both markdown outputs
-- Structured `cves` and `issues` arrays on release entries for machine-readable cross-referencing
+- `Quotinator.Changelog` project: `IChangelogService` / `ChangelogService` — deserialises `changelog.json`; no markdown parser
+- `ChangelogEntry` Blazor control: renders a single release entry (highlights or technical sections, GitHub release link, Issues & CVEs block)
+- `ChangelogUnreleasedEntry` Blazor control: renders the unreleased block — always expanded, no version or date, no GitHub release link
+- `ChangelogRoot`, `ChangelogUnreleased`, `ChangelogRelease`, `ChangelogReleaseTranslation`, `ChangelogTranslationItem`, `ChangelogSectionHeaders` models shaped directly by the JSON schema; `ChangelogUnreleased` is the base, `ChangelogRelease` inherits and adds `Version` and `Date`
+- `ChangelogSchemaTests`: validates `changelog.json` structure (required fields, no null entries, CVE ID format)
+- `schemas/changelog.schema.json`: machine-readable JSON schema for `changelog.json`
+- `scripts/changelog.csx`: generates `keepachangelog` and `ha-addon` markdown from `changelog.json`; supports `--lang`, `--audience`, `--fallback`, `--fallback-message`
+- `scripts/changelog-import.csx`: imports an existing `keepachangelog` or `ha-addon` markdown file into `changelog.json` format
+- `scripts/changelog-upgrade.csx`: one-time migration tool used to assemble `changelog.json` from the two reference markdown files
 
 ### Changed
-- Blazor About page reads from `changelog.json` directly — markdown parsing removed
-- `CHANGELOG.md` and `addon/CHANGELOG.md` are now generated files; never edit by hand
-- Pre-push checklist updated: add entries to the `unreleased` section as work lands; promote to a release entry at tag time
+- `ChangelogService` now deserialises `changelog.json` directly into public models; private DTO mapping layer removed
+- `ChangelogSection` model removed; Blazor components render the four change lists (`Added`, `Changed`, `Fixed`, `Removed`) directly
+- Single-highlight releases now render as a paragraph instead of a bullet list
+- `CHANGELOG.md` and `addon/CHANGELOG.md` are now generated files — edit `changelog.json`, then run `scripts/changelog.csx` to regenerate
+
+### Fixed
+- `scripts/changelog-upgrade.csx`: versions present in root `CHANGELOG.md` but absent from `addon/CHANGELOG.md` now correctly use root highlights as generic highlights; v1.0.0 and v1.0.1 were affected
+- `scripts/changelog.csx --fallback false`: standard highlights no longer leaked to absent-audience entries
+- `changelog.json` v1.0.0 and v1.0.1 were missing `highlights` — both now show user-facing summaries instead of technical section badges
 
 ---
 
@@ -482,6 +493,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [1.0.1] - 2026-06-13
 
+### Highlights
+- Bug fix — no user-facing changes
+
 ### Fixed
 - Docker image build now succeeds: `data/quotes.json` was excluded from the build context via `.dockerignore`, causing `dotnet publish` to fail
 - Updated all GitHub Actions to Node.js 24-compatible major versions; `actions/checkout@v4` still produces a Node 20 deprecation warning (upstream issue, tracked in session notes)
@@ -489,6 +503,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ---
 
 ## [1.0.0] - 2026-06-13
+
+### Highlights
+- Initial release: 780 curated quotes from films, TV, books, and famous people
+- REST API with random, list, search, and detail endpoints; multi-language support; rate limiting
+- OpenAPI documentation at /scalar/v1
 
 ### Added
 - REST read endpoints: `GET /api/v1/quotes/random`, `/api/v1/quotes`, `/api/v1/quotes/{id}`, `/api/v1/quotes/search`

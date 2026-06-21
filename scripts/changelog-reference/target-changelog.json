@@ -597,11 +597,9 @@
     {
       "version": "1.0.1",
       "date": "2026-06-13",
-      "audienceHighlights": {
-        "ha-addon": [
-          "Bug fix \u2014 no user-facing changes"
-        ]
-      },
+      "highlights": [
+        "Bug fix \u2014 no user-facing changes"
+      ],
       "fixed": [
         "Docker image build now succeeds: \u0060data/quotes.json\u0060 was excluded from the build context via \u0060.dockerignore\u0060, causing \u0060dotnet publish\u0060 to fail",
         "Updated all GitHub Actions to Node.js 24-compatible major versions; \u0060actions/checkout@v4\u0060 still produces a Node 20 deprecation warning (upstream issue, tracked in session notes)"
@@ -610,13 +608,11 @@
     {
       "version": "1.0.0",
       "date": "2026-06-13",
-      "audienceHighlights": {
-        "ha-addon": [
-          "Initial release: 780 curated quotes from films, TV, books, and famous people",
-          "REST API with random, list, search, and detail endpoints; multi-language support; rate limiting",
-          "OpenAPI documentation at /scalar/v1"
-        ]
-      },
+      "highlights": [
+        "Initial release: 780 curated quotes from films, TV, books, and famous people",
+        "REST API with random, list, search, and detail endpoints; multi-language support; rate limiting",
+        "OpenAPI documentation at /scalar/v1"
+      ],
       "added": [
         "REST read endpoints: \u0060GET /api/v1/quotes/random\u0060, \u0060/api/v1/quotes\u0060, \u0060/api/v1/quotes/{id}\u0060, \u0060/api/v1/quotes/search\u0060",
         "Health check endpoint: \u0060GET /api/v1/health\u0060",
