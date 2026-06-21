@@ -1,4 +1,8 @@
-# GENERATED FILE — do not edit by hand. Edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx
+### *GENERATED FILE [2026-06-21 12:42 UTC] — do not edit by hand.*
+
+*Edit: `src/Quotinator.Api/changelog.json`*
+
+*To regenerate: `dotnet-script changelog.csx -- --format keepachangelog --input src/Quotinator.Api/changelog.json --output CHANGELOG.md`*
 
 # Changelog
 

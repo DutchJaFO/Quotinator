@@ -74,15 +74,26 @@ var releases       = root.GetProperty("releases").EnumerateArray().ToList();
 var sourceLang     = root.TryGetProperty("sourceLanguage", out var sl) ? sl.GetString() ?? "en" : "en";
 var sectionHeaders = ParseSectionHeaders(root);
 
+// ── Build regenerate command ──────────────────────────────────────────────────
+
+var cmdBuilder = new StringBuilder("dotnet-script changelog.csx --");
+cmdBuilder.Append($" --format {formatArg}");
+cmdBuilder.Append($" --input {inputArg}");
+if (outputArg is not null)              cmdBuilder.Append($" --output {outputArg}");
+if (langArg != "en")                    cmdBuilder.Append($" --lang {langArg}");
+if (!defaultMachineTranslated)          cmdBuilder.Append(" --machine-translated false");
+if (lineEndingsArg != "lf")             cmdBuilder.Append($" --line-endings {lineEndingsArg}");
+var regenerateCmd = cmdBuilder.ToString();
+
 // ── Generate ──────────────────────────────────────────────────────────────────
 
 var sb     = new StringBuilder();
 var format = formatArg.ToLowerInvariant();
 
 if (format == "keepachangelog")
-    GenerateKeepAChangelog(sb, releases, langArg, sourceLang, sectionHeaders);
+    GenerateKeepAChangelog(sb, releases, langArg, sourceLang, sectionHeaders, inputArg!, regenerateCmd);
 else if (format == "ha-addon")
-    GenerateHaAddon(sb, releases, langArg, sourceLang);
+    GenerateHaAddon(sb, releases, langArg, sourceLang, inputArg!, regenerateCmd);
 else
 {
     Console.Error.WriteLine($"Unknown format: {formatArg}. Use keepachangelog or ha-addon.");
@@ -106,9 +117,10 @@ else
 
 // ── Format implementations ────────────────────────────────────────────────────
 
-static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders)
+static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders, string inputPath, string regenerateCmd)
 {
-    sb.AppendLine("# GENERATED FILE — do not edit by hand. Edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx");
+    // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
+    sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd));
     sb.AppendLine();
     sb.AppendLine("# Changelog");
     sb.AppendLine();
@@ -167,9 +179,10 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
     }
 }
 
-static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string lang, string sourceLang)
+static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string lang, string sourceLang, string inputPath, string regenerateCmd)
 {
-    sb.AppendLine("# GENERATED FILE — do not edit by hand. Edit src/Quotinator.Api/changelog.json and run scripts/changelog.csx");
+    // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
+    sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd));
     sb.AppendLine();
     sb.AppendLine("# Changelog");
     sb.AppendLine();
@@ -307,4 +320,16 @@ static Dictionary<string, Dictionary<string, string>>? ParseSectionHeaders(JsonE
         result[langEntry.Name] = langDict;
     }
     return result;
+}
+
+// Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
+static string BuildGeneratedHeader(string inputPath, string regenerateCmd)
+{
+    var sb = new StringBuilder();
+    sb.AppendLine($"### *GENERATED FILE [{DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC] — do not edit by hand.*");
+    sb.AppendLine();
+    sb.AppendLine($"*Edit: `{inputPath}`*");
+    sb.AppendLine();
+    sb.Append($"*To regenerate: `{regenerateCmd}`*");
+    return sb.ToString();
 }
