@@ -126,6 +126,7 @@
     <File Path="schemas/changelog.schema.json" />
   </Folder>
   <Folder Name="/scripts/">
+    <File Path="scripts/README.md" />
     <File Path="scripts/seed.csx" />
     <File Path="scripts/changelog.csx" />
     <File Path="scripts/changelog-import.csx" />
