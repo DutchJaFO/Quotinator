@@ -407,6 +407,14 @@ See [`docs/testing-policy.md`](docs/testing-policy.md).
 
 ---
 
+## Logging Standards
+
+See [`docs/logging.md`](docs/logging.md).
+
+Boyscout rule: when you edit any file that emits log lines without the `[Subsystem - Phase]` prefix, add the prefix in the same commit. Do not defer it to a cleanup PR.
+
+---
+
 ## What NOT to do
 
 - Do not use Entity Framework in v1 — flat-file JSON only

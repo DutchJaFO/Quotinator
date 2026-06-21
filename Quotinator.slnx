@@ -62,6 +62,7 @@
     <File Path="docs/openapi.md" />
     <File Path="docs/running-locally.md" />
     <File Path="docs/sql-safety.md" />
+    <File Path="docs/logging.md" />
     <File Path="docs/testing-policy.md" />
     <File Path="docs/vocabulary.md" />
   </Folder>
