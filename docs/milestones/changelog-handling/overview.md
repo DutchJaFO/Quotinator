@@ -2,7 +2,7 @@
 
 **GitHub milestone:** #15  
 **Branch:** `feature/changelog-handling`  
-**Status:** Not started
+**Status:** In progress
 
 ---
 
@@ -25,7 +25,7 @@ Replace hand-edited markdown changelogs with a JSON-driven system. A single `src
 
 | # | Issue | Title | Status |
 |---|-------|-------|--------|
-| 1 | #80 | Replace hand-edited changelogs with JSON-driven changelog system | Not started |
+| 1 | #80 | Replace hand-edited changelogs with JSON-driven changelog system | Complete — pending issue close |
 | 2 | #82 | Changelog: translated highlights for frontend display | Not started |
 
 ---
