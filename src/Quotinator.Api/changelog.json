@@ -103,6 +103,7 @@
     {
       "version": "1.4.1",
       "date": "2026-06-20",
+      "issues": [45],
       "highlights": [
         "Fixed: the changelog page now shows plain-English release summaries for all versions instead of technical details.",
         "Internal improvements in preparation for upcoming data import features."
@@ -333,6 +334,7 @@
     {
       "version": "1.0.12",
       "date": "2026-06-15",
+      "issues": [7],
       "highlights": [
         "Quotes are now stored in a SQLite database (\u0060quotes.db\u0060) on the persistent volume \u2014 no action required; the database is created and seeded automatically on first run",
         "Startup log now shows database status: schema version, seeding progress, and a final count of quotes, sources, characters, and people",
@@ -438,6 +440,7 @@
     {
       "version": "1.0.8",
       "date": "2026-06-14",
+      "issues": [8],
       "highlights": [
         "Fixed: links on the home page (Scalar UI, OpenAPI spec, health check) did not resolve correctly through the Home Assistant ingress \u2014 they now use relative paths"
       ],
