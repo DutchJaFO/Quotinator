@@ -1,0 +1,644 @@
+{
+  "releases": [
+    {
+      "version": "1.5.1",
+      "date": "2026-06-20",
+      "highlights": [
+        "Fixed: startup banner was collapsed to a single line in the supervisor log.",
+        "Fixed: admin API key and other options were not being read from the add-on config \u2014 the app now reads \u0060/data/options.json\u0060 directly, which is the source the supervisor writes."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Internal improvements \u2014 no user-facing changes."
+        ]
+      },
+      "added": [
+        "Diagnostic log lines at startup showing which \u0060Quotinator__*\u0060 environment variables are present (API key value is never logged \u2014 only whether it is set)."
+      ],
+      "fixed": [
+        "Startup banner was collapsed to a single line in the HA supervisor log \u2014 restored \u0060Console.WriteLine\u0060 so newlines are preserved.",
+        "Admin API key and other add-on options were not being read from \u0060/data/options.json\u0060; the \u0060env_vars\u0060 template mechanism is unreliable for optional options. The app now reads \u0060/data/options.json\u0060 directly at startup."
+      ]
+    },
+    {
+      "version": "1.5.0",
+      "date": "2026-06-20",
+      "highlights": [
+        "Admin endpoints (reseed, reset) now require an API key via the \u0060X-Api-Key\u0060 request header \u2014 set \u0060admin_api_key\u0060 in the add-on options.",
+        "The Scalar API reference shows an Authentication panel \u2014 enter your key once and it is sent automatically on all admin requests.",
+        "The startup log now shows whether an admin API key is configured (\u0060set\u0060 / \u0060not set\u0060).",
+        "The REST API page in the UI shows the admin endpoints when a key is active.",
+        "Fixed: admin endpoint documentation incorrectly stated \u0060Authorization: Bearer\u0060 \u2014 the correct header is \u0060X-Api-Key\u0060.",
+        "Fixed: \u0060appsettings.local.json\u0060 was included in the Docker image, allowing a local developer override to silently take priority over the \u0060admin_api_key\u0060 env var set by the HA supervisor."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Admin endpoints (reseed, reset) now require an API key supplied via the \u0060X-Api-Key\u0060 request header.",
+          "The Scalar API reference now shows an Authentication panel at the top \u2014 enter your key once and it is sent automatically on all admin requests.",
+          "The startup log now shows whether an admin API key is configured.",
+          "The REST API page in the UI shows the admin endpoints when a key is active."
+        ]
+      },
+      "added": [
+        "\u0060X-Api-Key\u0060 OpenAPI security scheme: admin endpoints are tagged in the spec so Scalar shows an Authentication panel pre-filled with the header name.",
+        "Admin API key status (\u0060set\u0060 / \u0060not set\u0060) added to the startup banner.",
+        "\u0060appsettings.local.template.json\u0060 \u2014 committed template for local development overrides (copy to \u0060appsettings.local.json\u0060, gitignored).",
+        "User Secrets support enabled on \u0060Quotinator.Api\u0060 (\u0060UserSecretsId: quotinator-api-dev\u0060) \u2014 use VS \u0022Manage User Secrets\u0022 as an alternative to the local settings file.",
+        "\u0060docs/running-locally.md\u0060 documents both local config approaches and how to test admin endpoints in Scalar.",
+        "Startup banner reformatted: each config setting on its own line for easier reading in logs."
+      ],
+      "fixed": [
+        "Admin endpoints were documented as requiring \u0060Authorization: Bearer \u003Ckey\u003E\u0060 but the correct header is \u0060X-Api-Key: \u003Ckey\u003E\u0060.",
+        "The startup banner was not visible in Visual Studio \u2014 it now goes through the logger so it appears in the Output window alongside other log messages.",
+        "\u0060appsettings.local.json\u0060 was being included in the Docker image via \u0060COPY . .\u0060, allowing a local developer override to silently win over environment variables (including the HA \u0060admin_api_key\u0060 env var). Added to \u0060.dockerignore\u0060.",
+        "Intermittent test failure under parallel execution: three test classes each called \u0060SqlMapper.AddTypeHandler\u0060 in \u0060[ClassInitialize]\u0060, causing a race on the global static handler dictionary. Registrations moved to \u0060[AssemblyInitialize]\u0060 so they run once before any tests start."
+      ]
+    },
+    {
+      "version": "1.4.3",
+      "date": "2026-06-20",
+      "highlights": [
+        "Internal improvements in preparation for upcoming data import features."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Internal improvements in preparation for upcoming data import features."
+        ]
+      },
+      "added": [
+        "\u0060ImportBatches\u0060 table tracks the origin of every seeded or imported record (\u0060Id\u0060, \u0060Name\u0060, \u0060Type\u0060, \u0060Url\u0060, \u0060ImportedAt\u0060, \u0060ImportedBy\u0060, \u0060RecordCount\u0060)",
+        "Nullable \u0060ImportBatchId\u0060 foreign key added to \u0060Quotes\u0060, \u0060Sources\u0060, \u0060Characters\u0060, and \u0060People\u0060 \u2014 links each record to the import batch that introduced it",
+        "\u0060IImportBatchRepository\u0060 / \u0060SqliteImportBatchRepository\u0060 in \u0060Quotinator.Core\u0060 with \u0060GetAllAsync\u0060, \u0060GetByTypeAsync\u0060, \u0060UpdateRecordCountAsync\u0060",
+        "Seeder creates one \u0060ImportBatch\u0060 row per source file and writes \u0060ImportBatchId\u0060 on all inserts for that file",
+        "Migration003: upgrades existing databases with the new table and columns; inserts placeholder \u0060Seed\u0060-type rows for the two bundled external datasets (existing records keep \u0060NULL\u0060 ImportBatchId \u2014 provenance not captured retroactively)"
+      ]
+    },
+    {
+      "version": "1.4.2",
+      "date": "2026-06-20",
+      "highlights": [
+        "Fixed: the Docker image was incorrectly reporting version 1.0.0 \u2014 the actual version is now shown correctly.",
+        "The REST API page now includes a direct link to the version endpoint.",
+        "Internal improvements \u2014 no other user-facing changes."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Fixed: the Docker image was incorrectly reporting version 1.0.0 \u2014 the actual version is now shown correctly.",
+          "The REST API page now includes a direct link to the version endpoint.",
+          "Internal improvements \u2014 no other user-facing changes."
+        ]
+      },
+      "added": [
+        "Version endpoint row (\u0060api/v1/version\u0060) on the REST API page; translated in English, Dutch, and German"
+      ],
+      "changed": [
+        "\u0060Quotinator.Constants\u0060 source files moved from project root into namespace-matched subfolders: \u0060Api/\u0060 (\u0060ApiMessages\u0060, \u0060ApiTags\u0060), \u0060Routes/\u0060 (\u0060ApiRoutes\u0060, \u0060RouteExtensions\u0060), \u0060RateLimiting/\u0060 (\u0060RateLimitPolicies\u0060)",
+        "\u0060Quotinator.Data.Data\u0060 namespace renamed to \u0060Quotinator.Data.Connections\u0060"
+      ],
+      "fixed": [
+        "Docker image embedded \u00601.0.0\u0060 as the API version \u2014 \u0060Directory.Build.props\u0060 was not included in the build context; now copied before the restore layer so the correct version is embedded at publish time",
+        "Docker build layer switched from per-project \u0060COPY\u0060 statements to \u0060COPY . .\u0060 to prevent files being silently omitted when new projects or root SDK files are added"
+      ]
+    },
+    {
+      "version": "1.4.1",
+      "date": "2026-06-20",
+      "highlights": [
+        "Fixed: the changelog page now shows plain-English release summaries for all versions instead of technical details.",
+        "Internal improvements in preparation for upcoming data import features."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Fixed: the changelog page now shows plain-English release summaries for all versions instead of technical details.",
+          "Internal improvements in preparation for upcoming data import features."
+        ]
+      },
+      "added": [
+        "\u0060IUnitOfWork\u0060 and \u0060SqliteUnitOfWork\u0060 \u2014 transaction and shared-connection support across repository operations; required by the upcoming import endpoint (#45) for atomic batch inserts",
+        "Repository methods (\u0060IRepository\u003CT\u003E\u0060, \u0060IRestorableRepository\u003CT\u003E\u0060) accept an optional \u0060IUnitOfWork?\u0060 parameter; all existing callers require no changes"
+      ],
+      "fixed": [
+        "\u0060### Highlights\u0060 sections for 1.4.0 and 1.3.0 were not displaying in the Blazor changelog page \u2014 1.4.0 used prose instead of a bullet list (silently ignored by the parser); 1.3.0 contained technical terms. Both rewritten in plain user-facing English."
+      ]
+    },
+    {
+      "version": "1.4.0",
+      "date": "2026-06-20",
+      "highlights": [
+        "Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected."
+        ]
+      },
+      "added": [
+        "\u0060seed.csx --output-dir DIR\u0060 flag redirects seed output to a custom directory, making it possible to test seeding without overwriting \u0060data/sources/\u0060",
+        "Generic repository infrastructure: \u0060IRepository\u003CT\u003E\u0060 and \u0060SqliteRepository\u003CT\u003E\u0060 (base CRUD), \u0060IRestorableRepository\u003CT\u003E\u0060 and \u0060SqliteRestorableRepository\u003CT\u003E\u0060 (opt-in soft-delete management \u2014 get deleted, restore, hard-delete, purge)",
+        "\u0060GuidHandler\u0060 Dapper type handler \u2014 forces \u0060Guid\u0060 storage as uppercase TEXT to match Microsoft.Data.Sqlite\u0027s default, fixing a case-sensitivity mismatch that silently dropped results from parameterised queries",
+        "ADR 002 documenting the RecordBase-everywhere decision \u2014 all tables carry audit columns; junction tables use a synthetic GUID primary key with a UNIQUE constraint on the natural key pair",
+        "\u0060README.md\u0060 in each reserved-but-empty folder (\u0060docs/architecture-decisions/\u0060, \u0060docs/milestones/\u0060, \u0060docs/milestones/data-import-sources/\u0060, \u0060docs/workflow/\u0060, \u0060scripts/cache/\u0060, \u0060src/Quotinator.Core/Configuration/\u0060) explaining the folder\u0027s purpose and expected contents",
+        "\u0060Directory.Build.props\u0060 suppressing NU1903 (CVE-2025-6965) globally with a rationale comment",
+        "\u0060Quotinator.Core.Data.Sql\u0060 static class centralising every SQL statement as named constants or factory methods; all inline SQL removed from \u0060DatabaseInitializer\u0060 and \u0060SqliteQuoteService\u0060",
+        "\u0060SqlQueryGuardTests\u0060 \u2014 reflection-based test covering all \u0060Sql.*\u0060 constants and all dynamic query factory methods with a full filter matrix; replaces the fragile file-scan approach",
+        "\u0060RepositorySql\u0060 class in \u0060Quotinator.Data.Repositories\u0060 \u2014 centralises the six \u0060SqliteRepository\u0060/\u0060SqliteRestorableRepository\u0060 template queries (previously inline); \u0060SqlAggregateGuard.HasAggregateFunction\u0060 public helper exposes the aggregate-detection regex for use in tests",
+        "\u0060AggregateQueries_MatchDocumentedInventory\u0060 test \u2014 documents and locks the exact set of SQL constants that contain aggregate functions; fails when new aggregate queries are added without review",
+        "\u0060AllSqlStringLiterals_AreInCentralisedFiles\u0060 scan test \u2014 enforces that no C# source file outside \u0060Sql.cs\u0060, \u0060RepositorySql.cs\u0060, and \u0060DatabaseInitializer.cs\u0060 contains DML string literals; closes the CVE-2025-6965 DoD item 1 gate",
+        "String centralisation policy documented in \u0060CLAUDE.md\u0060 \u2014 no inline strings for SQL, UI, or error messages; audit grep commands and test gates included"
+      ]
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-06-17",
+      "highlights": [
+        "Quote data now loaded from multiple source files in \u0060data/sources/\u0060 \u2014 one file per bundled dataset, plus optional user imports in the \u0060imports/\u0060 subfolder of the data directory",
+        "New \u0060GET /api/v1/admin/database/seed/preview\u0060 endpoint shows what would be imported without writing to the database (requires \u0060admin_api_key\u0060)",
+        "\u0060Quotinator__DataDir\u0060 env var replaces \u0060Quotinator__DataPath\u0060 \u2014 set to the data directory, not a file path"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Quotes can now be loaded from multiple data sources \u2014 bundled datasets and your own custom files placed in the imports folder.",
+          "New preview endpoint lets you see what would be imported before committing any changes.",
+          "Configuration: the data directory is now set by pointing to a folder, not a file path \u2014 update \u0060Quotinator__DataDir\u0060 if you have a custom setup."
+        ]
+      },
+      "added": [
+        "\u0060data/sources/\u0060 folder with one JSON file per dataset and a \u0060manifest.json\u0060 controlling import order and duplicate-resolution policy",
+        "\u0060data/sources/quotinator-curated.json\u0060 \u2014 manually curated and verified quotes (Airplane! to start)",
+        "Optional user imports: place \u0060.json\u0060 files in \u0060{dataDir}/imports/\u0060 to seed additional quotes on startup",
+        "Duplicate-resolution policy per batch: \u0060skip\u0060 (default) or \u0060overwrite\u0060; configurable in \u0060manifest.json\u0060 or via \u0060Quotinator:DuplicateResolution:*\u0060 env vars",
+        "\u0060GET /api/v1/admin/database/seed/preview\u0060 \u2014 dry-run scan returning file counts, quote counts, and cross-file duplicates (requires \u0060AdminApiKey\u0060)",
+        "Reseed and reset responses now include a \u0060duplicates\u0060 count",
+        "Six JSON schemas in \u0060schemas/\u0060 covering all source file formats and the manifest"
+      ],
+      "changed": [
+        "\u0060Quotinator__DataDir\u0060 env var replaces \u0060Quotinator__DataPath\u0060 \u2014 value is the data directory, not a file path"
+      ],
+      "fixed": [
+        "Seeder FK constraint failure on first startup caused by a Guid case mismatch between Dapper.Contrib (UPPERCASE) and raw SQL parameters (lowercase); SQLite text comparison is case-sensitive"
+      ]
+    },
+    {
+      "version": "1.2.2",
+      "date": "2026-06-16",
+      "highlights": [
+        "Fixed: the GitHub changelog link in the add-on UI opened inside the HA frame and was blocked \u2014 it now opens in a new tab correctly"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Fixed: the GitHub changelog link in the UI opened inside the HA frame and was blocked by GitHub\u0027s security policy \u2014 it now opens in a new tab correctly"
+        ]
+      },
+      "fixed": [
+        "GitHub release link on the About/Changelog page now opens in a new tab (\u0060target=\u0022_blank\u0022\u0060) so it escapes the HA ingress frame; without this, GitHub\u0027s \u0060X-Frame-Options\u0060 policy caused a browser error instead of the page loading"
+      ]
+    },
+    {
+      "version": "1.2.1",
+      "date": "2026-06-16",
+      "highlights": [
+        "Database file renamed from \u0060quotes.db\u0060 to \u0060quotinatordata.db\u0060 \u2014 the old file is renamed automatically on first startup after upgrade, no data loss",
+        "A backup of the database is created before any schema migration and stored in the \u0060backups/\u0060 subfolder of the data directory; old backups are safe to delete",
+        "New optional \u0060backup_path\u0060 config option to store backups in a custom location",
+        "DataProtection keys folder renamed from \u0060.keys\u0060 to \u0060keys\u0060",
+        "Container log output now uses single-line format \u2014 easier to read in the HA log panel",
+        "Startup banner shows all data paths at a glance"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "The database file is now named \u0060quotinatordata.db\u0060 \u2014 on first startup after upgrading, the old \u0060quotes.db\u0060 is renamed automatically with no data loss",
+          "A backup of the database is created automatically before any schema migration",
+          "Container log output is now single-line and easier to read; the startup banner shows all data paths at a glance"
+        ]
+      },
+      "added": [
+        "Pre-migration database backup using the SQLite backup API \u2014 written to \u0060{dataDir}/backups/quotinatordata_v{N}_{timestamp}Z.db\u0060 before any schema version bump; old backups are safe to delete",
+        "Configurable backup directory via \u0060Quotinator:BackupPath\u0060 env var (defaults to \u0060{dataDir}/backups\u0060)",
+        "HA add-on: optional \u0060backup_path\u0060 config option with translations in English, Dutch, and German",
+        "\u0060DataPaths\u0060 constants class (\u0060Quotinator.Core.Data\u0060) for all file and folder names in the data directory \u2014 named and documented so future changes stay in one place",
+        "Data directory structure documented in \u0060README.md\u0060 and \u0060addon/DOCS.md\u0060 with safe-to-delete guidance for each folder"
+      ],
+      "changed": [
+        "Database file renamed from \u0060quotes.db\u0060 to \u0060quotinatordata.db\u0060; the legacy file (including WAL and SHM journal files) is renamed automatically on first startup after upgrade",
+        "DataProtection keys folder renamed from \u0060.keys\u0060 to \u0060keys\u0060 \u2014 visible name is easier to discover and document",
+        "Console log formatter switched from \u0060simple\u0060 (two lines per entry) to \u0060systemd\u0060 (single line per entry) for cleaner container log output",
+        "Startup banner rewritten with full readable labels (\u0060Database:\u0060, \u0060Backups:\u0060, \u0060DataProtection:\u0060, \u0060Config:\u0060) aligned to a single column; no abbreviations"
+      ]
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-06-16",
+      "highlights": [
+        "Admin endpoints (reseed, reset) now require \u0060Authorization: Bearer \u003Ckey\u003E\u0060 \u2014 they return 401 by default until \u0060admin_api_key\u0060 is set in the add-on configuration",
+        "New \u0060admin_api_key\u0060 option in the add-on configuration panel"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Admin endpoints (reseed, reset) are now protected by an API key \u2014 they return 401 by default and only accept requests with the correct \u0060Authorization: Bearer \u003Ckey\u003E\u0060 header"
+        ]
+      },
+      "added": [
+        "\u0060AdminApiKeyFilter\u0060 endpoint filter guards \u0060POST /api/v1/admin/database/reseed\u0060 and \u0060POST /api/v1/admin/database/reset\u0060 with a static API key",
+        "\u0060Quotinator:AdminApiKey\u0060 config key (env var \u0060Quotinator__AdminApiKey\u0060) \u2014 must be set explicitly to enable the endpoints; no bundled default",
+        "Key comparison uses \u0060CryptographicOperations.FixedTimeEquals\u0060 to prevent timing attacks",
+        "HA add-on: optional \u0060admin_api_key\u0060 config option with translations in English, Dutch, and German"
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-06-15",
+      "highlights": [
+        "Filter quotes by multiple genres or types at once (e.g. sci-fi comedies) using repeatable query parameters on \u0060/random\u0060, \u0060/search\u0060, and the paginated list",
+        "Sci-fi and non-fiction genres are now correctly matched in all endpoints \u2014 they were silently missing from results before this fix",
+        "\u0060/random\u0060 now always returns a response envelope with status, items, total matching count, and an optional message; the shape of the response has changed",
+        "New admin endpoints: \u0060POST /api/v1/admin/database/reseed\u0060 and \u0060POST /api/v1/admin/database/reset\u0060 for database maintenance without restarting the container"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "You can now filter quotes by more than one genre or type at once \u2014 for example, get only sci-fi comedies or drama films",
+          "Sci-fi and non-fiction quotes were missing from search and random results; both genres now work correctly",
+          "Two new admin endpoints let you reseed or fully reset the quote database without restarting the container"
+        ]
+      },
+      "added": [
+        "\u0060/random\u0060 now accepts multi-value \u0060type\u0060 and \u0060genre\u0060 filters (repeatable query params, OR logic within each, AND between them), plus \u0060character\u0060, \u0060author\u0060, and \u0060source\u0060 text-contains filters (AND logic with other params)",
+        "\u0060/search\u0060 and \u0060/\u0060 (paginated list) now accept multi-value \u0060type\u0060 and \u0060genre\u0060 filters with OR logic",
+        "\u0060FilteredQuoteResult\u003CT\u003E\u0060 response envelope on \u0060/random\u0060 \u2014 always returned, includes \u0060status\u0060 (enum), \u0060items\u0060, \u0060totalMatching\u0060 (pool size before random selection), and \u0060message\u0060 (non-null for non-Ok statuses)",
+        "\u0060FilteredResultStatus\u0060 enum: \u0060Ok\u0060, \u0060NoResults\u0060, \u0060InvalidType\u0060, \u0060InvalidGenre\u0060, \u0060InputTooLong\u0060, \u0060InvalidInput\u0060",
+        "\u0060ValidGenres\u0060 set added to \u0060InputValidation\u0060; \u0060IsSuspiciousInput\u0060 regex detects common SQL injection patterns and surfaces them as \u0060InvalidInput\u0060 status (parameterised queries already prevent actual injection)",
+        "\u0060ValidGenres\u0060 and \u0060IsSuspiciousInput\u0060 tests added to \u0060InputValidationTests\u0060",
+        "\u0060POST /api/v1/admin/database/reseed\u0060 \u2014 clears all data and reimports from \u0060quotes.json\u0060; schema migration history is preserved",
+        "\u0060POST /api/v1/admin/database/reset\u0060 \u2014 clears data and schema version history, reapplies all migrations, then reimports from \u0060quotes.json\u0060; equivalent to a fresh database",
+        "\u0060GenreApiToDb\u0060 contract tests in \u0060InputValidationTests\u0060: every valid genre has a mapping, every mapped value is a valid enum name, hyphenated genres (\u0060sci-fi\u0060, \u0060non-fiction\u0060) map correctly"
+      ],
+      "changed": [
+        "**Breaking:** \u0060/random\u0060 response shape changed from a single quote object or array to the \u0060FilteredQuoteResult\u0060 envelope in all cases",
+        "Genre normalisation in \u0060SqliteQuoteService\u0060 now correctly maps \u0060sci-fi\u0060 \u2192 \u0060SciFi\u0060 and \u0060non-fiction\u0060 \u2192 \u0060NonFiction\u0060 for DB queries, and reverse-maps on read (previously hyphenated genres were not matched correctly)",
+        "Unknown \u0060type\u0060/\u0060genre\u0060 values on \u0060/random\u0060 now return a 200 \u0060InvalidType\u0060/\u0060InvalidGenre\u0060 envelope instead of 400; on \u0060/search\u0060 and \u0060/\u0060 they silently match nothing"
+      ],
+      "fixed": [
+        "\u0060SqliteQuoteService.ToResponse\u0060 was serialising \u0060Genre.SciFi\u0060 as \u0060\u0022scifi\u0022\u0060 and \u0060Genre.NonFiction\u0060 as \u0060\u0022nonfiction\u0022\u0060; both now return the correct API tag strings (\u0060\u0022sci-fi\u0022\u0060, \u0060\u0022non-fiction\u0022\u0060)",
+        "\u0060DatabaseInitializer\u0060 silently dropped \u0060sci-fi\u0060 and \u0060non-fiction\u0060 genres during seeding because \u0060Enum.TryParse(\u0022sci-fi\u0022)\u0060 fails on hyphenated strings \u2014 \u0060TryNormaliseGenre\u0060 now maps through \u0060InputValidation.GenreApiToDb\u0060 before parsing; \u0060Migration002\u0060 truncates the affected \u0060QuoteGenres\u0060 rows so existing databases are automatically re-seeded on next startup; \u0060GenreApiToDb\u0060 is moved from private in \u0060SqliteQuoteService\u0060 to public in \u0060InputValidation\u0060 so both consumers share one definition"
+      ]
+    },
+    {
+      "version": "1.0.15",
+      "date": "2026-06-15",
+      "highlights": [
+        "Fixed: antiforgery token errors after container restart \u2014 DataProtection keys are now reliably written to the persistent volume (\u0060/data/.keys/\u0060) even when the supervisor serves a cached config that omits \u0060Quotinator__DataPath\u0060",
+        "Fixed: the OpenAPI UI link in the sidebar opened in the system browser when tapped in the HA companion app, losing the session and causing a 404; it now navigates within the companion app\u0027s webview"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Fixed a session issue in Home Assistant where the interface lost its state after the container restarted"
+        ]
+      },
+      "fixed": [
+        "DataProtection keys written to ephemeral container filesystem when \u0060Quotinator__DataPath\u0060 env var is absent in HA (e.g. due to supervisor config cache) \u2014 \u0060Program.cs\u0060 now falls back to \u0060/data\u0060 (the HA persistent volume mount point) before the \u0060/app/data\u0060 default, so keys are always on a persistent volume and antiforgery tokens survive container restarts",
+        "OpenAPI UI and spec links in \u0060Home.razor\u0060 had \u0060target=\u0022_blank\u0022\u0060, which the HA companion app forwarded to the system browser (no HA session) \u2014 removing \u0060target=\u0022_blank\u0022\u0060 keeps navigation within the companion app\u0027s webview where the session is active"
+      ]
+    },
+    {
+      "version": "1.0.14",
+      "date": "2026-06-15",
+      "highlights": [
+        "Internal: endpoint tests no longer create or touch a database \u2014 no impact on add-on behaviour"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Internal improvement \u2014 no user-facing changes"
+        ]
+      },
+      "changed": [
+        "\u0060DatabaseInitializer\u0060 now implements \u0060IDatabaseInitializer\u0060; \u0060Program.cs\u0060 registers and resolves via the interface",
+        "Endpoint tests register \u0060NoOpDatabaseInitializer\u0060 alongside \u0060FakeQuoteService\u0060 \u2014 no database is created or seeded during tests that have no intent to exercise the database layer"
+      ]
+    },
+    {
+      "version": "1.0.13",
+      "date": "2026-06-15",
+      "highlights": [
+        "Internal: fixed a race condition in database seeding that caused test failures under parallel test execution \u2014 no impact on add-on behaviour"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Bug fix \u2014 no user-facing changes"
+        ]
+      },
+      "fixed": [
+        "Race condition in \u0060DatabaseInitializer.SeedIfEmptyAsync\u0060: parallel \u0060WebApplicationFactory\u0060 instances (parallel MSTest runs with \u0060ExecutionScope.MethodLevel\u0060) could both observe an empty database and attempt concurrent seeding, causing a \u0060UNIQUE constraint failed: Sources.Title, Sources.Type\u0060 error \u2014 fixed with a static \u0060SemaphoreSlim\u0060 that serialises seed attempts within the same process"
+      ]
+    },
+    {
+      "version": "1.0.12",
+      "date": "2026-06-15",
+      "highlights": [
+        "Quotes are now stored in a SQLite database (\u0060quotes.db\u0060) on the persistent volume \u2014 no action required; the database is created and seeded automatically on first run",
+        "Startup log now shows database status: schema version, seeding progress, and a final count of quotes, sources, characters, and people",
+        "Version endpoint (\u0060GET /api/v1/version\u0060) now returns the database schema version and record counts alongside the API version",
+        "Fixed: startup banner and version endpoint incorrectly reported version \u00601.0.0\u0060 instead of the actual add-on version",
+        "Fixed: Docker image build failed when \u0060Quotinator.Data\u0060 was introduced \u2014 Dockerfile COPY layers corrected"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Quotes are now stored in a local database rather than a flat file \u2014 faster, more reliable, and ready for future write support ([#7](https://github.com/DutchJaFO/Quotinator/issues/7))",
+          "The version endpoint now also reports the database schema version and record counts"
+        ]
+      },
+      "added": [
+        "SQLite backend (v2): replaces flat-file \u0060QuoteService\u0060 with \u0060SqliteQuoteService\u0060 backed by Dapper \u002B \u0060Microsoft.Data.Sqlite\u0060 (closes [#7](https://github.com/DutchJaFO/Quotinator/issues/7))",
+        "Fully normalised schema: \u0060Sources\u0060, \u0060SourceTranslations\u0060, \u0060Characters\u0060, \u0060CharacterTranslations\u0060, \u0060People\u0060, \u0060Quotes\u0060, \u0060QuoteTranslations\u0060, \u0060QuoteGenres\u0060 \u2014 all tables include \u0060RecordBase\u0060 audit columns (\u0060DateCreated\u0060, \u0060DateModified\u0060, \u0060DateDeleted\u0060, \u0060IsDeleted\u0060) for soft-delete support",
+        "\u0060SchemaVersion\u0060 table with numbered migration support \u2014 pending migrations are applied automatically at startup; existing migrations are never edited",
+        "First-run seeding: if the database is empty on startup, all 780 quotes are imported from the bundled \u0060quotes.json\u0060 automatically; no manual migration step required",
+        "\u0060SafeValue\u003CT\u003E\u0060 \u2014 diagnostic wrapper that carries both \u0060Raw\u0060 (original DB string) and \u0060Parsed\u0060 (converted value); corrupt or unrecognised values never crash the application and the original string is preserved for diagnosis",
+        "\u0060SafeEnumHandler\u003CT\u003E\u0060 and \u0060SafeDateHandler\u0060 \u2014 Dapper TypeHandlers; enum values stored as TEXT names (rename-safe), date fields support imprecise ISO 8601 (\u0060\u00221994\u0022\u0060, \u0060\u00221994-06\u0022\u0060, \u0060\u00221994-06-04\u0022\u0060)",
+        "\u0060QuoteType\u0060 and \u0060Genre\u0060 enums with \u0060Unknown = 0\u0060 as a safe zero-value fallback",
+        "\u0060People\u0060 table: tracks real people (authors, public figures) with optional \u0060DateOfBirth\u0060 / \u0060DateOfDeath\u0060 in imprecise ISO 8601 format",
+        "Characters scoped to their source \u2014 same character name from different franchises is stored as separate rows",
+        "\u0060Quotinator.Data\u0060 project: reusable data infrastructure (\u0060RecordBase\u0060, \u0060SafeValue\u003CT\u003E\u0060, \u0060IDbConnectionFactory\u0060, \u0060SqliteConnectionFactory\u0060, \u0060SafeEnumHandler\u003CT\u003E\u0060, \u0060SafeDateHandler\u0060) extracted into its own class library",
+        "Database startup logging: log lines for schema creation/update, seeding progress, and a final summary (quote / source / character / people counts)",
+        "XML \u0060\u003Csummary\u003E\u0060 documentation on all public types and members; CS1591 enforced in \u0060Quotinator.Core\u0060 and \u0060Quotinator.Data\u0060",
+        "Version endpoint (\u0060GET /api/v1/version\u0060) now returns \u0060database.schemaVersion\u0060 and row counts (\u0060quotes\u0060, \u0060sources\u0060, \u0060characters\u0060, \u0060people\u0060)",
+        "Startup banner now includes a \u0060DB:\u0060 line with schema version and row counts",
+        "\u0060SOURCES.md\u0060: added attribution for Dapper, Dapper.Contrib, \u0060Microsoft.Data.Sqlite\u0060, \u0060Microsoft.Extensions.Logging.Abstractions\u0060; added DB Browser for SQLite under external tools"
+      ],
+      "fixed": [
+        "Version endpoint and startup banner reported \u00601.0.0\u0060 instead of the actual release version \u2014 \u0060VersionService\u0060 was reading the \u0060Quotinator.Core\u0060 assembly (no \u0060\u003CVersion\u003E\u0060 set) instead of the entry assembly; changed to \u0060Assembly.GetEntryAssembly()\u0060",
+        "Docker build failed: \u0060Quotinator.Data\u0060 project was missing from the Dockerfile COPY layers"
+      ]
+    },
+    {
+      "version": "1.0.11",
+      "date": "2026-06-14",
+      "highlights": [
+        "Config panel options now show translated names and descriptions in English, Dutch, and German",
+        "Documentation tab: access section now clearly distinguishes ingress (default, sidebar) from direct port (optional, for external tools); misleading hardcoded URL removed"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Add-on configuration options now display translated names and descriptions in English, Dutch, and German"
+        ]
+      },
+      "added": [
+        "HA add-on config panel now shows translated option names and descriptions in English, Dutch, and German (\u0060addon/translations/\u0060)",
+        "GitHub Milestones created to track upcoming work; README roadmap section replaced with a link to the milestone list"
+      ],
+      "changed": [
+        "Architecture: extracted \u0060Quotinator.Constants\u0060 project (route strings, tag names, error message keys \u2014 no dependencies); moved \u0060ApiLocalizer\u0060, \u0060VersionService\u0060, and \u0060InputValidation\u0060 to \u0060Quotinator.Core\u0060",
+        "HA add-on documentation revised: access section now distinguishes ingress (default, no port config needed) from direct port (optional, for external tools); hardcoded \u0060http://\u003Cha-host\u003E:8080/\u0060 URLs removed"
+      ],
+      "fixed": [
+        "Stale \u0060UI.en.json\u0060 references in \u0060docs/localisation.md\u0060 and test comments corrected to \u0060UI.en-GB.json\u0060 (the actual baseline file)"
+      ]
+    },
+    {
+      "version": "1.0.10",
+      "date": "2026-06-14",
+      "highlights": [
+        "Startup banner prints as a single block (one timestamp) with a config summary: log level, request logging state, SSL state, and cert paths when SSL is enabled"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Startup log now prints as a single, readable block with a configuration summary"
+        ]
+      },
+      "changed": [
+        "Startup banner now prints as a single log entry (one timestamp) instead of one line per log call",
+        "Banner config summary added: \u0060log_level\u0060, \u0060log_requests\u0060, \u0060ssl\u0060 state, and cert/key paths when SSL is enabled"
+      ]
+    },
+    {
+      "version": "1.0.9",
+      "date": "2026-06-14",
+      "highlights": [
+        "New \u0060log_requests\u0060 option \u2014 logs one line per quote API request; useful for confirming calls arrive without enabling full debug logging (default: \u0060false\u0060)",
+        "New \u0060log_level\u0060 option \u2014 choose log verbosity from the add-on panel (default: \u0060info\u0060; use \u0060debug\u0060 when reporting issues)",
+        "UTC timestamps on all log lines",
+        "Clear start and stop markers in the supervisor log (version, data path, quote count)"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "New option: log one line per API request \u2014 useful for confirming calls arrive without enabling full debug logging",
+          "New option: choose how much detail appears in the supervisor log",
+          "All log lines now show a UTC timestamp"
+        ]
+      },
+      "added": [
+        "\u0060log_requests\u0060 add-on option \u2014 when enabled, logs one line per quote API request (\u0060GET /api/v1/quotes/random?n=5 \u2192 200 in 12ms\u0060); default \u0060false\u0060; 429 responses are included, health/Blazor/static traffic is not",
+        "\u0060log_level\u0060 add-on option \u2014 controls verbosity of the HA supervisor log; valid values: \u0060trace\u0060, \u0060debug\u0060, \u0060info\u0060, \u0060notice\u0060, \u0060warning\u0060, \u0060error\u0060, \u0060fatal\u0060; default \u0060info\u0060",
+        "UTC timestamps on all log lines (\u0060yyyy-MM-dd HH:mm:ss\u0060)",
+        "Startup banner logs version, data path, quote count, and keys directory on every start",
+        "Shutdown message logged when the container stops"
+      ],
+      "changed": [
+        "\u0060Console.WriteLine\u0060 startup output replaced by the structured logger \u2014 all output now respects the configured log level and timestamp format"
+      ]
+    },
+    {
+      "version": "1.0.8",
+      "date": "2026-06-14",
+      "highlights": [
+        "Fixed: links on the home page (Scalar UI, OpenAPI spec, health check) did not resolve correctly through the Home Assistant ingress \u2014 they now use relative paths"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Fixed: the API Reference, OpenAPI spec, and health check links on the home page did not work through the Home Assistant ingress ([#8](https://github.com/DutchJaFO/Quotinator/issues/8))"
+        ]
+      },
+      "fixed": [
+        "Scalar UI button, OpenAPI spec link, and health check link on the home page were broken under the Home Assistant ingress \u2014 absolute paths (e.g. \u0060/scalar/v1\u0060) ignored \u0060\u003Cbase href\u003E\u0060 and resolved against HA\u0027s server root; changed to relative paths so they resolve correctly through the ingress proxy in all deployment scenarios (closes [#8](https://github.com/DutchJaFO/Quotinator/issues/8))"
+      ]
+    },
+    {
+      "version": "1.0.7",
+      "date": "2026-06-14",
+      "highlights": [
+        "Quotes and DataProtection keys are now stored on the supervisor-mounted persistent volume (\u0060/data\u0060) and survive add-on restarts and updates \u2014 no manual data migration needed on first install",
+        "Fixed: Blazor assets (CSS, \u0060blazor.web.js\u0060) failed to load in the Home Assistant ingress panel \u2014 the sidebar page was broken and the \u0022New quote\u0022 button did not work",
+        "Fixed: antiforgery decryption failures after add-on restart \u2014 DataProtection keys now persist across restarts",
+        "Fixed: language cookie endpoint no longer appears in the Scalar API reference"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Quotes and session data now survive container restarts and add-on updates \u2014 no data loss on update",
+          "Fixed: the Blazor page (including the \u0022New quote\u0022 button) did not load correctly in the Home Assistant sidebar"
+        ]
+      },
+      "added": [
+        "First-run seeding: if \u0060Quotinator__DataPath\u0060 points to an empty directory (e.g. a fresh HA add-on data volume), the bundled \u0060quotes.json\u0060 is automatically copied there on startup so the add-on works immediately without manual setup"
+      ],
+      "fixed": [
+        "Blazor assets (CSS, \u0060blazor.web.js\u0060) failed to load through the Home Assistant ingress panel \u2014 the hardcoded \u0060\u003Cbase href=\u0022/\u0022 /\u003E\u0060 caused relative URLs to resolve against HA\u0027s own server root instead of the ingress proxy path; fixed by reading \u0060X-Ingress-Path\u0060 from the HA supervisor and setting it as the ASP.NET Core \u0060PathBase\u0060, which \u0060\u003Cbase href\u003E\u0060 now reflects dynamically",
+        "DataProtection keys were not persisted across HA add-on restarts \u2014 \u0060Quotinator__DataPath=/data/quotes.json\u0060 points the app at the supervisor\u0027s persistent volume (\u0060map: data:rw\u0060) so keys survive restarts and updates; antiforgery decryption failures and Blazor circuit descriptor mismatches are resolved",
+        "Kestrel double-bind warning: \u0060ASPNETCORE_HTTP_PORTS: \u00228099\u0022\u0060 in \u0060addon/config.yaml\u0060 clashed with the Kestrel code that also binds port 8099; removed the environment block so port binding is owned entirely by the application",
+        "DataProtection keys are now written to a \u0060.keys/\u0060 subdirectory within the data directory",
+        "\u0060/Culture/Set\u0060 (language cookie endpoint) no longer appears in the Scalar API reference \u2014 it is a Blazor UI helper, not a REST API endpoint"
+      ]
+    },
+    {
+      "version": "1.0.6",
+      "date": "2026-06-14",
+      "highlights": [
+        "SSL / HTTPS support on the direct-access port \u2014 set \u0060ssl: true\u0060 and supply cert/key filenames (relative to \u0060/ssl/\u0060); defaults to disabled",
+        "Ingress now correctly detects the browser\u0027s HTTPS context via \u0060X-Forwarded-Proto\u0060",
+        "Fixed: Blazor interactive components (e.g. the \u0022New quote\u0022 button) did not work in Docker or the HA add-on",
+        "Language selection cookie now works in plain-HTTP direct-access deployments"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Optional HTTPS on the direct access port \u2014 enable ssl in the add-on configuration to use your Let\u0027s Encrypt certificate",
+          "Fixed: interactive elements such as the \u0022New quote\u0022 button did not work in Docker or the HA add-on"
+        ]
+      },
+      "added": [
+        "Optional HTTPS on the direct-access port (8080) via Kestrel; configure with \u0060Quotinator__Ssl=true\u0060, \u0060Quotinator__SslCertFile\u0060, and \u0060Quotinator__SslKeyFile\u0060 environment variables",
+        "HA add-on SSL options (\u0060ssl\u0060, \u0060certfile\u0060, \u0060keyfile\u0060) \u2014 defaults to \u0060ssl: false\u0060; when enabled, uses certs from \u0060/ssl/\u0060 (HA Let\u0027s Encrypt add-on writes there)",
+        "\u0060UseForwardedHeaders()\u0060 middleware reads \u0060X-Forwarded-Proto\u0060 and \u0060X-Forwarded-For\u0060 from upstream proxies so the app knows it is behind HTTPS even when running HTTP internally (required for HA ingress)"
+      ],
+      "changed": [
+        "DataProtection keys are now persisted to the data directory (\u0060/app/data\u0060) instead of ephemeral in-memory; antiforgery tokens and Blazor circuit descriptors survive container restarts",
+        "Culture cookie \u0060Secure\u0060 flag is now derived from \u0060Request.IsHttps\u0060 instead of hardcoded \u0060true\u0060 \u2014 language selection persists in plain-HTTP deployments",
+        "\u0060UseHttpsRedirection\u0060 removed \u2014 redirect responsibility belongs to the consumer\u0027s reverse proxy, not the app",
+        "Dockerfile clears \u0060ASPNETCORE_HTTP_PORTS\u0060 set by the .NET base image; port binding is now owned entirely by the application\u0027s Kestrel configuration"
+      ],
+      "fixed": [
+        "Blazor interactive components (e.g. the \u0022New quote\u0022 button) did not work in Docker \u2014 \u0060_framework/blazor.web.js\u0060 was missing from the Docker publish output because \u0060--no-restore\u0060 reused an incomplete Blazor static web assets manifest generated before source files were copied; fixed by removing \u0060--no-restore\u0060 from \u0060dotnet publish\u0060"
+      ]
+    },
+    {
+      "version": "1.0.5",
+      "date": "2026-06-14",
+      "highlights": [
+        "Dependency updates: \u0060Microsoft.AspNetCore.OpenApi\u0060, \u0060MSTest\u0060, \u0060Microsoft.AspNetCore.Mvc.Testing\u0060, \u0060actions/checkout\u0060 (CI only)"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Dependency updates \u2014 no user-facing changes"
+        ]
+      },
+      "changed": [
+        "\u0060Microsoft.AspNetCore.OpenApi\u0060 updated from 10.0.7 to 10.0.9",
+        "\u0060actions/checkout\u0060 updated from v5 to v6 (CI only)",
+        "\u0060Microsoft.AspNetCore.Mvc.Testing\u0060 updated from 10.0.0 to 10.0.9 (test only)",
+        "\u0060MSTest\u0060 updated from 4.0.2 to 4.2.3 (test only)",
+        "\u0060.gitattributes\u0060 normalised to LF for all text files \u2014 prevents CRLF/LF mismatches from Dependabot merges"
+      ]
+    },
+    {
+      "version": "1.0.4",
+      "date": "2026-06-14",
+      "highlights": [
+        "Language selector in the UI navbar \u2014 overrides browser language, persists as a cookie for one year",
+        "AppArmor profile (\u0060apparmor.txt\u0060) \u2014 restricts container filesystem and network access; improves add-on quality score",
+        "Fixed: Home Assistant ingress now connects correctly",
+        "Direct access port disabled by default (\u0060null\u0060); enable in add-on configuration if needed for direct LAN or tool access"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Language selector in the navigation bar \u2014 override your browser\u0027s language preference; the choice is remembered for a year",
+          "AppArmor security profile added to the Home Assistant add-on"
+        ]
+      },
+      "added": [
+        "Release workflow now gates on CI passing \u2014 \u0060build-and-push\u0060 depends on a \u0060test\u0060 job so a broken build cannot produce a published image",
+        "Dependabot configured for weekly NuGet and GitHub Actions updates (\u0060.github/dependabot.yml\u0060)",
+        "Language selector in the navbar: overrides browser language preference, persists as a cookie for one year",
+        "Open API reference button on the home page",
+        "Translation support section on the home page",
+        "AppArmor profile for the Home Assistant add-on (\u0060addon/apparmor.txt\u0060)"
+      ],
+      "changed": [
+        "Home Assistant add-on direct access port disabled by default; enable in add-on configuration for direct LAN or tool access",
+        "\u0060UI.en-GB.json\u0060 is now the i18n baseline; \u0060UI.en.json\u0060 removed",
+        "Language selector offers: Auto-detect, English (en-GB), Deutsch, Nederlands"
+      ],
+      "fixed": [
+        "WCAG SC 3.1.1: \u0060\u003Chtml lang\u003E\u0060 is now dynamic and reflects the active UI culture (was hardcoded \u0060\u0022en\u0022\u0060)",
+        "Language cookie now uses \u0060SameSite=Lax\u0060 and \u0060Secure=true\u0060",
+        "QuoteCard (Interactive Server component) now respects the language cookie; previously always rendered in English regardless of selected language",
+        "Home Assistant ingress now connects correctly via \u0060ASPNETCORE_HTTP_PORTS\u0060 environment variable"
+      ]
+    },
+    {
+      "version": "1.0.3",
+      "date": "2026-06-14",
+      "highlights": [
+        "Store listing and documentation updated to accurately reflect v1 scope"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Documentation corrections \u2014 no user-facing changes"
+        ]
+      },
+      "fixed": [
+        "Documentation corrections: CI/CD steps updated to reflect publish smoke test and GitHub Release creation; Home Assistant docs updated with GHCR visibility requirement; Docker docs corrected for \u0060data/\u0060 build context inclusion",
+        "Add-on store listing and documentation corrected \u2014 Blazor management UI is planned for v2, not present in v1",
+        "Add-on \u0060config.yaml\u0060 version kept in sync with API version going forward"
+      ]
+    },
+    {
+      "version": "1.0.2",
+      "date": "2026-06-14",
+      "highlights": [
+        "Fixed: Docker image tag corrected \u2014 add-on version now matches the published image tag on GHCR"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Bug fix \u2014 no user-facing changes"
+        ]
+      },
+      "fixed": [
+        "GitHub Releases are now created automatically when a version tag is pushed"
+      ]
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-06-13",
+      "audienceHighlights": {
+        "ha-addon": [
+          "Bug fix \u2014 no user-facing changes"
+        ]
+      },
+      "fixed": [
+        "Docker image build now succeeds: \u0060data/quotes.json\u0060 was excluded from the build context via \u0060.dockerignore\u0060, causing \u0060dotnet publish\u0060 to fail",
+        "Updated all GitHub Actions to Node.js 24-compatible major versions; \u0060actions/checkout@v4\u0060 still produces a Node 20 deprecation warning (upstream issue, tracked in session notes)"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-06-13",
+      "audienceHighlights": {
+        "ha-addon": [
+          "Initial release: 780 curated quotes from films, TV, books, and famous people",
+          "REST API with random, list, search, and detail endpoints; multi-language support; rate limiting",
+          "OpenAPI documentation at /scalar/v1"
+        ]
+      },
+      "added": [
+        "REST read endpoints: \u0060GET /api/v1/quotes/random\u0060, \u0060/api/v1/quotes\u0060, \u0060/api/v1/quotes/{id}\u0060, \u0060/api/v1/quotes/search\u0060",
+        "Health check endpoint: \u0060GET /api/v1/health\u0060",
+        "Version endpoint: \u0060GET /api/v1/version\u0060",
+        "Quote dataset: 780 curated quotes seeded from two MIT-licensed sources",
+        "Quote schema: supports films, TV, anime, books, and famous people; optional translations",
+        "Language support: \u0060lang\u0060 query parameter (ISO 639-1) with fallback to original language",
+        "RFC 7807 ProblemDetails error responses with localised messages (en, en-GB, de, nl)",
+        "Input validation: all query parameters validated; non-integer inputs return 400 instead of 500",
+        "Sliding-window rate limiter: 100 requests per minute per IP",
+        "OpenAPI documentation via Scalar UI (\u0060/scalar/v1\u0060) and raw spec (\u0060/openapi/v1.json\u0060), available in all environments including production",
+        "Multi-arch Docker image (\u0060linux/amd64\u0060 \u002B \u0060linux/arm64\u0060)",
+        "GitHub Actions CI pipeline: build, test, and publish smoke test",
+        "GitHub Actions release pipeline: builds and pushes Docker image to GHCR on version tags"
+      ]
+    },
+    {
+      "version": "1.0.0-beta.1",
+      "date": "2026-06-13",
+      "highlights": [
+        "Initial release: REST API, health check endpoint, Blazor UI placeholder",
+        "780 curated quotes from films, TV, books, and famous people",
+        "Multi-arch Docker image (\u0060linux/amd64\u0060 \u002B \u0060linux/aarch64\u0060)",
+        "Home Assistant ingress on port 8099; direct access on port 8080"
+      ]
+    }
+  ]
+}
