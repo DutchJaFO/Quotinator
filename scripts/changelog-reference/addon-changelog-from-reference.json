@@ -1,0 +1,227 @@
+{
+  "releases": [
+    {
+      "version": "1.5.1",
+      "date": "2026-06-20",
+      "highlights": [
+        "Fixed: startup banner was collapsed to a single line in the supervisor log.",
+        "Fixed: admin API key and other options were not being read from the add-on config \u2014 the app now reads \u0060/data/options.json\u0060 directly, which is the source the supervisor writes."
+      ]
+    },
+    {
+      "version": "1.5.0",
+      "date": "2026-06-20",
+      "highlights": [
+        "Admin endpoints (reseed, reset) now require an API key via the \u0060X-Api-Key\u0060 request header \u2014 set \u0060admin_api_key\u0060 in the add-on options.",
+        "The Scalar API reference shows an Authentication panel \u2014 enter your key once and it is sent automatically on all admin requests.",
+        "The startup log now shows whether an admin API key is configured (\u0060set\u0060 / \u0060not set\u0060).",
+        "The REST API page in the UI shows the admin endpoints when a key is active.",
+        "Fixed: admin endpoint documentation incorrectly stated \u0060Authorization: Bearer\u0060 \u2014 the correct header is \u0060X-Api-Key\u0060.",
+        "Fixed: \u0060appsettings.local.json\u0060 was included in the Docker image, allowing a local developer override to silently take priority over the \u0060admin_api_key\u0060 env var set by the HA supervisor."
+      ]
+    },
+    {
+      "version": "1.4.3",
+      "date": "2026-06-20",
+      "highlights": [
+        "Internal improvements in preparation for upcoming data import features."
+      ]
+    },
+    {
+      "version": "1.4.2",
+      "date": "2026-06-20",
+      "highlights": [
+        "Fixed: the Docker image was incorrectly reporting version 1.0.0 \u2014 the actual version is now shown correctly.",
+        "The REST API page now includes a direct link to the version endpoint.",
+        "Internal improvements \u2014 no other user-facing changes."
+      ]
+    },
+    {
+      "version": "1.4.1",
+      "date": "2026-06-20",
+      "highlights": [
+        "Fixed: the changelog page now shows plain-English release summaries for all versions instead of technical details.",
+        "Internal improvements in preparation for upcoming data import features."
+      ]
+    },
+    {
+      "version": "1.4.0",
+      "date": "2026-06-20",
+      "highlights": [
+        "Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected."
+      ]
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-06-17",
+      "highlights": [
+        "Quote data now loaded from multiple source files in \u0060data/sources/\u0060 \u2014 one file per bundled dataset, plus optional user imports in the \u0060imports/\u0060 subfolder of the data directory",
+        "New \u0060GET /api/v1/admin/database/seed/preview\u0060 endpoint shows what would be imported without writing to the database (requires \u0060admin_api_key\u0060)",
+        "\u0060Quotinator__DataDir\u0060 env var replaces \u0060Quotinator__DataPath\u0060 \u2014 set to the data directory, not a file path"
+      ]
+    },
+    {
+      "version": "1.2.2",
+      "date": "2026-06-16",
+      "highlights": [
+        "Fixed: the GitHub changelog link in the add-on UI opened inside the HA frame and was blocked \u2014 it now opens in a new tab correctly"
+      ]
+    },
+    {
+      "version": "1.2.1",
+      "date": "2026-06-16",
+      "highlights": [
+        "Database file renamed from \u0060quotes.db\u0060 to \u0060quotinatordata.db\u0060 \u2014 the old file is renamed automatically on first startup after upgrade, no data loss",
+        "A backup of the database is created before any schema migration and stored in the \u0060backups/\u0060 subfolder of the data directory; old backups are safe to delete",
+        "New optional \u0060backup_path\u0060 config option to store backups in a custom location",
+        "DataProtection keys folder renamed from \u0060.keys\u0060 to \u0060keys\u0060",
+        "Container log output now uses single-line format \u2014 easier to read in the HA log panel",
+        "Startup banner shows all data paths at a glance"
+      ]
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-06-16",
+      "highlights": [
+        "Admin endpoints (reseed, reset) now require \u0060Authorization: Bearer \u003Ckey\u003E\u0060 \u2014 they return 401 by default until \u0060admin_api_key\u0060 is set in the add-on configuration",
+        "New \u0060admin_api_key\u0060 option in the add-on configuration panel"
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-06-15",
+      "highlights": [
+        "Filter quotes by multiple genres or types at once (e.g. sci-fi comedies) using repeatable query parameters on \u0060/random\u0060, \u0060/search\u0060, and the paginated list",
+        "Sci-fi and non-fiction genres are now correctly matched in all endpoints \u2014 they were silently missing from results before this fix",
+        "\u0060/random\u0060 now always returns a response envelope with status, items, total matching count, and an optional message; the shape of the response has changed",
+        "New admin endpoints: \u0060POST /api/v1/admin/database/reseed\u0060 and \u0060POST /api/v1/admin/database/reset\u0060 for database maintenance without restarting the container"
+      ]
+    },
+    {
+      "version": "1.0.15",
+      "date": "2026-06-15",
+      "highlights": [
+        "Fixed: antiforgery token errors after container restart \u2014 DataProtection keys are now reliably written to the persistent volume (\u0060/data/.keys/\u0060) even when the supervisor serves a cached config that omits \u0060Quotinator__DataPath\u0060",
+        "Fixed: the OpenAPI UI link in the sidebar opened in the system browser when tapped in the HA companion app, losing the session and causing a 404; it now navigates within the companion app\u0027s webview"
+      ]
+    },
+    {
+      "version": "1.0.14",
+      "date": "2026-06-15",
+      "highlights": [
+        "Internal: endpoint tests no longer create or touch a database \u2014 no impact on add-on behaviour"
+      ]
+    },
+    {
+      "version": "1.0.13",
+      "date": "2026-06-15",
+      "highlights": [
+        "Internal: fixed a race condition in database seeding that caused test failures under parallel test execution \u2014 no impact on add-on behaviour"
+      ]
+    },
+    {
+      "version": "1.0.12",
+      "date": "2026-06-15",
+      "highlights": [
+        "Quotes are now stored in a SQLite database (\u0060quotes.db\u0060) on the persistent volume \u2014 no action required; the database is created and seeded automatically on first run",
+        "Startup log now shows database status: schema version, seeding progress, and a final count of quotes, sources, characters, and people",
+        "Version endpoint (\u0060GET /api/v1/version\u0060) now returns the database schema version and record counts alongside the API version",
+        "Fixed: startup banner and version endpoint incorrectly reported version \u00601.0.0\u0060 instead of the actual add-on version",
+        "Fixed: Docker image build failed when \u0060Quotinator.Data\u0060 was introduced \u2014 Dockerfile COPY layers corrected"
+      ]
+    },
+    {
+      "version": "1.0.11",
+      "date": "2026-06-14",
+      "highlights": [
+        "Config panel options now show translated names and descriptions in English, Dutch, and German",
+        "Documentation tab: access section now clearly distinguishes ingress (default, sidebar) from direct port (optional, for external tools); misleading hardcoded URL removed"
+      ]
+    },
+    {
+      "version": "1.0.10",
+      "date": "2026-06-14",
+      "highlights": [
+        "Startup banner prints as a single block (one timestamp) with a config summary: log level, request logging state, SSL state, and cert paths when SSL is enabled"
+      ]
+    },
+    {
+      "version": "1.0.9",
+      "date": "2026-06-14",
+      "highlights": [
+        "New \u0060log_requests\u0060 option \u2014 logs one line per quote API request; useful for confirming calls arrive without enabling full debug logging (default: \u0060false\u0060)",
+        "New \u0060log_level\u0060 option \u2014 choose log verbosity from the add-on panel (default: \u0060info\u0060; use \u0060debug\u0060 when reporting issues)",
+        "UTC timestamps on all log lines",
+        "Clear start and stop markers in the supervisor log (version, data path, quote count)"
+      ]
+    },
+    {
+      "version": "1.0.8",
+      "date": "2026-06-14",
+      "highlights": [
+        "Fixed: links on the home page (Scalar UI, OpenAPI spec, health check) did not resolve correctly through the Home Assistant ingress \u2014 they now use relative paths"
+      ]
+    },
+    {
+      "version": "1.0.7",
+      "date": "2026-06-14",
+      "highlights": [
+        "Quotes and DataProtection keys are now stored on the supervisor-mounted persistent volume (\u0060/data\u0060) and survive add-on restarts and updates \u2014 no manual data migration needed on first install",
+        "Fixed: Blazor assets (CSS, \u0060blazor.web.js\u0060) failed to load in the Home Assistant ingress panel \u2014 the sidebar page was broken and the \u0022New quote\u0022 button did not work",
+        "Fixed: antiforgery decryption failures after add-on restart \u2014 DataProtection keys now persist across restarts",
+        "Fixed: language cookie endpoint no longer appears in the Scalar API reference"
+      ]
+    },
+    {
+      "version": "1.0.6",
+      "date": "2026-06-14",
+      "highlights": [
+        "SSL / HTTPS support on the direct-access port \u2014 set \u0060ssl: true\u0060 and supply cert/key filenames (relative to \u0060/ssl/\u0060); defaults to disabled",
+        "Ingress now correctly detects the browser\u0027s HTTPS context via \u0060X-Forwarded-Proto\u0060",
+        "Fixed: Blazor interactive components (e.g. the \u0022New quote\u0022 button) did not work in Docker or the HA add-on",
+        "Language selection cookie now works in plain-HTTP direct-access deployments"
+      ]
+    },
+    {
+      "version": "1.0.5",
+      "date": "2026-06-14",
+      "highlights": [
+        "Dependency updates: \u0060Microsoft.AspNetCore.OpenApi\u0060, \u0060MSTest\u0060, \u0060Microsoft.AspNetCore.Mvc.Testing\u0060, \u0060actions/checkout\u0060 (CI only)"
+      ]
+    },
+    {
+      "version": "1.0.4",
+      "date": "2026-06-14",
+      "highlights": [
+        "Language selector in the UI navbar \u2014 overrides browser language, persists as a cookie for one year",
+        "AppArmor profile (\u0060apparmor.txt\u0060) \u2014 restricts container filesystem and network access; improves add-on quality score",
+        "Fixed: Home Assistant ingress now connects correctly",
+        "Direct access port disabled by default (\u0060null\u0060); enable in add-on configuration if needed for direct LAN or tool access"
+      ]
+    },
+    {
+      "version": "1.0.3",
+      "date": "2026-06-14",
+      "highlights": [
+        "Store listing and documentation updated to accurately reflect v1 scope"
+      ]
+    },
+    {
+      "version": "1.0.2",
+      "date": "2026-06-14",
+      "highlights": [
+        "Fixed: Docker image tag corrected \u2014 add-on version now matches the published image tag on GHCR"
+      ]
+    },
+    {
+      "version": "1.0.0-beta.1",
+      "date": "2026-06-13",
+      "highlights": [
+        "Initial release: REST API, health check endpoint, Blazor UI placeholder",
+        "780 curated quotes from films, TV, books, and famous people",
+        "Multi-arch Docker image (\u0060linux/amd64\u0060 \u002B \u0060linux/aarch64\u0060)",
+        "Home Assistant ingress on port 8099; direct access on port 8080"
+      ]
+    }
+  ]
+}
