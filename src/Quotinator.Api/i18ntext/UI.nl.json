@@ -12,6 +12,8 @@
   "AboutHeading": "Over",
   "ChangelogHeading": "Wijzigingslog",
   "ChangelogFilterPlaceholder": "Versies filteren…",
+  "ChangelogUnreleased": "Niet uitgebracht",
+  "ChangelogReferencesSummary": "Problemen & CVE's",
   "ChangelogFullDetailsOnGitHub": "Volledige technische details op GitHub →",
   "AboutDescription": "Quotinator is gebouwd met ASP.NET Core (.NET 10) en wordt ingezet als Docker-container voor linux/amd64 en linux/arm64.",
   "AboutRoadmapV1": "REST API — leesendpoints (huidig)",

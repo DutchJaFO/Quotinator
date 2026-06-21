@@ -103,4 +103,37 @@ public sealed class ChangelogEntryTests
         Assert.AreEqual(0, release.Highlights.Count);
         Assert.AreEqual(0, release.Sections.Count);
     }
+
+    [TestMethod]
+    public void RenderPath_ReferencesPresent_ModelHasIssuesAndCves()
+    {
+        // References block shown when Issues or Cves are non-empty
+        var release = new ChangelogRelease(
+            "1.0.0", "2026-01-01",
+            ["Something changed."],
+            [],
+            [80, 82], ["CVE-2025-6965"], new Dictionary<string, ChangelogReleaseTranslation>());
+
+        Assert.IsTrue(release.Issues.Count > 0,  "issues must be non-empty to trigger references block");
+        Assert.IsTrue(release.Cves.Count > 0,    "cves must be non-empty to trigger references block");
+        Assert.AreEqual(80,             release.Issues[0]);
+        Assert.AreEqual("CVE-2025-6965", release.Cves[0]);
+    }
+
+    [TestMethod]
+    public void RenderPath_Unreleased_HasHighlightsNoVersionNoDate()
+    {
+        // Unreleased entries: IsUnreleased=true on the component suppresses version/date/GitHub link;
+        // the model uses empty version and date strings.
+        var release = new ChangelogRelease(
+            "", "",
+            ["New feature in progress."],
+            [],
+            [80], [], new Dictionary<string, ChangelogReleaseTranslation>());
+
+        Assert.IsTrue(release.Highlights.Count > 0);
+        Assert.AreEqual("", release.Version, "version is empty for unreleased entries");
+        Assert.AreEqual("", release.Date,    "date is empty for unreleased entries");
+        Assert.AreEqual(80, release.Issues[0]);
+    }
 }

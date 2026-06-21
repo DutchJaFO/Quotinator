@@ -14,7 +14,7 @@
     <li>@Text.AboutRoadmapV3</li>
 </ul>
 
-@if (ChangelogService.Releases.Count > 0)
+@if (ChangelogService.Unreleased is not null || ChangelogService.Releases.Count > 0)
 {
     <hr />
 
@@ -25,9 +25,14 @@
            oninput="var q=this.value.toLowerCase();document.querySelectorAll('.changelog-entry').forEach(function(el){el.style.display=el.dataset.version.toLowerCase().includes(q)?'':'none';});" />
 
     <div class="changelog-scroll">
+        @if (ChangelogService.Unreleased is not null)
+        {
+            <ChangelogEntry Release="ChangelogService.Unreleased" IsUnreleased="true" />
+        }
         @for (int i = 0; i < ChangelogService.Releases.Count; i++)
         {
-            <ChangelogEntry Release="ChangelogService.Releases[i]" Index="i" />
+            int idx = ChangelogService.Unreleased is not null ? i + 1 : i;
+            <ChangelogEntry Release="ChangelogService.Releases[i]" Index="idx" />
         }
     </div>
 }

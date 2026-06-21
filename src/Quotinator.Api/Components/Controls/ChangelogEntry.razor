@@ -1,9 +1,16 @@
 @using Quotinator.Changelog.Models
 
-<details class="mb-2 changelog-entry" data-version="@Release.Version" open="@IsOpen">
+<details class="mb-2 changelog-entry" data-version="@(IsUnreleased ? "unreleased" : Release.Version)" open="@IsOpen">
     <summary class="py-1 user-select-none" style="cursor:pointer">
-        <strong>v@(Release.Version)</strong>
-        <span class="text-muted ms-2">@Release.Date</span>
+        @if (IsUnreleased)
+        {
+            <strong>@Text.ChangelogUnreleased</strong>
+        }
+        else
+        {
+            <strong>v@(Release.Version)</strong>
+            <span class="text-muted ms-2">@Release.Date</span>
+        }
     </summary>
     <div class="mt-2 ps-3">
         @if (Release.Highlights.Count > 0)
@@ -14,8 +21,11 @@
                     <li>@FormatInline(item)</li>
                 }
             </ul>
-            <a class="small text-muted" target="_blank" rel="noopener noreferrer"
-               href="https://github.com/DutchJaFO/Quotinator/releases/tag/v@(Release.Version)">@Text.ChangelogFullDetailsOnGitHub</a>
+            @if (!IsUnreleased)
+            {
+                <a class="small text-muted" target="_blank" rel="noopener noreferrer"
+                   href="https://github.com/DutchJaFO/Quotinator/releases/tag/v@(Release.Version)">@Text.ChangelogFullDetailsOnGitHub</a>
+            }
         }
         else
         {
@@ -31,6 +41,22 @@
                     }
                 </ul>
             }
+        }
+        @if (HasReferences)
+        {
+            <details class="mt-2">
+                <summary class="small text-muted" style="cursor:pointer">@Text.ChangelogReferencesSummary</summary>
+                <ul class="mt-1 mb-0 small">
+                    @foreach (var issue in Release.Issues)
+                    {
+                        <li><a href="https://github.com/DutchJaFO/Quotinator/issues/@issue" target="_blank" rel="noopener noreferrer">#@issue</a></li>
+                    }
+                    @foreach (var cve in Release.Cves)
+                    {
+                        <li><a href="https://nvd.nist.gov/vuln/detail/@cve" target="_blank" rel="noopener noreferrer">@cve</a></li>
+                    }
+                </ul>
+            </details>
         }
     </div>
 </details>

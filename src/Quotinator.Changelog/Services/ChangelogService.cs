@@ -7,6 +7,9 @@ namespace Quotinator.Changelog.Services;
 public sealed class ChangelogService : IChangelogService
 {
     /// <inheritdoc/>
+    public ChangelogRelease? Unreleased { get; }
+
+    /// <inheritdoc/>
     public IReadOnlyList<ChangelogRelease> Releases { get; }
 
     /// <inheritdoc/>
@@ -21,9 +24,10 @@ public sealed class ChangelogService : IChangelogService
         var path = Path.Combine(AppContext.BaseDirectory, "resources", "changelog.json");
         if (File.Exists(path))
         {
-            var (lang, headers, releases) = Load(path);
+            var (lang, headers, unreleased, releases) = Load(path);
             SourceLanguage = lang;
             SectionHeaders = headers;
+            Unreleased     = unreleased;
             Releases       = releases;
         }
         else
@@ -34,27 +38,38 @@ public sealed class ChangelogService : IChangelogService
         }
     }
 
-    private static (string SourceLanguage, IReadOnlyDictionary<string, ChangelogSectionHeaders> SectionHeaders, IReadOnlyList<ChangelogRelease> Releases) Load(string path)
+    private static (string SourceLanguage, IReadOnlyDictionary<string, ChangelogSectionHeaders> SectionHeaders, ChangelogRelease? Unreleased, IReadOnlyList<ChangelogRelease> Releases) Load(string path)
     {
         var json = File.ReadAllText(path);
         var dto  = JsonSerializer.Deserialize<ChangelogDto>(json, JsonOptions);
-        if (dto is null) return ("en", new Dictionary<string, ChangelogSectionHeaders>(), []);
+        if (dto is null) return ("en", new Dictionary<string, ChangelogSectionHeaders>(), null, []);
 
         var sourceLang = dto.SourceLanguage ?? "en";
         var headers    = BuildSectionHeaders(dto.SectionHeaders);
-        var releases   = (dto.Releases ?? [])
+
+        var unreleased = dto.Unreleased is { } u
+            ? new ChangelogRelease(
+                "", "",
+                u.Highlights ?? [],
+                BuildSections(u.Added, u.Changed, u.Fixed, u.Removed),
+                u.Issues ?? [],
+                u.Cves ?? [],
+                new Dictionary<string, ChangelogReleaseTranslation>())
+            : null;
+
+        var releases = (dto.Releases ?? [])
             .Where(r => r.Version is not null && r.Date is not null)
             .Select(r => new ChangelogRelease(
                 r.Version!,
                 r.Date!,
                 r.Highlights ?? [],
-                BuildSections(r),
+                BuildSections(r.Added, r.Changed, r.Fixed, r.Removed),
                 r.Issues ?? [],
                 r.Cves ?? [],
                 BuildTranslations(r.Translations)))
             .ToList();
 
-        return (sourceLang, headers, releases);
+        return (sourceLang, headers, unreleased, releases);
     }
 
     private static IReadOnlyDictionary<string, ChangelogSectionHeaders> BuildSectionHeaders(
@@ -71,13 +86,14 @@ public sealed class ChangelogService : IChangelogService
                 kvp.Value.GetValueOrDefault("removed",    "")));
     }
 
-    private static IReadOnlyList<ChangelogSection> BuildSections(ReleaseDto r)
+    private static IReadOnlyList<ChangelogSection> BuildSections(
+        List<string>? added, List<string>? changed, List<string>? fixed_, List<string>? removed)
     {
         var sections = new List<ChangelogSection>(4);
-        if (r.Added   is { Count: > 0 }) sections.Add(new ChangelogSection("Added",   r.Added));
-        if (r.Changed is { Count: > 0 }) sections.Add(new ChangelogSection("Changed", r.Changed));
-        if (r.Fixed   is { Count: > 0 }) sections.Add(new ChangelogSection("Fixed",   r.Fixed));
-        if (r.Removed is { Count: > 0 }) sections.Add(new ChangelogSection("Removed", r.Removed));
+        if (added   is { Count: > 0 }) sections.Add(new ChangelogSection("Added",   added));
+        if (changed is { Count: > 0 }) sections.Add(new ChangelogSection("Changed", changed));
+        if (fixed_  is { Count: > 0 }) sections.Add(new ChangelogSection("Fixed",   fixed_));
+        if (removed is { Count: > 0 }) sections.Add(new ChangelogSection("Removed", removed));
         return sections;
     }
 
@@ -106,7 +122,17 @@ public sealed class ChangelogService : IChangelogService
     private sealed record ChangelogDto(
         string? SourceLanguage,
         Dictionary<string, Dictionary<string, string>>? SectionHeaders,
+        UnreleasedDto? Unreleased,
         List<ReleaseDto>? Releases);
+
+    private sealed record UnreleasedDto(
+        List<string>? Highlights,
+        List<string>? Added,
+        List<string>? Changed,
+        List<string>? Fixed,
+        List<string>? Removed,
+        List<int>? Issues,
+        List<string>? Cves);
 
     private sealed record ReleaseDto(
         string? Version,

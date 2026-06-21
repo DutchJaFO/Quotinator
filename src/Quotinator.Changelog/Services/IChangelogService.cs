@@ -5,6 +5,9 @@ namespace Quotinator.Changelog.Services;
 /// <summary>Provides release data deserialised from <c>changelog.json</c>.</summary>
 public interface IChangelogService
 {
+    /// <summary>Pending changes not yet included in a release. <see langword="null"/> when no <c>unreleased</c> block is present in the JSON.</summary>
+    ChangelogRelease? Unreleased { get; }
+
     /// <summary>All releases, newest first.</summary>
     IReadOnlyList<ChangelogRelease> Releases { get; }
 
