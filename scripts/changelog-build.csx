@@ -118,8 +118,9 @@ foreach (var haRelease in haAddonReleases)
 }
 
 var targetDoc = new JsonObject { ["releases"] = targetReleases };
-var json      = targetDoc.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-File.WriteAllText(targetJson, json + Environment.NewLine);
+var json      = targetDoc.ToJsonString(new JsonSerializerOptions { WriteIndented = true })
+                         .ReplaceLineEndings("\n");
+File.WriteAllText(targetJson, json + "\n");
 Console.WriteLine($"Written: {targetJson}");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

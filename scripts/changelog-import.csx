@@ -80,7 +80,7 @@ var json = ToJson(releases);
 if (outputArg is not null)
 {
     var outPath = Path.IsPathRooted(outputArg) ? outputArg : Path.Combine(repoRoot, outputArg);
-    File.WriteAllText(outPath, json + Environment.NewLine);
+    File.WriteAllText(outPath, json + "\n");
     Console.WriteLine($"Written: {outPath}");
 }
 else
@@ -208,7 +208,7 @@ static string ToJson(List<Release> releases)
     writer.WriteEndObject();
 
     writer.Flush();
-    return Encoding.UTF8.GetString(stream.ToArray());
+    return Encoding.UTF8.GetString(stream.ToArray()).ReplaceLineEndings("\n");
 }
 
 static void WriteSection(Utf8JsonWriter writer, string key, List<string> items)
