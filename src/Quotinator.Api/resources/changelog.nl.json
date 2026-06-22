@@ -11,6 +11,27 @@
   },
   "releases": [
     {
+      "version": "1.6.2",
+      "date": "2026-06-22",
+      "issues": [106],
+      "highlights": [
+        "Reset Database crasht de applicatie niet meer bij elke herstart na gebruik (issue #106)."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Reset Database crasht de add-on niet meer bij elke herstart na gebruik (issue #106)."
+        ]
+      },
+      "fixed": [
+        "Het gebruik van Reset Database in v1.5.x–v1.6.1 kon de database in een kapotte staat achterlaten waardoor de applicatie niet meer startte met 'SQLite Error 1: duplicate column name: ImportBatchId' (issue #106)"
+      ],
+      "changed": [
+        "Schemamigrations worden nu uitgevoerd binnen een transactie — een mislukte migratie wordt volledig teruggedraaid en de applicatie stopt netjes in plaats van in een crash-loop te raken",
+        "Foutherstel bij migraties is nu versiespecifiek: alleen de bekende gedeeltelijke migratietoestand uit v1.5.x–v1.6.1 wordt automatisch hersteld; onbekende fouten in andere migraties worden direct doorgegeven",
+        "Reset Database ontdekt tabellen nu dynamisch vanuit het databaseschema, zodat toekomstige migraties nooit achtergebleven tabellen kunnen achterlaten"
+      ]
+    },
+    {
       "version": "1.6.1",
       "date": "2026-06-22",
       "issues": [103],
