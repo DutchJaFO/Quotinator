@@ -1,10 +1,16 @@
-##### *GENERATED FILE [2026-06-22 20:55 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-22 21:06 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
+
+## [1.6.2] - 2026-06-22
+
+- Reset Database no longer crashes the add-on on every restart after being used (issue #106).
+
+---
 
 ## [1.6.1] - 2026-06-22
 

@@ -2,26 +2,28 @@
   "language": "en",
   "sourceLanguage": "en",
   "machineTranslated": false,
-  "unreleased": {
-    "issues": [106],
-    "highlights": [
-      "Reset Database no longer crashes the application on every restart after being used (issue #106)."
-    ],
-    "audienceHighlights": {
-      "ha-addon": [
-        "Reset Database no longer crashes the add-on on every restart after being used (issue #106)."
+  "releases": [
+    {
+      "version": "1.6.2",
+      "date": "2026-06-22",
+      "issues": [106],
+      "highlights": [
+        "Reset Database no longer crashes the application on every restart after being used (issue #106)."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Reset Database no longer crashes the add-on on every restart after being used (issue #106)."
+        ]
+      },
+      "fixed": [
+        "Using Reset Database in v1.5.x–v1.6.1 could leave the database in a broken state where the application failed to start with 'SQLite Error 1: duplicate column name: ImportBatchId' (issue #106)"
+      ],
+      "changed": [
+        "Schema migrations now run inside transactions — a failed migration is fully rolled back and the application stops cleanly instead of crash-looping",
+        "Migration error recovery is version-scoped: only the known partial-migration state introduced in v1.5.x–v1.6.1 is self-healed; unknown errors in any other migration propagate immediately",
+        "Reset Database now discovers tables dynamically from the database schema so future migrations never risk leaving orphaned tables behind"
       ]
     },
-    "fixed": [
-      "Using Reset Database in v1.5.x–v1.6.1 could leave the database in a broken state where the application failed to start with 'SQLite Error 1: duplicate column name: ImportBatchId' (issue #106)"
-    ],
-    "changed": [
-      "Schema migrations now run inside transactions — a failed migration is fully rolled back and the application stops cleanly instead of crash-looping",
-      "Migration error recovery is version-scoped: only the known partial-migration state introduced in v1.5.x–v1.6.1 is self-healed; unknown errors in any other migration propagate immediately",
-      "Reset Database now discovers tables dynamically from the database schema so future migrations never risk leaving orphaned tables behind"
-    ]
-  },
-  "releases": [
     {
       "version": "1.6.1",
       "date": "2026-06-22",

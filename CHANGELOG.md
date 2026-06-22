@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-22 20:55 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-22 21:06 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.6.2] - 2026-06-22
 
 ### Highlights
 - Reset Database no longer crashes the application on every restart after being used (issue #106).
@@ -567,7 +567,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.1...HEAD
+[1.6.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.0...v1.5.1

@@ -2,25 +2,6 @@
   "language": "de",
   "sourceLanguage": "en",
   "machineTranslated": true,
-  "unreleased": {
-    "issues": [106],
-    "highlights": [
-      "Reset Database verursacht nach der Verwendung keinen Absturz der Anwendung mehr bei jedem Neustart (issue #106)."
-    ],
-    "audienceHighlights": {
-      "ha-addon": [
-        "Reset Database verursacht nach der Verwendung keinen Absturz des Add-ons mehr bei jedem Neustart (issue #106)."
-      ]
-    },
-    "fixed": [
-      "Die Verwendung von Reset Database in v1.5.x–v1.6.1 konnte die Datenbank in einem defekten Zustand hinterlassen, in dem die Anwendung nicht mehr startete mit 'SQLite Error 1: duplicate column name: ImportBatchId' (issue #106)"
-    ],
-    "changed": [
-      "Schemamigrations werden jetzt innerhalb einer Transaktion ausgeführt — eine fehlgeschlagene Migration wird vollständig zurückgerollt und die Anwendung stoppt sauber statt in einer Absturzschleife",
-      "Fehlerbehandlung bei Migrations ist jetzt versionsspezifisch: nur der bekannte partielle Migrationszustand aus v1.5.x–v1.6.1 wird automatisch behoben; unbekannte Fehler in anderen Migrations werden sofort weitergegeben",
-      "Reset Database ermittelt Tabellen jetzt dynamisch aus dem Datenbankschema, sodass zukünftige Migrations keine verwaisten Tabellen hinterlassen können"
-    ]
-  },
   "sectionHeaders": {
     "highlights": "Highlights",
     "added": "Hinzugefügt",
@@ -29,6 +10,27 @@
     "removed": "Entfernt"
   },
   "releases": [
+    {
+      "version": "1.6.2",
+      "date": "2026-06-22",
+      "issues": [106],
+      "highlights": [
+        "Reset Database verursacht nach der Verwendung keinen Absturz der Anwendung mehr bei jedem Neustart (issue #106)."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Reset Database verursacht nach der Verwendung keinen Absturz des Add-ons mehr bei jedem Neustart (issue #106)."
+        ]
+      },
+      "fixed": [
+        "Die Verwendung von Reset Database in v1.5.x–v1.6.1 konnte die Datenbank in einem defekten Zustand hinterlassen, in dem die Anwendung nicht mehr startete mit 'SQLite Error 1: duplicate column name: ImportBatchId' (issue #106)"
+      ],
+      "changed": [
+        "Schemamigrations werden jetzt innerhalb einer Transaktion ausgeführt — eine fehlgeschlagene Migration wird vollständig zurückgerollt und die Anwendung stoppt sauber statt in einer Absturzschleife",
+        "Fehlerbehandlung bei Migrations ist jetzt versionsspezifisch: nur der bekannte partielle Migrationszustand aus v1.5.x–v1.6.1 wird automatisch behoben; unbekannte Fehler in anderen Migrations werden sofort weitergegeben",
+        "Reset Database ermittelt Tabellen jetzt dynamisch aus dem Datenbankschema, sodass zukünftige Migrations keine verwaisten Tabellen hinterlassen können"
+      ]
+    },
     {
       "version": "1.6.1",
       "date": "2026-06-22",
