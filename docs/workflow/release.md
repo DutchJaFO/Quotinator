@@ -64,7 +64,17 @@ dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quot
 
 Verify structure: `dotnet test --filter ChangelogSchema`
 
-### Step 3 — Check for Dependabot PRs
+### Step 3 — Run the open issue audit
+
+Before checking Dependabot PRs, run the open issue audit (`docs/workflow/issue-audit.md`):
+
+```bash
+gh issue list --state open --limit 100 --json number,title,labels,milestone
+```
+
+Classify each open issue (legitimately open, deployment-pending, done-not-closed, or stale). Close any that are done but were never formally closed, following the closure criteria in `checklist.md`. This ensures the release does not ship while completed work sits unclosed.
+
+### Step 5 — Check for Dependabot PRs
 
 ```bash
 gh pr list --state open
@@ -78,7 +88,7 @@ git pull
 
 Add a dependency bump entry to the `unreleased` section if any Dependabot PRs were merged, then regenerate the changelogs again.
 
-### Step 4 — Check for issues and CVEs to include
+### Step 6 — Check for issues and CVEs to include
 
 ```bash
 gh issue list --state open --label bug
@@ -86,7 +96,7 @@ gh issue list --state open --label bug
 
 Review open bug issues and any active CVE tracking docs in `src/[project]/CVE/`. Confirm whether any should be included in this release. If yes, address them on the branch and update `unreleased` accordingly. Regenerate changelogs if anything was added.
 
-### Step 5 — Promote `unreleased` to a release entry and bump the version
+### Step 7 — Promote `unreleased` to a release entry and bump the version
 
 Once `unreleased` is complete and all Dependabot and issue checks are done:
 
@@ -116,7 +126,7 @@ dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quoti
 dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md
 ```
 
-### Step 6 — Run the pre-push checklist
+### Step 8 — Run the pre-push checklist
 
 ```bash
 dotnet build --configuration Release          # 0 warnings, 0 errors
@@ -133,7 +143,7 @@ curl -s http://localhost:8080/api/v1/version   # must return the new version
 curl -s http://localhost:8080/api/v1/quotes/random
 ```
 
-### Step 7 — Open a PR and merge to `main`
+### Step 9 — Open a PR and merge to `main`
 
 Push the branch and open a PR:
 
@@ -146,7 +156,7 @@ Do **not** use `Fixes #N`, `Closes #N`, or any GitHub auto-close keyword in the 
 
 Merge the PR once CI is green. Do **not** use `--delete-branch` — branch deletion is the developer's decision only.
 
-### Step 8 — Tag the release
+### Step 10 — Tag the release
 
 After the PR is merged and `main` is up to date locally:
 
@@ -158,14 +168,14 @@ git push origin vX.Y.Z
 
 > **Environment note:** Claude Code Desktop can push tags directly. Claude Code cloud and mobile environments receive a 403 on tag pushes — if running there, push the tag from a local terminal.
 
-### Step 9 — Confirm the fix in the release build, then close the issue
+### Step 11 — Confirm the fix in the release build, then close the issue
 
 An issue is only closed when the fix is confirmed working in the actual release artefact — not just because the tag was pushed and CI passed. What "confirmed" means depends on what the issue touches:
 
 | Issue type | Confirmation required before closing |
 |---|---|
-| API / logic bug | Smoke-test against the local Docker image (Step 6) — confirm the specific failure no longer occurs |
-| Docker / container behaviour | Local Docker build and smoke-test (Step 6) |
+| API / logic bug | Smoke-test against the local Docker image (Step 8) — confirm the specific failure no longer occurs |
+| Docker / container behaviour | Local Docker build and smoke-test (Step 8) |
 | HA add-on behaviour (ingress, supervisor config, add-on panel, container restart) | Install the new release in the HA add-on and verify the behaviour there. These issues **cannot** be confirmed from a local Docker run alone. |
 | Documentation / content only | User reads the updated content and confirms it is correct |
 
@@ -183,10 +193,10 @@ Issues requiring HA add-on confirmation are tracked in the post-deploy verificat
 
 ## Milestone release procedure
 
-A milestone release follows Steps 2–9 above, with one difference:
+A milestone release follows Steps 2–11 above, with one difference:
 
-- The Dependabot check (Step 3) is done at the start of the milestone's final release session, not inline — see the "Tagging a release" section in `CLAUDE.md` for the full sequence.
-- After Step 9, close the milestone on GitHub:
+- The issue audit (Step 3) and Dependabot check (Step 5) are done at the start of the milestone's final release session, not inline — see the "Tagging a release" section in `CLAUDE.md` for the full sequence.
+- After Step 11, close the milestone on GitHub:
   ```bash
   gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed
   ```

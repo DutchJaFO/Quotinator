@@ -112,8 +112,10 @@
   <Folder Name="/docs/workflow/">
     <File Path="docs/workflow/README.md" />
     <File Path="docs/workflow/checklist.md" />
+    <File Path="docs/workflow/issue-audit.md" />
     <File Path="docs/workflow/issues.md" />
     <File Path="docs/workflow/process.md" />
+    <File Path="docs/workflow/release.md" />
     <File Path="docs/workflow/cve.md" />
     <File Path="docs/workflow/cve-template.md" />
   </Folder>
