@@ -1,10 +1,25 @@
-##### *GENERATED FILE [2026-06-22 18:31 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-22 20:55 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Highlights
+- Reset Database no longer crashes the application on every restart after being used (issue #106).
+
+### Changed
+- Schema migrations now run inside transactions — a failed migration is fully rolled back and the application stops cleanly instead of crash-looping
+- Migration error recovery is version-scoped: only the known partial-migration state introduced in v1.5.x–v1.6.1 is self-healed; unknown errors in any other migration propagate immediately
+- Reset Database now discovers tables dynamically from the database schema so future migrations never risk leaving orphaned tables behind
+
+### Fixed
+- Using Reset Database in v1.5.x–v1.6.1 could leave the database in a broken state where the application failed to start with 'SQLite Error 1: duplicate column name: ImportBatchId' (issue #106)
 
 ---
 
@@ -552,6 +567,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.1...HEAD
 [1.6.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.0...v1.5.1
