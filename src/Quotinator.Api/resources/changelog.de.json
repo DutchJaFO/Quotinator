@@ -47,7 +47,8 @@
         "`Scalar.AspNetCore` von 2.16.3 auf 2.16.4 aktualisiert",
         "`actions/checkout` von v6 auf v7 aktualisiert (nur CI)",
         "`JsonSchema.Net` von 8.0.0 auf 9.2.2 aktualisiert (nur Tests)",
-        "`MSTest` von 4.0.2 auf 4.2.3 aktualisiert (nur Tests)"
+        "`MSTest` von 4.0.2 auf 4.2.3 aktualisiert (nur Tests)",
+        "`Microsoft.Extensions.Logging.Abstractions` von 10.0.0 auf 10.0.9 aktualisiert"
       ],
       "fixed": [
         "`scripts/changelog-upgrade.csx`: Versionen, die in der Root-`CHANGELOG.md` vorhanden, aber in `addon/CHANGELOG.md` fehlen, verwenden jetzt korrekt Root-Highlights als generische Highlights; v1.0.0 und v1.0.1 waren betroffen",

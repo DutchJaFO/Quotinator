@@ -47,7 +47,8 @@
         "`Scalar.AspNetCore` bijgewerkt van 2.16.3 naar 2.16.4",
         "`actions/checkout` bijgewerkt van v6 naar v7 (alleen CI)",
         "`JsonSchema.Net` bijgewerkt van 8.0.0 naar 9.2.2 (alleen tests)",
-        "`MSTest` bijgewerkt van 4.0.2 naar 4.2.3 (alleen tests)"
+        "`MSTest` bijgewerkt van 4.0.2 naar 4.2.3 (alleen tests)",
+        "`Microsoft.Extensions.Logging.Abstractions` bijgewerkt van 10.0.0 naar 10.0.9"
       ],
       "fixed": [
         "`scripts/changelog-upgrade.csx`: versies aanwezig in de root `CHANGELOG.md` maar afwezig in `addon/CHANGELOG.md` gebruiken nu correct root-hoogtepunten als generieke hoogtepunten; v1.0.0 en v1.0.1 waren getroffen",

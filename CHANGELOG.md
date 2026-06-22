@@ -1,4 +1,4 @@
-### *GENERATED FILE [2026-06-22 06:24 UTC] — do not edit by hand.*
+### *GENERATED FILE [2026-06-22 06:25 UTC] — do not edit by hand.*
 
 *Edit: `src/Quotinator.Api/resources/changelog.en.json`*
 
@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `actions/checkout` updated from v6 to v7 (CI only)
 - `JsonSchema.Net` updated from 8.0.0 to 9.2.2 (test only)
 - `MSTest` updated from 4.0.2 to 4.2.3 (test only)
+- `Microsoft.Extensions.Logging.Abstractions` updated from 10.0.0 to 10.0.9
 
 ### Fixed
 - `scripts/changelog-upgrade.csx`: versions present in root `CHANGELOG.md` but absent from `addon/CHANGELOG.md` now correctly use root highlights as generic highlights; v1.0.0 and v1.0.1 were affected
