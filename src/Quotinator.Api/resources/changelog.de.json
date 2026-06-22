@@ -28,7 +28,8 @@
       "changed": [
         "Sprachauswahl von einem Dropdown zu einzelnen Navigationseinträgen mit einem Häkchen bei der aktiven Sprache umgestaltet",
         "Neuer Einstellungsbereich im Navigationsmenü als Heimat für Sprachauswahl und zukünftige Einstellungen hinzugefügt",
-        "Generierte Changelog-Dateien zeigen standardmäßig nur einen Zeitstempel im Header; übergeben Sie `--debug` an `changelog.csx`, um den Eingabepfad und den Regenerierungsbefehl einzuschließen"
+        "Generierte Changelog-Dateien zeigen standardmäßig nur einen Zeitstempel im Header; übergeben Sie `--debug` an `changelog.csx`, um den Eingabepfad und den Regenerierungsbefehl einzuschließen",
+        "`Microsoft.Extensions.Logging.Abstractions` von 10.0.0 auf 10.0.9 in `Quotinator.Core` aktualisiert"
       ]
     },
     {
