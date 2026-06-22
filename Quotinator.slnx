@@ -78,6 +78,7 @@
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
+    <File Path="docs/milestones/open-issue-audit.md" />
   </Folder>
   <Folder Name="/docs/milestones/data-import-sources/">
     <File Path="docs/milestones/data-import-sources/README.md" />
