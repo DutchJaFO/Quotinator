@@ -36,7 +36,11 @@
         "`ChangelogService` now deserialises `changelog.json` directly into public models; private DTO mapping layer removed",
         "`ChangelogSection` model removed; Blazor components render the four change lists (`Added`, `Changed`, `Fixed`, `Removed`) directly",
         "Single-highlight releases now render as a paragraph instead of a bullet list",
-        "`CHANGELOG.md` and `addon/CHANGELOG.md` are now generated files — edit `changelog.json`, then run `scripts/changelog.csx` to regenerate"
+        "`CHANGELOG.md` and `addon/CHANGELOG.md` are now generated files — edit `changelog.json`, then run `scripts/changelog.csx` to regenerate",
+        "`Scalar.AspNetCore` updated from 2.16.3 to 2.16.4",
+        "`actions/checkout` updated from v6 to v7 (CI only)",
+        "`JsonSchema.Net` updated from 8.0.0 to 9.2.2 (test only)",
+        "`MSTest` updated from 4.0.2 to 4.2.3 (test only)"
       ],
       "fixed": [
         "`scripts/changelog-upgrade.csx`: versions present in root `CHANGELOG.md` but absent from `addon/CHANGELOG.md` now correctly use root highlights as generic highlights; v1.0.0 and v1.0.1 were affected",
