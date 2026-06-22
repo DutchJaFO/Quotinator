@@ -21,7 +21,8 @@
       "version": "1.6.0",
       "date": "2026-06-22",
       "issues": [
-        80
+        80,
+        82
       ],
       "highlights": [
         "Changelog is now driven by a single JSON source — both markdown files are generated from it, and the Blazor changelog page reads it directly with no markdown parsing.",
@@ -43,7 +44,8 @@
         "`schemas/changelog.schema.json`: machine-readable JSON schema for `changelog.json`",
         "`scripts/changelog.csx`: generates `keepachangelog` and `ha-addon` markdown from `changelog.json`; supports `--lang`, `--audience`, `--fallback`, `--fallback-message`",
         "`scripts/changelog-import.csx`: imports an existing `keepachangelog` or `ha-addon` markdown file into `changelog.json` format",
-        "`scripts/changelog-upgrade.csx`: one-time migration tool used to assemble `changelog.json` from the two reference markdown files"
+        "`scripts/changelog-upgrade.csx`: one-time migration tool used to assemble `changelog.json` from the two reference markdown files",
+        "Dutch (`changelog.nl.json`) and German (`changelog.de.json`) changelog translations with machine-translated disclaimer shown when `machineTranslated` is true (issue #82)"
       ],
       "changed": [
         "`ChangelogService` now deserialises `changelog.json` directly into public models; private DTO mapping layer removed",

@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-22 18:11 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-22 18:14 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -40,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `scripts/changelog.csx`: generates `keepachangelog` and `ha-addon` markdown from `changelog.json`; supports `--lang`, `--audience`, `--fallback`, `--fallback-message`
 - `scripts/changelog-import.csx`: imports an existing `keepachangelog` or `ha-addon` markdown file into `changelog.json` format
 - `scripts/changelog-upgrade.csx`: one-time migration tool used to assemble `changelog.json` from the two reference markdown files
+- Dutch (`changelog.nl.json`) and German (`changelog.de.json`) changelog translations with machine-translated disclaimer shown when `machineTranslated` is true (issue #82)
 
 ### Changed
 - `ChangelogService` now deserialises `changelog.json` directly into public models; private DTO mapping layer removed
