@@ -117,3 +117,68 @@ The add-on data directory (`/data`) persists across updates and restarts. It con
 | API reference (direct) | `http://<ha-host>:<port>/scalar/v1` |
 
 Replace `<port>` with the host port you mapped to `8080/tcp` in the add-on configuration.
+
+## Troubleshooting
+
+### Add-on fails to start after using Reset Database
+
+**Affected versions:** v1.5.x – v1.6.1  
+**Fixed in:** v1.6.2
+
+Using the **Reset Database** admin action in v1.5.x – v1.6.1 can leave the database in a broken state where the add-on fails to start on every subsequent attempt. The error in the add-on log is:
+
+```
+SQLite Error 1: 'duplicate column name: ImportBatchId'
+```
+
+This happens because the reset clears the schema version history but does not drop the underlying tables. When the add-on tries to restart and re-apply its migrations, it attempts to add a column that already exists.
+
+To recover, choose the option that applies to your situation.
+
+#### Option A — Restore a Home Assistant backup (easiest, preserves everything)
+
+If you have a recent Home Assistant backup taken before the Reset Database was triggered, this is the simplest recovery path. It restores both the add-on and its data in one step without any terminal access.
+
+1. Go to **Settings → System → Backups** in Home Assistant.
+2. Select a backup from before the problem occurred.
+3. Restore the **Quotinator** add-on from that backup.
+
+The add-on and its database will be restored to the state they were in when that backup was taken.
+
+> If no suitable HA backup exists, or if it is older than you would like, continue to Option B or C.
+
+#### Option B — Restore from a database backup (preferred if no HA backup, preserves quotes)
+
+The add-on automatically creates a backup of the database before applying schema upgrades. If you installed Quotinator before the import-provenance feature was added (roughly v1.5.0), a valid backup will exist.
+
+> **Important:** the failed Reset and any subsequent restart attempts also create a backup — but those backups capture the *broken* state and are not useful for recovery. You must use the **oldest** backup, not the most recent one.
+
+1. **Stop the Quotinator add-on** from the Home Assistant add-on page.
+2. **Open a terminal on your HA host.** Use the [Terminal & SSH add-on](https://github.com/home-assistant/addons/tree/master/ssh) or SSH directly into Home Assistant OS.
+3. **List all backups, oldest first:**
+   ```bash
+   ls -lt /data/backups/ | tail -n +2 | tail -5
+   ```
+   You should see files named `quotinatordata_v{N}_{timestamp}Z.db`. If the only files there have today's date, they are the corrupted backups — use Option B instead.
+4. **Restore the oldest backup** (the one with the earliest timestamp):
+   ```bash
+   cp /data/backups/quotinatordata_v2_<earliest-timestamp>Z.db /data/quotinatordata.db
+   ```
+   Replace `<earliest-timestamp>` with the actual filename from step 3.
+5. **Start the Quotinator add-on.** It will detect schema version 2, apply the missing migration correctly on the original tables, and reseed any missing data.
+
+> The valid backup contains the database state from before the import-provenance migration. Any quotes added after that original upgrade will need to be re-added.
+
+#### Option C — Delete the database (clean slate, loses all data)
+
+Use this if no HA backup or database backup exists, or if you do not need to preserve existing data. The add-on will reseed from the bundled source files on next start.
+
+1. **Stop the Quotinator add-on.**
+2. **Open a terminal on your HA host** (see Option B, step 2).
+3. **Delete the database file:**
+   ```bash
+   rm /data/quotinatordata.db
+   ```
+4. **Start the Quotinator add-on.** It will create a fresh database and import all bundled quotes automatically.
+
+> Quotes added via the import feature or manual edits are not part of the bundled source files and will be lost.

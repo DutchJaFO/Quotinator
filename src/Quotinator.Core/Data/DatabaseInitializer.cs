@@ -169,16 +169,75 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
         for (var i = current; i < Migrations.Count; i++)
         {
-            await connection.ExecuteAsync(Migrations[i]);
-            await connection.ExecuteAsync(
-                Sql.Schema.InsertVersion,
-                new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) });
+            using var tx = connection.BeginTransaction();
+            try
+            {
+                await connection.ExecuteAsync(Migrations[i], transaction: tx);
+                await connection.ExecuteAsync(
+                    Sql.Schema.InsertVersion,
+                    new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) },
+                    transaction: tx);
+                await tx.CommitAsync();
+            }
+            catch (SqliteException ex) when (IsKnownMigrationError(ex, i + 1))
+            {
+                // A prior partial run already applied this migration's DDL but did not record
+                // the version. Roll back the failed attempt (a no-op in practice — the column/table
+                // was already there before the transaction started), then record the version
+                // outside the transaction so the loop advances.
+                await tx.RollbackAsync();
+                _logger.LogWarning(
+                    "Database: migration {Version} was previously partially applied — " +
+                    "recording version and continuing. If data appears missing, use Reset Database.",
+                    i + 1);
+                await connection.ExecuteAsync(
+                    Sql.Schema.InsertVersion,
+                    new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                _logger.LogError(
+                    ex,
+                    "Database: migration {Version} failed — rolled back to version {Current}. " +
+                    "Resolve the issue and restart the application.",
+                    i + 1, i);
+                throw;
+            }
         }
 
         SchemaVersion = Migrations.Count;
         _logger.LogInformation(
             "Database: schema {Action} at version {Version}",
             current == 0 ? "created" : "updated", Migrations.Count);
+    }
+
+    // Returns true only for explicitly documented per-version known errors.
+    // Each case is tied to a specific migration version number — a similar error in a future
+    // migration will NOT be silently recovered unless it is explicitly added here.
+    // Any version or error not listed propagates so the app does not start in a broken state.
+    private static bool IsKnownMigrationError(SqliteException ex, int migrationVersion)
+        => migrationVersion switch
+        {
+            // Migration003 added ImportBatchId columns via ALTER TABLE ADD COLUMN. The broken
+            // ResetAsync in v1.5.x–v1.6.1 could apply this migration's DDL without recording
+            // the version, leaving the columns present but SchemaVersion stuck at 2. On the
+            // next startup the ALTER TABLE fails because the column already exists.
+            3 => ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
+
+    // Discovers all user tables at runtime and drops them. This ensures ResetAsync always
+    // drops every table, including ones added by future migrations, without requiring a
+    // manual update to a hardcoded list.
+    // Table names come from sqlite_master (system metadata, not user input) — string
+    // interpolation is safe here. Brackets handle any unusual table names.
+    // Caller must disable FK checks before calling (PRAGMA foreign_keys = OFF).
+    private static async Task DropAllTablesAsync(SqliteConnection connection)
+    {
+        var tables = (await connection.QueryAsync<string>(Sql.Schema.GetUserTables)).ToList();
+        foreach (var table in tables)
+            await connection.ExecuteAsync($"DROP TABLE IF EXISTS [{table}];");
     }
 
     #endregion
@@ -222,8 +281,10 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         await _seedLock.WaitAsync();
         try
         {
-            await TruncateDataAsync(connection);
+            await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
             await connection.ExecuteAsync(Sql.Schema.DeleteAll);
+            await DropAllTablesAsync(connection);
+            await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
             await ApplyMigrationsAsync(connection);
             await SeedIfEmptyInternalAsync(connection);
         }

@@ -116,6 +116,13 @@ Phase gates:
 
 **SQL injection policy (mandatory for v2):** All database access must use parameterised queries or a query builder that parameterises automatically. Never build SQL strings by concatenating user input. This applies to every parameter that originates from an HTTP request — `id`, `q`, `type`, `genre`, `lang`, `page`, `pageSize`. The same inputs that reach the in-memory service in v1 will reach the database in v2; the v1 input validation layer is the first defence, parameterised queries are the second.
 
+**Schema migration policy:** Migrations are numbered, append-only sequences in `DatabaseInitializer.Migrations`. Rules that must be followed for every migration:
+
+- **Never reorder or edit an existing migration** — once applied to a real database, a migration is frozen. Changing it silently corrupts installations that already ran it.
+- **Every DDL statement must be idempotent.** Use `CREATE TABLE IF NOT EXISTS`, `DROP TABLE IF EXISTS`, and `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (supported by the bundled SQLite 3.37+). A non-idempotent migration that fails partway through leaves the database in a state where the version is not recorded but the schema change was partially applied — causing a never-ending startup crash loop on every subsequent restart.
+- **One schema change per migration where possible.** Multi-statement migrations are harder to make fully idempotent and harder to reason about when partially applied.
+- All migration SQL stays inside `DatabaseInitializer` as `private const string Migration00N_...` — not in `Sql.cs`. Migration text is frozen at migration time and must not be discoverable or modifiable via the `Sql` class.
+
 ### Project structure
 ```
 src/Quotinator.Constants/ # Route strings, tag names, error message keys — no dependencies

@@ -12,6 +12,7 @@
 | `running-locally.md` | How to start and verify the application in Visual Studio |
 | `sql-safety.md` | SQL aggregate guard design — CVE-2025-6965, why regex, SQLite aggregate coverage |
 | `testing-policy.md` | Test framework, project structure, what to test |
+| `troubleshooting.md` | Common problems and recovery procedures for Docker / standalone deployments |
 | `vocabulary.md` | Authoritative reference for abbreviations and domain terms |
 
 | Folder | Contents |

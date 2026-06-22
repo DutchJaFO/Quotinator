@@ -23,6 +23,13 @@ internal static class Sql
         internal const string GetCurrentVersion = "SELECT COALESCE(MAX(Version), 0) FROM SchemaVersion;";
         internal const string InsertVersion     = "INSERT INTO SchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
         internal const string DeleteAll         = "DELETE FROM SchemaVersion;";
+
+        // Returns all user-created table names, excluding SQLite internals and the schema
+        // version tracker. Used by ResetAsync to discover tables dynamically so that new
+        // tables added in future migrations are dropped without requiring a manual update here.
+        // FK checks must be off before dropping the results (PRAGMA foreign_keys = OFF).
+        internal const string GetUserTables =
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'SchemaVersion';";
     }
 
     /// <summary>Quotes table — fixed queries and dynamic-query factory methods.</summary>

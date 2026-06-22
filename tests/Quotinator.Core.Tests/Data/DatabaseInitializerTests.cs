@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Data;
@@ -120,5 +121,53 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         Assert.AreEqual(countAfterFirst, db.QuoteCount);
+    }
+
+    // ── Reset ─────────────────────────────────────────────────────────────────
+
+    /// <summary>ResetAsync on an already-seeded database drops and recreates all tables and reseeds correctly.</summary>
+    [TestMethod]
+    public async Task ResetAsync_AfterInitialise_RebuildsSchemaAndReseeds()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        var countAfterInit = db.QuoteCount;
+
+        await db.ResetAsync();
+
+        Assert.AreEqual(countAfterInit, db.QuoteCount, "Quote count after reset should match initial seed");
+    }
+
+    // ── Regression ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Regression test for issue #106: if SchemaVersion is rolled back to v2 while the
+    /// underlying tables already have v3 columns (ImportBatchId), InitialiseAsync must
+    /// self-heal — record the version and reseed — rather than crash-looping on every startup.
+    /// This state was produced by the broken ResetAsync in v1.5.x–v1.6.1.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_PartialMigrationState_SelfHealsAndReseeds()
+    {
+        // Arrange: seed a healthy v3 database then simulate the broken state by rolling
+        // SchemaVersion back to v2 — exactly what the pre-fix ResetAsync left behind.
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        var countAfterInit = db.QuoteCount;
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await conn.ExecuteAsync("DELETE FROM SchemaVersion WHERE Version = 3;");
+        await conn.CloseAsync();
+
+        // Act: InitialiseAsync must not throw. It detects the duplicate-column situation,
+        // records version 3, and leaves existing data intact.
+        await db.InitialiseAsync();
+
+        // Assert: schema is at v3 and existing data is undisturbed.
+        Assert.AreEqual(3,              db.SchemaVersion, "Schema must be recorded at v3 after self-heal");
+        Assert.AreEqual(countAfterInit, db.QuoteCount,    "Quote count must be unchanged after self-heal");
     }
 }
