@@ -259,11 +259,11 @@ Run `dotnet test --filter ChangelogSchema` after each file to confirm completene
 | 18 | ✅ | `Quotinator.slnx` updated (English file renamed; nl/de entries pending Phase 9) | Review | `changelog.en.json` entry present; nl/de entries to be added with Phase 9 |
 | 19 | ✅ | `CHANGELOG.md` and `addon/CHANGELOG.md` regenerated from `changelog.en.json` | Diff | Files regenerated as part of Phase 7 |
 | 20 | ✅ | Full build and all tests clean (English only) | Build + test | `dotnet build --configuration Release` → `0 Warning(s)  0 Error(s)`; `dotnet test --configuration Release` → 195 passed, `0 Warning(s)  0 Error(s)` |
-| 21 | ❌ | `changelog.nl.json` created: all arrays fully translated including `audienceHighlights.ha-addon` | Schema + test | `AllLanguageFiles_HaveMatchingVersionLists` green; structural checks green for nl file |
-| 22 | ❌ | `changelog.de.json` created: same completeness as nl | Schema + test | Same tests green for de file |
+| 21 | ✅ | `changelog.nl.json` created: all arrays fully translated including `audienceHighlights.ha-addon` | Schema + test | `ChangelogSchemaTests` 7/7 green; structural checks green for nl file |
+| 22 | ✅ | `changelog.de.json` created: same completeness as nl | Schema + test | Same tests green for de file |
 | 23 | ❌ | About page in NL shows Dutch highlights with machine-translated disclaimer; DE equivalent confirmed | Visual | Switch language in browser; verify correct content and disclaimer |
-| 24 | ❌ | Full build clean | Build | `dotnet build --configuration Release` → `0 Warning(s)  0 Error(s)` |
-| 25 | ❌ | All tests pass | Test run | `dotnet test --configuration Release` → all tests passed `0 Warning(s)  0 Error(s)` |
+| 24 | ✅ | Full build clean | Build | `dotnet build --configuration Release` → `0 Warning(s)  0 Error(s)` |
+| 25 | ✅ | All tests pass | Test run | `dotnet test --configuration Release` → 195 passed, `0 Warning(s)  0 Error(s)` |
 
 ---
 

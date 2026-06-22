@@ -1,0 +1,694 @@
+{
+  "language": "de",
+  "sourceLanguage": "en",
+  "machineTranslated": true,
+  "sectionHeaders": {
+    "highlights": "Highlights",
+    "added": "Hinzugefügt",
+    "changed": "Geändert",
+    "fixed": "Behoben",
+    "removed": "Entfernt"
+  },
+  "unreleased": {
+    "issues": [
+      80
+    ],
+    "highlights": [
+      "Das Changelog wird jetzt von einer einzigen JSON-Quelle gesteuert — beide Markdown-Dateien werden daraus generiert, und die Blazor-Changelog-Seite liest sie direkt ohne Markdown-Parsing.",
+      "Unveröffentlichte Änderungen werden jetzt oben auf der Changelog-Seite angezeigt.",
+      "Jedes Release zeigt jetzt, welche GitHub-Issues und CVEs es adressiert, in einem einklappbaren Abschnitt."
+    ],
+    "added": [
+      "`Quotinator.Changelog`-Projekt: `IChangelogService` / `ChangelogService` — deserialisiert `changelog.json`; kein Markdown-Parser",
+      "`ChangelogEntry` Blazor-Steuerelement: rendert einen einzelnen Release-Eintrag (Highlights oder technische Abschnitte, GitHub-Release-Link, Issues & CVEs Block)",
+      "`ChangelogUnreleasedEntry` Blazor-Steuerelement: rendert den unveröffentlichten Block — immer ausgeklappt, keine Version oder Datum, kein GitHub-Release-Link",
+      "`ChangelogRoot`, `ChangelogUnreleased`, `ChangelogRelease`, `ChangelogReleaseTranslation`, `ChangelogTranslationItem`, `ChangelogSectionHeaders` Modelle direkt durch das JSON-Schema geformt; `ChangelogUnreleased` ist die Basis, `ChangelogRelease` erbt davon und fügt `Version` und `Date` hinzu",
+      "`ChangelogSchemaTests`: validiert `changelog.json`-Struktur (Pflichtfelder, keine Null-Einträge, CVE-ID-Format)",
+      "`schemas/changelog.schema.json`: maschinenlesbares JSON-Schema für `changelog.json`",
+      "`scripts/changelog.csx`: generiert `keepachangelog`- und `ha-addon`-Markdown aus `changelog.json`; unterstützt `--lang`, `--audience`, `--fallback`, `--fallback-message`",
+      "`scripts/changelog-import.csx`: importiert eine vorhandene `keepachangelog`- oder `ha-addon`-Markdown-Datei in das `changelog.json`-Format",
+      "`scripts/changelog-upgrade.csx`: einmaliges Migrationswerkzeug zum Zusammenstellen von `changelog.json` aus den zwei Referenz-Markdown-Dateien"
+    ],
+    "changed": [
+      "`ChangelogService` deserialisiert jetzt `changelog.json` direkt in öffentliche Modelle; private DTO-Mapping-Schicht entfernt",
+      "`ChangelogSection`-Modell entfernt; Blazor-Komponenten rendern die vier Änderungslisten (`Added`, `Changed`, `Fixed`, `Removed`) direkt",
+      "Releases mit einem einzelnen Highlight werden jetzt als Absatz statt als Aufzählungsliste gerendert",
+      "`CHANGELOG.md` und `addon/CHANGELOG.md` sind jetzt generierte Dateien — bearbeiten Sie `changelog.json`, dann `scripts/changelog.csx` ausführen zum Regenerieren"
+    ],
+    "fixed": [
+      "`scripts/changelog-upgrade.csx`: Versionen, die in der Root-`CHANGELOG.md` vorhanden, aber in `addon/CHANGELOG.md` fehlen, verwenden jetzt korrekt Root-Highlights als generische Highlights; v1.0.0 und v1.0.1 waren betroffen",
+      "`scripts/changelog.csx --fallback false`: Standard-Highlights leckten nicht mehr in Einträge ohne Zielgruppe",
+      "`changelog.json` v1.0.0 und v1.0.1 fehlten `highlights` — beide zeigen jetzt benutzerfreundliche Zusammenfassungen statt technischer Abschnittsbadges"
+    ]
+  },
+  "releases": [
+    {
+      "version": "1.5.1",
+      "date": "2026-06-20",
+      "highlights": [
+        "Behoben: das Startbanner war im Supervisor-Log auf eine einzelne Zeile zusammengefaltet.",
+        "Behoben: der Admin-API-Schlüssel und andere Optionen wurden nicht aus der Add-on-Konfiguration gelesen — die App liest jetzt `/data/options.json` direkt, die Quelle, die der Supervisor schreibt."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Interne Verbesserungen — keine sichtbaren Änderungen für Benutzer."
+        ]
+      },
+      "added": [
+        "Diagnose-Log-Zeilen beim Start, die anzeigen, welche `Quotinator__*`-Umgebungsvariablen vorhanden sind (der API-Schlüsselwert wird niemals protokolliert — nur ob er gesetzt ist)."
+      ],
+      "fixed": [
+        "Das Startbanner war im HA-Supervisor-Log auf eine einzelne Zeile zusammengefaltet — `Console.WriteLine` wiederhergestellt, damit Zeilenumbrüche erhalten bleiben.",
+        "Admin-API-Schlüssel und andere Add-on-Optionen wurden nicht aus `/data/options.json` gelesen; der `env_vars`-Vorlagenmechanismus ist für optionale Optionen unzuverlässig. Die App liest jetzt `/data/options.json` direkt beim Start."
+      ]
+    },
+    {
+      "version": "1.5.0",
+      "date": "2026-06-20",
+      "highlights": [
+        "Admin-Endpunkte (neu seeden, zurücksetzen) erfordern jetzt einen API-Schlüssel über den `X-Api-Key`-Anfrage-Header — setzen Sie `admin_api_key` in den Add-on-Optionen.",
+        "Die Scalar API-Referenz zeigt ein Authentifizierungspanel — geben Sie Ihren Schlüssel einmal ein und er wird automatisch bei allen Admin-Anfragen gesendet.",
+        "Das Startprotokoll zeigt jetzt an, ob ein Admin-API-Schlüssel konfiguriert ist (`gesetzt` / `nicht gesetzt`).",
+        "Die REST-API-Seite in der Benutzeroberfläche zeigt die Admin-Endpunkte, wenn ein Schlüssel aktiv ist.",
+        "Behoben: die Dokumentation des Admin-Endpunkts gab fälschlicherweise `Authorization: Bearer` an — der korrekte Header ist `X-Api-Key`.",
+        "Behoben: `appsettings.local.json` war im Docker-Image enthalten, sodass eine lokale Entwickler-Überschreibung stillschweigend Vorrang vor der vom HA-Supervisor gesetzten `admin_api_key`-Umgebungsvariablen haben konnte."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Admin-Endpunkte (neu seeden, zurücksetzen) erfordern jetzt einen API-Schlüssel über den `X-Api-Key`-Anfrage-Header.",
+          "Die Scalar API-Referenz zeigt jetzt oben ein Authentifizierungspanel — geben Sie Ihren Schlüssel einmal ein und er wird automatisch bei allen Admin-Anfragen gesendet.",
+          "Das Startprotokoll zeigt jetzt an, ob ein Admin-API-Schlüssel konfiguriert ist.",
+          "Die REST-API-Seite in der Benutzeroberfläche zeigt die Admin-Endpunkte, wenn ein Schlüssel aktiv ist."
+        ]
+      },
+      "added": [
+        "`X-Api-Key` OpenAPI-Sicherheitsschema: Admin-Endpunkte sind in der Spezifikation mit Tags versehen, damit Scalar ein Authentifizierungspanel mit dem vorab ausgefüllten Header-Namen anzeigt.",
+        "Admin-API-Schlüsselstatus (`gesetzt` / `nicht gesetzt`) zum Startbanner hinzugefügt.",
+        "`appsettings.local.template.json` — festgelegte Vorlage für lokale Entwicklungsüberschreibungen (kopieren Sie nach `appsettings.local.json`, durch .gitignore ausgeschlossen).",
+        "User Secrets-Unterstützung für `Quotinator.Api` aktiviert (`UserSecretsId: quotinator-api-dev`) — verwenden Sie VS 'Manage User Secrets' als Alternative zur lokalen Einstellungsdatei.",
+        "`docs/running-locally.md` dokumentiert beide lokalen Konfigurationsansätze und wie Admin-Endpunkte in Scalar getestet werden.",
+        "Startbanner neu formatiert: jede Konfigurationseinstellung in einer eigenen Zeile für einfacheres Lesen in Logs."
+      ],
+      "fixed": [
+        "Admin-Endpunkte waren dokumentiert als erfordern `Authorization: Bearer <Schlüssel>`, aber der korrekte Header ist `X-Api-Key: <Schlüssel>`.",
+        "Das Startbanner war in Visual Studio nicht sichtbar — es geht jetzt durch den Logger, damit es im Ausgabefenster neben anderen Log-Nachrichten erscheint.",
+        "`appsettings.local.json` wurde über `COPY . .` in das Docker-Image aufgenommen, sodass eine lokale Entwickler-Überschreibung stillschweigend über Umgebungsvariablen gewann (einschließlich der HA `admin_api_key`-Umgebungsvariablen). Zu `.dockerignore` hinzugefügt.",
+        "Intermittierender Testfehler bei paralleler Ausführung: drei Testklassen riefen jeweils `SqlMapper.AddTypeHandler` in `[ClassInitialize]` auf, was eine Race-Condition im globalen statischen Handler-Dictionary verursachte. Registrierungen zu `[AssemblyInitialize]` verschoben, damit sie einmalig vor dem Start der Tests ausgeführt werden."
+      ]
+    },
+    {
+      "version": "1.4.3",
+      "date": "2026-06-20",
+      "highlights": [
+        "Interne Verbesserungen zur Vorbereitung auf bevorstehende Datenimport-Funktionen."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Interne Verbesserungen zur Vorbereitung auf bevorstehende Datenimport-Funktionen."
+        ]
+      },
+      "added": [
+        "`ImportBatches`-Tabelle verfolgt den Ursprung jedes geseedeten oder importierten Datensatzes (`Id`, `Name`, `Type`, `Url`, `ImportedAt`, `ImportedBy`, `RecordCount`)",
+        "Nullable `ImportBatchId`-Fremdschlüssel zu `Quotes`, `Sources`, `Characters` und `People` hinzugefügt — verknüpft jeden Datensatz mit dem Import-Batch, der ihn eingeführt hat",
+        "`IImportBatchRepository` / `SqliteImportBatchRepository` in `Quotinator.Core` mit `GetAllAsync`, `GetByTypeAsync`, `UpdateRecordCountAsync`",
+        "Seeder erstellt eine `ImportBatch`-Zeile pro Quelldatei und schreibt `ImportBatchId` bei allen Einfügungen für diese Datei",
+        "Migration003: aktualisiert bestehende Datenbanken mit der neuen Tabelle und Spalten; fügt Platzhalter-`Seed`-Typ-Zeilen für die zwei gebündelten externen Datasets ein (bestehende Datensätze behalten `NULL` ImportBatchId — Herkunft wird nicht rückwirkend erfasst)"
+      ]
+    },
+    {
+      "version": "1.4.2",
+      "date": "2026-06-20",
+      "highlights": [
+        "Behoben: das Docker-Image meldete fälschlicherweise Version 1.0.0 — die tatsächliche Version wird jetzt korrekt angezeigt.",
+        "Die REST-API-Seite enthält jetzt einen direkten Link zum Versions-Endpunkt.",
+        "Interne Verbesserungen — keine weiteren sichtbaren Änderungen für Benutzer."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Behoben: das Docker-Image meldete fälschlicherweise Version 1.0.0 — die tatsächliche Version wird jetzt korrekt angezeigt.",
+          "Die REST-API-Seite enthält jetzt einen direkten Link zum Versions-Endpunkt.",
+          "Interne Verbesserungen — keine weiteren sichtbaren Änderungen für Benutzer."
+        ]
+      },
+      "added": [
+        "Versions-Endpunkt-Zeile (`api/v1/version`) auf der REST-API-Seite; übersetzt in Englisch, Niederländisch und Deutsch"
+      ],
+      "changed": [
+        "`Quotinator.Constants`-Quelldateien vom Projektstamm in namespace-passende Unterordner verschoben: `Api/` (`ApiMessages`, `ApiTags`), `Routes/` (`ApiRoutes`, `RouteExtensions`), `RateLimiting/` (`RateLimitPolicies`)",
+        "`Quotinator.Data.Data`-Namespace in `Quotinator.Data.Connections` umbenannt"
+      ],
+      "fixed": [
+        "Docker-Image enthielt `1.0.0` als API-Version — `Directory.Build.props` war nicht im Build-Kontext enthalten; jetzt vor der Wiederherstellungsschicht kopiert, damit die korrekte Version zur Veröffentlichungszeit eingebettet wird",
+        "Docker-Build-Schicht von per-Projekt `COPY`-Anweisungen auf `COPY . .` umgestellt, um zu verhindern, dass Dateien beim Hinzufügen neuer Projekte oder Root-SDK-Dateien stillschweigend weggelassen werden"
+      ]
+    },
+    {
+      "version": "1.4.1",
+      "date": "2026-06-20",
+      "issues": [
+        45
+      ],
+      "highlights": [
+        "Behoben: die Changelog-Seite zeigt jetzt verständliche Zusammenfassungen für alle Versionen statt technischer Details.",
+        "Interne Verbesserungen zur Vorbereitung auf bevorstehende Datenimport-Funktionen."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Behoben: die Changelog-Seite zeigt jetzt verständliche Zusammenfassungen für alle Versionen statt technischer Details.",
+          "Interne Verbesserungen zur Vorbereitung auf bevorstehende Datenimport-Funktionen."
+        ]
+      },
+      "added": [
+        "`IUnitOfWork` und `SqliteUnitOfWork` — Transaktions- und geteilte Verbindungsunterstützung für Repository-Operationen; erforderlich vom bevorstehenden Import-Endpunkt (#45) für atomare Batch-Einfügungen",
+        "Repository-Methoden (`IRepository<T>`, `IRestorableRepository<T>`) akzeptieren einen optionalen `IUnitOfWork?`-Parameter; alle bestehenden Aufrufer benötigen keine Änderungen"
+      ],
+      "fixed": [
+        "`### Highlights`-Abschnitte für 1.4.0 und 1.3.0 wurden auf der Blazor-Changelog-Seite nicht angezeigt — 1.4.0 verwendete Fließtext statt einer Aufzählungsliste (vom Parser stillschweigend ignoriert); 1.3.0 enthielt Fachbegriffe. Beide in verständlichem benutzerseitigem Englisch neu geschrieben."
+      ]
+    },
+    {
+      "version": "1.4.0",
+      "date": "2026-06-20",
+      "cves": [
+        "CVE-2025-6965"
+      ],
+      "highlights": [
+        "Sicherheit: eine Datenbank-Abfrage-Schwachstelle (CVE-2025-6965) wurde identifiziert und behoben; keine Benutzerdaten waren betroffen."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Sicherheit: eine Datenbank-Abfrage-Schwachstelle (CVE-2025-6965) wurde identifiziert und behoben; keine Benutzerdaten waren betroffen."
+        ]
+      },
+      "added": [
+        "`seed.csx --output-dir DIR`-Flag leitet Seed-Ausgabe in ein benutzerdefiniertes Verzeichnis um und ermöglicht das Testen von Seeding ohne Überschreiben von `data/sources/`",
+        "Generische Repository-Infrastruktur: `IRepository<T>` und `SqliteRepository<T>` (Basis CRUD), `IRestorableRepository<T>` und `SqliteRestorableRepository<T>` (opt-in Soft-Delete-Verwaltung — gelöschte abrufen, wiederherstellen, hard-delete, purge)",
+        "`GuidHandler` Dapper-Typ-Handler — erzwingt `Guid`-Speicherung als Großbuchstaben-TEXT passend zu Microsoft.Data.Sqlites Standard, behebt eine Groß-/Kleinschreibungs-Nichtübereinstimmung, die stillschweigend Ergebnisse aus parametrisierten Abfragen verwarf",
+        "ADR 002 dokumentiert die RecordBase-überall-Entscheidung — alle Tabellen tragen Audit-Spalten; Verbindungstabellen verwenden einen synthetischen GUID-Primärschlüssel mit einer UNIQUE-Einschränkung auf dem natürlichen Schlüsselpaar",
+        "`README.md` in jedem reservierten-aber-leeren Ordner erklärt den Zweck und erwarteten Inhalt",
+        "`Directory.Build.props` unterdrückt NU1903 (CVE-2025-6965) global mit einem Begründungskommentar",
+        "`Quotinator.Core.Data.Sql` statische Klasse zentralisiert jede SQL-Anweisung als benannte Konstanten oder Factory-Methoden; alle Inline-SQL aus `DatabaseInitializer` und `SqliteQuoteService` entfernt",
+        "`SqlQueryGuardTests` — reflexionsbasierter Test, der alle `Sql.*`-Konstanten und alle dynamischen Abfrage-Factory-Methoden mit einer vollständigen Filtermatrix abdeckt; ersetzt den fragilen Datei-Scan-Ansatz",
+        "`RepositorySql`-Klasse in `Quotinator.Data.Repositories` — zentralisiert die sechs `SqliteRepository`/`SqliteRestorableRepository`-Vorlagenabfragen (zuvor inline); `SqlAggregateGuard.HasAggregateFunction` öffentlicher Helfer stellt den Aggregationserkennungsregex für Tests bereit",
+        "`AggregateQueries_MatchDocumentedInventory`-Test — dokumentiert und sperrt den genauen Satz von SQL-Konstanten, die Aggregationsfunktionen enthalten; schlägt fehl, wenn neue Aggregationsabfragen ohne Überprüfung hinzugefügt werden",
+        "`AllSqlStringLiterals_AreInCentralisedFiles`-Scan-Test — erzwingt, dass keine C#-Quelldatei außerhalb von `Sql.cs`, `RepositorySql.cs` und `DatabaseInitializer.cs` DML-String-Literale enthält; schließt das CVE-2025-6965 DoD-Element 1-Gate",
+        "String-Zentralisierungsrichtlinie in `CLAUDE.md` dokumentiert — keine Inline-Strings für SQL, UI oder Fehlermeldungen; Audit-Grep-Befehle und Test-Gates enthalten"
+      ]
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-06-17",
+      "highlights": [
+        "Zitat-Daten werden jetzt aus mehreren Quelldateien in `data/sources/` geladen — eine Datei pro gebündeltem Dataset, plus optionale Benutzerimporte im `imports/`-Unterordner des Datenverzeichnisses",
+        "Neuer `GET /api/v1/admin/database/seed/preview`-Endpunkt zeigt, was importiert würde, ohne in die Datenbank zu schreiben (erfordert `admin_api_key`)",
+        "`Quotinator__DataDir`-Umgebungsvariable ersetzt `Quotinator__DataPath` — auf das Datenverzeichnis setzen, nicht auf einen Dateipfad"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Zitate können jetzt aus mehreren Datenquellen geladen werden — gebündelte Datasets und Ihre eigenen benutzerdefinierten Dateien im Importordner.",
+          "Neuer Vorschau-Endpunkt zeigt, was importiert würde, bevor Änderungen festgeschrieben werden.",
+          "Konfiguration: das Datenverzeichnis wird jetzt durch Angabe eines Ordners gesetzt, nicht eines Dateipfads — aktualisieren Sie `Quotinator__DataDir`, wenn Sie eine benutzerdefinierte Einrichtung haben."
+        ]
+      },
+      "added": [
+        "`data/sources/`-Ordner mit einer JSON-Datei pro Dataset und einer `manifest.json`, die die Importreihenfolge und die Duplikat-Auflösungsrichtlinie steuert",
+        "`data/sources/quotinator-curated.json` — manuell zusammengestellte und verifizierte Zitate (Airplane! als Anfang)",
+        "Optionale Benutzerimporte: platzieren Sie `.json`-Dateien in `{dataDir}/imports/` um zusätzliche Zitate beim Start zu seeden",
+        "Duplikat-Auflösungsrichtlinie pro Batch: `skip` (Standard) oder `overwrite`; konfigurierbar in `manifest.json` oder über `Quotinator:DuplicateResolution:*`-Umgebungsvariablen",
+        "`GET /api/v1/admin/database/seed/preview` — Trockenablauf-Scan, der Dateianzahlen, Zitatanzahlen und dateiübergreifende Duplikate zurückgibt (erfordert `AdminApiKey`)",
+        "Reseed- und Reset-Antworten enthalten jetzt eine `duplicates`-Anzahl",
+        "Sechs JSON-Schemas in `schemas/` für alle Quelldatei-Formate und das Manifest"
+      ],
+      "changed": [
+        "`Quotinator__DataDir`-Umgebungsvariable ersetzt `Quotinator__DataPath` — Wert ist das Datenverzeichnis, nicht ein Dateipfad"
+      ],
+      "fixed": [
+        "Seeder FK-Constraint-Fehler beim ersten Start durch eine Guid-Groß-/Kleinschreibungs-Nichtübereinstimmung zwischen Dapper.Contrib (GROSSBUCHSTABEN) und rohen SQL-Parametern (Kleinbuchstaben); SQLite-Textvergleich ist Groß-/Kleinschreibungsempfindlich"
+      ]
+    },
+    {
+      "version": "1.2.2",
+      "date": "2026-06-16",
+      "highlights": [
+        "Behoben: der GitHub-Changelog-Link in der Add-on-Benutzeroberfläche öffnete sich innerhalb des HA-Frames und wurde blockiert — er öffnet sich jetzt korrekt in einem neuen Tab"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Behoben: der GitHub-Changelog-Link in der Benutzeroberfläche öffnete sich innerhalb des HA-Frames und wurde durch GitHubs Sicherheitsrichtlinie blockiert — er öffnet sich jetzt korrekt in einem neuen Tab"
+        ]
+      },
+      "fixed": [
+        "GitHub-Release-Link auf der Über/Changelog-Seite öffnet sich jetzt in einem neuen Tab (`target=\"_blank\"`), damit er den HA-Ingress-Frame verlässt; ohne dies verursachte GitHubs `X-Frame-Options`-Richtlinie einen Browser-Fehler statt des Ladens der Seite"
+      ]
+    },
+    {
+      "version": "1.2.1",
+      "date": "2026-06-16",
+      "highlights": [
+        "Datenbankdatei von `quotes.db` in `quotinatordata.db` umbenannt — die alte Datei wird beim ersten Start nach dem Upgrade automatisch umbenannt, kein Datenverlust",
+        "Vor jeder Schema-Migration wird ein Backup der Datenbank erstellt und im `backups/`-Unterordner des Datenverzeichnisses gespeichert; alte Backups können sicher gelöscht werden",
+        "Neue optionale `backup_path`-Konfigurationsoption zum Speichern von Backups an einem benutzerdefinierten Ort",
+        "DataProtection-Schlüsselordner von `.keys` in `keys` umbenannt",
+        "Container-Log-Ausgabe verwendet jetzt einzeiliges Format — einfacher in der HA-Log-Ansicht zu lesen",
+        "Startbanner zeigt alle Datenpfade auf einen Blick"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Die Datenbankdatei heißt jetzt `quotinatordata.db` — beim ersten Start nach dem Upgrade wird die alte `quotes.db` automatisch ohne Datenverlust umbenannt",
+          "Vor jeder Schema-Migration wird automatisch ein Backup der Datenbank erstellt",
+          "Container-Log-Ausgabe ist jetzt einzeilig und einfacher zu lesen; das Startbanner zeigt alle Datenpfade auf einen Blick"
+        ]
+      },
+      "added": [
+        "Vor-Migration-Datenbank-Backup mit der SQLite-Backup-API — geschrieben nach `{dataDir}/backups/quotinatordata_v{N}_{timestamp}Z.db` vor jeder Schema-Versionserhöhung; alte Backups können sicher gelöscht werden",
+        "Konfigurierbares Backup-Verzeichnis über `Quotinator:BackupPath`-Umgebungsvariable (Standard `{dataDir}/backups`)",
+        "HA Add-on: optionale `backup_path`-Konfigurationsoption mit Übersetzungen in Englisch, Niederländisch und Deutsch",
+        "`DataPaths`-Konstantenklasse (`Quotinator.Core.Data`) für alle Datei- und Ordnernamen im Datenverzeichnis — benannt und dokumentiert, damit zukünftige Änderungen an einem Ort bleiben",
+        "Datenverzeichnis-Struktur in `README.md` und `addon/DOCS.md` mit sicher-zu-löschenden Hinweisen für jeden Ordner dokumentiert"
+      ],
+      "changed": [
+        "Datenbankdatei von `quotes.db` in `quotinatordata.db` umbenannt; die veraltete Datei (einschließlich WAL- und SHM-Journal-Dateien) wird beim ersten Start nach dem Upgrade automatisch umbenannt",
+        "DataProtection-Schlüsselordner von `.keys` in `keys` umbenannt — sichtbarer Name ist leichter zu entdecken und zu dokumentieren",
+        "Konsolen-Log-Formatter von `simple` (zwei Zeilen pro Eintrag) auf `systemd` (eine Zeile pro Eintrag) für sauberere Container-Log-Ausgabe umgestellt",
+        "Startbanner mit vollständigen lesbaren Labels (`Database:`, `Backups:`, `DataProtection:`, `Config:`) neu geschrieben und auf eine Spalte ausgerichtet; keine Abkürzungen"
+      ]
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-06-16",
+      "highlights": [
+        "Admin-Endpunkte (neu seeden, zurücksetzen) erfordern jetzt `Authorization: Bearer <Schlüssel>` — sie geben standardmäßig 401 zurück, bis `admin_api_key` in der Add-on-Konfiguration gesetzt ist",
+        "Neue `admin_api_key`-Option im Add-on-Konfigurationspanel"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Admin-Endpunkte (neu seeden, zurücksetzen) sind jetzt durch einen API-Schlüssel geschützt — sie geben standardmäßig 401 zurück und akzeptieren nur Anfragen mit dem korrekten `Authorization: Bearer <Schlüssel>`-Header"
+        ]
+      },
+      "added": [
+        "`AdminApiKeyFilter`-Endpunkt-Filter sichert `POST /api/v1/admin/database/reseed` und `POST /api/v1/admin/database/reset` mit einem statischen API-Schlüssel",
+        "`Quotinator:AdminApiKey`-Konfigurationsschlüssel (Umgebungsvariable `Quotinator__AdminApiKey`) — muss explizit gesetzt werden, um die Endpunkte zu aktivieren; kein gebündelter Standard",
+        "Schlüsselvergleich verwendet `CryptographicOperations.FixedTimeEquals` um Timing-Angriffe zu verhindern",
+        "HA Add-on: optionale `admin_api_key`-Konfigurationsoption mit Übersetzungen in Englisch, Niederländisch und Deutsch"
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-06-15",
+      "highlights": [
+        "Filtern Sie Zitate nach mehreren Genres oder Typen gleichzeitig (z.B. Science-Fiction-Komödien) mit wiederholbaren Abfrageparametern auf `/random`, `/search` und der paginierten Liste",
+        "Sci-Fi- und Sachbuch-Genres werden jetzt in allen Endpunkten korrekt gefunden — sie fehlten stillschweigend in Ergebnissen vor diesem Fix",
+        "`/random` gibt jetzt immer einen Antwort-Umschlag mit Status, Elementen, Gesamtanzahl passender Ergebnisse und einer optionalen Nachricht zurück; die Form der Antwort hat sich geändert",
+        "Neue Admin-Endpunkte: `POST /api/v1/admin/database/reseed` und `POST /api/v1/admin/database/reset` für Datenbankwartung ohne Neustart des Containers"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Sie können Zitate jetzt nach mehr als einem Genre oder Typ gleichzeitig filtern — holen Sie zum Beispiel nur Science-Fiction-Komödien oder Drama-Filme",
+          "Sci-Fi- und Sachbuch-Zitate fehlten in Such- und Zufallsergebnissen; beide Genres funktionieren jetzt korrekt",
+          "Zwei neue Admin-Endpunkte ermöglichen das erneute Seeden oder vollständige Zurücksetzen der Zitat-Datenbank ohne Neustart des Containers"
+        ]
+      },
+      "added": [
+        "`/random` akzeptiert jetzt Multi-Wert `type`- und `genre`-Filter (wiederholbare Abfrageparameter, ODER-Logik innerhalb jedes, UND zwischen ihnen), plus `character`-, `author`- und `source`-Text-enthält-Filter (UND-Logik mit anderen Parametern)",
+        "`/search` und `/` (paginierte Liste) akzeptieren jetzt Multi-Wert `type`- und `genre`-Filter mit ODER-Logik",
+        "`FilteredQuoteResult<T>`-Antwort-Umschlag auf `/random` — immer zurückgegeben, enthält `status` (enum), `items`, `totalMatching` (Pool-Größe vor Zufallsauswahl) und `message` (nicht-null für Nicht-Ok-Status)",
+        "`FilteredResultStatus`-Enum: `Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`",
+        "`ValidGenres`-Set zu `InputValidation` hinzugefügt; `IsSuspiciousInput`-Regex erkennt übliche SQL-Injection-Muster und gibt sie als `InvalidInput`-Status aus (parametrisierte Abfragen verhindern bereits tatsächliche Injection)",
+        "`ValidGenres`- und `IsSuspiciousInput`-Tests zu `InputValidationTests` hinzugefügt",
+        "`POST /api/v1/admin/database/reseed` — löscht alle Daten und importiert neu aus `quotes.json`; Schema-Migrationshistorie bleibt erhalten",
+        "`POST /api/v1/admin/database/reset` — löscht Daten und Schema-Versionshistorie, wendet alle Migrationen erneut an, importiert dann neu aus `quotes.json`; entspricht einer frischen Datenbank",
+        "`GenreApiToDb`-Vertragstests in `InputValidationTests`: jedes gültige Genre hat ein Mapping, jeder gemappte Wert ist ein gültiger Enum-Name, Bindestrich-Genres (`sci-fi`, `non-fiction`) werden korrekt gemappt"
+      ],
+      "changed": [
+        "**Brechend:** `/random`-Antwortform in allen Fällen von einem einzelnen Zitat-Objekt oder Array zum `FilteredQuoteResult`-Umschlag geändert",
+        "Genre-Normalisierung in `SqliteQuoteService` mappt jetzt korrekt `sci-fi` → `SciFi` und `non-fiction` → `NonFiction` für DB-Abfragen und kehrt beim Lesen um (zuvor wurden Bindestrich-Genres nicht korrekt gefunden)",
+        "Unbekannte `type`/`genre`-Werte auf `/random` geben jetzt einen 200 `InvalidType`/`InvalidGenre`-Umschlag statt 400 zurück; auf `/search` und `/` matchen sie stillschweigend nichts"
+      ],
+      "fixed": [
+        "`SqliteQuoteService.ToResponse` serialisierte `Genre.SciFi` als `\"scifi\"` und `Genre.NonFiction` als `\"nonfiction\"`; beide geben jetzt die korrekten API-Tag-Strings zurück (`\"sci-fi\"`, `\"non-fiction\"`)",
+        "`DatabaseInitializer` ließ `sci-fi`- und `non-fiction`-Genres beim Seeden stillschweigend fallen, weil `Enum.TryParse(\"sci-fi\")` bei Bindestrich-Strings fehlschlägt — `TryNormaliseGenre` mappt jetzt über `InputValidation.GenreApiToDb` vor dem Parsen; `Migration002` schneidet die betroffenen `QuoteGenres`-Zeilen ab, damit bestehende Datenbanken beim nächsten Start automatisch erneut geseeded werden; `GenreApiToDb` wurde von privat in `SqliteQuoteService` nach öffentlich in `InputValidation` verschoben, damit beide Verbraucher eine Definition teilen"
+      ]
+    },
+    {
+      "version": "1.0.15",
+      "date": "2026-06-15",
+      "highlights": [
+        "Behoben: Antiforgery-Token-Fehler nach Container-Neustart — DataProtection-Schlüssel werden jetzt zuverlässig auf das persistente Volume (`/data/.keys/`) geschrieben, auch wenn der Supervisor eine zwischengespeicherte Konfiguration ohne `Quotinator__DataPath` bereitstellt",
+        "Behoben: der OpenAPI-UI-Link in der Seitenleiste öffnete sich beim Tippen in der HA-Companion-App im Systembrowser, verlor die Sitzung und verursachte einen 404; er navigiert jetzt innerhalb der Webview der Companion-App"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Ein Sitzungsproblem in Home Assistant behoben, bei dem die Benutzeroberfläche ihren Zustand nach dem Neustart des Containers verlor"
+        ]
+      },
+      "fixed": [
+        "DataProtection-Schlüssel wurden in das flüchtige Container-Dateisystem geschrieben, wenn die `Quotinator__DataPath`-Umgebungsvariable in HA fehlt (z.B. durch Supervisor-Konfigurations-Cache) — `Program.cs` fällt jetzt auf `/data` (den HA-persistenten Volume-Mount-Punkt) zurück, bevor die `/app/data`-Standardeinstellung verwendet wird, damit Schlüssel immer auf einem persistenten Volume sind und Antiforgery-Tokens Container-Neustarts überstehen",
+        "OpenAPI-UI- und Spec-Links in `Home.razor` hatten `target=\"_blank\"`, was die HA-Companion-App an den Systembrowser weiterleitete (keine HA-Sitzung) — Entfernen von `target=\"_blank\"` hält die Navigation innerhalb der Webview der Companion-App, wo die Sitzung aktiv ist"
+      ]
+    },
+    {
+      "version": "1.0.14",
+      "date": "2026-06-15",
+      "highlights": [
+        "Intern: Endpunkt-Tests erstellen oder berühren keine Datenbank mehr — keine Auswirkung auf Add-on-Verhalten"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Interne Verbesserung — keine sichtbaren Änderungen für Benutzer"
+        ]
+      },
+      "changed": [
+        "`DatabaseInitializer` implementiert jetzt `IDatabaseInitializer`; `Program.cs` registriert und löst über die Schnittstelle auf",
+        "Endpunkt-Tests registrieren `NoOpDatabaseInitializer` neben `FakeQuoteService` — keine Datenbank wird erstellt oder geseeded während Tests, die nicht beabsichtigen, die Datenbankschicht zu üben"
+      ]
+    },
+    {
+      "version": "1.0.13",
+      "date": "2026-06-15",
+      "highlights": [
+        "Intern: eine Race-Condition beim Datenbank-Seeding behoben, die bei paralleler Testausführung Testfehler verursachte — keine Auswirkung auf Add-on-Verhalten"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Bugfix — keine sichtbaren Änderungen für Benutzer"
+        ]
+      },
+      "fixed": [
+        "Race-Condition in `DatabaseInitializer.SeedIfEmptyAsync`: parallele `WebApplicationFactory`-Instanzen (parallele MSTest-Läufe mit `ExecutionScope.MethodLevel`) konnten beide eine leere Datenbank beobachten und gleichzeitiges Seeding versuchen, was einen `UNIQUE constraint failed: Sources.Title, Sources.Type`-Fehler verursachte — behoben mit einem statischen `SemaphoreSlim`, der Seed-Versuche innerhalb desselben Prozesses serialisiert"
+      ]
+    },
+    {
+      "version": "1.0.12",
+      "date": "2026-06-15",
+      "issues": [
+        7
+      ],
+      "highlights": [
+        "Zitate werden jetzt in einer SQLite-Datenbank (`quotes.db`) auf dem persistenten Volume gespeichert — keine Aktion erforderlich; die Datenbank wird automatisch beim ersten Start erstellt und befüllt",
+        "Das Startprotokoll zeigt jetzt den Datenbankstatus: Schema-Version, Seeding-Fortschritt und eine abschließende Anzahl von Zitaten, Quellen, Charakteren und Personen",
+        "Versions-Endpunkt (`GET /api/v1/version`) gibt jetzt die Datenbank-Schema-Version und Datensatzanzahlen neben der API-Version zurück",
+        "Behoben: das Startbanner und der Versions-Endpunkt meldeten fälschlicherweise Version `1.0.0` statt der tatsächlichen Add-on-Version",
+        "Behoben: der Docker-Image-Build schlug fehl, als `Quotinator.Data` eingeführt wurde — Dockerfile COPY-Schichten korrigiert"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Zitate werden jetzt in einer lokalen Datenbank statt in einer Flat-File gespeichert — schneller, zuverlässiger und bereit für zukünftige Schreibunterstützung ([#7](https://github.com/DutchJaFO/Quotinator/issues/7))",
+          "Der Versions-Endpunkt gibt jetzt auch die Datenbank-Schema-Version und Datensatzanzahlen zurück"
+        ]
+      },
+      "added": [
+        "SQLite-Backend (v2): ersetzt Flat-File `QuoteService` durch `SqliteQuoteService` basierend auf Dapper + `Microsoft.Data.Sqlite` (schließt [#7](https://github.com/DutchJaFO/Quotinator/issues/7))",
+        "Vollständig normalisiertes Schema: `Sources`, `SourceTranslations`, `Characters`, `CharacterTranslations`, `People`, `Quotes`, `QuoteTranslations`, `QuoteGenres` — alle Tabellen enthalten `RecordBase`-Audit-Spalten (`DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted`) für Soft-Delete-Unterstützung",
+        "`SchemaVersion`-Tabelle mit nummerierter Migrationsunterstützung — ausstehende Migrationen werden automatisch beim Start angewendet; bestehende Migrationen werden nie bearbeitet",
+        "Erster-Start-Seeding: wenn die Datenbank beim Start leer ist, werden alle 780 Zitate automatisch aus dem gebündelten `quotes.json` importiert; kein manueller Migrationsschritt erforderlich",
+        "`SafeValue<T>` — diagnostischer Wrapper, der sowohl `Raw` (ursprünglicher DB-String) als auch `Parsed` (konvertierter Wert) trägt; beschädigte oder nicht erkannte Werte bringen die Anwendung nie zum Absturz und der ursprüngliche String wird für die Diagnose aufbewahrt",
+        "`SafeEnumHandler<T>` und `SafeDateHandler` — Dapper TypeHandlers; Enum-Werte als TEXT-Namen gespeichert (umbenennung-sicher), Datumsfelder unterstützen ungenaues ISO 8601 (`\"1994\"`, `\"1994-06\"`, `\"1994-06-04\"`)",
+        "`QuoteType`- und `Genre`-Enums mit `Unknown = 0` als sicherer Null-Wert-Fallback",
+        "`People`-Tabelle: verfolgt echte Personen (Autoren, öffentliche Persönlichkeiten) mit optionalem `DateOfBirth` / `DateOfDeath` im ungenauen ISO 8601-Format",
+        "Charaktere auf ihre Quelle beschränkt — derselbe Charaktername aus verschiedenen Franchises wird als separate Zeilen gespeichert",
+        "`Quotinator.Data`-Projekt: wiederverwendbare Daten-Infrastruktur (`RecordBase`, `SafeValue<T>`, `IDbConnectionFactory`, `SqliteConnectionFactory`, `SafeEnumHandler<T>`, `SafeDateHandler`) in eine eigene Klassenbibliothek extrahiert",
+        "Datenbank-Startprotokollierung: Log-Zeilen für Schema-Erstellung/Aktualisierung, Seeding-Fortschritt und eine abschließende Zusammenfassung (Zitat-/Quellen-/Charakter-/Personenanzahlen)",
+        "XML `<summary>`-Dokumentation auf allen öffentlichen Typen und Mitgliedern; CS1591 in `Quotinator.Core` und `Quotinator.Data` erzwungen",
+        "Versions-Endpunkt (`GET /api/v1/version`) gibt jetzt `database.schemaVersion` und Zeilenanzahlen zurück (`quotes`, `sources`, `characters`, `people`)",
+        "Startbanner enthält jetzt eine `DB:`-Zeile mit Schema-Version und Zeilenanzahlen",
+        "`SOURCES.md`: Attribution für Dapper, Dapper.Contrib, `Microsoft.Data.Sqlite`, `Microsoft.Extensions.Logging.Abstractions` hinzugefügt; DB Browser for SQLite unter externen Tools hinzugefügt"
+      ],
+      "fixed": [
+        "Versions-Endpunkt und Startbanner meldeten `1.0.0` statt der tatsächlichen Release-Version — `VersionService` las die `Quotinator.Core`-Assembly (kein `<Version>` gesetzt) statt der Entry-Assembly; zu `Assembly.GetEntryAssembly()` geändert",
+        "Docker-Build schlug fehl: `Quotinator.Data`-Projekt fehlte in den Dockerfile COPY-Schichten"
+      ]
+    },
+    {
+      "version": "1.0.11",
+      "date": "2026-06-14",
+      "highlights": [
+        "Konfigurationspanel-Optionen zeigen jetzt übersetzte Namen und Beschreibungen in Englisch, Niederländisch und Deutsch",
+        "Dokumentations-Tab: der Zugriffsabschnitt unterscheidet jetzt klar zwischen Ingress (Standard, Seitenleiste) und direktem Port (optional, für externe Tools); irreführende hartcodierte URL entfernt"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Add-on-Konfigurationsoptionen zeigen jetzt übersetzte Namen und Beschreibungen in Englisch, Niederländisch und Deutsch"
+        ]
+      },
+      "added": [
+        "HA Add-on-Konfigurationspanel zeigt jetzt übersetzte Optionsnamen und Beschreibungen in Englisch, Niederländisch und Deutsch (`addon/translations/`)",
+        "GitHub-Milestones erstellt, um bevorstehende Arbeit zu verfolgen; README-Roadmap-Abschnitt durch Link zur Milestone-Liste ersetzt"
+      ],
+      "changed": [
+        "Architektur: `Quotinator.Constants`-Projekt extrahiert (Routen-Strings, Tag-Namen, Fehlermeldungsschlüssel — keine Abhängigkeiten); `ApiLocalizer`, `VersionService` und `InputValidation` nach `Quotinator.Core` verschoben",
+        "HA Add-on-Dokumentation überarbeitet: Zugriffsabschnitt unterscheidet jetzt Ingress (Standard, keine Port-Konfiguration nötig) von direktem Port (optional, für externe Tools); hartcodierte `http://<ha-host>:8080/`-URLs entfernt"
+      ],
+      "fixed": [
+        "Veraltete `UI.en.json`-Referenzen in `docs/localisation.md` und Test-Kommentaren auf `UI.en-GB.json` (die tatsächliche Basisdatei) korrigiert"
+      ]
+    },
+    {
+      "version": "1.0.10",
+      "date": "2026-06-14",
+      "highlights": [
+        "Startbanner wird als einzelner Block ausgegeben (ein Zeitstempel) mit einer Konfigurationszusammenfassung: Log-Level, Anfrage-Logging-Status, SSL-Status und Zertifikatpfade wenn SSL aktiviert ist"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Startprotokoll wird jetzt als einzelner, lesbarer Block mit einer Konfigurationszusammenfassung ausgegeben"
+        ]
+      },
+      "changed": [
+        "Startbanner wird jetzt als einzelner Log-Eintrag (ein Zeitstempel) statt einer Zeile pro Log-Aufruf ausgegeben",
+        "Banner-Konfigurationszusammenfassung hinzugefügt: `log_level`, `log_requests`, `ssl`-Status und Zertifikat-/Schlüsselpfade wenn SSL aktiviert ist"
+      ]
+    },
+    {
+      "version": "1.0.9",
+      "date": "2026-06-14",
+      "highlights": [
+        "Neue `log_requests`-Option — protokolliert eine Zeile pro Zitat-API-Anfrage; nützlich zum Bestätigen, dass Aufrufe ankommen, ohne vollständiges Debug-Logging zu aktivieren (Standard: `false`)",
+        "Neue `log_level`-Option — wählen Sie die Log-Ausführlichkeit im Add-on-Panel (Standard: `info`; verwenden Sie `debug` bei der Meldung von Problemen)",
+        "UTC-Zeitstempel auf allen Log-Zeilen",
+        "Klare Start- und Stopp-Markierungen im Supervisor-Log (Version, Datenpfad, Zitatanzahl)"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Neue Option: eine Zeile pro API-Anfrage protokollieren — nützlich zum Bestätigen, dass Aufrufe ankommen, ohne vollständiges Debug-Logging zu aktivieren",
+          "Neue Option: wählen Sie, wie viel Detail im Supervisor-Log erscheint",
+          "Alle Log-Zeilen zeigen jetzt einen UTC-Zeitstempel"
+        ]
+      },
+      "added": [
+        "`log_requests`-Add-on-Option — wenn aktiviert, wird eine Zeile pro Zitat-API-Anfrage protokolliert (`GET /api/v1/quotes/random?n=5 → 200 in 12ms`); Standard `false`; 429-Antworten werden eingeschlossen, Gesundheits-/Blazor-/statischer Verkehr nicht",
+        "`log_level`-Add-on-Option — steuert Ausführlichkeit des HA-Supervisor-Logs; gültige Werte: `trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`; Standard `info`",
+        "UTC-Zeitstempel auf allen Log-Zeilen (`yyyy-MM-dd HH:mm:ss`)",
+        "Startbanner protokolliert Version, Datenpfad, Zitatanzahl und Schlüsselverzeichnis bei jedem Start",
+        "Abschaltnachricht protokolliert, wenn der Container stoppt"
+      ],
+      "changed": [
+        "`Console.WriteLine`-Startausgabe durch den strukturierten Logger ersetzt — alle Ausgaben respektieren jetzt das konfigurierte Log-Level und Zeitstempel-Format"
+      ]
+    },
+    {
+      "version": "1.0.8",
+      "date": "2026-06-14",
+      "issues": [
+        8
+      ],
+      "highlights": [
+        "Behoben: Links auf der Startseite (Scalar UI, OpenAPI-Spec, Gesundheitscheck) wurden über den Home Assistant Ingress nicht korrekt aufgelöst — sie verwenden jetzt relative Pfade"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Behoben: die API-Referenz-, OpenAPI-Spec- und Gesundheitscheck-Links auf der Startseite funktionierten nicht über den Home Assistant Ingress ([#8](https://github.com/DutchJaFO/Quotinator/issues/8))"
+        ]
+      },
+      "fixed": [
+        "Scalar-UI-Schaltfläche, OpenAPI-Spec-Link und Gesundheitscheck-Link auf der Startseite funktionierten unter dem Home Assistant Ingress nicht — absolute Pfade (z.B. `/scalar/v1`) ignorierten `<base href>` und wurden gegen HAs Server-Root aufgelöst; zu relativen Pfaden geändert, damit sie in allen Bereitstellungsszenarien korrekt über den Ingress-Proxy aufgelöst werden (schließt [#8](https://github.com/DutchJaFO/Quotinator/issues/8))"
+      ]
+    },
+    {
+      "version": "1.0.7",
+      "date": "2026-06-14",
+      "highlights": [
+        "Zitate und DataProtection-Schlüssel werden jetzt auf dem vom Supervisor eingehängten persistenten Volume (`/data`) gespeichert und überstehen Add-on-Neustarts und Updates — keine manuelle Datenmigration bei der Erstinstallation nötig",
+        "Behoben: Blazor-Assets (CSS, `blazor.web.js`) konnten im Home Assistant Ingress-Panel nicht geladen werden — die Seitenleistenseite war kaputt und die Schaltfläche 'Neues Zitat' funktionierte nicht",
+        "Behoben: Antiforgery-Entschlüsselungsfehler nach Add-on-Neustart — DataProtection-Schlüssel bleiben jetzt über Neustarts erhalten",
+        "Behoben: der Sprachcookie-Endpunkt erscheint nicht mehr in der Scalar API-Referenz"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Zitate und Sitzungsdaten überstehen jetzt Container-Neustarts und Add-on-Updates — kein Datenverlust bei Updates",
+          "Behoben: die Blazor-Seite (einschließlich der Schaltfläche 'Neues Zitat') wurde in der Home Assistant Seitenleiste nicht korrekt geladen"
+        ]
+      },
+      "added": [
+        "Erster-Start-Seeding: wenn `Quotinator__DataPath` auf ein leeres Verzeichnis zeigt (z.B. ein frisches HA Add-on-Daten-Volume), wird das gebündelte `quotes.json` beim Start automatisch dorthin kopiert, damit das Add-on sofort ohne manuelle Einrichtung funktioniert"
+      ],
+      "fixed": [
+        "Blazor-Assets (CSS, `blazor.web.js`) konnten nicht über das Home Assistant Ingress-Panel geladen werden — das hartcodierte `<base href=\"/\" />` ließ relative URLs gegen HAs eigene Server-Root statt des Ingress-Proxy-Pfads auflösen; behoben durch Lesen von `X-Ingress-Path` vom HA-Supervisor und Setzen als ASP.NET Core `PathBase`, das `<base href>` jetzt dynamisch widerspiegelt",
+        "DataProtection-Schlüssel wurden nicht über HA Add-on-Neustarts hinweg beibehalten — `Quotinator__DataPath=/data/quotes.json` zeigt die App auf das persistente Volume des Supervisors (`map: data:rw`), damit Schlüssel Neustarts und Updates überstehen; Antiforgery-Entschlüsselungsfehler und Blazor-Circuit-Deskriptor-Nichtübereinstimmungen sind behoben",
+        "Kestrel Doppel-Bind-Warnung: `ASPNETCORE_HTTP_PORTS: \"8099\"` in `addon/config.yaml` kollidierte mit dem Kestrel-Code, der auch Port 8099 bindet; Umgebungsblock entfernt, damit Port-Bindung vollständig von der Anwendung besessen wird",
+        "DataProtection-Schlüssel werden jetzt in ein `.keys/`-Unterverzeichnis innerhalb des Datenverzeichnisses geschrieben",
+        "`/Culture/Set` (Sprachcookie-Endpunkt) erscheint nicht mehr in der Scalar API-Referenz — es ist ein Blazor-UI-Helfer, kein REST-API-Endpunkt"
+      ]
+    },
+    {
+      "version": "1.0.6",
+      "date": "2026-06-14",
+      "highlights": [
+        "SSL / HTTPS-Unterstützung auf dem Direktzugriffsport — setzen Sie `ssl: true` und geben Sie Zertifikat-/Schlüssel-Dateinamen an (relativ zu `/ssl/`); standardmäßig deaktiviert",
+        "Ingress erkennt jetzt den HTTPS-Kontext des Browsers korrekt über `X-Forwarded-Proto`",
+        "Behoben: interaktive Blazor-Komponenten (z.B. die Schaltfläche 'Neues Zitat') funktionierten nicht in Docker oder dem HA Add-on",
+        "Sprachauswahl-Cookie funktioniert jetzt in Plain-HTTP-Direktzugriff-Bereitstellungen"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Optionales HTTPS auf dem Direktzugriffsport — aktivieren Sie SSL in der Add-on-Konfiguration, um Ihr Let's Encrypt-Zertifikat zu verwenden",
+          "Behoben: interaktive Elemente wie die Schaltfläche 'Neues Zitat' funktionierten nicht in Docker oder dem HA Add-on"
+        ]
+      },
+      "added": [
+        "Optionales HTTPS auf dem Direktzugriffsport (8080) über Kestrel; konfigurieren mit `Quotinator__Ssl=true`, `Quotinator__SslCertFile` und `Quotinator__SslKeyFile`-Umgebungsvariablen",
+        "HA Add-on SSL-Optionen (`ssl`, `certfile`, `keyfile`) — Standard `ssl: false`; wenn aktiviert, werden Zertifikate aus `/ssl/` verwendet (HA Let's Encrypt Add-on schreibt dort)",
+        "`UseForwardedHeaders()`-Middleware liest `X-Forwarded-Proto` und `X-Forwarded-For` von Upstream-Proxies, damit die App weiß, dass sie hinter HTTPS läuft, auch wenn sie intern HTTP verwendet (erforderlich für HA Ingress)"
+      ],
+      "changed": [
+        "DataProtection-Schlüssel werden jetzt im Datenverzeichnis (`/app/data`) statt flüchtig im Arbeitsspeicher beibehalten; Antiforgery-Tokens und Blazor-Circuit-Deskriptoren überstehen Container-Neustarts",
+        "Culture-Cookie `Secure`-Flag wird jetzt von `Request.IsHttps` abgeleitet statt hartcodiert `true` — Sprachauswahl bleibt in Plain-HTTP-Bereitstellungen erhalten",
+        "`UseHttpsRedirection` entfernt — Weiterleitungsverantwortung liegt beim Reverse-Proxy des Verbrauchers, nicht bei der App",
+        "Dockerfile löscht `ASPNETCORE_HTTP_PORTS`, das vom .NET-Basis-Image gesetzt wurde; Port-Bindung wird jetzt vollständig von der Kestrel-Konfiguration der Anwendung besessen"
+      ],
+      "fixed": [
+        "Interaktive Blazor-Komponenten (z.B. die Schaltfläche 'Neues Zitat') funktionierten nicht in Docker — `_framework/blazor.web.js` fehlte in der Docker-Publish-Ausgabe, weil `--no-restore` ein unvollständiges Blazor-Static-Web-Assets-Manifest wiederverwendete, das vor dem Kopieren der Quelldateien generiert wurde; behoben durch Entfernen von `--no-restore` aus `dotnet publish`"
+      ]
+    },
+    {
+      "version": "1.0.5",
+      "date": "2026-06-14",
+      "highlights": [
+        "Abhängigkeitsaktualisierungen: `Microsoft.AspNetCore.OpenApi`, `MSTest`, `Microsoft.AspNetCore.Mvc.Testing`, `actions/checkout` (nur CI)"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Abhängigkeitsaktualisierungen — keine sichtbaren Änderungen für Benutzer"
+        ]
+      },
+      "changed": [
+        "`Microsoft.AspNetCore.OpenApi` von 10.0.7 auf 10.0.9 aktualisiert",
+        "`actions/checkout` von v5 auf v6 aktualisiert (nur CI)",
+        "`Microsoft.AspNetCore.Mvc.Testing` von 10.0.0 auf 10.0.9 aktualisiert (nur Tests)",
+        "`MSTest` von 4.0.2 auf 4.2.3 aktualisiert (nur Tests)",
+        "`.gitattributes` auf LF für alle Textdateien normalisiert — verhindert CRLF/LF-Nichtübereinstimmungen durch Dependabot-Merges"
+      ]
+    },
+    {
+      "version": "1.0.4",
+      "date": "2026-06-14",
+      "highlights": [
+        "Sprachauswahl in der UI-Navigationsleiste — überschreibt Browsersprache, wird ein Jahr als Cookie gespeichert",
+        "AppArmor-Profil (`apparmor.txt`) — schränkt den Zugriff auf Container-Dateisystem und Netzwerk ein; verbessert die Add-on-Qualitätsbewertung",
+        "Behoben: Home Assistant Ingress verbindet sich jetzt korrekt",
+        "Direktzugriffsport standardmäßig deaktiviert (`null`); in der Add-on-Konfiguration aktivieren wenn für direkten LAN- oder Tool-Zugriff benötigt"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Sprachauswahl in der Navigationsleiste — überschreiben Sie die Sprachpräferenz Ihres Browsers; die Auswahl wird ein Jahr lang gespeichert",
+          "AppArmor-Sicherheitsprofil zum Home Assistant Add-on hinzugefügt"
+        ]
+      },
+      "added": [
+        "Release-Workflow setzt jetzt CI-Bestehen voraus — `build-and-push` hängt von einem `test`-Job ab, damit ein kaputtes Build kein veröffentlichtes Image erzeugen kann",
+        "Dependabot für wöchentliche NuGet- und GitHub Actions-Updates konfiguriert (`.github/dependabot.yml`)",
+        "Sprachauswahl in der Navigationsleiste: überschreibt Browsersprach-Präferenz, wird ein Jahr als Cookie gespeichert",
+        "Open-API-Referenzschaltfläche auf der Startseite",
+        "Übersetzungsunterstützungsabschnitt auf der Startseite",
+        "AppArmor-Profil für das Home Assistant Add-on (`addon/apparmor.txt`)"
+      ],
+      "changed": [
+        "Home Assistant Add-on Direktzugriffsport standardmäßig deaktiviert; in der Add-on-Konfiguration für direkten LAN- oder Tool-Zugriff aktivieren",
+        "`UI.en-GB.json` ist jetzt die i18n-Basis; `UI.en.json` entfernt",
+        "Sprachauswahl bietet: Automatisch erkennen, English (en-GB), Deutsch, Nederlands"
+      ],
+      "fixed": [
+        "WCAG SC 3.1.1: `<html lang>` ist jetzt dynamisch und spiegelt die aktive UI-Kultur wider (war hartcodiert `\"en\"`)",
+        "Sprachcookie verwendet jetzt `SameSite=Lax` und `Secure=true`",
+        "QuoteCard (Interactive Server-Komponente) respektiert jetzt den Sprachcookie; zuvor immer auf Englisch gerendert unabhängig von der ausgewählten Sprache",
+        "Home Assistant Ingress verbindet sich jetzt korrekt über die `ASPNETCORE_HTTP_PORTS`-Umgebungsvariable"
+      ]
+    },
+    {
+      "version": "1.0.3",
+      "date": "2026-06-14",
+      "highlights": [
+        "Store-Eintrag und Dokumentation aktualisiert, um den v1-Umfang genau widerzuspiegeln"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Dokumentationskorrekturen — keine sichtbaren Änderungen für Benutzer"
+        ]
+      },
+      "fixed": [
+        "Dokumentationskorrekturen: CI/CD-Schritte aktualisiert, um Publish-Smoke-Test und GitHub-Release-Erstellung widerzuspiegeln; Home Assistant-Dokumentation mit GHCR-Sichtbarkeitsanforderung aktualisiert; Docker-Dokumentation für `data/`-Build-Kontext-Einbeziehung korrigiert",
+        "Add-on-Store-Eintrag und Dokumentation korrigiert — Blazor-Management-UI ist für v2 geplant, nicht in v1 vorhanden",
+        "Add-on `config.yaml`-Version ab sofort mit API-Version synchronisiert"
+      ]
+    },
+    {
+      "version": "1.0.2",
+      "date": "2026-06-14",
+      "highlights": [
+        "Behoben: Docker-Image-Tag korrigiert — Add-on-Version stimmt jetzt mit dem veröffentlichten Image-Tag auf GHCR überein"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Bugfix — keine sichtbaren Änderungen für Benutzer"
+        ]
+      },
+      "fixed": [
+        "GitHub-Releases werden jetzt automatisch erstellt, wenn ein Versions-Tag gepusht wird"
+      ]
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-06-13",
+      "highlights": [
+        "Bugfix — keine sichtbaren Änderungen für Benutzer"
+      ],
+      "fixed": [
+        "Docker-Image-Build ist jetzt erfolgreich: `data/quotes.json` war über `.dockerignore` vom Build-Kontext ausgeschlossen, was `dotnet publish` zum Scheitern brachte",
+        "Alle GitHub Actions auf Node.js 24-kompatible Hauptversionen aktualisiert; `actions/checkout@v4` erzeugt noch eine Node-20-Veraltungswarnung (Upstream-Problem, in Sitzungsnotizen verfolgt)"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-06-13",
+      "highlights": [
+        "Erstveröffentlichung: 780 kuratierte Zitate aus Filmen, TV, Büchern und berühmten Persönlichkeiten",
+        "REST-API mit zufälligen, Listen-, Such- und Detail-Endpunkten; Mehrsprachenunterstützung; Ratenbegrenzung",
+        "OpenAPI-Dokumentation unter /scalar/v1"
+      ],
+      "added": [
+        "REST-Lese-Endpunkte: `GET /api/v1/quotes/random`, `/api/v1/quotes`, `/api/v1/quotes/{id}`, `/api/v1/quotes/search`",
+        "Gesundheitscheck-Endpunkt: `GET /api/v1/health`",
+        "Versions-Endpunkt: `GET /api/v1/version`",
+        "Zitat-Dataset: 780 kuratierte Zitate aus zwei MIT-lizenzierten Quellen",
+        "Zitat-Schema: unterstützt Filme, TV, Anime, Bücher und berühmte Persönlichkeiten; optionale Übersetzungen",
+        "Sprachunterstützung: `lang`-Abfrageparameter (ISO 639-1) mit Fallback auf Originalsprache",
+        "RFC 7807 ProblemDetails-Fehlerantworten mit lokalisierten Nachrichten (en, en-GB, de, nl)",
+        "Eingabevalidierung: alle Abfrageparameter validiert; Nicht-Integer-Eingaben geben 400 statt 500 zurück",
+        "Gleitendes-Fenster-Raten-Begrenzer: 100 Anfragen pro Minute pro IP",
+        "OpenAPI-Dokumentation über Scalar UI (`/scalar/v1`) und rohe Spezifikation (`/openapi/v1.json`), in allen Umgebungen einschließlich Produktion verfügbar",
+        "Multi-Arch Docker-Image (`linux/amd64` + `linux/arm64`)",
+        "GitHub Actions CI-Pipeline: Build, Test und Publish-Smoke-Test",
+        "GitHub Actions Release-Pipeline: baut und pusht Docker-Image zu GHCR bei Versions-Tags"
+      ]
+    },
+    {
+      "version": "1.0.0-beta.1",
+      "date": "2026-06-13",
+      "highlights": [
+        "Erstveröffentlichung: REST-API, Gesundheitscheck-Endpunkt, Blazor-UI-Platzhalter",
+        "780 kuratierte Zitate aus Filmen, TV, Büchern und berühmten Persönlichkeiten",
+        "Multi-Arch Docker-Image (`linux/amd64` + `linux/aarch64`)",
+        "Home Assistant Ingress auf Port 8099; Direktzugriff auf Port 8080"
+      ]
+    }
+  ]
+}

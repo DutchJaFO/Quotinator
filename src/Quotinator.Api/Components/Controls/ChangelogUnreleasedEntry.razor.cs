@@ -12,9 +12,6 @@ public partial class ChangelogUnreleasedEntry
     /// <summary>The unreleased block to render.</summary>
     [Parameter, EditorRequired] public ChangelogUnreleased Unreleased { get; set; } = default!;
 
-    /// <summary>Whether the source document was machine-translated; shows a disclaimer when true.</summary>
-    [Parameter] public bool IsMachineTranslated { get; set; }
-
     #endregion
 
     #region Protected

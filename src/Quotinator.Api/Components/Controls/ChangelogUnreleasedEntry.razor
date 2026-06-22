@@ -9,10 +9,6 @@
         @if (highlights.Count == 1)
         {
             <p class="mb-1">@ChangelogEntry.FormatInline(highlights[0])</p>
-            @if (IsMachineTranslated)
-            {
-                <p class="small text-muted fst-italic mb-1">@Text.ChangelogMachineTranslatedDisclaimer</p>
-            }
         }
         else if (highlights.Count > 1)
         {
@@ -22,10 +18,6 @@
                     <li>@ChangelogEntry.FormatInline(item)</li>
                 }
             </ul>
-            @if (IsMachineTranslated)
-            {
-                <p class="small text-muted fst-italic mb-1">@Text.ChangelogMachineTranslatedDisclaimer</p>
-            }
         }
         else
         {

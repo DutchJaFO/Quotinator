@@ -20,6 +20,11 @@
 
     <h2>@Text.ChangelogHeading</h2>
 
+    @if (_document.MachineTranslated)
+    {
+        <p class="small text-muted fst-italic mb-2">@Text.ChangelogMachineTranslatedDisclaimer</p>
+    }
+
     <input type="search" class="form-control form-control-sm mb-2"
            placeholder="@Text.ChangelogFilterPlaceholder"
            oninput="var q=this.value.toLowerCase();document.querySelectorAll('.changelog-entry').forEach(function(el){el.style.display=el.dataset.version.toLowerCase().includes(q)?'':'none';});" />
@@ -27,11 +32,11 @@
     <div class="changelog-scroll">
         @if (_document.Unreleased is not null)
         {
-            <ChangelogUnreleasedEntry Unreleased="_document.Unreleased" IsMachineTranslated="_document.MachineTranslated" />
+            <ChangelogUnreleasedEntry Unreleased="_document.Unreleased" />
         }
         @for (int i = 0; i < _document.Releases.Count; i++)
         {
-            <ChangelogEntry Release="_document.Releases[i]" Index="i" IsMachineTranslated="_document.MachineTranslated" />
+            <ChangelogEntry Release="_document.Releases[i]" Index="i" />
         }
     </div>
 }

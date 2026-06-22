@@ -17,9 +17,6 @@ public partial class ChangelogEntry
     /// <summary>Zero-based position in the release list; entry 0 is expanded by default.</summary>
     [Parameter] public int Index { get; set; }
 
-    /// <summary>Whether the source document was machine-translated; shows a disclaimer when true.</summary>
-    [Parameter] public bool IsMachineTranslated { get; set; }
-
     #endregion
 
     #region Protected
