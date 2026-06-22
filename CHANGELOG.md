@@ -1,14 +1,24 @@
-### *GENERATED FILE [2026-06-22 06:25 UTC] — do not edit by hand.*
-
-*Edit: `src/Quotinator.Api/resources/changelog.en.json`*
-
-*To regenerate: `dotnet-script changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md`*
+##### *GENERATED FILE [2026-06-22 18:07 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Highlights
+- The language selector has moved from the navbar into a new Settings section in the side menu, fixing an overlap with the hamburger button on mobile.
+
+### Changed
+- Language selector redesigned from a drop-down to individual nav items with a checkmark on the active language
+- New Settings section added to the nav menu as the home for language selection and future settings
+
+### Fixed
+- On mobile, the hamburger toggle and language selector overlapped in the navbar (issue #103)
 
 ---
 

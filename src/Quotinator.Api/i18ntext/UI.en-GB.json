@@ -28,6 +28,8 @@
   "HomeNavLabel": "Home",
   "RestApiNavLabel": "REST API",
   "AboutNavLabel": "About",
+  "SettingsNavLabel": "Settings",
+  "LanguageNavLabel": "Language",
   "ErrorSearchQueryRequired": "The q parameter is required. Provide a search term.",
   "ErrorSearchQueryTooLong": "The search term must not exceed 200 characters.",
   "ErrorLangInvalid": "lang must be a valid ISO 639-1 language code (e.g. en, nl, de).",

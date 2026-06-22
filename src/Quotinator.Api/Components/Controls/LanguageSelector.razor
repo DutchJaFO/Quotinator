@@ -1,16 +1,22 @@
-<form method="get" action="@CultureSetAction" class="language-selector">
-    <input type="hidden" name="redirectUri" value="@ReturnUri" />
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
-         viewBox="0 0 16 16" aria-hidden="true" class="language-selector__icon">
-        <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm7.5-6.923c-.67.204-1.335.82-1.887 1.855A7.97 7.97 0 0 0 5.145 4H7.5zM4.09 4a9.267 9.267 0 0 1 .64-1.539 6.7 6.7 0 0 1 .597-.933A7.025 7.025 0 0 0 2.255 4H4.09zm-.582 3.5c.03-.877.138-1.718.312-2.5H1.674a6.958 6.958 0 0 0-.656 2.5h2.49zM4.847 5H7.5v2.5H4.51A12.5 12.5 0 0 1 4.847 5zM8.5 5v2.5h2.99a12.5 12.5 0 0 0-.337-2.5H8.5zM4.51 8.5H7.5V11H4.847a12.5 12.5 0 0 1-.338-2.5zm3.99 0V11h2.653c.187-.765.306-1.608.338-2.5H8.5zM5.145 12H7.5v2.923c-.67-.204-1.335-.82-1.887-1.855A7.97 7.97 0 0 1 5.145 12zm.182 2.472a6.696 6.696 0 0 1-.597-.933A9.268 9.268 0 0 1 4.09 12H2.255a7.024 7.024 0 0 0 3.072 2.472zM3.82 11H1.674a6.958 6.958 0 0 0 .656 2.5H3.82a13.7 13.7 0 0 1-.312-2.5zm8.78 0h-2.146c-.064.87-.17 1.7-.337 2.5h1.835a6.958 6.958 0 0 0 .648-2.5zm.802-3.5a6.958 6.958 0 0 0-.656-2.5H12.14c.174.782.282 1.623.312 2.5h2.152zM11.27 2.461c.247.464.462.98.64 1.539h1.835a7.024 7.024 0 0 0-3.072-2.472c.218.284.418.598.597.933zM10.855 4a7.966 7.966 0 0 0-.468-1.068C9.835 1.897 9.17 1.282 8.5 1.077V4z"/>
-    </svg>
-    <select name="culture"
-            class="language-selector__select"
-            aria-label="@Text.LanguageSelectorLabel"
-            onchange="this.form.submit()">
-        @foreach (var (cultureCode, label) in SupportedLanguages)
-        {
-            <option value="@cultureCode" selected="@IsSelected(cultureCode)">@label</option>
-        }
-    </select>
-</form>
+<div class="lang-group" aria-label="@Text.LanguageSelectorLabel">
+    <span class="lang-group__label">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+             viewBox="0 0 16 16" aria-hidden="true" class="lang-group__icon">
+            <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm7.5-6.923c-.67.204-1.335.82-1.887 1.855A7.97 7.97 0 0 0 5.145 4H7.5zM4.09 4a9.267 9.267 0 0 1 .64-1.539 6.7 6.7 0 0 1 .597-.933A7.025 7.025 0 0 0 2.255 4H4.09zm-.582 3.5c.03-.877.138-1.718.312-2.5H1.674a6.958 6.958 0 0 0-.656 2.5h2.49zM4.847 5H7.5v2.5H4.51A12.5 12.5 0 0 1 4.847 5zM8.5 5v2.5h2.99a12.5 12.5 0 0 0-.337-2.5H8.5zM4.51 8.5H7.5V11H4.847a12.5 12.5 0 0 1-.338-2.5zm3.99 0V11h2.653c.187-.765.306-1.608.338-2.5H8.5zM5.145 12H7.5v2.923c-.67-.204-1.335-.82-1.887-1.855A7.97 7.97 0 0 1 5.145 12zm.182 2.472a6.696 6.696 0 0 1-.597-.933A9.268 9.268 0 0 1 4.09 12H2.255a7.024 7.024 0 0 0 3.072 2.472zM3.82 11H1.674a6.958 6.958 0 0 0 .656 2.5H3.82a13.7 13.7 0 0 1-.312-2.5zm8.78 0h-2.146c-.064.87-.17 1.7-.337 2.5h1.835a6.958 6.958 0 0 0 .648-2.5zm.802-3.5a6.958 6.958 0 0 0-.656-2.5H12.14c.174.782.282 1.623.312 2.5h2.152zM11.27 2.461c.247.464.462.98.64 1.539h1.835a7.024 7.024 0 0 0-3.072-2.472c.218.284.418.598.597.933zM10.855 4a7.966 7.966 0 0 0-.468-1.068C9.835 1.897 9.17 1.282 8.5 1.077V4z"/>
+        </svg>
+        @Text.LanguageNavLabel
+    </span>
+    @foreach (var (cultureCode, label) in SupportedLanguages)
+    {
+        <form method="get" action="@CultureSetAction">
+            <input type="hidden" name="redirectUri" value="@ReturnUri" />
+            <input type="hidden" name="culture" value="@cultureCode" />
+            <button type="submit"
+                    class="lang-item @(IsSelected(cultureCode) ? "lang-item--active" : "")"
+                    aria-current="@(IsSelected(cultureCode) ? "true" : null)">
+                <span class="lang-item__check" aria-hidden="true">✓</span>
+                @label
+            </button>
+        </form>
+    }
+</div>

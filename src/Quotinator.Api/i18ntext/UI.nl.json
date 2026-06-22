@@ -28,6 +28,8 @@
   "HomeNavLabel": "Startpagina",
   "RestApiNavLabel": "REST-API",
   "AboutNavLabel": "Over",
+  "SettingsNavLabel": "Instellingen",
+  "LanguageNavLabel": "Taal",
   "ErrorSearchQueryRequired": "De parameter q is verplicht. Geef een zoekterm op.",
   "ErrorSearchQueryTooLong": "De zoekterm mag niet langer zijn dan 200 tekens.",
   "ErrorLangInvalid": "lang moet een geldige ISO 639-1-taalcode zijn (bijv. en, nl, de).",
