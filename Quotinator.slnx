@@ -62,6 +62,7 @@
     <File Path="docs/openapi.md" />
     <File Path="docs/running-locally.md" />
     <File Path="docs/sql-safety.md" />
+    <File Path="docs/logging.md" />
     <File Path="docs/testing-policy.md" />
     <File Path="docs/vocabulary.md" />
   </Folder>
@@ -98,6 +99,12 @@
     <File Path="docs/milestones/data-import-sources/72-cve-sql-audit-plan.md" />
     <File Path="docs/milestones/data-import-sources/78-repository-transaction-plan.md" />
   </Folder>
+  <Folder Name="/docs/milestones/changelog-handling/">
+    <File Path="docs/milestones/changelog-handling/overview.md" />
+    <File Path="docs/milestones/changelog-handling/80-json-changelog-plan.md" />
+    <File Path="docs/milestones/changelog-handling/82-changelog-translations-plan.md" />
+    <File Path="docs/milestones/changelog-handling/handover.md" />
+  </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
   </Folder>
@@ -116,11 +123,27 @@
     <File Path="schemas/seed-sources.schema.json" />
     <File Path="schemas/upstream-quoted-string.schema.json" />
     <File Path="schemas/upstream-object-array.schema.json" />
+    <File Path="schemas/changelog.schema.json" />
   </Folder>
   <Folder Name="/scripts/">
+    <File Path="scripts/README.md" />
     <File Path="scripts/seed.csx" />
+    <File Path="scripts/changelog.csx" />
+    <File Path="scripts/changelog-import.csx" />
+    <File Path="scripts/changelog-upgrade.csx" />
     <File Path="scripts/sources.json" />
     <File Path="scripts/SOURCES.md" />
+  </Folder>
+  <Folder Name="/scripts/changelog-reference/">
+    <File Path="scripts/changelog-reference/CHANGELOG.md" />
+    <File Path="scripts/changelog-reference/addon-CHANGELOG.md" />
+    <File Path="scripts/changelog-reference/changelog-root.json" />
+    <File Path="scripts/changelog-reference/changelog-highlights.json" />
+    <File Path="scripts/changelog-reference/changelog-ha-addon.json" />
+    <File Path="scripts/changelog-reference/changelog-from-reference.json" />
+    <File Path="scripts/changelog-reference/addon-changelog-from-reference.json" />
+    <File Path="scripts/changelog-reference/addon-changelog-highlights.json" />
+    <File Path="scripts/changelog-reference/target-changelog.json" />
   </Folder>
   <Folder Name="/scripts/hooks/">
     <File Path="scripts/hooks/README.md" />
@@ -134,16 +157,31 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Quotinator.Api/Quotinator.Api.csproj" />
+    <Project Path="src/Quotinator.Changelog/Quotinator.Changelog.csproj" />
     <Project Path="src/Quotinator.Constants/Quotinator.Constants.csproj" />
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
     <Project Path="src/Quotinator.Data/Quotinator.Data.csproj" />
+    <File Path="src/Quotinator.Api/resources/changelog.en.json" />
+    <File Path="src/Quotinator.Api/resources/changelog.nl.json" />
+    <File Path="src/Quotinator.Api/resources/changelog.de.json" />
+    <File Path="src/Quotinator.Changelog/Models/ChangelogRoot.cs" />
+    <File Path="src/Quotinator.Changelog/Models/ChangelogUnreleased.cs" />
+    <File Path="src/Quotinator.Api/Components/Controls/ChangelogUnreleasedEntry.razor" />
+    <File Path="src/Quotinator.Api/Components/Controls/ChangelogUnreleasedEntry.razor.cs" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
+    <Project Path="tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
     <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
   </Folder>
   <Folder Name="/CVE/" />
+  <Folder Name="/CVE/Quotinator.Changelog/">
+    <File Path="src/Quotinator.Changelog/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Changelog.Tests/">
+    <File Path="tests/Quotinator.Changelog.Tests/CVE/.gitkeep" />
+  </Folder>
   <Folder Name="/CVE/Quotinator.Core/">
     <File Path="src/Quotinator.Core/CVE/CVE-2025-6965.md" />
   </Folder>

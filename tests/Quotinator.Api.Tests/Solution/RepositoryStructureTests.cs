@@ -40,6 +40,33 @@ public class RepositoryStructureTests
             .ToHashSet();
     }
 
+    /// <summary>src/Quotinator.Api/resources/changelog.en.json must exist on disk as the English source file.</summary>
+    [TestMethod]
+    public void ChangelogEnJson_ExistsOnDisk()
+    {
+        Assert.IsTrue(
+            File.Exists(Path.Combine(RepoRoot, "src", "Quotinator.Api", "resources", "changelog.en.json")),
+            "src/Quotinator.Api/resources/changelog.en.json does not exist.");
+    }
+
+    /// <summary>CHANGELOG.md must exist on disk as a generated file.</summary>
+    [TestMethod]
+    public void ChangelogMd_ExistsOnDisk()
+    {
+        Assert.IsTrue(
+            File.Exists(Path.Combine(RepoRoot, "CHANGELOG.md")),
+            "CHANGELOG.md does not exist.");
+    }
+
+    /// <summary>addon/CHANGELOG.md must exist on disk as a generated file.</summary>
+    [TestMethod]
+    public void AddonChangelogMd_ExistsOnDisk()
+    {
+        Assert.IsTrue(
+            File.Exists(Path.Combine(RepoRoot, "addon", "CHANGELOG.md")),
+            "addon/CHANGELOG.md does not exist.");
+    }
+
     /// <summary>data/quotes.json must not exist on disk — replaced by per-source files in data/sources/ (#61).</summary>
     [TestMethod]
     public void DataQuotesJson_DoesNotExistOnDisk()

@@ -1,0 +1,67 @@
+@using Quotinator.Changelog.Models
+
+<details class="mb-2 changelog-entry" data-version="@Release.Version" open="@IsOpen">
+    <summary class="py-1 user-select-none" style="cursor:pointer">
+        <strong>v@(Release.Version)</strong>
+        <span class="text-muted ms-2">@Release.Date</span>
+    </summary>
+    <div class="mt-2 ps-3">
+        @{ var highlights = Release.Highlights; }
+        @if (highlights.Count == 1)
+        {
+            <p class="mb-1">@FormatInline(highlights[0])</p>
+            <a class="small text-muted" target="_blank" rel="noopener noreferrer"
+               href="https://github.com/DutchJaFO/Quotinator/releases/tag/v@(Release.Version)">@Text.ChangelogFullDetailsOnGitHub</a>
+        }
+        else if (highlights.Count > 1)
+        {
+            <ul class="mb-1">
+                @foreach (var item in highlights)
+                {
+                    <li>@FormatInline(item)</li>
+                }
+            </ul>
+            <a class="small text-muted" target="_blank" rel="noopener noreferrer"
+               href="https://github.com/DutchJaFO/Quotinator/releases/tag/v@(Release.Version)">@Text.ChangelogFullDetailsOnGitHub</a>
+        }
+        else
+        {
+            @if (Release.Added.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @CategoryBadgeClass("Added")">Added</span></h6>
+                <ul class="mb-1">@foreach (var item in Release.Added) { <li>@FormatInline(item)</li> }</ul>
+            }
+            @if (Release.Changed.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @CategoryBadgeClass("Changed")">Changed</span></h6>
+                <ul class="mb-1">@foreach (var item in Release.Changed) { <li>@FormatInline(item)</li> }</ul>
+            }
+            @if (Release.Fixed.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @CategoryBadgeClass("Fixed")">Fixed</span></h6>
+                <ul class="mb-1">@foreach (var item in Release.Fixed) { <li>@FormatInline(item)</li> }</ul>
+            }
+            @if (Release.Removed.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @CategoryBadgeClass("Removed")">Removed</span></h6>
+                <ul class="mb-1">@foreach (var item in Release.Removed) { <li>@FormatInline(item)</li> }</ul>
+            }
+        }
+        @if (HasReferences)
+        {
+            <details class="mt-2">
+                <summary class="small text-muted" style="cursor:pointer">@Text.ChangelogReferencesSummary</summary>
+                <ul class="mt-1 mb-0 small">
+                    @foreach (var issue in Release.Issues)
+                    {
+                        <li><a href="https://github.com/DutchJaFO/Quotinator/issues/@issue" target="_blank" rel="noopener noreferrer">#@issue</a></li>
+                    }
+                    @foreach (var cve in Release.Cves)
+                    {
+                        <li><a href="https://nvd.nist.gov/vuln/detail/@cve" target="_blank" rel="noopener noreferrer">@cve</a></li>
+                    }
+                </ul>
+            </details>
+        }
+    </div>
+</details>

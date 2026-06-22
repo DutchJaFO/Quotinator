@@ -1,0 +1,62 @@
+@using Quotinator.Changelog.Models
+
+<details class="mb-2 changelog-entry" data-version="unreleased" open>
+    <summary class="py-1 user-select-none" style="cursor:pointer">
+        <strong>@Text.ChangelogUnreleased</strong>
+    </summary>
+    <div class="mt-2 ps-3">
+        @{ var highlights = Unreleased.Highlights; }
+        @if (highlights.Count == 1)
+        {
+            <p class="mb-1">@ChangelogEntry.FormatInline(highlights[0])</p>
+        }
+        else if (highlights.Count > 1)
+        {
+            <ul class="mb-1">
+                @foreach (var item in highlights)
+                {
+                    <li>@ChangelogEntry.FormatInline(item)</li>
+                }
+            </ul>
+        }
+        else
+        {
+            @if (Unreleased.Added.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @ChangelogEntry.CategoryBadgeClass("Added")">Added</span></h6>
+                <ul class="mb-1">@foreach (var item in Unreleased.Added) { <li>@ChangelogEntry.FormatInline(item)</li> }</ul>
+            }
+            @if (Unreleased.Changed.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @ChangelogEntry.CategoryBadgeClass("Changed")">Changed</span></h6>
+                <ul class="mb-1">@foreach (var item in Unreleased.Changed) { <li>@ChangelogEntry.FormatInline(item)</li> }</ul>
+            }
+            @if (Unreleased.Fixed.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @ChangelogEntry.CategoryBadgeClass("Fixed")">Fixed</span></h6>
+                <ul class="mb-1">@foreach (var item in Unreleased.Fixed) { <li>@ChangelogEntry.FormatInline(item)</li> }</ul>
+            }
+            @if (Unreleased.Removed.Count > 0)
+            {
+                <h6 class="mt-2 mb-1"><span class="badge @ChangelogEntry.CategoryBadgeClass("Removed")">Removed</span></h6>
+                <ul class="mb-1">@foreach (var item in Unreleased.Removed) { <li>@ChangelogEntry.FormatInline(item)</li> }</ul>
+            }
+        }
+        @if (HasReferences)
+        {
+            <details class="mt-2">
+                <summary class="small text-muted" style="cursor:pointer">@Text.ChangelogReferencesSummary</summary>
+                <ul class="mt-1 mb-0 small">
+                    @foreach (var issue in Unreleased.Issues)
+                    {
+                        <li><a href="https://github.com/DutchJaFO/Quotinator/issues/@issue" target="_blank" rel="noopener noreferrer">#@issue</a></li>
+                    }
+                    @foreach (var cve in Unreleased.Cves)
+                    {
+                        <li><a href="https://nvd.nist.gov/vuln/detail/@cve" target="_blank" rel="noopener noreferrer">@cve</a></li>
+                    }
+                </ul>
+            </details>
+        }
+    </div>
+</details>

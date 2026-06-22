@@ -16,6 +16,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Quotinator.Api.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.16.3" />
@@ -23,6 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Quotinator.Changelog\Quotinator.Changelog.csproj" />
     <ProjectReference Include="..\Quotinator.Constants\Quotinator.Constants.csproj" />
     <ProjectReference Include="..\Quotinator.Core\Quotinator.Core.csproj" />
     <ProjectReference Include="..\Quotinator.Data\Quotinator.Data.csproj" />
@@ -32,8 +39,8 @@
     <!-- Copy bundled source files to the build output so the startup seeder can find them
          regardless of working directory (VS, dotnet run, Docker). -->
     <Content Include="..\..\data\sources\**\*" Link="data\sources\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <!-- Copy the changelog so ChangelogService can read it at runtime. -->
-    <Content Include="..\..\CHANGELOG.md" Link="CHANGELOG.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Copy per-language changelog files so ChangelogService can read them at runtime. -->
+    <Content Update="resources\changelog.*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Copy i18ntext JSON files so ApiLocalizer can read them at runtime from i18ntext/ relative
