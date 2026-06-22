@@ -55,7 +55,12 @@ Run `dotnet test tests/Quotinator.Changelog.Tests --filter ChangelogSchema` afte
 
 ## Issues to read (grouped by milestone)
 
-### No milestone assigned
+### ⚠ No milestone assigned — check these first
+
+Issues without a milestone have no overview file and no dependency map. They are the most likely to be stale, already shipped without being closed, or superseded by later work. None of them will surface in a milestone's status column — the only way to catch them is to read each one individually.
+
+For each: read the issue spec, check git log and closed PRs for work that may have addressed it, and classify.
+
 - #70 — Refactor CI/Release workflows to use a shared reusable workflow
 - #73 — Audit trail: record who did what on which record in which table
 - #74 — Add read-model query pattern to Quotinator.Data
@@ -170,7 +175,8 @@ gh issue close <N> --comment "<verification table>"
 
 ## Suggested order
 
-1. Read the two existing milestone overview files first — they may instantly classify several issues.
-2. Work through milestone 10 (Data Import & Sources) next — it has the most open issues and a complete overview.
-3. Work outward to the other milestones, leaving the no-milestone issues for last.
-4. Update `changelog.en.json` as each past release's issues become clear — batch by release.
+1. **No-milestone issues first** — read #70, #73, #74, #75, #76, #77, #100. These have no overview file and no dependency map; they are the most likely to be stale or already shipped. Check git log and merged PRs for evidence that the work was done.
+2. Read the two existing milestone overview files — they may instantly classify several milestone-10 and changelog-handling issues without needing to open each one individually.
+3. Work through milestone 10 (Data Import & Sources) — it has the most open issues and a complete overview.
+4. Work outward to the other milestones.
+5. Update `changelog.en.json` as each past release's issues become clear — batch by release.
