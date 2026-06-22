@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-22 18:07 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-22 18:11 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Changed
 - Language selector redesigned from a drop-down to individual nav items with a checkmark on the active language
 - New Settings section added to the nav menu as the home for language selection and future settings
+- Generated changelog files now show a minimal timestamp-only header by default; pass `--debug` to `changelog.csx` to include the input path and regenerate command
 
 ### Fixed
 - On mobile, the hamburger toggle and language selector overlapped in the navbar (issue #103)
