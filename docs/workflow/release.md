@@ -46,6 +46,8 @@ Both must report `0 Warning(s)  0 Error(s)`.
 
 `src/Quotinator.Api/resources/changelog.en.json` is the source of truth. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly.**
 
+**Before writing any entries, read `schemas/changelog.schema.json`** — it is the authoritative definition of every field, its type, and which fields are required. Do not infer the format from prior entries in the file or from git history; the schema may have changed since those were written.
+
 Add or update the `unreleased` section to reflect all changes on the branch that are not yet in a release entry. This keeps the changelog current before the promotion step.
 
 Rules for `highlights`:

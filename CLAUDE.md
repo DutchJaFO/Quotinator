@@ -525,6 +525,8 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
 3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
 
+   **Before writing any entries, read `schemas/changelog.schema.json`** — it is the authoritative definition of every field and which fields are required. Do not infer the format from prior entries or git history.
+
    **During development** (after closing each issue or committing a meaningful change): add entries to the `unreleased` section at the top of `changelog.en.json`. This follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `[Unreleased]` convention and keeps the changelog in sync without waiting for a release. Decide at the time of writing whether the change deserves a `highlights` entry (user-facing impact) or only `added`/`changed`/`fixed`/`removed` (technical).
 
    **When tagging a release**: promote the `unreleased` entries into a new release entry at the top of the `releases` array, set the `version` and `date` fields, and clear (or remove) the `unreleased` section. Then run the generator to regenerate both markdown files before committing.
