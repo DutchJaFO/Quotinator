@@ -9,13 +9,18 @@
     "fixed": "Opgelost",
     "removed": "Verwijderd"
   },
-  "unreleased": {},
+  "unreleased": {
+    "changed": [
+      "Gegenereerde changelogbestanden tonen standaard alleen een tijdstempel in de header; geef `--debug` door aan `changelog.csx` om het invoerpad en het regeneratiecommando op te nemen"
+    ]
+  },
   "releases": [
     {
       "version": "1.6.0",
       "date": "2026-06-22",
       "issues": [
-        80
+        80,
+        82
       ],
       "highlights": [
         "Het changelog wordt nu aangestuurd door één JSON-bron — beide markdown-bestanden worden hieruit gegenereerd, en de Blazor-changelogpagina leest het direct zonder markdown-parsing.",
@@ -37,7 +42,8 @@
         "`schemas/changelog.schema.json`: machine-leesbaar JSON-schema voor `changelog.json`",
         "`scripts/changelog.csx`: genereert `keepachangelog`- en `ha-addon`-markdown van `changelog.json`; ondersteunt `--lang`, `--audience`, `--fallback`, `--fallback-message`",
         "`scripts/changelog-import.csx`: importeert een bestaand `keepachangelog`- of `ha-addon`-markdownbestand naar `changelog.json`-formaat",
-        "`scripts/changelog-upgrade.csx`: eenmalig migratiehulpmiddel gebruikt om `changelog.json` samen te stellen uit de twee referentiemarkdownbestanden"
+        "`scripts/changelog-upgrade.csx`: eenmalig migratiehulpmiddel gebruikt om `changelog.json` samen te stellen uit de twee referentiemarkdownbestanden",
+        "Nederlandse (`changelog.nl.json`) en Duitse (`changelog.de.json`) changelogvertalingen met een machine-vertaalde disclaimer die wordt weergegeven wanneer `machineTranslated` true is (issue #82)"
       ],
       "changed": [
         "`ChangelogService` deserialiseert nu `changelog.json` direct naar publieke modellen; private DTO-mappinglaag verwijderd",
