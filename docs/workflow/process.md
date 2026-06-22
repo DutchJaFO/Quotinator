@@ -63,8 +63,27 @@ At the start of every session working on a milestone:
 
 1. Read the full issue spec: `gh issue view <N>`
 2. Read the plan doc.
-3. Check the dependency map in `overview.md`. Verify that all blocking issues are fully complete before starting — a partially-done dependency means this issue cannot be closed either.
-4. For each requirement in the spec, create a verification checklist entry in the plan doc.
+3. **Cross-check the spec against the current authoritative sources — do this before writing any code.**
+
+   Issues are written at a point in time. Prior issues in the same milestone may have introduced schemas, models, or design decisions that change what this issue should cover. Before accepting the spec as written:
+
+   **Check sources in this order:**
+   1. **JSON schemas** (`schemas/`) — the machine-readable contract for any data file the issue touches. A feature not defined in the schema does not officially exist yet, regardless of what the code does.
+   2. **Script / generator behaviour** — if the issue touches a generator (e.g. `changelog.csx`), read the script. The generator defines what the schema promises to consumers; its parameters and helper functions reveal the full intended scope.
+   3. **C# models** — cross-reference the models against the schema. Gaps between them are bugs: a model property not in the schema is undocumented; a schema field not in the model is unimplemented.
+   4. **Documentation** — any project-level README or design doc that describes the format to consumers.
+
+   For each source, explicitly ask:
+   - Does the issue reference every field or concept that now exists in the authoritative source?
+   - Have prior issues introduced constructs (schema fields, model properties, generator parameters) that this issue should logically extend but does not mention?
+   - Does every "scope exclusion" in the issue still make sense given what was actually built and documented?
+
+   **Raise each mismatch to the user and get explicit confirmation on scope before proceeding.** Do not silently assume a gap is intentional. Do not silently assume a gap is out of scope. The procedure is: flag it, explain the conflict, wait for a decision.
+
+   This step is the primary defence against implementing the wrong scope. It is not optional and must not be skipped even when the issue appears straightforward.
+
+4. Check the dependency map in `overview.md`. Verify that all blocking issues are fully complete before starting — a partially-done dependency means this issue cannot be closed either.
+5. For each requirement in the spec, create a verification checklist entry in the plan doc.
    This is part of planning — it must exist before implementation starts. Each entry must state:
    - **Unit test preferred:** if a unit test can cover it, name the exact test class and method.
      Write the test as part of the issue if it does not yet exist.
@@ -86,8 +105,8 @@ At the start of every session working on a milestone:
    failing unit test that demonstrates the bug, or document the exact steps and observed
    output that prove it exists. The fix is complete only when that test passes or those
    steps no longer reproduce the bug.
-5. Implement. Update plan doc step status as work progresses.
-6. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each documented verification step against the actual code.
+6. Implement. Update plan doc step status as work progresses.
+7. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each documented verification step against the actual code.
 
 An issue is done only when every requirement in its GitHub spec is met and verified against actual code. Partial implementation means the issue stays open.
 

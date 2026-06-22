@@ -1,0 +1,216 @@
+{
+  "releases": [
+    {
+      "version": "1.5.1",
+      "date": "2026-06-20",
+      "highlights": [
+        "Internal improvements \u2014 no user-facing changes."
+      ]
+    },
+    {
+      "version": "1.5.0",
+      "date": "2026-06-20",
+      "highlights": [
+        "Admin endpoints (reseed, reset) now require an API key supplied via the \u0060X-Api-Key\u0060 request header.",
+        "The Scalar API reference now shows an Authentication panel at the top \u2014 enter your key once and it is sent automatically on all admin requests.",
+        "The startup log now shows whether an admin API key is configured.",
+        "The REST API page in the UI shows the admin endpoints when a key is active."
+      ]
+    },
+    {
+      "version": "1.4.3",
+      "date": "2026-06-20",
+      "highlights": [
+        "Internal improvements in preparation for upcoming data import features."
+      ]
+    },
+    {
+      "version": "1.4.2",
+      "date": "2026-06-20",
+      "highlights": [
+        "Fixed: the Docker image was incorrectly reporting version 1.0.0 \u2014 the actual version is now shown correctly.",
+        "The REST API page now includes a direct link to the version endpoint.",
+        "Internal improvements \u2014 no other user-facing changes."
+      ]
+    },
+    {
+      "version": "1.4.1",
+      "date": "2026-06-20",
+      "highlights": [
+        "Fixed: the changelog page now shows plain-English release summaries for all versions instead of technical details.",
+        "Internal improvements in preparation for upcoming data import features."
+      ]
+    },
+    {
+      "version": "1.4.0",
+      "date": "2026-06-20",
+      "cves": [
+        "CVE-2025-6965"
+      ],
+      "highlights": [
+        "Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected."
+      ]
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-06-17",
+      "highlights": [
+        "Quotes can now be loaded from multiple data sources \u2014 bundled datasets and your own custom files placed in the imports folder.",
+        "New preview endpoint lets you see what would be imported before committing any changes.",
+        "Configuration: the data directory is now set by pointing to a folder, not a file path \u2014 update \u0060Quotinator__DataDir\u0060 if you have a custom setup."
+      ]
+    },
+    {
+      "version": "1.2.2",
+      "date": "2026-06-16",
+      "highlights": [
+        "Fixed: the GitHub changelog link in the UI opened inside the HA frame and was blocked by GitHub\u0027s security policy \u2014 it now opens in a new tab correctly"
+      ]
+    },
+    {
+      "version": "1.2.1",
+      "date": "2026-06-16",
+      "highlights": [
+        "The database file is now named \u0060quotinatordata.db\u0060 \u2014 on first startup after upgrading, the old \u0060quotes.db\u0060 is renamed automatically with no data loss",
+        "A backup of the database is created automatically before any schema migration",
+        "Container log output is now single-line and easier to read; the startup banner shows all data paths at a glance"
+      ]
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-06-16",
+      "highlights": [
+        "Admin endpoints (reseed, reset) are now protected by an API key \u2014 they return 401 by default and only accept requests with the correct \u0060Authorization: Bearer \u003Ckey\u003E\u0060 header"
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-06-15",
+      "highlights": [
+        "You can now filter quotes by more than one genre or type at once \u2014 for example, get only sci-fi comedies or drama films",
+        "Sci-fi and non-fiction quotes were missing from search and random results; both genres now work correctly",
+        "Two new admin endpoints let you reseed or fully reset the quote database without restarting the container"
+      ]
+    },
+    {
+      "version": "1.0.15",
+      "date": "2026-06-15",
+      "highlights": [
+        "Fixed a session issue in Home Assistant where the interface lost its state after the container restarted"
+      ]
+    },
+    {
+      "version": "1.0.14",
+      "date": "2026-06-15",
+      "highlights": [
+        "Internal improvement \u2014 no user-facing changes"
+      ]
+    },
+    {
+      "version": "1.0.13",
+      "date": "2026-06-15",
+      "highlights": [
+        "Bug fix \u2014 no user-facing changes"
+      ]
+    },
+    {
+      "version": "1.0.12",
+      "date": "2026-06-15",
+      "highlights": [
+        "Quotes are now stored in a local database rather than a flat file \u2014 faster, more reliable, and ready for future write support ([#7](https://github.com/DutchJaFO/Quotinator/issues/7))",
+        "The version endpoint now also reports the database schema version and record counts"
+      ]
+    },
+    {
+      "version": "1.0.11",
+      "date": "2026-06-14",
+      "highlights": [
+        "Add-on configuration options now display translated names and descriptions in English, Dutch, and German"
+      ]
+    },
+    {
+      "version": "1.0.10",
+      "date": "2026-06-14",
+      "highlights": [
+        "Startup log now prints as a single, readable block with a configuration summary"
+      ]
+    },
+    {
+      "version": "1.0.9",
+      "date": "2026-06-14",
+      "highlights": [
+        "New option: log one line per API request \u2014 useful for confirming calls arrive without enabling full debug logging",
+        "New option: choose how much detail appears in the supervisor log",
+        "All log lines now show a UTC timestamp"
+      ]
+    },
+    {
+      "version": "1.0.8",
+      "date": "2026-06-14",
+      "highlights": [
+        "Fixed: the API Reference, OpenAPI spec, and health check links on the home page did not work through the Home Assistant ingress ([#8](https://github.com/DutchJaFO/Quotinator/issues/8))"
+      ]
+    },
+    {
+      "version": "1.0.7",
+      "date": "2026-06-14",
+      "highlights": [
+        "Quotes and session data now survive container restarts and add-on updates \u2014 no data loss on update",
+        "Fixed: the Blazor page (including the \u0022New quote\u0022 button) did not load correctly in the Home Assistant sidebar"
+      ]
+    },
+    {
+      "version": "1.0.6",
+      "date": "2026-06-14",
+      "highlights": [
+        "Optional HTTPS on the direct access port \u2014 enable ssl in the add-on configuration to use your Let\u0027s Encrypt certificate",
+        "Fixed: interactive elements such as the \u0022New quote\u0022 button did not work in Docker or the HA add-on"
+      ]
+    },
+    {
+      "version": "1.0.5",
+      "date": "2026-06-14",
+      "highlights": [
+        "Dependency updates \u2014 no user-facing changes"
+      ]
+    },
+    {
+      "version": "1.0.4",
+      "date": "2026-06-14",
+      "highlights": [
+        "Language selector in the navigation bar \u2014 override your browser\u0027s language preference; the choice is remembered for a year",
+        "AppArmor security profile added to the Home Assistant add-on"
+      ]
+    },
+    {
+      "version": "1.0.3",
+      "date": "2026-06-14",
+      "highlights": [
+        "Documentation corrections \u2014 no user-facing changes"
+      ]
+    },
+    {
+      "version": "1.0.2",
+      "date": "2026-06-14",
+      "highlights": [
+        "Bug fix \u2014 no user-facing changes"
+      ]
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-06-13",
+      "highlights": [
+        "Bug fix \u2014 no user-facing changes"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-06-13",
+      "highlights": [
+        "Initial release: 780 curated quotes from films, TV, books, and famous people",
+        "REST API with random, list, search, and detail endpoints; multi-language support; rate limiting",
+        "OpenAPI documentation at /scalar/v1"
+      ]
+    }
+  ]
+}

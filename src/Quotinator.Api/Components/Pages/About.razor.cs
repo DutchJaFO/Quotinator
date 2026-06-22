@@ -1,6 +1,7 @@
-using System.Net;
-using System.Text.RegularExpressions;
+using System.Globalization;
 using Microsoft.AspNetCore.Components;
+using Quotinator.Changelog.Models;
+using Quotinator.Changelog.Services;
 using Quotinator.Core.Services;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
@@ -14,7 +15,8 @@ public partial class About
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
-        Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
+        Text      = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
+        _document = ChangelogService.GetForCulture(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName);
     }
 
     #endregion
@@ -27,22 +29,7 @@ public partial class About
 
     private Quotinator.Api.I18nText.UI Text = new();
 
-    private static Microsoft.AspNetCore.Components.MarkupString FormatInline(string text)
-    {
-        var encoded = WebUtility.HtmlEncode(text);
-        var result = Regex.Replace(encoded, @"\[([^\]]+)\]\(([^)]+)\)", "<a href=\"$2\">$1</a>");
-        result = Regex.Replace(result, @"`([^`]+)`", "<code>$1</code>");
-        return new Microsoft.AspNetCore.Components.MarkupString(result);
-    }
-
-    private static string CategoryBadgeClass(string category) => category switch
-    {
-        "Added" => "bg-success",
-        "Fixed" => "bg-danger",
-        "Changed" => "bg-primary",
-        "Removed" => "bg-warning text-dark",
-        _ => "bg-secondary"
-    };
+    private ChangelogDocument? _document;
 
     #endregion
 }

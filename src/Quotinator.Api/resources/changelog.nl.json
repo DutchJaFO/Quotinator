@@ -1,0 +1,694 @@
+{
+  "language": "nl",
+  "sourceLanguage": "en",
+  "machineTranslated": true,
+  "sectionHeaders": {
+    "highlights": "Hoogtepunten",
+    "added": "Toegevoegd",
+    "changed": "Gewijzigd",
+    "fixed": "Opgelost",
+    "removed": "Verwijderd"
+  },
+  "unreleased": {
+    "issues": [
+      80
+    ],
+    "highlights": [
+      "Het changelog wordt nu aangestuurd door één JSON-bron — beide markdown-bestanden worden hieruit gegenereerd, en de Blazor-changelogpagina leest het direct zonder markdown-parsing.",
+      "Niet-uitgebrachte wijzigingen worden nu bovenaan de changelogpagina weergegeven.",
+      "Elke release toont nu welke GitHub-issues en CVE's erin zijn verwerkt, in een inklapbare sectie."
+    ],
+    "added": [
+      "`Quotinator.Changelog`-project: `IChangelogService` / `ChangelogService` — deserialiseert `changelog.json`; geen markdown-parser",
+      "`ChangelogEntry` Blazor-control: geeft één release-item weer (hoogtepunten of technische secties, GitHub-releaselink, Issues & CVE's blok)",
+      "`ChangelogUnreleasedEntry` Blazor-control: geeft het niet-uitgebrachte blok weer — altijd uitgevouwen, geen versie of datum, geen GitHub-releaselink",
+      "`ChangelogRoot`, `ChangelogUnreleased`, `ChangelogRelease`, `ChangelogReleaseTranslation`, `ChangelogTranslationItem`, `ChangelogSectionHeaders` modellen direct gevormd door het JSON-schema; `ChangelogUnreleased` is de basis, `ChangelogRelease` erft hiervan en voegt `Version` en `Date` toe",
+      "`ChangelogSchemaTests`: valideert `changelog.json`-structuur (verplichte velden, geen null-items, CVE-ID-formaat)",
+      "`schemas/changelog.schema.json`: machine-leesbaar JSON-schema voor `changelog.json`",
+      "`scripts/changelog.csx`: genereert `keepachangelog`- en `ha-addon`-markdown van `changelog.json`; ondersteunt `--lang`, `--audience`, `--fallback`, `--fallback-message`",
+      "`scripts/changelog-import.csx`: importeert een bestaand `keepachangelog`- of `ha-addon`-markdownbestand naar `changelog.json`-formaat",
+      "`scripts/changelog-upgrade.csx`: eenmalig migratiehulpmiddel gebruikt om `changelog.json` samen te stellen uit de twee referentiemarkdownbestanden"
+    ],
+    "changed": [
+      "`ChangelogService` deserialiseert nu `changelog.json` direct naar publieke modellen; private DTO-mappinglaag verwijderd",
+      "`ChangelogSection`-model verwijderd; Blazor-componenten renderen de vier wijzigingslijsten (`Added`, `Changed`, `Fixed`, `Removed`) direct",
+      "Releases met één hoogtepunt worden nu als alinea weergegeven in plaats van als opsommingslijst",
+      "`CHANGELOG.md` en `addon/CHANGELOG.md` zijn nu gegenereerde bestanden — bewerk `changelog.json`, voer dan `scripts/changelog.csx` uit om te regenereren"
+    ],
+    "fixed": [
+      "`scripts/changelog-upgrade.csx`: versies aanwezig in de root `CHANGELOG.md` maar afwezig in `addon/CHANGELOG.md` gebruiken nu correct root-hoogtepunten als generieke hoogtepunten; v1.0.0 en v1.0.1 waren getroffen",
+      "`scripts/changelog.csx --fallback false`: standaard hoogtepunten lekten niet meer naar entries zonder publiek",
+      "`changelog.json` v1.0.0 en v1.0.1 misten `highlights` — beide tonen nu gebruiksvriendelijke samenvattingen in plaats van technische sectie-badges"
+    ]
+  },
+  "releases": [
+    {
+      "version": "1.5.1",
+      "date": "2026-06-20",
+      "highlights": [
+        "Opgelost: de opstartbanner was samengevouwen tot één regel in het supervisorlog.",
+        "Opgelost: de admin-API-sleutel en andere opties werden niet gelezen uit de add-on configuratie — de app leest nu `/data/options.json` direct, de bron die de supervisor schrijft."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Interne verbeteringen — geen zichtbare wijzigingen voor gebruikers."
+        ]
+      },
+      "added": [
+        "Diagnostische logregels bij het opstarten die aangeven welke `Quotinator__*`-omgevingsvariabelen aanwezig zijn (de waarde van de API-sleutel wordt nooit gelogd — alleen of deze is ingesteld)."
+      ],
+      "fixed": [
+        "De opstartbanner was samengevouwen tot één regel in het HA-supervisorlog — `Console.WriteLine` hersteld zodat nieuwe regels behouden blijven.",
+        "Admin-API-sleutel en andere add-on opties werden niet gelezen uit `/data/options.json`; het `env_vars`-templatemechanisme is onbetrouwbaar voor optionele opties. De app leest nu `/data/options.json` direct bij het opstarten."
+      ]
+    },
+    {
+      "version": "1.5.0",
+      "date": "2026-06-20",
+      "highlights": [
+        "Admin-eindpunten (opnieuw seeden, resetten) vereisen nu een API-sleutel via de `X-Api-Key`-verzoekkoptekst — stel `admin_api_key` in de add-on opties in.",
+        "De Scalar API-referentie toont een authenticatiepaneel — voer uw sleutel eenmalig in en deze wordt automatisch meegestuurd bij alle adminverzoeken.",
+        "Het opstartlog toont nu of een admin-API-sleutel is geconfigureerd (`ingesteld` / `niet ingesteld`).",
+        "De REST API-pagina in de UI toont de admin-eindpunten wanneer een sleutel actief is.",
+        "Opgelost: de documentatie van het admin-eindpunt vermeldde ten onrechte `Authorization: Bearer` — de juiste header is `X-Api-Key`.",
+        "Opgelost: `appsettings.local.json` was opgenomen in de Docker-image, waardoor een lokale ontwikkelaarsoverschrijving stilletjes voorrang kon krijgen boven de `admin_api_key`-omgevingsvariabele ingesteld door de HA-supervisor."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Admin-eindpunten (opnieuw seeden, resetten) vereisen nu een API-sleutel via de `X-Api-Key`-verzoekkoptekst.",
+          "De Scalar API-referentie toont nu een authenticatiepaneel bovenaan — voer uw sleutel eenmalig in en deze wordt automatisch meegestuurd bij alle adminverzoeken.",
+          "Het opstartlog toont nu of een admin-API-sleutel is geconfigureerd.",
+          "De REST API-pagina in de UI toont de admin-eindpunten wanneer een sleutel actief is."
+        ]
+      },
+      "added": [
+        "`X-Api-Key` OpenAPI-beveiligingsschema: admin-eindpunten zijn getagd in de spec zodat Scalar een authenticatiepaneel toont met de headernaam vooraf ingevuld.",
+        "Admin-API-sleutelstatus (`ingesteld` / `niet ingesteld`) toegevoegd aan de opstartbanner.",
+        "`appsettings.local.template.json` — vastgelegd sjabloon voor lokale ontwikkelingsoverschrijvingen (kopieer naar `appsettings.local.json`, uitgesloten via .gitignore).",
+        "User Secrets-ondersteuning ingeschakeld op `Quotinator.Api` (`UserSecretsId: quotinator-api-dev`) — gebruik VS 'Manage User Secrets' als alternatief voor het lokale instellingenbestand.",
+        "`docs/running-locally.md` documenteert beide lokale configuratiebenaderingen en hoe admin-eindpunten in Scalar te testen.",
+        "Opstartbanner opnieuw opgemaakt: elke configuratie-instelling op een eigen regel voor gemakkelijkere lezing in logs."
+      ],
+      "fixed": [
+        "Admin-eindpunten waren gedocumenteerd als vereisend `Authorization: Bearer <sleutel>` maar de juiste header is `X-Api-Key: <sleutel>`.",
+        "De opstartbanner was niet zichtbaar in Visual Studio — deze gaat nu via de logger zodat het verschijnt in het uitvoervenster naast andere logberichten.",
+        "`appsettings.local.json` werd opgenomen in de Docker-image via `COPY . .`, waardoor een lokale ontwikkelaarsoverschrijving stilletjes won van omgevingsvariabelen (inclusief de HA `admin_api_key`-omgevingsvariabele). Toegevoegd aan `.dockerignore`.",
+        "Intermitterende testmislukking bij parallelle uitvoering: drie testklassen riepen elk `SqlMapper.AddTypeHandler` aan in `[ClassInitialize]`, wat een race veroorzaakte op het globale statische handler-woordenboek. Registraties verplaatst naar `[AssemblyInitialize]` zodat ze eenmalig worden uitgevoerd voor het starten van tests."
+      ]
+    },
+    {
+      "version": "1.4.3",
+      "date": "2026-06-20",
+      "highlights": [
+        "Interne verbeteringen ter voorbereiding op aankomende gegevensimportfuncties."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Interne verbeteringen ter voorbereiding op aankomende gegevensimportfuncties."
+        ]
+      },
+      "added": [
+        "`ImportBatches`-tabel bijhoudt de oorsprong van elk gezaaid of geïmporteerd record (`Id`, `Name`, `Type`, `Url`, `ImportedAt`, `ImportedBy`, `RecordCount`)",
+        "Nullable `ImportBatchId`-externe sleutel toegevoegd aan `Quotes`, `Sources`, `Characters` en `People` — koppelt elk record aan de importbatch die het introduceerde",
+        "`IImportBatchRepository` / `SqliteImportBatchRepository` in `Quotinator.Core` met `GetAllAsync`, `GetByTypeAsync`, `UpdateRecordCountAsync`",
+        "Seeder maakt één `ImportBatch`-rij per bronbestand en schrijft `ImportBatchId` op alle invoegingen voor dat bestand",
+        "Migration003: werkt bestaande databases bij met de nieuwe tabel en kolommen; voegt tijdelijke `Seed`-typerijen in voor de twee gebundelde externe datasets (bestaande records houden `NULL` ImportBatchId — herkomst niet achteraf vastgelegd)"
+      ]
+    },
+    {
+      "version": "1.4.2",
+      "date": "2026-06-20",
+      "highlights": [
+        "Opgelost: de Docker-image rapporteerde ten onrechte versie 1.0.0 — de werkelijke versie wordt nu correct weergegeven.",
+        "De REST API-pagina bevat nu een directe link naar het versieeindpunt.",
+        "Interne verbeteringen — geen andere zichtbare wijzigingen voor gebruikers."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Opgelost: de Docker-image rapporteerde ten onrechte versie 1.0.0 — de werkelijke versie wordt nu correct weergegeven.",
+          "De REST API-pagina bevat nu een directe link naar het versieeindpunt.",
+          "Interne verbeteringen — geen andere zichtbare wijzigingen voor gebruikers."
+        ]
+      },
+      "added": [
+        "Versieeindpuntrij (`api/v1/version`) op de REST API-pagina; vertaald in het Engels, Nederlands en Duits"
+      ],
+      "changed": [
+        "`Quotinator.Constants`-bronbestanden verplaatst van projectroot naar naamruimte-overeenkomende submappen: `Api/` (`ApiMessages`, `ApiTags`), `Routes/` (`ApiRoutes`, `RouteExtensions`), `RateLimiting/` (`RateLimitPolicies`)",
+        "`Quotinator.Data.Data`-naamruimte hernoemd naar `Quotinator.Data.Connections`"
+      ],
+      "fixed": [
+        "Docker-image bevatte `1.0.0` als API-versie — `Directory.Build.props` was niet opgenomen in de bouwcontext; nu gekopieerd vóór de herstellaag zodat de juiste versie wordt ingesloten bij publicatie",
+        "Docker-bouwlaag overgeschakeld van per-project `COPY`-statements naar `COPY . .` om te voorkomen dat bestanden stilletjes worden weggelaten bij het toevoegen van nieuwe projecten of root SDK-bestanden"
+      ]
+    },
+    {
+      "version": "1.4.1",
+      "date": "2026-06-20",
+      "issues": [
+        45
+      ],
+      "highlights": [
+        "Opgelost: de changelogpagina toont nu begrijpelijke samenvattingen voor alle versies in plaats van technische details.",
+        "Interne verbeteringen ter voorbereiding op aankomende gegevensimportfuncties."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Opgelost: de changelogpagina toont nu begrijpelijke samenvattingen voor alle versies in plaats van technische details.",
+          "Interne verbeteringen ter voorbereiding op aankomende gegevensimportfuncties."
+        ]
+      },
+      "added": [
+        "`IUnitOfWork` en `SqliteUnitOfWork` — transactie- en gedeelde verbindingsondersteuning voor repository-operaties; vereist door het aankomende importeindpunt (#45) voor atomaire batch-invoegingen",
+        "Repository-methoden (`IRepository<T>`, `IRestorableRepository<T>`) accepteren een optionele `IUnitOfWork?`-parameter; alle bestaande aanroepers hebben geen wijzigingen nodig"
+      ],
+      "fixed": [
+        "`### Highlights`-secties voor 1.4.0 en 1.3.0 werden niet weergegeven op de Blazor-changelogpagina — 1.4.0 gebruikte lopende tekst in plaats van een opsommingslijst (stilletjes genegeerd door de parser); 1.3.0 bevatte technische termen. Beide herschreven in begrijpelijk gebruikersgericht Engels."
+      ]
+    },
+    {
+      "version": "1.4.0",
+      "date": "2026-06-20",
+      "cves": [
+        "CVE-2025-6965"
+      ],
+      "highlights": [
+        "Beveiliging: een databasequery-kwetsbaarheid (CVE-2025-6965) is geïdentificeerd en verholpen; geen gebruikersgegevens waren getroffen."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Beveiliging: een databasequery-kwetsbaarheid (CVE-2025-6965) is geïdentificeerd en verholpen; geen gebruikersgegevens waren getroffen."
+        ]
+      },
+      "added": [
+        "`seed.csx --output-dir DIR`-vlag leidt seed-uitvoer om naar een aangepaste map, waardoor seeding mogelijk is zonder `data/sources/` te overschrijven",
+        "Generieke repository-infrastructuur: `IRepository<T>` en `SqliteRepository<T>` (basis CRUD), `IRestorableRepository<T>` en `SqliteRestorableRepository<T>` (opt-in soft-delete beheer — ophalen verwijderd, herstellen, hard-delete, purge)",
+        "`GuidHandler` Dapper-typehandler — dwingt `Guid`-opslag af als hoofdletters TEXT om overeen te komen met de standaard van Microsoft.Data.Sqlite, waardoor een hoofdlettergevoeligheidsmismatch wordt opgelost die stilletjes resultaten weggooide uit geparametriseerde queries",
+        "ADR 002 documenteert de RecordBase-overal-beslissing — alle tabellen dragen auditkolommen; koppeltabellen gebruiken een synthetische GUID-primaire sleutel met een UNIQUE-beperking op het natuurlijke sleutelpaar",
+        "`README.md` in elke gereserveerde-maar-lege map (`docs/architecture-decisions/`, `docs/milestones/`, `docs/milestones/data-import-sources/`, `docs/workflow/`, `scripts/cache/`, `src/Quotinator.Core/Configuration/`) die het doel en verwachte inhoud van de map uitlegt",
+        "`Directory.Build.props` onderdrukt NU1903 (CVE-2025-6965) globaal met een reden commentaar",
+        "`Quotinator.Core.Data.Sql` statische klasse centraliseert elke SQL-instructie als benoemde constanten of factory-methoden; alle inline SQL verwijderd uit `DatabaseInitializer` en `SqliteQuoteService`",
+        "`SqlQueryGuardTests` — reflectie-gebaseerde test die alle `Sql.*`-constanten en alle dynamische query-factory-methoden dekt met een volledig filtermatrix; vervangt de kwetsbare bestandsscan-aanpak",
+        "`RepositorySql`-klasse in `Quotinator.Data.Repositories` — centraliseert de zes `SqliteRepository`/`SqliteRestorableRepository`-sjabloonqueries (eerder inline); `SqlAggregateGuard.HasAggregateFunction` publieke helper stelt de aggregatiedetectieregex bloot voor gebruik in tests",
+        "`AggregateQueries_MatchDocumentedInventory`-test — documenteert en vergrendelt de exacte set SQL-constanten die aggregatiefuncties bevatten; mislukt wanneer nieuwe aggregatiequeries worden toegevoegd zonder beoordeling",
+        "`AllSqlStringLiterals_AreInCentralisedFiles`-scantest — dwingt af dat geen C#-bronbestand buiten `Sql.cs`, `RepositorySql.cs` en `DatabaseInitializer.cs` DML-stringliteralen bevat; sluit het CVE-2025-6965 DoD-item 1-gate",
+        "Beleid voor stringcentralisatie gedocumenteerd in `CLAUDE.md` — geen inline strings voor SQL, UI of foutmeldingen; audit grep-opdrachten en testgates inbegrepen"
+      ]
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-06-17",
+      "highlights": [
+        "Citaatgegevens worden nu geladen uit meerdere bronbestanden in `data/sources/` — één bestand per gebundelde dataset, plus optionele gebruikersimports in de `imports/`-submap van de datamap",
+        "Nieuw `GET /api/v1/admin/database/seed/preview`-eindpunt toont wat zou worden geïmporteerd zonder naar de database te schrijven (vereist `admin_api_key`)",
+        "`Quotinator__DataDir`-omgevingsvariabele vervangt `Quotinator__DataPath` — stel in op de datamap, niet op een bestandspad"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Citaten kunnen nu worden geladen uit meerdere gegevensbronnen — gebundelde datasets en uw eigen aangepaste bestanden geplaatst in de importsmap.",
+          "Nieuw voorbeeldeindpunt laat zien wat zou worden geïmporteerd voordat wijzigingen worden vastgelegd.",
+          "Configuratie: de datamap wordt nu ingesteld door naar een map te wijzen, niet naar een bestandspad — update `Quotinator__DataDir` als u een aangepaste instelling heeft."
+        ]
+      },
+      "added": [
+        "`data/sources/`-map met één JSON-bestand per dataset en een `manifest.json` die de importvolgorde en duplicaat-oplossingsbeleid beheert",
+        "`data/sources/quotinator-curated.json` — handmatig samengestelde en geverifieerde citaten (Airplane! als start)",
+        "Optionele gebruikersimports: plaats `.json`-bestanden in `{dataDir}/imports/` om aanvullende citaten te seeden bij het opstarten",
+        "Duplicaat-oplossingsbeleid per batch: `skip` (standaard) of `overwrite`; configureerbaar in `manifest.json` of via `Quotinator:DuplicateResolution:*`-omgevingsvariabelen",
+        "`GET /api/v1/admin/database/seed/preview` — droogloopscan die bestandsaantallen, citaataantallen en cross-bestandsduplicaten retourneert (vereist `AdminApiKey`)",
+        "Reseed- en resetreacties bevatten nu een `duplicates`-telling",
+        "Zes JSON-schema's in `schemas/` voor alle bronbestandsformaten en het manifest"
+      ],
+      "changed": [
+        "`Quotinator__DataDir`-omgevingsvariabele vervangt `Quotinator__DataPath` — waarde is de datamap, niet een bestandspad"
+      ],
+      "fixed": [
+        "Seeder FK-constraintfout bij eerste start veroorzaakt door een Guid-hoofdlettermismatch tussen Dapper.Contrib (HOOFDLETTERS) en ruwe SQL-parameters (kleine letters); SQLite-tekstvergelijking is hoofdlettergevoelig"
+      ]
+    },
+    {
+      "version": "1.2.2",
+      "date": "2026-06-16",
+      "highlights": [
+        "Opgelost: de GitHub-changeloglink in de add-on UI opende binnen het HA-frame en werd geblokkeerd — het opent nu correct in een nieuw tabblad"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Opgelost: de GitHub-changeloglink in de UI opende binnen het HA-frame en werd geblokkeerd door het beveiligingsbeleid van GitHub — het opent nu correct in een nieuw tabblad"
+        ]
+      },
+      "fixed": [
+        "GitHub-releaselink op de Over/Changelog-pagina opent nu in een nieuw tabblad (`target=\"_blank\"`) zodat het het HA-ingressframe verlaat; zonder dit veroorzaakte het `X-Frame-Options`-beleid van GitHub een browserfout in plaats van het laden van de pagina"
+      ]
+    },
+    {
+      "version": "1.2.1",
+      "date": "2026-06-16",
+      "highlights": [
+        "Databasebestand hernoemd van `quotes.db` naar `quotinatordata.db` — het oude bestand wordt automatisch hernoemd bij de eerste start na de upgrade, geen gegevensverlies",
+        "Een back-up van de database wordt gemaakt vóór elke schemamigratie en opgeslagen in de `backups/`-submap van de datamap; oude back-ups kunnen veilig worden verwijderd",
+        "Nieuwe optionele `backup_path`-configuratieoptie om back-ups op een aangepaste locatie op te slaan",
+        "DataProtection-sleutelmap hernoemd van `.keys` naar `keys`",
+        "Containerloguitvoer gebruikt nu enkellijnformaat — gemakkelijker te lezen in het HA-logpaneel",
+        "Opstartbanner toont alle datapaden in één oogopslag"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Het databasebestand heet nu `quotinatordata.db` — bij de eerste start na de upgrade wordt de oude `quotes.db` automatisch hernoemd zonder gegevensverlies",
+          "Een back-up van de database wordt automatisch gemaakt vóór elke schemamigratie",
+          "Containerloguitvoer is nu enkellijnig en gemakkelijker te lezen; de opstartbanner toont alle datapaden in één oogopslag"
+        ]
+      },
+      "added": [
+        "Pre-migratie database back-up met de SQLite back-up API — geschreven naar `{dataDir}/backups/quotinatordata_v{N}_{timestamp}Z.db` vóór elke schemaversieverhoging; oude back-ups kunnen veilig worden verwijderd",
+        "Configureerbare back-upmap via `Quotinator:BackupPath`-omgevingsvariabele (standaard `{dataDir}/backups`)",
+        "HA add-on: optionele `backup_path`-configuratieoptie met vertalingen in het Engels, Nederlands en Duits",
+        "`DataPaths`-constantenklasse (`Quotinator.Core.Data`) voor alle bestands- en mapnamen in de datamap — benoemd en gedocumenteerd zodat toekomstige wijzigingen op één plek blijven",
+        "Datamap-structuur gedocumenteerd in `README.md` en `addon/DOCS.md` met veilig-te-verwijderen richtlijnen voor elke map"
+      ],
+      "changed": [
+        "Databasebestand hernoemd van `quotes.db` naar `quotinatordata.db`; het verouderde bestand (inclusief WAL- en SHM-journaalbestanden) wordt automatisch hernoemd bij de eerste start na de upgrade",
+        "DataProtection-sleutelmap hernoemd van `.keys` naar `keys` — zichtbare naam is gemakkelijker te ontdekken en te documenteren",
+        "Console-logformatter overgeschakeld van `simple` (twee regels per item) naar `systemd` (één regel per item) voor schonere containerloguitvoer",
+        "Opstartbanner herschreven met volledige leesbare labels (`Database:`, `Backups:`, `DataProtection:`, `Config:`) uitgelijnd op één kolom; geen afkortingen"
+      ]
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-06-16",
+      "highlights": [
+        "Admin-eindpunten (opnieuw seeden, resetten) vereisen nu `Authorization: Bearer <sleutel>` — ze retourneren standaard 401 totdat `admin_api_key` is ingesteld in de add-on configuratie",
+        "Nieuwe `admin_api_key`-optie in het add-on configuratiepaneel"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Admin-eindpunten (opnieuw seeden, resetten) zijn nu beveiligd met een API-sleutel — ze retourneren standaard 401 en accepteren alleen verzoeken met de juiste `Authorization: Bearer <sleutel>`-header"
+        ]
+      },
+      "added": [
+        "`AdminApiKeyFilter`-eindpuntfilter bewaakt `POST /api/v1/admin/database/reseed` en `POST /api/v1/admin/database/reset` met een statische API-sleutel",
+        "`Quotinator:AdminApiKey`-configuratiesleutel (omgevingsvariabele `Quotinator__AdminApiKey`) — moet expliciet worden ingesteld om de eindpunten in te schakelen; geen gebundelde standaard",
+        "Sleutelvergelijking gebruikt `CryptographicOperations.FixedTimeEquals` om timing-aanvallen te voorkomen",
+        "HA add-on: optionele `admin_api_key`-configuratieoptie met vertalingen in het Engels, Nederlands en Duits"
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-06-15",
+      "highlights": [
+        "Filter citaten op meerdere genres of typen tegelijk (bijv. sci-fi komedies) met herhaalbare queryparameters op `/random`, `/search` en de gepagineerde lijst",
+        "Sci-fi en non-fictie genres worden nu correct gevonden in alle eindpunten — ze ontbraken stilletjes uit resultaten vóór deze oplossing",
+        "`/random` retourneert nu altijd een antwoordenvelop met status, items, totaal overeenkomend aantal en een optioneel bericht; de vorm van het antwoord is veranderd",
+        "Nieuwe admin-eindpunten: `POST /api/v1/admin/database/reseed` en `POST /api/v1/admin/database/reset` voor databaseonderhoud zonder het herstarten van de container"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "U kunt nu citaten filteren op meer dan één genre of type tegelijk — haal bijvoorbeeld alleen sci-fi komedies of dramafilms op",
+          "Sci-fi en non-fictiecitaten ontbraken in zoek- en willekeurige resultaten; beide genres werken nu correct",
+          "Twee nieuwe admin-eindpunten laten u de citaatdatabase opnieuw seeden of volledig resetten zonder de container te herstarten"
+        ]
+      },
+      "added": [
+        "`/random` accepteert nu multi-waarde `type`- en `genre`-filters (herhaalbare queryparameters, OF-logica binnen elk, EN tussen hen), plus `character`-, `author`- en `source`-tekst-bevat-filters (EN-logica met andere parameters)",
+        "`/search` en `/` (gepagineerde lijst) accepteren nu multi-waarde `type`- en `genre`-filters met OF-logica",
+        "`FilteredQuoteResult<T>`-antwoordenvelop op `/random` — altijd geretourneerd, inclusief `status` (enum), `items`, `totalMatching` (poolgrootte vóór willekeurige selectie) en `message` (niet-null voor niet-Ok statussen)",
+        "`FilteredResultStatus`-enum: `Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`",
+        "`ValidGenres`-set toegevoegd aan `InputValidation`; `IsSuspiciousInput`-regex detecteert veelvoorkomende SQL-injectiepatronen en geeft ze als `InvalidInput`-status (geparametriseerde queries voorkomen al werkelijke injectie)",
+        "`ValidGenres`- en `IsSuspiciousInput`-tests toegevoegd aan `InputValidationTests`",
+        "`POST /api/v1/admin/database/reseed` — wist alle gegevens en importeert opnieuw vanuit `quotes.json`; schemamigratiegeschiedenis blijft behouden",
+        "`POST /api/v1/admin/database/reset` — wist gegevens en schemaversiegeschiedenis, past alle migraties opnieuw toe, importeert dan opnieuw vanuit `quotes.json`; equivalent aan een verse database",
+        "`GenreApiToDb`-contracttests in `InputValidationTests`: elk geldig genre heeft een mapping, elke gemapte waarde is een geldige enumnaam, afgestreepte genres (`sci-fi`, `non-fiction`) worden correct gemapt"
+      ],
+      "changed": [
+        "**Brekend:** `/random`-antwoordvorm veranderd van een enkel citaatobject of array naar de `FilteredQuoteResult`-envelop in alle gevallen",
+        "Genre-normalisatie in `SqliteQuoteService` mapt nu correct `sci-fi` → `SciFi` en `non-fiction` → `NonFiction` voor DB-queries, en omgekeerd bij het lezen (eerder werden afgestreepte genres niet correct gematcht)",
+        "Onbekende `type`/`genre`-waarden op `/random` retourneren nu een 200 `InvalidType`/`InvalidGenre`-envelop in plaats van 400; op `/search` en `/` matchen ze stilletjes niets"
+      ],
+      "fixed": [
+        "`SqliteQuoteService.ToResponse` serialiseerde `Genre.SciFi` als `\"scifi\"` en `Genre.NonFiction` als `\"nonfiction\"`; beide retourneren nu de juiste API-tagstrings (`\"sci-fi\"`, `\"non-fiction\"`)",
+        "`DatabaseInitializer` liet `sci-fi`- en `non-fiction`-genres stilletjes vallen tijdens het seeden omdat `Enum.TryParse(\"sci-fi\")` mislukt op afgestreepte strings — `TryNormaliseGenre` mapt nu via `InputValidation.GenreApiToDb` vóór het parsen; `Migration002` kapt de getroffen `QuoteGenres`-rijen af zodat bestaande databases automatisch opnieuw worden geseeded bij de volgende start; `GenreApiToDb` is verplaatst van privé in `SqliteQuoteService` naar publiek in `InputValidation` zodat beide consumenten één definitie delen"
+      ]
+    },
+    {
+      "version": "1.0.15",
+      "date": "2026-06-15",
+      "highlights": [
+        "Opgelost: antiforgery-tokenfouten na herstart van container — DataProtection-sleutels worden nu betrouwbaar geschreven naar het persistente volume (`/data/.keys/`) zelfs wanneer de supervisor een gecachede configuratie geeft die `Quotinator__DataPath` weglaat",
+        "Opgelost: de OpenAPI UI-link in de zijbalk opende in de systeembrowser bij tikken in de HA-companion-app, verloor de sessie en veroorzaakte een 404; het navigeert nu binnen de webview van de companion-app"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Opgelost een sessieprobleem in Home Assistant waarbij de interface zijn staat verloor na het herstarten van de container"
+        ]
+      },
+      "fixed": [
+        "DataProtection-sleutels geschreven naar tijdelijk containerbestandssysteem wanneer de `Quotinator__DataPath`-omgevingsvariabele afwezig is in HA (bijv. door supervisor-configuratiecache) — `Program.cs` valt nu terug op `/data` (het HA-persistente volumekoppelpunt) vóór de `/app/data`-standaard, zodat sleutels altijd op een persistent volume staan en antiforgery-tokens containerherstart overleven",
+        "OpenAPI UI- en speclinks in `Home.razor` hadden `target=\"_blank\"`, wat de HA-companion-app doorstuurde naar de systeembrowser (geen HA-sessie) — `target=\"_blank\"` verwijderd houdt navigatie binnen de webview van de companion-app waar de sessie actief is"
+      ]
+    },
+    {
+      "version": "1.0.14",
+      "date": "2026-06-15",
+      "highlights": [
+        "Intern: eindpunttests maken of raken geen database meer aan — geen impact op add-on gedrag"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Interne verbetering — geen zichtbare wijzigingen voor gebruikers"
+        ]
+      },
+      "changed": [
+        "`DatabaseInitializer` implementeert nu `IDatabaseInitializer`; `Program.cs` registreert en lost op via de interface",
+        "Eindpunttests registreren `NoOpDatabaseInitializer` naast `FakeQuoteService` — er wordt geen database gemaakt of geseeded tijdens tests die niet de bedoeling hebben de databaselaag te oefenen"
+      ]
+    },
+    {
+      "version": "1.0.13",
+      "date": "2026-06-15",
+      "highlights": [
+        "Intern: een raceconditie in database-seeding opgelost die testmislukkingen veroorzaakte bij parallelle testuitvoering — geen impact op add-on gedrag"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Bugfix — geen zichtbare wijzigingen voor gebruikers"
+        ]
+      },
+      "fixed": [
+        "Raceconditie in `DatabaseInitializer.SeedIfEmptyAsync`: parallelle `WebApplicationFactory`-instanties (parallelle MSTest-runs met `ExecutionScope.MethodLevel`) konden beide een lege database observeren en gelijktijdig seeden proberen, wat een `UNIQUE constraint failed: Sources.Title, Sources.Type`-fout veroorzaakte — opgelost met een statische `SemaphoreSlim` die seedpogingen binnen hetzelfde proces serialiseert"
+      ]
+    },
+    {
+      "version": "1.0.12",
+      "date": "2026-06-15",
+      "issues": [
+        7
+      ],
+      "highlights": [
+        "Citaten worden nu opgeslagen in een SQLite-database (`quotes.db`) op het persistente volume — geen actie vereist; de database wordt automatisch aangemaakt en gevuld bij de eerste start",
+        "Opstartlog toont nu databasestatus: schemaversie, seedingvoortgang en een eindtelling van citaten, bronnen, personages en personen",
+        "Versieeindpunt (`GET /api/v1/version`) retourneert nu de databaseschemaversie en recordtellingen naast de API-versie",
+        "Opgelost: de opstartbanner en het versieeindpunt rapporteerden ten onrechte versie `1.0.0` in plaats van de werkelijke add-on versie",
+        "Opgelost: de Docker-imagebouw mislukte toen `Quotinator.Data` werd geïntroduceerd — Dockerfile COPY-lagen gecorrigeerd"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Citaten worden nu opgeslagen in een lokale database in plaats van een plat bestand — sneller, betrouwbaarder en klaar voor toekomstige schrijfondersteuning ([#7](https://github.com/DutchJaFO/Quotinator/issues/7))",
+          "Het versieeindpunt rapporteert nu ook de databaseschemaversie en recordtellingen"
+        ]
+      },
+      "added": [
+        "SQLite-backend (v2): vervangt plat-bestand `QuoteService` door `SqliteQuoteService` ondersteund door Dapper + `Microsoft.Data.Sqlite` (sluit [#7](https://github.com/DutchJaFO/Quotinator/issues/7))",
+        "Volledig genormaliseerd schema: `Sources`, `SourceTranslations`, `Characters`, `CharacterTranslations`, `People`, `Quotes`, `QuoteTranslations`, `QuoteGenres` — alle tabellen bevatten `RecordBase`-auditkolommen (`DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted`) voor soft-delete ondersteuning",
+        "`SchemaVersion`-tabel met genummerde migratieondersteuning — lopende migraties worden automatisch toegepast bij het opstarten; bestaande migraties worden nooit bewerkt",
+        "Eerste-run seeding: als de database leeg is bij het opstarten, worden alle 780 citaten automatisch geïmporteerd vanuit de gebundelde `quotes.json`; geen handmatige migratiestap vereist",
+        "`SafeValue<T>` — diagnostische wrapper die zowel `Raw` (originele DB-string) als `Parsed` (geconverteerde waarde) meeneemt; beschadigde of niet-herkende waarden doen de applicatie nooit crashen en de originele string wordt bewaard voor diagnose",
+        "`SafeEnumHandler<T>` en `SafeDateHandler` — Dapper TypeHandlers; enumwaarden opgeslagen als TEXT-namen (hernoeming-veilig), datumvelden ondersteunen onnauwkeurige ISO 8601 (`\"1994\"`, `\"1994-06\"`, `\"1994-06-04\"`)",
+        "`QuoteType`- en `Genre`-enums met `Unknown = 0` als veilige nulwaarde terugval",
+        "`People`-tabel: bijhoudt echte personen (auteurs, publieke figuren) met optionele `DateOfBirth` / `DateOfDeath` in onnauwkeurig ISO 8601-formaat",
+        "Personages gekoppeld aan hun bron — dezelfde personagenaam uit verschillende franchises wordt opgeslagen als aparte rijen",
+        "`Quotinator.Data`-project: herbruikbare data-infrastructuur (`RecordBase`, `SafeValue<T>`, `IDbConnectionFactory`, `SqliteConnectionFactory`, `SafeEnumHandler<T>`, `SafeDateHandler`) geëxtraheerd in zijn eigen klassenbibliotheek",
+        "Database-opstartlogging: logregels voor schemaopbouw/update, seedingvoortgang en een eindsamenvatting (citaat / bron / personage / persoonstellingen)",
+        "XML `<summary>`-documentatie op alle publieke typen en leden; CS1591 afgedwongen in `Quotinator.Core` en `Quotinator.Data`",
+        "Versieeindpunt (`GET /api/v1/version`) retourneert nu `database.schemaVersion` en rijtellingen (`quotes`, `sources`, `characters`, `people`)",
+        "Opstartbanner bevat nu een `DB:`-regel met schemaversie en rijtellingen",
+        "`SOURCES.md`: attributie toegevoegd voor Dapper, Dapper.Contrib, `Microsoft.Data.Sqlite`, `Microsoft.Extensions.Logging.Abstractions`; DB Browser for SQLite toegevoegd onder externe hulpmiddelen"
+      ],
+      "fixed": [
+        "Versieeindpunt en opstartbanner rapporteerden `1.0.0` in plaats van de werkelijke releaseversie — `VersionService` las de `Quotinator.Core`-assembly (geen `<Version>` ingesteld) in plaats van de entry-assembly; gewijzigd naar `Assembly.GetEntryAssembly()`",
+        "Docker-bouw mislukte: `Quotinator.Data`-project ontbrak in de Dockerfile COPY-lagen"
+      ]
+    },
+    {
+      "version": "1.0.11",
+      "date": "2026-06-14",
+      "highlights": [
+        "Configuratiepanelopties tonen nu vertaalde namen en beschrijvingen in het Engels, Nederlands en Duits",
+        "Documentatietabblad: de toegangssectie maakt nu duidelijk onderscheid tussen ingress (standaard, zijbalk) en directe poort (optioneel, voor externe hulpmiddelen); misleidende hardgecodeerde URL verwijderd"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Add-on configuratieopties tonen nu vertaalde namen en beschrijvingen in het Engels, Nederlands en Duits"
+        ]
+      },
+      "added": [
+        "HA add-on configuratiepaneel toont nu vertaalde optienamen en beschrijvingen in het Engels, Nederlands en Duits (`addon/translations/`)",
+        "GitHub-milestones gemaakt om aankomend werk bij te houden; README-routekartsectie vervangen door een link naar de milestonelijst"
+      ],
+      "changed": [
+        "Architectuur: `Quotinator.Constants`-project geëxtraheerd (routestrings, tagnamen, foutmeldingssleutels — geen afhankelijkheden); `ApiLocalizer`, `VersionService` en `InputValidation` verplaatst naar `Quotinator.Core`",
+        "HA add-on documentatie herzien: toegangssectie onderscheidt nu ingress (standaard, geen poortconfiguratie nodig) van directe poort (optioneel, voor externe hulpmiddelen); hardgecodeerde `http://<ha-host>:8080/`-URL's verwijderd"
+      ],
+      "fixed": [
+        "Verouderde `UI.en.json`-referenties in `docs/localisation.md` en testcommentaren gecorrigeerd naar `UI.en-GB.json` (het werkelijke basisbestand)"
+      ]
+    },
+    {
+      "version": "1.0.10",
+      "date": "2026-06-14",
+      "highlights": [
+        "Opstartbanner wordt afgedrukt als een enkel blok (één timestamp) met een configuratiesamenvatting: logniveau, verzoekloggingstatus, SSL-status en certpaden wanneer SSL is ingeschakeld"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Opstartlog wordt nu afgedrukt als een enkel, leesbaar blok met een configuratiesamenvatting"
+        ]
+      },
+      "changed": [
+        "Opstartbanner wordt nu afgedrukt als één logitem (één timestamp) in plaats van één regel per logaanroep",
+        "Bannerconfiguratie-samenvatting toegevoegd: `log_level`, `log_requests`, `ssl`-status en cert/sleutelpaden wanneer SSL is ingeschakeld"
+      ]
+    },
+    {
+      "version": "1.0.9",
+      "date": "2026-06-14",
+      "highlights": [
+        "Nieuwe `log_requests`-optie — logt één regel per citaat-API-verzoek; handig om te bevestigen dat aanroepen aankomen zonder volledige debuglogging in te schakelen (standaard: `false`)",
+        "Nieuwe `log_level`-optie — kies logdetailniveau vanuit het add-on paneel (standaard: `info`; gebruik `debug` bij het melden van problemen)",
+        "UTC-timestamps op alle logregels",
+        "Duidelijke start- en stopmarkeringen in het supervisorlog (versie, datapad, citaataantal)"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Nieuwe optie: log één regel per API-verzoek — handig om te bevestigen dat aanroepen aankomen zonder volledige debuglogging in te schakelen",
+          "Nieuwe optie: kies hoeveel detail verschijnt in het supervisorlog",
+          "Alle logregels tonen nu een UTC-timestamp"
+        ]
+      },
+      "added": [
+        "`log_requests`-add-on optie — wanneer ingeschakeld, logt één regel per citaat-API-verzoek (`GET /api/v1/quotes/random?n=5 → 200 in 12ms`); standaard `false`; 429-antwoorden worden opgenomen, gezondheid/Blazor/statisch verkeer niet",
+        "`log_level`-add-on optie — beheert uitvoerigheid van het HA-supervisorlog; geldige waarden: `trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`; standaard `info`",
+        "UTC-timestamps op alle logregels (`yyyy-MM-dd HH:mm:ss`)",
+        "Opstartbanner logt versie, datapad, citaataantal en sleutelmap bij elke start",
+        "Afsluitbericht gelogd wanneer de container stopt"
+      ],
+      "changed": [
+        "`Console.WriteLine`-opstartuitvoer vervangen door de gestructureerde logger — alle uitvoer respecteert nu het geconfigureerde logniveau en timestampformaat"
+      ]
+    },
+    {
+      "version": "1.0.8",
+      "date": "2026-06-14",
+      "issues": [
+        8
+      ],
+      "highlights": [
+        "Opgelost: links op de startpagina (Scalar UI, OpenAPI-spec, gezondheidscheck) werden niet correct opgelost via de Home Assistant ingress — ze gebruiken nu relatieve paden"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Opgelost: de API-referentie, OpenAPI-spec en gezondheidscheck-links op de startpagina werkten niet via de Home Assistant ingress ([#8](https://github.com/DutchJaFO/Quotinator/issues/8))"
+        ]
+      },
+      "fixed": [
+        "Scalar UI-knop, OpenAPI-speclink en gezondheidscheck-link op de startpagina waren kapot onder de Home Assistant ingress — absolute paden (bijv. `/scalar/v1`) negeerden `<base href>` en losten op tegen de serverroot van HA; veranderd naar relatieve paden zodat ze correct oplossen via de ingressproxy in alle implementatiescenario's (sluit [#8](https://github.com/DutchJaFO/Quotinator/issues/8))"
+      ]
+    },
+    {
+      "version": "1.0.7",
+      "date": "2026-06-14",
+      "highlights": [
+        "Citaten en DataProtection-sleutels worden nu opgeslagen op het door de supervisor gekoppelde persistente volume (`/data`) en overleven add-on herstart en updates — geen handmatige gegevensmigratie nodig bij de eerste installatie",
+        "Opgelost: Blazor-assets (CSS, `blazor.web.js`) konden niet worden geladen in het Home Assistant ingress-paneel — de zijbalkpagina was kapot en de knop 'Nieuw citaat' werkte niet",
+        "Opgelost: antiforgery-decryptiefouten na herstart van de add-on — DataProtection-sleutels blijven nu behouden over herstarten",
+        "Opgelost: het taalcookieeindpunt verschijnt niet meer in de Scalar API-referentie"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Citaten en sessiegegevens overleven nu containerherstart en add-on updates — geen gegevensverlies bij update",
+          "Opgelost: de Blazor-pagina (inclusief de knop 'Nieuw citaat') werd niet correct geladen in de Home Assistant zijbalk"
+        ]
+      },
+      "added": [
+        "Eerste-run seeding: als `Quotinator__DataPath` naar een lege map wijst (bijv. een vers HA add-on datavolume), wordt de gebundelde `quotes.json` automatisch daarheen gekopieerd bij het opstarten zodat de add-on direct werkt zonder handmatige installatie"
+      ],
+      "fixed": [
+        "Blazor-assets (CSS, `blazor.web.js`) konden niet worden geladen via het Home Assistant ingress-paneel — de hardgecodeerde `<base href=\"/\" />` zorgde ervoor dat relatieve URL's werden omgezet tegen de eigen serverroot van HA in plaats van het ingressproxypad; opgelost door `X-Ingress-Path` te lezen van de HA-supervisor en in te stellen als het ASP.NET Core `PathBase`, dat `<base href>` nu dynamisch reflecteert",
+        "DataProtection-sleutels werden niet bewaard over HA add-on herstarten — `Quotinator__DataPath=/data/quotes.json` wijst de app naar het persistente volume van de supervisor (`map: data:rw`) zodat sleutels herstarten en updates overleven; antiforgery-decryptiefouten en Blazor-circuitbeschrijvermismatches zijn opgelost",
+        "Kestrel dubbele-binding waarschuwing: `ASPNETCORE_HTTP_PORTS: \"8099\"` in `addon/config.yaml` botste met de Kestrel-code die ook poort 8099 bindt; omgevingsblok verwijderd zodat poortbinding volledig eigendom is van de applicatie",
+        "DataProtection-sleutels worden nu geschreven naar een `.keys/`-submap binnen de datamap",
+        "`/Culture/Set` (taalcookieeindpunt) verschijnt niet meer in de Scalar API-referentie — het is een Blazor UI-helper, geen REST API-eindpunt"
+      ]
+    },
+    {
+      "version": "1.0.6",
+      "date": "2026-06-14",
+      "highlights": [
+        "SSL / HTTPS-ondersteuning op de directe toegangspoort — stel `ssl: true` in en geef cert/sleutelbestandsnamen op (relatief aan `/ssl/`); standaard uitgeschakeld",
+        "Ingress detecteert nu correct de HTTPS-context van de browser via `X-Forwarded-Proto`",
+        "Opgelost: Blazor-interactieve componenten (bijv. de knop 'Nieuw citaat') werkten niet in Docker of de HA add-on",
+        "Taalkeuzecookie werkt nu in plain-HTTP directe toegangsimplementaties"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Optionele HTTPS op de directe toegangspoort — schakel ssl in de add-on configuratie in om uw Let's Encrypt-certificaat te gebruiken",
+          "Opgelost: interactieve elementen zoals de knop 'Nieuw citaat' werkten niet in Docker of de HA add-on"
+        ]
+      },
+      "added": [
+        "Optionele HTTPS op de directe toegangspoort (8080) via Kestrel; configureer met `Quotinator__Ssl=true`, `Quotinator__SslCertFile` en `Quotinator__SslKeyFile`-omgevingsvariabelen",
+        "HA add-on SSL-opties (`ssl`, `certfile`, `keyfile`) — standaard `ssl: false`; wanneer ingeschakeld, gebruikt certs uit `/ssl/` (HA Let's Encrypt add-on schrijft daar)",
+        "`UseForwardedHeaders()`-middleware leest `X-Forwarded-Proto` en `X-Forwarded-For` van upstream-proxies zodat de app weet dat het achter HTTPS draait ook wanneer het intern HTTP draait (vereist voor HA ingress)"
+      ],
+      "changed": [
+        "DataProtection-sleutels worden nu bewaard in de datamap (`/app/data`) in plaats van tijdelijk in-memory; antiforgery-tokens en Blazor-circuitbeschrijvers overleven containerherstart",
+        "Culture-cookie `Secure`-vlag is nu afgeleid van `Request.IsHttps` in plaats van hardgecodeerd `true` — taalvoorkeur blijft behouden in plain-HTTP implementaties",
+        "`UseHttpsRedirection` verwijderd — omleidingsverantwoordelijkheid behoort toe aan de reverse-proxy van de consument, niet de app",
+        "Dockerfile wist `ASPNETCORE_HTTP_PORTS` ingesteld door de .NET-basisimage; poortbinding is nu volledig eigendom van de Kestrel-configuratie van de applicatie"
+      ],
+      "fixed": [
+        "Blazor-interactieve componenten (bijv. de knop 'Nieuw citaat') werkten niet in Docker — `_framework/blazor.web.js` ontbrak in de Docker-publicatieuitvoer omdat `--no-restore` een onvolledige Blazor-statische-webassets-manifest hergebruikte dat was gegenereerd voordat bronbestanden werden gekopieerd; opgelost door `--no-restore` te verwijderen uit `dotnet publish`"
+      ]
+    },
+    {
+      "version": "1.0.5",
+      "date": "2026-06-14",
+      "highlights": [
+        "Afhankelijkheidsupdates: `Microsoft.AspNetCore.OpenApi`, `MSTest`, `Microsoft.AspNetCore.Mvc.Testing`, `actions/checkout` (alleen CI)"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Afhankelijkheidsupdates — geen zichtbare wijzigingen voor gebruikers"
+        ]
+      },
+      "changed": [
+        "`Microsoft.AspNetCore.OpenApi` bijgewerkt van 10.0.7 naar 10.0.9",
+        "`actions/checkout` bijgewerkt van v5 naar v6 (alleen CI)",
+        "`Microsoft.AspNetCore.Mvc.Testing` bijgewerkt van 10.0.0 naar 10.0.9 (alleen tests)",
+        "`MSTest` bijgewerkt van 4.0.2 naar 4.2.3 (alleen tests)",
+        "`.gitattributes` genormaliseerd naar LF voor alle tekstbestanden — voorkomt CRLF/LF-mismatches van Dependabot-merges"
+      ]
+    },
+    {
+      "version": "1.0.4",
+      "date": "2026-06-14",
+      "highlights": [
+        "Taalkeuze in de UI-navigatiebalk — overschrijft browsertaal, blijft één jaar als cookie bewaard",
+        "AppArmor-profiel (`apparmor.txt`) — beperkt toegang tot het containerbestandssysteem en netwerk; verbetert de kwaliteitsscore van de add-on",
+        "Opgelost: Home Assistant ingress maakt nu correct verbinding",
+        "Directe toegangspoort standaard uitgeschakeld (`null`); schakel in in de add-on configuratie indien nodig voor directe LAN- of hulpmiddeltoegang"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Taalkeuze in de navigatiebalk — overschrijf de taalvoorkeur van uw browser; de keuze wordt één jaar onthouden",
+          "AppArmor-beveiligingsprofiel toegevoegd aan de Home Assistant add-on"
+        ]
+      },
+      "added": [
+        "Releaseworkflow is nu afhankelijk van het slagen van CI — `build-and-push` is afhankelijk van een `test`-taak zodat een kapotte build geen gepubliceerde image kan produceren",
+        "Dependabot geconfigureerd voor wekelijkse NuGet- en GitHub Actions-updates (`.github/dependabot.yml`)",
+        "Taalkeuze in de navigatiebalk: overschrijft browsertaalvoorkeur, blijft één jaar als cookie bewaard",
+        "Open API-referentieknop op de startpagina",
+        "Vertaalondersteuningssectie op de startpagina",
+        "AppArmor-profiel voor de Home Assistant add-on (`addon/apparmor.txt`)"
+      ],
+      "changed": [
+        "Home Assistant add-on directe toegangspoort standaard uitgeschakeld; schakel in in de add-on configuratie voor directe LAN- of hulpmiddeltoegang",
+        "`UI.en-GB.json` is nu de i18n-basis; `UI.en.json` verwijderd",
+        "Taalkeuze biedt: Automatisch detecteren, English (en-GB), Deutsch, Nederlands"
+      ],
+      "fixed": [
+        "WCAG SC 3.1.1: `<html lang>` is nu dynamisch en reflecteert de actieve UI-cultuur (was hardgecodeerd `\"en\"`)",
+        "Taalcookie gebruikt nu `SameSite=Lax` en `Secure=true`",
+        "QuoteCard (Interactive Server-component) respecteert nu de taalcookie; eerder altijd weergegeven in het Engels ongeacht de geselecteerde taal",
+        "Home Assistant ingress maakt nu correct verbinding via de `ASPNETCORE_HTTP_PORTS`-omgevingsvariabele"
+      ]
+    },
+    {
+      "version": "1.0.3",
+      "date": "2026-06-14",
+      "highlights": [
+        "Winkelvermelding en documentatie bijgewerkt om de v1-scope nauwkeurig te weerspiegelen"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Documentatiecorrecties — geen zichtbare wijzigingen voor gebruikers"
+        ]
+      },
+      "fixed": [
+        "Documentatiecorrecties: CI/CD-stappen bijgewerkt om publish smoke test en GitHub Release-aanmaak te weerspiegelen; Home Assistant-documenten bijgewerkt met GHCR-zichtbaarheidsvereiste; Docker-documenten gecorrigeerd voor `data/`-bouwcontextopname",
+        "Add-on winkelvermelding en documentatie gecorrigeerd — Blazor-beheer-UI is gepland voor v2, niet aanwezig in v1",
+        "Add-on `config.yaml`-versie voortaan gesynchroniseerd met API-versie"
+      ]
+    },
+    {
+      "version": "1.0.2",
+      "date": "2026-06-14",
+      "highlights": [
+        "Opgelost: Docker-imagetag gecorrigeerd — add-on versie komt nu overeen met de gepubliceerde imagetag op GHCR"
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Bugfix — geen zichtbare wijzigingen voor gebruikers"
+        ]
+      },
+      "fixed": [
+        "GitHub-releases worden nu automatisch aangemaakt wanneer een versietag wordt gepushed"
+      ]
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-06-13",
+      "highlights": [
+        "Bugfix — geen zichtbare wijzigingen voor gebruikers"
+      ],
+      "fixed": [
+        "Docker-imagebouw slaagt nu: `data/quotes.json` was uitgesloten van de bouwcontext via `.dockerignore`, waardoor `dotnet publish` mislukte",
+        "Alle GitHub Actions bijgewerkt naar Node.js 24-compatibele hoofdversies; `actions/checkout@v4` produceert nog steeds een Node 20-afschrijvingswaarschuwing (upstream-probleem, bijgehouden in sessienotities)"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-06-13",
+      "highlights": [
+        "Eerste release: 780 samengestelde citaten uit films, tv, boeken en beroemde personen",
+        "REST API met willekeurige, lijst-, zoek- en detaileindpunten; meertalige ondersteuning; snelheidsbeperking",
+        "OpenAPI-documentatie op /scalar/v1"
+      ],
+      "added": [
+        "REST-leeseindpunten: `GET /api/v1/quotes/random`, `/api/v1/quotes`, `/api/v1/quotes/{id}`, `/api/v1/quotes/search`",
+        "Gezondheidscheck-eindpunt: `GET /api/v1/health`",
+        "Versieeindpunt: `GET /api/v1/version`",
+        "Citaatdataset: 780 samengestelde citaten gezaaid uit twee MIT-gelicenseerde bronnen",
+        "Citaatschema: ondersteunt films, tv, anime, boeken en beroemde personen; optionele vertalingen",
+        "Taalondersteuning: `lang`-queryparameter (ISO 639-1) met terugval naar originele taal",
+        "RFC 7807 ProblemDetails-foutantwoorden met gelokaliseerde berichten (en, en-GB, de, nl)",
+        "Invoervalidatie: alle queryparameters gevalideerd; niet-integer invoer retourneert 400 in plaats van 500",
+        "Schuivend-venster snelheidsbegrenzer: 100 verzoeken per minuut per IP",
+        "OpenAPI-documentatie via Scalar UI (`/scalar/v1`) en ruwe spec (`/openapi/v1.json`), beschikbaar in alle omgevingen inclusief productie",
+        "Multi-arch Docker-image (`linux/amd64` + `linux/arm64`)",
+        "GitHub Actions CI-pipeline: bouw, test en publish smoke test",
+        "GitHub Actions release-pipeline: bouwt en pusht Docker-image naar GHCR bij versietags"
+      ]
+    },
+    {
+      "version": "1.0.0-beta.1",
+      "date": "2026-06-13",
+      "highlights": [
+        "Eerste release: REST API, gezondheidscheck-eindpunt, Blazor UI-plaatshouder",
+        "780 samengestelde citaten uit films, tv, boeken en beroemde personen",
+        "Multi-arch Docker-image (`linux/amd64` + `linux/aarch64`)",
+        "Home Assistant ingress op poort 8099; directe toegang op poort 8080"
+      ]
+    }
+  ]
+}

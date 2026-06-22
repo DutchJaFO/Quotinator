@@ -407,6 +407,14 @@ See [`docs/testing-policy.md`](docs/testing-policy.md).
 
 ---
 
+## Logging Standards
+
+See [`docs/logging.md`](docs/logging.md).
+
+Boyscout rule: when you edit any file that emits log lines without the `[Subsystem - Phase]` prefix, add the prefix in the same commit. Do not defer it to a cleanup PR.
+
+---
+
 ## What NOT to do
 
 - Do not use Entity Framework in v1 — flat-file JSON only
@@ -508,19 +516,31 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
-3. **Changelog updated** — add entries to `CHANGELOG.md` under `[Unreleased]` as changes land. When tagging a release, promote the `[Unreleased]` block to a versioned heading (`## [x.y.z] - YYYY-MM-DD`) and **remove the `[Unreleased]` header entirely** — do not leave an empty section. Add the `[Unreleased]` header back only when the next change is ready to document. Every versioned section must have a `### Highlights` block — this is the **only** part shown in the Blazor UI. Rules for `### Highlights`:
-   - **Always a bullet list** (one or more `- ` items) — the parser only reads bullet lines; prose text is silently ignored and the UI falls back to the full technical sections
-   - **Plain user-facing English only** — no CVE IDs, no API paths, no class names, no config key names, no technical implementation details
-   - **For purely internal releases** use exactly: `- Internal improvements — no user-facing changes.`
-   - **Bad:** `- SQL queries centralised as mitigation for CVE-2025-6965` / `- New GET /api/v1/admin/... endpoint`
-   - **Good:** `- Internal improvements — no user-facing changes.` / `- Quotes can now be loaded from multiple data sources.` / `- Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected.`
-   - **Security fixes** should always appear in Highlights — include the CVE ID so users can verify, but keep the surrounding language non-technical
+3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
 
-   The `addon/CHANGELOG.md` uses a flat bullet list per version with no `### Added/Fixed/Changed` subsections (HA convention); update it alongside the root changelog. The addon entries follow the same plain-English rule — no CVE IDs or technical terms.
+   **During development** (after closing each issue or committing a meaningful change): add entries to the `unreleased` section at the top of `changelog.en.json`. This follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `[Unreleased]` convention and keeps the changelog in sync without waiting for a release. Decide at the time of writing whether the change deserves a `highlights` entry (user-facing impact) or only `added`/`changed`/`fixed`/`removed` (technical).
+
+   **When tagging a release**: promote the `unreleased` entries into a new release entry at the top of the `releases` array, set the `version` and `date` fields, and clear (or remove) the `unreleased` section. Then run the generator to regenerate both markdown files before committing.
+
+   Rules for `highlights` in `changelog.en.json`:
+   - **An array of plain-English strings** (one sentence per element) — the Blazor UI renders each element as a bullet
+   - **Plain user-facing English only** — no CVE IDs, no API paths, no class names, no config key names, no technical implementation details
+   - **For purely internal releases** use exactly: `["Internal improvements — no user-facing changes."]`
+   - **Bad:** `["SQL queries centralised as mitigation for CVE-2025-6965"]` / `["New GET /api/v1/admin/... endpoint"]`
+   - **Good:** `["Internal improvements — no user-facing changes."]` / `["Quotes can now be loaded from multiple data sources."]` / `["Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected."]`
+   - **Security fixes** should always appear in highlights — include the CVE ID so users can verify, but keep the surrounding language non-technical
+   - `ChangelogSchemaTests` validates structure (no null entries, CVE format) — run `dotnet test --filter ChangelogSchema` to verify before committing
+
+   After editing `changelog.en.json`, regenerate the markdown files (run from repo root):
+   ```bash
+   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md
+   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md
+   ```
+   Commit the regenerated files alongside the JSON change.
 4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
    - `Directory.Build.props` → `<Version>` (shared across all projects — **this is the only file to update**)
    - `addon/config.yaml` → `version`
-   - `CHANGELOG.md` and `addon/CHANGELOG.md` → versioned section heading
+   - `changelog.en.json` → new version entry at the top; regenerate `CHANGELOG.md` and `addon/CHANGELOG.md`
 
    `AssemblyVersion` and `FileVersion` are derived automatically as `$(Version).0` (e.g. `1.4.1` → `1.4.1.0`). Do not set them manually.
 5. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
@@ -549,8 +569,8 @@ Workflow:
 3. Wait for any remaining Dependabot PRs to finish CI
 4. Review and merge passing Dependabot PRs
 5. `git pull` to bring dependency bumps onto your local branch
-6. Update `CHANGELOG.md` and `addon/CHANGELOG.md` with the dependency bump entries
-7. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, both changelogs) and commit
+6. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate both markdown files with `scripts/changelog.csx`
+7. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, `changelog.en.json` version entry) and commit
 8. Run the full pre-push checklist above (including Docker build)
 9. Push the version bump commit, then push the tag:
    ```bash

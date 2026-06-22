@@ -72,6 +72,9 @@ docker-compose.override.yml
 *.p12
 secrets/
 
+# ===== Scratch / temp =====
+.claude/temp/
+
 # ===== OS =====
 .DS_Store
 Thumbs.db
