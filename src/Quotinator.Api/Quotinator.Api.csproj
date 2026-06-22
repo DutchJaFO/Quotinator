@@ -39,8 +39,8 @@
     <!-- Copy bundled source files to the build output so the startup seeder can find them
          regardless of working directory (VS, dotnet run, Docker). -->
     <Content Include="..\..\data\sources\**\*" Link="data\sources\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <!-- Copy the JSON changelog so ChangelogService can read it at runtime. -->
-    <Content Update="resources\changelog.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Copy per-language changelog files so ChangelogService can read them at runtime. -->
+    <Content Update="resources\changelog.*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Copy i18ntext JSON files so ApiLocalizer can read them at runtime from i18ntext/ relative

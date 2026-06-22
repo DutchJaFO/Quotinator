@@ -353,19 +353,33 @@ Find the commit that added the `translations` blocks and extract the `nl` and `d
 
 ## Implementation order
 
-1. Delete `ChangelogReleaseTranslation.cs` and `ChangelogTranslationItem.cs`
-2. Simplify `ChangelogUnreleased.cs` (remove translation members)
-3. Update `ChangelogRoot.cs` and add `ChangelogDocument.cs`
-4. Rewrite `IChangelogService.cs` and `ChangelogService.cs`
-5. Update `ChangelogEntry.razor` / `.razor.cs` and `ChangelogUnreleasedEntry.razor` / `.razor.cs`
-6. Update About / Changelog page for `GetForCulture` and `MachineTranslated` flag
-7. Refactor `schemas/changelog.schema.json` (composition + new top-level fields)
-8. Update `changelog.csx` (remove translation lookup, simplify helpers)
-9. Rename `changelog.json` → `changelog.en.json`; add `language`, `sourceLanguage`, `machineTranslated` to it; strip all `translations` blocks
-10. Create `changelog.nl.json` and `changelog.de.json` (recover content from git history)
-11. Update tests: delete `GetHighlightsTests.cs`; update `ChangelogSchemaTests` and `RepositoryStructureTests`
-12. Update `CLAUDE.md` generator commands
-13. Update `Quotinator.slnx`
-14. `dotnet build --configuration Release` → 0 warnings, 0 errors
-15. `dotnet test --configuration Release` → all tests pass
-16. Regenerate `CHANGELOG.md` and `addon/CHANGELOG.md` using the new `changelog.en.json` source
+- [x] 1. Delete `ChangelogReleaseTranslation.cs` and `ChangelogTranslationItem.cs`
+- [x] 2. Simplify `ChangelogUnreleased.cs` (remove translation members)
+- [x] 3. Update `ChangelogRoot.cs` and add `ChangelogDocument.cs`
+- [x] 4. Rewrite `IChangelogService.cs` and `ChangelogService.cs`
+- [x] 5. Refactor `schemas/changelog.schema.json` (composition + new top-level fields)
+- [x] 6. Update `changelog.csx` (remove translation lookup, simplify helpers)
+- [x] 7. Update `changelog-import.csx` (reference project DLL; use project types; use `DefaultJsonTypeInfoResolver` to skip empty/null lists)
+- [x] 8. Rename `changelog.json` → `changelog.en.json`; add `language`, `sourceLanguage`, `machineTranslated`; strip all `translations` blocks
+- [x] 9. Update tests: delete `GetHighlightsTests.cs`; rewrite `ChangelogSchemaTests`; add `ChangelogServiceTests`; update `RepositoryStructureTests`
+- [x] 10. Update `ChangelogEntry.razor` / `.razor.cs` and `ChangelogUnreleasedEntry.razor` / `.razor.cs` (`IsMachineTranslated` parameter; `Highlights` direct; no `Culture`)
+- [x] 11. Update About page for `GetForCulture` and `_document.MachineTranslated`
+- [x] 12. Update `CLAUDE.md` generator commands (`changelog.json` → `changelog.en.json`)
+- [x] 13. Update `Quotinator.slnx` (`changelog.json` → `changelog.en.json`)
+- [x] 14. `dotnet build --configuration Release` → 0 warnings, 0 errors ✓
+- [x] 15. `dotnet test --configuration Release` → 195 passed, 0 failed ✓
+- [x] 16. Regenerate `CHANGELOG.md` and `addon/CHANGELOG.md` using `changelog.en.json`
+- [ ] 17. Create `changelog.nl.json` and `changelog.de.json` (see note below on recovering content)
+- [ ] 18. Add `changelog.nl.json` and `changelog.de.json` to `Quotinator.slnx`
+- [ ] 19. `dotnet test --configuration Release` → all tests pass with NL/DE files present
+- [ ] 20. Delete the old `changelog.json` from disk (it was left in place during step 8; not copied to output due to glob `changelog.*.json`)
+
+---
+
+## Session notes
+
+### `changelog-import.csx` — DLL reference approach
+The script uses `#r "../src/Quotinator.Changelog/bin/Release/net10.0/Quotinator.Changelog.dll"` to share types with the project rather than maintaining duplicate local records. The project must be built in Release before running the import script. Empty `List<string>` properties are suppressed in JSON output via `DefaultJsonTypeInfoResolver.Modifiers` + `SkipEmptyOrNull` — this avoids `WhenWritingNull` which doesn't apply to non-nullable lists.
+
+### NL/DE translation approach
+The old `translations` blocks (stripped in step 8) are no longer in the working tree. Do NOT attempt to recover them via `git show` on `feature/changelog-handling` — the approach described at the bottom of the "Content for changelog.nl.json and changelog.de.json" section above is based on a superseded plan. Instead, use `changelog-import.csx` to generate `changelog.nl.json` and `changelog.de.json` from scratch using machine translation of `changelog.en.json`. The import script already accepts `--language`, `--source-language`, and `--machine-translated` flags for this purpose.

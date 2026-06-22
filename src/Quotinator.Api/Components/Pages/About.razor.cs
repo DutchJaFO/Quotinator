@@ -1,4 +1,6 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Components;
+using Quotinator.Changelog.Models;
 using Quotinator.Changelog.Services;
 using Quotinator.Core.Services;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
@@ -13,7 +15,8 @@ public partial class About
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
-        Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
+        Text      = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
+        _document = ChangelogService.GetForCulture(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName);
     }
 
     #endregion
@@ -25,6 +28,8 @@ public partial class About
     [Inject] private I18nTextService I18nText { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
+
+    private ChangelogDocument? _document;
 
     #endregion
 }

@@ -319,7 +319,10 @@ if (isContainer)
 
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
-builder.Services.AddSingleton<IChangelogService, ChangelogService>();
+builder.Services.AddSingleton<IChangelogService>(sp =>
+    new ChangelogService(
+        Path.Combine(AppContext.BaseDirectory, "resources"),
+        sp.GetRequiredService<ILogger<ChangelogService>>()));
 
 var dbPath     = Path.Combine(dataDir, DataPaths.DatabaseFile);
 var backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0 } customBackupPath

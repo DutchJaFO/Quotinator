@@ -2,21 +2,20 @@ using Quotinator.Changelog.Models;
 
 namespace Quotinator.Changelog.Services;
 
-/// <summary>Provides release data deserialised from <c>changelog.json</c>.</summary>
+/// <summary>Provides changelog content resolved to the requested language.</summary>
 public interface IChangelogService
 {
-    /// <summary>Pending changes not yet included in a release. <see langword="null"/> when no <c>unreleased</c> block is present in the JSON.</summary>
-    ChangelogUnreleased? Unreleased { get; }
-
-    /// <summary>All releases, newest first.</summary>
-    IReadOnlyList<ChangelogRelease> Releases { get; }
-
-    /// <summary>ISO 639-1 language code of the top-level source content. Defaults to <c>"en"</c> when not declared in the JSON.</summary>
-    string SourceLanguage { get; }
+    /// <summary>
+    /// Returns the changelog document for <paramref name="culture"/>, falling back to <c>en</c>
+    /// when no file exists for the requested language.
+    /// Returns <see langword="null"/> when no file is found at all — signals language not found / not supported.
+    /// </summary>
+    ChangelogDocument? GetForCulture(string? culture);
 
     /// <summary>
-    /// Section display names per language, keyed by ISO 639-1 code.
-    /// Empty when no <c>sectionHeaders</c> block is present in the JSON.
+    /// ISO 639-1 codes of all language files successfully loaded at startup.
+    /// Use the count to verify that all expected files were read — a count lower than the number
+    /// of <c>changelog.*.json</c> files on disk indicates a parse failure or missing <c>language</c> property.
     /// </summary>
-    IReadOnlyDictionary<string, ChangelogSectionHeaders> SectionHeaders { get; }
+    IReadOnlyList<string> AvailableLanguages { get; }
 }

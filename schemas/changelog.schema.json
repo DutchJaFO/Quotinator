@@ -1,43 +1,33 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/DutchJaFO/Quotinator/main/schemas/changelog.schema.json",
-  "title": "Quotinator Changelog",
-  "description": "Source of truth for all changelog content. The generation script (scripts/changelog.csx) produces CHANGELOG.md and addon/CHANGELOG.md from this file. Never edit the markdown files directly.",
+  "title": "Quotinator Changelog (per-language file)",
+  "description": "Schema for a single per-language changelog file (changelog.en.json, changelog.nl.json, etc.). The generation script (scripts/changelog.csx) produces CHANGELOG.md and addon/CHANGELOG.md from changelog.en.json. Never edit the generated markdown files directly.",
   "type": "object",
-  "required": ["releases"],
+  "required": ["language", "sourceLanguage", "releases"],
   "additionalProperties": false,
   "properties": {
-    "unreleased": {
-      "type": "object",
-      "description": "Changes not yet in a release, following the Keep a Changelog [Unreleased] convention. Rendered as ## [Unreleased] at the top of keepachangelog format output. Omitted from ha-addon format — HA Store shows only released versions.",
-      "additionalProperties": false,
-      "properties": {
-        "issues": {
-          "type": "array",
-          "description": "GitHub issue numbers this unreleased work addresses. Must be set manually — issue numbers are ambiguous in prose and cannot be auto-detected.",
-          "items": { "type": "integer", "minimum": 1 }
-        },
-        "cves": {
-          "type": "array",
-          "description": "CVE IDs this unreleased work addresses (e.g. 'CVE-2025-6965').",
-          "items": { "type": "string", "pattern": "^CVE-\\d{4}-\\d{4,}$" }
-        },
-        "highlights": { "type": "array", "description": "User-facing plain-language summary of unreleased changes.", "items": { "type": "string", "minLength": 1 } },
-        "added":      { "type": "array", "description": "New features added but not yet released.",                 "items": { "type": "string", "minLength": 1 } },
-        "changed":    { "type": "array", "description": "Changes to existing behaviour not yet released.",           "items": { "type": "string", "minLength": 1 } },
-        "fixed":      { "type": "array", "description": "Bug fixes not yet released.",                               "items": { "type": "string", "minLength": 1 } },
-        "removed":    { "type": "array", "description": "Removed features or behaviour not yet released.",           "items": { "type": "string", "minLength": 1 } }
-      }
+    "language": {
+      "type": "string",
+      "description": "ISO 639-1 code of the language used in this file (e.g. 'en', 'nl', 'de'). Must match the file's content — used to key the file in the service and acts as confirmation that the filename and content agree."
     },
     "sourceLanguage": {
       "type": "string",
-      "description": "ISO 639-1 code of the language used in top-level content arrays (highlights, added, etc.). Defaults to 'en' when absent. The generator falls back to this language when a requested translation is missing.",
+      "description": "ISO 639-1 code of the fallback language file. When language == sourceLanguage there is no further fallback (this file is authoritative). The service uses this to walk the fallback chain when the requested language file is absent.",
       "default": "en"
     },
+    "machineTranslated": {
+      "type": "boolean",
+      "description": "True when the content of this file was machine-generated rather than manually curated. The Blazor UI shows a disclaimer when this is true. Omit or set false for hand-written or source-language files.",
+      "default": false
+    },
     "sectionHeaders": {
-      "type": "object",
-      "description": "Localised display names for the five changelog sections, keyed by ISO 639-1 language code. Optional — when absent the generator uses built-in English strings. Individual language blocks and section keys are also optional; missing entries fall back to the sourceLanguage block, then to built-in English.",
-      "additionalProperties": { "$ref": "#/$defs/sectionHeadersEntry" }
+      "$ref": "#/$defs/sectionHeadersEntry",
+      "description": "Localised display names for the five changelog sections in the language of this file. Optional — when absent the generator uses built-in English strings."
+    },
+    "unreleased": {
+      "$ref": "#/$defs/changelogEntry",
+      "description": "Changes not yet in a release, following the Keep a Changelog [Unreleased] convention. Rendered as ## [Unreleased] at the top of keepachangelog format output. Omitted from ha-addon format — HA Store shows only released versions."
     },
     "releases": {
       "type": "array",
@@ -58,46 +48,37 @@
         "removed":    { "type": "string", "minLength": 1 }
       }
     },
-    "translationItem": {
+    "changelogEntry": {
       "type": "object",
-      "required": ["text"],
-      "additionalProperties": false,
+      "description": "Base content shared by unreleased and release entries.",
+      "unevaluatedProperties": false,
       "properties": {
-        "text": {
-          "type": "string",
-          "minLength": 1,
-          "description": "The translated string."
+        "issues": {
+          "type": "array",
+          "description": "GitHub issue numbers this work addresses. Must be set manually — issue numbers are ambiguous in prose and cannot be auto-detected.",
+          "items": { "type": "integer", "minimum": 1 }
         },
-        "machineTranslated": {
-          "type": "boolean",
-          "description": "Whether this item was machine-generated. When absent the generator's --machine-translated parameter applies (default: true). Set to false when a native speaker has verified the translation."
-        }
-      }
-    },
-    "release": {
-      "type": "object",
-      "description": "Recommended property order: version, date, issues, cves, highlights, audienceHighlights, added, changed, fixed, removed, translations. JSON Schema cannot enforce ordering; generators must apply it explicitly.",
-      "required": ["version", "date"],
-      "additionalProperties": false,
-      "properties": {
-        "version": {
-          "type": "string",
-          "pattern": "^\\d+\\.\\d+\\.\\d+.*$",
-          "description": "Semver string, including optional pre-release suffix (e.g. '1.0.0-beta.1')."
-        },
-        "date": {
-          "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "description": "Release date in ISO 8601 format (YYYY-MM-DD)."
+        "cves": {
+          "type": "array",
+          "description": "CVE IDs this work addresses (e.g. 'CVE-2025-6965').",
+          "items": { "type": "string", "pattern": "^CVE-\\d{4}-\\d{4,}$" }
         },
         "highlights": {
           "type": "array",
-          "description": "User-facing plain-language summary in the source language. Each item is one sentence. No CVE IDs, API paths, class names, or technical terms. Omit or leave empty for internal-only releases.",
+          "description": "User-facing plain-language summary. Each item is one sentence. No CVE IDs, API paths, class names, or technical terms. Omit or leave empty for internal-only releases.",
           "items": { "type": "string", "minLength": 1 }
+        },
+        "audienceHighlights": {
+          "type": "object",
+          "description": "Audience-specific highlight overrides keyed by audience identifier (e.g. 'ha-addon'). When a key is present and non-empty, the generator uses those items for that audience instead of the standard highlights. When present but empty ([]), the generator emits 'No user-facing changes.' When the key is absent, the standard highlights are used as fallback.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
         },
         "added": {
           "type": "array",
-          "description": "Technical description of new features added in this release. Developer-facing; not shown in the Blazor UI highlights.",
+          "description": "Technical description of new features added.",
           "items": { "type": "string", "minLength": 1 }
         },
         "changed": {
@@ -114,60 +95,25 @@
           "type": "array",
           "description": "Technical description of removed features or behaviour.",
           "items": { "type": "string", "minLength": 1 }
-        },
-        "audienceHighlights": {
-          "type": "object",
-          "description": "Audience-specific highlight overrides keyed by audience identifier (e.g. 'ha-addon'). When a key is present and non-empty, the generator uses those items for that audience instead of the standard highlights. When present but empty ([]), the generator emits 'No user-facing changes.' When the key is absent, the standard highlights are used as fallback.",
-          "additionalProperties": {
-            "type": "array",
-            "items": { "type": "string", "minLength": 1 }
-          }
-        },
-        "issues": {
-          "type": "array",
-          "description": "GitHub issue numbers addressed by this release.",
-          "items": { "type": "integer", "minimum": 1 }
-        },
-        "cves": {
-          "type": "array",
-          "description": "CVE IDs addressed by this release (e.g. 'CVE-2025-6965').",
-          "items": { "type": "string", "pattern": "^CVE-\\d{4}-\\d{4,}$" }
-        },
-        "translations": {
-          "type": "object",
-          "description": "Translations of release content keyed by ISO 639-1 language code. All sections and items are optional. Items that omit machineTranslated inherit the generator's --machine-translated default.",
-          "additionalProperties": { "$ref": "#/$defs/releaseTranslation" }
         }
       }
     },
-    "releaseTranslation": {
+    "release": {
       "type": "object",
-      "additionalProperties": false,
+      "description": "A versioned release. Recommended property order: version, date, issues, cves, highlights, audienceHighlights, added, changed, fixed, removed. JSON Schema cannot enforce ordering; generators must apply it explicitly.",
+      "required": ["version", "date"],
+      "unevaluatedProperties": false,
+      "allOf": [{ "$ref": "#/$defs/changelogEntry" }],
       "properties": {
-        "highlights": {
-          "type": "array",
-          "description": "Translated highlight items.",
-          "items": { "$ref": "#/$defs/translationItem" }
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+.*$",
+          "description": "Semver string, including optional pre-release suffix (e.g. '1.0.0-beta.1')."
         },
-        "added": {
-          "type": "array",
-          "description": "Translated added-section items.",
-          "items": { "$ref": "#/$defs/translationItem" }
-        },
-        "changed": {
-          "type": "array",
-          "description": "Translated changed-section items.",
-          "items": { "$ref": "#/$defs/translationItem" }
-        },
-        "fixed": {
-          "type": "array",
-          "description": "Translated fixed-section items.",
-          "items": { "$ref": "#/$defs/translationItem" }
-        },
-        "removed": {
-          "type": "array",
-          "description": "Translated removed-section items.",
-          "items": { "$ref": "#/$defs/translationItem" }
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Release date in ISO 8601 format (YYYY-MM-DD)."
         }
       }
     }

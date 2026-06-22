@@ -1,11 +1,12 @@
 #!/usr/bin/env dotnet-script
 #nullable enable
 // Quotinator changelog generator
-// Reads src/Quotinator.Api/resources/changelog.json and writes CHANGELOG.md in one of two formats.
+// Reads a per-language changelog JSON file (e.g. changelog.en.json) and writes a
+// CHANGELOG.md in one of two formats.
 //
 // Usage (run from repo root):
-//   dotnet-script scripts/changelog.csx -- --format keepachangelog --output CHANGELOG.md
-//   dotnet-script scripts/changelog.csx -- --format ha-addon        --output addon/CHANGELOG.md
+//   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md
+//   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md
 //
 // Options:
 //   --input              <path>    JSON source file (required)
@@ -17,37 +18,26 @@
 //                                  instead of standard highlights.
 //   --fallback-message   <text>    Message emitted when --fallback false and no audience key is present
 //                                  (default: "No user-facing changes.")
-//   --lang               <code>    ISO 639-1 language code (default: en)
-//                                  Resolves content from translations.<code>.* when available;
-//                                  falls back to source language content when translation is absent.
-//   --machine-translated <bool>    Default value for machineTranslated on translation items
-//                                  that do not specify the property (default: true).
-//                                  Pass false when all translations in the JSON were done by hand.
 //   --line-endings       <style>   lf | crlf (default: lf)
 //                                  Line ending style for the output file.
-
-#r "nuget: System.Text.Json, 8.0.0"
 
 using System.Text;
 using System.Text.Json;
 
 // ── CLI arguments ─────────────────────────────────────────────────────────────
 
-var inputArg             = Args.SkipWhile(a => a != "--input").Skip(1).FirstOrDefault();
-var outputArg            = Args.SkipWhile(a => a != "--output").Skip(1).FirstOrDefault();
-var formatArg            = Args.SkipWhile(a => a != "--format").Skip(1).FirstOrDefault();
-var audienceArg          = Args.SkipWhile(a => a != "--audience").Skip(1).FirstOrDefault() ?? "ha-addon";
-var fallbackArg          = Args.SkipWhile(a => a != "--fallback").Skip(1).FirstOrDefault();
-var doFallback           = fallbackArg?.ToLowerInvariant() != "false";
-var fallbackMessage      = Args.SkipWhile(a => a != "--fallback-message").Skip(1).FirstOrDefault() ?? "No user-facing changes.";
-var langArg              = Args.SkipWhile(a => a != "--lang").Skip(1).FirstOrDefault() ?? "en";
-var machineTranslatedArg = Args.SkipWhile(a => a != "--machine-translated").Skip(1).FirstOrDefault();
-var defaultMachineTranslated = machineTranslatedArg?.ToLowerInvariant() != "false";
-var lineEndingsArg       = Args.SkipWhile(a => a != "--line-endings").Skip(1).FirstOrDefault() ?? "lf";
+var inputArg        = Args.SkipWhile(a => a != "--input").Skip(1).FirstOrDefault();
+var outputArg       = Args.SkipWhile(a => a != "--output").Skip(1).FirstOrDefault();
+var formatArg       = Args.SkipWhile(a => a != "--format").Skip(1).FirstOrDefault();
+var audienceArg     = Args.SkipWhile(a => a != "--audience").Skip(1).FirstOrDefault() ?? "ha-addon";
+var fallbackArg     = Args.SkipWhile(a => a != "--fallback").Skip(1).FirstOrDefault();
+var doFallback      = fallbackArg?.ToLowerInvariant() != "false";
+var fallbackMessage = Args.SkipWhile(a => a != "--fallback-message").Skip(1).FirstOrDefault() ?? "No user-facing changes.";
+var lineEndingsArg  = Args.SkipWhile(a => a != "--line-endings").Skip(1).FirstOrDefault() ?? "lf";
 
 if (string.IsNullOrEmpty(formatArg) || string.IsNullOrEmpty(inputArg))
 {
-    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog.csx -- --format <keepachangelog|ha-addon> --input <path> [--output <path>] [--audience <name>] [--fallback <true|false>] [--fallback-message <text>] [--lang <code>] [--machine-translated <true|false>] [--line-endings <lf|crlf>]");
+    Console.Error.WriteLine("Usage: dotnet-script scripts/changelog.csx -- --format <keepachangelog|ha-addon> --input <path> [--output <path>] [--audience <name>] [--fallback <true|false>] [--fallback-message <text>] [--line-endings <lf|crlf>]");
     Environment.Exit(1);
 }
 
@@ -82,7 +72,6 @@ var doc            = JsonDocument.Parse(json);
 var root           = doc.RootElement;
 var releases       = root.GetProperty("releases").EnumerateArray().ToList();
 var unreleased     = root.TryGetProperty("unreleased", out var u) ? u : (JsonElement?)null;
-var sourceLang     = root.TryGetProperty("sourceLanguage", out var sl) ? sl.GetString() ?? "en" : "en";
 var sectionHeaders = ParseSectionHeaders(root);
 
 // ── Build regenerate command ──────────────────────────────────────────────────
@@ -97,8 +86,6 @@ if (!doFallback)
     cmdBuilder.Append(" --fallback false");
     if (fallbackMessage != "No user-facing changes.") cmdBuilder.Append($" --fallback-message \"{fallbackMessage}\"");
 }
-if (langArg != "en")                    cmdBuilder.Append($" --lang {langArg}");
-if (!defaultMachineTranslated)          cmdBuilder.Append(" --machine-translated false");
 if (lineEndingsArg != "lf")             cmdBuilder.Append($" --line-endings {lineEndingsArg}");
 var regenerateCmd = cmdBuilder.ToString();
 
@@ -108,9 +95,9 @@ var sb     = new StringBuilder();
 var format = formatArg.ToLowerInvariant();
 
 if (format == "keepachangelog")
-    GenerateKeepAChangelog(sb, releases, unreleased, doFallback, fallbackMessage, langArg, sourceLang, sectionHeaders, inputArg!, regenerateCmd);
+    GenerateKeepAChangelog(sb, releases, unreleased, doFallback, fallbackMessage, sectionHeaders, inputArg!, regenerateCmd);
 else if (format == "ha-addon")
-    GenerateHaAddon(sb, releases, audienceArg, doFallback, fallbackMessage, langArg, sourceLang, inputArg!, regenerateCmd);
+    GenerateHaAddon(sb, releases, audienceArg, doFallback, fallbackMessage, inputArg!, regenerateCmd);
 else
 {
     Console.Error.WriteLine($"Unknown format: {formatArg}. Use keepachangelog or ha-addon.");
@@ -134,7 +121,7 @@ else
 
 // ── Format implementations ────────────────────────────────────────────────────
 
-static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, JsonElement? unreleased, bool fallback, string fallbackMessage, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders, string inputPath, string regenerateCmd)
+static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, JsonElement? unreleased, bool fallback, string fallbackMessage, Dictionary<string, string>? sectionHeaders, string inputPath, string regenerateCmd)
 {
     // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
     sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd));
@@ -158,19 +145,19 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
             sb.AppendLine();
             sb.AppendLine("## [Unreleased]");
 
-            var unreleasedHighlights = GetHighlights(u, lang, sourceLang, fallback, fallbackMessage);
+            var unreleasedHighlights = GetHighlights(u, fallback, fallbackMessage);
             if (unreleasedHighlights.Count > 0)
             {
                 sb.AppendLine();
-                sb.AppendLine($"### {GetSectionHeader("highlights", lang, sourceLang, sectionHeaders)}");
+                sb.AppendLine($"### {GetSectionHeader("highlights", sectionHeaders)}");
                 foreach (var h in unreleasedHighlights)
                     sb.AppendLine($"- {h}");
             }
 
-            AppendSection(sb, u, "added",   lang, sourceLang, sectionHeaders);
-            AppendSection(sb, u, "changed", lang, sourceLang, sectionHeaders);
-            AppendSection(sb, u, "fixed",   lang, sourceLang, sectionHeaders);
-            AppendSection(sb, u, "removed", lang, sourceLang, sectionHeaders);
+            AppendSection(sb, u, "added",   sectionHeaders);
+            AppendSection(sb, u, "changed", sectionHeaders);
+            AppendSection(sb, u, "fixed",   sectionHeaders);
+            AppendSection(sb, u, "removed", sectionHeaders);
 
             sb.AppendLine();
             sb.AppendLine("---");
@@ -186,19 +173,19 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
         sb.AppendLine();
         sb.AppendLine($"## [{version}] - {date}");
 
-        var highlights = GetHighlights(r, lang, sourceLang, fallback, fallbackMessage);
+        var highlights = GetHighlights(r, fallback, fallbackMessage);
         if (highlights.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine($"### {GetSectionHeader("highlights", lang, sourceLang, sectionHeaders)}");
+            sb.AppendLine($"### {GetSectionHeader("highlights", sectionHeaders)}");
             foreach (var h in highlights)
                 sb.AppendLine($"- {h}");
         }
 
-        AppendSection(sb, r, "added",   lang, sourceLang, sectionHeaders);
-        AppendSection(sb, r, "changed", lang, sourceLang, sectionHeaders);
-        AppendSection(sb, r, "fixed",   lang, sourceLang, sectionHeaders);
-        AppendSection(sb, r, "removed", lang, sourceLang, sectionHeaders);
+        AppendSection(sb, r, "added",   sectionHeaders);
+        AppendSection(sb, r, "changed", sectionHeaders);
+        AppendSection(sb, r, "fixed",   sectionHeaders);
+        AppendSection(sb, r, "removed", sectionHeaders);
 
         if (i < releases.Count - 1)
         {
@@ -231,7 +218,7 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
     }
 }
 
-static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string audience, bool fallback, string fallbackMessage, string lang, string sourceLang, string inputPath, string regenerateCmd)
+static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string audience, bool fallback, string fallbackMessage, string inputPath, string regenerateCmd)
 {
     // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
     sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd));
@@ -251,7 +238,7 @@ static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string
         sb.AppendLine();
         sb.AppendLine($"## [{version}] - {date}");
 
-        var highlights = GetAudienceHighlights(r, audience, fallback, fallbackMessage, lang, sourceLang);
+        var highlights = GetAudienceHighlights(r, audience, fallback, fallbackMessage);
         if (highlights.Count > 0)
         {
             sb.AppendLine();
@@ -269,35 +256,24 @@ static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-static List<string> GetItems(JsonElement r, string key, string lang, string sourceLang)
+static List<string> GetItems(JsonElement r, string key)
 {
-    if (lang == sourceLang)
-        return GetTopLevelItems(r, key);
-
-    if (r.TryGetProperty("translations", out var trans) &&
-        trans.TryGetProperty(lang, out var langTrans) &&
-        langTrans.TryGetProperty(key, out var transItems))
-    {
-        var items = transItems.EnumerateArray()
-            .Select(GetItemText)
-            .Where(s => !string.IsNullOrEmpty(s))
-            .Select(s => s!)
-            .ToList();
-        if (items.Count > 0) return items;
-    }
-
-    return GetTopLevelItems(r, key);
+    if (!r.TryGetProperty(key, out var arr)) return [];
+    return arr.EnumerateArray()
+        .Select(i => i.GetString() ?? "")
+        .Where(s => !string.IsNullOrEmpty(s))
+        .ToList();
 }
 
-static List<string> GetHighlights(JsonElement r, string lang, string sourceLang, bool fallback, string fallbackMessage)
+static List<string> GetHighlights(JsonElement r, bool fallback, string fallbackMessage)
 {
-    var items = GetItems(r, "highlights", lang, sourceLang);
+    var items = GetItems(r, "highlights");
     if (items.Count > 0) return items;
     if (!fallback) return [fallbackMessage];
     return [];
 }
 
-static List<string> GetAudienceHighlights(JsonElement r, string audience, bool fallback, string fallbackMessage, string lang, string sourceLang)
+static List<string> GetAudienceHighlights(JsonElement r, string audience, bool fallback, string fallbackMessage)
 {
     if (r.TryGetProperty("audienceHighlights", out var audienceHighlights) &&
         audienceHighlights.TryGetProperty(audience, out var audienceItems))
@@ -315,26 +291,10 @@ static List<string> GetAudienceHighlights(JsonElement r, string audience, bool f
     if (!fallback)
         return [fallbackMessage];
 
-    return GetItems(r, "highlights", lang, sourceLang);
+    return GetItems(r, "highlights");
 }
 
-static List<string> GetTopLevelItems(JsonElement r, string key)
-{
-    if (!r.TryGetProperty(key, out var arr)) return [];
-    return arr.EnumerateArray()
-        .Select(i => i.GetString() ?? "")
-        .Where(s => !string.IsNullOrEmpty(s))
-        .ToList();
-}
-
-static string? GetItemText(JsonElement item)
-{
-    if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("text", out var text))
-        return text.GetString();
-    return item.GetString();
-}
-
-static string GetSectionHeader(string key, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders)
+static string GetSectionHeader(string key, Dictionary<string, string>? sectionHeaders)
 {
     var builtin = key switch
     {
@@ -348,42 +308,30 @@ static string GetSectionHeader(string key, string lang, string sourceLang, Dicti
 
     if (sectionHeaders is null) return builtin;
 
-    if (sectionHeaders.TryGetValue(lang, out var langHeaders) &&
-        langHeaders.TryGetValue(key, out var header) &&
-        !string.IsNullOrEmpty(header))
+    if (sectionHeaders.TryGetValue(key, out var header) && !string.IsNullOrEmpty(header))
         return header;
-
-    if (sectionHeaders.TryGetValue(sourceLang, out var sourceHeaders) &&
-        sourceHeaders.TryGetValue(key, out var sourceHeader) &&
-        !string.IsNullOrEmpty(sourceHeader))
-        return sourceHeader;
 
     return builtin;
 }
 
-static void AppendSection(StringBuilder sb, JsonElement r, string key, string lang, string sourceLang, Dictionary<string, Dictionary<string, string>>? sectionHeaders)
+static void AppendSection(StringBuilder sb, JsonElement r, string key, Dictionary<string, string>? sectionHeaders)
 {
-    var items = GetItems(r, key, lang, sourceLang);
+    var items = GetItems(r, key);
     if (items.Count == 0) return;
 
     sb.AppendLine();
-    sb.AppendLine($"### {GetSectionHeader(key, lang, sourceLang, sectionHeaders)}");
+    sb.AppendLine($"### {GetSectionHeader(key, sectionHeaders)}");
     foreach (var item in items)
         sb.AppendLine($"- {item}");
 }
 
-static Dictionary<string, Dictionary<string, string>>? ParseSectionHeaders(JsonElement root)
+static Dictionary<string, string>? ParseSectionHeaders(JsonElement root)
 {
     if (!root.TryGetProperty("sectionHeaders", out var headersEl)) return null;
-    var result = new Dictionary<string, Dictionary<string, string>>();
-    foreach (var langEntry in headersEl.EnumerateObject())
-    {
-        var langDict = new Dictionary<string, string>();
-        foreach (var sectionEntry in langEntry.Value.EnumerateObject())
-            langDict[sectionEntry.Name] = sectionEntry.Value.GetString() ?? "";
-        result[langEntry.Name] = langDict;
-    }
-    return result;
+    var result = new Dictionary<string, string>();
+    foreach (var entry in headersEl.EnumerateObject())
+        result[entry.Name] = entry.Value.GetString() ?? "";
+    return result.Count > 0 ? result : null;
 }
 
 // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()

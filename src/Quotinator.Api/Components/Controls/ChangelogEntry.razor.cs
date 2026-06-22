@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
@@ -17,6 +16,9 @@ public partial class ChangelogEntry
 
     /// <summary>Zero-based position in the release list; entry 0 is expanded by default.</summary>
     [Parameter] public int Index { get; set; }
+
+    /// <summary>Whether the source document was machine-translated; shows a disclaimer when true.</summary>
+    [Parameter] public bool IsMachineTranslated { get; set; }
 
     #endregion
 
@@ -39,8 +41,6 @@ public partial class ChangelogEntry
     private bool IsOpen => Index == 0;
 
     private bool HasReferences => Release.Issues.Count > 0 || Release.Cves.Count > 0;
-
-    private string Culture => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
 
     internal static MarkupString FormatInline(string text)
     {

@@ -5,11 +5,11 @@
         <strong>@Text.ChangelogUnreleased</strong>
     </summary>
     <div class="mt-2 ps-3">
-        @{ var highlights = Unreleased.GetHighlights(Culture); }
+        @{ var highlights = Unreleased.Highlights; }
         @if (highlights.Count == 1)
         {
             <p class="mb-1">@ChangelogEntry.FormatInline(highlights[0])</p>
-            @if (Unreleased.AreHighlightsMachineTranslated(Culture))
+            @if (IsMachineTranslated)
             {
                 <p class="small text-muted fst-italic mb-1">@Text.ChangelogMachineTranslatedDisclaimer</p>
             }
@@ -22,7 +22,7 @@
                     <li>@ChangelogEntry.FormatInline(item)</li>
                 }
             </ul>
-            @if (Unreleased.AreHighlightsMachineTranslated(Culture))
+            @if (IsMachineTranslated)
             {
                 <p class="small text-muted fst-italic mb-1">@Text.ChangelogMachineTranslatedDisclaimer</p>
             }

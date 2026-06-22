@@ -1,8 +1,8 @@
-### *GENERATED FILE [2026-06-21 16:54 UTC] — do not edit by hand.*
+### *GENERATED FILE [2026-06-21 21:57 UTC] — do not edit by hand.*
 
-*Edit: `src/Quotinator.Api/resources/changelog.json`*
+*Edit: `src/Quotinator.Api/resources/changelog.en.json`*
 
-*To regenerate: `dotnet-script changelog.csx -- --format ha-addon --input src/Quotinator.Api/resources/changelog.json --output addon/CHANGELOG.md`*
+*To regenerate: `dotnet-script changelog.csx -- --format ha-addon --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md`*
 
 # Changelog
 

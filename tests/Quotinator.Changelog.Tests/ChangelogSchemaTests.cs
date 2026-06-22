@@ -8,29 +8,65 @@ public sealed class ChangelogSchemaTests
 {
     private static readonly Regex CvePattern = new(@"^CVE-\d{4}-\d{4,}$", RegexOptions.Compiled);
 
-    private static JsonDocument _doc = null!;
-    private static JsonElement.ArrayEnumerator _releases;
+    private static List<(string Filename, JsonDocument Doc)> _docs = [];
 
     [ClassInitialize]
-    public static void LoadFile(TestContext _)
+    public static void LoadFiles(TestContext _)
     {
-        var path = FindChangelogJson();
-        _doc = JsonDocument.Parse(File.ReadAllText(path));
-        _releases = _doc.RootElement.GetProperty("releases").EnumerateArray();
+        foreach (var path in FindChangelogFiles())
+        {
+            var doc = JsonDocument.Parse(File.ReadAllText(path));
+            _docs.Add((Path.GetFileName(path), doc));
+        }
     }
 
     [ClassCleanup]
-    public static void Cleanup() => _doc.Dispose();
+    public static void Cleanup()
+    {
+        foreach (var (_, doc) in _docs)
+            doc.Dispose();
+        _docs.Clear();
+    }
+
+    [TestMethod]
+    public void AtLeastOneChangelogFile_IsLoaded()
+    {
+        Assert.IsTrue(_docs.Count > 0,
+            "No changelog.*.json files found in src/Quotinator.Api/resources/ — expected at least changelog.en.json.");
+    }
+
+    [TestMethod]
+    public void AllFiles_HaveRequiredRootFields()
+    {
+        foreach (var (filename, doc) in _docs)
+        {
+            var root = doc.RootElement;
+
+            Assert.IsTrue(root.TryGetProperty("language", out var lang) &&
+                          lang.ValueKind == JsonValueKind.String &&
+                          !string.IsNullOrWhiteSpace(lang.GetString()),
+                $"{filename}: missing or empty 'language' property");
+
+            Assert.IsTrue(root.TryGetProperty("sourceLanguage", out var sourceLang) &&
+                          sourceLang.ValueKind == JsonValueKind.String &&
+                          !string.IsNullOrWhiteSpace(sourceLang.GetString()),
+                $"{filename}: missing or empty 'sourceLanguage' property");
+
+            Assert.IsTrue(root.TryGetProperty("machineTranslated", out var mt) &&
+                          (mt.ValueKind == JsonValueKind.True || mt.ValueKind == JsonValueKind.False),
+                $"{filename}: missing or non-boolean 'machineTranslated' property");
+        }
+    }
 
     [TestMethod]
     public void AllReleases_HaveNonEmptyVersionAndDate()
     {
-        foreach (var r in Releases())
+        foreach (var (filename, r) in Releases())
         {
             var version = r.GetProperty("version").GetString();
             var date    = r.GetProperty("date").GetString();
-            Assert.IsFalse(string.IsNullOrWhiteSpace(version), $"version is missing in entry: {r}");
-            Assert.IsFalse(string.IsNullOrWhiteSpace(date),    $"date is missing in version {version}");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(version), $"{filename}: version is missing in entry: {r}");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(date),    $"{filename}: date is missing in version {version}");
         }
     }
 
@@ -38,7 +74,7 @@ public sealed class ChangelogSchemaTests
     public void AllReleases_StringArrays_ContainNoNullEntries()
     {
         var arrayNames = new[] { "highlights", "added", "changed", "fixed", "removed" };
-        foreach (var r in Releases())
+        foreach (var (filename, r) in Releases())
         {
             var version = r.GetProperty("version").GetString();
             foreach (var name in arrayNames)
@@ -46,7 +82,7 @@ public sealed class ChangelogSchemaTests
                 if (!r.TryGetProperty(name, out var arr)) continue;
                 foreach (var item in arr.EnumerateArray())
                     Assert.AreNotEqual(JsonValueKind.Null, item.ValueKind,
-                        $"null entry in '{name}' array for version {version}");
+                        $"{filename}: null entry in '{name}' array for version {version}");
             }
         }
     }
@@ -54,7 +90,7 @@ public sealed class ChangelogSchemaTests
     [TestMethod]
     public void AllReleases_CveEntries_MatchExpectedFormat()
     {
-        foreach (var r in Releases())
+        foreach (var (filename, r) in Releases())
         {
             var version = r.GetProperty("version").GetString();
             if (!r.TryGetProperty("cves", out var cves)) continue;
@@ -62,37 +98,7 @@ public sealed class ChangelogSchemaTests
             {
                 var id = cve.GetString();
                 Assert.IsTrue(CvePattern.IsMatch(id ?? string.Empty),
-                    $"CVE ID '{id}' in version {version} does not match CVE-YYYY-NNNNN+ format");
-            }
-        }
-    }
-
-    [TestMethod]
-    public void AllReleases_TranslationItems_HaveNonEmptyText()
-    {
-        var sectionNames = new[] { "highlights", "added", "changed", "fixed", "removed" };
-        foreach (var r in Releases())
-        {
-            var version = r.GetProperty("version").GetString();
-            if (!r.TryGetProperty("translations", out var translations)) continue;
-            foreach (var lang in translations.EnumerateObject())
-            {
-                foreach (var section in sectionNames)
-                {
-                    if (!lang.Value.TryGetProperty(section, out var items)) continue;
-                    foreach (var item in items.EnumerateArray())
-                    {
-                        Assert.AreEqual(JsonValueKind.Object, item.ValueKind,
-                            $"translations.{lang.Name}.{section} item in version {version} must be an object with a 'text' property");
-                        Assert.IsTrue(item.TryGetProperty("text", out var text),
-                            $"translations.{lang.Name}.{section} item in version {version} is missing required 'text' property");
-                        Assert.IsFalse(string.IsNullOrWhiteSpace(text.GetString()),
-                            $"translations.{lang.Name}.{section} item in version {version} has empty 'text'");
-                        if (item.TryGetProperty("machineTranslated", out var mt))
-                            Assert.IsTrue(mt.ValueKind is JsonValueKind.True or JsonValueKind.False,
-                                $"translations.{lang.Name}.{section} item in version {version}: machineTranslated must be a boolean");
-                    }
-                }
+                    $"{filename}: CVE ID '{id}' in version {version} does not match CVE-YYYY-NNNNN+ format");
             }
         }
     }
@@ -100,7 +106,7 @@ public sealed class ChangelogSchemaTests
     [TestMethod]
     public void AllReleases_AudienceHighlights_ContainNoNullEntries()
     {
-        foreach (var r in Releases())
+        foreach (var (filename, r) in Releases())
         {
             var version = r.GetProperty("version").GetString();
             if (!r.TryGetProperty("audienceHighlights", out var audienceHighlights)) continue;
@@ -108,7 +114,7 @@ public sealed class ChangelogSchemaTests
             {
                 foreach (var item in audience.Value.EnumerateArray())
                     Assert.AreNotEqual(JsonValueKind.Null, item.ValueKind,
-                        $"null entry in audienceHighlights.{audience.Name} for version {version}");
+                        $"{filename}: null entry in audienceHighlights.{audience.Name} for version {version}");
             }
         }
     }
@@ -116,32 +122,40 @@ public sealed class ChangelogSchemaTests
     [TestMethod]
     public void SectionHeaders_WhenPresent_HaveNonEmptyValues()
     {
-        if (!_doc.RootElement.TryGetProperty("sectionHeaders", out var sectionHeaders)) return;
         var expectedKeys = new[] { "highlights", "added", "changed", "fixed", "removed" };
-        foreach (var lang in sectionHeaders.EnumerateObject())
+        foreach (var (filename, doc) in _docs)
         {
+            if (!doc.RootElement.TryGetProperty("sectionHeaders", out var sectionHeaders)) continue;
             foreach (var key in expectedKeys)
             {
-                if (!lang.Value.TryGetProperty(key, out var value)) continue;
+                if (!sectionHeaders.TryGetProperty(key, out var value)) continue;
                 Assert.IsFalse(string.IsNullOrWhiteSpace(value.GetString()),
-                    $"sectionHeaders.{lang.Name}.{key} must not be empty when present");
+                    $"{filename}: sectionHeaders.{key} must not be empty when present");
             }
         }
     }
 
-    private static IEnumerable<JsonElement> Releases()
-        => _doc.RootElement.GetProperty("releases").EnumerateArray().ToList();
+    private static IEnumerable<(string Filename, JsonElement Release)> Releases()
+    {
+        foreach (var (filename, doc) in _docs)
+            foreach (var release in doc.RootElement.GetProperty("releases").EnumerateArray())
+                yield return (filename, release);
+    }
 
-    private static string FindChangelogJson()
+    private static IEnumerable<string> FindChangelogFiles()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
-            var candidate = Path.Combine(dir.FullName, "src", "Quotinator.Api", "resources", "changelog.json");
-            if (File.Exists(candidate)) return candidate;
+            var resourceDir = Path.Combine(dir.FullName, "src", "Quotinator.Api", "resources");
+            if (Directory.Exists(resourceDir))
+            {
+                var files = Directory.GetFiles(resourceDir, "changelog.*.json");
+                if (files.Length > 0) return files;
+            }
             dir = dir.Parent;
         }
-        throw new FileNotFoundException(
-            "changelog.json not found — expected at src/Quotinator.Api/resources/changelog.json under the repo root.");
+        throw new DirectoryNotFoundException(
+            "changelog.*.json not found — expected at src/Quotinator.Api/resources/ under the repo root.");
     }
 }

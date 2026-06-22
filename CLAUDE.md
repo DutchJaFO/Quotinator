@@ -516,13 +516,13 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
-3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
+3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
 
-   **During development** (after closing each issue or committing a meaningful change): add entries to the `unreleased` section at the top of `changelog.json`. This follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `[Unreleased]` convention and keeps the changelog in sync without waiting for a release. Decide at the time of writing whether the change deserves a `highlights` entry (user-facing impact) or only `added`/`changed`/`fixed`/`removed` (technical).
+   **During development** (after closing each issue or committing a meaningful change): add entries to the `unreleased` section at the top of `changelog.en.json`. This follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `[Unreleased]` convention and keeps the changelog in sync without waiting for a release. Decide at the time of writing whether the change deserves a `highlights` entry (user-facing impact) or only `added`/`changed`/`fixed`/`removed` (technical).
 
    **When tagging a release**: promote the `unreleased` entries into a new release entry at the top of the `releases` array, set the `version` and `date` fields, and clear (or remove) the `unreleased` section. Then run the generator to regenerate both markdown files before committing.
 
-   Rules for `highlights` in `changelog.json`:
+   Rules for `highlights` in `changelog.en.json`:
    - **An array of plain-English strings** (one sentence per element) — the Blazor UI renders each element as a bullet
    - **Plain user-facing English only** — no CVE IDs, no API paths, no class names, no config key names, no technical implementation details
    - **For purely internal releases** use exactly: `["Internal improvements — no user-facing changes."]`
@@ -531,16 +531,16 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    - **Security fixes** should always appear in highlights — include the CVE ID so users can verify, but keep the surrounding language non-technical
    - `ChangelogSchemaTests` validates structure (no null entries, CVE format) — run `dotnet test --filter ChangelogSchema` to verify before committing
 
-   After editing `changelog.json`, regenerate the markdown files (run from repo root):
+   After editing `changelog.en.json`, regenerate the markdown files (run from repo root):
    ```bash
-   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.json --output CHANGELOG.md
-   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.json --output addon/CHANGELOG.md
+   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md
+   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md
    ```
    Commit the regenerated files alongside the JSON change.
 4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
    - `Directory.Build.props` → `<Version>` (shared across all projects — **this is the only file to update**)
    - `addon/config.yaml` → `version`
-   - `changelog.json` → new version entry at the top; regenerate `CHANGELOG.md` and `addon/CHANGELOG.md`
+   - `changelog.en.json` → new version entry at the top; regenerate `CHANGELOG.md` and `addon/CHANGELOG.md`
 
    `AssemblyVersion` and `FileVersion` are derived automatically as `$(Version).0` (e.g. `1.4.1` → `1.4.1.0`). Do not set them manually.
 5. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
@@ -569,8 +569,8 @@ Workflow:
 3. Wait for any remaining Dependabot PRs to finish CI
 4. Review and merge passing Dependabot PRs
 5. `git pull` to bring dependency bumps onto your local branch
-6. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.json`; regenerate both markdown files with `scripts/changelog.csx`
-7. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, `changelog.json` version entry) and commit
+6. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate both markdown files with `scripts/changelog.csx`
+7. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, `changelog.en.json` version entry) and commit
 8. Run the full pre-push checklist above (including Docker build)
 9. Push the version bump commit, then push the tag:
    ```bash
