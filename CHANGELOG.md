@@ -1,14 +1,26 @@
-### *GENERATED FILE [2026-06-22 06:25 UTC] — do not edit by hand.*
-
-*Edit: `src/Quotinator.Api/resources/changelog.en.json`*
-
-*To regenerate: `dotnet-script changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md`*
+##### *GENERATED FILE [2026-06-22 18:31 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.6.1] - 2026-06-22
+
+### Highlights
+- The language selector has moved from the navbar into a new Settings section in the side menu, fixing an overlap with the hamburger button on mobile.
+
+### Changed
+- Language selector redesigned from a drop-down to individual nav items with a checkmark on the active language
+- New Settings section added to the nav menu as the home for language selection and future settings
+- Generated changelog files now show a minimal timestamp-only header by default; pass `--debug` to `changelog.csx` to include the input path and regenerate command
+- `Microsoft.Extensions.Logging.Abstractions` updated from 10.0.0 to 10.0.9 in `Quotinator.Core`
+
+### Fixed
+- On mobile, the hamburger toggle and language selector overlapped in the navbar (issue #103)
 
 ---
 
@@ -29,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `scripts/changelog.csx`: generates `keepachangelog` and `ha-addon` markdown from `changelog.json`; supports `--lang`, `--audience`, `--fallback`, `--fallback-message`
 - `scripts/changelog-import.csx`: imports an existing `keepachangelog` or `ha-addon` markdown file into `changelog.json` format
 - `scripts/changelog-upgrade.csx`: one-time migration tool used to assemble `changelog.json` from the two reference markdown files
+- Dutch (`changelog.nl.json`) and German (`changelog.de.json`) changelog translations with machine-translated disclaimer shown when `machineTranslated` is true (issue #82)
 
 ### Changed
 - `ChangelogService` now deserialises `changelog.json` directly into public models; private DTO mapping layer removed
@@ -539,7 +552,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.0...HEAD
+[1.6.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.4.3...v1.5.0

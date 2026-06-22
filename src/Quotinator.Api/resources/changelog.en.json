@@ -2,13 +2,35 @@
   "language": "en",
   "sourceLanguage": "en",
   "machineTranslated": false,
-  "unreleased": {},
   "releases": [
+    {
+      "version": "1.6.1",
+      "date": "2026-06-22",
+      "issues": [103],
+      "highlights": [
+        "The language selector has moved from the navbar into a new Settings section in the side menu, fixing an overlap with the hamburger button on mobile."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "The language selector has moved from the navbar into a new Settings section in the side menu, fixing an overlap with the hamburger button on mobile."
+        ]
+      },
+      "fixed": [
+        "On mobile, the hamburger toggle and language selector overlapped in the navbar (issue #103)"
+      ],
+      "changed": [
+        "Language selector redesigned from a drop-down to individual nav items with a checkmark on the active language",
+        "New Settings section added to the nav menu as the home for language selection and future settings",
+        "Generated changelog files now show a minimal timestamp-only header by default; pass `--debug` to `changelog.csx` to include the input path and regenerate command",
+        "`Microsoft.Extensions.Logging.Abstractions` updated from 10.0.0 to 10.0.9 in `Quotinator.Core`"
+      ]
+    },
     {
       "version": "1.6.0",
       "date": "2026-06-22",
       "issues": [
-        80
+        80,
+        82
       ],
       "highlights": [
         "Changelog is now driven by a single JSON source — both markdown files are generated from it, and the Blazor changelog page reads it directly with no markdown parsing.",
@@ -30,7 +52,8 @@
         "`schemas/changelog.schema.json`: machine-readable JSON schema for `changelog.json`",
         "`scripts/changelog.csx`: generates `keepachangelog` and `ha-addon` markdown from `changelog.json`; supports `--lang`, `--audience`, `--fallback`, `--fallback-message`",
         "`scripts/changelog-import.csx`: imports an existing `keepachangelog` or `ha-addon` markdown file into `changelog.json` format",
-        "`scripts/changelog-upgrade.csx`: one-time migration tool used to assemble `changelog.json` from the two reference markdown files"
+        "`scripts/changelog-upgrade.csx`: one-time migration tool used to assemble `changelog.json` from the two reference markdown files",
+        "Dutch (`changelog.nl.json`) and German (`changelog.de.json`) changelog translations with machine-translated disclaimer shown when `machineTranslated` is true (issue #82)"
       ],
       "changed": [
         "`ChangelogService` now deserialises `changelog.json` directly into public models; private DTO mapping layer removed",

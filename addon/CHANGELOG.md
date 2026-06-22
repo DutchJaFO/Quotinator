@@ -1,14 +1,16 @@
-### *GENERATED FILE [2026-06-22 06:25 UTC] — do not edit by hand.*
-
-*Edit: `src/Quotinator.Api/resources/changelog.en.json`*
-
-*To regenerate: `dotnet-script changelog.csx -- --format ha-addon --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md`*
+##### *GENERATED FILE [2026-06-22 18:31 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
+
+## [1.6.1] - 2026-06-22
+
+- The language selector has moved from the navbar into a new Settings section in the side menu, fixing an overlap with the hamburger button on mobile.
+
+---
 
 ## [1.6.0] - 2026-06-22
 

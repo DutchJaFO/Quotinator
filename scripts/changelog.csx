@@ -20,6 +20,8 @@
 //                                  (default: "No user-facing changes.")
 //   --line-endings       <style>   lf | crlf (default: lf)
 //                                  Line ending style for the output file.
+//   --debug                        Include input path and regenerate command in the generated header.
+//                                  Omit for a minimal timestamp-only header (default for release/live use).
 
 using System.Text;
 using System.Text.Json;
@@ -34,6 +36,7 @@ var fallbackArg     = Args.SkipWhile(a => a != "--fallback").Skip(1).FirstOrDefa
 var doFallback      = fallbackArg?.ToLowerInvariant() != "false";
 var fallbackMessage = Args.SkipWhile(a => a != "--fallback-message").Skip(1).FirstOrDefault() ?? "No user-facing changes.";
 var lineEndingsArg  = Args.SkipWhile(a => a != "--line-endings").Skip(1).FirstOrDefault() ?? "lf";
+var debugHeader     = Args.Contains("--debug");
 
 if (string.IsNullOrEmpty(formatArg) || string.IsNullOrEmpty(inputArg))
 {
@@ -95,9 +98,9 @@ var sb     = new StringBuilder();
 var format = formatArg.ToLowerInvariant();
 
 if (format == "keepachangelog")
-    GenerateKeepAChangelog(sb, releases, unreleased, doFallback, fallbackMessage, sectionHeaders, inputArg!, regenerateCmd);
+    GenerateKeepAChangelog(sb, releases, unreleased, doFallback, fallbackMessage, sectionHeaders, inputArg!, regenerateCmd, debugHeader);
 else if (format == "ha-addon")
-    GenerateHaAddon(sb, releases, audienceArg, doFallback, fallbackMessage, inputArg!, regenerateCmd);
+    GenerateHaAddon(sb, releases, audienceArg, doFallback, fallbackMessage, inputArg!, regenerateCmd, debugHeader);
 else
 {
     Console.Error.WriteLine($"Unknown format: {formatArg}. Use keepachangelog or ha-addon.");
@@ -121,10 +124,10 @@ else
 
 // ── Format implementations ────────────────────────────────────────────────────
 
-static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, JsonElement? unreleased, bool fallback, string fallbackMessage, Dictionary<string, string>? sectionHeaders, string inputPath, string regenerateCmd)
+static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, JsonElement? unreleased, bool fallback, string fallbackMessage, Dictionary<string, string>? sectionHeaders, string inputPath, string regenerateCmd, bool debug)
 {
     // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
-    sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd));
+    sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd, debug));
     sb.AppendLine();
     sb.AppendLine("# Changelog");
     sb.AppendLine();
@@ -218,10 +221,10 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
     }
 }
 
-static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string audience, bool fallback, string fallbackMessage, string inputPath, string regenerateCmd)
+static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string audience, bool fallback, string fallbackMessage, string inputPath, string regenerateCmd, bool debug)
 {
     // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
-    sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd));
+    sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd, debug));
     sb.AppendLine();
     sb.AppendLine("# Changelog");
     sb.AppendLine();
@@ -335,10 +338,13 @@ static Dictionary<string, string>? ParseSectionHeaders(JsonElement root)
 }
 
 // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
-static string BuildGeneratedHeader(string inputPath, string regenerateCmd)
+static string BuildGeneratedHeader(string inputPath, string regenerateCmd, bool debug)
 {
+    var firstLine = $"##### *GENERATED FILE [{DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC] — do not edit by hand.*";
+    if (!debug) return firstLine;
+
     var sb = new StringBuilder();
-    sb.AppendLine($"### *GENERATED FILE [{DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC] — do not edit by hand.*");
+    sb.AppendLine(firstLine);
     sb.AppendLine();
     sb.AppendLine($"*Edit: `{inputPath}`*");
     sb.AppendLine();
