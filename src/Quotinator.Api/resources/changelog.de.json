@@ -9,12 +9,28 @@
     "fixed": "Behoben",
     "removed": "Entfernt"
   },
-  "unreleased": {
-    "changed": [
-      "Generierte Changelog-Dateien zeigen standardmäßig nur einen Zeitstempel im Header; übergeben Sie `--debug` an `changelog.csx`, um den Eingabepfad und den Regenerierungsbefehl einzuschließen"
-    ]
-  },
   "releases": [
+    {
+      "version": "1.6.1",
+      "date": "2026-06-22",
+      "issues": [103],
+      "highlights": [
+        "Die Sprachauswahl wurde aus der Navigationsleiste in einen neuen Einstellungsbereich im Seitenmenü verschoben, wodurch eine Überlappung mit dem Hamburger-Button auf Mobilgeräten behoben wurde."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Die Sprachauswahl wurde aus der Navigationsleiste in einen neuen Einstellungsbereich im Seitenmenü verschoben, wodurch eine Überlappung mit dem Hamburger-Button auf Mobilgeräten behoben wurde."
+        ]
+      },
+      "fixed": [
+        "Auf Mobilgeräten überlappten der Hamburger-Schalter und die Sprachauswahl in der Navigationsleiste (issue #103)"
+      ],
+      "changed": [
+        "Sprachauswahl von einem Dropdown zu einzelnen Navigationseinträgen mit einem Häkchen bei der aktiven Sprache umgestaltet",
+        "Neuer Einstellungsbereich im Navigationsmenü als Heimat für Sprachauswahl und zukünftige Einstellungen hinzugefügt",
+        "Generierte Changelog-Dateien zeigen standardmäßig nur einen Zeitstempel im Header; übergeben Sie `--debug` an `changelog.csx`, um den Eingabepfad und den Regenerierungsbefehl einzuschließen"
+      ]
+    },
     {
       "version": "1.6.0",
       "date": "2026-06-22",

@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-22 18:14 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-22 18:23 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.6.1] - 2026-06-22
 
 ### Highlights
 - The language selector has moved from the navbar into a new Settings section in the side menu, fixing an overlap with the hamburger button on mobile.
@@ -551,7 +551,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.0...HEAD
+[1.6.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.4.3...v1.5.0

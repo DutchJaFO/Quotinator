@@ -2,21 +2,28 @@
   "language": "en",
   "sourceLanguage": "en",
   "machineTranslated": false,
-  "unreleased": {
-    "issues": [103],
-    "highlights": [
-      "The language selector has moved from the navbar into a new Settings section in the side menu, fixing an overlap with the hamburger button on mobile."
-    ],
-    "fixed": [
-      "On mobile, the hamburger toggle and language selector overlapped in the navbar (issue #103)"
-    ],
-    "changed": [
-      "Language selector redesigned from a drop-down to individual nav items with a checkmark on the active language",
-      "New Settings section added to the nav menu as the home for language selection and future settings",
-      "Generated changelog files now show a minimal timestamp-only header by default; pass `--debug` to `changelog.csx` to include the input path and regenerate command"
-    ]
-  },
   "releases": [
+    {
+      "version": "1.6.1",
+      "date": "2026-06-22",
+      "issues": [103],
+      "highlights": [
+        "The language selector has moved from the navbar into a new Settings section in the side menu, fixing an overlap with the hamburger button on mobile."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "The language selector has moved from the navbar into a new Settings section in the side menu, fixing an overlap with the hamburger button on mobile."
+        ]
+      },
+      "fixed": [
+        "On mobile, the hamburger toggle and language selector overlapped in the navbar (issue #103)"
+      ],
+      "changed": [
+        "Language selector redesigned from a drop-down to individual nav items with a checkmark on the active language",
+        "New Settings section added to the nav menu as the home for language selection and future settings",
+        "Generated changelog files now show a minimal timestamp-only header by default; pass `--debug` to `changelog.csx` to include the input path and regenerate command"
+      ]
+    },
     {
       "version": "1.6.0",
       "date": "2026-06-22",

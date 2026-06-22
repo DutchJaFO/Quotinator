@@ -1,10 +1,16 @@
-##### *GENERATED FILE [2026-06-22 18:14 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-22 18:23 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
+
+## [1.6.1] - 2026-06-22
+
+- The language selector has moved from the navbar into a new Settings section in the side menu, fixing an overlap with the hamburger button on mobile.
+
+---
 
 ## [1.6.0] - 2026-06-22
 
