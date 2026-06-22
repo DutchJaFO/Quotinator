@@ -1,4 +1,4 @@
-### *GENERATED FILE [2026-06-21 21:57 UTC] — do not edit by hand.*
+### *GENERATED FILE [2026-06-22 06:25 UTC] — do not edit by hand.*
 
 *Edit: `src/Quotinator.Api/resources/changelog.en.json`*
 
@@ -9,6 +9,13 @@
 All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
+
+## [1.6.0] - 2026-06-22
+
+- Unreleased changes are now shown at the top of the changelog page.
+- Each release now shows which GitHub issues and CVEs it addresses in a collapsible section.
+
+---
 
 ## [1.5.1] - 2026-06-20
 

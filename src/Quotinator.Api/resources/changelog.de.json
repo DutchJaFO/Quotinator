@@ -1,4 +1,4 @@
-{
+﻿{
   "language": "de",
   "sourceLanguage": "en",
   "machineTranslated": true,
@@ -9,39 +9,53 @@
     "fixed": "Behoben",
     "removed": "Entfernt"
   },
-  "unreleased": {
-    "issues": [
-      80
-    ],
-    "highlights": [
-      "Das Changelog wird jetzt von einer einzigen JSON-Quelle gesteuert — beide Markdown-Dateien werden daraus generiert, und die Blazor-Changelog-Seite liest sie direkt ohne Markdown-Parsing.",
-      "Unveröffentlichte Änderungen werden jetzt oben auf der Changelog-Seite angezeigt.",
-      "Jedes Release zeigt jetzt, welche GitHub-Issues und CVEs es adressiert, in einem einklappbaren Abschnitt."
-    ],
-    "added": [
-      "`Quotinator.Changelog`-Projekt: `IChangelogService` / `ChangelogService` — deserialisiert `changelog.json`; kein Markdown-Parser",
-      "`ChangelogEntry` Blazor-Steuerelement: rendert einen einzelnen Release-Eintrag (Highlights oder technische Abschnitte, GitHub-Release-Link, Issues & CVEs Block)",
-      "`ChangelogUnreleasedEntry` Blazor-Steuerelement: rendert den unveröffentlichten Block — immer ausgeklappt, keine Version oder Datum, kein GitHub-Release-Link",
-      "`ChangelogRoot`, `ChangelogUnreleased`, `ChangelogRelease`, `ChangelogReleaseTranslation`, `ChangelogTranslationItem`, `ChangelogSectionHeaders` Modelle direkt durch das JSON-Schema geformt; `ChangelogUnreleased` ist die Basis, `ChangelogRelease` erbt davon und fügt `Version` und `Date` hinzu",
-      "`ChangelogSchemaTests`: validiert `changelog.json`-Struktur (Pflichtfelder, keine Null-Einträge, CVE-ID-Format)",
-      "`schemas/changelog.schema.json`: maschinenlesbares JSON-Schema für `changelog.json`",
-      "`scripts/changelog.csx`: generiert `keepachangelog`- und `ha-addon`-Markdown aus `changelog.json`; unterstützt `--lang`, `--audience`, `--fallback`, `--fallback-message`",
-      "`scripts/changelog-import.csx`: importiert eine vorhandene `keepachangelog`- oder `ha-addon`-Markdown-Datei in das `changelog.json`-Format",
-      "`scripts/changelog-upgrade.csx`: einmaliges Migrationswerkzeug zum Zusammenstellen von `changelog.json` aus den zwei Referenz-Markdown-Dateien"
-    ],
-    "changed": [
-      "`ChangelogService` deserialisiert jetzt `changelog.json` direkt in öffentliche Modelle; private DTO-Mapping-Schicht entfernt",
-      "`ChangelogSection`-Modell entfernt; Blazor-Komponenten rendern die vier Änderungslisten (`Added`, `Changed`, `Fixed`, `Removed`) direkt",
-      "Releases mit einem einzelnen Highlight werden jetzt als Absatz statt als Aufzählungsliste gerendert",
-      "`CHANGELOG.md` und `addon/CHANGELOG.md` sind jetzt generierte Dateien — bearbeiten Sie `changelog.json`, dann `scripts/changelog.csx` ausführen zum Regenerieren"
-    ],
-    "fixed": [
-      "`scripts/changelog-upgrade.csx`: Versionen, die in der Root-`CHANGELOG.md` vorhanden, aber in `addon/CHANGELOG.md` fehlen, verwenden jetzt korrekt Root-Highlights als generische Highlights; v1.0.0 und v1.0.1 waren betroffen",
-      "`scripts/changelog.csx --fallback false`: Standard-Highlights leckten nicht mehr in Einträge ohne Zielgruppe",
-      "`changelog.json` v1.0.0 und v1.0.1 fehlten `highlights` — beide zeigen jetzt benutzerfreundliche Zusammenfassungen statt technischer Abschnittsbadges"
-    ]
-  },
+  "unreleased": {},
   "releases": [
+    {
+      "version": "1.6.0",
+      "date": "2026-06-22",
+      "issues": [
+        80
+      ],
+      "highlights": [
+        "Das Changelog wird jetzt von einer einzigen JSON-Quelle gesteuert — beide Markdown-Dateien werden daraus generiert, und die Blazor-Changelog-Seite liest sie direkt ohne Markdown-Parsing.",
+        "Unveröffentlichte Änderungen werden jetzt oben auf der Changelog-Seite angezeigt.",
+        "Jedes Release zeigt jetzt, welche GitHub-Issues und CVEs es adressiert, in einem einklappbaren Abschnitt."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Unveröffentlichte Änderungen werden jetzt oben auf der Changelog-Seite angezeigt.",
+          "Jedes Release zeigt jetzt, welche GitHub-Issues und CVEs es adressiert, in einem einklappbaren Abschnitt."
+        ]
+      },
+      "added": [
+        "`Quotinator.Changelog`-Projekt: `IChangelogService` / `ChangelogService` — deserialisiert `changelog.json`; kein Markdown-Parser",
+        "`ChangelogEntry` Blazor-Steuerelement: rendert einen einzelnen Release-Eintrag (Highlights oder technische Abschnitte, GitHub-Release-Link, Issues & CVEs Block)",
+        "`ChangelogUnreleasedEntry` Blazor-Steuerelement: rendert den unveröffentlichten Block — immer ausgeklappt, keine Version oder Datum, kein GitHub-Release-Link",
+        "`ChangelogRoot`, `ChangelogUnreleased`, `ChangelogRelease`, `ChangelogReleaseTranslation`, `ChangelogTranslationItem`, `ChangelogSectionHeaders` Modelle direkt durch das JSON-Schema geformt; `ChangelogUnreleased` ist die Basis, `ChangelogRelease` erbt davon und fügt `Version` und `Date` hinzu",
+        "`ChangelogSchemaTests`: validiert `changelog.json`-Struktur (Pflichtfelder, keine Null-Einträge, CVE-ID-Format)",
+        "`schemas/changelog.schema.json`: maschinenlesbares JSON-Schema für `changelog.json`",
+        "`scripts/changelog.csx`: generiert `keepachangelog`- und `ha-addon`-Markdown aus `changelog.json`; unterstützt `--lang`, `--audience`, `--fallback`, `--fallback-message`",
+        "`scripts/changelog-import.csx`: importiert eine vorhandene `keepachangelog`- oder `ha-addon`-Markdown-Datei in das `changelog.json`-Format",
+        "`scripts/changelog-upgrade.csx`: einmaliges Migrationswerkzeug zum Zusammenstellen von `changelog.json` aus den zwei Referenz-Markdown-Dateien"
+      ],
+      "changed": [
+        "`ChangelogService` deserialisiert jetzt `changelog.json` direkt in öffentliche Modelle; private DTO-Mapping-Schicht entfernt",
+        "`ChangelogSection`-Modell entfernt; Blazor-Komponenten rendern die vier Änderungslisten (`Added`, `Changed`, `Fixed`, `Removed`) direkt",
+        "Releases mit einem einzelnen Highlight werden jetzt als Absatz statt als Aufzählungsliste gerendert",
+        "`CHANGELOG.md` und `addon/CHANGELOG.md` sind jetzt generierte Dateien — bearbeiten Sie `changelog.json`, dann `scripts/changelog.csx` ausführen zum Regenerieren",
+        "`Scalar.AspNetCore` von 2.16.3 auf 2.16.4 aktualisiert",
+        "`actions/checkout` von v6 auf v7 aktualisiert (nur CI)",
+        "`JsonSchema.Net` von 8.0.0 auf 9.2.2 aktualisiert (nur Tests)",
+        "`MSTest` von 4.0.2 auf 4.2.3 aktualisiert (nur Tests)",
+        "`Microsoft.Extensions.Logging.Abstractions` von 10.0.0 auf 10.0.9 aktualisiert"
+      ],
+      "fixed": [
+        "`scripts/changelog-upgrade.csx`: Versionen, die in der Root-`CHANGELOG.md` vorhanden, aber in `addon/CHANGELOG.md` fehlen, verwenden jetzt korrekt Root-Highlights als generische Highlights; v1.0.0 und v1.0.1 waren betroffen",
+        "`scripts/changelog.csx --fallback false`: Standard-Highlights leckten nicht mehr in Einträge ohne Zielgruppe",
+        "`changelog.json` v1.0.0 und v1.0.1 fehlten `highlights` — beide zeigen jetzt benutzerfreundliche Zusammenfassungen statt technischer Abschnittsbadges"
+      ]
+    },
     {
       "version": "1.5.1",
       "date": "2026-06-20",
