@@ -1,4 +1,4 @@
-### *GENERATED FILE [2026-06-21 21:57 UTC] — do not edit by hand.*
+### *GENERATED FILE [2026-06-22 06:15 UTC] — do not edit by hand.*
 
 *Edit: `src/Quotinator.Api/resources/changelog.en.json`*
 
@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.6.0] - 2026-06-22
 
 ### Highlights
 - Changelog is now driven by a single JSON source — both markdown files are generated from it, and the Blazor changelog page reads it directly with no markdown parsing.
@@ -534,7 +534,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.4.2...v1.4.3

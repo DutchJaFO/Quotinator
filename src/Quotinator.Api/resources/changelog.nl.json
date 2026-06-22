@@ -1,4 +1,4 @@
-{
+﻿{
   "language": "nl",
   "sourceLanguage": "en",
   "machineTranslated": true,
@@ -9,39 +9,48 @@
     "fixed": "Opgelost",
     "removed": "Verwijderd"
   },
-  "unreleased": {
-    "issues": [
-      80
-    ],
-    "highlights": [
-      "Het changelog wordt nu aangestuurd door één JSON-bron — beide markdown-bestanden worden hieruit gegenereerd, en de Blazor-changelogpagina leest het direct zonder markdown-parsing.",
-      "Niet-uitgebrachte wijzigingen worden nu bovenaan de changelogpagina weergegeven.",
-      "Elke release toont nu welke GitHub-issues en CVE's erin zijn verwerkt, in een inklapbare sectie."
-    ],
-    "added": [
-      "`Quotinator.Changelog`-project: `IChangelogService` / `ChangelogService` — deserialiseert `changelog.json`; geen markdown-parser",
-      "`ChangelogEntry` Blazor-control: geeft één release-item weer (hoogtepunten of technische secties, GitHub-releaselink, Issues & CVE's blok)",
-      "`ChangelogUnreleasedEntry` Blazor-control: geeft het niet-uitgebrachte blok weer — altijd uitgevouwen, geen versie of datum, geen GitHub-releaselink",
-      "`ChangelogRoot`, `ChangelogUnreleased`, `ChangelogRelease`, `ChangelogReleaseTranslation`, `ChangelogTranslationItem`, `ChangelogSectionHeaders` modellen direct gevormd door het JSON-schema; `ChangelogUnreleased` is de basis, `ChangelogRelease` erft hiervan en voegt `Version` en `Date` toe",
-      "`ChangelogSchemaTests`: valideert `changelog.json`-structuur (verplichte velden, geen null-items, CVE-ID-formaat)",
-      "`schemas/changelog.schema.json`: machine-leesbaar JSON-schema voor `changelog.json`",
-      "`scripts/changelog.csx`: genereert `keepachangelog`- en `ha-addon`-markdown van `changelog.json`; ondersteunt `--lang`, `--audience`, `--fallback`, `--fallback-message`",
-      "`scripts/changelog-import.csx`: importeert een bestaand `keepachangelog`- of `ha-addon`-markdownbestand naar `changelog.json`-formaat",
-      "`scripts/changelog-upgrade.csx`: eenmalig migratiehulpmiddel gebruikt om `changelog.json` samen te stellen uit de twee referentiemarkdownbestanden"
-    ],
-    "changed": [
-      "`ChangelogService` deserialiseert nu `changelog.json` direct naar publieke modellen; private DTO-mappinglaag verwijderd",
-      "`ChangelogSection`-model verwijderd; Blazor-componenten renderen de vier wijzigingslijsten (`Added`, `Changed`, `Fixed`, `Removed`) direct",
-      "Releases met één hoogtepunt worden nu als alinea weergegeven in plaats van als opsommingslijst",
-      "`CHANGELOG.md` en `addon/CHANGELOG.md` zijn nu gegenereerde bestanden — bewerk `changelog.json`, voer dan `scripts/changelog.csx` uit om te regenereren"
-    ],
-    "fixed": [
-      "`scripts/changelog-upgrade.csx`: versies aanwezig in de root `CHANGELOG.md` maar afwezig in `addon/CHANGELOG.md` gebruiken nu correct root-hoogtepunten als generieke hoogtepunten; v1.0.0 en v1.0.1 waren getroffen",
-      "`scripts/changelog.csx --fallback false`: standaard hoogtepunten lekten niet meer naar entries zonder publiek",
-      "`changelog.json` v1.0.0 en v1.0.1 misten `highlights` — beide tonen nu gebruiksvriendelijke samenvattingen in plaats van technische sectie-badges"
-    ]
-  },
+  "unreleased": {},
   "releases": [
+    {
+      "version": "1.6.0",
+      "date": "2026-06-22",
+      "issues": [
+        80
+      ],
+      "highlights": [
+        "Het changelog wordt nu aangestuurd door één JSON-bron — beide markdown-bestanden worden hieruit gegenereerd, en de Blazor-changelogpagina leest het direct zonder markdown-parsing.",
+        "Niet-uitgebrachte wijzigingen worden nu bovenaan de changelogpagina weergegeven.",
+        "Elke release toont nu welke GitHub-issues en CVE's erin zijn verwerkt, in een inklapbare sectie."
+      ],
+      "audienceHighlights": {
+        "ha-addon": [
+          "Niet-uitgebrachte wijzigingen worden nu bovenaan de changelogpagina weergegeven.",
+          "Elke release toont nu welke GitHub-issues en CVE's erin zijn verwerkt, in een inklapbare sectie."
+        ]
+      },
+      "added": [
+        "`Quotinator.Changelog`-project: `IChangelogService` / `ChangelogService` — deserialiseert `changelog.json`; geen markdown-parser",
+        "`ChangelogEntry` Blazor-control: geeft één release-item weer (hoogtepunten of technische secties, GitHub-releaselink, Issues & CVE's blok)",
+        "`ChangelogUnreleasedEntry` Blazor-control: geeft het niet-uitgebrachte blok weer — altijd uitgevouwen, geen versie of datum, geen GitHub-releaselink",
+        "`ChangelogRoot`, `ChangelogUnreleased`, `ChangelogRelease`, `ChangelogReleaseTranslation`, `ChangelogTranslationItem`, `ChangelogSectionHeaders` modellen direct gevormd door het JSON-schema; `ChangelogUnreleased` is de basis, `ChangelogRelease` erft hiervan en voegt `Version` en `Date` toe",
+        "`ChangelogSchemaTests`: valideert `changelog.json`-structuur (verplichte velden, geen null-items, CVE-ID-formaat)",
+        "`schemas/changelog.schema.json`: machine-leesbaar JSON-schema voor `changelog.json`",
+        "`scripts/changelog.csx`: genereert `keepachangelog`- en `ha-addon`-markdown van `changelog.json`; ondersteunt `--lang`, `--audience`, `--fallback`, `--fallback-message`",
+        "`scripts/changelog-import.csx`: importeert een bestaand `keepachangelog`- of `ha-addon`-markdownbestand naar `changelog.json`-formaat",
+        "`scripts/changelog-upgrade.csx`: eenmalig migratiehulpmiddel gebruikt om `changelog.json` samen te stellen uit de twee referentiemarkdownbestanden"
+      ],
+      "changed": [
+        "`ChangelogService` deserialiseert nu `changelog.json` direct naar publieke modellen; private DTO-mappinglaag verwijderd",
+        "`ChangelogSection`-model verwijderd; Blazor-componenten renderen de vier wijzigingslijsten (`Added`, `Changed`, `Fixed`, `Removed`) direct",
+        "Releases met één hoogtepunt worden nu als alinea weergegeven in plaats van als opsommingslijst",
+        "`CHANGELOG.md` en `addon/CHANGELOG.md` zijn nu gegenereerde bestanden — bewerk `changelog.json`, voer dan `scripts/changelog.csx` uit om te regenereren"
+      ],
+      "fixed": [
+        "`scripts/changelog-upgrade.csx`: versies aanwezig in de root `CHANGELOG.md` maar afwezig in `addon/CHANGELOG.md` gebruiken nu correct root-hoogtepunten als generieke hoogtepunten; v1.0.0 en v1.0.1 waren getroffen",
+        "`scripts/changelog.csx --fallback false`: standaard hoogtepunten lekten niet meer naar entries zonder publiek",
+        "`changelog.json` v1.0.0 en v1.0.1 misten `highlights` — beide tonen nu gebruiksvriendelijke samenvattingen in plaats van technische sectie-badges"
+      ]
+    },
     {
       "version": "1.5.1",
       "date": "2026-06-20",
