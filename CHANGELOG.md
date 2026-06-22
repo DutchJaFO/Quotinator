@@ -1,4 +1,4 @@
-### *GENERATED FILE [2026-06-21 21:57 UTC] — do not edit by hand.*
+### *GENERATED FILE [2026-06-22 06:25 UTC] — do not edit by hand.*
 
 *Edit: `src/Quotinator.Api/resources/changelog.en.json`*
 
@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.6.0] - 2026-06-22
 
 ### Highlights
 - Changelog is now driven by a single JSON source — both markdown files are generated from it, and the Blazor changelog page reads it directly with no markdown parsing.
@@ -35,6 +35,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `ChangelogSection` model removed; Blazor components render the four change lists (`Added`, `Changed`, `Fixed`, `Removed`) directly
 - Single-highlight releases now render as a paragraph instead of a bullet list
 - `CHANGELOG.md` and `addon/CHANGELOG.md` are now generated files — edit `changelog.json`, then run `scripts/changelog.csx` to regenerate
+- `Scalar.AspNetCore` updated from 2.16.3 to 2.16.4
+- `actions/checkout` updated from v6 to v7 (CI only)
+- `JsonSchema.Net` updated from 8.0.0 to 9.2.2 (test only)
+- `MSTest` updated from 4.0.2 to 4.2.3 (test only)
+- `Microsoft.Extensions.Logging.Abstractions` updated from 10.0.0 to 10.0.9
 
 ### Fixed
 - `scripts/changelog-upgrade.csx`: versions present in root `CHANGELOG.md` but absent from `addon/CHANGELOG.md` now correctly use root highlights as generic highlights; v1.0.0 and v1.0.1 were affected
@@ -534,7 +539,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.4.2...v1.4.3
