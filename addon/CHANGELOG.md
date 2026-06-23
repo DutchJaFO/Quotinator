@@ -1,10 +1,16 @@
-##### *GENERATED FILE [2026-06-22 21:06 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-23 21:28 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
+
+## [1.6.3] - 2026-06-23
+
+- The startup log now shows a summary of server addresses, database statistics, and key configuration values — useful for verifying a deployment at a glance.
+
+---
 
 ## [1.6.2] - 2026-06-22
 

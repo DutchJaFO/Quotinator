@@ -1,10 +1,23 @@
-##### *GENERATED FILE [2026-06-22 21:06 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-23 21:28 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.6.3] - 2026-06-23
+
+### Highlights
+- The startup log now shows a summary of server addresses, database statistics, and key configuration values — useful for verifying a deployment at a glance.
+
+### Changed
+- Startup log now displays opening and closing banners as single structured multi-line entries
+- Closing banner includes bound server URLs, database statistics (schema version, quote/source/character/people counts), data paths, and active configuration (log level, SSL, admin key status)
+- All startup log lines now carry [Subsystem - Phase] prefixes for easier filtering (e.g. [Database - Init], [Database - Seed], [Server])
+- Switched from Microsoft.Extensions.Logging console formatter to Serilog — multi-line log entries now render correctly in Docker
 
 ---
 
@@ -567,6 +580,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
+[1.6.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.5.1...v1.6.0

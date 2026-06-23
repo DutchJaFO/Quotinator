@@ -11,6 +11,20 @@
   },
   "releases": [
     {
+      "version": "1.6.3",
+      "date": "2026-06-23",
+      "issues": [100],
+      "highlights": [
+        "Das Startprotokoll zeigt jetzt eine Zusammenfassung der Serveradressen, Datenbankstatistiken und wichtigen Konfigurationswerte an — praktisch zur schnellen Überprüfung einer Bereitstellung."
+      ],
+      "changed": [
+        "Startprotokoll zeigt nun Eröffnungs- und Abschlussbanner als einzelne strukturierte mehrzeilige Einträge",
+        "Abschlussbanner enthält gebundene Serveradressen, Datenbankstatistiken (Schemaversion, Anzahl von Zitaten/Quellen/Charakteren/Personen), Datenpfade und aktive Konfiguration (Protokollebene, SSL, Admin-Schlüsselstatus)",
+        "Alle Startprotokollzeilen tragen nun [Subsystem - Phase]-Präfixe für einfacheres Filtern (z. B. [Database - Init], [Database - Seed], [Server])",
+        "Wechsel vom Microsoft.Extensions.Logging Konsolenformatierer zu Serilog — mehrzeilige Protokolleinträge werden jetzt in Docker korrekt dargestellt"
+      ]
+    },
+    {
       "version": "1.6.2",
       "date": "2026-06-22",
       "issues": [106],
