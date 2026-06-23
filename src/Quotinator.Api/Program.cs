@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Serilog;
+using Serilog.Events;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Threading.RateLimiting;
@@ -367,22 +369,24 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Map HA log level names (trace/debug/info/notice/warning/error/fatal) to ASP.NET Core LogLevel.
-// HA uses "info"; ASP.NET Core uses "Information" — the mapping is required, they do not match.
-// Per-category overrides in appsettings.json (Microsoft.AspNetCore: Warning) remain effective
-// because a specific category prefix always wins over the global minimum.
+// Map HA log level names (trace/debug/info/notice/warning/error/fatal) to Serilog levels,
+// then inject into configuration so ReadFrom.Configuration picks it up automatically.
 var haLogLevel = builder.Configuration["Quotinator:LogLevel"] ?? "info";
-builder.Logging.SetMinimumLevel(haLogLevel.ToLowerInvariant() switch
+builder.Configuration["Serilog:MinimumLevel:Default"] = haLogLevel.ToLowerInvariant() switch
 {
-    "trace"   => LogLevel.Trace,
-    "debug"   => LogLevel.Debug,
-    "notice"  => LogLevel.Information,
-    "info"    => LogLevel.Information,
-    "warning" => LogLevel.Warning,
-    "error"   => LogLevel.Error,
-    "fatal"   => LogLevel.Critical,
-    _         => LogLevel.Information
-});
+    "trace"   => nameof(LogEventLevel.Verbose),
+    "debug"   => nameof(LogEventLevel.Debug),
+    "notice"  => nameof(LogEventLevel.Information),
+    "info"    => nameof(LogEventLevel.Information),
+    "warning" => nameof(LogEventLevel.Warning),
+    "error"   => nameof(LogEventLevel.Error),
+    "fatal"   => nameof(LogEventLevel.Fatal),
+    _         => nameof(LogEventLevel.Information)
+};
+
+builder.Host.UseSerilog((ctx, _, config) =>
+    config.ReadFrom.Configuration(ctx.Configuration)
+          .Enrich.FromLogContext());
 
 var app = builder.Build();
 
