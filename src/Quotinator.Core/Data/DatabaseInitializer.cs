@@ -46,6 +46,9 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     public int PeopleCount { get; private set; }
 
     /// <inheritdoc/>
+    public string? MigrationApplied { get; private set; }
+
+    /// <inheritdoc/>
     public IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates => _lastSeedDuplicates;
 
     // Guards against concurrent seeding when multiple WebApplicationFactory instances start in
@@ -108,16 +111,16 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         var legacyPath = Path.Combine(dataDir, DataPaths.LegacyDatabaseFile);
         if (!File.Exists(legacyPath) || File.Exists(_dbPath)) return;
 
-        _logger.LogInformation("Database: migrating legacy filename quotes.db → {NewName}", Path.GetFileName(_dbPath));
+        _logger.LogInformation("[Database - Init] migrating legacy filename quotes.db → {NewName}", Path.GetFileName(_dbPath));
         foreach (var suffix in new[] { "", "-wal", "-shm" })
         {
             var src = legacyPath + suffix;
             var dst = _dbPath + suffix;
             if (!File.Exists(src)) continue;
-            _logger.LogInformation("Database: moving {Src} → {Dst}", Path.GetFileName(src), Path.GetFileName(dst));
+            _logger.LogInformation("[Database - Init] moving {Src} → {Dst}", Path.GetFileName(src), Path.GetFileName(dst));
             File.Move(src, dst);
         }
-        _logger.LogInformation("Database: filename migration complete → {Path}", _dbPath);
+        _logger.LogInformation("[Database - Init] filename migration complete → {Path}", _dbPath);
     }
 
     private void CreateBackup(SqliteConnection connection, int fromVersion)
@@ -127,11 +130,11 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         var backupName = $"{Path.GetFileNameWithoutExtension(_dbPath)}_v{fromVersion}_{timestamp}Z.db";
         var backupPath = Path.Combine(_backupsDir, backupName);
 
-        _logger.LogInformation("Database: backing up v{Version} → {Path}", fromVersion, backupPath);
+        _logger.LogInformation("[Database - Backup] backing up v{Version} → {Path}", fromVersion, backupPath);
         using var dest = new SqliteConnection($"Data Source={backupPath}");
         dest.Open();
         connection.BackupDatabase(dest);
-        _logger.LogInformation("Database: backup complete");
+        _logger.LogInformation("[Database - Backup] backup complete");
     }
 
     #endregion
@@ -151,18 +154,18 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         if (current >= Migrations.Count)
         {
             SchemaVersion = current;
-            _logger.LogInformation("Database: schema is up to date at version {Version}", current);
+            _logger.LogInformation("[Database - Init] schema is up to date at version {Version}", current);
             return;
         }
 
         if (current == 0)
         {
-            _logger.LogInformation("Database: creating schema...");
+            _logger.LogInformation("[Database - Init] creating schema...");
         }
         else
         {
             _logger.LogInformation(
-                "Database: applying {Count} pending migration(s) (version {Current} → {Target})...",
+                "[Database - Init] applying {Count} pending migration(s) (version {Current} → {Target})...",
                 Migrations.Count - current, current, Migrations.Count);
             CreateBackup(connection, current);
         }
@@ -187,7 +190,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                 // outside the transaction so the loop advances.
                 await tx.RollbackAsync();
                 _logger.LogWarning(
-                    "Database: migration {Version} was previously partially applied — " +
+                    "[Database - Init] migration {Version} was previously partially applied — " +
                     "recording version and continuing. If data appears missing, use Reset Database.",
                     i + 1);
                 await connection.ExecuteAsync(
@@ -199,7 +202,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                 await tx.RollbackAsync();
                 _logger.LogError(
                     ex,
-                    "Database: migration {Version} failed — rolled back to version {Current}. " +
+                    "[Database - Init] migration {Version} failed — rolled back to version {Current}. " +
                     "Resolve the issue and restart the application.",
                     i + 1, i);
                 throw;
@@ -207,8 +210,10 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         }
 
         SchemaVersion = Migrations.Count;
+        if (current > 0)
+            MigrationApplied = $"v{current} → v{Migrations.Count}";
         _logger.LogInformation(
-            "Database: schema {Action} at version {Version}",
+            "[Database - Init] schema {Action} at version {Version}",
             current == 0 ? "created" : "updated", Migrations.Count);
     }
 
@@ -252,7 +257,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         await connection.OpenAsync();
 
         var totalFiles = _batches.Sum(b => b.Files.Count);
-        _logger.LogInformation("Database: reseed requested — clearing all data and reimporting from {Count} source file(s)...", totalFiles);
+        _logger.LogInformation("[Database - Seed] reseed requested — clearing all data and reimporting from {Count} source file(s)...", totalFiles);
 
         await _seedLock.WaitAsync();
         try
@@ -266,7 +271,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         }
 
         await LogDatabaseStatsAsync(connection);
-        _logger.LogInformation("Database: reseed complete");
+        _logger.LogInformation("[Database - Seed] reseed complete");
     }
 
     /// <inheritdoc/>
@@ -276,7 +281,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         await connection.OpenAsync();
 
         var totalFiles = _batches.Sum(b => b.Files.Count);
-        _logger.LogInformation("Database: reset requested — rebuilding schema and reimporting from {Count} source file(s)...", totalFiles);
+        _logger.LogInformation("[Database - Init] reset requested — rebuilding schema and reimporting from {Count} source file(s)...", totalFiles);
 
         await _seedLock.WaitAsync();
         try
@@ -294,7 +299,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         }
 
         await LogDatabaseStatsAsync(connection);
-        _logger.LogInformation("Database: reset complete");
+        _logger.LogInformation("[Database - Init] reset complete");
     }
 
     /// <inheritdoc/>
@@ -373,7 +378,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
         if (_batches.Count == 0)
         {
-            _logger.LogWarning("Database: no source files configured — database will be empty");
+            _logger.LogWarning("[Database - Seed] no source files configured — database will be empty");
             return;
         }
 
@@ -396,7 +401,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                 var quotes      = LoadQuotesFromFile(file);
                 var importBatch = await CreateImportBatchAsync(file, batch.Label);
 
-                _logger.LogInformation("Database: importing {Count} quotes from {File} ({Batch})...",
+                _logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
                     quotes.Count, fileName, batch.Label);
 
                 var fileQuoteCount = 0;
@@ -413,14 +418,14 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                         if (batch.Policy.ForQuotes == DuplicateResolutionPolicy.Skip)
                         {
                             _logger.LogDebug(
-                                "Database: skipping duplicate quote {Id} in {File} (first seen in {First})",
+                                "[Database - Seed] skipping duplicate quote {Id} in {File} (first seen in {First})",
                                 q.Id, fileName, Path.GetFileName(firstFile));
                             continue;
                         }
 
                         // OVERWRITE: delete children first (FK constraint), then update the parent.
                         _logger.LogDebug(
-                            "Database: overwriting duplicate quote {Id} in {File} (was {First})",
+                            "[Database - Seed] overwriting duplicate quote {Id} in {File} (was {First})",
                             q.Id, fileName, Path.GetFileName(firstFile));
 
                         await connection.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote,      new { id = q.Id });
@@ -485,7 +490,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
         var dupCount = _lastSeedDuplicates.Count;
         _logger.LogInformation(
-            "Database: seeding complete — {Unique} unique quotes from {Total} total ({Dups} duplicate{S})",
+            "[Database - Seed] seeding complete — {Unique} unique quotes from {Total} total ({Dups} duplicate{S})",
             seenIds.Count, seenIds.Count + dupCount, dupCount, dupCount == 1 ? "" : "s");
     }
 
@@ -499,11 +504,11 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
         if (_batches.Count == 0)
         {
-            _logger.LogWarning("Database: cannot re-seed genres — no source files configured");
+            _logger.LogWarning("[Database - Seed] cannot re-seed genres — no source files configured");
             return;
         }
 
-        _logger.LogInformation("Database: re-seeding genres from source files...");
+        _logger.LogInformation("[Database - Seed] re-seeding genres from source files...");
 
         var now      = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
         var inserted = 0;
@@ -531,7 +536,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
             }
         }
 
-        _logger.LogInformation("Database: genre re-seed complete — {Count} genre rows processed", inserted);
+        _logger.LogInformation("[Database - Seed] genre re-seed complete — {Count} genre rows processed", inserted);
     }
 
     private async Task InsertTranslationsAsync(
@@ -702,7 +707,7 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         PeopleCount    = await connection.ExecuteScalarAsync<int>(Sql.People.CountActive);
 
         _logger.LogInformation(
-            "Database ready — {Quotes} quotes, {Sources} sources, {Characters} characters, {People} people",
+            "[Database - Stats] {Quotes} quotes  {Sources} sources  {Characters} characters  {People} people",
             QuoteCount, SourceCount, CharacterCount, PeopleCount);
     }
 
