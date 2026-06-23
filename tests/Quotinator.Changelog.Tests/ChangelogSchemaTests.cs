@@ -135,6 +135,44 @@ public sealed class ChangelogSchemaTests
         }
     }
 
+    [TestMethod]
+    public void AllLanguageFiles_HaveMatchingVersionLists()
+    {
+        var enDoc = _docs.FirstOrDefault(d =>
+        {
+            var root = d.Doc.RootElement;
+            return root.TryGetProperty("language", out var lang) && lang.GetString() == "en";
+        });
+
+        if (enDoc == default)
+            Assert.Inconclusive("changelog.en.json not found — cannot compare version lists.");
+
+        var enVersions = enDoc.Doc.RootElement
+            .GetProperty("releases")
+            .EnumerateArray()
+            .Select(r => r.GetProperty("version").GetString())
+            .ToHashSet();
+
+        foreach (var (filename, doc) in _docs)
+        {
+            if (filename == enDoc.Filename) continue;
+
+            var versions = doc.RootElement
+                .GetProperty("releases")
+                .EnumerateArray()
+                .Select(r => r.GetProperty("version").GetString())
+                .ToHashSet();
+
+            var missing = enVersions.Except(versions).OrderBy(v => v).ToList();
+            var extra   = versions.Except(enVersions).OrderBy(v => v).ToList();
+
+            Assert.AreEqual(0, missing.Count,
+                $"{filename}: missing releases that exist in changelog.en.json: {string.Join(", ", missing)}");
+            Assert.AreEqual(0, extra.Count,
+                $"{filename}: contains releases not present in changelog.en.json: {string.Join(", ", extra)}");
+        }
+    }
+
     private static IEnumerable<(string Filename, JsonElement Release)> Releases()
     {
         foreach (var (filename, doc) in _docs)
