@@ -105,6 +105,8 @@
     <File Path="docs/milestones/changelog-handling/overview.md" />
     <File Path="docs/milestones/changelog-handling/80-json-changelog-plan.md" />
     <File Path="docs/milestones/changelog-handling/82-changelog-translations-plan.md" />
+    <File Path="docs/milestones/changelog-handling/82-per-language-files-handover.md" />
+    <File Path="docs/milestones/changelog-handling/82-plan.md" />
     <File Path="docs/milestones/changelog-handling/handover.md" />
   </Folder>
   <Folder Name="/docs/security/">
@@ -114,6 +116,7 @@
     <File Path="docs/workflow/README.md" />
     <File Path="docs/workflow/checklist.md" />
     <File Path="docs/workflow/issue-audit.md" />
+    <File Path="docs/workflow/issue-closure.md" />
     <File Path="docs/workflow/issues.md" />
     <File Path="docs/workflow/process.md" />
     <File Path="docs/workflow/release.md" />
