@@ -1,9 +1,9 @@
 # Plan: #82 — Changelog: translated highlights for frontend display
 
-> **STATUS: Original design superseded.**
+> **STATUS: Complete. Closed 2026-06-23.**
 > The embedded-translation approach (single `changelog.json` with `translations` objects per release) was replaced with a per-language file model matching the `UI.*.json` i18nText pattern.
-> Implementation must follow **[82-per-language-files-handover.md](82-per-language-files-handover.md)** instead of the steps below.
-> The decisions and verification table below are kept for historical context only.
+> Implementation followed **[82-per-language-files-handover.md](82-per-language-files-handover.md)**. Shipped in v1.6.0. Formally closed 2026-06-23 against v1.6.2.
+> The original decisions and superseded verification table below are kept for historical context only.
 
 ## Problem
 

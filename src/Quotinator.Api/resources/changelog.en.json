@@ -4,6 +4,20 @@
   "machineTranslated": false,
   "releases": [
     {
+      "version": "1.6.3",
+      "date": "2026-06-23",
+      "issues": [100],
+      "highlights": [
+        "The startup log now shows a summary of server addresses, database statistics, and key configuration values — useful for verifying a deployment at a glance."
+      ],
+      "changed": [
+        "Startup log now displays opening and closing banners as single structured multi-line entries",
+        "Closing banner includes bound server URLs, database statistics (schema version, quote/source/character/people counts), data paths, and active configuration (log level, SSL, admin key status)",
+        "All startup log lines now carry [Subsystem - Phase] prefixes for easier filtering (e.g. [Database - Init], [Database - Seed], [Server])",
+        "Switched from Microsoft.Extensions.Logging console formatter to Serilog — multi-line log entries now render correctly in Docker"
+      ]
+    },
+    {
       "version": "1.6.2",
       "date": "2026-06-22",
       "issues": [106],

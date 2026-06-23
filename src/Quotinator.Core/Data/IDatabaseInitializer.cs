@@ -19,6 +19,12 @@ public interface IDatabaseInitializer
     int PeopleCount { get; }
 
     /// <summary>
+    /// Description of any migration applied at startup (e.g. <c>"v2 → v3"</c>), or <c>null</c> if
+    /// the schema was already up to date. Available after <see cref="InitialiseAsync"/> completes.
+    /// </summary>
+    string? MigrationApplied { get; }
+
+    /// <summary>
     /// Duplicate records encountered during the last seeding operation.
     /// Populated after <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, or <see cref="ResetAsync"/> completes.
     /// Empty on a fresh database with no cross-file conflicts.

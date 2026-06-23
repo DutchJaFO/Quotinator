@@ -26,7 +26,7 @@ Replace hand-edited markdown changelogs with a JSON-driven system. A single `src
 | # | Issue | Title | Status |
 |---|-------|-------|--------|
 | 1 | #80 | Replace hand-edited changelogs with JSON-driven changelog system | Complete — pending issue close |
-| 2 | #82 | Changelog: translated highlights for frontend display | Not started |
+| 2 | #82 | Changelog: translated highlights for frontend display | Closed ✅ |
 
 ---
 

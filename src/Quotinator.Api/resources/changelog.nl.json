@@ -11,6 +11,20 @@
   },
   "releases": [
     {
+      "version": "1.6.3",
+      "date": "2026-06-23",
+      "issues": [100],
+      "highlights": [
+        "Het startlogboek toont nu een samenvatting van serveradressen, databasestatistieken en belangrijke configuratiewaarden — handig om een implementatie in één oogopslag te controleren."
+      ],
+      "changed": [
+        "Startlogboek toont nu openings- en sluitingsbanner als enkelvoudige gestructureerde meerregelige vermeldingen",
+        "Sluitingsbanner bevat gebonden serveradressen, databasestatistieken (schemaversie, aantallen quotes/bronnen/personages/personen), datapaden en actieve configuratie (logniveau, SSL, beheerderssleutelstatus)",
+        "Alle opstartlogregels dragen nu [Subsysteem - Fase]-voorvoegsels voor eenvoudigere filtering (bijv. [Database - Init], [Database - Seed], [Server])",
+        "Overgestapt van Microsoft.Extensions.Logging consoleformatter naar Serilog — meerregelige logvermeldingen worden nu correct weergegeven in Docker"
+      ]
+    },
+    {
       "version": "1.6.2",
       "date": "2026-06-22",
       "issues": [106],

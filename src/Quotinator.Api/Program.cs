@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Serilog;
+using Serilog.Events;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Threading.RateLimiting;
@@ -29,7 +31,8 @@ var builder = WebApplication.CreateBuilder(args);
 // The supervisor writes the user's config panel values here; env_vars template rendering
 // is not reliably supported for optional options. This is the official HA approach.
 var haOptionsPath = "/data/options.json";
-if (File.Exists(haOptionsPath))
+var isHa = File.Exists(haOptionsPath);
+if (isHa)
 {
     var haOptions = System.Text.Json.JsonDocument.Parse(File.ReadAllText(haOptionsPath)).RootElement;
     var haMap = new Dictionary<string, string?>();
@@ -196,7 +199,7 @@ static IReadOnlyList<SeedBatch> BuildSeedBatches(
     }
     else
     {
-        log.LogWarning("Database: bundled sources directory not found at {Dir} — database will be empty on first run", bundledDir);
+        log.LogWarning("[Database - Init] bundled sources directory not found at {Dir} — database will be empty on first run", bundledDir);
     }
 
     if (Directory.Exists(importsDir))
@@ -220,7 +223,7 @@ static (IReadOnlyList<string> Files, ManifestPolicy Policy) OrderedByManifest(
     var manifestPath = Path.Combine(dir, "manifest.json");
     if (!File.Exists(manifestPath))
     {
-        log.LogInformation("Database: no manifest in {Dir} — importing {Count} JSON file(s) in alphabetical order", dir, allJson.Count);
+        log.LogInformation("[Database - Init] no manifest in {Dir} — importing {Count} JSON file(s) in alphabetical order", dir, allJson.Count);
         return (allJson, configPolicy);
     }
 
@@ -239,14 +242,14 @@ static (IReadOnlyList<string> Files, ManifestPolicy Policy) OrderedByManifest(
         var listedSet = new HashSet<string>(listed, StringComparer.OrdinalIgnoreCase);
         var unlisted  = allJson.Where(f => !listedSet.Contains(f)).ToList();
         if (unlisted.Count > 0)
-            log.LogInformation("Database: {Count} file(s) not listed in manifest will be appended: {Files}",
+            log.LogInformation("[Database - Init] {Count} file(s) not listed in manifest will be appended: {Files}",
                 unlisted.Count, string.Join(", ", unlisted.Select(Path.GetFileName)));
 
         return ([.. listed, .. unlisted], resolvedPolicy);
     }
     catch (Exception ex)
     {
-        log.LogWarning(ex, "Database: failed to read manifest at {Path} — falling back to alphabetical order", manifestPath);
+        log.LogWarning(ex, "[Database - Init] failed to read manifest at {Path} — falling back to alphabetical order", manifestPath);
         return (allJson, configPolicy);
     }
 }
@@ -366,71 +369,58 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Map HA log level names (trace/debug/info/notice/warning/error/fatal) to ASP.NET Core LogLevel.
-// HA uses "info"; ASP.NET Core uses "Information" — the mapping is required, they do not match.
-// Per-category overrides in appsettings.json (Microsoft.AspNetCore: Warning) remain effective
-// because a specific category prefix always wins over the global minimum.
+// Map HA log level names (trace/debug/info/notice/warning/error/fatal) to Serilog levels,
+// then inject into configuration so ReadFrom.Configuration picks it up automatically.
 var haLogLevel = builder.Configuration["Quotinator:LogLevel"] ?? "info";
-builder.Logging.SetMinimumLevel(haLogLevel.ToLowerInvariant() switch
+builder.Configuration["Serilog:MinimumLevel:Default"] = haLogLevel.ToLowerInvariant() switch
 {
-    "trace"   => LogLevel.Trace,
-    "debug"   => LogLevel.Debug,
-    "notice"  => LogLevel.Information,
-    "info"    => LogLevel.Information,
-    "warning" => LogLevel.Warning,
-    "error"   => LogLevel.Error,
-    "fatal"   => LogLevel.Critical,
-    _         => LogLevel.Information
-});
+    "trace"   => nameof(LogEventLevel.Verbose),
+    "debug"   => nameof(LogEventLevel.Debug),
+    "notice"  => nameof(LogEventLevel.Information),
+    "info"    => nameof(LogEventLevel.Information),
+    "warning" => nameof(LogEventLevel.Warning),
+    "error"   => nameof(LogEventLevel.Error),
+    "fatal"   => nameof(LogEventLevel.Fatal),
+    _         => nameof(LogEventLevel.Information)
+};
+
+builder.Host.UseSerilog((ctx, _, config) =>
+    config.ReadFrom.Configuration(ctx.Configuration)
+          .Enrich.FromLogContext());
 
 var app = builder.Build();
 
-var dbInitializer = app.Services.GetRequiredService<IDatabaseInitializer>();
-await dbInitializer.InitialiseAsync();
-
-var logger = app.Services.GetRequiredService<ILogger<Program>>();
+var dbInitializer  = app.Services.GetRequiredService<IDatabaseInitializer>();
 var versionService = app.Services.GetRequiredService<IVersionService>();
-var logRequests = app.Configuration.GetValue<bool>("Quotinator:LogRequests");
-
+var logRequests    = app.Configuration.GetValue<bool>("Quotinator:LogRequests");
 var adminKeyConfigured = !string.IsNullOrEmpty(app.Configuration["Quotinator:AdminApiKey"]);
 
-// Console.WriteLine writes directly to stdout, bypassing the systemd formatter.
-// This preserves newlines in the HA supervisor log. logger.LogInformation collapses
-// multi-line strings to a single line under the systemd formatter.
-var banner = new System.Text.StringBuilder()
-    .AppendLine("############################################")
-    .AppendLine($"Quotinator v{versionService.Version} starting")
-    .AppendLine($"Data:           {dataDir}")
-    .AppendLine($"Database:       {dbPath}")
-    .AppendLine($"                schema v{dbInitializer.SchemaVersion} — {dbInitializer.QuoteCount} quotes  {dbInitializer.SourceCount} sources  {dbInitializer.CharacterCount} characters  {dbInitializer.PeopleCount} people")
-    .AppendLine($"Backups:        {backupsDir}")
-    .AppendLine($"DataProtection: {keysDir}")
-    .AppendLine($"Log level:      {haLogLevel}")
-    .AppendLine($"Log requests:   {(logRequests ? "on" : "off")}")
-    .AppendLine($"SSL:            {(sslEnabled ? "on" : "off")}");
-if (sslEnabled)
-    banner.AppendLine($"  cert:         {sslCertFile}")
-          .AppendLine($"  key:          {sslKeyFile}");
-banner.AppendLine($"Admin API key:  {(adminKeyConfigured ? "set" : "not set")}")
-      .Append("############################################");
-Console.WriteLine(banner);
+// StartupSummaryLogger is a one-shot startup utility, not a general-purpose service;
+// instantiated directly rather than registered with DI.
+var startupLog = new Quotinator.Api.Startup.StartupSummaryLogger(
+    app.Services.GetRequiredService<ILogger<Quotinator.Api.Startup.StartupSummaryLogger>>(),
+    dbInitializer, versionService,
+    dataDir, dbPath, backupsDir, keysDir,
+    haLogLevel, logRequests, sslEnabled, adminKeyConfigured, isHa);
 
-// Diagnostic: log all Quotinator__ env vars and options.json presence to help diagnose HA config issues.
-// API key value is never logged — only whether it is present.
-logger.LogInformation("options.json:   {Present}", File.Exists("/data/options.json") ? "found" : "not found");
-foreach (System.Collections.DictionaryEntry entry in System.Environment.GetEnvironmentVariables())
-{
-    var key = entry.Key?.ToString() ?? string.Empty;
-    if (!key.StartsWith("Quotinator__", StringComparison.OrdinalIgnoreCase)) continue;
-    var isApiKey = key.Equals("Quotinator__AdminApiKey", StringComparison.OrdinalIgnoreCase);
-    var value    = entry.Value?.ToString();
-    var display  = isApiKey ? (string.IsNullOrEmpty(value) ? "(empty)" : "(set)") : value;
-    logger.LogInformation("env {Key} = {Value}", key, display);
-}
+startupLog.LogStarting();
+await dbInitializer.InitialiseAsync();
 
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+
+// Closing banner fires after Kestrel binds so bound addresses are available.
+lifetime.ApplicationStarted.Register(() =>
+{
+    var addresses = (app.Services
+        .GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>()
+        .Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()
+        ?.Addresses ?? []).ToList();
+    startupLog.LogReady(addresses);
+});
+
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
 lifetime.ApplicationStopping.Register(() =>
-    logger.LogInformation("Quotinator v{Version} stopping", versionService.Version));
+    logger.LogInformation("[Server] Quotinator v{Version} stopping", versionService.Version));
 
 // Must be first so all subsequent middleware sees the correct scheme and client IP.
 app.UseForwardedHeaders();

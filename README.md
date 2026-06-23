@@ -54,6 +54,7 @@ Quotinator/
 | API | ASP.NET Core Minimal API |
 | Frontend | Blazor Server |
 | Data | SQLite (Dapper — no EF Core) |
+| Logging | Serilog |
 | Protocol | REST (MCP planned) |
 | Container | Docker (linux/amd64 + linux/arm64) |
 | Auth | API key required for admin endpoints; quote endpoints are public |
