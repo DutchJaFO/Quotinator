@@ -3,7 +3,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Data;
 using Quotinator.Core.Data.Repositories;
-using Quotinator.Core.Data.TypeHandlers;
 using Quotinator.Data.Connections;
 
 namespace Quotinator.Core.Tests.Data;
@@ -23,9 +22,6 @@ public class DatabaseInitializerTests
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private string _backups = null!;
-
-    [ClassInitialize]
-    public static void ClassInitialize(TestContext _) => DapperConfiguration.Configure();
 
     [TestInitialize]
     public void TestInitialize()

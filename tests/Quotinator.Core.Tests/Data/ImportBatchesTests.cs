@@ -3,7 +3,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Data;
 using Quotinator.Core.Data.Repositories;
-using Quotinator.Core.Data.TypeHandlers;
 using Quotinator.Data.Connections;
 
 namespace Quotinator.Core.Tests.Data;
@@ -24,9 +23,6 @@ public class ImportBatchesTests
     private string _dbPath  = null!;
     private string _backups = null!;
 
-    [ClassInitialize]
-    public static void ClassInitialize(TestContext _) => DapperConfiguration.Configure();
-
     [TestInitialize]
     public void TestInitialize()
     {
@@ -38,7 +34,9 @@ public class ImportBatchesTests
     [TestCleanup]
     public void TestCleanup()
     {
+        // Release pooled SQLite connections before deleting the temp DB file.
         SqliteConnection.ClearAllPools();
+
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, recursive: true);
     }
