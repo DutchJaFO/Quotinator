@@ -1,10 +1,20 @@
-##### *GENERATED FILE [2026-06-23 21:28 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-24 04:06 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.6.4] - 2026-06-24
+
+### Highlights
+- Internal improvements — no user-facing changes.
+
+### Fixed
+- HA add-on crashed at startup with UnauthorizedAccessException after upgrading to v1.6.3 — Serilog attempted to scan the /app directory for sink assemblies, which the HA supervisor container does not permit
 
 ---
 
@@ -580,6 +590,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
+[1.6.4]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.0...v1.6.1

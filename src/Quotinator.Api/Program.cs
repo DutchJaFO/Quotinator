@@ -369,24 +369,40 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Map HA log level names (trace/debug/info/notice/warning/error/fatal) to Serilog levels,
-// then inject into configuration so ReadFrom.Configuration picks it up automatically.
+// Map HA log level names (trace/debug/info/notice/warning/error/fatal) to Serilog levels.
 var haLogLevel = builder.Configuration["Quotinator:LogLevel"] ?? "info";
-builder.Configuration["Serilog:MinimumLevel:Default"] = haLogLevel.ToLowerInvariant() switch
+var serilogLevel = haLogLevel.ToLowerInvariant() switch
 {
-    "trace"   => nameof(LogEventLevel.Verbose),
-    "debug"   => nameof(LogEventLevel.Debug),
-    "notice"  => nameof(LogEventLevel.Information),
-    "info"    => nameof(LogEventLevel.Information),
-    "warning" => nameof(LogEventLevel.Warning),
-    "error"   => nameof(LogEventLevel.Error),
-    "fatal"   => nameof(LogEventLevel.Fatal),
-    _         => nameof(LogEventLevel.Information)
+    "trace"   => LogEventLevel.Verbose,
+    "debug"   => LogEventLevel.Debug,
+    "notice"  => LogEventLevel.Information,
+    "info"    => LogEventLevel.Information,
+    "warning" => LogEventLevel.Warning,
+    "error"   => LogEventLevel.Error,
+    "fatal"   => LogEventLevel.Fatal,
+    _         => LogEventLevel.Information
 };
 
+// Configured in code — not via ReadFrom.Configuration — because the HA supervisor container
+// denies directory listing on /app, which Serilog.Settings.Configuration scans for sink DLLs.
 builder.Host.UseSerilog((ctx, _, config) =>
-    config.ReadFrom.Configuration(ctx.Configuration)
-          .Enrich.FromLogContext());
+{
+    var isDev = ctx.HostingEnvironment.IsDevelopment();
+    var template = isDev
+        ? "{Timestamp:HH:mm:ss} {Level:u3}: {SourceContext}[{EventId:0}] {Message}{NewLine}{Exception}"
+        : "{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}: {SourceContext}[{EventId:0}] {Message}{NewLine}{Exception}";
+
+    config
+        .MinimumLevel.Is(serilogLevel)
+        .MinimumLevel.Override("Microsoft.AspNetCore",             LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.AspNetCore.DataProtection", LogEventLevel.Error)
+        .MinimumLevel.Override("Microsoft.Hosting.Lifetime",      LogEventLevel.Information)
+        .Enrich.FromLogContext()
+        .WriteTo.Console(outputTemplate: template);
+
+    if (isDev)
+        config.WriteTo.Debug();
+});
 
 var app = builder.Build();
 

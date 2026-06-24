@@ -4,6 +4,17 @@
   "machineTranslated": false,
   "releases": [
     {
+      "version": "1.6.4",
+      "date": "2026-06-24",
+      "issues": [],
+      "highlights": [
+        "Internal improvements — no user-facing changes."
+      ],
+      "fixed": [
+        "HA add-on crashed at startup with UnauthorizedAccessException after upgrading to v1.6.3 — Serilog attempted to scan the /app directory for sink assemblies, which the HA supervisor container does not permit"
+      ]
+    },
+    {
       "version": "1.6.3",
       "date": "2026-06-23",
       "issues": [100],

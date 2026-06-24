@@ -11,6 +11,17 @@
   },
   "releases": [
     {
+      "version": "1.6.4",
+      "date": "2026-06-24",
+      "issues": [],
+      "highlights": [
+        "Interne verbeteringen — geen gebruikersgerichte wijzigingen."
+      ],
+      "fixed": [
+        "De HA add-on crashte bij opstarten met UnauthorizedAccessException na upgrade naar v1.6.3 — Serilog probeerde de map /app te scannen op sink-assemblies, wat de HA supervisor-container niet toestaat"
+      ]
+    },
+    {
       "version": "1.6.3",
       "date": "2026-06-23",
       "issues": [100],

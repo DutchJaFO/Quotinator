@@ -163,6 +163,20 @@ Routes/        → Quotinator.Constants.Routes     (ApiRoutes, RouteExtensions)
 
 Any use of bare `new` for a type that could reasonably be registered must have a comment explaining why DI was not used.
 
+### Serilog — programmatic configuration
+
+Serilog is configured entirely in code via `builder.Host.UseSerilog((ctx, _, config) => { ... })` in `Program.cs`. **Do not switch to `ReadFrom.Configuration`** (which reads sink names from `appsettings.json` and uses `DllScanningAssemblyFinder` to locate the corresponding DLL in the app directory).
+
+**Why:** The HA supervisor container sets the `/app` directory as read-only. `DllScanningAssemblyFinder` calls `Directory.GetFiles("/app", ...)`, which throws `UnauthorizedAccessException` and crashes the add-on before it starts. Programmatic configuration has no filesystem scan — sinks are referenced as compiled code, not discovered at runtime.
+
+**Two templates, chosen in code:**
+- Development: `{Timestamp:HH:mm:ss} {Level:u3}: ...` (time only, + Debug sink)
+- Production: `{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}: ...` (full timestamp)
+
+The `{Message}` token in the output template preserves embedded newlines, which is why the closing startup banner renders as a proper multi-line block in the HA supervisor log. This is the primary reason Quotinator uses Serilog rather than the default Microsoft console formatter.
+
+**HA log level mapping** lives alongside the `UseSerilog` call in `Program.cs`. HA uses string level names (`trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`) that are mapped to `LogEventLevel` values before the logger is built. The mapping must stay in code — it cannot be driven from `appsettings.json` without reintroducing `ReadFrom.Configuration`.
+
 ### Why Quotinator.Api hosts the Blazor UI
 
 The Web and API were merged into a single project so that Quotinator ships as one container. This is required for the Home Assistant add-on (the HA supervisor runs single-container add-ons) and simplifies all deployment scenarios. The Blazor UI and REST endpoints share one process, one port, and one image.
