@@ -119,8 +119,11 @@ When a new issue is identified during an active milestone session — whether it
 1. **Decide the milestone** — ask the user which milestone the new issue belongs to. Do not assume it belongs to the current milestone. Present the options and wait for an explicit decision.
 2. **Decide the branch** — if the issue belongs to the current milestone, it will be worked on the current feature branch. If it belongs to a different milestone, note it and leave it for that milestone's feature branch.
 3. **Never file without a milestone** — an issue with no milestone is invisible to planning. Always assign one before creating.
+4. **No feature milestone? Use v1.7.0** — while the v1.7.0 milestone is open, it is the catch-all for bugs and minor improvements that do not belong to a feature milestone. Assign the issue there rather than leaving it unlinked. When v1.7.0 closes (all its issues resolved), a v1.7.0 release is cut and a new catch-all milestone is opened.
 
 This rule applies to all issue actions: assigning, moving, labelling. Always ask; never assume.
+
+**Release linking:** when closing an issue, confirm it is assigned to the milestone that matches the version it shipped in. If the release is already tagged and no matching milestone exists, add the issue number to the `issues` array of the corresponding entry in `changelog.en.json` (and `nl.json`, `de.json` lockstep) so the release stays traceable.
 
 ---
 

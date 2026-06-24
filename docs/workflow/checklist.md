@@ -26,6 +26,14 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 ---
 
+## Filing a new issue
+
+- [ ] Assign a milestone before saving — an issue with no milestone is invisible to planning
+- [ ] No feature milestone fits? Assign to **v1.7.0** (catch-all for bugs and minor improvements while that milestone is open)
+- [ ] Ask the user which milestone if unsure — never assume
+
+---
+
 ## Before closing an issue
 
 - [ ] Verify all blocking/related issues in the dependency map are fully closed first
@@ -41,6 +49,7 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 - [ ] No requirement is still unconfirmed — if anything is unverified, the issue stays open
 - [ ] **PR merged to `main`** — do not run `gh issue close` while still on the feature branch; the issue stays open until the merge lands
 - [ ] Confirm all changes are merged to `main` and included in a tagged release
+- [ ] Confirm the issue is assigned to the milestone matching the release version it shipped in; if missing, add its number to the `issues` array in `changelog.en.json` (+ `nl.json`, `de.json` lockstep)
 - [ ] Update the plan doc status to `Complete` (or note "no plan doc — by decision" if none exists)
 - [ ] Update the status column in `overview.md`
 - [ ] Re-verify the order of operations table — update if this issue's completion changes the correct sequence
