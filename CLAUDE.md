@@ -506,6 +506,8 @@ The `.slnx` format does **not** support nested `<Folder>` elements. Subfolders m
 
 Source: verified against [microsoft/vs-solutionpersistence](https://github.com/microsoft/vs-solutionpersistence) — their own `SolutionPersistence.slnx` uses this flat pattern.
 
+**Do not add solution folders for files that are already part of a project.** Source files (`.cs`, `.razor`, `.razor.cs`) inside a project directory are visible in Solution Explorer through the project node — listing them again in a `<Folder>` creates a name collision between the folder path and the project's unique identifier and causes the "Solution Folder with the same unique identifier already exists" error. Only use `<Folder>` entries for files that live outside any project (docs, scripts, schemas, config).
+
 Current folders and their contents:
 - `/Solution Items/` — `CLAUDE.md`, `README.md`, `SOURCES.md`, `CHANGELOG.md`
 - `/addon/` — all Home Assistant add-on files (`config.yaml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `icon.png`, `logo.png`)
