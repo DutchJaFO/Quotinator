@@ -32,10 +32,18 @@ Version:        1.x.x
 
 Everything between the two banners is diagnostic or informational.
 
-**Why `Console.WriteLine` for banners?**
-The systemd / HA supervisor log formatter collapses `logger.LogInformation` multi-line strings
-to a single line. `Console.WriteLine` bypasses the formatter and preserves newlines.
-Individual single-line structured messages must still use `logger.LogInformation`.
+**Why Serilog instead of the default Microsoft console formatter?**
+Both banners are emitted by `StartupSummaryLogger` via `logger.LogInformation`. The default
+Microsoft console formatter collapses multi-line `LogInformation` strings to a single line in
+the HA supervisor log. Serilog's output template uses the `{Message}` token, which preserves
+embedded newlines — so the full multi-line block appears correctly in the log.
+
+`Console.WriteLine` is no longer used anywhere in the codebase. All output goes through
+`logger.LogInformation` via Serilog.
+
+See `CLAUDE.md → Serilog — programmatic configuration` for the configuration constraints.
+
+Individual single-line structured messages must use `logger.LogInformation`.
 
 ---
 

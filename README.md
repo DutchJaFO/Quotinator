@@ -24,21 +24,28 @@ A self-hosted quote REST API with MCP support, built in C# / ASP.NET Core, deplo
 Quotinator/
 ├── src/
 │   ├── Quotinator.Api/          # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
+│   ├── Quotinator.Changelog/    # Changelog library — models, schema validation, formatters
 │   ├── Quotinator.Core/         # Models, interfaces, service implementations, SQLite services
 │   ├── Quotinator.Data/         # SQLite infrastructure — connection factory, type handlers, base types
 │   └── Quotinator.Constants/    # Route strings, tag names, error message keys (no dependencies)
 ├── tests/
+│   ├── Quotinator.Api.Tests/    # Endpoint integration tests (WebApplicationFactory)
+│   ├── Quotinator.Changelog.Tests/ # Changelog schema and generation tests
 │   ├── Quotinator.Core.Tests/   # Unit tests for core logic and input validation
-│   └── Quotinator.Api.Tests/    # Endpoint integration tests (WebApplicationFactory)
+│   └── Quotinator.Data.Tests/   # SQLite integration tests for seeder and migrations
 ├── addon/                       # Home Assistant add-on manifest, config, and translations
 ├── data/
 │   └── sources/                 # Bundled source files (one JSON per dataset) + manifest
 ├── docker/
 │   ├── Dockerfile
 │   └── docker-compose.yml
+├── docs/                        # Architecture decisions, workflow, security, and reference docs
 ├── schemas/                     # JSON Schema files for source file validation and editor IntelliSense
 ├── scripts/
-│   └── seed.csx                 # Per-source seed script
+│   ├── seed.csx                 # Per-source seed script
+│   ├── changelog.csx            # Changelog markdown generator (keepachangelog + HA add-on formats)
+│   ├── changelog-import.csx     # Import tool for adding new changelog entries
+│   └── changelog-upgrade.csx   # Schema upgrade tool for changelog format migrations
 ├── SOURCES.md                   # Attribution for seed data sources
 ├── CLAUDE.md                    # AI assistant context (read this first)
 └── README.md
@@ -54,7 +61,7 @@ Quotinator/
 | API | ASP.NET Core Minimal API |
 | Frontend | Blazor Server |
 | Data | SQLite (Dapper — no EF Core) |
-| Logging | Serilog |
+| Logging | Serilog (programmatic configuration — HA container compatible) |
 | Protocol | REST (MCP planned) |
 | Container | Docker (linux/amd64 + linux/arm64) |
 | Auth | API key required for admin endpoints; quote endpoints are public |

@@ -11,6 +11,17 @@
   },
   "releases": [
     {
+      "version": "1.6.4",
+      "date": "2026-06-24",
+      "issues": [],
+      "highlights": [
+        "Interne Verbesserungen — keine benutzersichtbaren Änderungen."
+      ],
+      "fixed": [
+        "Das HA Add-on stürzte beim Start mit UnauthorizedAccessException ab nach dem Upgrade auf v1.6.3 — Serilog versuchte das Verzeichnis /app nach Sink-Assemblies zu durchsuchen, was der HA-Supervisor-Container nicht erlaubt"
+      ]
+    },
+    {
       "version": "1.6.3",
       "date": "2026-06-23",
       "issues": [100],
