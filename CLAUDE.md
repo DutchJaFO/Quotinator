@@ -77,35 +77,10 @@ Quotes come from **films, television, books, and famous people**. All quotes are
 
 ## Current Development Phase
 
-**Phase: v1 — COMPLETE (tagged 1.0.0)**
+Active milestones, open issues, and development priorities are tracked in GitHub — not here. This section is intentionally brief to avoid going stale.
 
-v1 phase gates — all done:
-- [x] `data/quotes.json` seeded and deduplicated from both source datasets (780 quotes)
-- [x] REST read endpoints working (`/random`, `/random?n=`, `/`, `/{id}`, `/search`)
-- [x] `/api/v1/health` endpoint
-- [x] Docker image builds and runs correctly on amd64 and arm64
-
-**Phase: v2 — SQLite backend — COMPLETE (tagged 1.0.12)**
-
-v2 phase gates — all done:
-- [x] SQLite database created at startup with the correct schema (Dapper + `Microsoft.Data.Sqlite`; EF Core not used)
-- [x] Migration from `data/quotes.json` → SQLite on first run
-- [x] `IQuoteService` implementation backed by SQLite (`SqliteQuoteService`)
-- [x] All v1 read endpoints behave identically to v1 flat-file (all tests pass)
-- [x] Docker volume at `/app/data` persists the `.db` file across restarts
-- [x] `data/*.db` excluded from `.gitignore`
-- [x] `Quotinator.Data` project extracted with reusable infrastructure (`RecordBase`, `SafeValue<T>`, type handlers, connection factory)
-- [x] Database startup logging (schema, seeding, stats)
-
-**Phase: v3 — Blazor management UI (next)**
-
-Focus: a Blazor Server management interface for viewing and editing quotes. Requires write endpoints and authentication design first.
-
-Phase gates:
-- [ ] Auth design decided (local user accounts, API key, or HA token)
-- [ ] Write endpoints (`POST /quotes`, `PUT /quotes/{id}`, `DELETE /quotes/{id}`)
-- [ ] Blazor pages: quote list, quote detail/edit, add quote form
-- [ ] Input validation and error display in UI
+- **Milestones:** https://github.com/DutchJaFO/Quotinator/milestones
+- **Issues:** https://github.com/DutchJaFO/Quotinator/issues
 
 ---
 
@@ -125,16 +100,27 @@ Phase gates:
 
 ### Project structure
 ```
-src/Quotinator.Constants/ # Route strings, tag names, error message keys — no dependencies
-src/Quotinator.Core/      # Models, interfaces, all service implementations
-src/Quotinator.Api/       # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
+src/
+  Quotinator.Constants/   # Route strings, tag names, error message keys — no dependencies
+  Quotinator.Core/        # Models, interfaces, all service implementations
+  Quotinator.Data/        # SQLite infrastructure — Dapper, connection factory, type handlers, migrations
+  Quotinator.Changelog/   # Changelog schema, models, and generator logic
+  Quotinator.Api/         # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
+tests/
+  Quotinator.Api.Tests/          # Endpoint integration tests (WebApplicationFactory)
+  Quotinator.Changelog.Tests/    # Changelog schema and generation tests
+  Quotinator.Core.Tests/         # Unit and service tests
+  Quotinator.Data.Tests/         # SQLite integration tests (real DB, no fakes)
 data/sources/             # Bundled source files (one JSON per dataset) + manifest
-scripts/seed.csx          # Per-source seed script (dotnet-script)
+docs/                     # Workflow guides, testing policy, CVE docs, milestone plans
+scripts/
+  seed.csx                # Per-source seed script (dotnet-script)
+  changelog.csx           # Changelog markdown generator
 docker/Dockerfile         # Multi-stage build, targets linux/amd64 + linux/arm64
 addon/                    # Home Assistant add-on manifest and assets
 ```
 
-Dependency direction: `Quotinator.Api` → `Quotinator.Core` → (no deps); `Quotinator.Api` → `Quotinator.Constants` (no deps). Core does not reference Constants.
+Dependency direction: `Quotinator.Api` → `Quotinator.Core` → (no deps); `Quotinator.Api` → `Quotinator.Constants` (no deps); `Quotinator.Api` → `Quotinator.Data`; `Quotinator.Core` → `Quotinator.Data`. Core does not reference Constants.
 
 ### File placement rule
 
@@ -459,18 +445,36 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `README.md` | Public-facing project documentation and roadmap |
 | `CLAUDE.md` | This file — AI assistant context |
 | `SOURCES.md` | Attribution for seed data |
+| `CHANGELOG.md` | Generated changelog — do not edit directly |
+| `Directory.Build.props` | Shared version number (`<Version>`) — only file to update when bumping |
+| `Quotinator.slnx` | Visual Studio solution — all non-generated files must be listed here |
 | `data/sources/` | Bundled source files — one JSON per dataset + `manifest.json` |
 | `data/sources/quotinator-curated.json` | Manually verified curated entries |
+| `schemas/source-flat.schema.json` | Machine-readable quote schema |
+| `schemas/changelog.schema.json` | Machine-readable changelog schema — read before writing changelog entries |
 | `scripts/seed.csx` | Per-source seed script — writes one file per source, manifest only when missing |
+| `scripts/changelog.csx` | Changelog markdown generator — run after editing `changelog.en.json` |
 | `src/Quotinator.Api/Program.cs` | API entry point |
+| `src/Quotinator.Api/resources/changelog.en.json` | Changelog source of truth — edit this, never the generated `.md` files |
+| `src/Quotinator.Api/resources/changelog.nl.json` | Dutch changelog (lockstep with `en.json`) |
+| `src/Quotinator.Api/resources/changelog.de.json` | German changelog (lockstep with `en.json`) |
+| `src/Quotinator.Api/i18ntext/UI.en-GB.json` | English UI string baseline — source of truth for all UI keys |
 | `src/Quotinator.Core/Models/Quote.cs` | Canonical Quote model |
 | `src/Quotinator.Core/Models/QuoteTranslation.cs` | Translation entry model |
 | `src/Quotinator.Core/Models/QuoteResponse.cs` | API response DTO |
+| `src/Quotinator.Core/Data/Sql.cs` | All SQL query strings — never write SQL inline outside this file |
+| `src/Quotinator.Data/Database/DatabaseInitializer.cs` | SQLite schema + numbered migrations |
+| `addon/config.yaml` | HA add-on manifest — version, options, schema, port config |
+| `addon/CHANGELOG.md` | Generated HA add-on changelog — do not edit directly |
 | `docker/Dockerfile` | Container build |
 | `docs/docker.md` | Docker build notes, Blazor static web assets caveat, port configuration |
-| `.gitignore` | Must exclude `appsettings.local.json`, `.env`, and `data/*.db` |
-| `docs/security/README.md` | Summary of all known CVEs and their current status across all projects |
+| `docs/testing-policy.md` | Testing standards — test project pairing, CVE folder rule, parallel execution |
+| `docs/workflow/process.md` | Milestone workflow — starting, executing, closing, living and maintenance milestones |
+| `docs/workflow/checklist.md` | Issue filing, session-start, issue-closing, and milestone-close checklists |
 | `docs/workflow/cve.md` | CVE handling workflow; template is at `docs/workflow/cve-template.md` |
+| `docs/security/README.md` | Summary of all known CVEs and their current status across all projects |
+| `docs/milestones/` | Per-milestone overview and per-issue plan docs |
+| `.gitignore` | Must exclude `appsettings.local.json`, `.env`, and `data/*.db` |
 | `src/[project]/CVE/` | Per-project CVE tracking — `CVE-YYYY-NNNNN.md` per alert; closed CVEs in `CVE/archived/` |
 
 ---
@@ -627,14 +631,3 @@ The closing comment posted on the GitHub issue must reproduce this same table (n
 
 **Deployment-only issues** — anything involving HA ingress routing, supervisor log output, add-on config panel, or container restart behaviour must be classified as deployment-verified and added to the memory checklist before the release.
 
----
-
-## Next Milestone: v3 — Blazor Management UI
-
-Starting point for the next development session.
-
-- Auth design must come first — decide between local user accounts, API key, or HA token before writing any write endpoint
-- Write endpoints (`POST`, `PUT`, `DELETE` on `/api/v1/quotes`) with full input validation and SQL injection protection (parameterised queries already required by architecture policy)
-- Blazor pages: quote list, quote detail/edit, add quote form
-- `IQuoteService` will need write methods — extend the interface when auth design is settled
-- Existing read endpoints and tests must remain unchanged
