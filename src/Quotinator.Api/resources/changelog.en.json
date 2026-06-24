@@ -3,9 +3,13 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [],
+    "issues": [93, 94, 104],
     "changed": [
-      "Workflow documentation: added rule that issues must be linked to the release/milestone they shipped in — update docs/workflow/checklist.md and docs/workflow/process.md"
+      "Workflow: issue closing checklist now requires a changelog entry (unreleased section) as part of closing — not deferred to release time",
+      "Workflow: release issue-list rule added — every release entry tracing back to an issue must carry the issue number, including hotfix releases",
+      "Workflow: new issue filing checklist added — milestone must be assigned before saving; v1.7.0 is the catch-all while open",
+      "Workflow: living milestone model defined — time-boxed cycles (~30 days); Developer Documentation milestone (#16) updated with due date and cycle description",
+      "Testing policy: all four test projects documented; paired test project rule added; CVE folder creation rule added; [AssemblyInitialize] global state rule generalised beyond Dapper"
     ]
   },
   "releases": [

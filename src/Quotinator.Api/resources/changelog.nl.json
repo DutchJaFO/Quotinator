@@ -10,9 +10,13 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [],
+    "issues": [93, 94, 104],
     "changed": [
-      "Workflowdocumentatie: regel toegevoegd dat issues gekoppeld moeten zijn aan de release/milestone waarin ze zijn uitgebracht — docs/workflow/checklist.md en docs/workflow/process.md bijwerken"
+      "Workflow: afsluitchecklist vereist nu een changelogvermelding (unreleased-sectie) bij het sluiten van een issue — niet uitgesteld tot releasetijd",
+      "Workflow: release issue-lijstregel toegevoegd — elke release-vermelding die teruggaat naar een issue moet het issuenummer bevatten, inclusief hotfix-releases",
+      "Workflow: nieuwe checklist voor het aanmaken van issues — milestone moet worden toegewezen voor opslaan; v1.7.0 is de standaard zolang die open staat",
+      "Workflow: levend-milestone-model gedefinieerd — tijdgebonden cycli (~30 dagen); Developer Documentation milestone (#16) bijgewerkt met einddatum en cyclusbeschrijving",
+      "Testbeleid: alle vier testprojecten gedocumenteerd; gekoppeld testprojectregel toegevoegd; CVE-mapregel toegevoegd; [AssemblyInitialize] globale-toestandsregel uitgebreid voorbij Dapper"
     ]
   },
   "releases": [

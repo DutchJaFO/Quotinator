@@ -232,3 +232,24 @@ A milestone is closed only when all issues are resolved or explicitly closed wit
    ```
    gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed
    ```
+
+---
+
+## Living milestones
+
+A living milestone has no fixed scope endpoint — issues are added continuously as gaps are found during other milestone work. The **Developer Documentation** milestone (#16) is the current example.
+
+**Time-boxed cycle model:**
+
+- Each cycle runs for approximately 30 days, or until all open issues in the milestone are resolved — whichever comes first.
+- At cycle start: set a due date on the milestone:
+  ```
+  gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f due_on="YYYY-MM-DDT00:00:00Z"
+  ```
+- At cycle end — **if at least one issue was closed during the cycle:** close the milestone and open a new one (e.g. "Developer Documentation — Cycle 2"). Reassign any remaining open issues to the new milestone. Update the new milestone's description to note the cycle number and start date.
+- At cycle end — **if zero issues were closed:** extend the due date by another 30 days. A cycle with no progress produces no useful boundary — do not close and reopen just to reset the clock.
+
+The closing gate for a living milestone is:
+> Due date reached **and** at least one issue closed this cycle — OR — all current open issues resolved.
+
+Do not apply the standard "all issues resolved" gate to living milestones.
