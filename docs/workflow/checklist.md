@@ -29,7 +29,7 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 ## Filing a new issue
 
 - [ ] Assign a milestone before saving — an issue with no milestone is invisible to planning
-- [ ] No feature milestone fits? Assign to **v1.7.0** (catch-all for bugs and minor improvements while that milestone is open)
+- [ ] No feature milestone fits? Assign to the **current maintenance milestone** (v1.7.0 while it is open) — see `process.md → Maintenance milestone` for rules on when it gets replaced
 - [ ] Ask the user which milestone if unsure — never assume
 
 ---

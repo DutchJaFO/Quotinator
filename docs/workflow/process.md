@@ -119,7 +119,7 @@ When a new issue is identified during an active milestone session — whether it
 1. **Decide the milestone** — ask the user which milestone the new issue belongs to. Do not assume it belongs to the current milestone. Present the options and wait for an explicit decision.
 2. **Decide the branch** — if the issue belongs to the current milestone, it will be worked on the current feature branch. If it belongs to a different milestone, note it and leave it for that milestone's feature branch.
 3. **Never file without a milestone** — an issue with no milestone is invisible to planning. Always assign one before creating.
-4. **No feature milestone? Use v1.7.0** — while the v1.7.0 milestone is open, it is the catch-all for bugs and minor improvements that do not belong to a feature milestone. Assign the issue there rather than leaving it unlinked. When v1.7.0 closes (all its issues resolved), a v1.7.0 release is cut and a new catch-all milestone is opened.
+4. **No feature milestone? Use the current maintenance milestone** — the maintenance milestone (currently v1.7.0) is the catch-all for bugs and minor improvements that do not belong to a feature milestone. See *Maintenance milestone* below for the full rules.
 
 This rule applies to all issue actions: assigning, moving, labelling. Always ask; never assume.
 
@@ -232,6 +232,35 @@ A milestone is closed only when all issues are resolved or explicitly closed wit
    ```
    gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed
    ```
+
+---
+
+## Maintenance milestone
+
+There is always exactly **one** open maintenance milestone at a time. It is the catch-all for bugs and minor improvements that do not belong to a feature milestone.
+
+**Current maintenance milestone:** v1.7.0 — issues here are expected to release as v1.7.x patch versions.
+
+### Rules
+
+**When creating the milestone**, define the expected version range in the milestone title and description (e.g., "v1.7.0 — bugs and minor improvements, targeting v1.7.x releases").
+
+**When to replace the maintenance milestone** — three triggers, all require the same action (open a new maintenance milestone, move all open issues there, close the old one):
+
+1. **All issues closed and shipped** — every issue in the current milestone has been released. Open a new maintenance milestone for the next version (e.g., v1.7.0 → v1.8.0).
+
+2. **An issue requires a version outside the current range** — if an issue added to the maintenance milestone would require a version bump beyond the current range (e.g., a breaking change needing v2.0.0 while the maintenance milestone targets v1.7.x), create a separate milestone for it, move the issue there, and if the remaining issues in the maintenance milestone are all within range, it stays open.
+
+3. **A feature milestone release pushes the version outside the range** — if a feature milestone ships and its release version is higher than the maintenance milestone's range (e.g., a feature milestone releases as v2.0.0 while the maintenance milestone is v1.7.0 targeting v1.7.x), the maintenance milestone can no longer accept new issues at the old version range. Open a new maintenance milestone at the next patch of the new version (e.g., v2.1.0), move all open issues there, and close the old maintenance milestone.
+
+### Checklist when replacing the maintenance milestone
+
+1. Open the new milestone on GitHub with a title and description that names the version range
+2. Move all open issues from the old milestone to the new one: `gh issue edit <N> --milestone "<new>"`
+3. Close the old milestone: `gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed`
+4. Update `docs/workflow/process.md` — change "Current maintenance milestone" above to the new one
+5. Update `checklist.md` — change the maintenance milestone reference in "Filing a new issue"
+6. Update the memory entry `project_milestone_naming.md`
 
 ---
 
