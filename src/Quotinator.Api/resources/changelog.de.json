@@ -9,17 +9,23 @@
     "fixed": "Behoben",
     "removed": "Entfernt"
   },
-  "unreleased": {
-    "issues": [93, 94, 104],
-    "changed": [
-      "Workflow: Abschluss-Checkliste erfordert jetzt einen Changelog-Eintrag (unreleased-Abschnitt) beim Schließen eines Issues — nicht auf den Release-Zeitpunkt verschoben",
-      "Workflow: Release-Issue-Listenregel hinzugefügt — jeder Release-Eintrag, der auf ein Issue zurückgeht, muss die Issue-Nummer enthalten, einschließlich Hotfix-Releases",
-      "Workflow: Neue Checkliste zum Anlegen von Issues — Meilenstein muss vor dem Speichern zugewiesen werden; v1.7.0 ist der Standard solange offen",
-      "Workflow: Lebendes-Meilenstein-Modell definiert — zeitgebundene Zyklen (~30 Tage); Developer Documentation Meilenstein (#16) mit Fälligkeitsdatum und Zyklus-Beschreibung aktualisiert",
-      "Testrichtlinie: alle vier Testprojekte dokumentiert; Regel für gekoppelte Testprojekte hinzugefügt; CVE-Ordner-Erstellungsregel hinzugefügt; [AssemblyInitialize]-Regel für globalen Zustand über Dapper hinaus verallgemeinert"
-    ]
-  },
   "releases": [
+    {
+      "version": "1.6.5",
+      "date": "2026-06-24",
+      "issues": [93, 94, 104],
+      "highlights": [
+        "Interne Verbesserungen — keine benutzersichtbaren Änderungen."
+      ],
+      "changed": [
+        "Workflow: Abschluss-Checkliste erfordert jetzt einen Changelog-Eintrag (unreleased-Abschnitt) beim Schließen eines Issues — nicht auf den Release-Zeitpunkt verschoben",
+        "Workflow: Release-Issue-Listenregel hinzugefügt — jeder Release-Eintrag, der auf ein Issue zurückgeht, muss die Issue-Nummer enthalten, einschließlich Hotfix-Releases",
+        "Workflow: Neue Checkliste zum Anlegen von Issues — Meilenstein muss vor dem Speichern zugewiesen werden; v1.7.0 ist der Standard solange offen",
+        "Workflow: Lebendes-Meilenstein-Modell definiert — zeitgebundene Zyklen (~30 Tage); Developer Documentation Meilenstein (#16) mit Fälligkeitsdatum und Zyklus-Beschreibung aktualisiert",
+        "Testrichtlinie: alle vier Testprojekte dokumentiert; Regel für gekoppelte Testprojekte hinzugefügt; CVE-Ordner-Erstellungsregel hinzugefügt; [AssemblyInitialize]-Regel für globalen Zustand über Dapper hinaus verallgemeinert",
+        "CLAUDE.md: veraltete Entwicklungsphase und Nächste-Meilenstein-Abschnitte entfernt; Projektstruktur und Schlüsseldateien auf den aktuellen Stand gebracht"
+      ]
+    },
     {
       "version": "1.6.4",
       "date": "2026-06-24",

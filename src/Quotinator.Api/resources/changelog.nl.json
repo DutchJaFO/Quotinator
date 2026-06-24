@@ -9,17 +9,23 @@
     "fixed": "Opgelost",
     "removed": "Verwijderd"
   },
-  "unreleased": {
-    "issues": [93, 94, 104],
-    "changed": [
-      "Workflow: afsluitchecklist vereist nu een changelogvermelding (unreleased-sectie) bij het sluiten van een issue — niet uitgesteld tot releasetijd",
-      "Workflow: release issue-lijstregel toegevoegd — elke release-vermelding die teruggaat naar een issue moet het issuenummer bevatten, inclusief hotfix-releases",
-      "Workflow: nieuwe checklist voor het aanmaken van issues — milestone moet worden toegewezen voor opslaan; v1.7.0 is de standaard zolang die open staat",
-      "Workflow: levend-milestone-model gedefinieerd — tijdgebonden cycli (~30 dagen); Developer Documentation milestone (#16) bijgewerkt met einddatum en cyclusbeschrijving",
-      "Testbeleid: alle vier testprojecten gedocumenteerd; gekoppeld testprojectregel toegevoegd; CVE-mapregel toegevoegd; [AssemblyInitialize] globale-toestandsregel uitgebreid voorbij Dapper"
-    ]
-  },
   "releases": [
+    {
+      "version": "1.6.5",
+      "date": "2026-06-24",
+      "issues": [93, 94, 104],
+      "highlights": [
+        "Interne verbeteringen — geen gebruikersgerichte wijzigingen."
+      ],
+      "changed": [
+        "Workflow: afsluitchecklist vereist nu een changelogvermelding (unreleased-sectie) bij het sluiten van een issue — niet uitgesteld tot releasetijd",
+        "Workflow: release issue-lijstregel toegevoegd — elke release-vermelding die teruggaat naar een issue moet het issuenummer bevatten, inclusief hotfix-releases",
+        "Workflow: nieuwe checklist voor het aanmaken van issues — milestone moet worden toegewezen voor opslaan; v1.7.0 is de standaard zolang die open staat",
+        "Workflow: levend-milestone-model gedefinieerd — tijdgebonden cycli (~30 dagen); Developer Documentation milestone (#16) bijgewerkt met einddatum en cyclusbeschrijving",
+        "Testbeleid: alle vier testprojecten gedocumenteerd; gekoppeld testprojectregel toegevoegd; CVE-mapregel toegevoegd; [AssemblyInitialize] globale-toestandsregel uitgebreid voorbij Dapper",
+        "CLAUDE.md: verouderde ontwikkelingsfase- en volgende-milestonesecties verwijderd; projectstructuur en sleutelbestanden bijgewerkt naar de huidige codebase"
+      ]
+    },
     {
       "version": "1.6.4",
       "date": "2026-06-24",
