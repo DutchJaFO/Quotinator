@@ -1,10 +1,25 @@
-##### *GENERATED FILE [2026-06-24 04:06 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-24 18:34 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.6.5] - 2026-06-24
+
+### Highlights
+- Internal improvements — no user-facing changes.
+
+### Changed
+- Workflow: issue closing checklist now requires a changelog entry (unreleased section) as part of closing — not deferred to release time
+- Workflow: release issue-list rule added — every release entry tracing back to an issue must carry the issue number, including hotfix releases
+- Workflow: new issue filing checklist added — milestone must be assigned before saving; v1.7.0 is the catch-all while open
+- Workflow: living milestone model defined — time-boxed cycles (~30 days); Developer Documentation milestone (#16) updated with due date and cycle description
+- Testing policy: all four test projects documented; paired test project rule added; CVE folder creation rule added; [AssemblyInitialize] global state rule generalised beyond Dapper
+- CLAUDE.md: removed stale development phase and next-milestone sections; updated project structure and key files to reflect current codebase
 
 ---
 
@@ -590,6 +605,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
+[1.6.5]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.1...v1.6.2
