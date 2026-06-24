@@ -583,8 +583,14 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    curl -s http://localhost:8080/api/v1/health
    curl -s http://localhost:8080/api/v1/version
    curl -s http://localhost:8080/api/v1/quotes/random
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=love"
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=Casablanca&field=source"
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=Churchill&field=author"
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=Rick&field=character"
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=love&type=person"
    ```
    Check that `/version` returns the expected version number — a missing `Directory.Build.props` in the build context silently produces `1.0.0` while `/health` still returns healthy.
+   The search queries cover: default full-text (`love` should return results), `field=source` (`Casablanca` should return results), and `field=author`, `field=character`, `type=person` — these three may return an empty `items` array with a `message` when the bundled dataset has no matching data; that is expected behaviour, not a bug.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
