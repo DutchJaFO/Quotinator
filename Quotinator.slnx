@@ -141,6 +141,7 @@
     <File Path="docs/milestones/v1-7-0/77-many-to-many-plan.md" />
     <File Path="docs/milestones/v1-7-0/109-search-bugs-plan.md" />
     <File Path="docs/milestones/v1-7-0/111-flaky-test-plan.md" />
+    <File Path="docs/milestones/v1-7-0/115-dapper-core-refactor-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

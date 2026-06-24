@@ -2,7 +2,7 @@
 
 **Issue:** https://github.com/DutchJaFO/Quotinator/issues/111  
 **Milestone:** v1.7.0  
-**Status:** ✅ Complete
+**Status:** 🟡 Blocked by [#115](https://github.com/DutchJaFO/Quotinator/issues/115)
 
 ---
 
@@ -50,3 +50,4 @@ The red step was not completed before applying the fix — the fix was identifie
 | 4 | ✅ | `Quotinator.Core.Tests` passes 200/200 | Live | `dotnet test tests/Quotinator.Core.Tests --configuration Release` — 200 passed, 0 failed |
 | 5 | ✅ | Full suite stable under repeated runs | Live | 5 consecutive full-suite runs — 398/398 passed on every run |
 | 6 | ✅ | Build clean | Live | `dotnet build --configuration Release` — 0 warnings, 0 errors |
+| 7 | ❌ | All Dapper-related test files moved to `Quotinator.Data.Tests`; no remaining parallel patterns | Blocked | Requires [#115](https://github.com/DutchJaFO/Quotinator/issues/115) — `DatabaseInitializerTests`, `ImportBatchesTests`, `DapperSetupTests` move to Data.Tests; re-verify suite stability after move |
