@@ -125,6 +125,23 @@
     <File Path="docs/milestones/changelog-handling/82-plan.md" />
     <File Path="docs/milestones/changelog-handling/handover.md" />
   </Folder>
+  <Folder Name="/docs/milestones/developer-documentation/">
+    <File Path="docs/milestones/developer-documentation/overview.md" />
+    <File Path="docs/milestones/developer-documentation/93-testing-policy-plan.md" />
+    <File Path="docs/milestones/developer-documentation/94-living-milestone-plan.md" />
+    <File Path="docs/milestones/developer-documentation/104-changelog-checklist-plan.md" />
+  </Folder>
+  <Folder Name="/docs/milestones/v1-7-0/">
+    <File Path="docs/milestones/v1-7-0/overview.md" />
+    <File Path="docs/milestones/v1-7-0/70-ci-workflow-plan.md" />
+    <File Path="docs/milestones/v1-7-0/73-audit-trail-plan.md" />
+    <File Path="docs/milestones/v1-7-0/74-read-model-query-plan.md" />
+    <File Path="docs/milestones/v1-7-0/75-master-detail-plan.md" />
+    <File Path="docs/milestones/v1-7-0/76-one-to-one-plan.md" />
+    <File Path="docs/milestones/v1-7-0/77-many-to-many-plan.md" />
+    <File Path="docs/milestones/v1-7-0/109-search-bugs-plan.md" />
+    <File Path="docs/milestones/v1-7-0/111-flaky-test-plan.md" />
+  </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
   </Folder>
