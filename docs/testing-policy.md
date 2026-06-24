@@ -8,13 +8,19 @@ Write unit tests for everything where it is relevant and possible. Every service
 
 ## Project structure
 
-Test projects live under `tests/`, mirroring the source project they cover:
+Every project in `src/` has a paired test project in `tests/` with the same name plus a `.Tests` suffix. This applies to infrastructure projects (`Quotinator.Data`, `Quotinator.Changelog`) exactly as it applies to feature projects. When a new `src/` project is created, its `tests/` counterpart is created in the same commit.
 
 ```
 tests/
-  Quotinator.Api.Tests/
-  Quotinator.Core.Tests/
+  Quotinator.Api.Tests/          # Endpoint integration tests (WebApplicationFactory)
+  Quotinator.Changelog.Tests/    # Changelog schema and generation tests
+  Quotinator.Core.Tests/         # Unit and service tests
+  Quotinator.Data.Tests/         # SQLite integration tests (real DB, no fakes)
 ```
+
+### CVE folder rule
+
+Both `src/Quotinator.ProjectName/CVE/` and `tests/Quotinator.ProjectName.Tests/CVE/` are created when the project is created — not when a CVE is filed. The folder must exist before it is needed. A `.gitkeep` file holds the folder until the first CVE document is added.
 
 ## What to test
 
@@ -31,8 +37,9 @@ All test projects run with `[assembly: Parallelize(Scope = ExecutionScope.Method
 **Global state must only be written once, before tests run.** The only safe place to write global state is `[AssemblyInitialize]` in `MSTestSettings.cs`. Never write global state in `[ClassInitialize]` or `[TestInitialize]` — those run in parallel and will race.
 
 **What counts as global state:**
-- `SqlMapper.AddTypeHandler(...)` — Dapper's handler dictionary is a global static; registering from multiple `[ClassInitialize]` methods causes intermittent failures under parallel execution. All Dapper type handler registrations live in `AssemblySetup.RegisterTypeHandlers` in `Quotinator.Data.Tests/MSTestSettings.cs`.
-- Any other static/singleton mutation (caches, registries, logging sinks).
+- Any static/singleton mutation: caches, registries, logging sinks, Dapper type handlers.
+- `SqlMapper.AddTypeHandler(...)` is the canonical example — Dapper's handler dictionary is a global static; registering it from multiple `[ClassInitialize]` methods causes intermittent failures under parallel execution. All Dapper type handler registrations live in `AssemblySetup.RegisterTypeHandlers` in `Quotinator.Data.Tests/MSTestSettings.cs`.
+- The same principle applies to any future global state in any test project — always centralise in `[AssemblyInitialize]`.
 
 **Each test must own its own resources.** Database tests create a temp directory and SQLite file in `[TestInitialize]` and delete them in `[TestCleanup]`. Never share a file path or connection between tests.
 

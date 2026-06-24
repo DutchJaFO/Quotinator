@@ -26,6 +26,14 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 ---
 
+## Filing a new issue
+
+- [ ] Assign a milestone before saving — an issue with no milestone is invisible to planning
+- [ ] No feature milestone fits? Assign to the **current maintenance milestone** (v1.7.0 while it is open) — see `process.md → Maintenance milestone` for rules on when it gets replaced
+- [ ] Ask the user which milestone if unsure — never assume
+
+---
+
 ## Before closing an issue
 
 - [ ] Verify all blocking/related issues in the dependency map are fully closed first
@@ -39,8 +47,10 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 - [ ] All live commands have been run and produced the expected output (green)
 - [ ] **User manual test** — user starts the app in Visual Studio and confirms it starts without error. For documentation/content issues: user reads or views every item listed in the verification table and confirms each one explicitly.
 - [ ] No requirement is still unconfirmed — if anything is unverified, the issue stays open
+- [ ] **Changelog updated** — add the issue number to `unreleased.issues` in `changelog.en.json`; add at least one entry to `added`, `changed`, or `fixed`; add a `highlights` entry if the change is user-facing; update `nl.json` and `de.json` lockstep; regenerate `CHANGELOG.md` and `addon/CHANGELOG.md` via `scripts/changelog.csx`. This is part of closing — not a separate PR.
 - [ ] **PR merged to `main`** — do not run `gh issue close` while still on the feature branch; the issue stays open until the merge lands
 - [ ] Confirm all changes are merged to `main` and included in a tagged release
+- [ ] **Release issue-list** — every release entry whose work traces back to this issue must carry the issue number in its `issues[]` array, including hotfix releases. If a release is already tagged, add the number to the matching entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep) and regenerate.
 - [ ] Update the plan doc status to `Complete` (or note "no plan doc — by decision" if none exists)
 - [ ] Update the status column in `overview.md`
 - [ ] Re-verify the order of operations table — update if this issue's completion changes the correct sequence
