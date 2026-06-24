@@ -2,6 +2,12 @@
   "language": "en",
   "sourceLanguage": "en",
   "machineTranslated": false,
+  "unreleased": {
+    "issues": [],
+    "changed": [
+      "Workflow documentation: added rule that issues must be linked to the release/milestone they shipped in — update docs/workflow/checklist.md and docs/workflow/process.md"
+    ]
+  },
   "releases": [
     {
       "version": "1.6.4",

@@ -9,6 +9,12 @@
     "fixed": "Opgelost",
     "removed": "Verwijderd"
   },
+  "unreleased": {
+    "issues": [],
+    "changed": [
+      "Workflowdocumentatie: regel toegevoegd dat issues gekoppeld moeten zijn aan de release/milestone waarin ze zijn uitgebracht — docs/workflow/checklist.md en docs/workflow/process.md bijwerken"
+    ]
+  },
   "releases": [
     {
       "version": "1.6.4",

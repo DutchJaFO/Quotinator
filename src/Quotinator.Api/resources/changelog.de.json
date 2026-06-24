@@ -9,6 +9,12 @@
     "fixed": "Behoben",
     "removed": "Entfernt"
   },
+  "unreleased": {
+    "issues": [],
+    "changed": [
+      "Workflow-Dokumentation: Regel hinzugefügt, dass Issues mit dem Release/Meilenstein verknüpft sein müssen, in dem sie ausgeliefert wurden — docs/workflow/checklist.md und docs/workflow/process.md aktualisieren"
+    ]
+  },
   "releases": [
     {
       "version": "1.6.4",
