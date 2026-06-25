@@ -1,7 +1,5 @@
 using Quotinator.Data.Helpers;
 
-[assembly: Parallelize(Scope = ExecutionScope.MethodLevel)]
-
 namespace Quotinator.Core.Tests;
 
 /// <summary>Assembly-level setup that runs once before any test in this project.</summary>
