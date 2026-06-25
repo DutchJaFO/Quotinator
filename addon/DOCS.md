@@ -26,7 +26,7 @@ The REST API is accessible in two ways:
 | `GET /api/v1/quotes/random?yearFrom=1970&yearTo=1989` | Random quote from an explicit year range |
 | `GET /api/v1/quotes` | All quotes, paginated; `type`, `genre`, `yearFrom`, `yearTo`, `year`, `decade` all supported |
 | `GET /api/v1/quotes/{id}` | Quote by UUID |
-| `GET /api/v1/quotes/search?q=term` | Search quotes; add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
+| `GET /api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/version` | Running version |
 | `GET /api/v1/admin/database/seed/preview` | Preview what a reseed would import — no data is changed (requires `X-Api-Key`) |

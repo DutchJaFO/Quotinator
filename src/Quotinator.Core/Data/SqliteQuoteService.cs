@@ -132,7 +132,7 @@ public sealed class SqliteQuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null)
+    public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
@@ -157,7 +157,14 @@ public sealed class SqliteQuoteService : IQuoteService
         p.Add("limit", limit);
 
         var rows = connection.Query<QuoteRow>(sql, p).ToList();
-        return rows.Select(r => ToResponse(r, LoadGenres(connection, r.Id), lang)).ToList();
+        var items = rows.Select(r => ToResponse(r, LoadGenres(connection, r.Id), lang)).ToList();
+
+        return new FilteredQuoteResult<QuoteResponse>
+        {
+            Status        = items.Count > 0 ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults,
+            Items         = items,
+            TotalMatching = items.Count,
+        };
     }
 
     #endregion

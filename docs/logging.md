@@ -67,6 +67,10 @@ Format: `[Subsystem - Phase] message text`
 | `[DataProtection]` | Key persistence setup |
 | `[RateLimit]` | Rate limiter configuration |
 | `[Server]` | Kestrel bind addresses, application lifetime events |
+| `[Api - Random]` | Entry to GET /api/v1/quotes/random |
+| `[Api - Search]` | Entry to GET /api/v1/quotes/search |
+| `[Api - GetById]` | Entry to GET /api/v1/quotes/{id} |
+| `[Api - GetAll]` | Entry to GET /api/v1/quotes/ |
 
 New subsystems must register a prefix in this table before their log lines land in a PR.
 

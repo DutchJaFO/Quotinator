@@ -9,6 +9,18 @@
     "fixed": "Behoben",
     "removed": "Entfernt"
   },
+  "unreleased": {
+    "issues": [109],
+    "highlights": [
+      "Die Suchfunktion erklärt jetzt, wenn keine Zitate Ihren Filtern entsprechen, anstatt stillschweigend eine leere Liste zurückzugeben."
+    ],
+    "fixed": [
+      "Der Suchendpunkt gibt jetzt einen Ergebnisumschlag zurück (status, items, totalMatching, message), konsistent mit dem /random-Endpunkt — Aufrufer können jetzt NoResults von einem leeren Ergebnis unterscheiden (Issue #109)",
+      "Der Suchendpunkt validiert jetzt type- und genre-Filterwerte und gibt den Status InvalidType oder InvalidGenre für unbekannte Werte zurück (Issue #109)",
+      "Alle Quote-API-Endpunkte geben jetzt eine Einstiegsprotokolllinie mit dem Präfix [Api - *] aus, um das Request-Tracing zu verbessern (Issue #109)",
+      "SQLite-Integrationstests für Suchanfragen über field=author und field=character hinzugefügt, einschließlich der NULL-LIKE-Datenlücken-Szenarien (Issue #109)"
+    ]
+  },
   "releases": [
     {
       "version": "1.6.5",

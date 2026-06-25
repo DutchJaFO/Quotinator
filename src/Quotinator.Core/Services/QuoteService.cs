@@ -80,10 +80,10 @@ public sealed class QuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null)
+    public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null)
     {
         var filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
-        return filtered
+        var items = filtered
             .Where(q => field switch
             {
                 "quote"     => Contains(q.QuoteText, query),
@@ -98,6 +98,13 @@ public sealed class QuoteService : IQuoteService
             .Take(limit)
             .Select(q => Localise(q, lang))
             .ToList();
+
+        return new FilteredQuoteResult<QuoteResponse>
+        {
+            Status        = items.Count > 0 ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults,
+            Items         = items,
+            TotalMatching = items.Count,
+        };
     }
 
     private static IReadOnlyList<Quote> Filter(IReadOnlyList<Quote> quotes, string[]? types, string[]? genres, int? yearFrom = null, int? yearTo = null)

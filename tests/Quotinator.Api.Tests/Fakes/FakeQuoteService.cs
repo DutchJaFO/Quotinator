@@ -132,22 +132,31 @@ internal sealed class FakeQuoteService : IQuoteService
         return new PagedResult<QuoteResponse>(items, page, pageSize, All.Count);
     }
 
-    public IReadOnlyList<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null) =>
-        All.Where(q => field switch
-            {
-                "quote"     => q.Quote.Contains(query, StringComparison.OrdinalIgnoreCase),
-                "source"    => q.Source.Contains(query, StringComparison.OrdinalIgnoreCase),
-                "character" => q.Character?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false,
-                "author"    => q.Author?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false,
-                _           => q.Quote.Contains(query, StringComparison.OrdinalIgnoreCase)
-                            || q.Source.Contains(query, StringComparison.OrdinalIgnoreCase)
-            })
-           .Where(q => types is not { Length: > 0 } || types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)))
-           .Where(q => genres is not { Length: > 0 } || q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))))
-           .Where(q => yearFrom is null || (ExtractYear(q.Date) is int y1 && y1 >= yearFrom))
-           .Where(q => yearTo   is null || (ExtractYear(q.Date) is int y2 && y2 <= yearTo))
-           .Take(limit)
-           .ToList();
+    public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null)
+    {
+        var items = All.Where(q => field switch
+                {
+                    "quote"     => q.Quote.Contains(query, StringComparison.OrdinalIgnoreCase),
+                    "source"    => q.Source.Contains(query, StringComparison.OrdinalIgnoreCase),
+                    "character" => q.Character?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false,
+                    "author"    => q.Author?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false,
+                    _           => q.Quote.Contains(query, StringComparison.OrdinalIgnoreCase)
+                                || q.Source.Contains(query, StringComparison.OrdinalIgnoreCase)
+                })
+               .Where(q => types is not { Length: > 0 } || types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)))
+               .Where(q => genres is not { Length: > 0 } || q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))))
+               .Where(q => yearFrom is null || (ExtractYear(q.Date) is int y1 && y1 >= yearFrom))
+               .Where(q => yearTo   is null || (ExtractYear(q.Date) is int y2 && y2 <= yearTo))
+               .Take(limit)
+               .ToList();
+
+        return new FilteredQuoteResult<QuoteResponse>
+        {
+            Status        = items.Count > 0 ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults,
+            Items         = items,
+            TotalMatching = items.Count,
+        };
+    }
 
     private static int? ExtractYear(string? date)
     {

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Microsoft.Extensions.Logging;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Helpers;
@@ -11,6 +12,9 @@ namespace Quotinator.Api.Endpoints;
 internal static class QuoteEndpoints
 {
     private const int MaxQueryLength = 200;
+
+    // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
+    private sealed class Log { }
 
     internal static void MapQuoteEndpoints(this WebApplication app)
     {
@@ -115,6 +119,7 @@ internal static class QuoteEndpoints
     private static IResult GetRandom(
         IQuoteService service,
         IApiLocalizer localizer,
+        ILogger<Log> logger,
         [Description("Number of quotes to return (1–100). Omit for a single random quote.")] string? n = null,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null,
         [Description("Filter by source type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
@@ -127,6 +132,8 @@ internal static class QuoteEndpoints
         [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] int? year = null,
         [Description("Shorthand for yearFrom=N&yearTo=N+9 — e.g. `1980` matches 1980–1989. Must be divisible by 10.")] int? decade = null)
     {
+        logger.LogInformation("[Api - Random] n={N} type={Type} genre={Genre} lang={Lang}", n, type, genre, lang);
+
         if (ValidateCommon(localizer, lang) is { } err) return err;
 
         var count = 1;
@@ -172,8 +179,11 @@ internal static class QuoteEndpoints
         [Description("UUID of the quote.")] string id,
         IQuoteService service,
         IApiLocalizer localizer,
+        ILogger<Log> logger,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
+        logger.LogInformation("[Api - GetById] id={Id} lang={Lang}", id, lang);
+
         if (ValidateCommon(localizer, lang) is { } err) return err;
 
         var quote = service.GetById(id, lang);
@@ -187,6 +197,7 @@ internal static class QuoteEndpoints
     private static IResult Search(
         IQuoteService service,
         IApiLocalizer localizer,
+        ILogger<Log> logger,
         [Description("Search term. Matched case-insensitively against the selected field (or all fields when `field` is omitted).")] string? q = null,
         [Description("Maximum number of results to return (1–100)."), DefaultValue(20)] string? limit = null,
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
@@ -198,6 +209,8 @@ internal static class QuoteEndpoints
         [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] int? year = null,
         [Description("Shorthand for yearFrom=N&yearTo=N+9 — e.g. `1980` matches 1980–1989. Must be divisible by 10.")] int? decade = null)
     {
+        logger.LogInformation("[Api - Search] q={Q} field={Field} limit={Limit} type={Type} lang={Lang}", q, field, limit, type, lang);
+
         if (ValidateCommon(localizer, lang, field) is { } err) return err;
 
         if (string.IsNullOrWhiteSpace(q))
@@ -216,6 +229,9 @@ internal static class QuoteEndpoints
                 detail: localizer[ApiMessages.LimitOutOfRange],
                 statusCode: StatusCodes.Status400BadRequest);
 
+        if (ValidateFilterParams(localizer, type, genre, null, null, null) is { } invalid)
+            return Results.Ok(invalid);
+
         if (decade is not null)
         {
             if (decade % 10 != 0)
@@ -232,12 +248,24 @@ internal static class QuoteEndpoints
         if (yearFrom is not null && yearTo is not null && yearFrom > yearTo)
             return Results.Problem(detail: localizer[ApiMessages.YearRangeInvalid], statusCode: StatusCodes.Status400BadRequest);
 
-        return Results.Ok(service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yearFrom, yearTo));
+        var result = service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yearFrom, yearTo);
+
+        if (result.Status == FilteredResultStatus.NoResults)
+            return Results.Ok(new FilteredQuoteResult<QuoteResponse>
+            {
+                Status        = FilteredResultStatus.NoResults,
+                Items         = [],
+                TotalMatching = 0,
+                Message       = localizer[ApiMessages.NoQuotesMatchFilters],
+            });
+
+        return Results.Ok(result);
     }
 
     private static IResult GetAll(
         IQuoteService service,
         IApiLocalizer localizer,
+        ILogger<Log> logger,
         [Description("Page number, 1-based."), DefaultValue(1)] string? page = null,
         [Description("Number of quotes per page (1–100)."), DefaultValue(20)] string? pageSize = null,
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
@@ -248,6 +276,8 @@ internal static class QuoteEndpoints
         [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] int? year = null,
         [Description("Shorthand for yearFrom=N&yearTo=N+9 — e.g. `1980` matches 1980–1989. Must be divisible by 10.")] int? decade = null)
     {
+        logger.LogInformation("[Api - GetAll] page={Page} pageSize={PageSize} type={Type} lang={Lang}", page, pageSize, type, lang);
+
         if (ValidateCommon(localizer, lang) is { } err) return err;
 
         var pageValue = 1;

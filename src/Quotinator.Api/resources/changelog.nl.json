@@ -9,6 +9,18 @@
     "fixed": "Opgelost",
     "removed": "Verwijderd"
   },
+  "unreleased": {
+    "issues": [109],
+    "highlights": [
+      "De zoekfunctie geeft nu uitleg wanneer geen citaten aan uw filters voldoen, in plaats van stilzwijgend een lege lijst te retourneren."
+    ],
+    "fixed": [
+      "Het zoekeindpunt geeft nu een resultaatomhulsel terug (status, items, totalMatching, message) consistent met het /random-eindpunt — aanroepers kunnen nu NoResults onderscheiden van een leeg resultaat (issue #109)",
+      "Het zoekeindpunt valideert nu type- en genrefilterwaarden en geeft de status InvalidType of InvalidGenre terug voor onbekende waarden (issue #109)",
+      "Alle quote-API-eindpunten geven nu een logboekregel op ingangsniveau met het voorvoegsel [Api - *] om het traceren van verzoeken te verbeteren (issue #109)",
+      "SQLite-integratietests toegevoegd voor zoekopdrachten via field=author en field=character, inclusief de NULL LIKE data-gap-scenario's (issue #109)"
+    ]
+  },
   "releases": [
     {
       "version": "1.6.5",
