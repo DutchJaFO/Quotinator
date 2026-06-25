@@ -287,17 +287,60 @@ public class QuoteEndpointsTests
 
     // ── /search ───────────────────────────────────────────────────────────
 
-    /// <summary>Matching query returns results.</summary>
+    /// <summary>Matching query returns results in the envelope with status=Ok.</summary>
     [TestMethod]
-    public async Task Search_MatchingQuery_ReturnsResults()
+    public async Task Search_MatchingQuery_ReturnsOkEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=looking");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        Assert.AreEqual(JsonValueKind.Array, items.ValueKind);
-        Assert.IsGreaterThan(0, items.GetArrayLength());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
+        Assert.AreEqual(JsonValueKind.Array, doc.GetProperty("items").ValueKind);
+        Assert.IsGreaterThan(0, doc.GetProperty("items").GetArrayLength());
+        Assert.IsTrue(doc.TryGetProperty("totalMatching", out _));
+    }
+
+    /// <summary>No matching query returns envelope with status=NoResults and a message.</summary>
+    [TestMethod]
+    public async Task Search_NoResults_ReturnsNoResultsEnvelope()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=xyzzy_no_match_ever");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual("NoResults", doc.GetProperty("status").GetString());
+        Assert.AreEqual(0, doc.GetProperty("items").GetArrayLength());
+        Assert.IsFalse(string.IsNullOrEmpty(doc.GetProperty("message").GetString()));
+    }
+
+    /// <summary>Unknown type value returns 200 envelope with status=InvalidType.</summary>
+    [TestMethod]
+    public async Task Search_UnknownType_ReturnsInvalidTypeEnvelope()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&type=cartoon");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual("InvalidType", doc.GetProperty("status").GetString());
+        Assert.AreEqual(0, doc.GetProperty("items").GetArrayLength());
+        Assert.IsFalse(string.IsNullOrEmpty(doc.GetProperty("message").GetString()));
+    }
+
+    /// <summary>Unknown genre value returns 200 envelope with status=InvalidGenre.</summary>
+    [TestMethod]
+    public async Task Search_UnknownGenre_ReturnsInvalidGenreEnvelope()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&genre=notarealgenre");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual("InvalidGenre", doc.GetProperty("status").GetString());
+        Assert.AreEqual(0, doc.GetProperty("items").GetArrayLength());
     }
 
     /// <summary>Empty q is rejected with 400.</summary>
@@ -351,7 +394,9 @@ public class QuoteEndpointsTests
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=back&field=quote");
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
+        var items = doc.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
         StringAssert.Contains(items[0].GetProperty("quote").GetString(), "back");
     }
@@ -363,7 +408,9 @@ public class QuoteEndpointsTests
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Casablanca&field=source");
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
+        var items = doc.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
         Assert.AreEqual("Casablanca", items[0].GetProperty("source").GetString());
     }
@@ -375,7 +422,9 @@ public class QuoteEndpointsTests
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Rick&field=character");
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
+        var items = doc.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
         Assert.AreEqual("Rick Blaine", items[0].GetProperty("character").GetString());
     }
@@ -387,7 +436,9 @@ public class QuoteEndpointsTests
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Churchill&field=author");
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
+        var items = doc.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
         Assert.AreEqual("Winston Churchill", items[0].GetProperty("author").GetString());
     }
@@ -411,9 +462,9 @@ public class QuoteEndpointsTests
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&type=movie&type=person");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        Assert.AreEqual(JsonValueKind.Array, items.ValueKind);
-        foreach (var item in items.EnumerateArray())
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
+        foreach (var item in doc.GetProperty("items").EnumerateArray())
         {
             var t = item.GetProperty("type").GetString();
             Assert.IsTrue(t == "movie" || t == "person", $"Unexpected type: {t}");
@@ -622,7 +673,9 @@ public class QuoteEndpointsTests
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=back&year=1984");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
+        var items = doc.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
         Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
     }
