@@ -64,7 +64,7 @@ Additional gaps found during planning:
 | 12 | ✅ | Entry logging on `/search` with `[Api - Search]` prefix | Code review | `QuoteEndpoints.cs:Search` — `logger.LogInformation("[Api - Search] ...")` |
 | 13 | ✅ | Entry logging on `/{id}` with `[Api - GetById]` prefix | Code review | `QuoteEndpoints.cs:GetById` — `logger.LogInformation("[Api - GetById] ...")` |
 | 14 | ✅ | Entry logging on `/` with `[Api - GetAll]` prefix | Code review | `QuoteEndpoints.cs:GetAll` — `logger.LogInformation("[Api - GetAll] ...")` |
-| 15 | ⬜ | User manual test — app starts without error | Live | User starts app in VS; confirms startup without error |
+| 15 | ✅ | User manual test — app starts without error | Live | User starts app in VS; confirms startup without error |
 | 16 | ✅ | PR merged to main | — | PR #116 merged to main 2026-06-25 |
 
 ---
