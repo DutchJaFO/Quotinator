@@ -32,15 +32,15 @@ Both `src/Quotinator.ProjectName/CVE/` and `tests/Quotinator.ProjectName.Tests/C
 
 ## Parallel execution
 
-**Default: sequential.** No test project has `[assembly: Parallelize]`. Tests run sequentially within each project unless a class is explicitly opted in.
+**Default: sequential.** No test project has `[assembly: Parallelize]`. Tests run sequentially within each project unless a class is explicitly opted in. See [ADR 006](architecture-decisions/006-sequential-test-execution-by-default.md) for the rationale — this policy exists because of observed flaky test failures caused by concurrent execution of tests that touch process-wide state.
 
-**Opt-in rule:** add `[Parallelize]` at the class level only when you can positively demonstrate the class is parallel-safe. The bar for "demonstrated safe" is:
-- No global state written or read (Dapper type handlers, static caches, singletons)
-- No shared filesystem resources (temp dirs, SQLite files) that could collide under concurrent access
-- No `SqliteConnection.ClearAllPools()` in cleanup — that is a process-wide operation
-- All assertions are on local state only
+**Opt-in rule:** add `[Parallelize]` at the class level only when all four of the following are true:
+1. No global state written or read (Dapper type handlers, static caches, singletons)
+2. No shared filesystem resources — each test creates its own isolated temp directory and SQLite file in `[TestInitialize]` and deletes it in `[TestCleanup]`
+3. No `SqliteConnection.ClearAllPools()` in cleanup — that is a process-wide operation
+4. All assertions are on local, test-owned state only
 
-If you cannot confirm all four, leave the class sequential.
+If you cannot confirm all four, leave the class sequential. The friction is intentional.
 
 **Global state must only be written once, before tests run.** The only safe place to write global state is `[AssemblyInitialize]` in `MSTestSettings.cs`. Never write global state in `[ClassInitialize]` or `[TestInitialize]`.
 

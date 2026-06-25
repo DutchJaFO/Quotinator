@@ -80,6 +80,7 @@
     <File Path="docs/architecture-decisions/003-unit-of-work-and-data-project-design-goals.md" />
     <File Path="docs/architecture-decisions/004-quotinator-data-project-boundaries.md" />
     <File Path="docs/architecture-decisions/005-quotinator-changelog-project-scope.md" />
+    <File Path="docs/architecture-decisions/006-sequential-test-execution-by-default.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
