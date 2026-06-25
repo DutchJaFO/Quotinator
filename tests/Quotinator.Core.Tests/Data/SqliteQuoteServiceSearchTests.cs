@@ -3,10 +3,12 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Data;
-using Quotinator.Core.Data.Repositories;
-using Quotinator.Core.Data.TypeHandlers;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Database;
+using Quotinator.Data.Helpers;
+using Quotinator.Data.Import;
+using Quotinator.Data.Repositories;
 
 namespace Quotinator.Core.Tests.Data;
 
@@ -80,10 +82,11 @@ public class SqliteQuoteServiceSearchTests
         }));
 
         _factory = new SqliteConnectionFactory(_dbPath);
+        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(_factory);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         var batch         = new SeedBatch([_fixture], ManifestPolicy.HardcodedDefault, "search-fixture");
-        var db            = new DatabaseInitializer(_factory, _dbPath, _backups, [batch], importBatches, logger);
+        var db            = new DatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches, logger);
         await db.InitialiseAsync();
     }
 

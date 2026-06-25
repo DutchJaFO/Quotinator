@@ -1,4 +1,5 @@
-using Quotinator.Core.Data;
+using Quotinator.Data.Database;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Api.Tests.Fakes;
 

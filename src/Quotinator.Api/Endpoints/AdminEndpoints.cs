@@ -1,7 +1,7 @@
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
-using Quotinator.Core.Data;
+using Quotinator.Data.Database;
 
 namespace Quotinator.Api.Endpoints;
 

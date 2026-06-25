@@ -1,4 +1,4 @@
-using Quotinator.Core.Data.TypeHandlers;
+using Quotinator.Data.Helpers;
 
 [assembly: Parallelize(Scope = ExecutionScope.MethodLevel)]
 
