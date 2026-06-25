@@ -2,7 +2,7 @@
 
 **Issue:** https://github.com/DutchJaFO/Quotinator/issues/115  
 **Milestone:** v1.7.0  
-**Status:** 🔴 Open
+**Status:** 🟡 In progress — `SqliteQuoteService` blocked (circular dependency); filed as [#121](https://github.com/DutchJaFO/Quotinator/issues/121)
 
 ---
 
@@ -51,8 +51,8 @@ This boundary means `Quotinator.Core` depends on `Quotinator.Data` (already true
 |------|-------------|
 | `Data/DatabaseInitializer.cs` | `Quotinator.Data/Database/` |
 | `Data/Repositories/SqliteImportBatchRepository.cs` | `Quotinator.Data/Repositories/` |
-| `Data/SqliteQuoteService.cs` | `Quotinator.Data/Services/` |
-| `Data/TypeHandlers/DapperConfiguration.cs` | `Quotinator.Data/Helpers/` |
+| `Data/SqliteQuoteService.cs` | ~~`Quotinator.Data/Services/`~~ — **blocked**: moving to Data creates Core↔Data circular dependency. `SqliteQuoteService` uses both `IQuoteService`/`QuoteResponse` (Core) and Dapper infrastructure (Data). Deferred to [#121](https://github.com/DutchJaFO/Quotinator/issues/121). |
+| `Data/TypeHandlers/DapperConfiguration.cs` | `Quotinator.Data/Helpers/` ✅ |
 
 **Interfaces (belong in the layer they abstract):**
 
@@ -89,12 +89,12 @@ This boundary means `Quotinator.Core` depends on `Quotinator.Data` (already true
 
 ### Test code — `Quotinator.Core.Tests` → `Quotinator.Data.Tests`
 
-| File | New location |
-|------|-------------|
-| `Data/DatabaseInitializerTests.cs` | `Quotinator.Data.Tests/Database/` |
-| `Data/ImportBatchesTests.cs` | `Quotinator.Data.Tests/` |
-| `Data/DapperSetupTests.cs` | `Quotinator.Data.Tests/` |
-| `Data/SqliteQuoteServiceSearchTests.cs` | `Quotinator.Data.Tests/Services/` (uses Dapper directly) |
+| File | New location | Status |
+|------|-------------|--------|
+| `Data/DatabaseInitializerTests.cs` | `Quotinator.Data.Tests/Database/` | ✅ done |
+| `Data/ImportBatchesTests.cs` | `Quotinator.Data.Tests/Repositories/` | ✅ done |
+| `Data/DapperSetupTests.cs` | `Quotinator.Data.Tests/Helpers/` | ✅ done |
+| `Data/SqliteQuoteServiceSearchTests.cs` | Stays in Core.Tests — `using Dapper` removed (was unused); `[ClassInitialize]` policy violation removed | ✅ cleaned up |
 
 ### Test code that stays in `Quotinator.Core.Tests`
 
@@ -144,12 +144,12 @@ All of these reference types being moved and will need `using` directives update
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `grep -rn "using Dapper" src/Quotinator.Core/` returns no matches | Live | Command returns empty |
-| 2 | ❌ | Dapper not in `Quotinator.Core.csproj` package references | Live | `dotnet list package src/Quotinator.Core/Quotinator.Core.csproj` — no Dapper entry |
-| 3 | ❌ | `grep -rn "using Dapper" tests/Quotinator.Core.Tests/` returns no matches | Live | Command returns empty |
-| 4 | ❌ | All moved test files exist in `Quotinator.Data.Tests` with updated namespaces | Live | Files present; `dotnet build` succeeds |
-| 5 | ❌ | `Quotinator.Data.Tests/MSTestSettings.cs` calls `DapperConfiguration.Configure()` from `[AssemblyInitialize]` | Live | File updated; no manual per-handler registration remains |
-| 6 | ❌ | No `[ClassInitialize]` in moved test files writes to global state | Live | Grep for `ClassInitialize` in moved files; none call `SqlMapper.*` or `DapperConfiguration.*` |
-| 7 | ❌ | Build clean | Live | `dotnet build --configuration Release` — 0 warnings, 0 errors |
-| 8 | ❌ | Full test suite green | Live | `dotnet test --configuration Release` — all tests pass |
-| 9 | ❌ | `Quotinator.Data.Tests` stable under parallel execution | Live | 5 consecutive full-suite runs — all pass |
+| 1 | ⚠️ | `grep -rn "using Dapper" src/Quotinator.Core/` returns no matches | Live | `SqliteQuoteService.cs` remains — accepted; deferred to [#121](https://github.com/DutchJaFO/Quotinator/issues/121) |
+| 2 | ⚠️ | Dapper not in `Quotinator.Core.csproj` package references | Live | Still present — required by `SqliteQuoteService`; deferred to [#121](https://github.com/DutchJaFO/Quotinator/issues/121) |
+| 3 | ✅ | `grep -rn "using Dapper" tests/Quotinator.Core.Tests/` returns no matches | Live | Command returns empty |
+| 4 | ✅ | All moved test files exist in `Quotinator.Data.Tests` with updated namespaces | Live | `DatabaseInitializerTests` → `Database/`, `ImportBatchesTests` → `Repositories/`, `DapperSetupTests` → `Helpers/`; build succeeds |
+| 5 | ✅ | `Quotinator.Data.Tests/MSTestSettings.cs` calls `DapperConfiguration.Configure()` from `[AssemblyInitialize]` | Live | File updated; no manual per-handler registration remains |
+| 6 | ✅ | No `[ClassInitialize]` in moved test files writes to global state | Live | `SqliteQuoteServiceSearchTests` `[ClassInitialize]` removed; no remaining violations |
+| 7 | ✅ | Build clean | Live | `dotnet build --configuration Release` — 0 warnings, 0 errors |
+| 8 | ✅ | Full test suite green | Live | `dotnet test --configuration Release` — 418 passed, 0 failed |
+| 9 | ❌ | `Quotinator.Data.Tests` stable under parallel execution | Live | 5 consecutive full-suite runs required after latest test file moves |

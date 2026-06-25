@@ -1,7 +1,7 @@
 # Issue #115 — Refactor: move all Dapper dependencies out of Quotinator.Core into Quotinator.Data
 
 **Milestone:** v1.7.0  
-**Status:** Open  
+**Status:** 🟡 In progress — `SqliteQuoteService` deferred to [#121](https://github.com/DutchJaFO/Quotinator/issues/121)  
 **Branch:** `claude/7-0-milestone-issues-8ubkfo`
 
 ---
@@ -27,17 +27,17 @@
 | `Data/Entities/Source.cs` | `Entities/Source.cs` |
 | `Data/Entities/SourceTranslation.cs` | `Entities/SourceTranslation.cs` |
 | `Data/Repositories/SqliteImportBatchRepository.cs` | `Repositories/SqliteImportBatchRepository.cs` |
-| `Data/SqliteQuoteService.cs` | `Services/SqliteQuoteService.cs` |
-| `Data/TypeHandlers/DapperConfiguration.cs` | `TypeHandlers/DapperConfiguration.cs` |
+| `Data/SqliteQuoteService.cs` | ~~`Services/SqliteQuoteService.cs`~~ — **blocked** (Core↔Data circular dependency); deferred to [#121](https://github.com/DutchJaFO/Quotinator/issues/121) |
+| `Data/TypeHandlers/DapperConfiguration.cs` | `Helpers/DapperConfiguration.cs` ✅ |
 
 ### Test code to move to `Quotinator.Data.Tests`
 
-| Source (Quotinator.Core.Tests) | Destination (Quotinator.Data.Tests) |
-|--------------------------------|--------------------------------------|
-| `Data/DatabaseInitializerTests.cs` | `Database/DatabaseInitializerTests.cs` |
-| `Data/ImportBatchesTests.cs` | `Repositories/ImportBatchesTests.cs` |
-| `Data/DapperSetupTests.cs` | `TypeHandlers/DapperSetupTests.cs` |
-| `MSTestSettings.cs` (Dapper call only) | Remove `DapperConfiguration.Configure()` call; move if needed |
+| Source (Quotinator.Core.Tests) | Destination (Quotinator.Data.Tests) | Status |
+|--------------------------------|--------------------------------------|--------|
+| `Data/DatabaseInitializerTests.cs` | `Database/DatabaseInitializerTests.cs` | ✅ done |
+| `Data/ImportBatchesTests.cs` | `Repositories/ImportBatchesTests.cs` | ✅ done |
+| `Data/DapperSetupTests.cs` | `Helpers/DapperSetupTests.cs` | ✅ done |
+| `MSTestSettings.cs` (Dapper call only) | `[AssemblyInitialize]` retained; calls `DapperConfiguration.Configure()` from Data | ✅ done |
 
 ### Aftermath
 
@@ -63,9 +63,9 @@
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | No `using Dapper` in Quotinator.Core production code | Live | `grep -rn "using Dapper" src/Quotinator.Core/` returns 0 matches |
-| 2 | ⬜ | No `using Dapper` in Quotinator.Core.Tests | Live | `grep -rn "using Dapper" tests/Quotinator.Core.Tests/` returns 0 matches |
-| 3 | ⬜ | Dapper not in `Quotinator.Core.csproj` package references | Code review | `Quotinator.Core.csproj` — no `PackageReference Include="Dapper*"` |
-| 4 | ⬜ | Build clean — 0 warnings, 0 errors | Live | `dotnet build --configuration Release` |
-| 5 | ⬜ | All tests pass | Live | `dotnet test --configuration Release` — all pass |
+| 1 | ⚠️ | No `using Dapper` in Quotinator.Core production code | Live | `SqliteQuoteService.cs` remains — accepted; deferred to [#121](https://github.com/DutchJaFO/Quotinator/issues/121) |
+| 2 | ✅ | No `using Dapper` in Quotinator.Core.Tests | Live | `grep -rn "using Dapper" tests/Quotinator.Core.Tests/` returns 0 matches |
+| 3 | ⚠️ | Dapper not in `Quotinator.Core.csproj` package references | Code review | Still present — required by `SqliteQuoteService`; deferred to [#121](https://github.com/DutchJaFO/Quotinator/issues/121) |
+| 4 | ✅ | Build clean — 0 warnings, 0 errors | Live | `dotnet build --configuration Release` — 0 warnings, 0 errors |
+| 5 | ✅ | All tests pass | Live | `dotnet test --configuration Release` — 418 passed, 0 failed |
 | 6 | ⬜ | User manual test — app starts without error | Live | User starts app in VS; confirms startup without error |

@@ -8,7 +8,8 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 
 | # | Title | Status | Plan doc |
 |---|-------|--------|----------|
-| [#115](https://github.com/DutchJaFO/Quotinator/issues/115) | Refactor: move all Dapper dependencies out of Quotinator.Core into Quotinator.Data | 🔴 Open | [115-dapper-core-refactor-plan.md](115-dapper-core-refactor-plan.md) |
+| [#115](https://github.com/DutchJaFO/Quotinator/issues/115) | Refactor: move all Dapper dependencies out of Quotinator.Core into Quotinator.Data | 🟡 In progress — `SqliteQuoteService` deferred to #121 | [115-dapper-core-refactor-plan.md](115-dapper-core-refactor-plan.md) |
+| [#121](https://github.com/DutchJaFO/Quotinator/issues/121) | Refactor: remove Dapper dependency from SqliteQuoteService | 🔴 Open | (no plan doc yet) |
 | [#111](https://github.com/DutchJaFO/Quotinator/issues/111) | Investigate flaky test in Quotinator.Core.Tests | 🟡 In progress (blocked by #115) | [111-flaky-test-plan.md](111-flaky-test-plan.md) |
 | [#70](https://github.com/DutchJaFO/Quotinator/issues/70) | Refactor CI/Release workflows to use a shared reusable workflow | 🔴 Open | [70-ci-workflow-plan.md](70-ci-workflow-plan.md) |
 | [#109](https://github.com/DutchJaFO/Quotinator/issues/109) | Search: field=author and field=character always return empty; type=person returns empty | ✅ Complete — closed | [109-search-endpoint-plan.md](109-search-endpoint-plan.md) |
@@ -24,9 +25,9 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 ## Dependency Map
 
 ```
-#115  ─── (none) — foundational refactor; must complete before #111 can close
-#111  ─── blocked by #115 (flaky test investigation is incomplete until all test files
-           are in the correct projects and all parallel execution patterns are verified)
+#115  ─── (none) — in progress; SqliteQuoteService deferred to #121
+#121  ─── depends on #115 (structural groundwork) and a patterns decision (#74/#75/#76/#77)
+#111  ─── blocked by #115 (5-run stability check required after latest test file moves)
 #70   ─── (none)
 #109  ─── closed
 #74   ─── (none)
@@ -43,14 +44,15 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 
 | Order | Issue | Reason |
 |-------|-------|--------|
-| 1 | **#115** — Dapper/Core refactor | Must come first: moves `DatabaseInitializerTests` and `ImportBatchesTests` to `Quotinator.Data.Tests`, where all remaining parallel-execution patterns must be verified |
-| 2 | **#111** — Flaky test (re-verify after #115) | One race pattern fixed; re-verify after #115 to confirm no additional patterns exist |
+| 1 | **#115** — Dapper/Core refactor | In progress; foundational test file moves done; `SqliteQuoteService` deferred to #121 |
+| 2 | **#111** — Flaky test (re-verify after #115) | All test files moved; 5-run stability check still required |
 | 3 | **#70** — CI refactor | Independent; clean up workflow duplication early |
-| 4 | **#74** — Read-model pattern | Foundational for #75, #76, and #77 |
+| 4 | **#74** — Read-model pattern | Foundational for #75, #76, #77, and #121 |
 | 5 | **#75** — Master/detail pattern | After #74; may add optional transaction parameter to `IRepository<T>` |
 | 6 | **#76** — 1:1 pattern | After #74; transaction concern shared with #75 — do close together |
 | 7 | **#77** — Many-to-many pattern | After #74, #75, #76 (all three referenced in the spec) |
-| 8 | **#73** — Audit trail | Deferred; blocked by auth milestone — no work expected this milestone |
+| 8 | **#121** — Remove Dapper from SqliteQuoteService | After #74–#77; solution likely involves a repository pattern that #74–#77 establish |
+| 9 | **#73** — Audit trail | Deferred; blocked by auth milestone — no work expected this milestone |
 
 ---
 
@@ -58,7 +60,8 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 
 | Issue | Safe to merge alone? | Notes |
 |-------|---------------------|-------|
-| #115 | Yes | Refactor with no behaviour change; build + tests are the gate. |
+| #115 | Yes | Refactor with no behaviour change; build + tests are the gate. `SqliteQuoteService` portion deferred to #121. |
+| #121 | Yes (after #74–#77) | Depends on repository pattern work to establish the right abstraction. |
 | #111 | Yes (after #115) | Re-verify after #115; self-contained once confirmed. |
 | #70 | Yes | CI-only change — no production code affected. |
 | #74 | Yes | New infrastructure; nothing currently calls it. |
