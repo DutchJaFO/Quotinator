@@ -45,7 +45,7 @@ public class SqliteQuoteServiceSearchTests
                 originalLanguage = "en",
                 source           = "Airplane!",
                 date             = "1980",
-                character        = "Ted Striker",
+                character        = (string?)"Ted Striker",
                 author           = (string?)null,
                 type             = "movie",
                 genres           = new[] { "comedy" },
@@ -59,7 +59,7 @@ public class SqliteQuoteServiceSearchTests
                 source           = "House of Commons, 4 June 1940",
                 date             = "1940-06-04",
                 character        = (string?)null,
-                author           = "Winston Churchill",
+                author           = (string?)"Winston Churchill",
                 type             = "person",
                 genres           = new[] { "non-fiction" },
                 translations     = new { }

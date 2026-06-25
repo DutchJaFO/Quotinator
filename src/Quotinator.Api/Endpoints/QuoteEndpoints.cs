@@ -13,6 +13,9 @@ internal static class QuoteEndpoints
 {
     private const int MaxQueryLength = 200;
 
+    // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
+    private sealed class Log { }
+
     internal static void MapQuoteEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/quotes")
@@ -116,7 +119,7 @@ internal static class QuoteEndpoints
     private static IResult GetRandom(
         IQuoteService service,
         IApiLocalizer localizer,
-        ILogger<QuoteEndpoints> logger,
+        ILogger<Log> logger,
         [Description("Number of quotes to return (1–100). Omit for a single random quote.")] string? n = null,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null,
         [Description("Filter by source type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
@@ -176,7 +179,7 @@ internal static class QuoteEndpoints
         [Description("UUID of the quote.")] string id,
         IQuoteService service,
         IApiLocalizer localizer,
-        ILogger<QuoteEndpoints> logger,
+        ILogger<Log> logger,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
         logger.LogInformation("[Api - GetById] id={Id} lang={Lang}", id, lang);
@@ -194,7 +197,7 @@ internal static class QuoteEndpoints
     private static IResult Search(
         IQuoteService service,
         IApiLocalizer localizer,
-        ILogger<QuoteEndpoints> logger,
+        ILogger<Log> logger,
         [Description("Search term. Matched case-insensitively against the selected field (or all fields when `field` is omitted).")] string? q = null,
         [Description("Maximum number of results to return (1–100)."), DefaultValue(20)] string? limit = null,
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
@@ -262,7 +265,7 @@ internal static class QuoteEndpoints
     private static IResult GetAll(
         IQuoteService service,
         IApiLocalizer localizer,
-        ILogger<QuoteEndpoints> logger,
+        ILogger<Log> logger,
         [Description("Page number, 1-based."), DefaultValue(1)] string? page = null,
         [Description("Number of quotes per page (1–100)."), DefaultValue(20)] string? pageSize = null,
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
