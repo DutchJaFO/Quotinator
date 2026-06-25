@@ -101,6 +101,18 @@
     <File Path="docs/milestones/data-import-sources/72-cve-sql-audit-plan.md" />
     <File Path="docs/milestones/data-import-sources/78-repository-transaction-plan.md" />
   </Folder>
+  <Folder Name="/docs/milestones/v1-7-0/">
+    <File Path="docs/milestones/v1-7-0/overview.md" />
+    <File Path="docs/milestones/v1-7-0/109-search-endpoint-plan.md" />
+    <File Path="docs/milestones/v1-7-0/70-ci-workflow-plan.md" />
+    <File Path="docs/milestones/v1-7-0/115-dapper-refactor-plan.md" />
+    <File Path="docs/milestones/v1-7-0/111-flaky-test-plan.md" />
+    <File Path="docs/milestones/v1-7-0/74-read-model-query-plan.md" />
+    <File Path="docs/milestones/v1-7-0/75-master-detail-plan.md" />
+    <File Path="docs/milestones/v1-7-0/76-one-to-one-plan.md" />
+    <File Path="docs/milestones/v1-7-0/77-many-to-many-plan.md" />
+    <File Path="docs/milestones/v1-7-0/73-audit-trail-plan.md" />
+  </Folder>
   <Folder Name="/docs/milestones/changelog-handling/">
     <File Path="docs/milestones/changelog-handling/overview.md" />
     <File Path="docs/milestones/changelog-handling/80-json-changelog-plan.md" />

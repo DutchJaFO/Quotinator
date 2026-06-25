@@ -2,6 +2,18 @@
   "language": "en",
   "sourceLanguage": "en",
   "machineTranslated": false,
+  "unreleased": {
+    "issues": [109],
+    "highlights": [
+      "The search endpoint now explains when no quotes match your filters, instead of returning an empty list silently."
+    ],
+    "fixed": [
+      "Search endpoint now returns a result envelope (status, items, totalMatching, message) consistent with the /random endpoint — callers can now distinguish NoResults from an empty result set (issue #109)",
+      "Search endpoint now validates type and genre filter values, returning InvalidType or InvalidGenre status for unknown values (issue #109)",
+      "All quote API endpoints now emit an entry-level log line with [Api - *] prefix to improve request tracing (issue #109)",
+      "Added SQLite integration tests for field=author and field=character search paths, covering the NULL LIKE data-gap scenarios (issue #109)"
+    ]
+  },
   "releases": [
     {
       "version": "1.6.5",
