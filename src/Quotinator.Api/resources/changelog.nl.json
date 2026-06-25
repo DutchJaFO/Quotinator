@@ -10,9 +10,12 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [109],
+    "issues": [109, 117],
     "highlights": [
       "De zoekfunctie geeft nu uitleg wanneer geen citaten aan uw filters voldoen, in plaats van stilzwijgend een lege lijst te retourneren."
+    ],
+    "added": [
+      "Session-start hook voor Claude Code cloud-/remote-sessies installeert nu automatisch de .NET 10 SDK en dotnet-script — bouwen, testen en changelog-regeneratie kunnen nu volledig worden uitgevoerd zonder lokale terminal (issue #117)"
     ],
     "fixed": [
       "Het zoekeindpunt geeft nu een resultaatomhulsel terug (status, items, totalMatching, message) consistent met het /random-eindpunt — aanroepers kunnen nu NoResults onderscheiden van een leeg resultaat (issue #109)",

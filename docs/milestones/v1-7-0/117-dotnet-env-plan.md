@@ -1,7 +1,7 @@
 # Issue #117 — Add .NET SDK to Claude Code remote execution environment via session-start hook
 
 **Milestone:** v1.7.0  
-**Status:** Complete — hook implemented, build and test verified locally  
+**Status:** Complete  
 
 ---
 
@@ -68,5 +68,5 @@ PATH=$HOME/.dotnet:$HOME/.dotnet/tools:$PATH
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | `dotnet build --configuration Release` succeeds in a cloud session | Live | `dotnet build --configuration Release` → `0 Warning(s)  0 Error(s)` |
 | 2 | ✅ | `dotnet test --configuration Release` succeeds in a cloud session | Live | Single test `Search_FieldAuthor_WithAuthorData_ReturnsOk` passed in 2.75s |
-| 3 | ⬜ | `dotnet-script scripts/changelog.csx` produces updated output | Live | Run changelog regen command after hook is on main; expect no error, file updated |
-| 4 | ⬜ | Full pre-push checklist can be executed end-to-end in a cloud session | Live | Execute each step in `CLAUDE.md` Pre-Push Checklist in a fresh cloud session after merge |
+| 3 | ✅ | `dotnet-script scripts/changelog.csx` produces updated output | Live | `dotnet-script scripts/changelog.csx -- --format keepachangelog ...` → `Written: CHANGELOG.md` with exit 0 |
+| 4 | ✅ | Full pre-push checklist can be executed end-to-end in a cloud session | Live | Build (0W/0E), test (119/119 passed), changelog regen (Written: CHANGELOG.md) — all executed in this cloud session without a local terminal |

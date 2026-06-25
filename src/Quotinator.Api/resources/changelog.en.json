@@ -3,9 +3,12 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [109],
+    "issues": [109, 117],
     "highlights": [
       "The search endpoint now explains when no quotes match your filters, instead of returning an empty list silently."
+    ],
+    "added": [
+      "Session-start hook for Claude Code cloud/remote sessions now installs the .NET 10 SDK and dotnet-script automatically — build, test, and changelog regeneration can now be fully executed without a local terminal (issue #117)"
     ],
     "fixed": [
       "Search endpoint now returns a result envelope (status, items, totalMatching, message) consistent with the /random endpoint — callers can now distinguish NoResults from an empty result set (issue #109)",
