@@ -8,7 +8,7 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 
 | # | Title | Status |
 |---|-------|--------|
-| [#109](https://github.com/DutchJaFO/Quotinator/issues/109) | Search: field=author and field=character always return empty; type=person returns empty | Complete — merged to main (PR #116), pending closure |
+| [#109](https://github.com/DutchJaFO/Quotinator/issues/109) | Search: field=author and field=character always return empty; type=person returns empty | In progress — merged to main (PR #116); row 15 pending user live test |
 | [#70](https://github.com/DutchJaFO/Quotinator/issues/70) | Refactor CI/Release workflows to use a shared reusable workflow | Open |
 | [#115](https://github.com/DutchJaFO/Quotinator/issues/115) | Refactor: move all Dapper dependencies out of Quotinator.Core into Quotinator.Data | Open |
 | [#111](https://github.com/DutchJaFO/Quotinator/issues/111) | Investigate flaky test in Quotinator.Core.Tests | Open — blocked by #115 |
