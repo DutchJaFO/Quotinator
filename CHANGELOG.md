@@ -1,10 +1,26 @@
-##### *GENERATED FILE [2026-06-24 18:34 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-25 10:55 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Highlights
+- The search endpoint now explains when no quotes match your filters, instead of returning an empty list silently.
+
+### Added
+- Session-start hook for Claude Code cloud/remote sessions now installs the .NET 10 SDK and dotnet-script automatically — build, test, and changelog regeneration can now be fully executed without a local terminal (issue #117)
+
+### Fixed
+- Search endpoint now returns a result envelope (status, items, totalMatching, message) consistent with the /random endpoint — callers can now distinguish NoResults from an empty result set (issue #109)
+- Search endpoint now validates type and genre filter values, returning InvalidType or InvalidGenre status for unknown values (issue #109)
+- All quote API endpoints now emit an entry-level log line with [Api - *] prefix to improve request tracing (issue #109)
+- Added SQLite integration tests for field=author and field=character search paths, covering the NULL LIKE data-gap scenarios (issue #109)
 
 ---
 
@@ -605,6 +621,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.5...HEAD
 [1.6.5]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.2...v1.6.3
