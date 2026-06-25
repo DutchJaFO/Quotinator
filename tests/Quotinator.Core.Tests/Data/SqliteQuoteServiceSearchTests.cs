@@ -1,12 +1,10 @@
 using System.Text.Json;
-using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Data;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
-using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 
@@ -26,9 +24,6 @@ public class SqliteQuoteServiceSearchTests
     private string _fixture = null!;
 
     private IDbConnectionFactory _factory = null!;
-
-    [ClassInitialize]
-    public static void ClassInitialize(TestContext _) => DapperConfiguration.Configure();
 
     [TestInitialize]
     public async Task TestInitialize()

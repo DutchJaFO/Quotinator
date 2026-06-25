@@ -2,12 +2,12 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Models;
 
-namespace Quotinator.Core.Tests.Data;
+namespace Quotinator.Data.Tests.Helpers;
 
 /// <summary>
 /// Verifies that Dapper type handlers are registered before any test runs.
-/// These tests are red if AssemblySetup.Initialize is removed or if
-/// DapperConfiguration.Configure is called in a [ClassInitialize] that
+/// These tests are red if <see cref="MSTestSettings.Initialize"/> is removed or if
+/// <c>DapperConfiguration.Configure</c> is called in a <c>[ClassInitialize]</c> that
 /// races with another class initializer under parallel execution.
 /// </summary>
 [TestClass]
