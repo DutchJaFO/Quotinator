@@ -26,6 +26,9 @@
   <Folder Name="/.claude/">
     <File Path=".claude/settings.json" />
   </Folder>
+  <Folder Name="/.claude/hooks/">
+    <File Path=".claude/hooks/session-start.sh" />
+  </Folder>
   <Folder Name="/addon/">
     <File Path="addon/config.yaml" />
     <File Path="addon/apparmor.txt" />
