@@ -112,6 +112,7 @@
     <File Path="docs/milestones/v1-7-0/76-one-to-one-plan.md" />
     <File Path="docs/milestones/v1-7-0/77-many-to-many-plan.md" />
     <File Path="docs/milestones/v1-7-0/73-audit-trail-plan.md" />
+    <File Path="docs/milestones/v1-7-0/117-dotnet-env-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/changelog-handling/">
     <File Path="docs/milestones/changelog-handling/overview.md" />

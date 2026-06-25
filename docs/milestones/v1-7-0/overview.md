@@ -16,6 +16,7 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 | [#75](https://github.com/DutchJaFO/Quotinator/issues/75) | Add master/detail repository pattern to Quotinator.Data for parent/child table relationships | Open |
 | [#76](https://github.com/DutchJaFO/Quotinator/issues/76) | Add 1:1 relationship pattern to Quotinator.Data | Open |
 | [#77](https://github.com/DutchJaFO/Quotinator/issues/77) | Add many-to-many relationship pattern to Quotinator.Data | Open |
+| [#117](https://github.com/DutchJaFO/Quotinator/issues/117) | Add .NET SDK to Claude Code remote execution environment via session-start hook | Open |
 | [#73](https://github.com/DutchJaFO/Quotinator/issues/73) | Audit trail: record who did what on which record in which table | Open — deferred to auth milestone |
 
 ---
@@ -31,6 +32,7 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 #75   (master/detail)        — document alongside #74; independent implementation
 #76   (1:1 pattern)          — document alongside #74; independent implementation
 #77   (many-to-many)         — references #74 for read-model collection loading
+#117  (dotnet env setup)     — independent; unblocks full pre-push checklist in cloud sessions
 #73   (audit trail)          — deferred; requires auth milestone + write endpoints
 ```
 
@@ -48,7 +50,8 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 | 6 | #75 | Master/detail — implement first concrete pattern alongside #74 docs |
 | 7 | #76 | 1:1 pattern — parallel with #75 / #77; order within these three is flexible |
 | 8 | #77 | Many-to-many — references #74 read-model for loading related collections |
-| 9 | #73 | Deferred — blocked by auth milestone (no user identity available yet) |
+| 9 | #117 | dotnet env setup — unblocks full pre-push checklist in cloud sessions; do early |
+| 10 | #73 | Deferred — blocked by auth milestone (no user identity available yet) |
 
 ---
 
@@ -66,6 +69,7 @@ Default assumption: each issue is self-contained enough to merge when complete w
 | #75 | Yes | New infrastructure; nothing currently calls it. |
 | #76 | Yes | New infrastructure; nothing currently calls it. |
 | #77 | Yes | New infrastructure; nothing currently calls it. |
+| #117 | Yes | Configuration-only change — no production code affected. |
 | #73 | Deferred | Will not merge in this milestone. |
 
 ---
