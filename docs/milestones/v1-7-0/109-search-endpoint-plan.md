@@ -1,7 +1,7 @@
 # Issue #109 — Search: field=author and field=character always return empty; type=person returns empty
 
 **Milestone:** v1.7.0  
-**Status:** Complete (pending PR merge to main)  
+**Status:** Complete — merged to main via PR #116  
 **Branch:** `claude/7-0-milestone-issues-8ubkfo`
 
 ---
@@ -65,7 +65,7 @@ Additional gaps found during planning:
 | 13 | ✅ | Entry logging on `/{id}` with `[Api - GetById]` prefix | Code review | `QuoteEndpoints.cs:GetById` — `logger.LogInformation("[Api - GetById] ...")` |
 | 14 | ✅ | Entry logging on `/` with `[Api - GetAll]` prefix | Code review | `QuoteEndpoints.cs:GetAll` — `logger.LogInformation("[Api - GetAll] ...")` |
 | 15 | ⬜ | User manual test — app starts without error | Live | User starts app in VS; confirms startup without error |
-| 16 | ⬜ | PR merged to main | — | Merge `claude/7-0-milestone-issues-8ubkfo` → main |
+| 16 | ✅ | PR merged to main | — | PR #116 merged to main 2026-06-25 |
 
 ---
 
