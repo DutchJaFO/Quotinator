@@ -27,32 +27,47 @@ Issue #111 (flaky test) identified one parallel-execution race: concurrent `[Cla
 | `Data/Entities/QuoteTranslationEntity.cs` | `Quotinator.Data/Entities/` |
 | `Data/Entities/Source.cs` | `Quotinator.Data/Entities/` |
 | `Data/Entities/SourceTranslation.cs` | `Quotinator.Data/Entities/` |
-| `Data/DatabaseInitializer.cs` | `Quotinator.Data/Database/` (already has `DatabaseInitializer` — resolve naming) |
+| `Data/DatabaseInitializer.cs` | `Quotinator.Data/Database/` (no conflict — this folder does not yet exist in Quotinator.Data) |
 | `Data/Repositories/SqliteImportBatchRepository.cs` | `Quotinator.Data/Repositories/` |
 | `Data/SqliteQuoteService.cs` | `Quotinator.Data/Services/` |
 | `Data/TypeHandlers/DapperConfiguration.cs` | `Quotinator.Data/Helpers/` |
+
+### What stays in `Quotinator.Core`
+
+The following files in `Quotinator.Core/Data/` do **not** use Dapper and stay where they are:
+
+- `Data/IDatabaseInitializer.cs` — interface; contract belongs in Core
+- `Data/Repositories/IImportBatchRepository.cs` — interface; contract belongs in Core
+- `Data/Sql.cs` — SQL string constants; no Dapper dependency
+- `Data/DataPaths.cs`, `Data/ManifestPolicy.cs`, `Data/DuplicateResolutionPolicy.cs`, `Data/SeedBatch.cs`, `Data/SeedDuplicateRecord.cs`, `Data/SeedPreviewResult.cs` — no Dapper dependency
+- `Data/Enums/` — no Dapper dependency
 
 ### Test code — `Quotinator.Core.Tests` → `Quotinator.Data.Tests`
 
 | File | Action |
 |------|--------|
-| `Data/DatabaseInitializerTests.cs` | Move to `Quotinator.Data.Tests/` |
+| `Data/DatabaseInitializerTests.cs` | Move to `Quotinator.Data.Tests/Database/` |
 | `Data/ImportBatchesTests.cs` | Move to `Quotinator.Data.Tests/` |
 | `Data/DapperSetupTests.cs` | Move to `Quotinator.Data.Tests/` |
-| `MSTestSettings.cs` | Remove `DapperConfiguration.Configure()` call; Core.Tests no longer needs it |
+| `Data/SqliteQuoteServiceSearchTests.cs` | Move to `Quotinator.Data.Tests/Services/` (uses Dapper directly) |
+
+### Test code that stays in `Quotinator.Core.Tests`
+
+- `Data/SeedScriptIntegrityTests.cs` — no Dapper; tests JSON schema integrity
+- `Data/SourceDataIntegrityTests.cs` — no Dapper; tests JSON data integrity
 
 ---
 
 ## Approach
 
-1. **Check for a naming conflict** — `Quotinator.Data` may already have a `Database/DatabaseInitializer.cs`. Resolve before moving.
-2. **Move entity classes** — update namespaces to `Quotinator.Data.Entities`. Update all callers in `Quotinator.Core` (services, interfaces) that reference these types.
-3. **Move `DatabaseInitializer`, `SqliteImportBatchRepository`, `SqliteQuoteService`** — update namespaces; update `Quotinator.Api` DI registrations; verify the interface (`IQuoteService`) stays in `Quotinator.Core`.
-4. **Move `DapperConfiguration`** — update `Quotinator.Data.Tests/MSTestSettings.cs` to call `DapperConfiguration.Configure()` instead of registering handlers manually.
-5. **Remove Dapper NuGet reference** from `Quotinator.Core.csproj`.
+1. **Move entity classes** — update namespaces to `Quotinator.Data.Entities`. Update all callers in `Quotinator.Core` (services, interfaces) that reference these types.
+2. **Move `DatabaseInitializer`, `SqliteImportBatchRepository`, `SqliteQuoteService`** — update namespaces; update `Quotinator.Api` DI registrations; verify the interfaces (`IDatabaseInitializer`, `IImportBatchRepository`, `IQuoteService`) stay in `Quotinator.Core`.
+3. **Move `DapperConfiguration`** to `Quotinator.Data/Helpers/`.
+4. **Update `Quotinator.Data.Tests/MSTestSettings.cs`** — currently registers `GuidHandler` and `SafeDateHandler` manually; replace with a single `DapperConfiguration.Configure()` call once it is in the Data project.
+5. **Remove Dapper NuGet references** (`Dapper`, `Dapper.Contrib`, `Microsoft.Data.Sqlite`) from `Quotinator.Core.csproj`.
 6. **Move test files** to `Quotinator.Data.Tests`; update namespaces.
-7. **Update `Quotinator.Core.Tests/MSTestSettings.cs`** — remove `DapperConfiguration.Configure()` call; add back only what Core.Tests genuinely needs.
-8. **Re-verify parallel execution** in `Quotinator.Data.Tests` — check `MSTestSettings.cs` for `[AssemblyInitialize]` compliance; check all `[ClassInitialize]` methods in the test files that moved; check all `[TestCleanup]` for `ClearAllPools()` usage patterns.
+7. **Update `Quotinator.Core.Tests/MSTestSettings.cs`** — remove `DapperConfiguration.Configure()` call and its `using` once no Core.Tests file references Dapper.
+8. **Re-verify parallel execution** in `Quotinator.Data.Tests` — check `MSTestSettings.cs` for `[AssemblyInitialize]` compliance; check all `[ClassInitialize]` methods in moved test files; check all `[TestCleanup]` for `ClearAllPools()` usage patterns.
 9. **Update `Quotinator.slnx`** — reflect all moved files.
 10. **Build and test** — 0 warnings, 0 errors; all tests pass.
 
@@ -66,7 +81,7 @@ Issue #111 (flaky test) identified one parallel-execution race: concurrent `[Cla
 | 2 | ❌ | Dapper not in `Quotinator.Core.csproj` package references | Live | `dotnet list package src/Quotinator.Core/Quotinator.Core.csproj` — no Dapper entry |
 | 3 | ❌ | `grep -rn "using Dapper" tests/Quotinator.Core.Tests/` returns no matches | Live | Command returns empty |
 | 4 | ❌ | All moved test files exist in `Quotinator.Data.Tests` with updated namespaces | Live | Files present; `dotnet build` succeeds |
-| 5 | ❌ | `Quotinator.Data.Tests/MSTestSettings.cs` calls `DapperConfiguration.Configure()` from `[AssemblyInitialize]` | Live | File updated; no per-class handler registration remains |
+| 5 | ❌ | `Quotinator.Data.Tests/MSTestSettings.cs` calls `DapperConfiguration.Configure()` from `[AssemblyInitialize]` | Live | File updated; no per-class or manual handler registration remains |
 | 6 | ❌ | No `[ClassInitialize]` in moved test files writes to global state | Live | Grep for `ClassInitialize` in moved files; verify none call `SqlMapper.*` or `DapperConfiguration.*` |
 | 7 | ❌ | Build clean | Live | `dotnet build --configuration Release` — 0 warnings, 0 errors |
 | 8 | ❌ | Full test suite green | Live | `dotnet test --configuration Release` — all tests pass |
