@@ -105,21 +105,38 @@ This boundary means `Quotinator.Core` depends on `Quotinator.Data` (already true
 
 ---
 
+## Affected consumers (namespace updates required)
+
+All of these reference types being moved and will need `using` directives updated:
+
+| File | Types referenced |
+|------|-----------------|
+| `src/Quotinator.Api/Program.cs` | `DuplicateResolutionPolicy`, `ManifestPolicy`, `SeedBatch`, `IDatabaseInitializer`, `IImportBatchRepository`, `DatabaseInitializer`, `SqliteImportBatchRepository` |
+| `src/Quotinator.Api/Endpoints/AdminEndpoints.cs` | `IDatabaseInitializer` |
+| `src/Quotinator.Api/Startup/StartupSummaryLogger.cs` | `IDatabaseInitializer` |
+| `tests/Quotinator.Api.Tests/Fakes/NoOpDatabaseInitializer.cs` | `IDatabaseInitializer`, `SeedDuplicateRecord`, `SeedPreviewResult` |
+| `tests/Quotinator.Api.Tests/Startup/StartupSummaryLoggerTests.cs` | `IDatabaseInitializer`, `SeedDuplicateRecord`, `SeedPreviewResult` (inline `StubDbInitializer`) |
+
+`tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj` currently only references `Quotinator.Api`. After the move it must add an explicit `<ProjectReference>` to `Quotinator.Data` — the fakes directly implement `IDatabaseInitializer` and instantiate `SeedDuplicateRecord`/`SeedPreviewResult`.
+
+---
+
 ## Approach
 
 1. **Move entity classes** — update namespaces to `Quotinator.Data.Entities`. Update all callers in `Quotinator.Core` that reference these types.
-2. **Move infrastructure implementations** — `DatabaseInitializer`, `SqliteImportBatchRepository`, `SqliteQuoteService`; update `Quotinator.Api` DI registrations.
-3. **Move interfaces** — `IDatabaseInitializer`, `IImportBatchRepository`; update all callers (Api DI registrations, any Core services that reference them).
-4. **Move import/export infrastructure** — `DuplicateResolutionPolicy`, `ManifestPolicy`, `SeedDuplicateRecord`, `SeedPreviewResult`, `SeedBatch`, `ImportBatchType`; update all callers.
+2. **Move infrastructure implementations** — `DatabaseInitializer`, `SqliteImportBatchRepository`, `SqliteQuoteService`; update `Quotinator.Api` DI registrations and `using` directives in `Program.cs`, `AdminEndpoints.cs`, `StartupSummaryLogger.cs`.
+3. **Move interfaces** — `IDatabaseInitializer`, `IImportBatchRepository`; update all consumers listed above.
+4. **Move import/export infrastructure** — `DuplicateResolutionPolicy`, `ManifestPolicy`, `SeedDuplicateRecord`, `SeedPreviewResult`, `SeedBatch`, `ImportBatchType`; update all consumers.
 5. **Evaluate `DataPaths`** — decide at implementation time whether to split, move in full, or leave in Core.
 6. **Move `DapperConfiguration`** to `Quotinator.Data/Helpers/`.
-7. **Update `Quotinator.Data.Tests/MSTestSettings.cs`** — currently registers `GuidHandler` and `SafeDateHandler` manually; replace with a single `DapperConfiguration.Configure()` call once it is in the Data project.
-8. **Remove Dapper NuGet references** (`Dapper`, `Dapper.Contrib`, `Microsoft.Data.Sqlite`) from `Quotinator.Core.csproj`.
-9. **Move test files** to `Quotinator.Data.Tests`; update namespaces.
-10. **Update `Quotinator.Core.Tests/MSTestSettings.cs`** — remove `DapperConfiguration.Configure()` call and its `using` once no Core.Tests file references Dapper.
-11. **Re-verify parallel execution** in `Quotinator.Data.Tests` — check `[AssemblyInitialize]` compliance; check all `[ClassInitialize]` in moved test files; check `[TestCleanup]` for `ClearAllPools()` patterns.
-12. **Update `Quotinator.slnx`** — reflect all moved files.
-13. **Build and test** — 0 warnings, 0 errors; all tests pass.
+7. **Add `<ProjectReference>` to `Quotinator.Data`** in `Quotinator.Api.Tests.csproj`; update `using` directives in `NoOpDatabaseInitializer.cs` and `StartupSummaryLoggerTests.cs`.
+8. **Update `Quotinator.Data.Tests/MSTestSettings.cs`** — currently registers `GuidHandler` and `SafeDateHandler` manually; replace with a single `DapperConfiguration.Configure()` call once it is in the Data project.
+9. **Remove Dapper NuGet references** (`Dapper`, `Dapper.Contrib`, `Microsoft.Data.Sqlite`) from `Quotinator.Core.csproj`.
+10. **Move test files** to `Quotinator.Data.Tests`; update namespaces.
+11. **Update `Quotinator.Core.Tests/MSTestSettings.cs`** — remove `DapperConfiguration.Configure()` call and its `using` once no Core.Tests file references Dapper.
+12. **Re-verify parallel execution** in `Quotinator.Data.Tests` — check `[AssemblyInitialize]` compliance; check all `[ClassInitialize]` in moved test files; check `[TestCleanup]` for `ClearAllPools()` patterns.
+13. **Update `Quotinator.slnx`** — reflect all moved files.
+14. **Build and test** — 0 warnings, 0 errors; all tests pass.
 
 ---
 
