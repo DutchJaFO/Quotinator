@@ -17,6 +17,7 @@ using Quotinator.Core.Data;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Helpers;
+using Quotinator.Api.Middleware;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
@@ -350,6 +351,7 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp => new DatabaseInitialize
     sp.GetRequiredService<IImportBatchRepository>(),
     sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
 builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));
+builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
 builder.Services.AddI18nText(options =>
@@ -462,34 +464,12 @@ app.UseStatusCodePages();
 app.UseRequestLocalization();
 app.UseRateLimiter();
 
-// Optional request logging for /api/v1/quotes/* — off by default so the supervisor log
-// stays clean. Enable with log_requests: true in the add-on config (or Quotinator__LogRequests=true).
-// Uses a dedicated logger category so it can be suppressed independently if needed.
+// Optional request logging — logs every endpoint call as two lines (start + end) with a
+// per-request correlation ID. Off by default. Enable with log_requests: true in the add-on
+// config (or Quotinator__LogRequests=true). All endpoints are logged; header values are never
+// captured (X-Api-Key, Authorization, Cookie must not appear in logs).
 if (logRequests)
-{
-    var requestLogger = app.Services.GetRequiredService<ILoggerFactory>()
-        .CreateLogger("Quotinator.Requests");
-
-    app.Use(async (context, next) =>
-    {
-        if (!context.Request.Path.StartsWithSegments("/api/v1/quotes"))
-        {
-            await next();
-            return;
-        }
-
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        await next();
-        sw.Stop();
-
-        requestLogger.LogInformation("{Method} {Path}{Query} → {Status} in {Ms}ms",
-            context.Request.Method,
-            context.Request.Path,
-            context.Request.QueryString.Value,
-            context.Response.StatusCode,
-            sw.ElapsedMilliseconds);
-    });
-}
+    app.UseMiddleware<RequestLoggingMiddleware>();
 
 app.MapOpenApi();
 app.MapScalarApiReference();
