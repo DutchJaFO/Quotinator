@@ -10,10 +10,15 @@ namespace Quotinator.Api.Tests.Fakes;
 /// </summary>
 internal sealed class CaptureSink : ILogEventSink
 {
-    /// <summary>All rendered log messages, in emission order.</summary>
-    public List<string> Lines { get; } = [];
+    private readonly List<(LogEventLevel Level, string Message)> _events = [];
+
+    /// <summary>All captured events (level + rendered message), in emission order.</summary>
+    public IReadOnlyList<(LogEventLevel Level, string Message)> Events => _events;
+
+    /// <summary>Rendered messages only — convenience accessor for single-level assertions.</summary>
+    public IReadOnlyList<string> Lines => _events.Select(e => e.Message).ToList();
 
     /// <inheritdoc/>
     public void Emit(LogEvent logEvent)
-        => Lines.Add(logEvent.RenderMessage());
+        => _events.Add((logEvent.Level, logEvent.RenderMessage()));
 }

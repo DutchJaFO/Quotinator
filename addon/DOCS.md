@@ -79,7 +79,7 @@ When enabled, each request to `/api/v1/quotes/*` produces one log line:
 GET /api/v1/quotes/random?n=5&lang=nl → 200 in 12ms
 ```
 
-Rate-limited requests (`429`) are also logged. Health checks, Blazor traffic, and static assets are not.
+Rate-limited requests (`429`) are also logged. Blazor pages and static assets are logged at debug level (`[Web - Request]` and `[Web - Asset]` tags) and are not visible at the default `info` log level.
 
 ### Log level
 

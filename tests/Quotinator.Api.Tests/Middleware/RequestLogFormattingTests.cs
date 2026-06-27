@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using Serilog.Events;
 using Serilog.Extensions.Logging;
 using Quotinator.Api.Middleware;
 using Quotinator.Api.Tests.Fakes;
@@ -13,11 +14,18 @@ public class RequestLogFormattingTests
     // -------------------------------------------------------------------------
     #region Helpers
 
-    private static (RequestLoggingMiddleware Middleware, CaptureSink Sink) Build()
+    /// <summary>
+    /// Builds middleware with a sink at the given minimum level.
+    /// Default is Information — Debug routes are invisible at this level, which is the
+    /// correct production default and is what most tests want to assert.
+    /// Pass LogEventLevel.Debug to test that debug-category routes actually emit lines.
+    /// </summary>
+    private static (RequestLoggingMiddleware Middleware, CaptureSink Sink) Build(
+        LogEventLevel minimumLevel = LogEventLevel.Information)
     {
         var sink    = new CaptureSink();
         var serilog = new LoggerConfiguration()
-            .MinimumLevel.Information()
+            .MinimumLevel.Is(minimumLevel)
             .WriteTo.Sink(sink)
             .CreateLogger();
         var logger = new SerilogLoggerFactory(serilog)
@@ -206,6 +214,151 @@ public class RequestLogFormattingTests
         await middleware.InvokeAsync(MakeContext("GET", "/api/v1/health"), Respond());
 
         Assert.AreEqual(2, sink.Lines.Count);
+    }
+
+    #endregion
+
+    // -------------------------------------------------------------------------
+    #region Row 8 — three-category tags
+
+    [TestMethod]
+    public async Task ApiRoute_UsesApiRequestTag()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(MakeContext("GET", "/api/v1/quotes/random"), Respond());
+
+        StringAssert.Contains(sink.Lines[0], "[Api - Request]");
+    }
+
+    [TestMethod]
+    public async Task BlazorPage_UsesWebRequestTag()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(MakeContext("GET", "/about"), Respond());
+
+        StringAssert.Contains(sink.Lines[0], "[Web - Request]");
+    }
+
+    [TestMethod]
+    public async Task CultureRoute_UsesWebRequestTag()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(
+            MakeContext("GET", "/Culture/Set", "?culture=nl&redirectUri=%2Fabout"), Respond());
+
+        StringAssert.Contains(sink.Lines[0], "[Web - Request]");
+    }
+
+    [TestMethod]
+    public async Task ScalarUiPage_UsesWebRequestTag()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(MakeContext("GET", "/scalar/v1"), Respond());
+
+        StringAssert.Contains(sink.Lines[0], "[Web - Request]");
+    }
+
+    [TestMethod]
+    public async Task CssFile_UsesWebAssetTag()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(MakeContext("GET", "/app.khy4lop6wu.css"), Respond());
+
+        StringAssert.Contains(sink.Lines[0], "[Web - Asset]");
+    }
+
+    [TestMethod]
+    public async Task JsFile_UsesWebAssetTag()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(MakeContext("GET", "/scalar/scalar.js"), Respond());
+
+        StringAssert.Contains(sink.Lines[0], "[Web - Asset]");
+    }
+
+    [TestMethod]
+    public async Task BlazorFrameworkAsset_UsesWebAssetTag()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(
+            MakeContext("GET", "/_framework/blazor.web.ne14ti1q68.js"), Respond());
+
+        StringAssert.Contains(sink.Lines[0], "[Web - Asset]");
+    }
+
+    [TestMethod]
+    public async Task BlazorContentAsset_UsesWebAssetTag()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(
+            MakeContext("GET", "/_content/Toolbelt.Blazor.I18nText/i18n.js"), Respond());
+
+        StringAssert.Contains(sink.Lines[0], "[Web - Asset]");
+    }
+
+    [TestMethod]
+    public async Task SvgFile_UsesWebAssetTag()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(MakeContext("GET", "/logo.svg"), Respond());
+
+        StringAssert.Contains(sink.Lines[0], "[Web - Asset]");
+    }
+
+    #endregion
+
+    // -------------------------------------------------------------------------
+    #region Row 9 — log levels: API at Information, web/assets at Debug
+
+    [TestMethod]
+    public async Task ApiRoute_LoggedAtInformationLevel()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(MakeContext("GET", "/api/v1/health"), Respond());
+
+        Assert.IsTrue(sink.Events.All(e => e.Level == LogEventLevel.Information),
+            "API routes must log at Information level");
+    }
+
+    [TestMethod]
+    public async Task WebRoute_LoggedAtDebugLevel()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(MakeContext("GET", "/about"), Respond());
+
+        Assert.IsTrue(sink.Events.All(e => e.Level == LogEventLevel.Debug),
+            "Blazor pages must log at Debug level");
+    }
+
+    [TestMethod]
+    public async Task StaticAsset_LoggedAtDebugLevel()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Debug);
+        await middleware.InvokeAsync(MakeContext("GET", "/app.css"), Respond());
+
+        Assert.IsTrue(sink.Events.All(e => e.Level == LogEventLevel.Debug),
+            "Static assets must log at Debug level");
+    }
+
+    [TestMethod]
+    public async Task WebRoute_NotVisibleAtInformationLevel()
+    {
+        // Default Build() uses MinimumLevel.Information — web routes must produce no output
+        var (middleware, sink) = Build();
+        await middleware.InvokeAsync(MakeContext("GET", "/about"), Respond());
+
+        Assert.AreEqual(0, sink.Lines.Count,
+            "Blazor pages must not appear in the log at Information level");
+    }
+
+    [TestMethod]
+    public async Task StaticAsset_NotVisibleAtInformationLevel()
+    {
+        var (middleware, sink) = Build();
+        await middleware.InvokeAsync(MakeContext("GET", "/logo.svg"), Respond());
+
+        Assert.AreEqual(0, sink.Lines.Count,
+            "Static assets must not appear in the log at Information level");
     }
 
     #endregion
