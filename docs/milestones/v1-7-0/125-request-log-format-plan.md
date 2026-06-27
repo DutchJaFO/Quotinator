@@ -188,30 +188,11 @@ StringAssert.Contains(sink.Lines[1], "→ 200 in");
 
 `SerilogLoggerFactory` is in the `Serilog.Extensions.Logging` package, which the API project already references. The test project references `Quotinator.Api` indirectly via `Microsoft.AspNetCore.Mvc.Testing`, so `Serilog.Extensions.Logging` is already on the test project's transitive closure. Verify with `dotnet list tests/Quotinator.Api.Tests package --include-transitive` before adding a direct reference.
 
-### 6. Document the secret-safety rule for what is captured
+### 7. Document the secret-safety rule for what is captured
 
 The security constraint is about **what data is captured**, not which routes are included. `POST /api/v1/admin/database/reset → 200 in 5ms` is safe to log — the path is not a secret; the API key is in the `X-Api-Key` header, which is never logged. The same applies to future `Authorization` and `Cookie` headers.
 
 Add the secret-logging rules below to `docs/logging.md` so they apply to all future logging work in this codebase.
-
----
-
-## Secret-logging rules (to be added to `docs/logging.md`)
-
-These rules apply permanently to all log output in Quotinator:
-
-| What | Rule |
-|---|---|
-| `X-Api-Key` header | Never log. Not the name, not the value. |
-| `Authorization` header | Never log. Not the scheme, not the token. |
-| `Cookie` header | Never log. Any cookie value may contain session or auth data. |
-| `Set-Cookie` response header | Never log. |
-| Query parameters on admin/auth routes | Never log. Auth tokens are sometimes passed as query parameters; the path filter must prevent these routes from entering any logging middleware. |
-| Request body | Never log. May contain credentials, PII, or import data. |
-| `User-Agent` value | Safe to log — it is identification, not authentication. |
-| Quote search parameters (`q`, `field`, `type`, `genre`, `lang`) | Safe to log — they are non-sensitive search terms. |
-
-**The security boundary is what is captured, not which routes are included.** Never log header values — `X-Api-Key`, `Authorization`, `Cookie`, `Set-Cookie`. The path and query string of any endpoint are safe to log. If query parameters ever carry secrets (e.g. `?token=...`), exclude only those parameters — do not exclude the route.
 
 ---
 
@@ -257,7 +238,7 @@ These are two separate outputs with different purposes and different security co
 | **Output** | HA supervisor log (human-readable text) | SQLite database (queryable records) |
 | **Admin routes** | **Included** — all endpoints are logged | **Included** — `reseed`, `reset`, and future admin actions are explicitly audited |
 | **What is stored** | Method, URL, status code, duration | Operation name, agent identity (`User-Agent`), timestamp |
-| **Secrets** | Never stored — path filter is a security boundary | Never stored — API key is authenticated but never recorded; only the agent is |
+| **Secrets** | Never stored — header values are never captured; only method, URL, status, duration | Never stored — API key is authenticated but never recorded; only the agent is |
 
 All endpoints appear in the request log — the request log confirms that the endpoint was called. The audit trail records what was done (the operation and who triggered it). See issue #73.
 
