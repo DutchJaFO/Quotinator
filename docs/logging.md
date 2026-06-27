@@ -65,6 +65,22 @@ grep "in [0-9]\{4\}" # requests taking 1 second or more
 
 If a query parameter ever carries a secret (e.g. `?token=...`), strip that parameter from the URL before logging — do not exclude the entire route.
 
+### Serilog quoting and the `{:l}` specifier
+
+Serilog quotes string properties in rendered output by default: `{Url}` → `"/api/v1/health"`. Use the `l` (literal) format specifier on every string property in `LogInformation` calls to suppress this:
+
+```csharp
+// Wrong — Serilog renders: [Api - Request] "a1b2c3d4" "GET" "/api/v1/health"
+_logger.LogInformation("[Api - Request] {Id} {Method} {Url}", id, method, url);
+
+// Correct — Serilog renders: [Api - Request] a1b2c3d4 GET /api/v1/health
+_logger.LogInformation("[Api - Request] {Id:l} {Method:l} {Url:l}", id, method, url);
+```
+
+Scalar numerics (`int`, `long`) are not quoted by Serilog and need no specifier.
+
+**Unit tests must use Serilog's actual rendering**, not the MEL `formatter` callback. A plain `ILogger` test double uses the MEL formatter, which does not add quotes — tests pass while Serilog still produces quoted output in production. Use a `CaptureSink : ILogEventSink` backed by a real `LoggerConfiguration` to test exactly what appears in the log.
+
 ### Configuration
 
 Request logging is enabled by the `log_requests` add-on config option (default: `true`). When disabled, the middleware is not registered and no request lines are emitted. This option exists for homelab setups where the operator does not want the overhead.

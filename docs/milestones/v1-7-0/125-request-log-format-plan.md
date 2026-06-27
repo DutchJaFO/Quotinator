@@ -114,42 +114,64 @@ if (logRequests)
 
 `IMiddleware` requires `AddSingleton` (or `AddScoped`) registration — it is not activated by convention alone.
 
-### 5. Test infrastructure — `CaptureLogger<T>`
+### 5. Use `{:l}` Serilog literal specifiers in the message template
 
-No new NuGet packages. Add one small test double to `tests/Quotinator.Api.Tests/`:
+Serilog quotes string properties in rendered output: `{Url}` → `"/api/v1/health"`. The MEL `formatter` does not — it substitutes values inline without quotes. A plain `ILogger` test double would therefore give false positives: tests pass while Serilog still produces quoted output in production.
+
+The fix is to use Serilog's `l` (literal) format specifier on every string property to suppress quoting:
 
 ```csharp
-// tests/Quotinator.Api.Tests/Helpers/CaptureLogger.cs
-internal sealed class CaptureLogger<T> : ILogger<T>
+_logger.LogInformation("[Api - Request] {Id:l} {Method:l} {Url:l}",
+    id, context.Request.Method, url);
+
+_logger.LogInformation("[Api - Request] {Id:l} {Method:l} {Url:l} → {Status} in {Ms}ms",
+    id, context.Request.Method, url,
+    context.Response.StatusCode, sw.ElapsedMilliseconds);
+```
+
+`{Status}` and `{Ms}` are integers — Serilog does not quote scalar numerics, so no `:l` needed.
+
+Serilog rendered output (what appears in the HA supervisor log):
+
+```
+[Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love
+[Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love → 200 in 14ms
+```
+
+### 6. Test infrastructure — `CaptureSink` (Serilog)
+
+Tests must use Serilog's actual rendering, not the MEL formatter. Serilog is already a production dependency — no new packages required. Add one sink implementation to `tests/Quotinator.Api.Tests/Helpers/`:
+
+```csharp
+// tests/Quotinator.Api.Tests/Helpers/CaptureSink.cs
+using Serilog.Core;
+using Serilog.Events;
+
+internal sealed class CaptureSink : ILogEventSink
 {
     public List<string> Lines { get; } = new();
 
-    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
-        => NullScope.Instance;
-
-    public bool IsEnabled(LogLevel logLevel) => true;
-
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
-        Exception? exception, Func<TState, Exception?, string> formatter)
-        => Lines.Add(formatter(state, exception));
-
-    private sealed class NullScope : IDisposable
-    {
-        public static readonly NullScope Instance = new();
-        public void Dispose() { }
-    }
+    public void Emit(LogEvent logEvent)
+        => Lines.Add(logEvent.RenderMessage());
 }
 ```
 
-Tests use it like this:
+Tests create a real Serilog logger backed by the sink, then wrap it in a MEL `ILogger<T>` via `SerilogLoggerFactory`:
 
 ```csharp
-var logger     = new CaptureLogger<RequestLoggingMiddleware>();
+var sink   = new CaptureSink();
+var serilog = new LoggerConfiguration()
+    .WriteTo.Sink(sink)
+    .CreateLogger();
+var logger = new SerilogLoggerFactory(serilog)
+    .CreateLogger<RequestLoggingMiddleware>();
+
 var middleware = new RequestLoggingMiddleware(logger);
 var context    = new DefaultHttpContext();
 
 context.Request.Method = "GET";
-context.Request.Path   = "/api/v1/health";
+context.Request.Path   = "/api/v1/quotes/search";
+context.Request.QueryString = new QueryString("?q=love");
 
 await middleware.InvokeAsync(context, ctx =>
 {
@@ -157,13 +179,14 @@ await middleware.InvokeAsync(context, ctx =>
     return Task.CompletedTask;
 });
 
-Assert.AreEqual(2, logger.Lines.Count);
-StringAssert.Contains(logger.Lines[0], "GET /api/v1/health");
-StringAssert.DoesNotMatch(logger.Lines[0], new Regex("→"));   // start line has no status
-StringAssert.Contains(logger.Lines[1], "→ 200 in");
+// Serilog renders {Id:l} without quotes — assertions match production output exactly
+Assert.AreEqual(2, sink.Lines.Count);
+StringAssert.Contains(sink.Lines[0], "GET /api/v1/quotes/search?q=love");
+StringAssert.DoesNotContain(sink.Lines[0], "→");   // start line has no status
+StringAssert.Contains(sink.Lines[1], "→ 200 in");
 ```
 
-`DefaultHttpContext` is available via `Microsoft.AspNetCore.Http` — no additional package needed in the Api test project because `Microsoft.AspNetCore.Mvc.Testing` already pulls it in.
+`SerilogLoggerFactory` is in the `Serilog.Extensions.Logging` package, which the API project already references. The test project references `Quotinator.Api` indirectly via `Microsoft.AspNetCore.Mvc.Testing`, so `Serilog.Extensions.Logging` is already on the test project's transitive closure. Verify with `dotnet list tests/Quotinator.Api.Tests package --include-transitive` before adding a direct reference.
 
 ### 6. Document the secret-safety rule for what is captured
 
@@ -220,7 +243,7 @@ grep "in [0-9]\{4\}" # requests taking 1 second or more
 
 ## Out of scope
 
-- Do not add a structured logging library (e.g. `UseSerilogRequestLogging`) — the hand-rolled middleware needs the health-exclusion filter and must never log headers
+- Do not add a structured logging library (e.g. `UseSerilogRequestLogging`) — the hand-rolled middleware gives direct control over what is captured and must never log header values
 - Do not log request headers — never log `X-Api-Key`, `Authorization`, `Cookie`, or `Set-Cookie`; `User-Agent` is captured via `ICallerContext` in the audit trail (#73), not here
 
 ---
@@ -247,10 +270,10 @@ All endpoints appear in the request log — the request log confirms that the en
 | 1 | ⬜ | Start line emitted on request arrival (before `next()`) | Unit test | `RequestLogFormattingTests.StartLine_EmittedBeforeResponse` — assert first log line has no `→` and no status code |
 | 2 | ⬜ | End line contains URL, status, and duration | Unit test | `RequestLogFormattingTests.EndLine_ContainsStatusAndDuration` — assert second log line contains `→ 200 in` and `ms` |
 | 3 | ⬜ | Start and end lines share the same correlation ID | Unit test | `RequestLogFormattingTests.BothLines_ShareCorrelationId` — assert the 8-char hex token is identical on both lines |
-| 4 | ⬜ | URL combines path and query string without double-quote | Unit test | `RequestLogFormattingTests.Url_PathAndQueryCombined` — assert rendered URL contains `search?q=back` (no `""` between path and query) |
-| 5 | ⬜ | Path-only requests log cleanly (no trailing separator) | Unit test | `RequestLogFormattingTests.Url_NoQuery_NoTrailingSeparator` — assert `/api/v1/health` with no query produces no trailing character |
-| 6 | ⬜ | All endpoints are logged — including health and admin | Unit test | `RequestLogFormattingTests.AllRoutes_AreLogged` — assert `GET /api/v1/health` and `POST /api/v1/admin/database/reseed` both produce two log lines |
-| 7 | ⬜ | `[Api - Request]` prefix present on both lines | Unit test | `RequestLogFormattingTests.BothLines_HavePrefix` — assert both start and end lines begin with `[Api - Request]` |
+| 4 | ⬜ | String properties rendered without surrounding quotes (Serilog `{:l}` specifier) | Unit test | `RequestLogFormattingTests.StringProperties_NotQuoted` — uses `CaptureSink`; asserts rendered line does not wrap `GET`, the correlation ID, or the URL in double-quotes |
+| 5 | ⬜ | URL combines path and query without double-quote or trailing separator | Unit test | `RequestLogFormattingTests.Url_PathAndQueryCombined` — uses `CaptureSink`; asserts `search?q=back` present with no `""` between segments; `RequestLogFormattingTests.Url_NoQuery_NoTrailingSeparator` — path-only request produces no trailing character |
+| 6 | ⬜ | All endpoints are logged — including health and admin | Unit test | `RequestLogFormattingTests.AllRoutes_AreLogged` — uses `CaptureSink`; asserts `GET /api/v1/health` and `POST /api/v1/admin/database/reseed` both produce two log lines |
+| 7 | ⬜ | `[Api - Request]` prefix present on both lines | Unit test | `RequestLogFormattingTests.BothLines_HavePrefix` — uses `CaptureSink`; asserts both start and end lines begin with `[Api - Request]` |
 | 8 | ⬜ | No header values appear in any log line | Code review | `Program.cs` middleware block accesses only `Method`, `Path`, `QueryString`, `StatusCode`, and elapsed ms — no `Headers` access |
-| 9 | ⬜ | `docs/logging.md` updated to reflect two-line format | Code review | Observability overview and request log section show the two-line format with correlation ID |
-| 10 | ⬜ | User starts app in VS; overlapping request pairs visible and correlatable in log | Live | Hit several endpoints in quick succession; confirm start and end lines appear for each; confirm IDs match across pairs |
+| 9 | ⬜ | `docs/logging.md` updated to reflect two-line format with `{:l}` note | Code review | Observability overview and request log section show two-line format; note that `{:l}` is required on string properties |
+| 10 | ⬜ | User starts app in VS; overlapping request pairs visible and correlatable in log | Live | Hit several endpoints in quick succession; confirm start and end lines appear for each; confirm IDs match across pairs; confirm no surrounding quotes on method, ID, or URL |
