@@ -9,27 +9,29 @@
     "fixed": "Opgelost",
     "removed": "Verwijderd"
   },
-  "unreleased": {
-    "issues": [70, 109, 111, 115, 117],
-    "highlights": [
-      "De zoekfunctie geeft nu uitleg wanneer geen citaten aan uw filters voldoen, in plaats van stilzwijgend een lege lijst te retourneren."
-    ],
-    "added": [
-      "Session-start hook voor Claude Code cloud-/remote-sessies installeert nu automatisch de .NET 10 SDK en dotnet-script — bouwen, testen en changelog-regeneratie kunnen nu volledig worden uitgevoerd zonder lokale terminal (issue #117)"
-    ],
-    "changed": [
-      "Alle Dapper-infrastructuur verplaatst van Quotinator.Core naar Quotinator.Data — DatabaseInitializer is nu generiek en accepteert elke migratielijst; Quotinator-specifieke migratie-SQL verplaatst naar QuotinatorMigrations in Quotinator.Core (issue #115)",
-      "Alle testprojecten gebruiken nu standaard sequentiële uitvoering — parallelle uitvoering is een expliciete opt-in op klasseniveau (ADR 006); Dapper type handler-registratie verplaatst naar [AssemblyInitialize] om race conditions bij parallelle testuitvoering te voorkomen (issue #111)",
-      "CI- en release-workflows delen nu één herbruikbare build/test-workflow (_build-test.yml) — bouwstappen worden niet meer gedupliceerd; releases volgen een tweefasig beta/definitief-model met expliciete T1/T2/T3-verificatieniveaus (issue #70)"
-    ],
-    "fixed": [
-      "Het zoekeindpunt geeft nu een resultaatomhulsel terug (status, items, totalMatching, message) consistent met het /random-eindpunt — aanroepers kunnen nu NoResults onderscheiden van een leeg resultaat (issue #109)",
-      "Het zoekeindpunt valideert nu type- en genrefilterwaarden en geeft de status InvalidType of InvalidGenre terug voor onbekende waarden (issue #109)",
-      "Alle quote-API-eindpunten geven nu een logboekregel op ingangsniveau met het voorvoegsel [Api - *] om het traceren van verzoeken te verbeteren (issue #109)",
-      "SQLite-integratietests toegevoegd voor zoekopdrachten via field=author en field=character, inclusief de NULL LIKE data-gap-scenario's (issue #109)"
-    ]
-  },
   "releases": [
+    {
+      "version": "1.7.0",
+      "date": "2026-06-27",
+      "issues": [70, 109, 111, 115, 117],
+      "highlights": [
+        "De zoekfunctie geeft nu uitleg wanneer geen citaten aan uw filters voldoen, in plaats van stilzwijgend een lege lijst te retourneren."
+      ],
+      "added": [
+        "Session-start hook voor Claude Code cloud-/remote-sessies installeert nu automatisch de .NET 10 SDK en dotnet-script — bouwen, testen en changelog-regeneratie kunnen nu volledig worden uitgevoerd zonder lokale terminal (issue #117)"
+      ],
+      "changed": [
+        "Alle Dapper-infrastructuur verplaatst van Quotinator.Core naar Quotinator.Data — DatabaseInitializer is nu generiek en accepteert elke migratielijst; Quotinator-specifieke migratie-SQL verplaatst naar QuotinatorMigrations in Quotinator.Core (issue #115)",
+        "Alle testprojecten gebruiken nu standaard sequentiële uitvoering — parallelle uitvoering is een expliciete opt-in op klasseniveau (ADR 006); Dapper type handler-registratie verplaatst naar [AssemblyInitialize] om race conditions bij parallelle testuitvoering te voorkomen (issue #111)",
+        "CI- en release-workflows delen nu één herbruikbare build/test-workflow (_build-test.yml) — bouwstappen worden niet meer gedupliceerd; releases volgen een tweefasig beta/definitief-model met expliciete T1/T2/T3-verificatieniveaus (issue #70)"
+      ],
+      "fixed": [
+        "Het zoekeindpunt geeft nu een resultaatomhulsel terug (status, items, totalMatching, message) consistent met het /random-eindpunt — aanroepers kunnen nu NoResults onderscheiden van een leeg resultaat (issue #109)",
+        "Het zoekeindpunt valideert nu type- en genrefilterwaarden en geeft de status InvalidType of InvalidGenre terug voor onbekende waarden (issue #109)",
+        "Alle quote-API-eindpunten geven nu een logboekregel op ingangsniveau met het voorvoegsel [Api - *] om het traceren van verzoeken te verbeteren (issue #109)",
+        "SQLite-integratietests toegevoegd voor zoekopdrachten via field=author en field=character, inclusief de NULL LIKE data-gap-scenario's (issue #109)"
+      ]
+    },
     {
       "version": "1.6.5",
       "date": "2026-06-24",

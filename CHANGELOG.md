@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-27 09:35 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-27 09:54 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.7.0] - 2026-06-27
 
 ### Highlights
 - The search endpoint now explains when no quotes match your filters, instead of returning an empty list silently.
@@ -626,7 +626,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.5...HEAD
+[1.7.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.5...v1.7.0
 [1.6.5]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.2...v1.6.3

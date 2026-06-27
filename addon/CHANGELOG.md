@@ -1,10 +1,16 @@
-##### *GENERATED FILE [2026-06-27 09:35 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-27 09:54 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
+
+## [1.7.0] - 2026-06-27
+
+- The search endpoint now explains when no quotes match your filters, instead of returning an empty list silently.
+
+---
 
 ## [1.6.5] - 2026-06-24
 
