@@ -1,0 +1,18 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Quotinator.Constants -> /home/user/Quotinator/src/Quotinator.Constants/bin/Release/net10.0/Quotinator.Constants.dll
+  Quotinator.Changelog -> /home/user/Quotinator/src/Quotinator.Changelog/bin/Release/net10.0/Quotinator.Changelog.dll
+  Quotinator.Data -> /home/user/Quotinator/src/Quotinator.Data/bin/Release/net10.0/Quotinator.Data.dll
+  Quotinator.Core -> /home/user/Quotinator/src/Quotinator.Core/bin/Release/net10.0/Quotinator.Core.dll
+  Quotinator.Changelog.Tests -> /home/user/Quotinator/tests/Quotinator.Changelog.Tests/bin/Release/net10.0/Quotinator.Changelog.Tests.dll
+  Quotinator.Core.Tests -> /home/user/Quotinator/tests/Quotinator.Core.Tests/bin/Release/net10.0/Quotinator.Core.Tests.dll
+  Quotinator.Data.Tests -> /home/user/Quotinator/tests/Quotinator.Data.Tests/bin/Release/net10.0/Quotinator.Data.Tests.dll
+  Quotinator.Api -> /home/user/Quotinator/src/Quotinator.Api/bin/Release/net10.0/Quotinator.Api.dll
+  Quotinator.Api.Tests -> /home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/Quotinator.Api.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:04.52
+Exit code: 0

@@ -1,0 +1,1404 @@
+Build started 06/27/2026 08:17:40.
+     1>Project "/home/user/Quotinator/Quotinator.slnx" on node 1 (Restore target(s)).
+     1>ValidateSolutionConfiguration:
+         Building solution configuration "Release|Any CPU".
+       _GetAllRestoreProjectPathItems:
+         Determining projects to restore...
+     1>Project "/home/user/Quotinator/Quotinator.slnx" (1) is building "/home/user/Quotinator/src/Quotinator.Data/Quotinator.Data.csproj" (3:9) on node 1 (_GenerateProjectRestoreGraph target(s)).
+     3>AddPrunePackageReferences:
+         Loading prune package data from PrunePackageData folder
+         Failed to load prune package data from PrunePackageData folder, loading from targeting packs instead
+         Looking for targeting packs in /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref
+         Pack directories found: /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.9
+         Found package overrides file /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.9/data/PackageOverrides.txt
+     1>Project "/home/user/Quotinator/Quotinator.slnx" (1) is building "/home/user/Quotinator/src/Quotinator.Changelog/Quotinator.Changelog.csproj" (7:7) on node 4 (_GenerateProjectRestoreGraph target(s)).
+     7>AddPrunePackageReferences:
+         Loading prune package data from PrunePackageData folder
+         Failed to load prune package data from PrunePackageData folder, loading from targeting packs instead
+         Looking for targeting packs in /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref
+         Pack directories found: /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.9
+     1>Project "/home/user/Quotinator/Quotinator.slnx" (1) is building "/home/user/Quotinator/src/Quotinator.Constants/Quotinator.Constants.csproj" (9:7) on node 3 (_GenerateProjectRestoreGraph target(s)).
+     9>AddPrunePackageReferences:
+         Loading prune package data from PrunePackageData folder
+         Failed to load prune package data from PrunePackageData folder, loading from targeting packs instead
+         Looking for targeting packs in /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref
+         Pack directories found: /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.9
+     7>AddPrunePackageReferences:
+         Found package overrides file /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.9/data/PackageOverrides.txt
+     3>Done Building Project "/home/user/Quotinator/src/Quotinator.Data/Quotinator.Data.csproj" (_GenerateProjectRestoreGraph target(s)).
+     9>AddPrunePackageReferences:
+         Found package overrides file /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.9/data/PackageOverrides.txt
+     1>Project "/home/user/Quotinator/Quotinator.slnx" (1) is building "/home/user/Quotinator/src/Quotinator.Core/Quotinator.Core.csproj" (10:7) on node 2 (_GenerateProjectRestoreGraph target(s)).
+    10>AddPrunePackageReferences:
+         Loading prune package data from PrunePackageData folder
+         Failed to load prune package data from PrunePackageData folder, loading from targeting packs instead
+         Looking for targeting packs in /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref
+     1>Project "/home/user/Quotinator/Quotinator.slnx" (1) is building "/home/user/Quotinator/src/Quotinator.Api/Quotinator.Api.csproj" (2:6) on node 1 (_GenerateProjectRestoreGraph target(s)).
+     2>AddPrunePackageReferences:
+         Loading prune package data from PrunePackageData folder
+         Failed to load prune package data from PrunePackageData folder, loading from targeting packs instead
+         Looking for targeting packs in /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref
+         Pack directories found: /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.9
+         Found package overrides file /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.9/data/PackageOverrides.txt
+    10>AddPrunePackageReferences:
+         Pack directories found: /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.9
+     2>AddPrunePackageReferences:
+         Loading prune package data from PrunePackageData folder
+         Failed to load prune package data from PrunePackageData folder, loading from targeting packs instead
+         Looking for targeting packs in /usr/lib/dotnet/packs/Microsoft.AspNetCore.App.Ref
+         Pack directories found: /usr/lib/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.9
+         Found package overrides file /usr/lib/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.9/data/PackageOverrides.txt
+     7>Done Building Project "/home/user/Quotinator/src/Quotinator.Changelog/Quotinator.Changelog.csproj" (_GenerateProjectRestoreGraph target(s)).
+     9>Done Building Project "/home/user/Quotinator/src/Quotinator.Constants/Quotinator.Constants.csproj" (_GenerateProjectRestoreGraph target(s)).
+    10>AddPrunePackageReferences:
+         Found package overrides file /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.9/data/PackageOverrides.txt
+     2>Done Building Project "/home/user/Quotinator/src/Quotinator.Api/Quotinator.Api.csproj" (_GenerateProjectRestoreGraph target(s)).
+    10>Done Building Project "/home/user/Quotinator/src/Quotinator.Core/Quotinator.Core.csproj" (_GenerateProjectRestoreGraph target(s)).
+     1>Restore:
+         X.509 certificate chain validation will use the fallback certificate bundle at '/usr/lib/dotnet/sdk/10.0.109/trustedroots/codesignctl.pem'.
+         X.509 certificate chain validation will use the fallback certificate bundle at '/usr/lib/dotnet/sdk/10.0.109/trustedroots/timestampctl.pem'.
+         Assets file has not changed. Skipping assets file writing. Path: /home/user/Quotinator/src/Quotinator.Constants/obj/project.assets.json
+         Assets file has not changed. Skipping assets file writing. Path: /home/user/Quotinator/src/Quotinator.Api/obj/project.assets.json
+         Restored /home/user/Quotinator/src/Quotinator.Api/Quotinator.Api.csproj (in 101 ms).
+         Assets file has not changed. Skipping assets file writing. Path: /home/user/Quotinator/src/Quotinator.Data/obj/project.assets.json
+         Restored /home/user/Quotinator/src/Quotinator.Data/Quotinator.Data.csproj (in 111 ms).
+         Restored /home/user/Quotinator/src/Quotinator.Constants/Quotinator.Constants.csproj (in 107 ms).
+         Assets file has not changed. Skipping assets file writing. Path: /home/user/Quotinator/tests/Quotinator.Api.Tests/obj/project.assets.json
+         Restored /home/user/Quotinator/tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj (in 107 ms).
+         Assets file has not changed. Skipping assets file writing. Path: /home/user/Quotinator/src/Quotinator.Changelog/obj/project.assets.json
+         Restored /home/user/Quotinator/src/Quotinator.Changelog/Quotinator.Changelog.csproj (in 0.7 ms).
+         Assets file has not changed. Skipping assets file writing. Path: /home/user/Quotinator/src/Quotinator.Core/obj/project.assets.json
+         Restored /home/user/Quotinator/src/Quotinator.Core/Quotinator.Core.csproj (in 0.9 ms).
+         Assets file has not changed. Skipping assets file writing. Path: /home/user/Quotinator/tests/Quotinator.Data.Tests/obj/project.assets.json
+         Restored /home/user/Quotinator/tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj (in 1 ms).
+         Assets file has not changed. Skipping assets file writing. Path: /home/user/Quotinator/tests/Quotinator.Core.Tests/obj/project.assets.json
+         Restored /home/user/Quotinator/tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj (in 2 ms).
+         Assets file has not changed. Skipping assets file writing. Path: /home/user/Quotinator/tests/Quotinator.Changelog.Tests/obj/project.assets.json
+         Restored /home/user/Quotinator/tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj (in 0.9 ms).
+         
+         NuGet Config files used:
+             /root/.nuget/NuGet/NuGet.Config
+         
+         Feeds used:
+             https://api.nuget.org/v3/index.json
+             /usr/lib/dotnet/library-packs
+         All projects are up-to-date for restore.
+     1>Done Building Project "/home/user/Quotinator/Quotinator.slnx" (Restore target(s)).
+   1:2>Project "/home/user/Quotinator/Quotinator.slnx" on node 1 (VSTest target(s)).
+     1>ValidateSolutionConfiguration:
+         Building solution configuration "Release|Any CPU".
+   1:2>Project "/home/user/Quotinator/Quotinator.slnx" (1:2) is building "/home/user/Quotinator/tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" (4:6) on node 2 (VSTest target(s)).
+     4>BuildProject:
+         Build started, please wait...
+   1:2>Project "/home/user/Quotinator/Quotinator.slnx" (1:2) is building "/home/user/Quotinator/tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" (6:6) on node 1 (VSTest target(s)).
+     6>BuildProject:
+         Build started, please wait...
+   1:2>Project "/home/user/Quotinator/Quotinator.slnx" (1:2) is building "/home/user/Quotinator/tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" (5:6) on node 3 (VSTest target(s)).
+     5>BuildProject:
+         Build started, please wait...
+   1:2>Project "/home/user/Quotinator/Quotinator.slnx" (1:2) is building "/home/user/Quotinator/tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" (8:6) on node 4 (VSTest target(s)).
+     8>BuildProject:
+         Build started, please wait...
+   5:6>Project "/home/user/Quotinator/tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" (5:6) is building "/home/user/Quotinator/tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" (5:7) on node 3 (default targets).
+   5:7>Project "/home/user/Quotinator/tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" (5:7) is building "/home/user/Quotinator/src/Quotinator.Changelog/Quotinator.Changelog.csproj" (7:11) on node 3 (default targets).
+     7>GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+       CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+       _GenerateSourceLinkFile:
+         Source Link is empty, file 'obj/Release/net10.0/Quotinator.Changelog.sourcelink.json' does not exist.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+       CopyFilesToOutputDirectory:
+         Quotinator.Changelog -> /home/user/Quotinator/src/Quotinator.Changelog/bin/Release/net10.0/Quotinator.Changelog.dll
+     7>Done Building Project "/home/user/Quotinator/src/Quotinator.Changelog/Quotinator.Changelog.csproj" (default targets).
+     5>GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+       CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+       _GenerateSourceLinkFile:
+         Source Link is empty, file 'obj/Release/net10.0/Quotinator.Changelog.Tests.sourcelink.json' does not exist.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildRuntimeConfigurationFiles:
+       Skipping target "GenerateBuildRuntimeConfigurationFiles" because all output files are up-to-date with respect to the input files.
+       CopyFilesToOutputDirectory:
+         Quotinator.Changelog.Tests -> /home/user/Quotinator/tests/Quotinator.Changelog.Tests/bin/Release/net10.0/Quotinator.Changelog.Tests.dll
+     5>Done Building Project "/home/user/Quotinator/tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" (default targets).
+     5>BuildProject:
+         Build completed.
+         
+Test run for /home/user/Quotinator/tests/Quotinator.Changelog.Tests/bin/Release/net10.0/Quotinator.Changelog.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+  Passed AtLeastOneChangelogFile_IsLoaded [6 ms]
+  Passed AllFiles_HaveRequiredRootFields [1 ms]
+  Passed AllReleases_HaveNonEmptyVersionAndDate [1 ms]
+  Passed AllReleases_StringArrays_ContainNoNullEntries [1 ms]
+  Passed AllReleases_CveEntries_MatchExpectedFormat [2 ms]
+  Passed AllReleases_AudienceHighlights_ContainNoNullEntries [< 1 ms]
+  Passed SectionHeaders_WhenPresent_HaveNonEmptyValues [< 1 ms]
+  Passed AllLanguageFiles_HaveMatchingVersionLists [5 ms]
+  Passed GetForCulture_En_ReturnsEnDocument [58 ms]
+  Passed GetForCulture_Null_ReturnsEnDocument [< 1 ms]
+  Passed GetForCulture_LongCulture_NormalisesToBaseCode [< 1 ms]
+  Passed GetForCulture_RequestedLanguageExists_ReturnsCorrectDocument [6 ms]
+  Passed GetForCulture_RequestedLanguageAbsent_FallsBackToEn [< 1 ms]
+  Passed GetForCulture_NeitherRequestedNorEnExists_ReturnsNull [< 1 ms]
+  Passed AvailableLanguages_ReflectsLoadedFileCount [< 1 ms]
+  Passed Constructor_NonExistentDirectory_AvailableLanguagesEmpty [< 1 ms]
+  Passed Constructor_NonExistentDirectory_GetForCultureReturnsNull [< 1 ms]
+  Passed Build_FirstLine_StartsWithNoticePrefix [1 ms]
+  Passed Build_FirstLine_ContainsUtcTimestampSuffix [< 1 ms]
+  Passed Build_FirstLine_ContainsDoNotEditInstruction [< 1 ms]
+  Passed Build_FirstLine_TimestampMatchesInputValue [< 1 ms]
+  Passed Build_ContainsEditLabelAndInputPath [< 1 ms]
+  Passed Build_ContainsRegenerateLabel [< 1 ms]
+  Passed Build_ContainsRegenerateCommand [< 1 ms]
+  Passed Build_Minimal_StartsWithNoticePrefix [4 ms]
+  Passed Build_Minimal_ContainsUtcTimestampSuffix [< 1 ms]
+  Passed Build_Minimal_TimestampMatchesInputValue [< 1 ms]
+  Passed Build_Minimal_IsSingleLine [< 1 ms]
+  Passed Build_Minimal_DoesNotContainEditLabel [< 1 ms]
+  Passed Build_Minimal_DoesNotContainRegenerateLabel [< 1 ms]
+
+Test Run Successful.
+Total tests: 30
+     Passed: 30
+ Total time: 0.9679 Seconds
+     5>Done Building Project "/home/user/Quotinator/tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" (VSTest target(s)).
+   6:6>Project "/home/user/Quotinator/tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" (6:6) is building "/home/user/Quotinator/tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" (6:7) on node 1 (default targets).
+   6:7>Project "/home/user/Quotinator/tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" (6:7) is building "/home/user/Quotinator/src/Quotinator.Data/Quotinator.Data.csproj" (3:14) on node 3 (default targets).
+     3>GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+       CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+       _GenerateSourceLinkFile:
+         Source Link is empty, file 'obj/Release/net10.0/Quotinator.Data.sourcelink.json' does not exist.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+       CopyFilesToOutputDirectory:
+         Quotinator.Data -> /home/user/Quotinator/src/Quotinator.Data/bin/Release/net10.0/Quotinator.Data.dll
+     3>Done Building Project "/home/user/Quotinator/src/Quotinator.Data/Quotinator.Data.csproj" (default targets).
+   4:6>Project "/home/user/Quotinator/tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" (4:6) is building "/home/user/Quotinator/tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" (4:7) on node 2 (default targets).
+   4:7>Project "/home/user/Quotinator/tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" (4:7) is building "/home/user/Quotinator/src/Quotinator.Constants/Quotinator.Constants.csproj" (9:11) on node 2 (default targets).
+     9>GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+       CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+   6:7>Project "/home/user/Quotinator/tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" (6:7) is building "/home/user/Quotinator/src/Quotinator.Core/Quotinator.Core.csproj" (10:11) on node 1 (default targets).
+    10>GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+   8:6>Project "/home/user/Quotinator/tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" (8:6) is building "/home/user/Quotinator/tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" (8:7) on node 4 (default targets).
+     8>GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+     9>_GenerateSourceLinkFile:
+         Source Link is empty, file 'obj/Release/net10.0/Quotinator.Constants.sourcelink.json' does not exist.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+       CopyFilesToOutputDirectory:
+         Quotinator.Constants -> /home/user/Quotinator/src/Quotinator.Constants/bin/Release/net10.0/Quotinator.Constants.dll
+     9>Done Building Project "/home/user/Quotinator/src/Quotinator.Constants/Quotinator.Constants.csproj" (default targets).
+    10>CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+     8>CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+    10>_GenerateSourceLinkFile:
+         Source Link is empty, file 'obj/Release/net10.0/Quotinator.Core.sourcelink.json' does not exist.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+     8>_GenerateSourceLinkFile:
+         Source Link is empty, file 'obj/Release/net10.0/Quotinator.Data.Tests.sourcelink.json' does not exist.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+    10>GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+     8>_CopyOutOfDateSourceItemsToOutputDirectory:
+       Skipping target "_CopyOutOfDateSourceItemsToOutputDirectory" because all output files are up-to-date with respect to the input files.
+    10>CopyFilesToOutputDirectory:
+         Quotinator.Core -> /home/user/Quotinator/src/Quotinator.Core/bin/Release/net10.0/Quotinator.Core.dll
+     8>GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildRuntimeConfigurationFiles:
+       Skipping target "GenerateBuildRuntimeConfigurationFiles" because all output files are up-to-date with respect to the input files.
+       CopyFilesToOutputDirectory:
+         Quotinator.Data.Tests -> /home/user/Quotinator/tests/Quotinator.Data.Tests/bin/Release/net10.0/Quotinator.Data.Tests.dll
+    10>Done Building Project "/home/user/Quotinator/src/Quotinator.Core/Quotinator.Core.csproj" (default targets).
+     8>Done Building Project "/home/user/Quotinator/tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" (default targets).
+     6>GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+       CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+       _GenerateSourceLinkFile:
+         Source Link is empty, file 'obj/Release/net10.0/Quotinator.Core.Tests.sourcelink.json' does not exist.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+   4:7>Project "/home/user/Quotinator/tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" (4:7) is building "/home/user/Quotinator/src/Quotinator.Api/Quotinator.Api.csproj" (2:9) on node 4 (default targets).
+     2>_I18nText_GenerateLocalizedTextResourceJson:
+         I18nTextSourceDirectory: [/home/user/Quotinator/src/Quotinator.Api/i18ntext]
+         OutDirectory  : [/home/user/Quotinator/src/Quotinator.Api/obj/dist/_content/i18ntext/]
+         FallBackLanguage: [en-GB]
+         - /home/user/Quotinator/src/Quotinator.Api/i18ntext/UI.de.json, utf-8
+         - /home/user/Quotinator/src/Quotinator.Api/i18ntext/UI.en-GB.json, utf-8
+         - /home/user/Quotinator/src/Quotinator.Api/i18ntext/UI.nl.json, utf-8
+     6>GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildRuntimeConfigurationFiles:
+       Skipping target "GenerateBuildRuntimeConfigurationFiles" because all output files are up-to-date with respect to the input files.
+       CopyFilesToOutputDirectory:
+         Quotinator.Core.Tests -> /home/user/Quotinator/tests/Quotinator.Core.Tests/bin/Release/net10.0/Quotinator.Core.Tests.dll
+     6>Done Building Project "/home/user/Quotinator/tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" (default targets).
+     6>BuildProject:
+         Build completed.
+         
+Test run for /home/user/Quotinator/tests/Quotinator.Core.Tests/bin/Release/net10.0/Quotinator.Core.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+     2>_I18nText_GenerateLocalizedTextResourceJson:
+         Touching "/home/user/Quotinator/src/Quotinator.Api/obj/dist/_content/i18ntext/.UpToDateMarker".
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+       GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+       CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+       _DiscoverMvcApplicationParts:
+       Skipping target "_DiscoverMvcApplicationParts" because all output files are up-to-date with respect to the input files.
+       _GenerateSourceLinkFile:
+         Source Link is empty, file 'obj/Release/net10.0/Quotinator.Api.sourcelink.json' does not exist.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+       _CreateAppHost:
+       Skipping target "_CreateAppHost" because all output files are up-to-date with respect to the input files.
+     8>BuildProject:
+         Build completed.
+         
+Test run for /home/user/Quotinator/tests/Quotinator.Data.Tests/bin/Release/net10.0/Quotinator.Data.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+Test Parallelization enabled for /home/user/Quotinator/tests/Quotinator.Core.Tests/bin/Release/net10.0/Quotinator.Core.Tests.dll (Workers: 4, Scope: MethodLevel)
+  Passed Resolve_ExactCultureMatch_ReturnsTranslation [47 ms]
+  Passed Resolve_KeyAbsentFromTranslation_FallsBackToEnglish [< 1 ms]
+  Passed Resolve_TwoLetterFallback_ReturnsTranslation [40 ms]
+  Passed Resolve_EnglishCulture_ReturnsEnglishValue [< 1 ms]
+  Passed Resolve_NoMatchForCulture_FallsBackToEnglish [48 ms]
+  Passed Resolve_KeyNotFoundAnywhere_ReturnsKey [16 ms]
+  Passed Load_MissingFile_ReturnsEmpty [1 ms]
+  Passed Load_EachSourceFile_ReturnsQuotes [134 ms]
+  Passed Load_EachSourceFile_AllEntriesHaveRequiredFields [138 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Schema.InsertVersion","INSERT INTO SchemaVersion (Version, AppliedAt) VALUES (@v, @at);") [3 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Schema.CreateTable","CREATE TABLE IF NOT EXISTS SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Schema.GetUserTables","SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'SchemaVersion';") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Schema.DeleteAll","DELETE FROM SchemaVersion;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Quotes.CountActive","SELECT COUNT(*) FROM Quotes WHERE IsDeleted = 0;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Quotes.DeleteAll","DELETE FROM Quotes;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Quotes.Insert","INSERT OR IGNORE INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted) VALUES (@Id, @QuoteText, @OriginalLanguage, @SourceId, @CharacterId, @PersonId, @ImportBatchId, @DateCreated, NULL, NULL, 0);") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Quotes.UpdateOnOverwrite","UPDATE Quotes SET QuoteText=@text, OriginalLanguage=@lang, SourceId=@sid, CharacterId=@cid, PersonId=@pid, ImportBatchId=@batchId, DateModified=@mod WHERE Id=@id;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Quotes.SelectBase","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Quotes.CountForRandomBase","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Quotes.CountForGetAllBase","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("SearchField.Quote","q.QuoteText LIKE @like") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("SearchField.Source","s.Title LIKE @like") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("SearchField.Character","c.Name LIKE @like") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("SearchField.Author","p.Name LIKE @like") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("SearchField.All","(q.QuoteText LIKE @like OR s.Title LIKE @like OR c.Name LIKE @like OR p.Name LIKE @like)") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("QuoteGenres.CountAll","SELECT COUNT(*) FROM QuoteGenres;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("QuoteGenres.DeleteAll","DELETE FROM QuoteGenres;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("QuoteGenres.DeleteForQuote","DELETE FROM QuoteGenres WHERE QuoteId = @id;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("QuoteGenres.LoadForQuote","SELECT Genre FROM QuoteGenres WHERE QuoteId = @id AND IsDeleted = 0") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("QuoteGenres.Insert","INSERT OR IGNORE INTO QuoteGenres (Id, QuoteId, Genre, DateCreated, DateModified, DateDeleted, IsDeleted) VALUES (@Id, @QuoteId, @Genre, @DateCreated, NULL, NULL, 0);") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("QuoteGenres.InsertWithExistsGuard","INSERT OR IGNORE INTO QuoteGenres (Id, QuoteId, Genre, DateCreated, DateModified, DateDeleted, IsDeleted) SELECT @Id, @QuoteId, @Genre, @DateCreated, NULL, NULL, 0 WHERE EXISTS (SELECT 1 FROM Quotes WHERE Id = @QuoteId AND IsDeleted = 0);") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("QuoteTranslations.DeleteAll","DELETE FROM QuoteTranslations;") [< 1 ms]
+Test Parallelization enabled for /home/user/Quotinator/tests/Quotinator.Data.Tests/bin/Release/net10.0/Quotinator.Data.Tests.dll (Workers: 4, Scope: MethodLevel)
+  Passed SqlConstant_PassesAggregateGuard ("QuoteTranslations.DeleteForQuote","DELETE FROM QuoteTranslations WHERE QuoteId = @id;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("QuoteTranslations.Insert","INSERT OR IGNORE INTO QuoteTranslations (Id, QuoteId, Language, QuoteText, DateCreated, DateModified, DateDeleted, IsDeleted) VALUES (@Id, @QuoteId, @Language, @QuoteText, @DateCreated, NULL, NULL, 0);") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("SourceTranslations.DeleteAll","DELETE FROM SourceTranslations;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("SourceTranslations.CountForSource","SELECT COUNT(*) FROM SourceTranslations WHERE SourceId = @sid AND Language = @lang AND IsDeleted = 0;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("CharacterTranslations.DeleteAll","DELETE FROM CharacterTranslations;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Characters.CountActive","SELECT COUNT(*) FROM Characters WHERE IsDeleted = 0;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Characters.DeleteAll","DELETE FROM Characters;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("People.CountActive","SELECT COUNT(*) FROM People WHERE IsDeleted = 0;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("People.DeleteAll","DELETE FROM People;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Sources.CountActive","SELECT COUNT(*) FROM Sources WHERE IsDeleted = 0;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Sources.DeleteAll","DELETE FROM Sources;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("ImportBatches.SelectAll","SELECT * FROM ImportBatches WHERE IsDeleted = 0 ORDER BY ImportedAt DESC;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("ImportBatches.SelectByType","SELECT * FROM ImportBatches WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("ImportBatches.UpdateRecordCount","UPDATE ImportBatches SET RecordCount = @count, DateModified = @now WHERE Id = @id;") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("ImportBatches.DeleteAll","DELETE FROM ImportBatches;") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(no filters)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(no filters)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(no filters)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(no filters)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(type)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(type)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(type)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(type)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(genre)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(genre)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(genre)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(genre)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(lang)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(lang)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(lang)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(lang)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(character)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND c.Name LIKE @characterLike") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(character)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND c.Name LIKE @characterLike") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(character)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND c.Name LIKE @characterLike ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(character)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND c.Name LIKE @characterLike ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(author)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND p.Name LIKE @authorLike") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(author)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND p.Name LIKE @authorLike") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(author)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND p.Name LIKE @authorLike ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(author)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND p.Name LIKE @authorLike ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(source)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Title LIKE @sourceLike") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(source)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Title LIKE @sourceLike") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(source)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Title LIKE @sourceLike ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(source)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Title LIKE @sourceLike ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(yearFrom)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(yearFrom)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(yearFrom)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(yearFrom)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(yearTo)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(yearTo)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(yearTo)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(yearTo)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(all filters)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) AND c.Name LIKE @characterLike AND p.Name LIKE @authorLike AND s.Title LIKE @sourceLike AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(all filters)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) AND c.Name LIKE @characterLike AND p.Name LIKE @authorLike AND s.Title LIKE @sourceLike AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(all filters)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) AND c.Name LIKE @characterLike AND p.Name LIKE @authorLike AND s.Title LIKE @sourceLike AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(all filters)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) AND c.Name LIKE @characterLike AND p.Name LIKE @authorLike AND s.Title LIKE @sourceLike AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom AND CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(multi-type)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(multi-type)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(multi-type)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(multi-type)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountRandom(multi-genre)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 LEFT JOIN Characters c ON c.Id = q.CharacterId AND c.IsDeleted = 0 LEFT JOIN People p ON p.Id = q.PersonId AND p.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("CountGetAll(multi-genre)","SELECT COUNT(*) FROM Quotes q JOIN Sources s ON s.Id = q.SourceId AND s.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectRandom(multi-genre)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) ORDER BY RANDOM() LIMIT @count") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectPaged(multi-genre)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) ORDER BY q.Id LIMIT @pageSize OFFSET @offset") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectById()","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.Id = @id AND q.IsDeleted = 0") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectSearch(field=Quote)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) AND q.QuoteText LIKE @like LIMIT @limit") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectSearch(field=Source)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) AND s.Title LIKE @like LIMIT @limit") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectSearch(field=Character)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) AND c.Name LIKE @like LIMIT @limit") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectSearch(field=Author)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) AND p.Name LIKE @like LIMIT @limit") [< 1 ms]
+  Passed AssembledQuery_PassesAggregateGuard ("SelectSearch(field=All)","SELECT
+    q.Id,
+    COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
+    q.OriginalLanguage,
+    COALESCE(st.Title,      s.Title)       AS Source,
+    s.Date,
+    s.Type                                 AS SourceType,
+    COALESCE(ct.Name,       c.Name)        AS Character,
+    p.Name                                 AS Author,
+    CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+FROM   Quotes          q
+JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
+LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
+LEFT JOIN People       p  ON  p.Id  = q.PersonId                                          AND p.IsDeleted  = 0
+LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
+LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
+LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0 WHERE q.IsDeleted = 0 AND s.IsDeleted = 0 AND s.Type IN @dbTypes AND EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0) AND (q.QuoteText LIKE @like OR s.Title LIKE @like OR c.Name LIKE @like OR p.Name LIKE @like) LIMIT @limit") [< 1 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Quotes.CountAll","SELECT COUNT(*) FROM Quotes;") [12 ms]
+  Passed SqlConstant_PassesAggregateGuard ("Schema.GetCurrentVersion","SELECT COALESCE(MAX(Version), 0) FROM SchemaVersion;") [26 ms]
+  Passed AggregateQueries_MatchDocumentedInventory [29 ms]
+  Passed QuoteResponse_IsTranslated_FalseWhenLanguageMatchesOriginal [< 1 ms]
+  Passed QuoteResponse_IsTranslated_TrueWhenLanguageDiffersFromOriginal [< 1 ms]
+  Passed AllSqlInSourceFiles_NoVulnerableAggregatePatterns [28 ms]
+  Passed QuoteResponse_OptionalProperties_DefaultToNull [< 1 ms]
+  Passed Quote_RequiredProperties_AreSet [< 1 ms]
+  Passed Quote_Type_DefaultsToMovie [< 1 ms]
+  Passed Quote_OriginalLanguage_DefaultsToEnglish [< 1 ms]
+  Passed AllSqlStringLiterals_AreInCentralisedFiles [28 ms]
+  Passed Quote_Translations_DefaultsToEmpty [< 1 ms]
+  Passed Quote_OptionalProperties_DefaultToNull [< 1 ms]
+  Passed QuoteResponse_Genres_DefaultsToEmpty [12 ms]
+  Passed Quote_PersonType_UsesAuthorNotCharacter [< 1 ms]
+  Passed Quote_BookType_HasBothAuthorAndCharacter [< 1 ms]
+  Passed QuoteTranslation_RequiredQuoteText_IsSet [< 1 ms]
+  Passed QuoteTranslation_Source_IsOptional [< 1 ms]
+  Passed QuoteTranslation_Source_CanBeSet [< 1 ms]
+  Passed Quote_Genres_DefaultsToEmpty [15 ms]
+  Passed IsValidLang_ValidCodes_ReturnsTrue ("en") [9 ms]
+  Passed IsValidLang_ValidCodes_ReturnsTrue ("de") [< 1 ms]
+  Passed IsValidLang_ValidCodes_ReturnsTrue ("en-GB") [< 1 ms]
+  Passed IsValidLang_ValidCodes_ReturnsTrue ("nl-BE") [< 1 ms]
+  Passed IsValidLang_ValidCodes_ReturnsTrue ("zh-Hans") [< 1 ms]
+  Passed IsValidLang_ValidCodes_ReturnsTrue ("EN") [< 1 ms]
+  Passed IsValidLang_ValidCodes_ReturnsTrue ("EN-GB") [< 1 ms]
+  Passed IsValidLang_InvalidCodes_ReturnsFalse ("e") [< 1 ms]
+  Passed IsValidLang_InvalidCodes_ReturnsFalse ("english") [< 1 ms]
+  Passed IsValidLang_InvalidCodes_ReturnsFalse ("en_GB") [< 1 ms]
+  Passed IsValidLang_InvalidCodes_ReturnsFalse ("en-TOOLONG") [< 1 ms]
+  Passed IsValidLang_InvalidCodes_ReturnsFalse ("123") [< 1 ms]
+  Passed IsValidLang_InvalidCodes_ReturnsFalse ("en-1") [< 1 ms]
+  Passed IsValidLang_InvalidCodes_ReturnsFalse ("toolongcode") [< 1 ms]
+  Passed IsValidLang_InvalidCodes_ReturnsFalse ("") [< 1 ms]
+  Passed ValidTypes_ContainsExpectedValues ("movie") [< 1 ms]
+  Passed ValidTypes_ContainsExpectedValues ("tv") [< 1 ms]
+  Passed IsValidLang_ValidCodes_ReturnsTrue ("nl") [9 ms]
+  Passed ValidTypes_ContainsExpectedValues ("book") [< 1 ms]
+  Passed ValidTypes_ContainsExpectedValues ("person") [< 1 ms]
+  Passed Quote_AllProperties_CanBeSet [21 ms]
+  Passed ValidSearchFields_ContainsExpectedValues ("quote") [< 1 ms]
+  Passed ValidSearchFields_ContainsExpectedValues ("source") [< 1 ms]
+  Passed ValidSearchFields_ContainsExpectedValues ("character") [< 1 ms]
+  Passed ValidSearchFields_ContainsExpectedValues ("author") [< 1 ms]
+  Passed ValidSearchFields_DoesNotContainUnknownValues [< 1 ms]
+  Passed ValidGenres_ContainsExpectedValues ("action") [< 1 ms]
+  Passed ValidGenres_ContainsExpectedValues ("sci-fi") [< 1 ms]
+  Passed ValidGenres_ContainsExpectedValues ("non-fiction") [< 1 ms]
+  Passed ValidGenres_ContainsExpectedValues ("drama") [< 1 ms]
+  Passed ValidTypes_DoesNotContainUnknownValues [3 ms]
+  Passed ValidGenres_ContainsExpectedValues ("thriller") [< 1 ms]
+  Passed ValidGenres_DoesNotContainUnknownValues [< 1 ms]
+  Passed GenreApiToDb_ContainsAllValidGenres [< 1 ms]
+  Passed GenreApiToDb_HyphenatedGenresMappedCorrectly ("sci-fi","SciFi") [< 1 ms]
+  Passed GenreApiToDb_HyphenatedGenresMappedCorrectly ("non-fiction","NonFiction") [< 1 ms]
+  Passed GenreApiToDb_IsCaseInsensitive [< 1 ms]
+  Passed GenreApiToDb_AllMappedValuesAreValidEnumNames [1 ms]
+  Passed ValidTypes_ContainsExpectedValues ("anime") [< 1 ms]
+  Passed IsSuspiciousInput_KnownInjectionPatterns_ReturnsTrue ("' OR 1=1 --") [2 ms]
+  Passed IsSuspiciousInput_KnownInjectionPatterns_ReturnsTrue ("'; DROP TABLE Quotes --") [1 ms]
+  Passed IsSuspiciousInput_KnownInjectionPatterns_ReturnsTrue ("EXEC(xp_cmdshell)") [< 1 ms]
+  Passed IsSuspiciousInput_NormalValues_ReturnsFalse ("Gandalf") [< 1 ms]
+  Passed IsSuspiciousInput_NormalValues_ReturnsFalse ("O'Brien") [< 1 ms]
+  Passed IsSuspiciousInput_NormalValues_ReturnsFalse ("Rick Blaine") [< 1 ms]
+  Passed RepositorySqlFactory_PassesAggregateGuard ("SoftDelete","UPDATE TestWidgets SET IsDeleted = 1, DateDeleted = @now, DateModified = @now WHERE Id = @id AND IsDeleted = 0;") [25 ms]
+  Passed RepositorySqlFactory_PassesAggregateGuard ("Restore","UPDATE TestWidgets SET IsDeleted = 0, DateDeleted = NULL, DateModified = @now WHERE Id = @id AND IsDeleted = 1") [< 1 ms]
+  Passed RepositorySqlFactory_PassesAggregateGuard ("HardDelete","DELETE FROM TestWidgets WHERE Id = @id AND IsDeleted = 1") [< 1 ms]
+  Passed RepositorySqlFactory_PassesAggregateGuard ("SelectDeleted","SELECT * FROM TestWidgets WHERE IsDeleted = 1") [23 ms]
+  Passed RepositorySqlFactory_PassesAggregateGuard ("SelectById","SELECT * FROM TestWidgets WHERE Id = @id AND IsDeleted = 0") [20 ms]
+  Passed RepositorySqlFactory_PassesAggregateGuard ("Purge","DELETE FROM TestWidgets WHERE IsDeleted = 1") [< 1 ms]
+  Passed SqliteRepository_ImplementsIRepository [95 ms]
+  Passed GetByIdAsync_ReturnsNull_WhenNotFound [235 ms]
+  Passed InsertAsync_ThenGetById_ReturnsRecord [287 ms]
+  Passed UpdateAsync_PersistsChanges [91 ms]
+  Passed SoftDeleteAsync_HidesRecordFromGetById [64 ms]
+  Passed SoftDeleteAsync_NoOp_WhenEntityNotFound [11 ms]
+  Passed SqliteUnitOfWork_ImplementsIUnitOfWork [17 ms]
+  Passed SoftDeleteAsync_SetsAuditColumns [44 ms]
+  Passed SoftDeleteAsync_IsIdempotent [48 ms]
+  Passed IUnitOfWork_HasNoDapperTypesOnPublicInterface [22 ms]
+  Passed Dispose_WithoutCommit_RollsBack [13 ms]
+  Passed InsertAsync_WithSharedConnection_RollbackRemovesRecord [28 ms]
+  Passed InsertAsync_WithSharedConnection_CommitPersistsRecord [40 ms]
+  Passed SqliteRestorableRepository_ImplementsIRestorableRepository [13 ms]
+  Passed MultipleInserts_WithinTransaction_AreAtomic [44 ms]
+  Passed GetDeletedAsync_ReturnsEmpty_WhenNoRecordsDeleted [35 ms]
+  Passed GetDeletedAsync_ReturnsOnlySoftDeletedRecords [59 ms]
+  Passed RestoreAsync_MakesRecordVisibleViaGetById [48 ms]
+  Passed GetDeletedAsync_ReturnsMultiple_WhenSeveralDeleted [87 ms]
+  Passed RestoreAsync_ClearsDateDeletedAndUpdatesDateModified [56 ms]
+  Passed RestoreAsync_NoOp_WhenRecordIsAlreadyActive [34 ms]
+  Passed RestoreAsync_NoOp_WhenNotFound [12 ms]
+  Passed RestoreAsync_RemovesRecordFromGetDeleted [54 ms]
+  Passed HardDeleteAsync_NoOp_WhenNotFound [17 ms]
+  Passed HardDeleteAsync_DoesNotRemoveActiveRecord [34 ms]
+  Passed HardDeleteAsync_RemovesSoftDeletedRecord [50 ms]
+  Passed PurgeAsync_Returns0_WhenNothingToDelete [24 ms]
+  Passed IsVulnerablePattern_GroupByWithCount_ReturnsTrue [12 ms]
+  Passed IsVulnerablePattern_HavingWithCount_ReturnsTrue [< 1 ms]
+  Passed IsVulnerablePattern_GroupByWithSum_ReturnsTrue [< 1 ms]
+  Passed PurgeAsync_RemovesAllSoftDeletedRecords [85 ms]
+  Passed IsVulnerablePattern_GroupByWithGroupConcat_ReturnsTrue [< 1 ms]
+  Passed IsVulnerablePattern_GroupByWithTotal_ReturnsTrue [< 1 ms]
+  Passed IsVulnerablePattern_HavingWithoutExplicitGroupBy_ReturnsTrue [< 1 ms]
+  Passed IsVulnerablePattern_GroupByWithAvg_ReturnsTrue [12 ms]
+  Passed IsVulnerablePattern_SimpleCountStar_ReturnsFalse [3 ms]
+  Passed IsVulnerablePattern_CoalesceMax_ReturnsFalse [< 1 ms]
+  Passed IsVulnerablePattern_CountWithWhere_ReturnsFalse [< 1 ms]
+  Passed IsVulnerablePattern_GroupByWithoutAggregate_ReturnsFalse [< 1 ms]
+  Passed IsVulnerablePattern_PlainSelect_ReturnsFalse [< 1 ms]
+  Passed IsVulnerablePattern_EmptyString_ReturnsFalse [< 1 ms]
+  Passed IsVulnerablePattern_NonSqlInput_ReturnsFalse [< 1 ms]
+  Passed HasAggregateFunction_QueryWithCount_ReturnsTrue [< 1 ms]
+  Passed HasAggregateFunction_QueryWithCoalesceMax_ReturnsTrue [< 1 ms]
+  Passed HasAggregateFunction_PlainSelect_ReturnsFalse [< 1 ms]
+  Passed HasAggregateFunction_EmptyString_ReturnsFalse [< 1 ms]
+  Passed PurgeAsync_PreservesActiveRecords [71 ms]
+  Passed PurgeAsync_ReturnsPurgedCount [101 ms]
+
+Test Run Successful.
+Total tests: 54
+     Passed: 54
+ Total time: 2.0245 Seconds
+     8>Done Building Project "/home/user/Quotinator/tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" (VSTest target(s)).
+  Passed IsSuspiciousInput_NormalValues_ReturnsFalse ("Winston Churchill") [< 1 ms]
+  Passed IsSuspiciousInput_NormalValues_ReturnsFalse ("The Lord of the Rings") [< 1 ms]
+  Passed IsSuspiciousInput_KnownInjectionPatterns_ReturnsTrue ("/* comment */") [5 ms]
+  Passed IsSuspiciousInput_KnownInjectionPatterns_ReturnsTrue ("UNION SELECT * FROM Users") [6 ms]
+  Passed InitialiseAsync_AllSourceFiles_SeedsExpectedCounts [2 s]
+  Passed InitialiseAsync_EmptyBatches_DatabaseIsEmpty [3 s]
+  Passed InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates [3 s]
+  Passed InitialiseAsync_CuratedFileOnly_SeedsFkChainCorrectly [3 s]
+  Passed Schema_ImportBatchesTable_HasAllRequiredColumns [3 s]
+  Passed InitialiseAsync_CalledTwice_IsIdempotent [5 s]
+  Passed Schema_MigrationVersion_IsBumped [1 s]
+  Passed ResetAsync_AfterInitialise_RebuildsSchemaAndReseeds [4 s]
+  Passed InitialiseAsync_PartialMigrationState_SelfHealsAndReseeds [4 s]
+  Passed Schema_EntityTables_HaveNullableImportBatchIdFK [1 s]
+  Passed SeedSources_IsValidJson [148 ms]
+  Passed SeedSources_ConformsToSchema [46 ms]
+  Passed CacheFiles_AllAreValidJson [1 ms]
+  Passed CacheFile_Vilaboim_ConformsToSchema [1 ms]
+  Passed CacheFile_NikhilNamal17_ConformsToSchema [41 ms]
+  Passed Manifest_IsValidJson [5 ms]
+  Passed SourceFiles_AllAreValidJson [3 ms]
+  Passed Manifest_ConformsToSchema [2 ms]
+  Passed Seeding_PreSeedBatches_ExistAfterMigration [302 ms]
+  Passed Migration_ExistingRecords_HaveNullImportBatchId [302 ms]
+  Passed Manifest_AllListedFilesExist [2 ms]
+  Passed SourceFiles_AllListedInManifest [2 ms]
+  Passed Seeding_TwoSourceFiles_ProduceTwoDistinctBatches [307 ms]
+  Passed Search_FieldSource_WithMatch_ReturnsOk [111 ms]
+  Passed Search_FieldQuote_WithMatch_ReturnsOk [112 ms]
+  Passed SourceFiles_ConformToSchema [160 ms]
+  Passed Search_FieldQuote_NoMatch_ReturnsNoResults [151 ms]
+  Passed Search_FieldCharacter_NoMatch_ReturnsNoResults [63 ms]
+  Passed Search_FieldCharacter_WithCharacterData_ReturnsOk [92 ms]
+  Passed Search_FieldCharacter_QuoteHasNoCharacter_ReturnsNoResults [107 ms]
+  Passed Search_FieldAuthor_WithAuthorData_ReturnsOk [111 ms]
+  Passed Search_FieldAuthor_NoMatch_ReturnsNoResults [111 ms]
+  Passed Search_FieldAuthor_QuoteHasNoAuthor_ReturnsNoResults [109 ms]
+  Passed Search_TypePerson_ReturnsPerson [116 ms]
+  Passed AsLink_LeadingSlash_Stripped [< 1 ms]
+  Passed AsLink_NoLeadingSlash_Unchanged [< 1 ms]
+  Passed AsLink_MultipleLeadingSlashes_AllStripped [< 1 ms]
+  Passed AsLink_AllApiRoutes_ProduceRelativePaths [< 1 ms]
+  Passed Search_TypeAnime_NoAnimeData_ReturnsNoResults [102 ms]
+  Passed Search_AllFields_MatchesAcrossQuoteAndSource [102 ms]
+  Passed Search_LimitCapsResults [99 ms]
+
+Test Run Successful.
+Total tests: 211
+     Passed: 211
+ Total time: 10.6759 Seconds
+     6>Done Building Project "/home/user/Quotinator/tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" (VSTest target(s)).
+     2>_ProcessScopedCssFiles:
+       Skipping target "_ProcessScopedCssFiles" because all output files are up-to-date with respect to the input files.
+       ResolveBuildCompressedStaticWebAssetsConfiguration:
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/hmmd95gasd-{0}-q90itjcafu-q90itjcafu.gz' for '/root/.nuget/packages/toolbelt.blazor.i18ntext/14.1.1/staticwebassets/helper.min.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/44ooy1hvxu-{0}-e95ckhss32-e95ckhss32.gz' for '/root/.nuget/packages/toolbelt.blazor.i18ntext/14.1.1/staticwebassets/Toolbelt.Blazor.I18nText.e95ckhss32.lib.module.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/licxcynu47-{0}-qdt6yotr61-qdt6yotr61.gz' for '/home/user/Quotinator/src/Quotinator.Api/obj/dist/_content/i18ntext/Quotinator.Api.I18nText.UI.de.json'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/lic8chq1o5-{0}-99urcitf21-99urcitf21.gz' for '/home/user/Quotinator/src/Quotinator.Api/obj/dist/_content/i18ntext/Quotinator.Api.I18nText.UI.en-GB.json'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/gjdfj9k1vk-{0}-yyfww7ry73-yyfww7ry73.gz' for '/home/user/Quotinator/src/Quotinator.Api/obj/dist/_content/i18ntext/Quotinator.Api.I18nText.UI.nl.json'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/p3m8umq951-{0}-w7mf952350-w7mf952350.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/app.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/ebvzkxeaf6-{0}-bqjiyaj88i-bqjiyaj88i.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-grid.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/9ugrp2yt6s-{0}-c2jlpeoesf-c2jlpeoesf.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-grid.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/0ft4rcowoe-{0}-erw9l3u2r3-erw9l3u2r3.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-grid.min.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/cx4vjwj87t-{0}-aexeepp0ev-aexeepp0ev.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-grid.min.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/o7myy0qbvm-{0}-d7shbmvgxk-d7shbmvgxk.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-grid.rtl.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/kdpkmt4p4a-{0}-ausgxo2sd3-ausgxo2sd3.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-grid.rtl.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/z8l99qfail-{0}-k8d9w2qqmf-k8d9w2qqmf.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/j9esgpvhop-{0}-cosvhxvwiu-cosvhxvwiu.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/f74qclbso0-{0}-ub07r2b239-ub07r2b239.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-reboot.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/zbwuul1ykv-{0}-fvhpjtyr6v-fvhpjtyr6v.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-reboot.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/3nu6t4tzue-{0}-b7pk76d08c-b7pk76d08c.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-reboot.min.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/6zgxns8rfs-{0}-fsbi9cje9m-fsbi9cje9m.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-reboot.min.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/xfwq0d6fcz-{0}-rzd6atqjts-rzd6atqjts.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-reboot.rtl.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/7fm5xyawgq-{0}-ee0r1s7dh0-ee0r1s7dh0.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-reboot.rtl.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/evkcoib2fe-{0}-dxx9fxp4il-dxx9fxp4il.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/wj2srxy3xk-{0}-jd9uben2k1-jd9uben2k1.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/lwwe27rpf7-{0}-khv3u5hwcm-khv3u5hwcm.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-utilities.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/4ow0v905jf-{0}-r4e9w2rdcm-r4e9w2rdcm.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-utilities.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/e61kx3hne3-{0}-lcd1t2u6c8-lcd1t2u6c8.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-utilities.min.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/6w8su4nvy2-{0}-c2oey78nd0-c2oey78nd0.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-utilities.min.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/4p87hvfir8-{0}-tdbxkamptv-tdbxkamptv.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-utilities.rtl.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/eeubj425gf-{0}-j5mq2jizvt-j5mq2jizvt.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-utilities.rtl.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/xjsrwr8l9o-{0}-06098lyss8-06098lyss8.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/u5ddqay24t-{0}-nvvlpmu67g-nvvlpmu67g.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/fs0cw53rar-{0}-s35ty4nyc5-s35ty4nyc5.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/wcs9wt80l2-{0}-pj5nd1wqec-pj5nd1wqec.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/9centh5oy2-{0}-46ein0sx1k-46ein0sx1k.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap.min.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/vjjsvzo5u1-{0}-v0zj4ognzu-v0zj4ognzu.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap.min.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/un4y8xsika-{0}-37tfw0ft22-37tfw0ft22.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap.rtl.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/gwtrlskfxk-{0}-hrwsygsryq-hrwsygsryq.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap.rtl.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/kgn9cnylzs-{0}-pk9g2wxc8p-pk9g2wxc8p.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap.rtl.min.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/nxxt8ho18m-{0}-ft3s53vfgj-ft3s53vfgj.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/css/bootstrap.rtl.min.css.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/ys7wd9uw4s-{0}-6cfz1n2cew-6cfz1n2cew.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.bundle.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/jz6qa35fnj-{0}-6pdc2jztkx-6pdc2jztkx.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.bundle.js.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/e8obyw0qry-{0}-493y06b0oq-493y06b0oq.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.bundle.min.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/rra3m0xbzx-{0}-iovd86k7lj-iovd86k7lj.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.bundle.min.js.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/lcfus3ecl5-{0}-vr1egmr9el-vr1egmr9el.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.esm.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/sxiymdsbfk-{0}-kbrnm935zg-kbrnm935zg.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.esm.js.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/cg5tfdo2vf-{0}-jj8uyg4cgr-jj8uyg4cgr.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.esm.min.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/u8r8vnc9wt-{0}-y7v9cxd14o-y7v9cxd14o.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.esm.min.js.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/b6x24npkl5-{0}-notf2xhcfb-notf2xhcfb.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/coi67004of-{0}-h1s4sie4z3-h1s4sie4z3.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.js.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/3lceg27aa2-{0}-63fj8s7r0e-63fj8s7r0e.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.min.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/jwo2mwnw4o-{0}-0j3bgjxly4-0j3bgjxly4.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/lib/bootstrap/dist/js/bootstrap.min.js.map'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/xsg7ykmxeu-{0}-kkz7sl2s29-kkz7sl2s29.gz' for '/home/user/Quotinator/src/Quotinator.Api/wwwroot/logo.svg'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/7vncuv6nan-{0}-cyz5k529gx-cyz5k529gx.gz' for '/home/user/Quotinator/src/Quotinator.Api/Components/Layout/ReconnectModal.razor.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/k753gnvv5e-{0}-7fbyclm2ie-7fbyclm2ie.gz' for '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/jsmodules/jsmodules.build.manifest.json'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/auor8e4azv-{0}-ne14ti1q68-ne14ti1q68.gz' for '/root/.nuget/packages/microsoft.aspnetcore.app.internal.assets/10.0.9/_framework/blazor.web.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/jgm3vmi7nw-{0}-ig5xotzpx5-ig5xotzpx5.gz' for '/root/.nuget/packages/microsoft.aspnetcore.app.internal.assets/10.0.9/_framework/blazor.server.js'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/jcmv9e932d-{0}-gs7dnd93ui-gs7dnd93ui.gz' for '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/scopedcss/bundle/Quotinator.Api.styles.css'.
+         Accepted compressed asset '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/rqr3gslrfx-{0}-gs7dnd93ui-gs7dnd93ui.gz' for '/home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/scopedcss/projectbundle/Quotinator.Api.bundle.scp.css'.
+         Resolved 57 compressed assets for 57 candidate assets.
+       ResolveBuildCompressedStaticWebAssets:
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/hmmd95gasd-{0}-q90itjcafu-q90itjcafu.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/44ooy1hvxu-{0}-e95ckhss32-e95ckhss32.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/licxcynu47-{0}-qdt6yotr61-qdt6yotr61.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/lic8chq1o5-{0}-99urcitf21-99urcitf21.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/gjdfj9k1vk-{0}-yyfww7ry73-yyfww7ry73.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/p3m8umq951-{0}-w7mf952350-w7mf952350.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/ebvzkxeaf6-{0}-bqjiyaj88i-bqjiyaj88i.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/9ugrp2yt6s-{0}-c2jlpeoesf-c2jlpeoesf.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/0ft4rcowoe-{0}-erw9l3u2r3-erw9l3u2r3.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/cx4vjwj87t-{0}-aexeepp0ev-aexeepp0ev.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/o7myy0qbvm-{0}-d7shbmvgxk-d7shbmvgxk.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/kdpkmt4p4a-{0}-ausgxo2sd3-ausgxo2sd3.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/z8l99qfail-{0}-k8d9w2qqmf-k8d9w2qqmf.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/j9esgpvhop-{0}-cosvhxvwiu-cosvhxvwiu.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/f74qclbso0-{0}-ub07r2b239-ub07r2b239.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/zbwuul1ykv-{0}-fvhpjtyr6v-fvhpjtyr6v.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/3nu6t4tzue-{0}-b7pk76d08c-b7pk76d08c.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/6zgxns8rfs-{0}-fsbi9cje9m-fsbi9cje9m.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/xfwq0d6fcz-{0}-rzd6atqjts-rzd6atqjts.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/7fm5xyawgq-{0}-ee0r1s7dh0-ee0r1s7dh0.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/evkcoib2fe-{0}-dxx9fxp4il-dxx9fxp4il.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/wj2srxy3xk-{0}-jd9uben2k1-jd9uben2k1.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/lwwe27rpf7-{0}-khv3u5hwcm-khv3u5hwcm.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/4ow0v905jf-{0}-r4e9w2rdcm-r4e9w2rdcm.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/e61kx3hne3-{0}-lcd1t2u6c8-lcd1t2u6c8.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/6w8su4nvy2-{0}-c2oey78nd0-c2oey78nd0.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/4p87hvfir8-{0}-tdbxkamptv-tdbxkamptv.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/eeubj425gf-{0}-j5mq2jizvt-j5mq2jizvt.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/xjsrwr8l9o-{0}-06098lyss8-06098lyss8.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/u5ddqay24t-{0}-nvvlpmu67g-nvvlpmu67g.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/fs0cw53rar-{0}-s35ty4nyc5-s35ty4nyc5.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/wcs9wt80l2-{0}-pj5nd1wqec-pj5nd1wqec.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/9centh5oy2-{0}-46ein0sx1k-46ein0sx1k.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/vjjsvzo5u1-{0}-v0zj4ognzu-v0zj4ognzu.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/un4y8xsika-{0}-37tfw0ft22-37tfw0ft22.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/gwtrlskfxk-{0}-hrwsygsryq-hrwsygsryq.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/kgn9cnylzs-{0}-pk9g2wxc8p-pk9g2wxc8p.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/nxxt8ho18m-{0}-ft3s53vfgj-ft3s53vfgj.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/ys7wd9uw4s-{0}-6cfz1n2cew-6cfz1n2cew.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/jz6qa35fnj-{0}-6pdc2jztkx-6pdc2jztkx.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/e8obyw0qry-{0}-493y06b0oq-493y06b0oq.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/rra3m0xbzx-{0}-iovd86k7lj-iovd86k7lj.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/lcfus3ecl5-{0}-vr1egmr9el-vr1egmr9el.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/sxiymdsbfk-{0}-kbrnm935zg-kbrnm935zg.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/cg5tfdo2vf-{0}-jj8uyg4cgr-jj8uyg4cgr.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/u8r8vnc9wt-{0}-y7v9cxd14o-y7v9cxd14o.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/b6x24npkl5-{0}-notf2xhcfb-notf2xhcfb.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/coi67004of-{0}-h1s4sie4z3-h1s4sie4z3.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/3lceg27aa2-{0}-63fj8s7r0e-63fj8s7r0e.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/jwo2mwnw4o-{0}-0j3bgjxly4-0j3bgjxly4.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/xsg7ykmxeu-{0}-kkz7sl2s29-kkz7sl2s29.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/7vncuv6nan-{0}-cyz5k529gx-cyz5k529gx.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/k753gnvv5e-{0}-7fbyclm2ie-7fbyclm2ie.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/auor8e4azv-{0}-ne14ti1q68-ne14ti1q68.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/jgm3vmi7nw-{0}-ig5xotzpx5-ig5xotzpx5.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/jcmv9e932d-{0}-gs7dnd93ui-gs7dnd93ui.gz
+         Processing compressed asset: /home/user/Quotinator/src/Quotinator.Api/obj/Release/net10.0/compressed/rqr3gslrfx-{0}-gs7dnd93ui-gs7dnd93ui.gz
+       _BuildCopyStaticWebAssetsPreserveNewest:
+       Skipping target "_BuildCopyStaticWebAssetsPreserveNewest" because it has no outputs.
+       _CopyOutOfDateSourceItemsToOutputDirectory:
+       Skipping target "_CopyOutOfDateSourceItemsToOutputDirectory" because all output files are up-to-date with respect to the input files.
+       GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildRuntimeConfigurationFiles:
+       Skipping target "GenerateBuildRuntimeConfigurationFiles" because all output files are up-to-date with respect to the input files.
+       CopyFilesToOutputDirectory:
+         Quotinator.Api -> /home/user/Quotinator/src/Quotinator.Api/bin/Release/net10.0/Quotinator.Api.dll
+     2>Done Building Project "/home/user/Quotinator/src/Quotinator.Api/Quotinator.Api.csproj" (default targets).
+     4>GenerateTargetFrameworkMonikerAttribute:
+       Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+       CoreGenerateAssemblyInfo:
+       Skipping target "CoreGenerateAssemblyInfo" because all output files are up-to-date with respect to the input files.
+       _GenerateSourceLinkFile:
+         Source Link is empty, file 'obj/Release/net10.0/Quotinator.Api.Tests.sourcelink.json' does not exist.
+       CoreCompile:
+       Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+       _CopyOutOfDateSourceItemsToOutputDirectory:
+       Building target "_CopyOutOfDateSourceItemsToOutputDirectory" partially, because some output files are out of date with respect to their input files.
+         Copying file from "/home/user/Quotinator/tests/Quotinator.Api.Tests/obj/Release/net10.0/MvcTestingAppManifest.json" to "/home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/MvcTestingAppManifest.json".
+       _CopyOutOfDateSourceItemsToOutputDirectoryAlways:
+         Copying file from "/home/user/Quotinator/src/Quotinator.Api/i18ntext/UI.en-GB.json" to "/home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/i18ntext/UI.en-GB.json".
+         Copying file from "/home/user/Quotinator/src/Quotinator.Api/i18ntext/UI.nl.json" to "/home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/i18ntext/UI.nl.json".
+         Copying file from "/home/user/Quotinator/src/Quotinator.Api/i18ntext/UI.de.json" to "/home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/i18ntext/UI.de.json".
+       GenerateBuildDependencyFile:
+       Skipping target "GenerateBuildDependencyFile" because all output files are up-to-date with respect to the input files.
+       GenerateBuildRuntimeConfigurationFiles:
+       Skipping target "GenerateBuildRuntimeConfigurationFiles" because all output files are up-to-date with respect to the input files.
+       CopyFilesToOutputDirectory:
+         Quotinator.Api.Tests -> /home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/Quotinator.Api.Tests.dll
+       _MvcCopyDependencyFiles:
+         Copying file from "/home/user/Quotinator/src/Quotinator.Api/bin/Release/net10.0/Quotinator.Api.deps.json" to "/home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/Quotinator.Api.deps.json".
+         Copying file from "/home/user/Quotinator/src/Quotinator.Changelog/bin/Release/net10.0/Quotinator.Changelog.deps.json" to "/home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/Quotinator.Changelog.deps.json".
+         Copying file from "/home/user/Quotinator/src/Quotinator.Constants/bin/Release/net10.0/Quotinator.Constants.deps.json" to "/home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/Quotinator.Constants.deps.json".
+         Copying file from "/home/user/Quotinator/src/Quotinator.Core/bin/Release/net10.0/Quotinator.Core.deps.json" to "/home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/Quotinator.Core.deps.json".
+         Copying file from "/home/user/Quotinator/src/Quotinator.Data/bin/Release/net10.0/Quotinator.Data.deps.json" to "/home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/Quotinator.Data.deps.json".
+     4>Done Building Project "/home/user/Quotinator/tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" (default targets).
+     4>BuildProject:
+         Build completed.
+         
+Test run for /home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/Quotinator.Api.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.2 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+Test Parallelization enabled for /home/user/Quotinator/tests/Quotinator.Api.Tests/bin/Release/net10.0/Quotinator.Api.Tests.dll (Workers: 4, Scope: MethodLevel)
+  Passed LogStarting_BannerContainsHashBorder [11 ms]
+  Passed LogStarting_BannerContainsStartingText [11 ms]
+  Passed LogStarting_LogsExactlyOneEntry [13 ms]
+  Passed LogReady_BannerContainsHashBorder [8 ms]
+  Passed LogReady_ListeningLinesLoggedBeforeBanner [9 ms]
+  Passed LogReady_BannerContainsReadyText [< 1 ms]
+  Passed LogReady_BannerContainsDbStats [< 1 ms]
+  Passed LogReady_BannerContainsVersion [< 1 ms]
+  Passed LogReady_BannerContainsMigrationLine_WhenMigrationApplied [< 1 ms]
+  Passed LogReady_BannerContainsMcpNotImplemented [< 1 ms]
+  Passed LogReady_BannerContainsLogLevel [< 1 ms]
+  Passed LogReady_AdminKeySet_ShowsSet [< 1 ms]
+  Passed LogReady_AdminKeyNotSet_ShowsNotSet [< 1 ms]
+  Passed LogReady_SslOn_ShowsOn [< 1 ms]
+  Passed LogReady_SslOff_ShowsOff [< 1 ms]
+  Passed LogReady_LogRequestsOn_ShowsOn [< 1 ms]
+  Passed LogReady_BannerContainsRestApiUrl [< 1 ms]
+  Passed LogReady_EmitsOneListeningLinePerAddress [12 ms]
+  Passed LogReady_BannerContainsOpenApiSpecUrl [< 1 ms]
+  Passed LogReady_BannerOmitsMigrationLine_WhenNoMigration [< 1 ms]
+  Passed ResolveUrls_HaMode_AllFieldsReturnHaMessage [< 1 ms]
+  Passed ResolveUrls_NoAddresses_AllFieldsReturnNotAvailable [< 1 ms]
+  Passed ResolveUrls_OnlyIngressPort8099_AllFieldsReturnNotAvailable [< 1 ms]
+  Passed ResolveUrls_HttpWildcard_ReplacesWithLocalIp [< 1 ms]
+  Passed ResolveUrls_IPv6Wildcard_ReplacesWithLocalIp [< 1 ms]
+  Passed ResolveUrls_SslEnabled_UsesHttpsScheme [< 1 ms]
+  Passed ResolveUrls_LocalhostAddress_PassedThrough [< 1 ms]
+  Passed LogReady_BannerContainsOpenApiUiUrl [< 1 ms]
+  Passed ChangelogMd_ExistsOnDisk [< 1 ms]
+  Passed ChangelogEnJson_ExistsOnDisk [< 1 ms]
+  Passed AddonChangelogMd_ExistsOnDisk [< 1 ms]
+  Passed DataQuotesJson_DoesNotExistOnDisk [2 ms]
+  Passed ResolveUrls_MultipleAddresses_UsesPrimarySkippingIngressPort [< 1 ms]
+  Passed DataQuotesJson_IsNotInSlnx [6 ms]
+  Passed SlnxDataSourcesEntries_AllExistOnDisk [4 ms]
+  Passed DataSourcesFiles_OnDisk_AreAllInSlnx [9 ms]
+  Passed AllLanguageFiles_HaveNoEmptyValues [6 ms]
+  Passed AllLanguageFiles_HaveExactlyTheSameKeysAsBaseline [20 ms]
+  Passed PreviewSeed_WrongKey_Returns401 [1 s]
+  Passed PreviewSeed_MissingAuthHeader_Returns401 [1 s]
+  Passed PreviewSeed_NoKeyConfigured_Returns401 [1 s]
+  Passed PreviewSeed_EmptyKeyConfigured_Returns401 [333 ms]
+  Passed PreviewSeed_WrongHeader_Returns401 [334 ms]
+  Passed SeedScript_WithNoFetch_ProducesFilesMatchingBaseline [1 s]
+  Passed PreviewSeed_CorrectKey_Returns200WithPreviewShape [431 ms]
+  Passed ReseedDatabase_NoKeyConfigured_Returns401 [290 ms]
+  Passed PreviewSeed_MalformedAuthHeader_Returns401 [304 ms]
+  Passed ReseedDatabase_MissingAuthHeader_Returns401 [329 ms]
+  Passed ReseedDatabase_WrongKey_Returns401 [281 ms]
+  Passed ResetDatabase_NoKeyConfigured_Returns401 [304 ms]
+  Passed ReseedDatabase_CorrectKey_Returns200WithStatsShape [323 ms]
+  Passed ResetDatabase_MissingAuthHeader_Returns401 [357 ms]
+  Passed ResetDatabase_WrongKey_Returns401 [347 ms]
+08:18:00 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="2" type=[] genre=[] lang=null
+08:18:00 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="0" type=[] genre=[] lang=null
+08:18:00 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="101" type=[] genre=[] lang=null
+08:18:00 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="g" type=[] genre=[] lang=null
+  Passed ResetDatabase_CorrectKey_Returns200WithStatsShape [335 ms]
+  Passed GetRandom_NoN_ReturnsEnvelopeWithSingleItem [473 ms]
+  Passed GetRandom_WithN_ReturnsEnvelopeWithNItems [393 ms]
+  Passed GetRandom_NZero_ReturnsBadRequest [400 ms]
+  Passed GetRandom_NTooLarge_ReturnsBadRequest [354 ms]
+  Passed GetRandom_NNotInteger_ReturnsBadRequest [343 ms]
+08:18:00 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="10" type=["movie"] genre=[] lang=null
+08:18:00 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="10" type=[] genre=["fantasy", "sci-fi"] lang=null
+08:18:00 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="1" type=["movie"] genre=[] lang=null
+08:18:00 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="10" type=[] genre=[] lang=null
+  Passed GetRandom_TypeFilter_ReturnsOnlyMatchingType [442 ms]
+  Passed GetRandom_MultipleTypes_AppliesOrLogic [451 ms]
+  Passed GetRandom_MultipleGenres_AppliesOrLogic [365 ms]
+  Passed GetRandom_TotalMatchingReflectsPool [388 ms]
+  Passed GetRandom_CharacterFilter_ReturnsMatchingQuotes [414 ms]
+  Passed GetRandom_AuthorFilter_ReturnsMatchingQuotes [382 ms]
+08:18:00 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="10" type=[] genre=[] lang=null
+08:18:01 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n=null type=["cartoon"] genre=[] lang=null
+08:18:01 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n=null type=[] genre=["notarealgenre"] lang=null
+08:18:01 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n=null type=[] genre=[] lang=null
+08:18:01 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n=null type=["anime"] genre=[] lang=null
+  Passed GetRandom_SourceFilter_ReturnsMatchingQuotes [318 ms]
+  Passed GetRandom_UnknownType_ReturnsInvalidTypeEnvelope [311 ms]
+  Passed GetRandom_UnknownGenre_ReturnsInvalidGenreEnvelope [325 ms]
+  Passed GetRandom_CharacterTooLong_ReturnsInputTooLongEnvelope [335 ms]
+  Passed GetRandom_SuspiciousCharacterInput_ReturnsInvalidInputEnvelope [392 ms]
+  Passed GetRandom_ValidFilterNoMatches_ReturnsNoResultsEnvelope [316 ms]
+08:18:01 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - GetById] id="aaaaaaaa-0000-0000-0000-000000000001" lang=null
+08:18:01 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - GetById] id="does-not-exist" lang=null
+08:18:01 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - GetById] id="aaaaaaaa-0000-0000-0000-000000000001" lang="nl"
+08:18:01 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q="looking" field=null limit=null type=[] lang=null
+08:18:01 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q="xyzzy_no_match_ever" field=null limit=null type=[] lang=null
+08:18:02 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q="the" field=null limit=null type=["cartoon"] lang=null
+  Passed GetById_KnownId_ReturnsQuote [356 ms]
+  Passed GetById_UnknownId_ReturnsNotFound [390 ms]
+  Passed GetById_WithLang_ReturnsTranslation [370 ms]
+  Passed Search_MatchingQuery_ReturnsOkEnvelope [429 ms]
+  Passed Search_NoResults_ReturnsNoResultsEnvelope [348 ms]
+  Passed Search_UnknownType_ReturnsInvalidTypeEnvelope [398 ms]
+08:18:02 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q="" field=null limit=null type=[] lang=null
+08:18:02 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q=null field=null limit=null type=[] lang=null
+08:18:02 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q=null field=null limit=null type=[] lang=null
+08:18:02 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q="back" field="quote" limit=null type=[] lang=null
+  Passed Search_UnknownGenre_ReturnsInvalidGenreEnvelope [370 ms]
+  Passed Search_EmptyQuery_ReturnsBadRequest [328 ms]
+  Passed Search_MissingQuery_ReturnsBadRequest [402 ms]
+  Passed Search_MissingQuery_WithAcceptLanguage_ReturnsLocalisedError [388 ms]
+  Passed Search_MissingQuery_ReturnsProblemDetails [432 ms]
+  Passed Search_FieldQuote_MatchesQuoteText [415 ms]
+08:18:02 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q="Casablanca" field="source" limit=null type=[] lang=null
+08:18:02 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q="Rick" field="character" limit=null type=[] lang=null
+08:18:02 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q="test" field="invalid" limit=null type=[] lang=null
+08:18:03 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q="the" field=null limit=null type=["movie", "person"] lang=null
+08:18:03 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n=null type=[] genre=[] lang="not-a-real-lang-code-xyz"
+  Passed Search_FieldSource_MatchesSourceOnly [344 ms]
+  Passed Search_FieldCharacter_MatchesCharacter [357 ms]
+  Passed Search_FieldAuthor_MatchesAuthor [357 ms]
+  Passed Search_InvalidField_ReturnsBadRequest [329 ms]
+  Passed Search_MultipleTypes_AppliesOrLogic [324 ms]
+  Passed GetRandom_InvalidLang_ReturnsBadRequest [348 ms]
+08:18:03 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Search] q="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" field=null limit=null type=[] lang=null
+08:18:03 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - GetAll] page="0" pageSize=null type=[] lang=null
+08:18:03 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - GetAll] page=null pageSize=null type=["person"] lang=null
+08:18:03 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - GetAll] page=null pageSize=null type=["movie", "book"] lang=null
+08:18:03 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - GetAll] page=null pageSize=null type=["cartoon"] lang=null
+  Passed Search_QueryTooLong_ReturnsBadRequest [370 ms]
+  Passed GetAll_Default_ReturnsPaginatedResult [359 ms]
+  Passed GetAll_PageZero_ReturnsBadRequest [316 ms]
+  Passed GetAll_TypeFilter_ReturnsFilteredResults [335 ms]
+  Passed GetAll_MultipleTypes_AppliesOrLogic [337 ms]
+  Passed GetAll_UnknownType_ReturnsEmptyPaginatedResult [351 ms]
+08:18:03 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="10" type=[] genre=[] lang=null
+08:18:03 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="10" type=[] genre=[] lang=null
+08:18:04 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n="10" type=[] genre=[] lang=null
+08:18:04 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n=null type=[] genre=[] lang=null
+08:18:04 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - Random] n=null type=[] genre=[] lang=null
+  Passed GetRandom_YearFrom_ExcludesOlderQuotes [398 ms]
+  Passed GetRandom_YearTo_ExcludesNewerQuotes [377 ms]
+  Passed GetRandom_YearShorthand_MatchesExactYear [347 ms]
+  Passed GetRandom_DecadeShorthand_MatchesQuotesInRange [335 ms]
+  Passed GetRandom_DecadeNotDivisibleByTen_ReturnsInvalidInputEnvelope [415 ms]
+  Passed GetRandom_YearFromGreaterThanYearTo_ReturnsInvalidInputEnvelope [400 ms]
+08:18:04 INF: Quotinator.Api.Endpoints.QuoteEndpoints.Log[] [Api - GetAll] page=null pageSize=null type=[] lang=null
+  Passed GetAll_YearFrom_FiltersOlderQuotes [404 ms]
+  Passed FormatInline_MarkdownLink_ConvertsToAnchor [13 ms]
+  Passed FormatInline_BacktickCode_ConvertsToCodeElement [< 1 ms]
+  Passed FormatInline_HtmlSpecialChars_AreEncoded [< 1 ms]
+  Passed FormatInline_PlainText_ReturnedUnchanged [< 1 ms]
+  Passed CategoryBadgeClass_Added_ReturnsSuccess [< 1 ms]
+  Passed CategoryBadgeClass_Fixed_ReturnsDanger [< 1 ms]
+  Passed CategoryBadgeClass_Changed_ReturnsPrimary [< 1 ms]
+  Passed CategoryBadgeClass_Removed_ReturnsWarning [< 1 ms]
+  Passed CategoryBadgeClass_Unknown_ReturnsSecondary [< 1 ms]
+  Passed RenderPath_HighlightsPresent_NoTechnicalLists [< 1 ms]
+  Passed RenderPath_HighlightsEmpty_TechnicalListsShown [< 1 ms]
+  Passed RenderPath_AllEmpty_OnlySummaryHeaderShown [< 1 ms]
+  Passed RenderPath_ReferencesPresent_ModelHasIssuesAndCves [< 1 ms]
+  Passed RenderPath_Unreleased_HasHighlightsAndReferences [< 1 ms]
+  Passed GetAll_DecadeNotDivisibleByTen_ReturnsBadRequest [363 ms]
+  Passed Search_YearShorthand_FiltersResults [290 ms]
+  Passed Search_DecadeNotDivisibleByTen_ReturnsBadRequest [248 ms]
+
+Test Run Successful.
+Total tests: 119
+     Passed: 119
+ Total time: 7.9914 Seconds
+     4>Done Building Project "/home/user/Quotinator/tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" (VSTest target(s)).
+     1>Done Building Project "/home/user/Quotinator/Quotinator.slnx" (VSTest target(s)).
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:24.67
+Exit code: 0
