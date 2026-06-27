@@ -39,13 +39,11 @@ Combine `{Path}` and `{Query}` into a single `{Url}` property by concatenating `
 
 The current line has no `[Subsystem - Phase]` prefix, violating `docs/logging.md`. Add `[Api - Request]` to match the prefix pattern used throughout the codebase.
 
-### 3. Extend to all endpoints except `/api/v1/health`
+### 3. Extend to all endpoints — no exclusions
 
-The current middleware only logs `/api/v1/quotes/*`. This should be all endpoints. If an endpoint is being called unexpectedly or hammered, it needs to be visible in the log regardless of whether it is a quote endpoint or an admin endpoint.
+The current middleware only logs `/api/v1/quotes/*`. This should be all endpoints. If an endpoint is being called, it must be visible in the log — whether it is a quote endpoint, admin endpoint, health check, or version endpoint.
 
-The only intentional exclusion is `/api/v1/health` — it is polled constantly by monitoring systems and would flood the log with noise that obscures real traffic.
-
-Change the path filter from:
+Remove the path filter entirely:
 
 ```csharp
 // Before: only quote endpoints
@@ -56,16 +54,7 @@ if (!context.Request.Path.StartsWithSegments("/api/v1/quotes"))
 }
 ```
 
-to:
-
-```csharp
-// After: all endpoints except /health
-if (context.Request.Path.StartsWithSegments("/api/v1/health"))
-{
-    await next();
-    return;
-}
-```
+After: no filter — every request enters the logging block. The middleware runs unconditionally.
 
 ### 4. Review the two-line-per-request pattern
 
@@ -124,11 +113,11 @@ These are two separate outputs with different purposes and different security co
 | | Request log (`logRequests` middleware) | Audit trail (`AuditEntries` table) |
 |---|---|---|
 | **Output** | HA supervisor log (human-readable text) | SQLite database (queryable records) |
-| **Admin routes** | **Included** — path + status is useful traffic signal; header values are never logged | **Included** — `reseed`, `reset`, and future admin actions are explicitly audited |
+| **Admin routes** | **Included** — all endpoints are logged | **Included** — `reseed`, `reset`, and future admin actions are explicitly audited |
 | **What is stored** | Method, URL, status code, duration | Operation name, agent identity (`User-Agent`), timestamp |
 | **Secrets** | Never stored — path filter is a security boundary | Never stored — API key is authenticated but never recorded; only the agent is |
 
-Both the request log and the audit trail cover admin routes — for different reasons. The request log confirms that the endpoint was called. The audit trail records what was done (the operation and who triggered it). See issue #73.
+All endpoints appear in the request log — the request log confirms that the endpoint was called. The audit trail records what was done (the operation and who triggered it). See issue #73.
 
 ---
 
@@ -139,8 +128,8 @@ Both the request log and the audit trail cover admin routes — for different re
 | 1 | ⬜ | No double-quote between path and query string | Unit test | `RequestLogFormattingTests.LogLine_IncludesFullUrl_WithoutDoubleQuote` — assert rendered line contains `search?q=back`, not `search""?q=back` |
 | 2 | ⬜ | `[Api - Request]` prefix present in log line | Unit test | `RequestLogFormattingTests.LogLine_HasApiRequestPrefix` — assert rendered line starts with `[Api - Request]` |
 | 3 | ⬜ | Requests with no query string log cleanly (no trailing empty token) | Unit test | `RequestLogFormattingTests.LogLine_NoQuery_NoTrailingQuote` — assert path-only request has no trailing quote artifact |
-| 4 | ⬜ | `/api/v1/health` produces no log line | Unit test | `RequestLogFormattingTests.HealthEndpoint_IsNotLogged` — assert `GET /api/v1/health` produces no log output |
-| 5 | ⬜ | Admin routes are logged | Unit test | `RequestLogFormattingTests.AdminRoute_IsLogged` — assert `POST /api/v1/admin/database/reseed` produces a log line with method, path, status, duration |
-| 6 | ⬜ | `docs/logging.md` contains the secret-logging rules table | Code review | Rules table present; secret constraint is about captured data, not route scope |
+| 4 | ⬜ | Admin routes are logged | Unit test | `RequestLogFormattingTests.AdminRoute_IsLogged` — assert `POST /api/v1/admin/database/reseed` produces a log line with method, path, status, duration |
+| 5 | ⬜ | Health endpoint is logged | Unit test | `RequestLogFormattingTests.HealthEndpoint_IsLogged` — assert `GET /api/v1/health` produces a log line |
+| 6 | ⬜ | `docs/logging.md` contains the secret-logging rules table | Code review | Rules table present; security rule is about captured data, not route filtering |
 | 7 | ⬜ | No header values appear in any log line | Code review | `Program.cs` middleware logs only method, URL, status, duration — no `context.Request.Headers` access anywhere in the block |
-| 8 | ⬜ | User starts app in VS; quote request, admin request, and version request all appear in log; health does not | Live | Hit `/api/v1/quotes/random`, `POST /api/v1/admin/database/seed/preview`, and `/api/v1/health` in sequence; confirm first two appear in log, health does not |
+| 8 | ⬜ | User starts app in VS; quote request, admin request, and health check all appear in log | Live | Hit `/api/v1/quotes/random`, `POST /api/v1/admin/database/seed/preview`, and `/api/v1/health` in sequence; confirm all three appear in log |

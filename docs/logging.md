@@ -1,4 +1,4 @@
-# Logging Standards
+﻿# Logging Standards
 
 This file is the authoritative reference for how Quotinator structures its log output.
 Apply these standards whenever you touch a file that emits log lines — boyscout style.
@@ -11,10 +11,10 @@ Quotinator has two distinct observability tracks. They serve different purposes 
 
 | Track | Output | Covers | Purpose |
 |---|---|---|---|
-| **Request log** | Serilog → HA supervisor log (text) | Every HTTP request except `/api/v1/health` | Operational visibility — confirms endpoints were called; detects unexpected traffic or hammering |
+| **Request log** | Serilog → HA supervisor log (text) | Every HTTP request | Operational visibility — confirms endpoints were called; detects unexpected traffic or hammering |
 | **Audit trail** | `AuditEntries` table in SQLite | Write operations + admin actions | Accountability — records who did what to which record, for long-term review |
 
-**The health endpoint is the only route excluded from the request log.** It is polled constantly by monitoring systems and would flood the log with noise that obscures real traffic. Every other route — including quote endpoints, admin endpoints, and the version endpoint — is logged.
+**All endpoints are logged.** If an endpoint is being called, it must be visible in the log — including health checks, admin routes, and the version endpoint. If monitor poll noise becomes a problem in a specific deployment, the operator can disable request logging entirely via the `log_requests` config option.
 
 **Read operations are not in the audit trail.** They appear in the request log. Auditing every read would produce unbounded write load with no accountability value.
 
@@ -24,7 +24,7 @@ Quotinator has two distinct observability tracks. They serve different purposes 
 
 ### What is captured
 
-Every request that is not excluded produces one log line:
+Every request produces one log line:
 
 ```
 [Api - Request] GET /api/v1/quotes/search?q=back&genre=comedy → 200 in 11ms
@@ -48,12 +48,6 @@ Captured: HTTP method, full URL (path + query string), response status code, ela
 **The security rule is about what data is captured, not which routes are included.** `POST /api/v1/admin/database/reset → 200 in 5ms` is safe — the path is not a secret; the API key is in the header, which is never logged.
 
 If a query parameter ever carries a secret (e.g. `?token=...`), strip that parameter from the URL before logging — do not exclude the entire route.
-
-### Excluded routes
-
-| Route | Reason |
-|---|---|
-| `GET /api/v1/health` | Polled constantly by monitoring systems; excluded to avoid log noise |
 
 ### Configuration
 
