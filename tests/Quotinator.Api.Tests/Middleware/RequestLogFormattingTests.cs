@@ -362,4 +362,26 @@ public class RequestLogFormattingTests
     }
 
     #endregion
+
+    // -------------------------------------------------------------------------
+    #region Exception propagation — completion line always fires
+
+    [TestMethod]
+    public async Task CompletionLine_EmittedEvenWhenNextThrows()
+    {
+        var (middleware, sink) = Build();
+        var ctx = MakeContext("GET", "/api/v1/quotes/random", "?yearFrom=abc");
+
+        RequestDelegate throws = _ => throw new BadHttpRequestException("bind failure");
+
+        try { await middleware.InvokeAsync(ctx, throws); }
+        catch (BadHttpRequestException) { /* expected — handler is not in this test */ }
+
+        Assert.AreEqual(2, sink.Lines.Count,
+            "Both start and completion lines must be emitted even when the next delegate throws");
+        StringAssert.Contains(sink.Lines[1], "→",
+            "Completion line must contain the arrow separator");
+    }
+
+    #endregion
 }

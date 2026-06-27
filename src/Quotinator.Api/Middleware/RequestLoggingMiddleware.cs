@@ -41,12 +41,17 @@ public class RequestLoggingMiddleware : IMiddleware
             tag, id, context.Request.Method, url);
 
         var sw = Stopwatch.StartNew();
-        await next(context);
-        sw.Stop();
-
-        Log(isDebug, "{Tag:l} {Id:l} {Method:l} {Url:l} → {Status} in {Ms}ms",
-            tag, id, context.Request.Method, url,
-            context.Response.StatusCode, sw.ElapsedMilliseconds);
+        try
+        {
+            await next(context);
+        }
+        finally
+        {
+            sw.Stop();
+            Log(isDebug, "{Tag:l} {Id:l} {Method:l} {Url:l} → {Status} in {Ms}ms",
+                tag, id, context.Request.Method, url,
+                context.Response.StatusCode, sw.ElapsedMilliseconds);
+        }
     }
 
     #region Private
