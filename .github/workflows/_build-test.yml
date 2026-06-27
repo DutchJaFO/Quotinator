@@ -1,0 +1,45 @@
+name: Build and Test (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      test-filter:
+        description: 'Filter expression passed to dotnet test --filter'
+        type: string
+        default: 'TestCategory!=Live'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "${{ inputs.test-filter }}"
+
+      - name: Publish smoke test
+        run: |
+          dotnet publish src/Quotinator.Api/Quotinator.Api.csproj \
+            --configuration Release \
+            --no-restore \
+            --output /tmp/publish
+          test -d /tmp/publish/data/sources && \
+            ls /tmp/publish/data/sources/*.json > /dev/null 2>&1 || \
+            (echo "ERROR: data/sources/ missing or empty in publish output" && exit 1)

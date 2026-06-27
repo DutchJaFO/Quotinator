@@ -6,7 +6,7 @@ namespace Quotinator.Data.Tests.Helpers;
 
 /// <summary>
 /// Verifies that Dapper type handlers are registered before any test runs.
-/// These tests are red if <see cref="MSTestSettings.Initialize"/> is removed or if
+/// These tests are red if <see cref="AssemblySetup.Initialize"/> is removed or if
 /// <c>DapperConfiguration.Configure</c> is called in a <c>[ClassInitialize]</c> that
 /// races with another class initializer under parallel execution.
 /// </summary>

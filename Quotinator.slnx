@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/.github/">
     <File Path=".github/dependabot.yml" />
+    <File Path=".github/workflows/_build-test.yml" />
     <File Path=".github/workflows/ci.yml" />
     <File Path=".github/workflows/release.yml" />
     <File Path=".github/PULL_REQUEST_TEMPLATE.md" />
@@ -66,6 +67,7 @@
     <File Path="docs/running-locally.md" />
     <File Path="docs/sql-safety.md" />
     <File Path="docs/logging.md" />
+    <File Path="docs/release-verification.md" />
     <File Path="docs/testing-policy.md" />
     <File Path="docs/troubleshooting.md" />
     <File Path="docs/vocabulary.md" />

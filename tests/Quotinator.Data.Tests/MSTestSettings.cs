@@ -1,4 +1,7 @@
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Quotinator.Data.Helpers;
+
+[assembly: DoNotParallelize]
 
 namespace Quotinator.Data.Tests;
 
