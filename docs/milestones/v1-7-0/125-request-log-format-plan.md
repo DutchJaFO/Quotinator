@@ -46,27 +46,7 @@ Each request gets a short random ID (`Guid.NewGuid().ToString("N")[..8]` — 8 l
 
 Both lines carry method and URL so either line is self-contained. The `→` on the end line distinguishes it visually from the start line.
 
-**Middleware structure:**
-
-```csharp
-app.Use(async (context, next) =>
-{
-    var id = Guid.NewGuid().ToString("N")[..8];
-    var url = context.Request.Path + context.Request.QueryString.Value;
-
-    requestLogger.LogInformation("[Api - Request] {Id} {Method} {Url}",
-        id, context.Request.Method, url);
-
-    var sw = Stopwatch.StartNew();
-    await next();
-    sw.Stop();
-
-    requestLogger.LogInformation("[Api - Request] {Id} {Method} {Url} → {Status} in {Ms}ms",
-        id, context.Request.Method, url, context.Response.StatusCode, sw.ElapsedMilliseconds);
-});
-```
-
-`context.Request.QueryString.Value` is an empty string when there is no query string, so concatenation with `Path` is safe — no trailing separator.
+`context.Request.QueryString.Value` is an empty string when there is no query string, so concatenating it with `Path` produces no trailing separator. See scope item 4 for the full class implementation.
 
 ### 2. Add `[Api - Request]` subsystem prefix
 
@@ -86,11 +66,106 @@ if (!context.Request.Path.StartsWithSegments("/api/v1/quotes"))
 // After: remove this block entirely
 ```
 
-### 4. Keep the endpoint handler log lines
+Endpoint handlers (`[Api - Search]`, `[Api - Random]`, etc.) log parsed semantic parameters — `q="back" field=null type=[] lang=null`. These remain unchanged. They complement the middleware lines, which log HTTP-level facts.
 
-Endpoint handlers (`[Api - Search]`, `[Api - Random]`, etc.) log parsed semantic parameters — `q="back" field=null type=[] lang=null`. These remain. They complement the middleware lines, which log HTTP-level facts. There is no duplication.
+### 4. Extract middleware to a testable class
 
-### 5. Document the secret-safety rule for what is captured
+The current middleware is an inline `app.Use(...)` lambda in `Program.cs`. Inline lambdas cannot be unit-tested — they require a full `WebApplicationFactory` to exercise. Extract to a named class so tests can instantiate it directly.
+
+**New file:** `src/Quotinator.Api/Middleware/RequestLoggingMiddleware.cs`
+
+```csharp
+public class RequestLoggingMiddleware : IMiddleware
+{
+    private readonly ILogger<RequestLoggingMiddleware> _logger;
+
+    public RequestLoggingMiddleware(ILogger<RequestLoggingMiddleware> logger)
+        => _logger = logger;
+
+    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+    {
+        var id  = Guid.NewGuid().ToString("N")[..8];
+        var url = context.Request.Path + context.Request.QueryString.Value;
+
+        _logger.LogInformation("[Api - Request] {Id} {Method} {Url}",
+            id, context.Request.Method, url);
+
+        var sw = Stopwatch.StartNew();
+        await next(context);
+        sw.Stop();
+
+        _logger.LogInformation("[Api - Request] {Id} {Method} {Url} → {Status} in {Ms}ms",
+            id, context.Request.Method, url,
+            context.Response.StatusCode, sw.ElapsedMilliseconds);
+    }
+}
+```
+
+`Program.cs` registers and applies it conditionally:
+
+```csharp
+if (logRequests)
+{
+    builder.Services.AddSingleton<RequestLoggingMiddleware>();
+    // ... after app.Build():
+    app.UseMiddleware<RequestLoggingMiddleware>();
+}
+```
+
+`IMiddleware` requires `AddSingleton` (or `AddScoped`) registration — it is not activated by convention alone.
+
+### 5. Test infrastructure — `CaptureLogger<T>`
+
+No new NuGet packages. Add one small test double to `tests/Quotinator.Api.Tests/`:
+
+```csharp
+// tests/Quotinator.Api.Tests/Helpers/CaptureLogger.cs
+internal sealed class CaptureLogger<T> : ILogger<T>
+{
+    public List<string> Lines { get; } = new();
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        => NullScope.Instance;
+
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+        Exception? exception, Func<TState, Exception?, string> formatter)
+        => Lines.Add(formatter(state, exception));
+
+    private sealed class NullScope : IDisposable
+    {
+        public static readonly NullScope Instance = new();
+        public void Dispose() { }
+    }
+}
+```
+
+Tests use it like this:
+
+```csharp
+var logger     = new CaptureLogger<RequestLoggingMiddleware>();
+var middleware = new RequestLoggingMiddleware(logger);
+var context    = new DefaultHttpContext();
+
+context.Request.Method = "GET";
+context.Request.Path   = "/api/v1/health";
+
+await middleware.InvokeAsync(context, ctx =>
+{
+    ctx.Response.StatusCode = 200;
+    return Task.CompletedTask;
+});
+
+Assert.AreEqual(2, logger.Lines.Count);
+StringAssert.Contains(logger.Lines[0], "GET /api/v1/health");
+StringAssert.DoesNotMatch(logger.Lines[0], new Regex("→"));   // start line has no status
+StringAssert.Contains(logger.Lines[1], "→ 200 in");
+```
+
+`DefaultHttpContext` is available via `Microsoft.AspNetCore.Http` — no additional package needed in the Api test project because `Microsoft.AspNetCore.Mvc.Testing` already pulls it in.
+
+### 6. Document the secret-safety rule for what is captured
 
 The security constraint is about **what data is captured**, not which routes are included. `POST /api/v1/admin/database/reset → 200 in 5ms` is safe to log — the path is not a secret; the API key is in the `X-Api-Key` header, which is never logged. The same applies to future `Authorization` and `Cookie` headers.
 
