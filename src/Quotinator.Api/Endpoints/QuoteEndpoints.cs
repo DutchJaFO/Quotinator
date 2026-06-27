@@ -153,7 +153,7 @@ internal static class QuoteEndpoints
         [Description("Return only quotes from this year or later (inclusive).")] string? yearFrom = null,
         [Description("Return only quotes from this year or earlier (inclusive).")] string? yearTo = null,
         [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] string? year = null,
-        [Description("Shorthand for yearFrom=N&yearTo=N+9 — e.g. `1980` matches 1980–1989. Must be divisible by 10.")] string? decade = null)
+        [Description("Shorthand for yearFrom=N&yearTo=N+9. Must be divisible by 10. Accepts two-digit form: `80` = 1980–1989, `00` = 2000–2009, `20` = 2020–2029.")] string? decade = null)
     {
         logger.LogInformation("[Api - Random] n={N} type={Type} genre={Genre} lang={Lang}", n, type, genre, lang);
 
@@ -176,6 +176,8 @@ internal static class QuoteEndpoints
                 return Results.Json(
                     FilterEnvelope(FilteredResultStatus.InvalidInput, localizer[ApiMessages.DecadeInvalid]),
                     statusCode: StatusCodes.Status422UnprocessableEntity);
+            // Two-digit shorthand: 80 → 1980, 40 → 1940, 00 → 2000, 20 → 2020
+            if (dc < 100) dc = dc < 30 ? dc + 2000 : dc + 1900;
             yf = dc;
             yt = dc + 9;
         }
@@ -239,7 +241,7 @@ internal static class QuoteEndpoints
         [Description("Return only quotes from this year or later (inclusive).")] string? yearFrom = null,
         [Description("Return only quotes from this year or earlier (inclusive).")] string? yearTo = null,
         [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] string? year = null,
-        [Description("Shorthand for yearFrom=N&yearTo=N+9 — e.g. `1980` matches 1980–1989. Must be divisible by 10.")] string? decade = null)
+        [Description("Shorthand for yearFrom=N&yearTo=N+9. Must be divisible by 10. Accepts two-digit form: `80` = 1980–1989, `00` = 2000–2009, `20` = 2020–2029.")] string? decade = null)
     {
         logger.LogInformation("[Api - Search] q={Q} field={Field} limit={Limit} type={Type} lang={Lang}", q, field, limit, type, lang);
 
@@ -273,6 +275,8 @@ internal static class QuoteEndpoints
         {
             if (dc % 10 != 0)
                 return Results.Problem(detail: localizer[ApiMessages.DecadeInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
+            // Two-digit shorthand: 80 → 1980, 40 → 1940, 00 → 2000, 20 → 2020
+            if (dc < 100) dc = dc < 30 ? dc + 2000 : dc + 1900;
             yf = dc;
             yt = dc + 9;
         }
@@ -311,7 +315,7 @@ internal static class QuoteEndpoints
         [Description("Return only quotes from this year or later (inclusive).")] string? yearFrom = null,
         [Description("Return only quotes from this year or earlier (inclusive).")] string? yearTo = null,
         [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] string? year = null,
-        [Description("Shorthand for yearFrom=N&yearTo=N+9 — e.g. `1980` matches 1980–1989. Must be divisible by 10.")] string? decade = null)
+        [Description("Shorthand for yearFrom=N&yearTo=N+9. Must be divisible by 10. Accepts two-digit form: `80` = 1980–1989, `00` = 2000–2009, `20` = 2020–2029.")] string? decade = null)
     {
         logger.LogInformation("[Api - GetAll] page={Page} pageSize={PageSize} type={Type} lang={Lang}", page, pageSize, type, lang);
 
@@ -341,6 +345,8 @@ internal static class QuoteEndpoints
         {
             if (dc % 10 != 0)
                 return Results.Problem(detail: localizer[ApiMessages.DecadeInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
+            // Two-digit shorthand: 80 → 1980, 40 → 1940, 00 → 2000, 20 → 2020
+            if (dc < 100) dc = dc < 30 ? dc + 2000 : dc + 1900;
             yf = dc;
             yt = dc + 9;
         }

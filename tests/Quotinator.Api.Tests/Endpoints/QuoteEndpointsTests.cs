@@ -670,6 +670,18 @@ public class QuoteEndpointsTests
         Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
     }
 
+    /// <summary>decade=40 is shorthand for 1940–1949 — same result as decade=1940.</summary>
+    [TestMethod]
+    public async Task GetRandom_DecadeShorthand2Digit40_EquivalentTo1940s()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&decade=40");
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
+    }
+
     /// <summary>decade not divisible by 10 returns 422 envelope with status=InvalidInput.</summary>
     [TestMethod]
     public async Task GetRandom_DecadeNotDivisibleByTen_Returns422WithInvalidInputEnvelope()
@@ -754,6 +766,47 @@ public class QuoteEndpointsTests
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1941");
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>decade=80 is shorthand for 1980–1989 — same result as decade=1980.</summary>
+    [TestMethod]
+    public async Task GetAll_DecadeShorthand2Digit80_EquivalentTo1980s()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=80");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = doc.RootElement.GetProperty("items");
+        Assert.AreEqual(1, items.GetArrayLength());
+        Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>decade=40 is shorthand for 1940–1949 — same result as decade=1940.</summary>
+    [TestMethod]
+    public async Task GetAll_DecadeShorthand2Digit40_EquivalentTo1940s()
+    {
+        using var factory = CreateFactory();
+        var twoDigit  = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=40");
+        var fourDigit = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1940");
+
+        var two  = JsonDocument.Parse(await twoDigit.Content.ReadAsStringAsync()).RootElement;
+        var four = JsonDocument.Parse(await fourDigit.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual(four.GetProperty("items").GetArrayLength(),
+                        two.GetProperty("items").GetArrayLength(),
+                        "decade=40 must return the same count as decade=1940");
+    }
+
+    /// <summary>decade=00 is shorthand for 2000–2009 — valid, no results in fake data.</summary>
+    [TestMethod]
+    public async Task GetAll_DecadeShorthand2Digit00_ValidNoResults()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=00");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
     // ── /search — year/decade filters ────────────────────────────────────
