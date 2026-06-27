@@ -39,21 +39,47 @@ Combine `{Path}` and `{Query}` into a single `{Url}` property by concatenating `
 
 The current line has no `[Subsystem - Phase]` prefix, violating `docs/logging.md`. Add `[Api - Request]` to match the prefix pattern used throughout the codebase.
 
-### 3. Review the two-line-per-request pattern
+### 3. Extend to all endpoints except `/api/v1/health`
 
-Each API request currently emits two log lines:
+The current middleware only logs `/api/v1/quotes/*`. This should be all endpoints. If an endpoint is being called unexpectedly or hammered, it needs to be visible in the log regardless of whether it is a quote endpoint or an admin endpoint.
+
+The only intentional exclusion is `/api/v1/health` — it is polled constantly by monitoring systems and would flood the log with noise that obscures real traffic.
+
+Change the path filter from:
+
+```csharp
+// Before: only quote endpoints
+if (!context.Request.Path.StartsWithSegments("/api/v1/quotes"))
+{
+    await next();
+    return;
+}
+```
+
+to:
+
+```csharp
+// After: all endpoints except /health
+if (context.Request.Path.StartsWithSegments("/api/v1/health"))
+{
+    await next();
+    return;
+}
+```
+
+### 4. Review the two-line-per-request pattern
+
+Each API request currently emits two log lines (for quote endpoints):
 - Endpoint handler: `[Api - Search] q="back" field=null limit=null type=[] lang=null`
 - Middleware: `"GET" "/path""?query" → 200 in Xms`
 
-Both are complementary — the endpoint log captures parsed semantic parameters, the middleware log captures HTTP-level facts (method, URL, status, duration). Keep both. Ensure neither duplicates what the other records.
+Both are complementary and should be kept. With scope extended to all endpoints, the middleware line now also appears for admin and other routes. No duplication concern — endpoint handlers log semantic parameters, the middleware logs HTTP facts.
 
-### 4. Document and enforce the secret-safety boundary (new)
+### 5. Document the secret-safety rule for what is captured
 
-The current middleware filters to `/api/v1/quotes/*` only. This is a **security boundary**: admin routes (`/api/v1/admin/*`) carry the `X-Api-Key` header and must never be logged. Future auth routes will carry `Authorization` and `Cookie` headers. The filter being implicit and undocumented is a hazard — widening it without understanding the consequence would leak secrets.
+The security constraint is about **what data is captured**, not which routes are included. `POST /api/v1/admin/database/reset → 200 in 5ms` is safe to log — the path is not a secret; the API key is in the `X-Api-Key` header, which is never logged. The same applies to future `Authorization` and `Cookie` headers.
 
-Changes required:
-- Add a named constant or clear comment in `Program.cs` that describes the path filter as a **deliberate security boundary**, not just a scope filter.
-- Add the secret-logging rules below to `docs/logging.md` so they apply to all future logging work in this codebase, not just this middleware.
+Add the secret-logging rules below to `docs/logging.md` so they apply to all future logging work in this codebase.
 
 ---
 
@@ -72,7 +98,7 @@ These rules apply permanently to all log output in Quotinator:
 | `User-Agent` value | Safe to log — it is identification, not authentication. |
 | Quote search parameters (`q`, `field`, `type`, `genre`, `lang`) | Safe to log — they are non-sensitive search terms. |
 
-**The `/api/v1/quotes/*` path filter is a security boundary.** Any change that widens the logged path scope (e.g. to `/api/v1/*` or `*`) must explicitly verify that no secrets can enter the log via headers, query parameters, or request bodies on the newly-included routes.
+**The security boundary is what is captured, not which routes are included.** Never log header values — `X-Api-Key`, `Authorization`, `Cookie`, `Set-Cookie`. The path and query string of any endpoint are safe to log. If query parameters ever carry secrets (e.g. `?token=...`), exclude only those parameters — do not exclude the route.
 
 ---
 
@@ -86,8 +112,8 @@ INF: Quotinator.Requests[] [Api - Request] GET /api/v1/quotes/search?q=back&genr
 
 ## Out of scope
 
-- Do not add a structured logging library (e.g. `UseSerilogRequestLogging`) — the hand-rolled middleware filters to `/api/v1/quotes/*` intentionally and the filter is a security boundary
-- Do not log request headers — `User-Agent` is captured via `ICallerContext` in the audit trail (#73), not by duplicating it here
+- Do not add a structured logging library (e.g. `UseSerilogRequestLogging`) — the hand-rolled middleware needs the health-exclusion filter and must never log headers
+- Do not log request headers — never log `X-Api-Key`, `Authorization`, `Cookie`, or `Set-Cookie`; `User-Agent` is captured via `ICallerContext` in the audit trail (#73), not here
 
 ---
 
@@ -98,11 +124,11 @@ These are two separate outputs with different purposes and different security co
 | | Request log (`logRequests` middleware) | Audit trail (`AuditEntries` table) |
 |---|---|---|
 | **Output** | HA supervisor log (human-readable text) | SQLite database (queryable records) |
-| **Admin routes** | **Excluded** — `X-Api-Key` must never appear in log files | **Included** — `reseed`, `reset`, and future admin actions are explicitly audited |
+| **Admin routes** | **Included** — path + status is useful traffic signal; header values are never logged | **Included** — `reseed`, `reset`, and future admin actions are explicitly audited |
 | **What is stored** | Method, URL, status code, duration | Operation name, agent identity (`User-Agent`), timestamp |
 | **Secrets** | Never stored — path filter is a security boundary | Never stored — API key is authenticated but never recorded; only the agent is |
 
-Admin routes being absent from the request log does not mean admin actions go unrecorded. See issue #73.
+Both the request log and the audit trail cover admin routes — for different reasons. The request log confirms that the endpoint was called. The audit trail records what was done (the operation and who triggered it). See issue #73.
 
 ---
 
@@ -113,7 +139,8 @@ Admin routes being absent from the request log does not mean admin actions go un
 | 1 | ⬜ | No double-quote between path and query string | Unit test | `RequestLogFormattingTests.LogLine_IncludesFullUrl_WithoutDoubleQuote` — assert rendered line contains `search?q=back`, not `search""?q=back` |
 | 2 | ⬜ | `[Api - Request]` prefix present in log line | Unit test | `RequestLogFormattingTests.LogLine_HasApiRequestPrefix` — assert rendered line starts with `[Api - Request]` |
 | 3 | ⬜ | Requests with no query string log cleanly (no trailing empty token) | Unit test | `RequestLogFormattingTests.LogLine_NoQuery_NoTrailingQuote` — assert path-only request has no trailing quote artifact |
-| 4 | ⬜ | Admin routes are never entered by the request log middleware | Unit test | `RequestLogFormattingTests.AdminRoute_IsNotLogged` — assert `GET /api/v1/admin/audit` produces no log line |
-| 5 | ⬜ | `docs/logging.md` contains the secret-logging rules table | Code review | Rules table present; path filter documented as security boundary |
-| 6 | ⬜ | Secret-safety boundary is documented in `Program.cs` at the filter | Code review | Comment at the path filter names the security constraint explicitly |
-| 7 | ⬜ | User starts app in VS; request log lines are readable in the output window | Live | Start app, hit `/api/v1/quotes/random` in browser; confirm log line matches expected format; confirm no admin route appears in log |
+| 4 | ⬜ | `/api/v1/health` produces no log line | Unit test | `RequestLogFormattingTests.HealthEndpoint_IsNotLogged` — assert `GET /api/v1/health` produces no log output |
+| 5 | ⬜ | Admin routes are logged | Unit test | `RequestLogFormattingTests.AdminRoute_IsLogged` — assert `POST /api/v1/admin/database/reseed` produces a log line with method, path, status, duration |
+| 6 | ⬜ | `docs/logging.md` contains the secret-logging rules table | Code review | Rules table present; secret constraint is about captured data, not route scope |
+| 7 | ⬜ | No header values appear in any log line | Code review | `Program.cs` middleware logs only method, URL, status, duration — no `context.Request.Headers` access anywhere in the block |
+| 8 | ⬜ | User starts app in VS; quote request, admin request, and version request all appear in log; health does not | Live | Hit `/api/v1/quotes/random`, `POST /api/v1/admin/database/seed/preview`, and `/api/v1/health` in sequence; confirm first two appear in log, health does not |

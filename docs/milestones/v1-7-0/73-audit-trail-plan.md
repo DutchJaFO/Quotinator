@@ -100,7 +100,7 @@ Read operations are not audited — the request log (`log_requests: true`) cover
 
 Admin actions use `TableName = "Database"` and `RecordId = null` — they are database-level operations, not row-level. Admin endpoint handlers call `IAuditWriter.WriteAsync` directly, injecting it via DI. They do not go through the repository base class.
 
-> **Important distinction:** admin routes are excluded from the *request log middleware* (to prevent `X-Api-Key` appearing in log files). They are explicitly included in the *audit trail*. These are different outputs with different security constraints — the audit trail stores operation identity (agent + operation name), never credentials.
+> **Important distinction:** logging and audit are distinct features. The *request log* confirms that an endpoint was called (method, URL, status, duration) — it covers all routes including admin. The *audit trail* records what was done (operation, agent, affected record) — it covers write operations and admin actions only. The security rule is the same for both: never capture header values (`X-Api-Key`, `Authorization`, `Cookie`).
 
 ### `ICallerContext` — scoped caller identity
 
