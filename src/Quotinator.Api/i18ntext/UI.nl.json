@@ -48,6 +48,7 @@
   "ErrorFilterInputInvalid": "Een of meer filterwaarden bevatten ongeldige tekens.",
   "ErrorDecadeInvalid": "decade moet een jaar zijn dat deelbaar is door 10 (bijv. 1980, 1990, 2000).",
   "ErrorYearRangeInvalid": "yearFrom mag niet groter zijn dan yearTo.",
+  "ErrorNumericParameterInvalid": "Een of meer queryparameters bevatten een ongeldige waarde. Numerieke parameters (yearFrom, yearTo, year, decade, page, pageSize, n) moeten gehele getallen zijn.",
   "AdminEndpointsHeading": "Beheereindpunten",
   "AdminEndpointsDescription": "Deze eindpunten vereisen een X-Api-Key-header die overeenkomt met de admin_api_key in de add-on-opties. Ze zijn niet beschikbaar als er geen sleutel is ingesteld.",
   "AdminPreviewSeedLabel": "Importvoorbeeld bekijken",

@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
+using Quotinator.Constants.Api;
+using Quotinator.Core.Services;
 
 namespace Quotinator.Api.Middleware;
 
@@ -9,7 +11,7 @@ namespace Quotinator.Api.Middleware;
 /// handler, UseExceptionHandler() falls through to 500 even though the fault is the caller's.
 /// Registered before AddProblemDetails() so it runs first in the IExceptionHandler chain.
 /// </remarks>
-internal sealed class BadRequestExceptionHandler : IExceptionHandler
+internal sealed class BadRequestExceptionHandler(IApiLocalizer localizer) : IExceptionHandler
 {
     /// <inheritdoc/>
     public async ValueTask<bool> TryHandleAsync(
@@ -22,7 +24,7 @@ internal sealed class BadRequestExceptionHandler : IExceptionHandler
 
         context.Response.StatusCode = bad.StatusCode;
         await Results.Problem(
-            detail: bad.Message,
+            detail: localizer[ApiMessages.NumericParameterInvalid],
             statusCode: bad.StatusCode)
             .ExecuteAsync(context);
 
