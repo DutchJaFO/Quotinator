@@ -30,8 +30,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#109](https://github.com/DutchJaFO/Quotinator/issues/109) | Search: field=author/character always return empty; type=person returns empty | ✅ Closed — v1.7.0 | T1 ✅ | [109-search-endpoint-plan.md](109-search-endpoint-plan.md) |
 | [#117](https://github.com/DutchJaFO/Quotinator/issues/117) | Add .NET SDK to Claude Code remote execution environment via session-start hook | ✅ Closed — v1.7.0 | T1 ✅ | [117-dotnet-env-plan.md](117-dotnet-env-plan.md) |
 | [#70](https://github.com/DutchJaFO/Quotinator/issues/70) | Refactor CI/Release workflows: reusable workflow + beta/final release process | 🟡 Code complete — pending T3 | T3 ⬜ | [70-ci-workflow-plan.md](70-ci-workflow-plan.md) |
-| [#125](https://github.com/DutchJaFO/Quotinator/issues/125) | Fix request log format: double-quote between path and query string | 🟡 Code complete — pending release | T1 ⬜ T3 ⬜ | [125-request-log-format-plan.md](125-request-log-format-plan.md) |
-| [#126](https://github.com/DutchJaFO/Quotinator/issues/126) | Validation errors return 200 instead of 4xx | 🟡 Code complete — pending release | T1 ⬜ | [126-validation-status-codes-plan.md](126-validation-status-codes-plan.md) |
+| [#125](https://github.com/DutchJaFO/Quotinator/issues/125) | Fix request log format: double-quote between path and query string | 🟡 Code complete — pending release | T1 ✅ T3 ⬜ | [125-request-log-format-plan.md](125-request-log-format-plan.md) |
+| [#126](https://github.com/DutchJaFO/Quotinator/issues/126) | Validation errors return 200 instead of 4xx | 🟡 Code complete — pending release | T1 ✅ | [126-validation-status-codes-plan.md](126-validation-status-codes-plan.md) |
 | [#74](https://github.com/DutchJaFO/Quotinator/issues/74) | Add read-model query pattern to Quotinator.Data for join and projection queries | 🔴 Not started | T1, T2 | [74-read-model-query-plan.md](74-read-model-query-plan.md) |
 | [#75](https://github.com/DutchJaFO/Quotinator/issues/75) | Add master/detail repository pattern to Quotinator.Data | 🔴 Not started | T1, T2 | [75-master-detail-plan.md](75-master-detail-plan.md) |
 | [#76](https://github.com/DutchJaFO/Quotinator/issues/76) | Add 1:1 relationship pattern to Quotinator.Data | 🔴 Not started | T1, T2 | [76-one-to-one-plan.md](76-one-to-one-plan.md) |
@@ -61,13 +61,7 @@ Full audit commands: [70-ci-workflow-plan.md § How to audit and re-verify](70-c
 
 ### #125 — Request log format fix
 **Shipped in:** (next release)  
-**T1 — local:**
-
-| What to verify | How |
-|---------------|-----|
-| Log lines show `GET /api/v1/quotes/random → 200 in Xms` with no double-quote between path and query | Run the app locally in VS; call `GET /api/v1/quotes/search?q=love`; check the VS Output / Debug console for the request log line |
-| Correlated start/end pair shares an 8-char hex ID | Confirm two lines share the same ID — e.g. `[Api - Request] abc12345 ← GET /api/v1/…` and `[Api - Request] abc12345 → 200 in Xms` |
-| `/api/**` routes log at Information; Blazor/asset routes log at Debug | With log level set to `Information`, confirm web page and asset requests are absent from the console output |
+T1 ✅ verified 2026-06-27 (log lines show 8-char correlation ID, no double-quote, correct `→` separator; `/api/**` routes at Information in VS output)  
 
 **T3 — HA add-on:**
 
@@ -90,18 +84,7 @@ No T3 requirements for this issue.
 
 ### #126 — Validation errors return 4xx
 **Shipped in:** (next release)  
-**T1 — local:**
-
-| What to verify | How |
-|---------------|-----|
-| Unrecognised `genre` → 422 | `GET /api/v1/quotes/random?genre=scifi` — expect 422, message listing valid genres |
-| Unrecognised `type` → 422 | `GET /api/v1/quotes/random?type=Tv` — expect 422 (was 200 before fix) |
-| `decade` not ÷10 → 422 | `GET /api/v1/quotes/random?decade=1981` — expect 422 |
-| Two-digit decade shorthand → 200 | `GET /api/v1/quotes/random?decade=80` — expect 200, results from 1980–1989 |
-| `yearFrom > yearTo` → 422 | `GET /api/v1/quotes/random?yearFrom=2000&yearTo=1990` — expect 422 |
-| Oversized filter value → 400 | `GET /api/v1/quotes/random?character=` + 201-char string — expect 400 |
-| `n` not an integer → 422 | `GET /api/v1/quotes/random?n=x` — expect 422, message naming `n` |
-| Unknown `lang` → 400 | `GET /api/v1/quotes/random?lang=xx` — expect 400 |
+T1 ✅ verified 2026-06-27 (`GET /api/v1/quotes/random?type=x` → 422 with `InvalidType` status and valid-values message; confirmed in Scalar UI + VS log)
 
 Full verification table: [126-validation-status-codes-plan.md](126-validation-status-codes-plan.md)
 
@@ -136,8 +119,8 @@ Full verification table: [126-validation-status-codes-plan.md](126-validation-st
 | 3 | ✅ **#109** — Search field/type bug | Closed v1.7.0 |
 | 4 | ✅ **#117** — .NET SDK hook | Closed v1.7.0 |
 | 5 | 🟡 **#70** — CI refactor | Code complete v1.7.0; close after T3 rows 10–11 pass in the next beta→final cycle |
-| 6 | 🟡 **#125** — Request log format fix | Code complete; close after next release + T1/T3 confirmed |
-| 7 | 🟡 **#126** — Validation 4xx | Code complete; close after next release + T1 confirmed |
+| 6 | 🟡 **#125** — Request log format fix | Code complete; T1 ✅; close after next release + T3 confirmed |
+| 7 | 🟡 **#126** — Validation 4xx | Code complete; T1 ✅; close after next release |
 | 8 | 🟡 **#73** — Audit trail | Code complete; T1 ✅ T2 ✅; close after next release |
 | 9 | **#74** — Read-model pattern | After #73; repository base class receives `IAuditWriter` + `ICallerContext` in constructor |
 | 10 | **#75** — Master/detail pattern | After #74; may add optional transaction parameter to `IRepository<T>` |
