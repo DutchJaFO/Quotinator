@@ -121,6 +121,12 @@
     <File Path="docs/milestones/v1-7-0/115-dapper-core-refactor-plan.md" />
     <File Path="docs/milestones/v1-7-0/117-dotnet-env-plan.md" />
   </Folder>
+  <Folder Name="/docs/milestones/v1-7-0/audit/issue-117/">
+    <File Path="docs/milestones/v1-7-0/audit/issue-117/README.md" />
+    <File Path="docs/milestones/v1-7-0/audit/issue-117/log-1-build.txt" />
+    <File Path="docs/milestones/v1-7-0/audit/issue-117/log-2-tests.txt" />
+    <File Path="docs/milestones/v1-7-0/audit/issue-117/log-3-changelog.txt" />
+  </Folder>
   <Folder Name="/docs/milestones/changelog-handling/">
     <File Path="docs/milestones/changelog-handling/overview.md" />
     <File Path="docs/milestones/changelog-handling/80-json-changelog-plan.md" />
