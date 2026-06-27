@@ -133,7 +133,7 @@ public class JoinQueryRepository<TResult>(
 
 ### 7. `Quotinator.Data.Testing` — new companion project
 
-A dedicated project for test infrastructure. Consumers add it as a test-only project reference. All types are `public` with XML `<summary>` tags.
+A dedicated project for test infrastructure. Consumers add it as a test-only project reference. All types are `public` with XML `<summary>` tags. CS1591 is enabled (`<GenerateDocumentationFile>true</GenerateDocumentationFile>`) and treated as a warning-as-error so missing summaries fail the build — same policy as `Quotinator.Data` and `Quotinator.Core`.
 
 **Contents:**
 
@@ -300,15 +300,15 @@ foreach (var type in strategyTypes)
 |---|--------|-------------|--------|--------------|
 | 1 | ⬜ | `Sql.Joins.Inner` and `Sql.Joins.Left` exist in `Sql.cs` with bracket-quoted output | Unit test | `SqlQueryGuardTests` — assert `[` present in `Inner` and `Left` output |
 | 2 | ⬜ | `Sql.Queries.WidgetWithOwner()` covered by `SqlQueryGuardTests` | Unit test | `SqlQueryGuardTests.AssembledQueryCases` — `WidgetWithOwner` case included |
-| 3 | ⬜ | `IJoinStrategy<TResult>` defined in `Quotinator.Data.Queries` | Code review | Interface file exists; correct namespace; public with XML summary |
-| 4 | ⬜ | `WidgetWithOwnerStrategy` implements `IJoinStrategy<WidgetWithOwner>` and delegates to `Sql.Queries` | Code review | Strategy class exists; `BuildSql()` calls `Sql.Queries.WidgetWithOwner()` |
+| 3 | ⬜ | `IJoinStrategy<TResult>` defined in `Quotinator.Data.Queries` | Build + integration tests | Compilation proves existence and namespace; rows 5–8 exercise it end-to-end |
+| 4 | ⬜ | `WidgetWithOwnerStrategy` implements `IJoinStrategy<WidgetWithOwner>` and delegates to `Sql.Queries` | Build + integration tests | Compilation proves implementation; rows 5 and 7 exercise `BuildSql()` via reflection and real query |
 | 5 | ⬜ | `SqlQueryGuardTests` reflection scan finds all `IJoinStrategy<TResult>` implementations and passes vulnerability check | Unit test | `SqlQueryGuardTests.AllJoinStrategies_BuildSql_PassesVulnerabilityCheck` |
 | 6 | ⬜ | `JoinQueryRepository<TResult>` executes the strategy and returns results | Integration test | `JoinQueryRepositoryTests.QueryAsync_ReturnsProjectedReadModels` |
 | 7 | ⬜ | Integration test: Widget+Owner INNER JOIN returns correct read model fields | Integration test | `JoinQueryRepositoryTests.QueryAsync_WidgetWithOwner_MapsAllColumns` |
 | 8 | ⬜ | Integration test: LEFT JOIN returns read model with default values when right side is absent | Integration test | `JoinQueryRepositoryTests.QueryAsync_LeftJoin_NullRightSide_ReturnedWithDefaults` |
 | 9 | ⬜ | `Quotinator.Data.Testing` project exists; builds clean | Build | `dotnet build --configuration Release` — 0 warnings, 0 errors |
-| 10 | ⬜ | `NoOpAuditWriter`, `NoOpAuditReader`, `NoOpCallerContext`, `NoOpDatabaseInitializer` in `Quotinator.Data.Testing`; all public with XML summaries | Code review | Types exist in correct namespace; `Instance` singleton on each no-op |
-| 11 | ⬜ | `FakeJoinStrategy<TResult>` in `Quotinator.Data.Testing`; public with XML summary | Code review | Type exists; `BuildSql()` returns the constructor-supplied SQL |
+| 10 | ⬜ | `NoOpAuditWriter`, `NoOpAuditReader`, `NoOpCallerContext`, `NoOpDatabaseInitializer` in `Quotinator.Data.Testing`; all public with XML summaries | Build | CS1591 enabled on `Quotinator.Data.Testing` (`<GenerateDocumentationFile>true</GenerateDocumentationFile>` + CS1591 warnings-as-errors); missing summaries fail the build |
+| 11 | ⬜ | `FakeJoinStrategy<TResult>.BuildSql()` returns the SQL supplied to the constructor | Unit test | `FakeJoinStrategyTests.BuildSql_ReturnsConstructorSuppliedSql` |
 | 12 | ⬜ | `TempDatabase` in `Quotinator.Data.Testing`; creates real DB, applies migrations, disposes cleanly | Integration test | `TempDatabaseTests.Dispose_DeletesTempDirectory` |
 | 13 | ⬜ | Duplicate no-op stubs removed from `Api.Tests`, `Core.Tests`, `Data.Tests`; replaced with project reference to `Quotinator.Data.Testing` | Code review | Old stub files absent; each test project references `Quotinator.Data.Testing` |
 | 14 | ⬜ | `docs/data-access.md` created; covers all required topics including `Quotinator.Data.Testing` usage | Code review | Doc exists; `TempDatabase`, `NoOp*`, and `FakeJoinStrategy<TResult>` documented with examples |
