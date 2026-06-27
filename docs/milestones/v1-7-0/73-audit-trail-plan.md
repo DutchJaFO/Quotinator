@@ -1,4 +1,4 @@
-# Issue #73 — Audit trail: record who did what on which record in which table
+﻿# Issue #73 — Audit trail: record who did what on which record in which table
 
 **Milestone:** v1.7.0  
 **Status:** Open  
@@ -14,6 +14,56 @@ The original spec deferred this issue to the auth milestone because `PerformedBy
 **New design:** The `Agent` field is populated from an optional `X-Agent` request header via a scoped `ICallerContext` service. Callers that identify themselves (MagicMirror, smoke-test scripts, the Blazor UI circuit) are recorded. Callers that omit the header produce a null agent entry — the operation is still recorded. The authenticated `UserId` is added when auth lands, as a separate nullable column alongside `Agent`.
 
 See the scope-change comment on [GitHub issue #73](https://github.com/DutchJaFO/Quotinator/issues/73#issuecomment-4816844699) for the full reasoning.
+
+---
+
+## Dependency analysis
+
+### Actual project dependency graph
+
+```
+Quotinator.Data  (no project references)
+  └─ exposes internals to Quotinator.Core via InternalsVisibleTo
+       ↑ referenced by
+Quotinator.Core  (→ Data; has Dapper + Microsoft.Data.Sqlite)
+       ↑ referenced by
+Quotinator.Api   (→ Core, → Data, → Changelog, → Constants)
+```
+
+`Quotinator.Data` sits at the bottom. Core and Api both depend on it. **Data cannot reference Core — there is no upward reference.** This determines where every audit type must live.
+
+### Where audit types must live
+
+| Type | Project | Reason |
+|---|---|---|
+| `ICallerContext` | `Quotinator.Data` | Must be reachable by Data's repository base class AND by Core's services AND by Api's middleware; only Data satisfies all three since both Core and Api reference it |
+| `IAuditWriter` | `Quotinator.Data` | Same reasoning; `AuditWriter` (also in Data) implements it |
+| `AuditEntry` entity | `Quotinator.Data/Entities/` | Data entities live here; Core and Api can reach it |
+| `AuditWriter` | `Quotinator.Data` | Direct Dapper implementation — see circular reference rule below |
+| `CallerContext` | `Quotinator.Data` | Scoped implementation; Api middleware sets it, Data's base class reads it |
+
+The original plan doc placed `ICallerContext` and `IAuditWriter` in Core. That was wrong — Data cannot reference Core, so `AuditWriter` (a Data-layer class) could not implement a Core-defined interface.
+
+### Circular reference rule — `AuditWriter` must NOT extend `SqliteRepository<T>`
+
+`SqliteRepository<T>` will receive `IAuditWriter` in its constructor and call `WriteAsync` on every write operation. If `AuditWriter` also extended `SqliteRepository<T>`, its constructor would require `IAuditWriter` — which is itself. The DI container cannot resolve this.
+
+**Rule: `AuditWriter` is a standalone direct-Dapper class. It never extends `SqliteRepository<T>` and never calls any repository.**
+
+```
+SqliteRepository<T>(IAuditWriter, ICallerContext, IDbConnectionFactory)
+    └─ calls IAuditWriter.WriteAsync(...)
+         └─ AuditWriter : IAuditWriter
+               └─ direct Dapper INSERT — no repository, no recursion
+```
+
+### Reading audit entries
+
+The `GET /api/v1/admin/audit` endpoint reads audit entries. It must NOT use `SqliteRepository<AuditEntry>` because:
+1. `SqliteRepository<T>` carries `IAuditWriter` in its constructor, implying the audit reader could write audit entries — conceptually wrong.
+2. It would require registering `SqliteRepository<AuditEntry>` in DI, which would again bring `IAuditWriter` into a read-only context.
+
+**The audit read endpoint uses the read-model query pattern from #74** — a lightweight, read-only query class with no write capability and no `IAuditWriter` dependency.
 
 ---
 
@@ -101,7 +151,7 @@ public static class AuditOperation
 
 ### Repository integration
 
-`IAuditWriter` (Quotinator.Core interface) has one method:
+`IAuditWriter` (Quotinator.Data interface) has one method:
 
 ```csharp
 Task WriteAsync(AuditEntry entry, IDbConnection connection, IDbTransaction transaction);
@@ -125,15 +175,17 @@ Response: paginated `AuditEntry` list, newest first.
 
 | File | Change |
 |---|---|
-| `src/Quotinator.Core/Models/AuditEntry.cs` | New — model + `AuditOperation` constants |
-| `src/Quotinator.Core/Interfaces/ICallerContext.cs` | New — scoped caller identity interface |
-| `src/Quotinator.Core/Interfaces/IAuditWriter.cs` | New — single write method |
-| `src/Quotinator.Data/Audit/AuditWriter.cs` | New — Dapper implementation of `IAuditWriter` |
-| `src/Quotinator.Core/Data/Sql.cs` | Add `Audit` nested class with insert + select queries |
+| `src/Quotinator.Data/Entities/AuditEntry.cs` | New — entity + `AuditOperation` string constants |
+| `src/Quotinator.Data/Repositories/ICallerContext.cs` | New — scoped caller identity interface (in Data so Core, Data, and Api can all reach it) |
+| `src/Quotinator.Data/Repositories/IAuditWriter.cs` | New — single `WriteAsync` method |
+| `src/Quotinator.Data/Repositories/CallerContext.cs` | New — mutable scoped implementation; Api middleware and Blazor layout both set `Agent` |
+| `src/Quotinator.Data/Repositories/AuditWriter.cs` | New — direct Dapper INSERT; must NOT extend `SqliteRepository<T>` (see circular reference rule) |
+| `src/Quotinator.Data/Repositories/SqliteRepository.cs` | Extend constructor: add `IAuditWriter` + `ICallerContext`; call `WriteAsync` in write methods |
+| `src/Quotinator.Data/Queries/Sql.cs` | Add `Audit` nested class: insert query (for AuditWriter) + select query (for read endpoint) |
 | `src/Quotinator.Data/Database/DatabaseInitializer.cs` | New migration: `AuditEntries` table + two indexes |
-| `src/Quotinator.Api/Program.cs` | Register `ICallerContext` (scoped); add `X-Agent` middleware |
-| `src/Quotinator.Api/Components/Layout/MainLayout.razor.cs` | Set `ICallerContext.Agent = "ui"` on init |
-| `src/Quotinator.Api/Endpoints/AdminEndpoints.cs` | Add `GET /api/v1/admin/audit` endpoint |
+| `src/Quotinator.Api/Program.cs` | Register `ICallerContext` and `IAuditWriter` (scoped); add `User-Agent` to `ICallerContext.Agent` middleware |
+| `src/Quotinator.Api/Components/Layout/MainLayout.razor.cs` | Set `ICallerContext.Agent = "ui"` on `OnInitializedAsync` |
+| `src/Quotinator.Api/Endpoints/AdminEndpoints.cs` | Add `GET /api/v1/admin/audit` endpoint using read-model query (not `SqliteRepository<AuditEntry>`) |
 | `tests/Quotinator.Data.Tests/Audit/AuditWriterTests.cs` | New — integration tests against real SQLite |
 | `tests/Quotinator.Api.Tests/Endpoints/AdminAuditEndpointTests.cs` | New — endpoint tests |
 
