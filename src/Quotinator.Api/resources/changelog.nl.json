@@ -2,6 +2,17 @@
   "language": "nl",
   "sourceLanguage": "en",
   "machineTranslated": true,
+  "unreleased": {
+    "issues": [125],
+    "highlights": [
+      "Endpoint-verzoeken worden nu vastgelegd als een gekoppeld start- en eindpaar — een korte ID verbindt beide regels, waardoor overlappende verzoeken eenvoudig te traceren zijn. Webpagina- en bestandsverzoeken zijn ondergebracht in eigen logcategorieën zodat de standaarduitvoer alleen API-activiteit toont."
+    ],
+    "changed": [
+      "Middleware voor verzoekregistratie verplaatst van `Program.cs` naar `RequestLoggingMiddleware : IMiddleware` — elk HTTP-verzoek produceert twee logregels: één bij aankomst (voor verwerking) en één bij voltooiing, met een gemeenschappelijk correlatie-ID van 8 hexadecimale tekens (issue #125)",
+      "Verzoekregistratie routeert nu op pad naar drie categorieën: `[Api - Request]` op Information-niveau voor `/api/**`-endpoints; `[Web - Request]` op Debug-niveau voor Blazor-pagina's, Scalar-interface en taalroutes; `[Web - Asset]` op Debug-niveau voor statische bestanden en framework-assets — operators zien op het standaard `info`-niveau alleen API-verkeer (issue #125)",
+      "Serilog `{:l}` letterlijk-formaatspecificatie toegepast op alle tekenreekseigenschappen in verzoeklogsjablonen — methode, correlatie-ID en URL worden niet langer omsloten door dubbele aanhalingstekens in de gerenderde uitvoer (issue #125)"
+    ]
+  },
   "sectionHeaders": {
     "highlights": "Hoogtepunten",
     "added": "Toegevoegd",

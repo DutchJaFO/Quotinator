@@ -2,6 +2,17 @@
   "language": "en",
   "sourceLanguage": "en",
   "machineTranslated": false,
+  "unreleased": {
+    "issues": [125],
+    "highlights": [
+      "Endpoint requests are now logged as a matched start and end pair — a short ID links both lines, making it easy to trace overlapping calls. Web page and asset requests are separated into their own log categories so the default output shows only API activity."
+    ],
+    "changed": [
+      "Request logging middleware extracted from `Program.cs` to `RequestLoggingMiddleware : IMiddleware` — each HTTP request produces two log lines: one on arrival (before processing) and one on completion, sharing an 8-character hex correlation ID (issue #125)",
+      "Request log now routes by path to three categories: `[Api - Request]` at Information for `/api/**` endpoints; `[Web - Request]` at Debug for Blazor pages, Scalar UI, and culture routes; `[Web - Asset]` at Debug for static files and framework assets — operators see only API traffic at the default `info` log level (issue #125)",
+      "Serilog `{:l}` literal format specifier applied to all string properties in request log templates — method, correlation ID, and URL are no longer wrapped in double-quotes in rendered output (issue #125)"
+    ]
+  },
   "releases": [
     {
       "version": "1.7.0",

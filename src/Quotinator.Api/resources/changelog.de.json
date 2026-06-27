@@ -2,6 +2,17 @@
   "language": "de",
   "sourceLanguage": "en",
   "machineTranslated": true,
+  "unreleased": {
+    "issues": [125],
+    "highlights": [
+      "Endpoint-Anfragen werden jetzt als zusammengehöriges Start- und Endpaar protokolliert — eine kurze ID verbindet beide Zeilen und erleichtert das Nachverfolgen überlappender Anfragen. Webseiten- und Asset-Anfragen werden in eigene Log-Kategorien eingeordnet, sodass die Standardausgabe nur API-Aktivität zeigt."
+    ],
+    "changed": [
+      "Request-Logging-Middleware aus `Program.cs` nach `RequestLoggingMiddleware : IMiddleware` ausgelagert — jede HTTP-Anfrage erzeugt zwei Logzeilen: eine beim Eingang (vor der Verarbeitung) und eine beim Abschluss, mit einer gemeinsamen 8-stelligen Hex-Korrelations-ID (issue #125)",
+      "Request-Log leitet nun nach Pfad in drei Kategorien weiter: `[Api - Request]` auf Information-Ebene für `/api/**`-Endpunkte; `[Web - Request]` auf Debug-Ebene für Blazor-Seiten, Scalar-UI und Kulturrouten; `[Web - Asset]` auf Debug-Ebene für statische Dateien und Framework-Assets — Betreiber sehen auf dem Standard-`info`-Level nur API-Verkehr (issue #125)",
+      "Serilog `{:l}`-Literalformatbezeichner auf alle String-Eigenschaften in Request-Log-Templates angewendet — Methode, Korrelations-ID und URL werden in der gerenderten Ausgabe nicht mehr mit doppelten Anführungszeichen umschlossen (issue #125)"
+    ]
+  },
   "sectionHeaders": {
     "highlights": "Highlights",
     "added": "Hinzugefügt",

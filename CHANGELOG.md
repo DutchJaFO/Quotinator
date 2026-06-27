@@ -1,10 +1,22 @@
-##### *GENERATED FILE [2026-06-27 09:54 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-27 13:28 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Highlights
+- Endpoint requests are now logged as a matched start and end pair — a short ID links both lines, making it easy to trace overlapping calls. Web page and asset requests are separated into their own log categories so the default output shows only API activity.
+
+### Changed
+- Request logging middleware extracted from `Program.cs` to `RequestLoggingMiddleware : IMiddleware` — each HTTP request produces two log lines: one on arrival (before processing) and one on completion, sharing an 8-character hex correlation ID (issue #125)
+- Request log now routes by path to three categories: `[Api - Request]` at Information for `/api/**` endpoints; `[Web - Request]` at Debug for Blazor pages, Scalar UI, and culture routes; `[Web - Asset]` at Debug for static files and framework assets — operators see only API traffic at the default `info` log level (issue #125)
+- Serilog `{:l}` literal format specifier applied to all string properties in request log templates — method, correlation ID, and URL are no longer wrapped in double-quotes in rendered output (issue #125)
 
 ---
 
@@ -626,6 +638,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.0...HEAD
 [1.7.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.5...v1.7.0
 [1.6.5]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.3...v1.6.4
