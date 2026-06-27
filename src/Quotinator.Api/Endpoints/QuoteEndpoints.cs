@@ -126,8 +126,6 @@ internal static class QuoteEndpoints
             _                                 => StatusCodes.Status400BadRequest,
         });
 
-    // Parses a nullable string year param to int? without throwing.
-    // Returns false when the string is present but cannot be parsed as an integer.
     private static bool TryParseYear(string? raw, out int? value)
     {
         if (raw is null) { value = null; return true; }

@@ -4,11 +4,11 @@ using Quotinator.Core.Services;
 
 namespace Quotinator.Api.Middleware;
 
-/// <summary>Maps <see cref="BadHttpRequestException"/> from parameter binding failures to a 400 response.</summary>
+/// <summary>Maps <see cref="BadHttpRequestException"/> from parameter binding failures to a 422 response.</summary>
 /// <remarks>
-/// ASP.NET Core throws <see cref="BadHttpRequestException"/> with StatusCode=400 when a query
-/// parameter cannot be converted to its declared type (e.g. "1981x" for an int?). Without this
-/// handler, UseExceptionHandler() falls through to 500 even though the fault is the caller's.
+/// Safety net for any <see cref="BadHttpRequestException"/> that escapes the normal validation path.
+/// The primary year-param case is handled at the point of origin by <c>TryParseYear</c> so this
+/// handler fires only for unexpected binding failures on other parameter types.
 /// Registered before AddProblemDetails() so it runs first in the IExceptionHandler chain.
 /// </remarks>
 internal sealed class BadRequestExceptionHandler(IApiLocalizer localizer) : IExceptionHandler
@@ -19,7 +19,7 @@ internal sealed class BadRequestExceptionHandler(IApiLocalizer localizer) : IExc
         Exception exception,
         CancellationToken cancellationToken)
     {
-        if (exception is not BadHttpRequestException bad)
+        if (exception is not BadHttpRequestException)
             return false;
 
         context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
