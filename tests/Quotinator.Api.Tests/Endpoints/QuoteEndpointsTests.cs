@@ -180,54 +180,54 @@ public class QuoteEndpointsTests
 
     // ── /random — filter validation in envelope ───────────────────────────
 
-    /// <summary>Unknown type value returns 200 envelope with status=InvalidType.</summary>
+    /// <summary>Unknown type value returns 422 envelope with status=InvalidType.</summary>
     [TestMethod]
-    public async Task GetRandom_UnknownType_ReturnsInvalidTypeEnvelope()
+    public async Task GetRandom_UnknownType_Returns422WithInvalidTypeEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?type=cartoon");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InvalidType", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.IsFalse(string.IsNullOrEmpty(doc.RootElement.GetProperty("message").GetString()));
     }
 
-    /// <summary>Unknown genre value returns 200 envelope with status=InvalidGenre.</summary>
+    /// <summary>Unknown genre value returns 422 envelope with status=InvalidGenre.</summary>
     [TestMethod]
-    public async Task GetRandom_UnknownGenre_ReturnsInvalidGenreEnvelope()
+    public async Task GetRandom_UnknownGenre_Returns422WithInvalidGenreEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?genre=notarealgenre");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InvalidGenre", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
-    /// <summary>Character filter longer than 200 chars returns envelope with status=InputTooLong.</summary>
+    /// <summary>Character filter longer than 200 chars returns 400 envelope with status=InputTooLong.</summary>
     [TestMethod]
-    public async Task GetRandom_CharacterTooLong_ReturnsInputTooLongEnvelope()
+    public async Task GetRandom_CharacterTooLong_Returns400WithInputTooLongEnvelope()
     {
         using var factory = CreateFactory();
         var longValue = new string('a', 201);
         var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/random?character={longValue}");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InputTooLong", doc.RootElement.GetProperty("status").GetString());
     }
 
-    /// <summary>Suspicious input in a text filter returns envelope with status=InvalidInput.</summary>
+    /// <summary>Suspicious input in a text filter returns 400 envelope with status=InvalidInput.</summary>
     [TestMethod]
-    public async Task GetRandom_SuspiciousCharacterInput_ReturnsInvalidInputEnvelope()
+    public async Task GetRandom_SuspiciousCharacterInput_Returns400WithInvalidInputEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?character=%27%20OR%201%3D1%20--");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
     }
@@ -316,28 +316,28 @@ public class QuoteEndpointsTests
         Assert.IsFalse(string.IsNullOrEmpty(doc.GetProperty("message").GetString()));
     }
 
-    /// <summary>Unknown type value returns 200 envelope with status=InvalidType.</summary>
+    /// <summary>Unknown type value returns 422 envelope with status=InvalidType.</summary>
     [TestMethod]
-    public async Task Search_UnknownType_ReturnsInvalidTypeEnvelope()
+    public async Task Search_UnknownType_Returns422WithInvalidTypeEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&type=cartoon");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         Assert.AreEqual("InvalidType", doc.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.GetProperty("items").GetArrayLength());
         Assert.IsFalse(string.IsNullOrEmpty(doc.GetProperty("message").GetString()));
     }
 
-    /// <summary>Unknown genre value returns 200 envelope with status=InvalidGenre.</summary>
+    /// <summary>Unknown genre value returns 422 envelope with status=InvalidGenre.</summary>
     [TestMethod]
-    public async Task Search_UnknownGenre_ReturnsInvalidGenreEnvelope()
+    public async Task Search_UnknownGenre_Returns422WithInvalidGenreEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&genre=notarealgenre");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         Assert.AreEqual("InvalidGenre", doc.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.GetProperty("items").GetArrayLength());
@@ -546,16 +546,28 @@ public class QuoteEndpointsTests
         }
     }
 
-    /// <summary>Unknown type on / silently returns empty result (no 400, no envelope).</summary>
+    /// <summary>Unknown type on / returns 422 envelope with status=InvalidType.</summary>
     [TestMethod]
-    public async Task GetAll_UnknownType_ReturnsEmptyPaginatedResult()
+    public async Task GetAll_UnknownType_Returns422WithInvalidTypeEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=cartoon");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
+        Assert.AreEqual("InvalidType", doc.RootElement.GetProperty("status").GetString());
+    }
+
+    /// <summary>Unknown genre on / returns 422 envelope with status=InvalidGenre.</summary>
+    [TestMethod]
+    public async Task GetAll_UnknownGenre_Returns422WithInvalidGenreEnvelope()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?genre=notarealgenre");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("InvalidGenre", doc.RootElement.GetProperty("status").GetString());
     }
 
     // ── /random — year/decade filters ────────────────────────────────────
@@ -613,27 +625,27 @@ public class QuoteEndpointsTests
         Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
     }
 
-    /// <summary>decade not divisible by 10 returns 200 envelope with status=InvalidInput.</summary>
+    /// <summary>decade not divisible by 10 returns 422 envelope with status=InvalidInput.</summary>
     [TestMethod]
-    public async Task GetRandom_DecadeNotDivisibleByTen_ReturnsInvalidInputEnvelope()
+    public async Task GetRandom_DecadeNotDivisibleByTen_Returns422WithInvalidInputEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?decade=1941");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
-    /// <summary>yearFrom greater than yearTo returns 200 envelope with status=InvalidInput.</summary>
+    /// <summary>yearFrom greater than yearTo returns 422 envelope with status=InvalidInput.</summary>
     [TestMethod]
-    public async Task GetRandom_YearFromGreaterThanYearTo_ReturnsInvalidInputEnvelope()
+    public async Task GetRandom_YearFromGreaterThanYearTo_Returns422WithInvalidInputEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?yearFrom=1984&yearTo=1942");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
     }

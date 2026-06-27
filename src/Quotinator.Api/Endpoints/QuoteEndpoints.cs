@@ -116,6 +116,16 @@ internal static class QuoteEndpoints
     private static FilteredQuoteResult<QuoteResponse> FilterEnvelope(FilteredResultStatus status, string message) =>
         new() { Status = status, Message = message };
 
+    // Maps a validation envelope to the correct HTTP status code.
+    // Semantic errors (unrecognised value) → 422; structural errors (too long, suspicious) → 400.
+    private static IResult ToValidationResult(FilteredQuoteResult<QuoteResponse> envelope) =>
+        Results.Json(envelope, statusCode: envelope.Status switch
+        {
+            FilteredResultStatus.InvalidType  => StatusCodes.Status422UnprocessableEntity,
+            FilteredResultStatus.InvalidGenre => StatusCodes.Status422UnprocessableEntity,
+            _                                 => StatusCodes.Status400BadRequest,
+        });
+
     private static IResult GetRandom(
         IQuoteService service,
         IApiLocalizer localizer,
@@ -145,7 +155,9 @@ internal static class QuoteEndpoints
         if (decade is not null)
         {
             if (decade % 10 != 0)
-                return Results.Ok(FilterEnvelope(FilteredResultStatus.InvalidInput, localizer[ApiMessages.DecadeInvalid]));
+                return Results.Json(
+                    FilterEnvelope(FilteredResultStatus.InvalidInput, localizer[ApiMessages.DecadeInvalid]),
+                    statusCode: StatusCodes.Status422UnprocessableEntity);
             yearFrom = decade;
             yearTo   = decade + 9;
         }
@@ -156,10 +168,12 @@ internal static class QuoteEndpoints
         }
 
         if (yearFrom is not null && yearTo is not null && yearFrom > yearTo)
-            return Results.Ok(FilterEnvelope(FilteredResultStatus.InvalidInput, localizer[ApiMessages.YearRangeInvalid]));
+            return Results.Json(
+                FilterEnvelope(FilteredResultStatus.InvalidInput, localizer[ApiMessages.YearRangeInvalid]),
+                statusCode: StatusCodes.Status422UnprocessableEntity);
 
         if (ValidateFilterParams(localizer, type, genre, character, author, source) is { } invalid)
-            return Results.Ok(invalid);
+            return ToValidationResult(invalid);
 
         var result = service.GetRandom(count, type, genre, character, author, source, lang, yearFrom, yearTo);
 
@@ -230,7 +244,7 @@ internal static class QuoteEndpoints
                 statusCode: StatusCodes.Status400BadRequest);
 
         if (ValidateFilterParams(localizer, type, genre, null, null, null) is { } invalid)
-            return Results.Ok(invalid);
+            return ToValidationResult(invalid);
 
         if (decade is not null)
         {
@@ -291,6 +305,9 @@ internal static class QuoteEndpoints
             return Results.Problem(
                 detail: localizer[ApiMessages.PageSizeOutOfRange],
                 statusCode: StatusCodes.Status400BadRequest);
+
+        if (ValidateFilterParams(localizer, type, genre, null, null, null) is { } invalid)
+            return ToValidationResult(invalid);
 
         if (decade is not null)
         {
