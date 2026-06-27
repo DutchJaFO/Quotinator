@@ -145,5 +145,5 @@ The milestone-close section of `checklist.md` gains two explicit gates:
 | 5 | ✅ | `release.yml` creates a pre-release GitHub Release for beta tags | Code review | `--prerelease` flag gated on `contains(github.ref, '-')` |
 | 6 | ✅ | `docs/release-verification.md` exists and defines all three tiers | Code review | File exists; T1/T2/T3 defined with what each catches |
 | 7 | ✅ | `checklist.md` milestone-close section includes beta and final gates | Code review | Both gate blocks present with correct items |
-| 8 | ⬜ | CI passes on push to feature branch | Live | GitHub Actions — CI workflow green on branch push |
+| 8 | ✅ | CI passes on push to feature branch | Live | GitHub Actions — CI workflow green on branch push |
 | 9 | ✅ | User manual test — app starts without error | Live | User starts app in VS; confirms startup without error |
