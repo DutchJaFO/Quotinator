@@ -21,4 +21,5 @@ public static class ApiMessages
     public const string DecadeInvalid              = "ErrorDecadeInvalid";
     public const string YearRangeInvalid           = "ErrorYearRangeInvalid";
     public const string NumericParameterInvalid    = "ErrorNumericParameterInvalid";
+    public const string YearParamNotInteger        = "ErrorYearParamNotInteger";
 }

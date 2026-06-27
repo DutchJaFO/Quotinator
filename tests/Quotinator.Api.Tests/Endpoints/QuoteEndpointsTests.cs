@@ -732,4 +732,37 @@ public class QuoteEndpointsTests
             .GetAsync("/api/v1/quotes?decade=1980x");
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
+
+    /// <summary>Error detail names the specific parameter that failed — not a generic list of all params.</summary>
+    [TestMethod]
+    public async Task GetRandom_NonIntegerYearFrom_DetailNamesParameter()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?yearFrom=abc");
+        var body = await response.Content.ReadAsStringAsync();
+        StringAssert.Contains(body, "yearFrom");
+        Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
+    }
+
+    /// <summary>Error detail names yearTo specifically — not a generic list of all params.</summary>
+    [TestMethod]
+    public async Task Search_NonIntegerYearTo_DetailNamesParameter()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&yearTo=1981x");
+        var body = await response.Content.ReadAsStringAsync();
+        StringAssert.Contains(body, "yearTo");
+        Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
+    }
+
+    /// <summary>Error detail names decade specifically — not a generic list of all params.</summary>
+    [TestMethod]
+    public async Task GetAll_NonIntegerDecade_DetailNamesParameter()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1980x");
+        var body = await response.Content.ReadAsStringAsync();
+        StringAssert.Contains(body, "decade");
+        Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
+    }
 }
