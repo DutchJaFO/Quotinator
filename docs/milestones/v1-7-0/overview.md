@@ -36,7 +36,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#75](https://github.com/DutchJaFO/Quotinator/issues/75) | Add master/detail repository pattern to Quotinator.Data | 🔴 Not started | T1, T2 | [75-master-detail-plan.md](75-master-detail-plan.md) |
 | [#76](https://github.com/DutchJaFO/Quotinator/issues/76) | Add 1:1 relationship pattern to Quotinator.Data | 🔴 Not started | T1, T2 | [76-one-to-one-plan.md](76-one-to-one-plan.md) |
 | [#77](https://github.com/DutchJaFO/Quotinator/issues/77) | Add many-to-many relationship pattern to Quotinator.Data | 🔴 Not started | T1, T2 | [77-many-to-many-plan.md](77-many-to-many-plan.md) |
-| [#73](https://github.com/DutchJaFO/Quotinator/issues/73) | Audit trail: record who did what on which record in which table | 🔴 Not started | T1, T2 | [73-audit-trail-plan.md](73-audit-trail-plan.md) |
+| [#73](https://github.com/DutchJaFO/Quotinator/issues/73) | Audit trail: record who did what on which record in which table | 🟡 Code complete — pending release | T1 ✅ T2 ✅ | [73-audit-trail-plan.md](73-audit-trail-plan.md) |
 | [#121](https://github.com/DutchJaFO/Quotinator/issues/121) | Refactor: remove Dapper dependency from SqliteQuoteService | 🔴 Not started | T1, T2 | (no plan doc yet) |
 
 ---
@@ -80,6 +80,14 @@ Full verification table: [125-request-log-format-plan.md](125-request-log-format
 
 ---
 
+### #73 — Audit trail
+**Shipped in:** (next release)  
+T1 ✅ verified 2026-06-27 (app started in VS; POST reseed produced `Reseeded` + `BulkInserted` entries per source file; GET audit returned correct shape; DELETE audit returned 401 without key / 204 with key)  
+T2 ✅ verified 2026-06-27 (`docker build -f docker/Dockerfile -t quotinator:local .` — clean build)  
+No T3 requirements for this issue.
+
+---
+
 ### #126 — Validation errors return 4xx
 **Shipped in:** (next release)  
 **T1 — local:**
@@ -109,7 +117,7 @@ Full verification table: [126-validation-status-codes-plan.md](126-validation-st
 #70   ─── (none) — code complete v1.7.0; rows 10–11 pending next beta→final cycle
 #125  ─── (none) — code complete; pending next release + T1/T3 verification
 #126  ─── (none) — code complete; pending next release + T1 verification
-#73   ─── (none) — auth dependency removed 2026-06-27; uses User-Agent via ICallerContext
+#73   ─── (none) — code complete; T1 ✅ T2 ✅ 2026-06-27; pending next release
 #74   ─── depends on #73 (repository base class receives IAuditWriter + ICallerContext from day one)
 #75   ─── depends on #74 (read-model pattern)
 #76   ─── depends on #74 (read-model pattern); transaction concern shared with #75
@@ -130,7 +138,7 @@ Full verification table: [126-validation-status-codes-plan.md](126-validation-st
 | 5 | 🟡 **#70** — CI refactor | Code complete v1.7.0; close after T3 rows 10–11 pass in the next beta→final cycle |
 | 6 | 🟡 **#125** — Request log format fix | Code complete; close after next release + T1/T3 confirmed |
 | 7 | 🟡 **#126** — Validation 4xx | Code complete; close after next release + T1 confirmed |
-| 8 | **#73** — Audit trail | Must come before #74; `ICallerContext`, `IAuditWriter`, `AuditWriter`, and the `AuditEntries` migration must exist before repository base classes are written |
+| 8 | 🟡 **#73** — Audit trail | Code complete; T1 ✅ T2 ✅; close after next release |
 | 9 | **#74** — Read-model pattern | After #73; repository base class receives `IAuditWriter` + `ICallerContext` in constructor |
 | 10 | **#75** — Master/detail pattern | After #74; may add optional transaction parameter to `IRepository<T>` |
 | 11 | **#76** — 1:1 pattern | After #74; transaction concern shared with #75 — do close together |
