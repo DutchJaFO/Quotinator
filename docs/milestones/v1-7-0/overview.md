@@ -8,9 +8,9 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 
 | # | Title | Status | Plan doc |
 |---|-------|--------|----------|
-| [#115](https://github.com/DutchJaFO/Quotinator/issues/115) | Refactor: move all Dapper dependencies out of Quotinator.Core into Quotinator.Data | 🟡 In progress — `SqliteQuoteService` deferred to #121 | [115-dapper-core-refactor-plan.md](115-dapper-core-refactor-plan.md) |
+| [#115](https://github.com/DutchJaFO/Quotinator/issues/115) | Refactor: move all Dapper dependencies out of Quotinator.Core into Quotinator.Data | ✅ Complete — closed | [115-dapper-core-refactor-plan.md](115-dapper-core-refactor-plan.md) |
 | [#121](https://github.com/DutchJaFO/Quotinator/issues/121) | Refactor: remove Dapper dependency from SqliteQuoteService | 🔴 Open | (no plan doc yet) |
-| [#111](https://github.com/DutchJaFO/Quotinator/issues/111) | Investigate flaky test in Quotinator.Core.Tests | 🟡 In progress (blocked by #115) | [111-flaky-test-plan.md](111-flaky-test-plan.md) |
+| [#111](https://github.com/DutchJaFO/Quotinator/issues/111) | Investigate flaky test in Quotinator.Core.Tests | ✅ Complete — closed | [111-flaky-test-plan.md](111-flaky-test-plan.md) |
 | [#70](https://github.com/DutchJaFO/Quotinator/issues/70) | Refactor CI/Release workflows to use a shared reusable workflow | 🔴 Open | [70-ci-workflow-plan.md](70-ci-workflow-plan.md) |
 | [#109](https://github.com/DutchJaFO/Quotinator/issues/109) | Search: field=author and field=character always return empty; type=person returns empty | ✅ Complete — closed | [109-search-endpoint-plan.md](109-search-endpoint-plan.md) |
 | [#74](https://github.com/DutchJaFO/Quotinator/issues/74) | Add read-model query pattern to Quotinator.Data for join and projection queries | 🔴 Open | [74-read-model-query-plan.md](74-read-model-query-plan.md) |
