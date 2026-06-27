@@ -650,6 +650,42 @@ public class QuoteEndpointsTests
         Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
     }
 
+    /// <summary>yearFrom greater than yearTo on /search returns 422.</summary>
+    [TestMethod]
+    public async Task Search_YearFromGreaterThanYearTo_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&yearFrom=1984&yearTo=1942");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>yearFrom greater than yearTo on / returns 422.</summary>
+    [TestMethod]
+    public async Task GetAll_YearFromGreaterThanYearTo_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?yearFrom=1984&yearTo=1942");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>An invalid lang value on /search is rejected with 400.</summary>
+    [TestMethod]
+    public async Task Search_InvalidLang_ReturnsBadRequest()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&lang=not-a-real-lang-code-xyz");
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>An invalid lang value on / is rejected with 400.</summary>
+    [TestMethod]
+    public async Task GetAll_InvalidLang_ReturnsBadRequest()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?lang=not-a-real-lang-code-xyz");
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     // ── / (paginated list) — year/decade filters ─────────────────────────
 
     /// <summary>yearFrom=1980 on / filters to only Terminator (1984).</summary>
