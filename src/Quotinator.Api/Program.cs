@@ -323,6 +323,7 @@ if (isContainer)
     });
 }
 
+builder.Services.AddExceptionHandler<BadRequestExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
 builder.Services.AddSingleton<IChangelogService>(sp =>

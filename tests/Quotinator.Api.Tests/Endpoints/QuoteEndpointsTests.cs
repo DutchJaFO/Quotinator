@@ -700,4 +700,36 @@ public class QuoteEndpointsTests
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&decade=1941");
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    // ── parameter binding errors ──────────────────────────────────────────
+
+    /// <summary>Non-integer yearTo returns 400, not 500 — BadHttpRequestException is handled.</summary>
+    [TestMethod]
+    public async Task Search_NonIntegerYearTo_ReturnsBadRequest()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient()
+            .GetAsync("/api/v1/quotes/search?q=x&yearFrom=1980&yearTo=1981x");
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>Non-integer yearFrom returns 400, not 500.</summary>
+    [TestMethod]
+    public async Task GetRandom_NonIntegerYearFrom_ReturnsBadRequest()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient()
+            .GetAsync("/api/v1/quotes/random?yearFrom=abc");
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>Non-integer decade returns 400, not 500.</summary>
+    [TestMethod]
+    public async Task GetAll_NonIntegerDecade_ReturnsBadRequest()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient()
+            .GetAsync("/api/v1/quotes?decade=1980x");
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }
