@@ -134,18 +134,78 @@ The milestone-close section of `checklist.md` gains two explicit gates:
 
 ---
 
+## How to audit and re-verify
+
+This issue covers GitHub Actions YAML and process documentation — neither can be unit tested in the conventional sense. The audit trail is a combination of PR diffs, Actions run links, and live release observations. Future sessions can use these methods to confirm the implementation is still correct after any refactor.
+
+### Auditing the reusable workflow (rows 1–4)
+
+```bash
+# Confirm _build-test.yml exists and has the workflow_call trigger
+grep "workflow_call" .github/workflows/_build-test.yml
+
+# Confirm ci.yml calls it and has no duplicated steps
+grep "uses:" .github/workflows/ci.yml
+grep -c "dotnet build" .github/workflows/ci.yml   # expect 0
+
+# Confirm release.yml calls it and needs: references the caller job
+grep "uses:" .github/workflows/release.yml
+grep "needs:" .github/workflows/release.yml
+
+# Confirm the required status check name matches what GitHub reports
+# (run after any CI run and check the check-run name via API)
+gh api repos/DutchJaFO/Quotinator/commits/HEAD/check-runs --jq '.check_runs[] | .name'
+```
+
+### Auditing the release process controls (rows 5, 10–11)
+
+```bash
+# Confirm --prerelease is conditional on the tag containing '-'
+grep "prerelease" .github/workflows/release.yml
+
+# Confirm enforce-beta-first job exists and checks for prior beta tag
+grep "enforce-beta-first" .github/workflows/release.yml
+grep "v\${VERSION_BASE}-\*" .github/workflows/release.yml
+```
+
+**To test row 10 (failure case):** push a final tag `vX.Y.Z` for a version that has no `vX.Y.Z-*` tag in the repo. The `enforce-beta-first` job must fail and the Docker build must not run. Verify in the Actions tab — `build-and-test` and `build-and-push` should be skipped/not reached.
+
+**To test row 11 (success case):** the normal beta → final release cycle. Push `vX.Y.Z-beta` first, confirm it creates a pre-release. Then push `vX.Y.Z` — `enforce-beta-first` should pass, Docker image should be built and pushed with `latest`, and a full GitHub Release should be created.
+
+### Auditing the branch protection required check (lesson learned)
+
+After any workflow refactor that renames a job, verify the required status check name still matches:
+
+```bash
+# Get the current required check name from the ruleset
+gh api repos/DutchJaFO/Quotinator/rulesets/17924200 \
+  --jq '.rules[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context'
+
+# Get the actual check name reported by the last CI run
+gh api repos/DutchJaFO/Quotinator/commits/main/check-runs \
+  --jq '.check_runs[] | select(.app.slug=="github-actions") | .name'
+```
+
+If these do not match, the PR will show "Build & Test — Expected — Waiting for status to be reported" and block merges. Update the ruleset via:
+
+```bash
+gh api repos/DutchJaFO/Quotinator/rulesets/17924200 -X PUT --input ruleset.json
+```
+
+---
+
 ## Verification
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ✅ | `_build-test.yml` exists with `workflow_call` trigger and `test-filter` input | Code review | File exists; trigger is `workflow_call`; input `test-filter` with correct default |
-| 2 | ✅ | `_build-test.yml` contains all five shared steps with normalised names | Code review | Checkout, Setup .NET, Restore, Build, Test, Publish smoke test all present |
-| 3 | ✅ | `ci.yml` calls shared workflow; no duplicated steps remain | Code review | `uses: ./.github/workflows/_build-test.yml` present; old steps absent |
-| 4 | ✅ | `release.yml` calls shared workflow; Docker job `needs:` references caller job name | Code review | `uses:` present; `needs: [build-and-test]` correct |
-| 5 | ✅ | `release.yml` creates a pre-release GitHub Release for beta tags | Code review | `--prerelease` flag gated on `contains(github.ref, '-')` |
-| 6 | ✅ | `docs/release-verification.md` exists and defines all three tiers | Code review | File exists; T1/T2/T3 defined with what each catches |
-| 7 | ✅ | `checklist.md` milestone-close section includes beta and final gates | Code review | Both gate blocks present with correct items |
-| 8 | ✅ | CI passes on push to feature branch | Live | GitHub Actions — CI workflow green on branch push |
-| 9 | ✅ | User manual test — app starts without error | Live | User starts app in VS; confirms startup without error |
-| 10 | ⬜ | Final tag without beta tag fails the release workflow | Live | Push a final tag with no prior beta tag; confirm `enforce-beta-first` job fails and Docker image is not pushed |
-| 11 | ⬜ | Final tag with beta tag passes the release workflow | Live | Push beta tag then final tag for next milestone release; confirm `enforce-beta-first` passes and full release is created |
+| 1 | ✅ | `_build-test.yml` exists with `workflow_call` trigger and `test-filter` input | Code review | PR [#123](https://github.com/DutchJaFO/Quotinator/pull/123) diff — file created; trigger is `workflow_call`; input `test-filter` with default `TestCategory!=Live` |
+| 2 | ✅ | `_build-test.yml` contains all six shared steps with normalised names | Code review | PR [#123](https://github.com/DutchJaFO/Quotinator/pull/123) diff — Checkout, Setup .NET, Restore, Build, Test, Publish smoke test all present |
+| 3 | ✅ | `ci.yml` calls shared workflow; no duplicated steps remain | Code review | PR [#123](https://github.com/DutchJaFO/Quotinator/pull/123) diff — `uses: ./.github/workflows/_build-test.yml` present; old inline steps absent |
+| 4 | ✅ | `release.yml` calls shared workflow; Docker job `needs:` references caller job name | Code review | PR [#123](https://github.com/DutchJaFO/Quotinator/pull/123) diff — `uses:` present; `needs: [enforce-beta-first, build-and-test]` correct |
+| 5 | ✅ | `release.yml` creates a pre-release GitHub Release for beta tags | Code review | PR [#123](https://github.com/DutchJaFO/Quotinator/pull/123) diff — `--prerelease` flag gated on `contains(github.ref, '-')` |
+| 6 | ✅ | `docs/release-verification.md` exists and defines all three tiers | Code review | PR [#123](https://github.com/DutchJaFO/Quotinator/pull/123) diff — file created; T1/T2/T3 defined with what each catches and when required |
+| 7 | ✅ | `checklist.md` milestone-close section includes mandatory beta and final gates | Code review | PR [#123](https://github.com/DutchJaFO/Quotinator/pull/123) diff — both gate blocks present; beta described as mandatory with no waiver |
+| 8 | ✅ | CI passes on push to feature branch via reusable workflow | Live | [Actions run 28285604901](https://github.com/DutchJaFO/Quotinator/actions/runs/28285604901) — `Build & Test / Build & Test` succeeded in 59s via `_build-test.yml` |
+| 9 | ✅ | User manual test — app starts without error (T1) | Live | Confirmed by user 2026-06-27 — app started in Visual Studio without error; Razor pages rendered correctly |
+| 10 | ⬜ | Final tag without beta tag fails the release workflow | Live | Push a final tag `vX.Y.Z` with no prior `vX.Y.Z-*` tag; confirm `enforce-beta-first` fails in Actions; `build-and-test` and `build-and-push` must not run |
+| 11 | ⬜ | Final tag with beta tag passes the release workflow | Live | Normal beta → final cycle for next milestone release; confirm `enforce-beta-first` passes; Docker image pushed with `latest`; full GitHub Release created |
