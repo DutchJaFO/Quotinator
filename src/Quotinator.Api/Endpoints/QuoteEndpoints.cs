@@ -167,10 +167,10 @@ internal static class QuoteEndpoints
                 detail: localizer[ApiMessages.RandomNOutOfRange],
                 statusCode: StatusCodes.Status400BadRequest);
 
-        if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, "yearFrom");
-        if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, "yearTo");
-        if (!TryParseYear(year,     out var yr)) return YearParseError(localizer, "year");
-        if (!TryParseYear(decade,   out var dc)) return YearParseError(localizer, "decade");
+        if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, nameof(yearFrom));
+        if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, nameof(yearTo));
+        if (!TryParseYear(year,     out var yr)) return YearParseError(localizer, nameof(year));
+        if (!TryParseYear(decade,   out var dc)) return YearParseError(localizer, nameof(decade));
 
         if (dc is not null)
         {
@@ -263,10 +263,10 @@ internal static class QuoteEndpoints
                 detail: localizer[ApiMessages.LimitOutOfRange],
                 statusCode: StatusCodes.Status400BadRequest);
 
-        if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, "yearFrom");
-        if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, "yearTo");
-        if (!TryParseYear(year,     out var yr)) return YearParseError(localizer, "year");
-        if (!TryParseYear(decade,   out var dc)) return YearParseError(localizer, "decade");
+        if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, nameof(yearFrom));
+        if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, nameof(yearTo));
+        if (!TryParseYear(year,     out var yr)) return YearParseError(localizer, nameof(year));
+        if (!TryParseYear(decade,   out var dc)) return YearParseError(localizer, nameof(decade));
 
         if (ValidateFilterParams(localizer, type, genre, null, null, null) is { } invalid)
             return ToValidationResult(invalid);
@@ -331,10 +331,10 @@ internal static class QuoteEndpoints
                 detail: localizer[ApiMessages.PageSizeOutOfRange],
                 statusCode: StatusCodes.Status400BadRequest);
 
-        if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, "yearFrom");
-        if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, "yearTo");
-        if (!TryParseYear(year,     out var yr)) return YearParseError(localizer, "year");
-        if (!TryParseYear(decade,   out var dc)) return YearParseError(localizer, "decade");
+        if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, nameof(yearFrom));
+        if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, nameof(yearTo));
+        if (!TryParseYear(year,     out var yr)) return YearParseError(localizer, nameof(year));
+        if (!TryParseYear(decade,   out var dc)) return YearParseError(localizer, nameof(decade));
 
         if (ValidateFilterParams(localizer, type, genre, null, null, null) is { } invalid)
             return ToValidationResult(invalid);
