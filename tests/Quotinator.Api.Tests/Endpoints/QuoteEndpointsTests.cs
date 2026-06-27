@@ -51,31 +51,31 @@ public class QuoteEndpointsTests
         Assert.AreEqual(2, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
-    /// <summary>n=0 is rejected with 400.</summary>
+    /// <summary>n=0 is out of the valid range — semantically wrong, returns 422.</summary>
     [TestMethod]
-    public async Task GetRandom_NZero_ReturnsBadRequest()
+    public async Task GetRandom_NZero_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=0");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
-    /// <summary>n=101 is rejected with 400.</summary>
+    /// <summary>n=101 exceeds the maximum — semantically wrong, returns 422.</summary>
     [TestMethod]
-    public async Task GetRandom_NTooLarge_ReturnsBadRequest()
+    public async Task GetRandom_NTooLarge_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=101");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
-    /// <summary>A non-integer n is rejected with 400, not 500.</summary>
+    /// <summary>A non-integer n is the same kind of error as yearFrom=5f — returns 422.</summary>
     [TestMethod]
-    public async Task GetRandom_NNotInteger_ReturnsBadRequest()
+    public async Task GetRandom_NNotInteger_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=g");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.IsTrue(doc.RootElement.TryGetProperty("detail", out _));
     }
@@ -508,13 +508,58 @@ public class QuoteEndpointsTests
         Assert.IsTrue(doc.RootElement.TryGetProperty("totalPages", out _));
     }
 
-    /// <summary>page=0 is rejected with 400.</summary>
+    /// <summary>page=0 is semantically out of range — returns 422.</summary>
     [TestMethod]
-    public async Task GetAll_PageZero_ReturnsBadRequest()
+    public async Task GetAll_PageZero_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes?page=0");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>A non-integer page is the same kind of error as yearFrom=5f — returns 422.</summary>
+    [TestMethod]
+    public async Task GetAll_PageNotInteger_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?page=x");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>pageSize=0 is semantically out of range — returns 422.</summary>
+    [TestMethod]
+    public async Task GetAll_PageSizeZero_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=0");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>A non-integer pageSize is the same kind of error as yearFrom=5f — returns 422.</summary>
+    [TestMethod]
+    public async Task GetAll_PageSizeNotInteger_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=x");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>limit=0 on search is semantically out of range — returns 422.</summary>
+    [TestMethod]
+    public async Task Search_LimitZero_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&limit=0");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>A non-integer limit is the same kind of error as yearFrom=5f — returns 422.</summary>
+    [TestMethod]
+    public async Task Search_LimitNotInteger_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&limit=x");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     /// <summary>?type=person filters to person quotes only.</summary>

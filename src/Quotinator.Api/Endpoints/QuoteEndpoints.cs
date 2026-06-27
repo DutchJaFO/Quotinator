@@ -163,7 +163,7 @@ internal static class QuoteEndpoints
         if (n is not null && (!int.TryParse(n, out count) || count < 1 || count > 100))
             return Results.Problem(
                 detail: localizer[ApiMessages.RandomNOutOfRange],
-                statusCode: StatusCodes.Status400BadRequest);
+                statusCode: StatusCodes.Status422UnprocessableEntity);
 
         if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, nameof(yearFrom));
         if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, nameof(yearTo));
@@ -259,7 +259,7 @@ internal static class QuoteEndpoints
         if (limit is not null && (!int.TryParse(limit, out limitValue) || limitValue < 1 || limitValue > 100))
             return Results.Problem(
                 detail: localizer[ApiMessages.LimitOutOfRange],
-                statusCode: StatusCodes.Status400BadRequest);
+                statusCode: StatusCodes.Status422UnprocessableEntity);
 
         if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, nameof(yearFrom));
         if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, nameof(yearTo));
@@ -321,13 +321,13 @@ internal static class QuoteEndpoints
         if (page is not null && (!int.TryParse(page, out pageValue) || pageValue < 1))
             return Results.Problem(
                 detail: localizer[ApiMessages.PageOutOfRange],
-                statusCode: StatusCodes.Status400BadRequest);
+                statusCode: StatusCodes.Status422UnprocessableEntity);
 
         var pageSizeValue = 20;
         if (pageSize is not null && (!int.TryParse(pageSize, out pageSizeValue) || pageSizeValue < 1 || pageSizeValue > 100))
             return Results.Problem(
                 detail: localizer[ApiMessages.PageSizeOutOfRange],
-                statusCode: StatusCodes.Status400BadRequest);
+                statusCode: StatusCodes.Status422UnprocessableEntity);
 
         if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, nameof(yearFrom));
         if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, nameof(yearTo));
