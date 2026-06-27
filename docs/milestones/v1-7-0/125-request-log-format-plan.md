@@ -3,7 +3,7 @@
 **Milestone:** v1.7.0  
 **Status:** Open  
 **Branch:** `feature/v1-7-0`  
-**Tiers required:** T1
+**Tiers required:** T1, T2, T3
 
 ---
 
@@ -257,4 +257,6 @@ All endpoints appear in the request log — the request log confirms that the en
 | 7 | ✅ | `[Api - Request]` prefix present on both lines | Unit test | `RequestLogFormattingTests.BothLines_HavePrefix` — uses `CaptureSink`; asserts both start and end lines begin with `[Api - Request]` |
 | 8 | ⬜ | No header values appear in any log line | Code review | `Program.cs` middleware block accesses only `Method`, `Path`, `QueryString`, `StatusCode`, and elapsed ms — no `Headers` access |
 | 9 | ⬜ | `docs/logging.md` updated to reflect two-line format with `{:l}` note | Code review | Observability overview and request log section show two-line format; note that `{:l}` is required on string properties |
-| 10 | ⬜ | User starts app in VS; overlapping request pairs visible and correlatable in log | Live | Hit several endpoints in quick succession; confirm start and end lines appear for each; confirm IDs match across pairs; confirm no surrounding quotes on method, ID, or URL |
+| 10 | ⬜ | T1 — VS: request log lines appear correctly in the output window | Live (T1) | Start app in VS with `Quotinator__LogRequests=true`; hit `/api/v1/quotes/random`, `/api/v1/health`, and an admin endpoint; confirm two lines per request with matching correlation IDs; confirm no surrounding quotes on method, ID, or URL |
+| 11 | ⬜ | T2 — Docker: two-line format visible in container stdout | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .`; run with `docker run --rm -p 8080:8080 -e Quotinator__LogRequests=true quotinator:local`; hit several endpoints via curl; confirm two lines per request appear in container output with correct format |
+| 12 | ⬜ | T3 — HA add-on: supervisor log shows correct format for real traffic | Live (T3) | Install release in HA; open supervisor log; browse the UI and hit `/api/v1/quotes/random`; confirm two-line format with matching IDs; confirm health check polls appear; confirm no surrounding quotes; Serilog production template (full timestamp) differs from VS — verify format is readable in the HA supervisor view |
