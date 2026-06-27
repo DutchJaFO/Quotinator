@@ -2,39 +2,162 @@
 
 **Milestone:** v1.7.0  
 **Status:** Open  
-**Branch:** `claude/7-0-milestone-issues-8ubkfo`
+
+---
+
+## Depends on
+
+- **#73** (audit trail) — complete ✅
 
 ---
 
 ## Problem
 
-`IRepository<T>` assumes a single flat table. Queries that join two or more tables, or that return a projection (a subset or combination of columns), cannot be expressed through it:
-- `SELECT * FROM {TableName}` returns one table's columns; a join brings in a second table with overlapping column names (`Id`, `IsDeleted`, `DateCreated`) that collide in the Dapper mapping.
-- `T` is a `RecordBase` entity — it has no place to hold columns from a joined table.
-- Forcing joins through `IRepository` would break its single-responsibility.
-
-## Approach
-
-Introduce a **read-model query service** alongside (not inside) `IRepository`:
-- A *read model* is a plain class (not a `RecordBase`, not a table entity) shaped to match the result of a specific query.
-- A *query service* holds the hand-written Dapper query and returns the read model.
-- `IRepository` is unchanged.
-
-## Scope
-
-1. Define the convention in `Quotinator.Data` (folder structure, naming, base class or marker interface if needed)
-2. Add at least one canonical implementation when the first real join query is needed
-3. Document the pattern in `docs/data-access.md` or `docs/sql-safety.md`
-4. Add tests for the first concrete query service
+`IRepository<T>` targets one flat table. Queries that join two or more tables, or return a projection (a subset or combination of columns), cannot be expressed through it. The first real consumer is **#121** (`SqliteQuoteService` refactor), which joins `Quotes → Sources → Characters → People`.
 
 ---
 
-## Design decisions to make at implementation time
+## Design decisions (all confirmed)
 
-- **Folder**: likely `Quotinator.Data/Queries/` or `Quotinator.Data/ReadModels/` — decide based on what exists when this is worked
-- **Base class**: a bare POCO class is sufficient; a marker interface (`IReadModel`) may help with discoverability but is not required
-- **Multi-mapping**: evaluate Dapper's `QueryAsync<T1, T2, TResult>` vs single-column projection at implementation time
-- **SQL placement**: all SQL must live in `Sql.cs` as constants or factory methods — the read-model class holds no SQL
+| Decision | Choice |
+|----------|--------|
+| SQL fragment helpers | `Sql.Joins.Inner(...)` and `Sql.Joins.Left(...)` in `Sql.cs` |
+| Full query assembly | `Sql.Queries.*` factory methods in `Sql.cs`, assembled from `Sql.Joins.*` fragments |
+| Join abstraction | `IJoinStrategy<TResult>` interface — concrete strategy classes call `Sql.Queries.*` |
+| DI registration | Strategy registered as `IJoinStrategy<TResult>`; injected into query repository |
+| Projection | Caller specifies SELECT columns in the `Sql.Queries.*` factory method |
+| Read model POCOs | Plain classes (no `RecordBase`, no `[Table]`) in `Quotinator.Data/Models/` |
+| Strategy classes | In `Quotinator.Data/Queries/` alongside `Sql.cs` |
+| Documentation | New `docs/data-access.md` (referenced by #75 and #76) |
+| First concrete example | Test-only `Widget`/`Owner` pair — domain joins land in #121 |
+| `SqlQueryGuardTests` | `Sql.Queries.*` factory methods added to `AssembledQueryCases` |
+
+---
+
+## What gets built
+
+### 1. `Sql.Joins` — fragment helpers (in `Sql.cs`)
+
+```csharp
+internal static class Joins
+{
+    internal static string Inner(string rightTable, string rightAlias,
+                                 string leftAlias,  string leftKey, string rightKey)
+        => $"INNER JOIN {rightTable} {rightAlias} ON {leftAlias}.{leftKey} = {rightAlias}.{rightKey}";
+
+    internal static string Left(string rightTable, string rightAlias,
+                                string leftAlias,  string leftKey, string rightKey)
+        => $"LEFT JOIN {rightTable} {rightAlias} ON {leftAlias}.{leftKey} = {rightAlias}.{rightKey}";
+}
+```
+
+### 2. `Sql.Queries` — full query factory methods (in `Sql.cs`)
+
+```csharp
+internal static class Queries
+{
+    // Example — #121 will add real domain queries here
+    internal static string WidgetWithOwner() => $"""
+        SELECT w.Id AS WidgetId, w.Label,
+               o.Name AS OwnerName
+        FROM   Widgets w
+        {Joins.Inner("Owners", "o", "w", "OwnerId", "Id")}
+        WHERE  w.IsDeleted = 0
+        """;
+}
+```
+
+### 3. `IJoinStrategy<TResult>` — interface (new file in `Quotinator.Data/Queries/`)
+
+```csharp
+/// <summary>Provides the SQL for a join query that returns <typeparamref name="TResult"/> read models.</summary>
+public interface IJoinStrategy<TResult>
+{
+    /// <summary>Returns the full parameterised SELECT … FROM … JOIN … SQL string.</summary>
+    string BuildSql();
+}
+```
+
+### 4. Concrete strategy class — example (in `Quotinator.Data/Queries/`)
+
+```csharp
+/// <summary>Join strategy for Widget with its Owner — canonical example for the pattern.</summary>
+public sealed class WidgetWithOwnerStrategy : IJoinStrategy<WidgetWithOwner>
+{
+    /// <inheritdoc/>
+    public string BuildSql() => Sql.Queries.WidgetWithOwner();
+}
+```
+
+### 5. Read model POCO — example (in `Quotinator.Data/Models/`)
+
+```csharp
+/// <summary>Read model returned by the Widget-with-Owner join query.</summary>
+public sealed class WidgetWithOwner
+{
+    /// <summary>Widget primary key.</summary>
+    public Guid   WidgetId  { get; init; }
+    /// <summary>Widget display label.</summary>
+    public string Label     { get; init; } = string.Empty;
+    /// <summary>Name of the owning entity.</summary>
+    public string OwnerName { get; init; } = string.Empty;
+}
+```
+
+### 6. Query repository — reusable base (in `Quotinator.Data/Repositories/`)
+
+A lightweight repository that executes any `IJoinStrategy<TResult>`. Domain-specific repositories extend this or use it directly.
+
+```csharp
+/// <summary>Executes a join query defined by an <see cref="IJoinStrategy{TResult}"/>.</summary>
+public class JoinQueryRepository<TResult>(
+    IDbConnectionFactory        factory,
+    IJoinStrategy<TResult>      strategy)
+{
+    /// <summary>Returns all rows matching the strategy's SQL with optional Dapper parameters.</summary>
+    public async Task<IReadOnlyList<TResult>> QueryAsync(object? parameters = null)
+    {
+        using var conn = factory.CreateConnection();
+        conn.Open();
+        return (await conn.QueryAsync<TResult>(strategy.BuildSql(), parameters)).ToList();
+    }
+}
+```
+
+### 7. `docs/data-access.md` — new doc
+
+Covers:
+- When to use `IRepository<T>` vs a join query
+- `IJoinStrategy<TResult>` pattern: interface, strategy class, registration, injection
+- `Sql.Joins.*` fragment helpers and `Sql.Queries.*` factory methods
+- Read model naming and folder rules (no `RecordBase`, no `[Table]`, lives in `Models/`)
+- How to add a complex query that needs WHERE parameters
+- Cross-reference to #75 (master/detail), #76 (1:1), #77 (many-to-many)
+
+---
+
+## Folder structure after this issue
+
+```
+Quotinator.Data/
+  Models/
+    AuditPageResult.cs        ← existing
+    WidgetWithOwner.cs        ← new (example read model)
+  Queries/
+    Sql.cs                    ← add Sql.Joins + Sql.Queries nested classes
+    IJoinStrategy.cs          ← new
+    WidgetWithOwnerStrategy.cs ← new (example strategy)
+  Repositories/
+    JoinQueryRepository.cs    ← new (reusable base)
+```
+
+---
+
+## SQL safety
+
+`Sql.Joins.Inner` and `Sql.Joins.Left` accept **table names and column names only** — these are developer-controlled metadata (string literals in strategy classes), not user input. They follow the same pattern as `TableName` resolved from `[Table]` attributes.
+
+`Sql.Queries.*` factory methods are covered by `SqlQueryGuardTests.AssembledQueryCases` — add a case for each new factory method.
 
 ---
 
@@ -42,10 +165,15 @@ Introduce a **read-model query service** alongside (not inside) `IRepository`:
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | Convention documented (`docs/data-access.md` or `docs/sql-safety.md`) | Code review | Doc exists; describes read-model naming, folder, and SQL placement rules |
-| 2 | ⬜ | At least one concrete read-model class and query service added | Code review | Class in correct folder; no `RecordBase` inheritance; SQL in `Sql.cs` |
-| 3 | ⬜ | Integration test covers the first concrete query service | Unit test | Test class + method names in verification (TBD at implementation) |
-| 4 | ⬜ | `SqlSourceScanTests` still passes | Unit test | `SqlSourceScanTests` — all pass |
-| 5 | ⬜ | Build clean — 0 warnings, 0 errors | Live | `dotnet build --configuration Release` |
-| 6 | ⬜ | All tests pass | Live | `dotnet test --configuration Release` |
-| 7 | ⬜ | User manual test — app starts without error | Live | User starts app in VS; confirms startup without error |
+| 1 | ⬜ | `Sql.Joins.Inner` and `Sql.Joins.Left` exist in `Sql.cs` | Integration test | `SqlQueryGuardTests` — existing scan still passes; helpers present |
+| 2 | ⬜ | `Sql.Queries.WidgetWithOwner()` covered by `SqlQueryGuardTests` | Integration test | `SqlQueryGuardTests.AssembledQueryCases` — `WidgetWithOwner` case included |
+| 3 | ⬜ | `IJoinStrategy<TResult>` defined in `Quotinator.Data.Queries` | Code review | Interface file exists; correct namespace |
+| 4 | ⬜ | `WidgetWithOwnerStrategy` implements `IJoinStrategy<WidgetWithOwner>` and delegates to `Sql.Queries` | Code review | Strategy class exists; `BuildSql()` calls `Sql.Queries.WidgetWithOwner()` |
+| 5 | ⬜ | `JoinQueryRepository<TResult>` executes the strategy and returns results | Integration test | `JoinQueryRepositoryTests.QueryAsync_ReturnsProjectedReadModels` |
+| 6 | ⬜ | Integration test: Widget+Owner join returns correct read model fields | Integration test | `JoinQueryRepositoryTests.QueryAsync_WidgetWithOwner_MapsAllColumns` |
+| 7 | ⬜ | Integration test: LEFT JOIN returns null-safe read model when right side is absent | Integration test | `JoinQueryRepositoryTests.QueryAsync_LeftJoin_NullRightSide_ReturnedWithDefaults` |
+| 8 | ⬜ | `docs/data-access.md` created and covers all required topics | Code review | Doc exists; sections for IRepository vs join query, IJoinStrategy, Sql.Joins, Sql.Queries, read model rules |
+| 9 | ⬜ | No inline SQL outside `Sql.cs` — `SqlSourceScanTests` passes | Unit test | `SqlSourceScanTests` — all pass |
+| 10 | ⬜ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` |
+| 11 | ⬜ | All tests pass | Build | `dotnet test --configuration Release` |
+| 12 | ⬜ | App starts without error | T1 | User starts app in VS; confirms startup banner |
