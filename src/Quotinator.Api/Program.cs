@@ -102,12 +102,34 @@ builder.Services.AddOpenApi(options =>
         return Task.CompletedTask;
     });
 
-    // Year/decade params are declared as string? for error handling but must appear as
-    // integer in the OpenAPI spec so callers and tooling know the expected type.
+    // ── Year parameter schema fix ──────────────────────────────────────────────
+    // yearFrom / yearTo / year / decade are declared as string? in the handler
+    // signatures so that invalid values (e.g. "1980x") are caught by TryParseYear
+    // and returned as a 422 at the point of origin rather than propagating as an
+    // unhandled BadHttpRequestException through the entire middleware stack.
+    //
+    // The downside: the OpenAPI generator sees string? and emits type:string in the
+    // spec, which is wrong — callers and tooling would infer the wrong input type.
+    // This transformer patches only the three quote-filter endpoints back to integer,
+    // keeping the spec accurate without reverting the error-handling approach.
+    //
+    // Scoped explicitly to the three paths that use TryParseYear. Any future endpoint
+    // that genuinely accepts a string year value must NOT be added to this set.
     options.AddOperationTransformer((operation, context, cancellationToken) =>
     {
+        var yearFilterPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "api/v1/quotes",
+            "api/v1/quotes/random",
+            "api/v1/quotes/search",
+        };
+
+        if (!yearFilterPaths.Contains(context.Description.RelativePath ?? string.Empty))
+            return Task.CompletedTask;
+
         var yearParamNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             { "yearFrom", "yearTo", "year", "decade" };
+
         foreach (var param in operation.Parameters ?? [])
         {
             if (param.Name is not null && yearParamNames.Contains(param.Name)

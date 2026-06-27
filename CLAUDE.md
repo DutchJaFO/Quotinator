@@ -319,6 +319,17 @@ Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.
 
 `/search` is registered before `/{id}` in `QuoteEndpoints.cs` so the literal segment takes priority over the catch-all parameter. Preserve this order.
 
+### Year parameter binding pattern
+
+`yearFrom`, `yearTo`, `year`, and `decade` are declared as `string?` in handler signatures rather than `int?`. This is deliberate: when declared as `int?`, ASP.NET Core's parameter binder throws `BadHttpRequestException` on invalid input (e.g. `yearFrom=1980x`) and the exception propagates unhandled through the entire middleware stack before being caught accidentally by `UseExceptionHandler`. Declaring them as `string?` lets `TryParseYear()` in `QuoteEndpoints.cs` catch the parse failure at the point of origin and return a 422 immediately.
+
+The downside is that the OpenAPI generator infers `type: string` from the C# type, which is wrong. An operation transformer in `Program.cs` patches the schema back to `type: integer` for the three affected endpoints (`api/v1/quotes`, `api/v1/quotes/random`, `api/v1/quotes/search`). The transformer is scoped explicitly to those paths — do not add any endpoint to that set unless it also uses `TryParseYear`.
+
+**Rules for adding new numeric query parameters:**
+- Declare as `string?` and parse with `int.TryParse` (or a dedicated helper) — never `int?`
+- Return 422 on parse failure via `Results.Problem`
+- Add the endpoint path to the year-param schema transformer in `Program.cs`
+
 ### Vocabulary and abbreviations
 
 `docs/vocabulary.md` is the authoritative reference for abbreviations and domain terms used in this project. Do not introduce a new abbreviation in code, comments, or documentation without adding it to that file in the same commit. Domain terms that carry a project-specific meaning (especially where a common word is used in a narrower sense) belong there too.
