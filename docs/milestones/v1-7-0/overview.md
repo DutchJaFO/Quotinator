@@ -19,7 +19,7 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 | [#76](https://github.com/DutchJaFO/Quotinator/issues/76) | Add 1:1 relationship pattern to Quotinator.Data | 🔴 Open | [76-one-to-one-plan.md](76-one-to-one-plan.md) |
 | [#77](https://github.com/DutchJaFO/Quotinator/issues/77) | Add many-to-many relationship pattern to Quotinator.Data | 🔴 Open | [77-many-to-many-plan.md](77-many-to-many-plan.md) |
 | [#117](https://github.com/DutchJaFO/Quotinator/issues/117) | Add .NET SDK to Claude Code remote execution environment via session-start hook | ✅ Complete — closed | [117-dotnet-env-plan.md](117-dotnet-env-plan.md) |
-| [#73](https://github.com/DutchJaFO/Quotinator/issues/73) | Audit trail: record who did what on which record in which table | 🔴 Open (deferred) | [73-audit-trail-plan.md](73-audit-trail-plan.md) |
+| [#73](https://github.com/DutchJaFO/Quotinator/issues/73) | Audit trail: record who did what on which record in which table | 🔴 Open | [73-audit-trail-plan.md](73-audit-trail-plan.md) |
 
 ---
 
@@ -37,7 +37,8 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 #76   ─── depends on #74 (read-model pattern); transaction concern shared with #75
 #77   ─── depends on #74, #75, #76
 #121  ─── depends on #115 (structural groundwork, ✅ done) and patterns decision (#74/#75/#76/#77)
-#73   ─── blocked by auth milestone (deferred — stays open as a placeholder)
+#73   ─── depends on #74 (ICallerContext lives in Core; AuditWriter in Data — same layer as repository pattern work)
+         NOTE: auth dependency removed 2026-06-27; 'who' is now X-Agent header via ICallerContext
 ```
 
 ---
@@ -52,12 +53,12 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 | 4 | ✅ **#117** — .NET SDK hook | Complete |
 | 5 | ✅ **#70** — CI refactor (partial) | Code complete and in v1.7.0; rows 10–11 (beta-enforcement workflow test) pending next release cycle |
 | 6 | **#125** — Request log format fix | Independent; quick fix; the patch release that ships this is also the beta→final cycle that closes #70 rows 10–11 |
-| 7 | **#74** — Read-model pattern | Foundational for #75, #76, #77, and #121 |
+| 7 | **#74** — Read-model pattern | Foundational for #75, #76, #77, and #121; #73 ICallerContext/AuditWriter live in same layer |
 | 8 | **#75** — Master/detail pattern | After #74; may add optional transaction parameter to `IRepository<T>` |
 | 9 | **#76** — 1:1 pattern | After #74; transaction concern shared with #75 — do close together |
 | 10 | **#77** — Many-to-many pattern | After #74, #75, #76 (all three referenced in the spec) |
-| 11 | **#121** — Remove Dapper from SqliteQuoteService | After #74–#77; solution likely involves a repository pattern that #74–#77 establish |
-| 12 | **#73** — Audit trail | Deferred; blocked by auth milestone — no work expected this milestone |
+| 11 | **#73** — Audit trail | After #74–#77; AuditWriter integrates with the repository layer those issues establish; ICallerContext added at same time |
+| 12 | **#121** — Remove Dapper from SqliteQuoteService | After #74–#77 and #73; repository pattern established, audit integration in place |
 
 ---
 
@@ -71,12 +72,12 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 | #117 | ✅ Merged | Included in v1.7.0. |
 | #70 | ✅ Merged (partial) | CI-only; included in v1.7.0. Rows 10–11 pending; issue stays open. |
 | #125 | Yes | Small fix in `Program.cs`; no production logic affected. |
-| #121 | Yes (after #74–#77) | Depends on repository pattern work to establish the right abstraction. |
 | #74 | Yes | New infrastructure; nothing currently calls it. |
 | #75 | Yes | New infrastructure; nothing currently calls it. |
 | #76 | Yes | New infrastructure; nothing currently calls it. |
 | #77 | Yes | New infrastructure; nothing currently calls it. |
-| #73 | Deferred | Will not merge in this milestone. |
+| #73 | Yes (after #74–#77) | Unblocked 2026-06-27; auth dependency removed; ICallerContext + AuditWriter integrate with the repository layer established by #74–#77. |
+| #121 | Yes (after #73) | Depends on repository pattern (#74–#77) and audit integration (#73). |
 
 ---
 
