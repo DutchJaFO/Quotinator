@@ -3,14 +3,22 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [125],
+    "issues": [125, 126],
     "highlights": [
-      "Endpoint requests are now logged as a matched start and end pair — a short ID links both lines, making it easy to trace overlapping calls. Web page and asset requests are separated into their own log categories so the default output shows only API activity."
+      "Endpoint requests are now logged as a matched start and end pair — a short ID links both lines, making it easy to trace overlapping calls. Web page and asset requests are separated into their own log categories so the default output shows only API activity.",
+      "Validation errors on quote endpoints now return the correct HTTP error status code — filters with invalid values return 422, structurally invalid requests return 400. Clients can now detect errors by HTTP status code alone without parsing the response body."
+    ],
+    "added": [
+      "`decade` filter now accepts two-digit shorthand — `80` means 1980–1989, `00` means 2000–2009, `20` means 2020–2029; four-digit form continues to work unchanged (issue #126)"
     ],
     "changed": [
       "Request logging middleware extracted from `Program.cs` to `RequestLoggingMiddleware : IMiddleware` — each HTTP request produces two log lines: one on arrival (before processing) and one on completion, sharing an 8-character hex correlation ID (issue #125)",
       "Request log now routes by path to three categories: `[Api - Request]` at Information for `/api/**` endpoints; `[Web - Request]` at Debug for Blazor pages, Scalar UI, and culture routes; `[Web - Asset]` at Debug for static files and framework assets — operators see only API traffic at the default `info` log level (issue #125)",
       "Serilog `{:l}` literal format specifier applied to all string properties in request log templates — method, correlation ID, and URL are no longer wrapped in double-quotes in rendered output (issue #125)"
+    ],
+    "fixed": [
+      "Validation errors on quote endpoints now return 4xx status codes — unrecognised genre or type returns 422, decade not divisible by 10 returns 422, impossible year range returns 422, oversized or suspicious filter values return 400; previously all returned 200 with an error envelope in the body (issue #126)",
+      "Invalid values for numeric parameters (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) now return 422; the error detail names the specific parameter that failed (issue #126)"
     ]
   },
   "releases": [

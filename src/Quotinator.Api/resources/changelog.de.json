@@ -3,14 +3,22 @@
   "sourceLanguage": "en",
   "machineTranslated": true,
   "unreleased": {
-    "issues": [125],
+    "issues": [125, 126],
     "highlights": [
-      "Endpoint-Anfragen werden jetzt als zusammengehöriges Start- und Endpaar protokolliert — eine kurze ID verbindet beide Zeilen und erleichtert das Nachverfolgen überlappender Anfragen. Webseiten- und Asset-Anfragen werden in eigene Log-Kategorien eingeordnet, sodass die Standardausgabe nur API-Aktivität zeigt."
+      "Endpoint-Anfragen werden jetzt als zusammengehöriges Start- und Endpaar protokolliert — eine kurze ID verbindet beide Zeilen und erleichtert das Nachverfolgen überlappender Anfragen. Webseiten- und Asset-Anfragen werden in eigene Log-Kategorien eingeordnet, sodass die Standardausgabe nur API-Aktivität zeigt.",
+      "Validierungsfehler an Quote-Endpunkten geben jetzt den richtigen HTTP-Fehlerstatuscode zurück — Filter mit ungültigen Werten geben 422, strukturell ungültige Anfragen geben 400. Clients können Fehler jetzt allein anhand des HTTP-Statuscodes erkennen, ohne den Antworttext analysieren zu müssen."
+    ],
+    "added": [
+      "`decade`-Filter akzeptiert jetzt zweistellige Kurzschreibweise — `80` steht für 1980–1989, `00` für 2000–2009, `20` für 2020–2029; die vierstellige Form funktioniert weiterhin unverändert (issue #126)"
     ],
     "changed": [
       "Request-Logging-Middleware aus `Program.cs` nach `RequestLoggingMiddleware : IMiddleware` ausgelagert — jede HTTP-Anfrage erzeugt zwei Logzeilen: eine beim Eingang (vor der Verarbeitung) und eine beim Abschluss, mit einer gemeinsamen 8-stelligen Hex-Korrelations-ID (issue #125)",
       "Request-Log leitet nun nach Pfad in drei Kategorien weiter: `[Api - Request]` auf Information-Ebene für `/api/**`-Endpunkte; `[Web - Request]` auf Debug-Ebene für Blazor-Seiten, Scalar-UI und Kulturrouten; `[Web - Asset]` auf Debug-Ebene für statische Dateien und Framework-Assets — Betreiber sehen auf dem Standard-`info`-Level nur API-Verkehr (issue #125)",
       "Serilog `{:l}`-Literalformatbezeichner auf alle String-Eigenschaften in Request-Log-Templates angewendet — Methode, Korrelations-ID und URL werden in der gerenderten Ausgabe nicht mehr mit doppelten Anführungszeichen umschlossen (issue #125)"
+    ],
+    "fixed": [
+      "Validierungsfehler an Quote-Endpunkten geben jetzt 4xx-Statuscodes zurück — nicht erkanntes Genre oder Typ gibt 422, decade nicht durch 10 teilbar gibt 422, unmöglicher Jahresbereich gibt 422, zu lange oder verdächtige Filterwerte geben 400; bisher gaben alle Endpunkte 200 mit einem Fehler-Envelope im Antworttext zurück (issue #126)",
+      "Ungültige Werte für numerische Parameter (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) geben jetzt 422 zurück; die Fehlerdetails nennen den spezifischen Parameter, der die Validierung nicht bestanden hat (issue #126)"
     ]
   },
   "sectionHeaders": {
