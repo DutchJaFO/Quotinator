@@ -22,10 +22,10 @@ internal sealed class BadRequestExceptionHandler(IApiLocalizer localizer) : IExc
         if (exception is not BadHttpRequestException bad)
             return false;
 
-        context.Response.StatusCode = bad.StatusCode;
+        context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         await Results.Problem(
             detail: localizer[ApiMessages.NumericParameterInvalid],
-            statusCode: bad.StatusCode)
+            statusCode: StatusCodes.Status422UnprocessableEntity)
             .ExecuteAsync(context);
 
         return true;
