@@ -31,9 +31,42 @@ Observed in the live HA add-on supervisor log on 2026-06-27 after updating to v1
 
 ## Scope
 
-### 1. Fix the double-quote
+### 1. Two-line format with per-request correlation ID
 
-Combine `{Path}` and `{Query}` into a single `{Url}` property by concatenating `context.Request.Path` and `context.Request.QueryString.Value` before the `LogInformation` call. The full URL renders as one quoted token.
+Replace the single post-request log line with two lines per request: one on arrival, one on completion.
+
+Each request gets a short random ID (`Guid.NewGuid().ToString("N")[..8]` — 8 lowercase hex chars) that appears on both lines, making start/end pairs unambiguous even when long-running requests overlap with shorter ones.
+
+**Format:**
+
+```
+[Api - Request] {id} {METHOD} {url}
+[Api - Request] {id} {METHOD} {url} → {status} in {ms}ms
+```
+
+Both lines carry method and URL so either line is self-contained. The `→` on the end line distinguishes it visually from the start line.
+
+**Middleware structure:**
+
+```csharp
+app.Use(async (context, next) =>
+{
+    var id = Guid.NewGuid().ToString("N")[..8];
+    var url = context.Request.Path + context.Request.QueryString.Value;
+
+    requestLogger.LogInformation("[Api - Request] {Id} {Method} {Url}",
+        id, context.Request.Method, url);
+
+    var sw = Stopwatch.StartNew();
+    await next();
+    sw.Stop();
+
+    requestLogger.LogInformation("[Api - Request] {Id} {Method} {Url} → {Status} in {Ms}ms",
+        id, context.Request.Method, url, context.Response.StatusCode, sw.ElapsedMilliseconds);
+});
+```
+
+`context.Request.QueryString.Value` is an empty string when there is no query string, so concatenation with `Path` is safe — no trailing separator.
 
 ### 2. Add `[Api - Request]` subsystem prefix
 
@@ -41,9 +74,7 @@ The current line has no `[Subsystem - Phase]` prefix, violating `docs/logging.md
 
 ### 3. Extend to all endpoints — no exclusions
 
-The current middleware only logs `/api/v1/quotes/*`. This should be all endpoints. If an endpoint is being called, it must be visible in the log — whether it is a quote endpoint, admin endpoint, health check, or version endpoint.
-
-Remove the path filter entirely:
+The current middleware only logs `/api/v1/quotes/*`. Remove the path filter entirely — every request enters the logging block unconditionally.
 
 ```csharp
 // Before: only quote endpoints
@@ -52,17 +83,12 @@ if (!context.Request.Path.StartsWithSegments("/api/v1/quotes"))
     await next();
     return;
 }
+// After: remove this block entirely
 ```
 
-After: no filter — every request enters the logging block. The middleware runs unconditionally.
+### 4. Keep the endpoint handler log lines
 
-### 4. Review the two-line-per-request pattern
-
-Each API request currently emits two log lines (for quote endpoints):
-- Endpoint handler: `[Api - Search] q="back" field=null limit=null type=[] lang=null`
-- Middleware: `"GET" "/path""?query" → 200 in Xms`
-
-Both are complementary and should be kept. With scope extended to all endpoints, the middleware line now also appears for admin and other routes. No duplication concern — endpoint handlers log semantic parameters, the middleware logs HTTP facts.
+Endpoint handlers (`[Api - Search]`, `[Api - Random]`, etc.) log parsed semantic parameters — `q="back" field=null type=[] lang=null`. These remain. They complement the middleware lines, which log HTTP-level facts. There is no duplication.
 
 ### 5. Document the secret-safety rule for what is captured
 
@@ -93,8 +119,26 @@ These rules apply permanently to all log output in Quotinator:
 
 ## Expected log output after fix
 
+Single request:
 ```
-INF: Quotinator.Requests[] [Api - Request] GET /api/v1/quotes/search?q=back&genre=comedy → 200 in 11ms
+11:00:00.000  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=back&genre=comedy
+11:00:00.011  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=back&genre=comedy → 200 in 11ms
+```
+
+Overlapping requests:
+```
+11:00:00.000  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love
+11:00:00.001  [Api - Request] e5f6a7b8 GET /api/v1/health
+11:00:00.002  [Api - Request] e5f6a7b8 GET /api/v1/health → 200 in 2ms
+11:00:00.014  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love → 200 in 14ms
+```
+
+Useful greps:
+```bash
+grep "a1b2c3d4"     # find start + end for one request
+grep "→ 500"        # all failures
+grep "→ 429"        # rate-limited requests
+grep "in [0-9]\{4\}" # requests taking 1 second or more
 ```
 
 ---
@@ -125,11 +169,13 @@ All endpoints appear in the request log — the request log confirms that the en
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | No double-quote between path and query string | Unit test | `RequestLogFormattingTests.LogLine_IncludesFullUrl_WithoutDoubleQuote` — assert rendered line contains `search?q=back`, not `search""?q=back` |
-| 2 | ⬜ | `[Api - Request]` prefix present in log line | Unit test | `RequestLogFormattingTests.LogLine_HasApiRequestPrefix` — assert rendered line starts with `[Api - Request]` |
-| 3 | ⬜ | Requests with no query string log cleanly (no trailing empty token) | Unit test | `RequestLogFormattingTests.LogLine_NoQuery_NoTrailingQuote` — assert path-only request has no trailing quote artifact |
-| 4 | ⬜ | Admin routes are logged | Unit test | `RequestLogFormattingTests.AdminRoute_IsLogged` — assert `POST /api/v1/admin/database/reseed` produces a log line with method, path, status, duration |
-| 5 | ⬜ | Health endpoint is logged | Unit test | `RequestLogFormattingTests.HealthEndpoint_IsLogged` — assert `GET /api/v1/health` produces a log line |
-| 6 | ⬜ | `docs/logging.md` contains the secret-logging rules table | Code review | Rules table present; security rule is about captured data, not route filtering |
-| 7 | ⬜ | No header values appear in any log line | Code review | `Program.cs` middleware logs only method, URL, status, duration — no `context.Request.Headers` access anywhere in the block |
-| 8 | ⬜ | User starts app in VS; quote request, admin request, and health check all appear in log | Live | Hit `/api/v1/quotes/random`, `POST /api/v1/admin/database/seed/preview`, and `/api/v1/health` in sequence; confirm all three appear in log |
+| 1 | ⬜ | Start line emitted on request arrival (before `next()`) | Unit test | `RequestLogFormattingTests.StartLine_EmittedBeforeResponse` — assert first log line has no `→` and no status code |
+| 2 | ⬜ | End line contains URL, status, and duration | Unit test | `RequestLogFormattingTests.EndLine_ContainsStatusAndDuration` — assert second log line contains `→ 200 in` and `ms` |
+| 3 | ⬜ | Start and end lines share the same correlation ID | Unit test | `RequestLogFormattingTests.BothLines_ShareCorrelationId` — assert the 8-char hex token is identical on both lines |
+| 4 | ⬜ | URL combines path and query string without double-quote | Unit test | `RequestLogFormattingTests.Url_PathAndQueryCombined` — assert rendered URL contains `search?q=back` (no `""` between path and query) |
+| 5 | ⬜ | Path-only requests log cleanly (no trailing separator) | Unit test | `RequestLogFormattingTests.Url_NoQuery_NoTrailingSeparator` — assert `/api/v1/health` with no query produces no trailing character |
+| 6 | ⬜ | All endpoints are logged — including health and admin | Unit test | `RequestLogFormattingTests.AllRoutes_AreLogged` — assert `GET /api/v1/health` and `POST /api/v1/admin/database/reseed` both produce two log lines |
+| 7 | ⬜ | `[Api - Request]` prefix present on both lines | Unit test | `RequestLogFormattingTests.BothLines_HavePrefix` — assert both start and end lines begin with `[Api - Request]` |
+| 8 | ⬜ | No header values appear in any log line | Code review | `Program.cs` middleware block accesses only `Method`, `Path`, `QueryString`, `StatusCode`, and elapsed ms — no `Headers` access |
+| 9 | ⬜ | `docs/logging.md` updated to reflect two-line format | Code review | Observability overview and request log section show the two-line format with correlation ID |
+| 10 | ⬜ | User starts app in VS; overlapping request pairs visible and correlatable in log | Live | Hit several endpoints in quick succession; confirm start and end lines appear for each; confirm IDs match across pairs |

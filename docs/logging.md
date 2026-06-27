@@ -24,15 +24,31 @@ Quotinator has two distinct observability tracks. They serve different purposes 
 
 ### What is captured
 
-Every request produces one log line:
+Every request produces two log lines: one on arrival, one on completion. Each request gets a short random correlation ID (8 lowercase hex chars) that appears on both lines, making start/end pairs unambiguous when long-running requests overlap with shorter ones.
 
 ```
-[Api - Request] GET /api/v1/quotes/search?q=back&genre=comedy → 200 in 11ms
-[Api - Request] POST /api/v1/admin/database/reseed → 200 in 340ms
-[Api - Request] GET /api/v1/version → 200 in 2ms
+[Api - Request] {id} {METHOD} {url}
+[Api - Request] {id} {METHOD} {url} → {status} in {ms}ms
 ```
 
-Captured: HTTP method, full URL (path + query string), response status code, elapsed time in milliseconds.
+Example — overlapping requests:
+
+```
+11:00:00.000  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love
+11:00:00.001  [Api - Request] e5f6a7b8 GET /api/v1/health
+11:00:00.002  [Api - Request] e5f6a7b8 GET /api/v1/health → 200 in 2ms
+11:00:00.014  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love → 200 in 14ms
+```
+
+Captured: correlation ID, HTTP method, full URL (path + query string), response status code, elapsed time in milliseconds.
+
+Useful greps:
+```bash
+grep "a1b2c3d4"      # find both lines for one request
+grep "→ 500"         # all failures
+grep "→ 429"         # rate-limited requests
+grep "in [0-9]\{4\}" # requests taking 1 second or more
+```
 
 ### What is never captured
 
@@ -207,10 +223,12 @@ New subsystems must register a prefix in this table before their log lines land 
 ### Example request log output
 
 ```
-[Api - Request] GET /api/v1/quotes/random → 200 in 8ms
-[Api - Request] GET /api/v1/quotes/search?q=love&lang=nl → 200 in 14ms
-[Api - Request] POST /api/v1/admin/database/reseed → 200 in 340ms
-[Api - Request] GET /api/v1/version → 200 in 2ms
+11:00:00.000  [Api - Request] a1b2c3d4 GET /api/v1/quotes/random
+11:00:00.008  [Api - Request] a1b2c3d4 GET /api/v1/quotes/random → 200 in 8ms
+11:00:01.000  [Api - Request] b2c3d4e5 GET /api/v1/quotes/search?q=love&lang=nl
+11:00:01.001  [Api - Request] f6a7b8c9 POST /api/v1/admin/database/reseed
+11:00:01.014  [Api - Request] b2c3d4e5 GET /api/v1/quotes/search?q=love&lang=nl → 200 in 14ms
+11:00:01.341  [Api - Request] f6a7b8c9 POST /api/v1/admin/database/reseed → 200 in 340ms
 ```
 
 ---
