@@ -122,6 +122,7 @@
     <File Path="docs/milestones/v1-7-0/111-flaky-test-plan.md" />
     <File Path="docs/milestones/v1-7-0/115-dapper-core-refactor-plan.md" />
     <File Path="docs/milestones/v1-7-0/117-dotnet-env-plan.md" />
+    <File Path="docs/milestones/v1-7-0/125-request-log-format-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/audit/issue-117/">
     <File Path="docs/milestones/v1-7-0/audit/issue-117/README.md" />
