@@ -19,6 +19,12 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 ## Session start
 
+- [ ] Check remote branches before assuming the local view is complete — another session (e.g. a cloud session) may have created branches you do not have locally:
+  ```
+  git fetch --all
+  git branch -r | grep feature/
+  ```
+  Never create a new branch until you have confirmed no matching branch already exists on the remote.
 - [ ] Check for new issues: `gh issue list --milestone "<Name>" --state open --json number,title`
 - [ ] Update `overview.md` and create plan docs for any issues added since last session
 - [ ] For any new issue without a plan doc: confirm the no-plan-doc decision is logged in the GitHub issue and in `overview.md`
