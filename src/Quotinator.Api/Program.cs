@@ -343,6 +343,9 @@ var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
+builder.Services.AddSingleton<ICallerContext, CallerContext>();
+builder.Services.AddSingleton<IAuditWriter, AuditWriter>();
+builder.Services.AddSingleton<IAuditReader, AuditReader>();
 
 // Resolve seed batches before building the host — uses the early logger factory so errors
 // surface before the DI container starts up. Batches are captured into the lambda closure.
@@ -353,6 +356,8 @@ builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepositor
 builder.Services.AddSingleton<IDatabaseInitializer>(sp => new DatabaseInitializer(
     connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
     sp.GetRequiredService<IImportBatchRepository>(),
+    sp.GetRequiredService<IAuditWriter>(),
+    sp.GetRequiredService<ICallerContext>(),
     sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
 builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
@@ -467,6 +472,15 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseRequestLocalization();
 app.UseRateLimiter();
+
+// Populate ICallerContext.Agent from the User-Agent header for audit trail entries.
+// Only the value is read — the header name is not logged or stored anywhere.
+app.Use(async (context, next) =>
+{
+    var callerContext = context.RequestServices.GetRequiredService<ICallerContext>();
+    callerContext.Agent = context.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;
+    await next();
+});
 
 // Optional request logging — logs every endpoint call as two lines (start + end) with a
 // per-request correlation ID. Off by default. Enable with log_requests: true in the add-on

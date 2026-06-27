@@ -204,4 +204,35 @@ internal static class Sql
 
         internal const string DeleteAll = "DELETE FROM ImportBatches;";
     }
+
+    /// <summary>AuditEntries table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.AuditWriter"/>.</summary>
+    internal static class Audit
+    {
+        /// <summary>Removes all audit entries.</summary>
+        internal const string DeleteAll     = "DELETE FROM AuditEntries;";
+
+        /// <summary>Removes audit entries for a specific table name.</summary>
+        internal const string DeleteByTable = "DELETE FROM AuditEntries WHERE TableName = @table;";
+
+        // COUNT base — shared by CountPaged factory method below.
+        private const string CountPagedBase = "SELECT COUNT(*) FROM AuditEntries";
+
+        /// <summary>Paginated audit entry listing, newest first, with optional filters.</summary>
+        internal static string SelectPaged(bool filterTable, bool filterRecordId)
+            => "SELECT Id, TableName, RecordId, Operation, Agent, PerformedAt FROM AuditEntries" +
+               BuildWhere(filterTable, filterRecordId) +
+               " ORDER BY PerformedAt DESC LIMIT @pageSize OFFSET @offset;";
+
+        /// <summary>Total matching count for the audit list endpoint.</summary>
+        internal static string CountPaged(bool filterTable, bool filterRecordId)
+            => CountPagedBase + BuildWhere(filterTable, filterRecordId) + ";";
+
+        private static string BuildWhere(bool filterTable, bool filterRecordId)
+        {
+            var parts = new List<string>(2);
+            if (filterTable)    parts.Add("TableName = @table");
+            if (filterRecordId) parts.Add("RecordId = @recordId");
+            return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
+        }
+    }
 }

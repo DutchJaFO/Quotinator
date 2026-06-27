@@ -6,6 +6,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Tests.Helpers;
 
 namespace Quotinator.Data.Tests.Repositories;
 
@@ -47,9 +48,10 @@ public class ImportBatchesTests
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory);
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
-        return new DatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches, logger);
+        return new DatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
+            NoOpAuditWriter.Instance, NoOpCallerContext.Instance, logger);
     }
 
     // Creates a minimal v2-schema database with one pre-existing quote, simulating an upgrade path.
@@ -109,14 +111,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>Schema migration version is bumped to 3 after <see cref="DatabaseInitializer.InitialiseAsync"/>.</summary>
+    /// <summary>Schema migration version is bumped to 4 after <see cref="DatabaseInitializer.InitialiseAsync"/>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(3, db.SchemaVersion, "SchemaVersion should be 3 after Migration003");
+        Assert.AreEqual(4, db.SchemaVersion, "SchemaVersion should be 4 after Migration004");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────

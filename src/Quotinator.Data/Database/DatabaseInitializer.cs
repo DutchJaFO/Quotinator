@@ -25,6 +25,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     private readonly IReadOnlyList<SchemaMigration>  _migrations;
     private readonly IReadOnlyList<SeedBatch>        _batches;
     private readonly IImportBatchRepository          _importBatches;
+    private readonly IAuditWriter                    _auditWriter;
+    private readonly ICallerContext                  _callerContext;
     private readonly ILogger<DatabaseInitializer>    _logger;
 
     private List<SeedDuplicateRecord> _lastSeedDuplicates = [];
@@ -82,6 +84,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     /// <param name="migrations">Ordered, append-only list of schema migrations to apply.</param>
     /// <param name="batches">Source file batches in import order, each with its resolved duplicate-resolution policy.</param>
     /// <param name="importBatches">Repository used to record provenance for each seeded file.</param>
+    /// <param name="auditWriter">Writes an audit entry on completion of reseed and reset operations.</param>
+    /// <param name="callerContext">Provides the agent identifier for audit entries.</param>
     /// <param name="logger">Logger for startup diagnostics.</param>
     public DatabaseInitializer(
         IDbConnectionFactory            factory,
@@ -89,6 +93,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         IReadOnlyList<SchemaMigration>  migrations,
         IReadOnlyList<SeedBatch>        batches,
         IImportBatchRepository          importBatches,
+        IAuditWriter                    auditWriter,
+        ICallerContext                  callerContext,
         ILogger<DatabaseInitializer>    logger)
     {
         _factory       = factory;
@@ -96,6 +102,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         _migrations    = migrations;
         _batches       = batches;
         _importBatches = importBatches;
+        _auditWriter   = auditWriter;
+        _callerContext = callerContext;
         _logger        = logger;
     }
 
@@ -283,6 +291,13 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         }
 
         await LogDatabaseStatsAsync(connection);
+        await _auditWriter.WriteAsync(new AuditEntry
+        {
+            TableName   = "Database",
+            Operation   = AuditOperation.Reseed,
+            Agent       = _callerContext.Agent,
+            PerformedAt = DateTime.UtcNow,
+        });
         _logger.LogInformation("[Database - Seed] reseed complete");
     }
 
@@ -311,6 +326,13 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         }
 
         await LogDatabaseStatsAsync(connection);
+        await _auditWriter.WriteAsync(new AuditEntry
+        {
+            TableName   = "Database",
+            Operation   = AuditOperation.Reset,
+            Agent       = _callerContext.Agent,
+            PerformedAt = DateTime.UtcNow,
+        });
         _logger.LogInformation("[Database - Init] reset complete");
     }
 

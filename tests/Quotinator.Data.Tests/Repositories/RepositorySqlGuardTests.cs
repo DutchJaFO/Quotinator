@@ -1,4 +1,5 @@
 using Quotinator.Data.Diagnostics;
+using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Tests.Repositories;
@@ -31,6 +32,16 @@ public class RepositorySqlGuardTests
             ["Restore",       RepositorySql.Restore(t)],
             ["HardDelete",    RepositorySql.HardDelete(t)],
             ["Purge",         RepositorySql.Purge(t)],
+
+            // Audit factory methods — all four filter-flag combinations.
+            ["Audit.SelectPaged(false,false)", Sql.Audit.SelectPaged(false, false)],
+            ["Audit.SelectPaged(true,false)",  Sql.Audit.SelectPaged(true,  false)],
+            ["Audit.SelectPaged(false,true)",  Sql.Audit.SelectPaged(false, true)],
+            ["Audit.SelectPaged(true,true)",   Sql.Audit.SelectPaged(true,  true)],
+            ["Audit.CountPaged(false,false)",  Sql.Audit.CountPaged(false,  false)],
+            ["Audit.CountPaged(true,false)",   Sql.Audit.CountPaged(true,   false)],
+            ["Audit.CountPaged(false,true)",   Sql.Audit.CountPaged(false,  true)],
+            ["Audit.CountPaged(true,true)",    Sql.Audit.CountPaged(true,   true)],
         ];
     }
 }

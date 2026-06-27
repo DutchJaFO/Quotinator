@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Tests.Helpers;
 
 namespace Quotinator.Data.Tests.Repositories;
 
@@ -32,7 +33,7 @@ public class SqliteRestorableRepositoryTests
             );
             """);
 
-        _repository = new SqliteRestorableRepository<Widget>(new SqliteConnectionFactory(_dbPath));
+        _repository = new SqliteRestorableRepository<Widget>(new SqliteConnectionFactory(_dbPath), NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
     }
 
     [TestCleanup]

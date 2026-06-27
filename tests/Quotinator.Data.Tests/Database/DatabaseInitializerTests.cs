@@ -6,6 +6,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Tests.Helpers;
 
 namespace Quotinator.Data.Tests.Database;
 
@@ -47,9 +48,10 @@ public class DatabaseInitializerTests
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory);
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
-        return new DatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches, logger);
+        return new DatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
+            NoOpAuditWriter.Instance, NoOpCallerContext.Instance, logger);
     }
 
     private static SeedBatch AllFilesBatch() => new(
@@ -145,11 +147,13 @@ public class DatabaseInitializerTests
     /// underlying tables already have v3 columns (ImportBatchId), InitialiseAsync must
     /// self-heal — record the version and reseed — rather than crash-looping on every startup.
     /// This state was produced by the broken ResetAsync in v1.5.x–v1.6.1.
+    /// The test rolls back to v2 by removing v3 and v4 version records so that the self-heal
+    /// path (idempotent IF NOT EXISTS DDL) runs and brings the schema back to current.
     /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_PartialMigrationState_SelfHealsAndReseeds()
     {
-        // Arrange: seed a healthy v3 database then simulate the broken state by rolling
+        // Arrange: seed a healthy database then simulate the broken state by rolling
         // SchemaVersion back to v2 — exactly what the pre-fix ResetAsync left behind.
         var db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
@@ -158,15 +162,15 @@ public class DatabaseInitializerTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
-        await conn.ExecuteAsync("DELETE FROM SchemaVersion WHERE Version = 3;");
+        await conn.ExecuteAsync("DELETE FROM SchemaVersion WHERE Version IN (3, 4);");
         await conn.CloseAsync();
 
         // Act: InitialiseAsync must not throw. It detects the duplicate-column situation,
-        // records version 3, and leaves existing data intact.
+        // records the missing versions, and leaves existing data intact.
         await db.InitialiseAsync();
 
-        // Assert: schema is at v3 and existing data is undisturbed.
-        Assert.AreEqual(3,              db.SchemaVersion, "Schema must be recorded at v3 after self-heal");
+        // Assert: schema is at current version and existing data is undisturbed.
+        Assert.AreEqual(4,              db.SchemaVersion, "Schema must be recorded at v4 after self-heal");
         Assert.AreEqual(countAfterInit, db.QuoteCount,    "Quote count must be unchanged after self-heal");
     }
 }

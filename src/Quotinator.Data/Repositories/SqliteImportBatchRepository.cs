@@ -10,7 +10,8 @@ namespace Quotinator.Data.Repositories;
 public sealed class SqliteImportBatchRepository : SqliteRepository<ImportBatch>, IImportBatchRepository
 {
     /// <inheritdoc/>
-    public SqliteImportBatchRepository(IDbConnectionFactory factory) : base(factory) { }
+    public SqliteImportBatchRepository(IDbConnectionFactory factory, IAuditWriter auditWriter, ICallerContext callerContext)
+        : base(factory, auditWriter, callerContext) { }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<ImportBatch>> GetAllAsync(IUnitOfWork? unitOfWork = null)

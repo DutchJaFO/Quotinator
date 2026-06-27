@@ -5,6 +5,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Tests.Helpers;
 
 namespace Quotinator.Data.Tests.Repositories;
 
@@ -42,7 +43,7 @@ public class SqliteRepositoryTests
             );
             """);
 
-        _repository = new SqliteRepository<Widget>(new SqliteConnectionFactory(_dbPath));
+        _repository = new SqliteRepository<Widget>(new SqliteConnectionFactory(_dbPath), NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
     }
 
     [TestCleanup]

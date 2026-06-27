@@ -18,6 +18,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 1, Sql = Migration001_InitialSchema },
         new SchemaMigration { Version = 2, Sql = Migration002_ReseedGenres },
         new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
+        new SchemaMigration { Version = 4, Sql = AuditMigrations.CreateAuditEntriesTable },
     ];
 
     // All tables use RecordBase columns (Id, DateCreated, DateModified, DateDeleted, IsDeleted).
@@ -164,4 +165,5 @@ public static class QuotinatorMigrations
                strftime('%Y-%m-%d %H:%M:%S', 'now'), NULL, NULL, 0
         WHERE EXISTS (SELECT 1 FROM Quotes LIMIT 1);
         """;
+
 }
