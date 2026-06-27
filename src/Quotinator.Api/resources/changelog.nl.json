@@ -3,12 +3,17 @@
   "sourceLanguage": "en",
   "machineTranslated": true,
   "unreleased": {
-    "issues": [125, 126],
+    "issues": [73, 125, 126],
     "highlights": [
       "Endpoint-verzoeken worden nu vastgelegd als een gekoppeld start- en eindpaar — een korte ID verbindt beide regels, waardoor overlappende verzoeken eenvoudig te traceren zijn. Webpagina- en bestandsverzoeken zijn ondergebracht in eigen logcategorieën zodat de standaarduitvoer alleen API-activiteit toont.",
-      "Validatiefouten op quote-eindpunten geven nu de juiste HTTP-foutstatuscode terug — filters met ongeldige waarden geven 422, structureel ongeldige verzoeken geven 400. Clients kunnen nu fouten herkennen aan de HTTP-statuscode zonder de antwoordtekst te hoeven verwerken."
+      "Validatiefouten op quote-eindpunten geven nu de juiste HTTP-foutstatuscode terug — filters met ongeldige waarden geven 422, structureel ongeldige verzoeken geven 400. Clients kunnen nu fouten herkennen aan de HTTP-statuscode zonder de antwoordtekst te hoeven verwerken.",
+      "Elke schrijfoperatie wordt nu vastgelegd in een auditlog — zie wie wat heeft gedaan, op welk record en wanneer. Beheerders kunnen het log bekijken en wissen via de API."
     ],
     "added": [
+      "Audittrail: elke schrijfoperatie (invoegen, bijwerken, zacht verwijderen, herstellen, hard verwijderen, leegmaken, bulkimport, opnieuw seeden, resetten) wordt vastgelegd in een `AuditEntries`-tabel met tabelnaam, record-ID, operatie, caller-agent en tijdstempel (issue #73)",
+      "`GET /api/v1/admin/audit` — gepagineerd auditlog, filterbaar op tabel en record-ID; openbaar toegankelijk, geen API-sleutel vereist (issue #73)",
+      "`DELETE /api/v1/admin/audit` — het volledige auditlog of de vermeldingen van een specifieke tabel wissen; beheerders-API-sleutel vereist; na het wissen wordt een bewaarvermelding weggeschreven (issue #73)",
+      "`GET /api/v1/admin/database/seed/preview` — nu openbaar toegankelijk; geen API-sleutel vereist (niet-destructieve leesoperatie) (issue #73)",
       "`decade`-filter accepteert nu verkorte notatie met twee cijfers — `80` staat voor 1980–1989, `00` voor 2000–2009, `20` voor 2020–2029; de viercijferige notatie werkt ongewijzigd door (issue #126)"
     ],
     "changed": [

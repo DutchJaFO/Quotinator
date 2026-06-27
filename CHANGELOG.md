@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-27 15:29 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-27 19:36 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -13,8 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Highlights
 - Endpoint requests are now logged as a matched start and end pair — a short ID links both lines, making it easy to trace overlapping calls. Web page and asset requests are separated into their own log categories so the default output shows only API activity.
 - Validation errors on quote endpoints now return the correct HTTP error status code — filters with invalid values return 422, structurally invalid requests return 400. Clients can now detect errors by HTTP status code alone without parsing the response body.
+- Every write operation is now recorded in an audit log — see who did what, on which record, and when. Administrators can view and clear the log via the API.
 
 ### Added
+- Audit trail: every write operation (insert, update, soft-delete, restore, hard-delete, purge, bulk import, reseed, reset) is recorded in an `AuditEntries` table with the table name, record ID, operation, caller agent, and timestamp (issue #73)
+- `GET /api/v1/admin/audit` — paginated audit log, filterable by table and record ID; publicly accessible, no API key required (issue #73)
+- `DELETE /api/v1/admin/audit` — clear the entire audit log or a specific table's entries; admin API key required; a purge sentinel entry is written after the delete (issue #73)
+- `GET /api/v1/admin/database/seed/preview` — now publicly accessible; no API key required (non-destructive read) (issue #73)
 - `decade` filter now accepts two-digit shorthand — `80` means 1980–1989, `00` means 2000–2009, `20` means 2020–2029; four-digit form continues to work unchanged (issue #126)
 
 ### Changed

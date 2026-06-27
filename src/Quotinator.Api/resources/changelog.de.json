@@ -3,12 +3,17 @@
   "sourceLanguage": "en",
   "machineTranslated": true,
   "unreleased": {
-    "issues": [125, 126],
+    "issues": [73, 125, 126],
     "highlights": [
       "Endpoint-Anfragen werden jetzt als zusammengehöriges Start- und Endpaar protokolliert — eine kurze ID verbindet beide Zeilen und erleichtert das Nachverfolgen überlappender Anfragen. Webseiten- und Asset-Anfragen werden in eigene Log-Kategorien eingeordnet, sodass die Standardausgabe nur API-Aktivität zeigt.",
-      "Validierungsfehler an Quote-Endpunkten geben jetzt den richtigen HTTP-Fehlerstatuscode zurück — Filter mit ungültigen Werten geben 422, strukturell ungültige Anfragen geben 400. Clients können Fehler jetzt allein anhand des HTTP-Statuscodes erkennen, ohne den Antworttext analysieren zu müssen."
+      "Validierungsfehler an Quote-Endpunkten geben jetzt den richtigen HTTP-Fehlerstatuscode zurück — Filter mit ungültigen Werten geben 422, strukturell ungültige Anfragen geben 400. Clients können Fehler jetzt allein anhand des HTTP-Statuscodes erkennen, ohne den Antworttext analysieren zu müssen.",
+      "Jede Schreiboperation wird jetzt in einem Auditprotokoll erfasst — sehen Sie, wer was an welchem Datensatz wann durchgeführt hat. Administratoren können das Protokoll über die API einsehen und löschen."
     ],
     "added": [
+      "Audit-Trail: jede Schreiboperation (Einfügen, Aktualisieren, Soft-Delete, Wiederherstellen, Hard-Delete, Bereinigen, Massenimport, erneutes Seeden, Zurücksetzen) wird in einer `AuditEntries`-Tabelle mit Tabellenname, Datensatz-ID, Operation, Caller-Agent und Zeitstempel erfasst (issue #73)",
+      "`GET /api/v1/admin/audit` — paginiertes Auditprotokoll, filterbar nach Tabelle und Datensatz-ID; öffentlich zugänglich, kein API-Schlüssel erforderlich (issue #73)",
+      "`DELETE /api/v1/admin/audit` — das gesamte Auditprotokoll oder die Einträge einer bestimmten Tabelle löschen; Admin-API-Schlüssel erforderlich; nach dem Löschen wird ein Bereinigungseintrag geschrieben (issue #73)",
+      "`GET /api/v1/admin/database/seed/preview` — jetzt öffentlich zugänglich; kein API-Schlüssel erforderlich (nicht-destruktiver Lesevorgang) (issue #73)",
       "`decade`-Filter akzeptiert jetzt zweistellige Kurzschreibweise — `80` steht für 1980–1989, `00` für 2000–2009, `20` für 2020–2029; die vierstellige Form funktioniert weiterhin unverändert (issue #126)"
     ],
     "changed": [
