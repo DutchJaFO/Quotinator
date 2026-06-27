@@ -27,3 +27,5 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 003 | [003-unit-of-work-and-data-project-design-goals.md](003-unit-of-work-and-data-project-design-goals.md) | Unit of Work pattern and Quotinator.Data design goals |
 | 004 | [004-quotinator-data-project-boundaries.md](004-quotinator-data-project-boundaries.md) | Quotinator.Data project boundaries and design intent |
 | 005 | [005-quotinator-changelog-project-scope.md](005-quotinator-changelog-project-scope.md) | Quotinator.Changelog project scope |
+| 006 | [006-sequential-test-execution-by-default.md](006-sequential-test-execution-by-default.md) | Sequential test execution by default |
+| 007 | [007-cs1591-on-test-projects.md](007-cs1591-on-test-projects.md) | CS1591 enforcement on test projects |
