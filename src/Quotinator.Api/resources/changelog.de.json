@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [109, 111, 115, 117],
+    "issues": [70, 109, 111, 115, 117],
     "highlights": [
       "Die Suchfunktion erklärt jetzt, wenn keine Zitate Ihren Filtern entsprechen, anstatt stillschweigend eine leere Liste zurückzugeben."
     ],
@@ -19,7 +19,8 @@
     ],
     "changed": [
       "Gesamte Dapper-Infrastruktur von Quotinator.Core nach Quotinator.Data verschoben — DatabaseInitializer ist jetzt generisch und akzeptiert beliebige Migrationslisten; Quotinator-spezifisches Migrations-SQL nach QuotinatorMigrations in Quotinator.Core verschoben (Issue #115)",
-      "Alle Testprojekte verwenden jetzt standardmäßig sequenzielle Ausführung — parallele Ausführung ist ein explizites Opt-in auf Klassenebene (ADR 006); Dapper-Typhandler-Registrierung nach [AssemblyInitialize] verschoben, um Race Conditions bei parallelen Testläufen zu vermeiden (Issue #111)"
+      "Alle Testprojekte verwenden jetzt standardmäßig sequenzielle Ausführung — parallele Ausführung ist ein explizites Opt-in auf Klassenebene (ADR 006); Dapper-Typhandler-Registrierung nach [AssemblyInitialize] verschoben, um Race Conditions bei parallelen Testläufen zu vermeiden (Issue #111)",
+      "CI- und Release-Workflows teilen sich jetzt einen gemeinsamen wiederverwendbaren Build/Test-Workflow (_build-test.yml) — Build-Schritte werden nicht mehr dupliziert; Releases folgen einem zweistufigen Beta/Final-Modell mit expliziten T1/T2/T3-Verifizierungsstufen (Issue #70)"
     ],
     "fixed": [
       "Der Suchendpunkt gibt jetzt einen Ergebnisumschlag zurück (status, items, totalMatching, message), konsistent mit dem /random-Endpunkt — Aufrufer können jetzt NoResults von einem leeren Ergebnis unterscheiden (Issue #109)",
