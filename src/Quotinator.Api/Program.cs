@@ -101,6 +101,21 @@ builder.Services.AddOpenApi(options =>
         }
         return Task.CompletedTask;
     });
+
+    // Year/decade params are declared as string? for error handling but must appear as
+    // integer in the OpenAPI spec so callers and tooling know the expected type.
+    options.AddOperationTransformer((operation, context, cancellationToken) =>
+    {
+        var yearParamNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "yearFrom", "yearTo", "year", "decade" };
+        foreach (var param in operation.Parameters ?? [])
+        {
+            if (param.Name is not null && yearParamNames.Contains(param.Name)
+                && param is OpenApiParameter p && p.Schema is OpenApiSchema s)
+                s.Type = JsonSchemaType.Integer | JsonSchemaType.Null;
+        }
+        return Task.CompletedTask;
+    });
 });
 
 builder.Services.AddRateLimiter(options =>
