@@ -128,4 +128,4 @@ The audit read endpoint uses a dedicated `IAuditReader` / `AuditReader` pair ins
 | 19 | ✅ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` |
 | 20 | ✅ | All tests pass — 497 tests | Build | `dotnet test --configuration Release` |
 | 21 | ✅ | App starts in VS; reseed writes `Reseeded` + one `BulkInserted` per source file | T1 gate | Start app; call `POST /api/v1/admin/database/reseed`; verify `GET /api/v1/admin/audit` returns entries with `BulkInserted` on `Quotes` table, `RecordId` = ImportBatch Guid |
-| 22 | ⬜ | Docker image builds and behaves correctly | T2 gate | `docker build -f docker/Dockerfile -t quotinator:local .` |
+| 22 | ✅ | Docker image builds and behaves correctly | T2 gate | `docker build -f docker/Dockerfile -t quotinator:local .` |
