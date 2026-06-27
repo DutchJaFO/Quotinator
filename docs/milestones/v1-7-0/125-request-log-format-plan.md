@@ -1,4 +1,4 @@
-# Issue #125 — Fix request log format
+﻿# Issue #125 — Fix request log format
 
 **Milestone:** v1.7.0  
 **Status:** Open  
@@ -88,6 +88,21 @@ INF: Quotinator.Requests[] [Api - Request] GET /api/v1/quotes/search?q=back&genr
 
 - Do not add a structured logging library (e.g. `UseSerilogRequestLogging`) — the hand-rolled middleware filters to `/api/v1/quotes/*` intentionally and the filter is a security boundary
 - Do not log request headers — `User-Agent` is captured via `ICallerContext` in the audit trail (#73), not by duplicating it here
+
+---
+
+## Request log vs. audit trail — important distinction
+
+These are two separate outputs with different purposes and different security constraints:
+
+| | Request log (`logRequests` middleware) | Audit trail (`AuditEntries` table) |
+|---|---|---|
+| **Output** | HA supervisor log (human-readable text) | SQLite database (queryable records) |
+| **Admin routes** | **Excluded** — `X-Api-Key` must never appear in log files | **Included** — `reseed`, `reset`, and future admin actions are explicitly audited |
+| **What is stored** | Method, URL, status code, duration | Operation name, agent identity (`User-Agent`), timestamp |
+| **Secrets** | Never stored — path filter is a security boundary | Never stored — API key is authenticated but never recorded; only the agent is |
+
+Admin routes being absent from the request log does not mean admin actions go unrecorded. See issue #73.
 
 ---
 

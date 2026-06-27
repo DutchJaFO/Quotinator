@@ -11,7 +11,7 @@
 
 The original spec deferred this issue to the auth milestone because `PerformedBy` required an authenticated user. That dependency is removed.
 
-**New design:** The `Agent` field is populated from an optional `X-Agent` request header via a scoped `ICallerContext` service. Callers that identify themselves (MagicMirror, smoke-test scripts, the Blazor UI circuit) are recorded. Callers that omit the header produce a null agent entry — the operation is still recorded. The authenticated `UserId` is added when auth lands, as a separate nullable column alongside `Agent`.
+**New design:** The `Agent` field is populated from the standard `User-Agent` request header via a scoped `ICallerContext` service. Callers that identify themselves (MagicMirror, smoke-test scripts, the Blazor UI circuit) are recorded. Callers that omit the header produce a null agent entry — the operation is still recorded. The authenticated `UserId` is added when auth lands, as a separate nullable column alongside `Agent`.
 
 See the scope-change comment on [GitHub issue #73](https://github.com/DutchJaFO/Quotinator/issues/73#issuecomment-4816844699) for the full reasoning.
 
@@ -71,12 +71,41 @@ The `GET /api/v1/admin/audit` endpoint reads audit entries. It must NOT use `Sql
 
 ### Audit scope
 
-Write operations only: Insert, Update, SoftDelete, Restore, HardDelete, Purge, Link, Unlink. Read operations are not audited — the existing request log (`log_requests: true`) covers read access. Bulk operations (e.g. database seed) write one summary entry per operation, not one per record.
+Two categories of operations are audited:
+
+**1. Record-level write operations** — handled automatically by the repository base class:
+
+| Operation | When |
+|---|---|
+| `Insert` | A single record is created |
+| `Update` | A record is modified |
+| `SoftDelete` | A record is marked deleted |
+| `Restore` | A soft-deleted record is reinstated |
+| `HardDelete` | A record is permanently removed |
+| `Purge` | All soft-deleted records in a table are permanently removed |
+| `Link` | A many-to-many join record is created |
+| `Unlink` | A many-to-many join record is removed |
+| `BulkInsert` | A batch of records is inserted (one summary entry per batch, not per row) |
+
+Read operations are not audited — the request log (`log_requests: true`) covers read access to quote endpoints.
+
+**2. Admin actions** — called directly on `IAuditWriter` by admin endpoint handlers (not via the repository):
+
+| Operation | Endpoint | `TableName` | Notes |
+|---|---|---|---|
+| `Reseed` | `POST /api/v1/admin/database/reseed` | `"Database"` | Replaces all data with bundled source files |
+| `Reset` | `POST /api/v1/admin/database/reset` | `"Database"` | Drops and recreates all tables |
+| `Import` | Future import endpoint | `"Database"` | User-provided import file processed |
+| `Backup` | Future backup endpoint | `"Database"` | Database backup created |
+
+Admin actions use `TableName = "Database"` and `RecordId = null` — they are database-level operations, not row-level. Admin endpoint handlers call `IAuditWriter.WriteAsync` directly, injecting it via DI. They do not go through the repository base class.
+
+> **Important distinction:** admin routes are excluded from the *request log middleware* (to prevent `X-Api-Key` appearing in log files). They are explicitly included in the *audit trail*. These are different outputs with different security constraints — the audit trail stores operation identity (agent + operation name), never credentials.
 
 ### `ICallerContext` — scoped caller identity
 
 ```csharp
-// Quotinator.Core
+// Quotinator.Data
 public interface ICallerContext
 {
     string? Agent { get; set; }
@@ -112,7 +141,7 @@ No custom header to document. Callers that already set `User-Agent` (most HTTP c
 | `TableName` | TEXT NOT NULL | Name of the table the operation touched (e.g. `"Quotes"`) |
 | `RecordId` | TEXT | Guid of the affected row as string; null for bulk/summary entries |
 | `Operation` | TEXT NOT NULL | One of: `Insert`, `Update`, `SoftDelete`, `Restore`, `HardDelete`, `Purge`, `Link`, `Unlink`, `BulkInsert` |
-| `Agent` | TEXT | Value from `X-Agent` header, `"ui"` for Blazor circuit, null otherwise |
+| `Agent` | TEXT | Value from `User-Agent` header, `"ui"` for Blazor circuit, null otherwise |
 | `PerformedAt` | TEXT NOT NULL | ISO 8601 UTC timestamp |
 
 **Does not extend `RecordBase`** — audit entries are immutable append-only records. Soft-delete, DateModified, and IsDeleted are inappropriate here.
@@ -124,7 +153,7 @@ No custom header to document. Callers that already set `User-Agent` (most HTTP c
 ### `AuditEntry` model
 
 ```csharp
-// Quotinator.Core — Models/
+// Quotinator.Data — Entities/
 public class AuditEntry
 {
     public long Id { get; init; }
@@ -137,6 +166,7 @@ public class AuditEntry
 
 public static class AuditOperation
 {
+    // Record-level — written automatically by repository base class
     public const string Insert     = "Insert";
     public const string Update     = "Update";
     public const string SoftDelete = "SoftDelete";
@@ -146,6 +176,12 @@ public static class AuditOperation
     public const string Link       = "Link";
     public const string Unlink     = "Unlink";
     public const string BulkInsert = "BulkInsert";
+
+    // Admin actions — written directly by admin endpoint handlers
+    public const string Reseed  = "Reseed";
+    public const string Reset   = "Reset";
+    public const string Import  = "Import";
+    public const string Backup  = "Backup";
 }
 ```
 
@@ -185,7 +221,7 @@ Response: paginated `AuditEntry` list, newest first.
 | `src/Quotinator.Data/Database/DatabaseInitializer.cs` | New migration: `AuditEntries` table + two indexes |
 | `src/Quotinator.Api/Program.cs` | Register `ICallerContext` and `IAuditWriter` (scoped); add `User-Agent` to `ICallerContext.Agent` middleware |
 | `src/Quotinator.Api/Components/Layout/MainLayout.razor.cs` | Set `ICallerContext.Agent = "ui"` on `OnInitializedAsync` |
-| `src/Quotinator.Api/Endpoints/AdminEndpoints.cs` | Add `GET /api/v1/admin/audit` endpoint using read-model query (not `SqliteRepository<AuditEntry>`) |
+| `src/Quotinator.Api/Endpoints/AdminEndpoints.cs` | Add `GET /api/v1/admin/audit` endpoint using read-model query; add `IAuditWriter` calls to `reseed` and `reset` handlers |
 | `tests/Quotinator.Data.Tests/Audit/AuditWriterTests.cs` | New — integration tests against real SQLite |
 | `tests/Quotinator.Api.Tests/Endpoints/AdminAuditEndpointTests.cs` | New — endpoint tests |
 
@@ -203,6 +239,8 @@ Response: paginated `AuditEntry` list, newest first.
 | 6 | ⬜ | `GET /api/v1/admin/audit` returns paginated entries filtered by `table` | Endpoint test | `AdminAuditEndpointTests.GetAudit_FiltersByTableName` |
 | 7 | ⬜ | `GET /api/v1/admin/audit` returns paginated entries filtered by `recordId` | Endpoint test | `AdminAuditEndpointTests.GetAudit_FiltersByRecordId` |
 | 8 | ⬜ | `GET /api/v1/admin/audit` requires `X-Api-Key`; returns 401 without it | Endpoint test | `AdminAuditEndpointTests.GetAudit_Returns401_WithoutApiKey` |
-| 9 | ⬜ | Build clean — 0 warnings, 0 errors | Live | `dotnet build --configuration Release` |
-| 10 | ⬜ | All tests pass | Live | `dotnet test --configuration Release` |
-| 11 | ⬜ | User starts app in VS; app starts without error | Live | T1 gate |
+| 9 | ⬜ | `POST /api/v1/admin/database/reseed` writes a `Reseed` audit entry with `TableName="Database"` | Integration test | `AdminAuditEndpointTests.Reseed_WritesAuditEntry_WithDatabaseTableName` |
+| 10 | ⬜ | `POST /api/v1/admin/database/reset` writes a `Reset` audit entry with `TableName="Database"` | Integration test | `AdminAuditEndpointTests.Reset_WritesAuditEntry_WithDatabaseTableName` |
+| 11 | ⬜ | Build clean — 0 warnings, 0 errors | Live | `dotnet build --configuration Release` |
+| 12 | ⬜ | All tests pass | Live | `dotnet test --configuration Release` |
+| 13 | ⬜ | User starts app in VS; app starts without error | Live | T1 gate |
