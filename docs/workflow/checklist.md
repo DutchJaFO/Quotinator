@@ -89,7 +89,7 @@ Releases follow a two-stage model. See `docs/release-verification.md` for tier d
 
 ### Beta tag (T1 + T2 gate)
 
-Push a beta tag when T1 and T2 are verified. Skip to Final tag only if the release has no T1 or T2 changes (confirmed explicitly).
+A beta tag is mandatory for every release. The release workflow enforces this — pushing a final tag without a prior beta tag for the same version fails the workflow immediately.
 
 - [ ] T1 verified: app starts in VS without error; affected Razor pages render correctly
 - [ ] T2 verified: `docker build -f docker/Dockerfile -t quotinator:local .` succeeds; smoke-test commands return expected output

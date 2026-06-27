@@ -125,7 +125,7 @@ The milestone-close section of `checklist.md` gains two explicit gates:
 
 | File | Change |
 |---|---|
-| `.github/workflows/release.yml` | Add `--prerelease` flag conditional on tag containing `-`; already suppresses `latest` |
+| `.github/workflows/release.yml` | Add `--prerelease` flag conditional on tag containing `-`; add `enforce-beta-first` job that fails final tags with no prior beta tag |
 | `docs/release-verification.md` | New — tier definitions, classification rules, how to declare tiers in plan docs |
 | `docs/workflow/checklist.md` | Add beta/final gates to milestone-close section (as above) |
 | `tests/Quotinator.Data.Tests/Helpers/DapperSetupTests.cs` | Fix CS1574: cref `MSTestSettings.Initialize` → `AssemblySetup.Initialize` |
@@ -147,3 +147,5 @@ The milestone-close section of `checklist.md` gains two explicit gates:
 | 7 | ✅ | `checklist.md` milestone-close section includes beta and final gates | Code review | Both gate blocks present with correct items |
 | 8 | ✅ | CI passes on push to feature branch | Live | GitHub Actions — CI workflow green on branch push |
 | 9 | ✅ | User manual test — app starts without error | Live | User starts app in VS; confirms startup without error |
+| 10 | ⬜ | Final tag without beta tag fails the release workflow | Live | Push a final tag with no prior beta tag; confirm `enforce-beta-first` job fails and Docker image is not pushed |
+| 11 | ⬜ | Final tag with beta tag passes the release workflow | Live | Push beta tag then final tag for next milestone release; confirm `enforce-beta-first` passes and full release is created |
