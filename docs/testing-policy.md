@@ -32,14 +32,21 @@ Both `src/Quotinator.ProjectName/CVE/` and `tests/Quotinator.ProjectName.Tests/C
 
 ## Parallel execution
 
-All test projects run with `[assembly: Parallelize(Scope = ExecutionScope.MethodLevel)]` — every test method runs concurrently. This is fast but requires discipline:
+**Default: sequential.** No test project has `[assembly: Parallelize]`. Tests run sequentially within each project unless a class is explicitly opted in. See [ADR 006](architecture-decisions/006-sequential-test-execution-by-default.md) for the rationale — this policy exists because of observed flaky test failures caused by concurrent execution of tests that touch process-wide state.
 
-**Global state must only be written once, before tests run.** The only safe place to write global state is `[AssemblyInitialize]` in `MSTestSettings.cs`. Never write global state in `[ClassInitialize]` or `[TestInitialize]` — those run in parallel and will race.
+**Opt-in rule:** add `[Parallelize]` at the class level only when all four of the following are true:
+1. No global state written or read (Dapper type handlers, static caches, singletons)
+2. No shared filesystem resources — each test creates its own isolated temp directory and SQLite file in `[TestInitialize]` and deletes it in `[TestCleanup]`
+3. No `SqliteConnection.ClearAllPools()` in cleanup — that is a process-wide operation
+4. All assertions are on local, test-owned state only
+
+If you cannot confirm all four, leave the class sequential. The friction is intentional.
+
+**Global state must only be written once, before tests run.** The only safe place to write global state is `[AssemblyInitialize]` in `MSTestSettings.cs`. Never write global state in `[ClassInitialize]` or `[TestInitialize]`.
 
 **What counts as global state:**
 - Any static/singleton mutation: caches, registries, logging sinks, Dapper type handlers.
-- `SqlMapper.AddTypeHandler(...)` is the canonical example — Dapper's handler dictionary is a global static; registering it from multiple `[ClassInitialize]` methods causes intermittent failures under parallel execution. All Dapper type handler registrations live in `AssemblySetup.RegisterTypeHandlers` in `Quotinator.Data.Tests/MSTestSettings.cs`.
-- The same principle applies to any future global state in any test project — always centralise in `[AssemblyInitialize]`.
+- `SqlMapper.AddTypeHandler(...)` is the canonical example — Dapper's handler dictionary is a global static. All Dapper type handler registrations live in `[AssemblyInitialize]` in `MSTestSettings.cs` of the project that uses them.
 
 **Each test must own its own resources.** Database tests create a temp directory and SQLite file in `[TestInitialize]` and delete them in `[TestCleanup]`. Never share a file path or connection between tests.
 

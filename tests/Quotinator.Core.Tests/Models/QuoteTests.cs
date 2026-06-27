@@ -1,11 +1,11 @@
-using Quotinator.Core.Models;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Tests.Models;
 
 [TestClass]
 public class QuoteTests
 {
-    private static Quote BuildMinimal() => new()
+    private static SourceQuote BuildMinimal() => new()
     {
         Id = "123e4567-e89b-12d3-a456-426614174000",
         QuoteText = "Here's looking at you, kid.",
@@ -59,8 +59,8 @@ public class QuoteTests
     [TestMethod]
     public void Quote_AllProperties_CanBeSet()
     {
-        var translation = new QuoteTranslation { QuoteText = "Hier kijk ik naar je, kind.", Source = "Casablanca" };
-        var quote = new Quote
+        var translation = new SourceQuoteTranslation { QuoteText = "Hier kijk ik naar je, kind.", Source = "Casablanca" };
+        var quote = new SourceQuote
         {
             Id = "123e4567-e89b-12d3-a456-426614174000",
             QuoteText = "Here's looking at you, kid.",
@@ -71,7 +71,7 @@ public class QuoteTests
             Author = null,
             Type = "movie",
             Genres = ["drama", "romance"],
-            Translations = new Dictionary<string, QuoteTranslation> { ["nl"] = translation }
+            Translations = new Dictionary<string, SourceQuoteTranslation> { ["nl"] = translation }
         };
 
         Assert.AreEqual("en", quote.OriginalLanguage);
@@ -87,7 +87,7 @@ public class QuoteTests
     [TestMethod]
     public void Quote_PersonType_UsesAuthorNotCharacter()
     {
-        var quote = new Quote
+        var quote = new SourceQuote
         {
             Id = "223e4567-e89b-12d3-a456-426614174001",
             QuoteText = "We shall fight on the beaches.",
@@ -108,7 +108,7 @@ public class QuoteTests
     [TestMethod]
     public void Quote_BookType_HasBothAuthorAndCharacter()
     {
-        var quote = new Quote
+        var quote = new SourceQuote
         {
             Id = "323e4567-e89b-12d3-a456-426614174002",
             QuoteText = "All that is gold does not glitter.",

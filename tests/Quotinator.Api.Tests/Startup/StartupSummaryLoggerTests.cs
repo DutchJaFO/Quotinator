@@ -1,8 +1,9 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Quotinator.Api.Startup;
 using Quotinator.Api.Tests.Fakes;
-using Quotinator.Core.Data;
 using Quotinator.Core.Services;
+using Quotinator.Data.Database;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Api.Tests.Startup;
 

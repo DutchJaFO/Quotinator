@@ -1,12 +1,13 @@
 using System.Text.Json;
 using Quotinator.Core.Models;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Services;
 
 /// <summary>Loads <c>data/quotes.json</c> into memory at startup and serves read requests.</summary>
 public sealed class QuoteService : IQuoteService
 {
-    private readonly IReadOnlyList<Quote> _quotes;
+    private readonly IReadOnlyList<SourceQuote> _quotes;
 
     /// <summary>Initialises the service and loads quotes from <paramref name="dataPath"/> into memory.</summary>
     /// <param name="dataPath">Absolute or working-directory-relative path to <c>quotes.json</c>. Defaults to <c>data/quotes.json</c>.</param>
@@ -15,14 +16,14 @@ public sealed class QuoteService : IQuoteService
         _quotes = Load(dataPath);
     }
 
-    private static IReadOnlyList<Quote> Load(string path)
+    private static IReadOnlyList<SourceQuote> Load(string path)
     {
         if (!File.Exists(path))
             return [];
 
         var json = File.ReadAllText(path);
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        return JsonSerializer.Deserialize<List<Quote>>(json, options) ?? [];
+        return JsonSerializer.Deserialize<List<SourceQuote>>(json, options) ?? [];
     }
 
     /// <inheritdoc/>
@@ -44,7 +45,7 @@ public sealed class QuoteService : IQuoteService
         int? yearFrom = null,
         int? yearTo = null)
     {
-        IEnumerable<Quote> filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
+        IEnumerable<SourceQuote> filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
 
         if (character is not null)
             filtered = filtered.Where(q => q.Character is not null && Contains(q.Character, character));
@@ -107,9 +108,9 @@ public sealed class QuoteService : IQuoteService
         };
     }
 
-    private static IReadOnlyList<Quote> Filter(IReadOnlyList<Quote> quotes, string[]? types, string[]? genres, int? yearFrom = null, int? yearTo = null)
+    private static IReadOnlyList<SourceQuote> Filter(IReadOnlyList<SourceQuote> quotes, string[]? types, string[]? genres, int? yearFrom = null, int? yearTo = null)
     {
-        IEnumerable<Quote> result = quotes;
+        IEnumerable<SourceQuote> result = quotes;
 
         if (types is { Length: > 0 })
             result = result.Where(q => types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)));
@@ -135,7 +136,7 @@ public sealed class QuoteService : IQuoteService
     private static bool Contains(string haystack, string needle) =>
         haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);
 
-    private static QuoteResponse Localise(Quote q, string? lang)
+    private static QuoteResponse Localise(SourceQuote q, string? lang)
     {
         if (lang is not null
             && !lang.Equals(q.OriginalLanguage, StringComparison.OrdinalIgnoreCase)

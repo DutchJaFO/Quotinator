@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/.github/">
     <File Path=".github/dependabot.yml" />
+    <File Path=".github/workflows/_build-test.yml" />
     <File Path=".github/workflows/ci.yml" />
     <File Path=".github/workflows/release.yml" />
     <File Path=".github/PULL_REQUEST_TEMPLATE.md" />
@@ -66,6 +67,7 @@
     <File Path="docs/running-locally.md" />
     <File Path="docs/sql-safety.md" />
     <File Path="docs/logging.md" />
+    <File Path="docs/release-verification.md" />
     <File Path="docs/testing-policy.md" />
     <File Path="docs/troubleshooting.md" />
     <File Path="docs/vocabulary.md" />
@@ -78,6 +80,9 @@
     <File Path="docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md" />
     <File Path="docs/architecture-decisions/002-recordbase-on-all-tables.md" />
     <File Path="docs/architecture-decisions/003-unit-of-work-and-data-project-design-goals.md" />
+    <File Path="docs/architecture-decisions/004-quotinator-data-project-boundaries.md" />
+    <File Path="docs/architecture-decisions/005-quotinator-changelog-project-scope.md" />
+    <File Path="docs/architecture-decisions/006-sequential-test-execution-by-default.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
@@ -106,15 +111,16 @@
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/">
     <File Path="docs/milestones/v1-7-0/overview.md" />
-    <File Path="docs/milestones/v1-7-0/109-search-endpoint-plan.md" />
     <File Path="docs/milestones/v1-7-0/70-ci-workflow-plan.md" />
-    <File Path="docs/milestones/v1-7-0/115-dapper-refactor-plan.md" />
-    <File Path="docs/milestones/v1-7-0/111-flaky-test-plan.md" />
+    <File Path="docs/milestones/v1-7-0/73-audit-trail-plan.md" />
     <File Path="docs/milestones/v1-7-0/74-read-model-query-plan.md" />
     <File Path="docs/milestones/v1-7-0/75-master-detail-plan.md" />
     <File Path="docs/milestones/v1-7-0/76-one-to-one-plan.md" />
     <File Path="docs/milestones/v1-7-0/77-many-to-many-plan.md" />
-    <File Path="docs/milestones/v1-7-0/73-audit-trail-plan.md" />
+    <File Path="docs/milestones/v1-7-0/109-search-endpoint-plan.md" />
+    <File Path="docs/milestones/v1-7-0/109-search-bugs-plan.md" />
+    <File Path="docs/milestones/v1-7-0/111-flaky-test-plan.md" />
+    <File Path="docs/milestones/v1-7-0/115-dapper-core-refactor-plan.md" />
     <File Path="docs/milestones/v1-7-0/117-dotnet-env-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/audit/issue-117/">
@@ -130,6 +136,12 @@
     <File Path="docs/milestones/changelog-handling/82-per-language-files-handover.md" />
     <File Path="docs/milestones/changelog-handling/82-plan.md" />
     <File Path="docs/milestones/changelog-handling/handover.md" />
+  </Folder>
+  <Folder Name="/docs/milestones/developer-documentation/">
+    <File Path="docs/milestones/developer-documentation/overview.md" />
+    <File Path="docs/milestones/developer-documentation/93-testing-policy-plan.md" />
+    <File Path="docs/milestones/developer-documentation/94-living-milestone-plan.md" />
+    <File Path="docs/milestones/developer-documentation/104-changelog-checklist-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

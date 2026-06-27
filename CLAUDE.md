@@ -506,6 +506,8 @@ The `.slnx` format does **not** support nested `<Folder>` elements. Subfolders m
 
 Source: verified against [microsoft/vs-solutionpersistence](https://github.com/microsoft/vs-solutionpersistence) — their own `SolutionPersistence.slnx` uses this flat pattern.
 
+**Do not add solution folders for files that are already part of a project.** Source files (`.cs`, `.razor`, `.razor.cs`) inside a project directory are visible in Solution Explorer through the project node — listing them again in a `<Folder>` creates a name collision between the folder path and the project's unique identifier and causes the "Solution Folder with the same unique identifier already exists" error. Only use `<Folder>` entries for files that live outside any project (docs, scripts, schemas, config).
+
 Current folders and their contents:
 - `/Solution Items/` — `CLAUDE.md`, `README.md`, `SOURCES.md`, `CHANGELOG.md`
 - `/addon/` — all Home Assistant add-on files (`config.yaml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `icon.png`, `logo.png`)
@@ -540,7 +542,7 @@ The actual host, port, and file path are configured in the consumer environment,
 Run these checks before pushing any commit or tag. Tests alone do not cover all failure modes — the Docker build in particular is only verified here and in the release workflow.
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
-2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`
+2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`. The same 0-warnings policy that applies to `dotnet build` applies here — any compiler warning surfaced during test build is a blocking failure.
 3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
 
    **Before writing any entries, read `schemas/changelog.schema.json`** — it is the authoritative definition of every field and which fields are required. Do not infer the format from prior entries or git history.
@@ -583,8 +585,14 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    curl -s http://localhost:8080/api/v1/health
    curl -s http://localhost:8080/api/v1/version
    curl -s http://localhost:8080/api/v1/quotes/random
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=love"
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=Casablanca&field=source"
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=Churchill&field=author"
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=Rick&field=character"
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=love&type=person"
    ```
    Check that `/version` returns the expected version number — a missing `Directory.Build.props` in the build context silently produces `1.0.0` while `/health` still returns healthy.
+   The search queries cover: default full-text (`love` should return results), `field=source` (`Casablanca` should return results), and `field=author`, `field=character`, `type=person` — these three may return an empty `items` array with a `message` when the bundled dataset has no matching data; that is expected behaviour, not a bug.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 

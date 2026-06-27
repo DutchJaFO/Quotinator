@@ -1,11 +1,12 @@
 using Dapper;
-using Quotinator.Core.Data.Enums;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Models;
-using GenreEnum = Quotinator.Core.Data.Enums.Genre;
+using Quotinator.Data.Queries;
+using GenreEnum = Quotinator.Data.Entities.Genre;
 
 namespace Quotinator.Core.Data;
 

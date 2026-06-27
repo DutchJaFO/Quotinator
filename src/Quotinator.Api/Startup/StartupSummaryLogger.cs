@@ -1,5 +1,5 @@
-using Quotinator.Core.Data;
 using Quotinator.Core.Services;
+using Quotinator.Data.Database;
 
 namespace Quotinator.Api.Startup;
 

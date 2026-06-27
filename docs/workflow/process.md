@@ -50,12 +50,19 @@ All code and plan doc updates go on this branch. Milestone content does not go d
 
 At the start of every session working on a milestone:
 
-1. Check for new issues:
+1. **Check remote branches before assuming the local view is complete.** Another session (e.g. a cloud session running in parallel) may have pushed branches that are not present locally. Fetch before creating any new branch:
+   ```
+   git fetch --all
+   git branch -r | grep feature/
+   ```
+   Never create a new branch until you have confirmed no matching branch already exists on the remote. Creating a duplicate branch fragments work across two branches and makes merging unnecessarily difficult.
+
+2. Check for new issues:
    ```
    gh issue list --milestone "<Milestone Name>" --state open --json number,title
    ```
-2. Compare against `overview.md`. For any new issues: fetch the spec, create a plan doc, update the overview.
-3. Review the plan docs for issues being worked on today.
+3. Compare against `overview.md`. For any new issues: fetch the spec, create a plan doc, update the overview.
+4. Review the plan docs for issues being worked on today.
 
 ---
 
@@ -89,6 +96,20 @@ At the start of every session working on a milestone:
      Write the test as part of the issue if it does not yet exist.
    - **Live test fallback:** if no unit test is possible, document the exact command to run
      and the observable output that confirms the requirement is met.
+   - **External verification with audit trail:** when a requirement can only be verified by an
+     external tool or process (e.g. a cloud session, a deployed HA add-on, a CI run), do not
+     simply assert that it was verified. Capture the actual output as proof:
+     1. Create `docs/milestones/{slug}/audit/issue-{N}/` in the branch.
+     2. Write the raw command output to numbered log files (e.g. `log-1-build.txt`,
+        `log-2-tests.txt`).
+     3. Add a `README.md` in that folder summarising what was run, when, and what the result was.
+     4. Commit the audit folder to the branch. The closing comment on the GitHub issue then
+        references the audit folder as the source of evidence.
+
+     This pattern applies only when no unit test or locally-runnable command is feasible.
+     It is not a substitute for tests — it is the last resort when the execution environment
+     itself is the thing under test (e.g. a hook that installs tooling in a remote container).
+
    Checklist items start red (test failing or command not yet passing) and turn green as
    implementation progresses. A green item means the test passes or the command produces
    the expected output — not that the code looks right.

@@ -19,6 +19,12 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 ## Session start
 
+- [ ] Check remote branches before assuming the local view is complete — another session (e.g. a cloud session) may have created branches you do not have locally:
+  ```
+  git fetch --all
+  git branch -r | grep feature/
+  ```
+  Never create a new branch until you have confirmed no matching branch already exists on the remote.
 - [ ] Check for new issues: `gh issue list --milestone "<Name>" --state open --json number,title`
 - [ ] Update `overview.md` and create plan docs for any issues added since last session
 - [ ] For any new issue without a plan doc: confirm the no-plan-doc decision is logged in the GitHub issue and in `overview.md`
@@ -73,12 +79,34 @@ CI enforces build and test pass. The additional check before opening a PR:
 
 ## Milestone close
 
+Releases follow a two-stage model. See `docs/release-verification.md` for tier definitions (T1/T2/T3) and the full stage table.
+
 - [ ] All issues verified: `gh issue list --milestone "<Name>" --state open` returns empty
 - [ ] Build clean: `dotnet build --configuration Release` — 0 warnings, 0 errors
 - [ ] Tests pass: `dotnet test --configuration Release` — all tests pass, 0 warnings
-- [ ] Docker build succeeds: `docker build -f docker/Dockerfile -t quotinator:local .`
 - [ ] Changelogs updated (`CHANGELOG.md` and `addon/CHANGELOG.md`)
-- [ ] Version bumped (`src/Quotinator.Api/Quotinator.Api.csproj`, `addon/config.yaml`, both changelogs)
 - [ ] Final PR merged to `main` (without `--delete-branch` — developer deletes the branch manually if desired)
-- [ ] Pushed to `main` and tagged: `git tag vX.Y.Z && git push origin vX.Y.Z`
+
+### Beta tag (T1 + T2 gate)
+
+Push a beta tag when T1 and T2 are verified. Skip to Final tag only if the release has no T1 or T2 changes (confirmed explicitly).
+
+- [ ] T1 verified: app starts in VS without error; affected Razor pages render correctly
+- [ ] T2 verified: `docker build -f docker/Dockerfile -t quotinator:local .` succeeds; smoke-test commands return expected output
+- [ ] `addon/config.yaml version` set to beta version (e.g. `1.7.0-beta`)
+- [ ] `Directory.Build.props <Version>` set to beta version
+- [ ] Changelog beta entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep); `CHANGELOG.md` and `addon/CHANGELOG.md` regenerated
+- [ ] Push beta tag: `git tag vX.Y.Z-beta && git push origin vX.Y.Z-beta`
+- [ ] Confirm GitHub Actions release workflow completes; pre-release created on GitHub with correct Docker image
+
+### Final tag (T3 gate)
+
+Push the final tag after T3 is verified in the live HA add-on.
+
+- [ ] T3 verified: beta add-on installed in HA; all T3-classified requirements confirmed in the live supervisor
+- [ ] `addon/config.yaml version` bumped to final version (e.g. `1.7.0`)
+- [ ] `Directory.Build.props <Version>` bumped to final version
+- [ ] Changelog final entry promoted from beta; `CHANGELOG.md` and `addon/CHANGELOG.md` regenerated
+- [ ] Push final tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
+- [ ] Confirm GitHub Actions release workflow completes; full release created on GitHub; `latest` Docker tag updated
 - [ ] Milestone closed on GitHub: `gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed`

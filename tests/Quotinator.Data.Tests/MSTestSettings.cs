@@ -1,7 +1,7 @@
-using Dapper;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Quotinator.Data.Helpers;
 
-[assembly: Parallelize(Scope = ExecutionScope.MethodLevel)]
+[assembly: DoNotParallelize]
 
 namespace Quotinator.Data.Tests;
 
@@ -11,9 +11,5 @@ public static class AssemblySetup
 {
     /// <summary>Registers Dapper type handlers once for the entire test run.</summary>
     [AssemblyInitialize]
-    public static void RegisterTypeHandlers(TestContext _)
-    {
-        SqlMapper.AddTypeHandler(new GuidHandler());
-        SqlMapper.AddTypeHandler(new SafeDateHandler());
-    }
+    public static void Initialize(TestContext _) => DapperConfiguration.Configure();
 }

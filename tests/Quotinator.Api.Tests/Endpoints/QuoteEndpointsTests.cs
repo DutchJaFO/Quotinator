@@ -3,8 +3,8 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
-using Quotinator.Core.Data;
 using Quotinator.Core.Services;
+using Quotinator.Data.Database;
 
 namespace Quotinator.Api.Tests.Endpoints;
 

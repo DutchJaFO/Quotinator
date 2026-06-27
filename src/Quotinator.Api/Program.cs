@@ -14,9 +14,11 @@ using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
 using Quotinator.Core.Data;
-using Quotinator.Core.Data.Repositories;
-using Quotinator.Core.Data.TypeHandlers;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Database;
+using Quotinator.Data.Helpers;
+using Quotinator.Data.Import;
+using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Changelog.Services;
 using Quotinator.Core.Services;
@@ -331,6 +333,7 @@ var dbPath     = Path.Combine(dataDir, DataPaths.DatabaseFile);
 var backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0 } customBackupPath
     ? customBackupPath
     : Path.Combine(dataDir, DataPaths.BackupsFolder);
+var dbOptions         = new DatabaseOptions { DbPath = dbPath, BackupsPath = backupsDir };
 var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddTransient<IUnitOfWork>(sp =>
@@ -343,7 +346,7 @@ var earlyLogger        = earlyLoggerFactory.CreateLogger<Program>();
 var seedBatches        = BuildSeedBatches(bundledSourcesDir, importsDir, configPolicy, earlyLogger);
 builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepository>();
 builder.Services.AddSingleton<IDatabaseInitializer>(sp => new DatabaseInitializer(
-    connectionFactory, dbPath, backupsDir, seedBatches,
+    connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
     sp.GetRequiredService<IImportBatchRepository>(),
     sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
 builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));

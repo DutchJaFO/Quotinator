@@ -10,12 +10,17 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [109, 117],
+    "issues": [70, 109, 111, 115, 117],
     "highlights": [
       "De zoekfunctie geeft nu uitleg wanneer geen citaten aan uw filters voldoen, in plaats van stilzwijgend een lege lijst te retourneren."
     ],
     "added": [
       "Session-start hook voor Claude Code cloud-/remote-sessies installeert nu automatisch de .NET 10 SDK en dotnet-script — bouwen, testen en changelog-regeneratie kunnen nu volledig worden uitgevoerd zonder lokale terminal (issue #117)"
+    ],
+    "changed": [
+      "Alle Dapper-infrastructuur verplaatst van Quotinator.Core naar Quotinator.Data — DatabaseInitializer is nu generiek en accepteert elke migratielijst; Quotinator-specifieke migratie-SQL verplaatst naar QuotinatorMigrations in Quotinator.Core (issue #115)",
+      "Alle testprojecten gebruiken nu standaard sequentiële uitvoering — parallelle uitvoering is een expliciete opt-in op klasseniveau (ADR 006); Dapper type handler-registratie verplaatst naar [AssemblyInitialize] om race conditions bij parallelle testuitvoering te voorkomen (issue #111)",
+      "CI- en release-workflows delen nu één herbruikbare build/test-workflow (_build-test.yml) — bouwstappen worden niet meer gedupliceerd; releases volgen een tweefasig beta/definitief-model met expliciete T1/T2/T3-verificatieniveaus (issue #70)"
     ],
     "fixed": [
       "Het zoekeindpunt geeft nu een resultaatomhulsel terug (status, items, totalMatching, message) consistent met het /random-eindpunt — aanroepers kunnen nu NoResults onderscheiden van een leeg resultaat (issue #109)",

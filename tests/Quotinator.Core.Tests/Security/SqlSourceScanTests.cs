@@ -44,12 +44,12 @@ public class SqlSourceScanTests
     public void AllSqlStringLiterals_AreInCentralisedFiles()
     {
         // Files permitted to contain SQL DML string literals.
-        // DatabaseInitializer.cs exception: migration constants are intentionally frozen there.
+        // QuotinatorMigrations.cs: migration constants are frozen DDL/DML — intentionally here.
         var permittedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Sql.cs",
             "RepositorySql.cs",
-            "DatabaseInitializer.cs",
+            "QuotinatorMigrations.cs",
         };
 
         // Matches a quote character immediately followed by a DML keyword.

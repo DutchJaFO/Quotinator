@@ -1,4 +1,4 @@
-using Quotinator.Core.Data.Enums;
+using Quotinator.Data.Entities;
 using Quotinator.Core.Helpers;
 
 namespace Quotinator.Core.Tests.Helpers;

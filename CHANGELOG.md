@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-25 15:44 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-27 09:35 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 - Session-start hook for Claude Code cloud/remote sessions now installs the .NET 10 SDK and dotnet-script automatically — build, test, and changelog regeneration can now be fully executed without a local terminal (issue #117)
+
+### Changed
+- All Dapper infrastructure moved from Quotinator.Core into Quotinator.Data — DatabaseInitializer is now generic and accepts any migration list; Quotinator-specific migration SQL moved to QuotinatorMigrations in Quotinator.Core (issue #115)
+- All test projects now default to sequential execution — parallel execution is an explicit opt-in at the class level (ADR 006); Dapper type handler registration moved to [AssemblyInitialize] to eliminate race conditions in parallel test runs (issue #111)
+- CI and release workflows now share a single reusable build/test workflow (_build-test.yml) — build steps are no longer duplicated; releases follow a two-stage beta/final model with explicit T1/T2/T3 verification tiers (issue #70)
 
 ### Fixed
 - Search endpoint now returns a result envelope (status, items, totalMatching, message) consistent with the /random endpoint — callers can now distinguish NoResults from an empty result set (issue #109)
