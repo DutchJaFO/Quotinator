@@ -32,13 +32,12 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 #117  ─── (none) — ✅ complete
 #70   ─── (none) — open; rows 10–11 pending next beta→final release cycle
 #125  ─── (none) — open; independent fix in Program.cs
-#74   ─── (none)
+#73   ─── (none) — auth dependency removed 2026-06-27; uses User-Agent header via ICallerContext
+#74   ─── depends on #73 (repository base class takes IAuditWriter + ICallerContext from the start)
 #75   ─── depends on #74 (read-model pattern)
 #76   ─── depends on #74 (read-model pattern); transaction concern shared with #75
 #77   ─── depends on #74, #75, #76
-#121  ─── depends on #115 (structural groundwork, ✅ done) and patterns decision (#74/#75/#76/#77)
-#73   ─── depends on #74 (ICallerContext lives in Core; AuditWriter in Data — same layer as repository pattern work)
-         NOTE: auth dependency removed 2026-06-27; 'who' is now X-Agent header via ICallerContext
+#121  ─── depends on #115 (✅ done), #73 (audit in place), and patterns decision (#74/#75/#76/#77)
 ```
 
 ---
@@ -53,12 +52,12 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 | 4 | ✅ **#117** — .NET SDK hook | Complete |
 | 5 | ✅ **#70** — CI refactor (partial) | Code complete and in v1.7.0; rows 10–11 (beta-enforcement workflow test) pending next release cycle |
 | 6 | **#125** — Request log format fix | Independent; quick fix; the patch release that ships this is also the beta→final cycle that closes #70 rows 10–11 |
-| 7 | **#74** — Read-model pattern | Foundational for #75, #76, #77, and #121; #73 ICallerContext/AuditWriter live in same layer |
-| 8 | **#75** — Master/detail pattern | After #74; may add optional transaction parameter to `IRepository<T>` |
-| 9 | **#76** — 1:1 pattern | After #74; transaction concern shared with #75 — do close together |
-| 10 | **#77** — Many-to-many pattern | After #74, #75, #76 (all three referenced in the spec) |
-| 11 | **#73** — Audit trail | After #74–#77; AuditWriter integrates with the repository layer those issues establish; ICallerContext added at same time |
-| 12 | **#121** — Remove Dapper from SqliteQuoteService | After #74–#77 and #73; repository pattern established, audit integration in place |
+| 7 | **#73** — Audit trail | Before #74: `ICallerContext`, `IAuditWriter`, `AuditWriter`, and the `AuditEntries` migration must exist before repository base classes are written, so audit is built in from day one |
+| 8 | **#74** — Read-model pattern | After #73; repository base class receives `IAuditWriter` + `ICallerContext` in constructor |
+| 9 | **#75** — Master/detail pattern | After #74; may add optional transaction parameter to `IRepository<T>` |
+| 10 | **#76** — 1:1 pattern | After #74; transaction concern shared with #75 — do close together |
+| 11 | **#77** — Many-to-many pattern | After #74, #75, #76 (all three referenced in the spec) |
+| 12 | **#121** — Remove Dapper from SqliteQuoteService | After #73 (audit) + #74–#77 (patterns); all infrastructure in place |
 
 ---
 
@@ -76,8 +75,12 @@ Maintenance milestone for bugs and minor improvements. Issues target v1.7.x patc
 | #75 | Yes | New infrastructure; nothing currently calls it. |
 | #76 | Yes | New infrastructure; nothing currently calls it. |
 | #77 | Yes | New infrastructure; nothing currently calls it. |
-| #73 | Yes (after #74–#77) | Unblocked 2026-06-27; auth dependency removed; ICallerContext + AuditWriter integrate with the repository layer established by #74–#77. |
-| #121 | Yes (after #73) | Depends on repository pattern (#74–#77) and audit integration (#73). |
+| #73 | Yes | Independent; must merge before #74 so audit is in the repository base class from the start. |
+| #74 | Yes (after #73) | New infrastructure; nothing currently calls it. |
+| #75 | Yes (after #74) | New infrastructure. |
+| #76 | Yes (after #74) | New infrastructure. |
+| #77 | Yes (after #74–#76) | New infrastructure. |
+| #121 | Yes (after #73 + #74–#77) | Depends on audit integration and full repository pattern. |
 
 ---
 

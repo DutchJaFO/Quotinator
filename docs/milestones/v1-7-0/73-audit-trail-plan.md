@@ -37,22 +37,22 @@ Registered as scoped in DI. Two setters populate it per request:
 
 | Setter | When | Value |
 |---|---|---|
-| API middleware (Program.cs) | Every HTTP request | `X-Agent` header value, or `null` if absent |
+| API middleware (Program.cs) | Every HTTP request | `User-Agent` header value, or `null` if absent |
 | Blazor layout (`MainLayout.razor.cs`) | Every Blazor circuit request | `"ui"` |
 
 Repository write methods receive `ICallerContext` via constructor injection and read `Agent` when creating an `AuditEntry`.
 
-### `X-Agent` header
+### `User-Agent` header
 
-Optional on all API requests. Callers that want their operations attributed set it:
+`ICallerContext.Agent` is populated from the standard HTTP `User-Agent` request header — not a custom header. RFC 7231 defines `User-Agent` as the correct place to identify the software making a request. RFC 6648 deprecated the `X-` prefix precisely to prevent custom headers proliferating when a standard already exists. Callers set it as they already do with any HTTP client:
 
 ```
-X-Agent: magicmirror
-X-Agent: smoke-test
-X-Agent: home-assistant
+User-Agent: magicmirror
+User-Agent: smoke-test
+User-Agent: home-assistant
 ```
 
-**Header naming note:** `X-Agent` is a private extension header. RFC 6648 deprecated the `X-` prefix only for headers seeking IANA registration — not for private use. No conflict risk.
+No custom header to document. Callers that already set `User-Agent` (most HTTP clients do) are automatically identified.
 
 ### `AuditEntries` table
 
@@ -101,13 +101,15 @@ public static class AuditOperation
 
 ### Repository integration
 
-`IAuditWriter` (Quotinator.Data interface) has one method:
+`IAuditWriter` (Quotinator.Core interface) has one method:
 
 ```csharp
 Task WriteAsync(AuditEntry entry, IDbConnection connection, IDbTransaction transaction);
 ```
 
-Repository write methods call `IAuditWriter.WriteAsync` inside the same transaction as the operation they record. A failure to write the audit entry rolls back the operation — audit integrity is not optional.
+**The repository base class (#74) receives `IAuditWriter` and `ICallerContext` in its constructor and calls `WriteAsync` automatically on every write operation.** Concrete repositories inherit this behaviour — they do not wire audit individually. This is why #73 must be complete before #74 begins: every repository built in #74–#77 depends on the audit infrastructure being in place from the start.
+
+A failure to write the audit entry rolls back the triggering operation — audit integrity is not optional.
 
 ### Admin read endpoint
 
