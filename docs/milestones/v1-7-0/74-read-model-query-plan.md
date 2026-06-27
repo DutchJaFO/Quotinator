@@ -38,18 +38,22 @@
 
 ### 1. `Sql.Joins` — fragment helpers (in `Sql.cs`)
 
+Table names, column names, and aliases are quoted with `[…]` (SQLite bracket quoting). This neutralises injection even if a string literal is accidentally non-constant — a `]` inside a value breaks the identifier rather than escaping into SQL.
+
 ```csharp
 internal static class Joins
 {
     internal static string Inner(string rightTable, string rightAlias,
                                  string leftAlias,  string leftKey, string rightKey)
-        => $"INNER JOIN {rightTable} {rightAlias} ON {leftAlias}.{leftKey} = {rightAlias}.{rightKey}";
+        => $"INNER JOIN [{rightTable}] [{rightAlias}] ON [{leftAlias}].[{leftKey}] = [{rightAlias}].[{rightKey}]";
 
     internal static string Left(string rightTable, string rightAlias,
                                 string leftAlias,  string leftKey, string rightKey)
-        => $"LEFT JOIN {rightTable} {rightAlias} ON {leftAlias}.{leftKey} = {rightAlias}.{rightKey}";
+        => $"LEFT JOIN [{rightTable}] [{rightAlias}] ON [{leftAlias}].[{leftKey}] = [{rightAlias}].[{rightKey}]";
 }
 ```
+
+> **Rule:** `Sql.Joins.*` parameters must always be compile-time string literals — never user input, never runtime strings. Bracket quoting is a defence-in-depth measure, not a licence to pass dynamic values.
 
 ### 2. `Sql.Queries` — full query factory methods (in `Sql.cs`)
 
@@ -155,9 +159,26 @@ Quotinator.Data/
 
 ## SQL safety
 
-`Sql.Joins.Inner` and `Sql.Joins.Left` accept **table names and column names only** — these are developer-controlled metadata (string literals in strategy classes), not user input. They follow the same pattern as `TableName` resolved from `[Table]` attributes.
+**Identifier quoting:** `Sql.Joins.*` wraps every table name, alias, and column name in `[…]` (SQLite bracket quoting). A `]` inside a value breaks the identifier rather than escaping into SQL, providing defence-in-depth even if a literal is accidentally non-constant. Parameters must still always be compile-time string literals — bracket quoting is not a licence to pass dynamic values.
 
-`Sql.Queries.*` factory methods are covered by `SqlQueryGuardTests.AssembledQueryCases` — add a case for each new factory method.
+**`Sql.Queries.*` coverage:** every factory method must be added to `SqlQueryGuardTests.AssembledQueryCases`. The guard drives the method and asserts the output contains no vulnerable patterns (unparameterised string concatenation, comment injections, stacked statements).
+
+**`IJoinStrategy<TResult>` coverage:** `SqlQueryGuardTests` must also discover all concrete `IJoinStrategy<TResult>` implementations in `Quotinator.Data` via reflection, call `BuildSql()` on each, and run the output through the same vulnerability checks. This ensures no strategy class ships with unsafe SQL regardless of how it builds its query.
+
+```csharp
+// Sketch of the reflection-driven strategy scan in SqlQueryGuardTests
+var strategyTypes = typeof(Sql).Assembly.GetTypes()
+    .Where(t => !t.IsAbstract && !t.IsInterface)
+    .Where(t => t.GetInterfaces()
+        .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IJoinStrategy<>)));
+
+foreach (var type in strategyTypes)
+{
+    var instance = Activator.CreateInstance(type)!;
+    var sql = (string)type.GetMethod("BuildSql")!.Invoke(instance, null)!;
+    AssertNoVulnerablePatterns(sql, type.Name);
+}
+```
 
 ---
 
@@ -173,7 +194,9 @@ Quotinator.Data/
 | 6 | ⬜ | Integration test: Widget+Owner join returns correct read model fields | Integration test | `JoinQueryRepositoryTests.QueryAsync_WidgetWithOwner_MapsAllColumns` |
 | 7 | ⬜ | Integration test: LEFT JOIN returns null-safe read model when right side is absent | Integration test | `JoinQueryRepositoryTests.QueryAsync_LeftJoin_NullRightSide_ReturnedWithDefaults` |
 | 8 | ⬜ | `docs/data-access.md` created and covers all required topics | Code review | Doc exists; sections for IRepository vs join query, IJoinStrategy, Sql.Joins, Sql.Queries, read model rules |
-| 9 | ⬜ | No inline SQL outside `Sql.cs` — `SqlSourceScanTests` passes | Unit test | `SqlSourceScanTests` — all pass |
-| 10 | ⬜ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` |
-| 11 | ⬜ | All tests pass | Build | `dotnet test --configuration Release` |
-| 12 | ⬜ | App starts without error | T1 | User starts app in VS; confirms startup banner |
+| 9 | ⬜ | `Sql.Joins.*` output uses `[…]` bracket quoting on all identifiers | Unit test | `SqlQueryGuardTests` — assert brackets present in `Inner` and `Left` output |
+| 10 | ⬜ | `SqlQueryGuardTests` discovers all `IJoinStrategy<TResult>` implementations via reflection and asserts `BuildSql()` output passes vulnerability checks | Unit test | `SqlQueryGuardTests.AllJoinStrategies_BuildSql_PassesVulnerabilityCheck` |
+| 11 | ⬜ | No inline SQL outside `Sql.cs` — `SqlSourceScanTests` passes | Unit test | `SqlSourceScanTests` — all pass |
+| 12 | ⬜ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` |
+| 13 | ⬜ | All tests pass | Build | `dotnet test --configuration Release` |
+| 14 | ⬜ | App starts without error | T1 | User starts app in VS; confirms startup banner |
