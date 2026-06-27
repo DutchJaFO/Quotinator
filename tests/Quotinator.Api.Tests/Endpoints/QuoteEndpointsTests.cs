@@ -666,13 +666,13 @@ public class QuoteEndpointsTests
         Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
     }
 
-    /// <summary>decade not divisible by 10 on / returns 400.</summary>
+    /// <summary>decade not divisible by 10 on / returns 422 — semantic error, same as /random.</summary>
     [TestMethod]
-    public async Task GetAll_DecadeNotDivisibleByTen_ReturnsBadRequest()
+    public async Task GetAll_DecadeNotDivisibleByTen_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1941");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     // ── /search — year/decade filters ────────────────────────────────────
@@ -692,13 +692,13 @@ public class QuoteEndpointsTests
         Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
     }
 
-    /// <summary>decade not divisible by 10 on /search returns 400.</summary>
+    /// <summary>decade not divisible by 10 on /search returns 422 — semantic error, same as /random.</summary>
     [TestMethod]
-    public async Task Search_DecadeNotDivisibleByTen_ReturnsBadRequest()
+    public async Task Search_DecadeNotDivisibleByTen_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&decade=1941");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     // ── parameter binding errors ──────────────────────────────────────────
