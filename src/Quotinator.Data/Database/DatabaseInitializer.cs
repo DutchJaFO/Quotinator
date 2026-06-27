@@ -519,6 +519,15 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
                 }
 
                 await _importBatches.UpdateRecordCountAsync(importBatch.Id, fileQuoteCount);
+
+                await _auditWriter.WriteAsync(new AuditEntry
+                {
+                    TableName   = "Quotes",
+                    RecordId    = importBatch.Id.ToString("D").ToUpperInvariant(),
+                    Operation   = AuditOperation.BulkInsert,
+                    Agent       = _callerContext.Agent,
+                    PerformedAt = DateTime.UtcNow,
+                }, connection);
             }
         }
 
