@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-28 16:46 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-28 19:01 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Endpoint requests are now logged as a matched start and end pair — a short ID links both lines, making it easy to trace overlapping calls. Web page and asset requests are separated into their own log categories so the default output shows only API activity.
 - Validation errors on quote endpoints now return the correct HTTP error status code — filters with invalid values return 422, structurally invalid requests return 400. Clients can now detect errors by HTTP status code alone without parsing the response body.
 - Every write operation is now recorded in an audit log — see who did what, on which record, and when. Administrators can view and clear the log via the API.
+- Security: a log injection vulnerability (CWE-117) in the request logging middleware was identified and fixed — crafted request paths and HTTP methods could no longer forge fake log entries.
+- Security: the existing CVE-2025-6965 mitigation (SQLite aggregate query guard) was extended to four new projects added in this release; no user data was affected.
 
 ### Added
 - Audit trail: every write operation (insert, update, soft-delete, restore, hard-delete, purge, bulk import, reseed, reset) is recorded in an `AuditEntries` table with the table name, record ID, operation, caller agent, and timestamp (issue #73)
@@ -40,7 +42,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Validation errors on quote endpoints now return 4xx status codes — unrecognised genre or type returns 422, decade not divisible by 10 returns 422, impossible year range returns 422, oversized or suspicious filter values return 400; previously all returned 200 with an error envelope in the body (issue #126)
 - Invalid values for numeric parameters (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) now return 422; the error detail names the specific parameter that failed (issue #126)
 - REST API page now lists the audit log endpoints (`GET` and `DELETE /api/v1/admin/audit`) in the admin section (issue #73)
-- Request logging middleware now strips newline characters from URLs before logging — prevents log forging via crafted request paths (CWE-117; flagged by CodeQL)
+- Request logging middleware now strips newline characters from HTTP method and URL before logging — prevents log forging via crafted request paths or methods (CWE-117; flagged by CodeQL)
+- CVE-2025-6965 mitigation extended to `Quotinator.Engine`, `Quotinator.Data.Testing`, `Quotinator.Engine.Tests`, and `Quotinator.Data.Testing.Tests` — four new projects added in this release carry the same transitive `SQLitePCLRaw.lib.e_sqlite3` dependency; the existing aggregate query guard covers all SQL in these projects
 
 ---
 
