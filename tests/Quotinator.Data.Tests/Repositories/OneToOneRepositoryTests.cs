@@ -1,74 +1,16 @@
 using Dapper;
-using Dapper.Contrib.Extensions;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Example.Common;
+using Quotinator.Data.Example.OneToOne;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Tests.Repositories;
 
-// Shared-PK detail: Id must equal the parent Widget's Id.
-// Public so Dapper's expression trees can instantiate it.
-[Table("WidgetDetails")]
-public sealed class WidgetDetail : RecordBase
-{
-    public string Notes { get; set; } = string.Empty;
-}
-
-// Separate-FK detail: own PK + WidgetId foreign key.
-[Table("WidgetDetailsFk")]
-public sealed class WidgetDetailFk : RecordBase
-{
-    public string WidgetId { get; set; } = string.Empty;
-    public string Notes    { get; set; } = string.Empty;
-}
-
 [TestClass]
 public class OneToOneRepositoryTests
 {
-    // ── Concrete repos used only in tests ─────────────────────────────────────
-
-    private sealed class SharedPkRepo(
-        IDbConnectionFactory factory,
-        IAuditWriter auditWriter,
-        ICallerContext callerContext,
-        SqliteRepository<WidgetDetail> detailRepo)
-        : SqliteOneToOneRepository<Widget, WidgetDetail>(factory, auditWriter, callerContext)
-    {
-        protected override SqliteRepository<WidgetDetail> ChildRepository => detailRepo;
-
-        // Child's Id must equal parent's Id before insert.
-        protected override IReadOnlyList<WidgetDetail> GetChildren(Widget parent)
-        {
-            var detail = new WidgetDetail { Notes = $"detail for {parent.Label}" };
-            // Replace the auto-generated Id with the parent's Id (shared PK).
-            return [new WidgetDetail
-            {
-                Id    = parent.Id,          // same PK as parent
-                Notes = detail.Notes
-            }];
-        }
-
-        public override Task<WidgetDetail?> GetDetailAsync(Guid parentId, IUnitOfWork? unitOfWork = null)
-            => GetDetailBySharedKeyAsync(parentId, unitOfWork);
-    }
-
-    // Separate-FK repo — children supply their own Id and a FK column.
-    private sealed class SeparateFkRepo(
-        IDbConnectionFactory factory,
-        IAuditWriter auditWriter,
-        ICallerContext callerContext,
-        SqliteRepository<WidgetDetailFk> detailRepo,
-        Func<Widget, WidgetDetailFk> buildDetail)
-        : SqliteOneToOneRepository<Widget, WidgetDetailFk>(factory, auditWriter, callerContext)
-    {
-        protected override SqliteRepository<WidgetDetailFk> ChildRepository => detailRepo;
-        protected override IReadOnlyList<WidgetDetailFk> GetChildren(Widget parent) => [buildDetail(parent)];
-
-        public override Task<WidgetDetailFk?> GetDetailAsync(Guid parentId, IUnitOfWork? unitOfWork = null)
-            => GetDetailByForeignKeyAsync("WidgetId", parentId, unitOfWork);
-    }
-
     // ── Setup / teardown ──────────────────────────────────────────────────────
 
     private string _tempDir       = null!;
@@ -76,8 +18,6 @@ public class OneToOneRepositoryTests
     private IDbConnectionFactory _factory  = null!;
     private AuditWriter _auditWriter       = null!;
     private CallerContext _callerContext   = null!;
-    private SqliteRepository<WidgetDetail>   _detailRepo   = null!;
-    private SqliteRepository<WidgetDetailFk> _detailFkRepo = null!;
 
     [TestInitialize]
     public void TestInitialize()
@@ -126,8 +66,6 @@ public class OneToOneRepositoryTests
         _factory       = new SqliteConnectionFactory(_dbPath);
         _callerContext = new CallerContext();
         _auditWriter   = new AuditWriter(_factory, _callerContext);
-        _detailRepo    = new SqliteRepository<WidgetDetail>  (_factory, _auditWriter, _callerContext);
-        _detailFkRepo  = new SqliteRepository<WidgetDetailFk>(_factory, _auditWriter, _callerContext);
     }
 
     [TestCleanup]
@@ -138,16 +76,11 @@ public class OneToOneRepositoryTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private SharedPkRepo MakeSharedPkRepo()
-        => new(_factory, _auditWriter, _callerContext, _detailRepo);
+    private WidgetWithDetailRepository   MakeSharedPkRepo()
+        => new(_factory, _auditWriter, _callerContext);
 
-    private SeparateFkRepo MakeSeparateFkRepo()
-        => new(_factory, _auditWriter, _callerContext, _detailFkRepo,
-            parent => new WidgetDetailFk
-            {
-                WidgetId = parent.Id.ToString("D").ToUpperInvariant(),
-                Notes    = $"fk-detail for {parent.Label}"
-            });
+    private WidgetWithFkDetailRepository MakeSeparateFkRepo()
+        => new(_factory, _auditWriter, _callerContext);
 
     private int Count(string table)
     {

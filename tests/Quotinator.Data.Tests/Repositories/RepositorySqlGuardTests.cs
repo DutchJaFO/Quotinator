@@ -33,6 +33,8 @@ public class RepositorySqlGuardTests
             ["HardDelete",           RepositorySql.HardDelete(t)],
             ["Purge",                RepositorySql.Purge(t)],
             ["SelectByForeignKey",   RepositorySql.SelectByForeignKey(t, "ParentId")],
+            ["SelectJunctionRow",    RepositorySql.SelectJunctionRow(t, "LeftId", "RightId")],
+            ["SelectByIds",          RepositorySql.SelectByIds(t)],
 
             // Audit factory methods — all four filter-flag combinations.
             ["Audit.SelectPaged(false,false)", Sql.Audit.SelectPaged(false, false)],

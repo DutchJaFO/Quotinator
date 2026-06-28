@@ -1,20 +1,13 @@
 using Dapper;
-using Dapper.Contrib.Extensions;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Example.Common;
+using Quotinator.Data.Example.MasterDetail;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Tests.Repositories;
-
-// Public so Dapper's dynamically compiled expression trees can instantiate it.
-[Table("WidgetLines")]
-public sealed class WidgetLine : RecordBase
-{
-    public string ParentId { get; set; } = string.Empty;
-    public string Value    { get; set; } = string.Empty;
-}
 
 [TestClass]
 public class AggregateRepositoryTests

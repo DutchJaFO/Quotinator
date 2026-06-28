@@ -1,6 +1,7 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Example.Common;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;

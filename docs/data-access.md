@@ -11,6 +11,7 @@ This document covers the two data access patterns in `Quotinator.Data` and the t
 | `IRepository<T>` / `SqliteRepository<T>` | CRUD on a single, flat table |
 | `AggregateRepository<TParent, TChild>` | Parent table with a child collection written atomically |
 | `SqliteOneToOneRepository<TParent, TDetail>` | Parent table paired with exactly one detail row, written atomically and loaded by parent ID |
+| `ILinkRepository<TLeft, TRight>` / `SqliteLinkRepository<TLeft, TRight, TJunction>` | Many-to-many relationship: link, unlink, restore individual pairs, and load related collections via a junction table |
 | `JoinQueryRepository<TResult>` + `IJoinStrategy<TResult>` | Read-only query that joins two or more tables, or returns a projection (a subset or combination of columns) |
 
 Never reach for a join strategy for single-table reads — `IRepository<T>` is simpler and already tested.
@@ -153,6 +154,93 @@ public sealed class WidgetRepository(
 ```
 
 `InsertAsync(parent)` atomically writes the parent row, the detail row, and an audit entry for each. `GetDetailAsync(parentId)` returns the detail or `null` if none exists.
+
+---
+
+## Many-to-many relationships — `ILinkRepository<TLeft, TRight>`
+
+Use this pattern when two entity types can each relate to many instances of the other through a junction table.
+
+### Interface
+
+```csharp
+public interface ILinkRepository<TLeft, TRight>
+    where TLeft  : RecordBase
+    where TRight : RecordBase
+{
+    Task LinkAsync        (Guid leftId, Guid rightId, IUnitOfWork? unitOfWork = null);
+    Task UnlinkAsync      (Guid leftId, Guid rightId, IUnitOfWork? unitOfWork = null);
+    Task RestoreLinkAsync (Guid leftId, Guid rightId, IUnitOfWork? unitOfWork = null);
+    Task<IReadOnlyList<TRight>> GetRightAsync(Guid leftId,  IUnitOfWork? unitOfWork = null);
+    Task<IReadOnlyList<TLeft>>  GetLeftAsync (Guid rightId, IUnitOfWork? unitOfWork = null);
+}
+```
+
+The junction entity type (`TJunction`) is an implementation detail of the abstract base class; consumers inject `ILinkRepository<Widget, Tag>` without knowing which table backs it.
+
+### Junction table DDL
+
+Every junction table uses `RecordBase` and a `UNIQUE` constraint on the FK pair:
+
+```sql
+CREATE TABLE WidgetTags (
+    Id           TEXT    NOT NULL PRIMARY KEY,
+    WidgetId     TEXT    NOT NULL REFERENCES Widgets(Id),
+    TagId        TEXT    NOT NULL REFERENCES Tags(Id),
+    DateCreated  TEXT,
+    DateModified TEXT,
+    DateDeleted  TEXT,
+    IsDeleted    INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (WidgetId, TagId)
+);
+```
+
+### Implementing a concrete link repository
+
+Extend `SqliteLinkRepository<TLeft, TRight, TJunction>` and provide the three abstract members:
+
+```csharp
+public sealed class WidgetTagLinkRepository(
+    IDbConnectionFactory factory,
+    IAuditWriter auditWriter,
+    ICallerContext callerContext)
+    : SqliteLinkRepository<Widget, Tag, WidgetTag>(factory, auditWriter, callerContext)
+{
+    protected override string LeftFkColumn  => "WidgetId";
+    protected override string RightFkColumn => "TagId";
+
+    protected override WidgetTag CreateJunction(Guid leftId, Guid rightId) => new()
+    {
+        WidgetId = leftId.ToString("D").ToUpperInvariant(),
+        TagId    = rightId.ToString("D").ToUpperInvariant()
+    };
+}
+```
+
+The `LeftFkColumn` and `RightFkColumn` strings are also used via reflection to extract FK values from loaded junction rows — no additional abstract members needed.
+
+### Write semantics
+
+| Operation | Checks current state | Result |
+|-----------|---------------------|--------|
+| `LinkAsync` | No row → Insert; soft-deleted → Restore; active → no-op | Always idempotent |
+| `UnlinkAsync` | Active → SoftDelete; not found / already deleted → no-op | |
+| `RestoreLinkAsync` | Soft-deleted → Restore; not found / already active → no-op | |
+
+`INSERT OR IGNORE` is deliberately **not** used — it would bypass `InsertAsync` and produce no audit entry. The check-then-act pattern keeps every state change in the audit trail.
+
+### Cascade deletion
+
+`SqliteLinkRepository` does not cascade soft-deletes to junction rows when a linked entity is removed. Whether junction rows should follow depends on the domain; the concrete repository documents and implements its own cascade strategy.
+
+### Read queries — two round-trips
+
+`GetRightAsync` and `GetLeftAsync` each make exactly two SQL round-trips regardless of N:
+
+1. Load all active junction rows for the given ID (`RepositorySql.SelectByForeignKey`)
+2. Load all related entities by primary key list (`RepositorySql.SelectByIds` — Dapper expands `@ids`)
+
+Soft-deleted entity rows are excluded by the `IsDeleted = 0` filter on the entity table (step 2).
 
 ---
 

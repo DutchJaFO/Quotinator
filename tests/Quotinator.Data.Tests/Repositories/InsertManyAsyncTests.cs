@@ -1,8 +1,8 @@
 using Dapper;
-using Dapper.Contrib.Extensions;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Example.Common;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 

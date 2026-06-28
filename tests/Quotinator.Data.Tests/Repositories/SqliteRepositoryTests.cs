@@ -1,21 +1,13 @@
 using Dapper;
-using Dapper.Contrib.Extensions;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Example.Common;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Data.Tests.Repositories;
-
-// Public so Dapper's dynamically compiled expression trees can instantiate it.
-// Non-public types are inaccessible to Dapper's emitted assembly and silently map to null.
-[Table("Widgets")]
-public sealed class Widget : RecordBase
-{
-    public string Label { get; set; } = string.Empty;
-}
 
 [TestClass]
 public class SqliteRepositoryTests
