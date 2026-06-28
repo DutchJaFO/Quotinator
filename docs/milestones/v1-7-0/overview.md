@@ -90,6 +90,15 @@ Full verification table: [126-validation-status-codes-plan.md](126-validation-st
 
 ---
 
+### #121 — Remove Dapper from SqliteQuoteService / Core
+**Shipped in:** (next release)  
+T1 ✅ verified 2026-06-28 (app started in VS; schema v4, 788 quotes / 478 sources; `/api/v1/quotes/random` → 200; `/api/v1/admin/database/reset` → rebuild + reseed confirmed; startup banner clean)  
+T2 ✅ verified 2026-06-28 (`docker build -f docker/Dockerfile -t quotinator:local .` — clean build; also fixed Dockerfile to include `Quotinator.Engine` and `Quotinator.Changelog` in NuGet restore layer)
+
+Full verification table: [121-remove-dapper-from-core-plan.md](121-remove-dapper-from-core-plan.md)
+
+---
+
 ## Dependency Map
 
 ```
@@ -98,14 +107,14 @@ Full verification table: [126-validation-status-codes-plan.md](126-validation-st
 #109  ─── (none) — ✅ closed v1.7.0
 #117  ─── (none) — ✅ closed v1.7.0
 #70   ─── (none) — code complete v1.7.0; rows 10–11 pending next beta→final cycle
-#125  ─── (none) — code complete; pending next release + T1/T3 verification
-#126  ─── (none) — code complete; pending next release + T1 verification
-#73   ─── (none) — code complete; T1 ✅ T2 ✅ 2026-06-27; pending next release
-#74   ─── depends on #73 (repository base class receives IAuditWriter + ICallerContext from day one)
-#75   ─── depends on #74 (read-model pattern)
-#76   ─── depends on #74 (read-model pattern); transaction concern shared with #75
-#77   ─── depends on #74, #75, #76
-#121  ─── depends on #73 (audit in place) + #74–#77 (full repository pattern established)
+#125  ─── (none) — code complete; T1 ✅; pending next release + T3
+#126  ─── (none) — code complete; T1 ✅; pending next release
+#73   ─── (none) — code complete; T1 ✅ T2 ✅; pending next release
+#74   ─── depends on #73 — code complete; T1 ✅; pending next release
+#75   ─── depends on #74 — code complete; T1 ✅ T2 ✅; pending next release
+#76   ─── depends on #74 — code complete; T1 ✅ T2 ✅; pending next release
+#77   ─── depends on #74, #75, #76 — code complete; T1 ✅ T2 ✅; pending next release
+#121  ─── depends on #73 + #74–#77 — code complete; T1 ✅ T2 ✅; pending next release
 ```
 
 ---
@@ -122,22 +131,11 @@ Full verification table: [126-validation-status-codes-plan.md](126-validation-st
 | 6 | 🟡 **#125** — Request log format fix | Code complete; T1 ✅; close after next release + T3 confirmed |
 | 7 | 🟡 **#126** — Validation 4xx | Code complete; T1 ✅; close after next release |
 | 8 | 🟡 **#73** — Audit trail | Code complete; T1 ✅ T2 ✅; close after next release |
-| 9 | **#74** — Read-model pattern | After #73; repository base class receives `IAuditWriter` + `ICallerContext` in constructor |
+| 9 | 🟡 **#74** — Read-model pattern | Code complete; T1 ✅; pending release |
 | 10 | 🟡 **#75** — Master/detail pattern | Code complete; T1 ✅ T2 ✅; pending release |
 | 11 | 🟡 **#76** — 1:1 pattern | Code complete; T1 ✅ T2 ✅; pending release |
 | 12 | 🟡 **#77** — Many-to-many pattern | Code complete; T1 ✅ T2 ✅; pending release |
 | 13 | 🟡 **#121** — Remove Dapper from SqliteQuoteService | Code complete; T1 ✅ T2 ✅ 2026-06-28; pending next release |
-
----
-
-### #121 — Remove Dapper from SqliteQuoteService / Core
-**Shipped in:** (next release)  
-T1 ✅ verified 2026-06-28 (app started in VS; schema v4, 788 quotes / 478 sources; `/api/v1/quotes/random` → 200; `/api/v1/admin/database/reset` → rebuild + reseed confirmed; startup banner clean)  
-T2 ✅ verified 2026-06-28 (`docker build -f docker/Dockerfile -t quotinator:local .` — clean build; also fixed Dockerfile to include `Quotinator.Engine` and `Quotinator.Changelog` in NuGet restore layer)
-
-Full verification table: [121-remove-dapper-from-core-plan.md](121-remove-dapper-from-core-plan.md)
-
----
 
 ## PR Merge Plan
 
