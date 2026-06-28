@@ -218,6 +218,7 @@
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
     <Project Path="tests/Quotinator.Data.Example/Quotinator.Data.Example.csproj" />
     <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
+    <Project Path="tests/Quotinator.Engine.Tests/Quotinator.Engine.Tests.csproj" />
   </Folder>
   <Folder Name="/CVE/" />
   <Folder Name="/CVE/Quotinator.Changelog/">
@@ -240,5 +241,8 @@
   </Folder>
   <Folder Name="/CVE/Quotinator.Engine/">
     <File Path="src/Quotinator.Engine/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Engine.Tests/">
+    <File Path="tests/Quotinator.Engine.Tests/CVE/.gitkeep" />
   </Folder>
 </Solution>
