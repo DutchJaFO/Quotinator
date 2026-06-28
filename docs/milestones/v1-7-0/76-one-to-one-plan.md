@@ -2,7 +2,7 @@
 
 **Issue:** https://github.com/DutchJaFO/Quotinator/issues/76  
 **Milestone:** v1.7.0  
-**Status:** 🟡 Code complete — pending release | T1 ✅ T2 ⬜
+**Status:** 🟡 Code complete — pending release | T1 ✅ T2 ✅
 
 ---
 
