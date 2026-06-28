@@ -8,5 +8,5 @@ public static class AssemblySetup
 {
     /// <summary>Registers Dapper type handlers once for the entire test run.</summary>
     [AssemblyInitialize]
-    public static void Initialize(TestContext _) => DapperConfiguration.Configure();
+    public static void Initialize(TestContext _) => new DapperConfiguration().Configure();
 }

@@ -27,7 +27,7 @@ using Quotinator.Core.Services;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
 
-DapperConfiguration.Configure();
+new DapperConfiguration().Configure();
 
 var builder = WebApplication.CreateBuilder(args);
 
