@@ -47,6 +47,7 @@ jobs:
   build-and-push:
     name: Build & Push Docker Image
     needs: [enforce-beta-first, build-and-test]
+    if: ${{ always() && needs.build-and-test.result == 'success' }}
     runs-on: ubuntu-latest
 
     permissions:
