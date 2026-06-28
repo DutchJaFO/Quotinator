@@ -33,12 +33,13 @@ public class RequestLoggingMiddleware : IMiddleware
     /// <inheritdoc/>
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
-        var id  = Guid.NewGuid().ToString("N")[..8];
-        var url = SanitiseForLog(context.Request.Path + context.Request.QueryString.Value);
+        var id     = Guid.NewGuid().ToString("N")[..8];
+        var method = SanitiseForLog(context.Request.Method);
+        var url    = SanitiseForLog(context.Request.Path + context.Request.QueryString.Value);
         var (tag, isDebug) = Categorise(context.Request.Path.Value ?? string.Empty);
 
         Log(isDebug, "{Tag:l} {Id:l} {Method:l} {Url:l}",
-            tag, id, context.Request.Method, url);
+            tag, id, method, url);
 
         var sw = Stopwatch.StartNew();
         try
@@ -49,7 +50,7 @@ public class RequestLoggingMiddleware : IMiddleware
         {
             sw.Stop();
             Log(isDebug, "{Tag:l} {Id:l} {Method:l} {Url:l} → {Status} in {Ms}ms",
-                tag, id, context.Request.Method, url,
+                tag, id, method, url,
                 context.Response.StatusCode, sw.ElapsedMilliseconds);
         }
     }
