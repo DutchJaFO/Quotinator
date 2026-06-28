@@ -11,6 +11,17 @@
   },
   "releases": [
     {
+      "version": "1.7.2-beta",
+      "date": "2026-06-28",
+      "issues": [],
+      "highlights": [
+        "Interne verbeteringen — geen zichtbare wijzigingen voor de gebruiker."
+      ],
+      "changed": [
+        "Versiestring gecorrigeerd — de definitieve Docker-image van v1.7.1 rapporteerde 1.7.1-beta door een gemiste versieverhoging vóór het taggen; v1.7.2 bevat de juiste versiestring"
+      ]
+    },
+    {
       "version": "1.7.1",
       "date": "2026-06-28",
       "issues": [73, 74, 75, 76, 77, 121, 125, 126],

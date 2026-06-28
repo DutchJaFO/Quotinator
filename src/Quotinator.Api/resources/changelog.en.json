@@ -4,6 +4,17 @@
   "machineTranslated": false,
   "releases": [
     {
+      "version": "1.7.2-beta",
+      "date": "2026-06-28",
+      "issues": [],
+      "highlights": [
+        "Internal improvements — no user-facing changes."
+      ],
+      "changed": [
+        "Version string corrected — v1.7.1 final Docker image reported 1.7.1-beta due to a missed version bump before tagging; v1.7.2 carries the correct version string"
+      ]
+    },
+    {
       "version": "1.7.1",
       "date": "2026-06-28",
       "issues": [73, 74, 75, 76, 77, 121, 125, 126],

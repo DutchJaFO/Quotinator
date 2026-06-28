@@ -1,5 +1,5 @@
 name: Quotinator
-version: "1.7.1"
+version: "1.7.2-beta"
 slug: quotinator
 description: Self-hosted quote REST API serving real, verified quotes from films, books, TV, and famous people.
 url: https://github.com/DutchJaFO/Quotinator
