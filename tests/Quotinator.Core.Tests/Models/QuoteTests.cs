@@ -1,4 +1,4 @@
-using Quotinator.Data.Import;
+using Quotinator.Core.Import;
 
 namespace Quotinator.Core.Tests.Models;
 

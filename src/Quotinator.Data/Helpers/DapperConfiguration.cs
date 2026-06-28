@@ -1,17 +1,10 @@
-using Dapper;
-using Quotinator.Data.Entities;
-
 namespace Quotinator.Data.Helpers;
 
-/// <summary>Registers Dapper type handlers for Quotinator's domain types. Call <see cref="Configure"/> once at application startup.</summary>
-public static class DapperConfiguration
+/// <summary>
+/// Default concrete <see cref="DatabaseConfiguration"/> that registers only the generic infrastructure handlers
+/// (<see cref="GuidHandler"/>, <see cref="SafeDateHandler"/>). Domain-specific enum handlers are registered by
+/// <c>QuotinatorDapperConfiguration</c> in <c>Quotinator.Engine</c>.
+/// </summary>
+public sealed class DapperConfiguration : DatabaseConfiguration
 {
-    /// <summary>Registers all <see cref="Quotinator.Data.Models.SafeValue{T}"/> type handlers with the global Dapper SqlMapper.</summary>
-    public static void Configure()
-    {
-        SqlMapper.AddTypeHandler(new GuidHandler());
-        SqlMapper.AddTypeHandler(new SafeEnumHandler<QuoteType>());
-        SqlMapper.AddTypeHandler(new SafeEnumHandler<Genre>());
-        SqlMapper.AddTypeHandler(new SafeDateHandler());
-    }
 }

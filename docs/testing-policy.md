@@ -12,11 +12,17 @@ Every project in `src/` has a paired test project in `tests/` with the same name
 
 ```
 tests/
-  Quotinator.Api.Tests/          # Endpoint integration tests (WebApplicationFactory)
-  Quotinator.Changelog.Tests/    # Changelog schema and generation tests
-  Quotinator.Core.Tests/         # Unit and service tests
-  Quotinator.Data.Tests/         # SQLite integration tests (real DB, no fakes)
+  Quotinator.Api.Tests/             # Endpoint integration tests (WebApplicationFactory)
+  Quotinator.Changelog.Tests/       # Changelog schema and generation tests
+  Quotinator.Constants.Tests/       # Tests for route and constant definitions
+  Quotinator.Core.Tests/            # Unit tests for domain logic and in-memory service
+  Quotinator.Data.Example/          # Concrete example implementations of Data patterns (not a test runner)
+  Quotinator.Data.Testing.Tests/    # Tests for the Data.Testing helper library
+  Quotinator.Data.Tests/            # Integration tests for Data infrastructure (real SQLite, no fakes)
+  Quotinator.Engine.Tests/          # Integration tests for Engine (SqliteQuoteService, migrations)
 ```
+
+`Quotinator.Data.Example` is not a test runner — it contains concrete implementations of Data patterns used by test projects as realistic examples. It lives in `tests/` because it has no production use but is not itself an MSTest project.
 
 ### CVE folder rule
 

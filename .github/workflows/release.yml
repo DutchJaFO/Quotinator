@@ -13,15 +13,40 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  enforce-beta-first:
+    name: Enforce beta-before-final
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref, '-') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-tags: true
+          fetch-depth: 0
+
+      - name: Verify beta tag exists for this version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION_BASE="${VERSION#v}"
+          if ! git tag -l "v${VERSION_BASE}-*" | grep -q .; then
+            echo "ERROR: No beta tag found for ${VERSION}."
+            echo "A beta tag (e.g. v${VERSION_BASE}-beta) must be pushed and verified before tagging a final release."
+            exit 1
+          fi
+          echo "Beta tag found for ${VERSION}:"
+          git tag -l "v${VERSION_BASE}-*"
+
   build-and-test:
     name: Build & Test
+    needs: [enforce-beta-first]
+    if: ${{ always() && (needs.enforce-beta-first.result == 'success' || needs.enforce-beta-first.result == 'skipped') }}
     uses: ./.github/workflows/_build-test.yml
     with:
       test-filter: 'TestCategory!=Live'
 
   build-and-push:
     name: Build & Push Docker Image
-    needs: [build-and-test]
+    needs: [enforce-beta-first, build-and-test]
     runs-on: ubuntu-latest
 
     permissions:

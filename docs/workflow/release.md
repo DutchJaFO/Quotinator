@@ -74,7 +74,7 @@ gh issue list --state open --limit 100 --json number,title,labels,milestone
 
 Classify each open issue (legitimately open, deployment-pending, done-not-closed, or stale). Close any that are done but were never formally closed, following the closure criteria in `checklist.md`. This ensures the release does not ship while completed work sits unclosed.
 
-### Step 5 — Check for Dependabot PRs
+### Step 4 — Check for Dependabot PRs
 
 ```bash
 gh pr list --state open
@@ -88,7 +88,7 @@ git pull
 
 Add a dependency bump entry to the `unreleased` section if any Dependabot PRs were merged, then regenerate the changelogs again.
 
-### Step 6 — Check for issues and CVEs to include
+### Step 5 — Check for issues and CVEs to include
 
 ```bash
 gh issue list --state open --label bug
@@ -96,7 +96,7 @@ gh issue list --state open --label bug
 
 Review open bug issues and any active CVE tracking docs in `src/[project]/CVE/`. Confirm whether any should be included in this release. If yes, address them on the branch and update `unreleased` accordingly. Regenerate changelogs if anything was added.
 
-### Step 7 — Promote `unreleased` to a release entry and bump the version
+### Step 6 — Promote `unreleased` to a release entry and bump the version
 
 Once `unreleased` is complete and all Dependabot and issue checks are done:
 
@@ -126,7 +126,7 @@ dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quoti
 dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md
 ```
 
-### Step 8 — Run the pre-push checklist
+### Step 7 — Run the pre-push checklist and T1/T2 verification
 
 ```bash
 dotnet build --configuration Release          # 0 warnings, 0 errors
@@ -134,7 +134,7 @@ dotnet test  --configuration Release --verbosity normal   # all pass
 docker build -f docker/Dockerfile -t quotinator:local .  # must succeed
 ```
 
-Smoke-test the local image. **This is mandatory whenever any code was changed.** The only reason to skip it is a release that touches only content files (changelog, documentation) with zero code changes.
+Smoke-test the local image (**T2 gate — mandatory whenever any code was changed**). The only reason to skip this is a release that touches only content files (changelog, documentation) with zero code changes.
 
 ```bash
 docker run --rm -p 8080:8080 quotinator:local
@@ -143,7 +143,11 @@ curl -s http://localhost:8080/api/v1/version   # must return the new version
 curl -s http://localhost:8080/api/v1/quotes/random
 ```
 
-### Step 9 — Open a PR and merge to `main`
+Also confirm **T1** — start the app in Visual Studio and verify it starts without error and affected pages render correctly, for any change that touches `.razor` files, Blazor services, or middleware.
+
+See `docs/release-verification.md` for the full tier definitions and what each tier catches.
+
+### Step 8 — Open a PR and merge to `main`
 
 Push the branch and open a PR:
 
@@ -156,17 +160,34 @@ Do **not** use `Fixes #N`, `Closes #N`, or any GitHub auto-close keyword in the 
 
 Merge the PR once CI is green. Do **not** use `--delete-branch` — branch deletion is the developer's decision only.
 
-### Step 10 — Tag the release
+### Step 9 — Push the beta tag
+
+The release workflow enforces that a final tag cannot be pushed without a prior beta tag for the same version. This applies to every release — patch and milestone alike.
 
 After the PR is merged and `main` is up to date locally:
 
 ```bash
 git pull
+git tag vX.Y.Z-beta
+git push origin vX.Y.Z-beta
+```
+
+Confirm the GitHub Actions release workflow completes and a pre-release is created on GitHub with the correct Docker image.
+
+> **Environment note:** Claude Code Desktop can push tags directly. Claude Code cloud and mobile environments receive a 403 on tag pushes — if running there, push the tag from a local terminal.
+
+### Step 10 — Tag the final release (after T3 if required)
+
+For issues that require **T3 verification** (HA add-on behaviour — see `docs/release-verification.md`): install the beta add-on in HA and confirm the T3-classified requirements before pushing the final tag.
+
+For issues that do **not** require T3: the final tag may be pushed once the beta release workflow completes successfully and any T1/T2 verification is confirmed (Step 7).
+
+```bash
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-> **Environment note:** Claude Code Desktop can push tags directly. Claude Code cloud and mobile environments receive a 403 on tag pushes — if running there, push the tag from a local terminal.
+Confirm the GitHub Actions release workflow completes, the full release is created on GitHub, and the `latest` Docker tag is updated.
 
 ### Step 11 — Confirm the fix in the release build, then close the issue
 
@@ -174,8 +195,8 @@ An issue is only closed when the fix is confirmed working in the actual release 
 
 | Issue type | Confirmation required before closing |
 |---|---|
-| API / logic bug | Smoke-test against the local Docker image (Step 8) — confirm the specific failure no longer occurs |
-| Docker / container behaviour | Local Docker build and smoke-test (Step 8) |
+| API / logic bug | Smoke-test against the local Docker image (Step 7) — confirm the specific failure no longer occurs |
+| Docker / container behaviour | Local Docker build and smoke-test (Step 7) |
 | HA add-on behaviour (ingress, supervisor config, add-on panel, container restart) | Install the new release in the HA add-on and verify the behaviour there. These issues **cannot** be confirmed from a local Docker run alone. |
 | Documentation / content only | User reads the updated content and confirms it is correct |
 
@@ -195,7 +216,8 @@ Issues requiring HA add-on confirmation are tracked in the post-deploy verificat
 
 A milestone release follows Steps 2–11 above, with one difference:
 
-- The issue audit (Step 3) and Dependabot check (Step 5) are done at the start of the milestone's final release session, not inline — see the "Tagging a release" section in `CLAUDE.md` for the full sequence.
+- The issue audit (Step 3) and Dependabot check (Step 4) are done at the start of the milestone's final release session, not inline — see the "Tagging a release" section in `CLAUDE.md` for the full sequence.
+- The milestone close checklist in `checklist.md` contains the full beta/final gate sequence, including which T3 items to verify before the final tag.
 - After Step 11, close the milestone on GitHub:
   ```bash
   gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed
@@ -212,6 +234,7 @@ A milestone release follows Steps 2–11 above, with one difference:
 - Do not use `Fixes #N` or `Closes #N` in commit messages or PR bodies — these trigger GitHub auto-close and bypass the verification comment requirement
 - Do not bump `AssemblyVersion` or `FileVersion` manually — they are derived from `<Version>` in `Directory.Build.props`
 - Do not push a tag before the PR is merged and `main` is up to date
+- Do not push a final tag without a prior beta tag — the release workflow will fail; this applies to every release, patch and milestone alike
 - Do not skip the smoke-test when code was changed — it is mandatory, not optional
 - Do not close an issue based solely on CI passing or the tag being pushed — confirm the fix in the appropriate artefact (local Docker, or HA add-on for deployment-only issues)
 - Do not close an HA add-on issue from a local Docker run — those require confirmation in the live add-on

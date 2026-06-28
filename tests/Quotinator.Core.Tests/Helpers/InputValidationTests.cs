@@ -1,5 +1,5 @@
-using Quotinator.Data.Entities;
 using Quotinator.Core.Helpers;
+using Quotinator.Core.Models;
 
 namespace Quotinator.Core.Tests.Helpers;
 

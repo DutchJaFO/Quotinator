@@ -20,6 +20,17 @@ public interface IRepository<T> where T : RecordBase
     Task InsertAsync(T entity, IUnitOfWork? unitOfWork = null);
 
     /// <summary>
+    /// Inserts a collection of entities in a single operation.
+    /// </summary>
+    /// <param name="entities">Entities to insert.</param>
+    /// <param name="unitOfWork">Optional. When supplied, the inserts participate in the unit of work's transaction.</param>
+    /// <param name="strategy">
+    /// Controls whether all entities are inserted in one SQL round-trip (<see cref="InsertStrategy.Bulk"/>, default)
+    /// or individually per entity (<see cref="InsertStrategy.Sequential"/>).
+    /// </param>
+    Task InsertManyAsync(IEnumerable<T> entities, IUnitOfWork? unitOfWork = null, InsertStrategy strategy = InsertStrategy.Bulk);
+
+    /// <summary>
     /// Persists changes to an existing entity.
     /// Sets <see cref="RecordBase.DateModified"/> to the current UTC time before writing.
     /// </summary>

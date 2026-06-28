@@ -204,4 +204,64 @@ internal static class Sql
 
         internal const string DeleteAll = "DELETE FROM ImportBatches;";
     }
+
+    /// <summary>JOIN fragment helpers — assembles INNER JOIN and LEFT JOIN clauses with bracket-quoted identifiers.</summary>
+    /// <remarks>
+    /// Parameters must always be compile-time string literals — never user input, never runtime strings.
+    /// Bracket quoting is a defence-in-depth measure, not a licence to pass dynamic values.
+    /// </remarks>
+    internal static class Joins
+    {
+        /// <summary>Returns an INNER JOIN clause with all identifiers bracket-quoted.</summary>
+        internal static string Inner(string rightTable, string rightAlias, string leftAlias, string leftKey, string rightKey)
+            => $"INNER JOIN [{rightTable}] [{rightAlias}] ON [{leftAlias}].[{leftKey}] = [{rightAlias}].[{rightKey}]";
+
+        /// <summary>Returns a LEFT JOIN clause with all identifiers bracket-quoted.</summary>
+        internal static string Left(string rightTable, string rightAlias, string leftAlias, string leftKey, string rightKey)
+            => $"LEFT JOIN [{rightTable}] [{rightAlias}] ON [{leftAlias}].[{leftKey}] = [{rightAlias}].[{rightKey}]";
+    }
+
+    /// <summary>Full query factory methods for join queries — assembled from <see cref="Joins"/> fragments.</summary>
+    internal static class Queries
+    {
+        /// <summary>Canonical Widget-with-Owner join query — example of the <c>IJoinStrategy&lt;TResult&gt;</c> pattern.</summary>
+        internal static string WidgetWithOwner() => $"""
+            SELECT [w].[Id] AS WidgetId, [w].[Label],
+                   [o].[Name] AS OwnerName
+            FROM   [Widgets] [w]
+            {Joins.Inner("Owners", "o", "w", "OwnerId", "Id")}
+            WHERE  [w].[IsDeleted] = 0
+            """;
+    }
+
+    /// <summary>AuditEntries table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.AuditWriter"/>.</summary>
+    internal static class Audit
+    {
+        /// <summary>Removes all audit entries.</summary>
+        internal const string DeleteAll     = "DELETE FROM AuditEntries;";
+
+        /// <summary>Removes audit entries for a specific table name.</summary>
+        internal const string DeleteByTable = "DELETE FROM AuditEntries WHERE TableName = @table;";
+
+        // COUNT base — shared by CountPaged factory method below.
+        private const string CountPagedBase = "SELECT COUNT(*) FROM AuditEntries";
+
+        /// <summary>Paginated audit entry listing, newest first, with optional filters.</summary>
+        internal static string SelectPaged(bool filterTable, bool filterRecordId)
+            => "SELECT Id, TableName, RecordId, Operation, Agent, PerformedAt FROM AuditEntries" +
+               BuildWhere(filterTable, filterRecordId) +
+               " ORDER BY PerformedAt DESC LIMIT @pageSize OFFSET @offset;";
+
+        /// <summary>Total matching count for the audit list endpoint.</summary>
+        internal static string CountPaged(bool filterTable, bool filterRecordId)
+            => CountPagedBase + BuildWhere(filterTable, filterRecordId) + ";";
+
+        private static string BuildWhere(bool filterTable, bool filterRecordId)
+        {
+            var parts = new List<string>(2);
+            if (filterTable)    parts.Add("TableName = @table");
+            if (filterRecordId) parts.Add("RecordId = @recordId");
+            return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
+        }
+    }
 }

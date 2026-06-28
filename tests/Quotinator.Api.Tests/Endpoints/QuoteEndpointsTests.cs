@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
+using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 
@@ -51,31 +52,31 @@ public class QuoteEndpointsTests
         Assert.AreEqual(2, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
-    /// <summary>n=0 is rejected with 400.</summary>
+    /// <summary>n=0 is out of the valid range — semantically wrong, returns 422.</summary>
     [TestMethod]
-    public async Task GetRandom_NZero_ReturnsBadRequest()
+    public async Task GetRandom_NZero_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=0");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
-    /// <summary>n=101 is rejected with 400.</summary>
+    /// <summary>n=101 exceeds the maximum — semantically wrong, returns 422.</summary>
     [TestMethod]
-    public async Task GetRandom_NTooLarge_ReturnsBadRequest()
+    public async Task GetRandom_NTooLarge_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=101");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
-    /// <summary>A non-integer n is rejected with 400, not 500.</summary>
+    /// <summary>A non-integer n is the same kind of error as yearFrom=5f — returns 422.</summary>
     [TestMethod]
-    public async Task GetRandom_NNotInteger_ReturnsBadRequest()
+    public async Task GetRandom_NNotInteger_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=g");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.IsTrue(doc.RootElement.TryGetProperty("detail", out _));
     }
@@ -180,54 +181,54 @@ public class QuoteEndpointsTests
 
     // ── /random — filter validation in envelope ───────────────────────────
 
-    /// <summary>Unknown type value returns 200 envelope with status=InvalidType.</summary>
+    /// <summary>Unknown type value returns 422 envelope with status=InvalidType.</summary>
     [TestMethod]
-    public async Task GetRandom_UnknownType_ReturnsInvalidTypeEnvelope()
+    public async Task GetRandom_UnknownType_Returns422WithInvalidTypeEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?type=cartoon");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InvalidType", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.IsFalse(string.IsNullOrEmpty(doc.RootElement.GetProperty("message").GetString()));
     }
 
-    /// <summary>Unknown genre value returns 200 envelope with status=InvalidGenre.</summary>
+    /// <summary>Unknown genre value returns 422 envelope with status=InvalidGenre.</summary>
     [TestMethod]
-    public async Task GetRandom_UnknownGenre_ReturnsInvalidGenreEnvelope()
+    public async Task GetRandom_UnknownGenre_Returns422WithInvalidGenreEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?genre=notarealgenre");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InvalidGenre", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
-    /// <summary>Character filter longer than 200 chars returns envelope with status=InputTooLong.</summary>
+    /// <summary>Character filter longer than 200 chars returns 400 envelope with status=InputTooLong.</summary>
     [TestMethod]
-    public async Task GetRandom_CharacterTooLong_ReturnsInputTooLongEnvelope()
+    public async Task GetRandom_CharacterTooLong_Returns400WithInputTooLongEnvelope()
     {
         using var factory = CreateFactory();
         var longValue = new string('a', 201);
         var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/random?character={longValue}");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InputTooLong", doc.RootElement.GetProperty("status").GetString());
     }
 
-    /// <summary>Suspicious input in a text filter returns envelope with status=InvalidInput.</summary>
+    /// <summary>Suspicious input in a text filter returns 400 envelope with status=InvalidInput.</summary>
     [TestMethod]
-    public async Task GetRandom_SuspiciousCharacterInput_ReturnsInvalidInputEnvelope()
+    public async Task GetRandom_SuspiciousCharacterInput_Returns400WithInvalidInputEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?character=%27%20OR%201%3D1%20--");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
     }
@@ -316,28 +317,28 @@ public class QuoteEndpointsTests
         Assert.IsFalse(string.IsNullOrEmpty(doc.GetProperty("message").GetString()));
     }
 
-    /// <summary>Unknown type value returns 200 envelope with status=InvalidType.</summary>
+    /// <summary>Unknown type value returns 422 envelope with status=InvalidType.</summary>
     [TestMethod]
-    public async Task Search_UnknownType_ReturnsInvalidTypeEnvelope()
+    public async Task Search_UnknownType_Returns422WithInvalidTypeEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&type=cartoon");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         Assert.AreEqual("InvalidType", doc.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.GetProperty("items").GetArrayLength());
         Assert.IsFalse(string.IsNullOrEmpty(doc.GetProperty("message").GetString()));
     }
 
-    /// <summary>Unknown genre value returns 200 envelope with status=InvalidGenre.</summary>
+    /// <summary>Unknown genre value returns 422 envelope with status=InvalidGenre.</summary>
     [TestMethod]
-    public async Task Search_UnknownGenre_ReturnsInvalidGenreEnvelope()
+    public async Task Search_UnknownGenre_Returns422WithInvalidGenreEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&genre=notarealgenre");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         Assert.AreEqual("InvalidGenre", doc.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.GetProperty("items").GetArrayLength());
@@ -508,13 +509,58 @@ public class QuoteEndpointsTests
         Assert.IsTrue(doc.RootElement.TryGetProperty("totalPages", out _));
     }
 
-    /// <summary>page=0 is rejected with 400.</summary>
+    /// <summary>page=0 is semantically out of range — returns 422.</summary>
     [TestMethod]
-    public async Task GetAll_PageZero_ReturnsBadRequest()
+    public async Task GetAll_PageZero_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes?page=0");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>A non-integer page is the same kind of error as yearFrom=5f — returns 422.</summary>
+    [TestMethod]
+    public async Task GetAll_PageNotInteger_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?page=x");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>pageSize=0 is semantically out of range — returns 422.</summary>
+    [TestMethod]
+    public async Task GetAll_PageSizeZero_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=0");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>A non-integer pageSize is the same kind of error as yearFrom=5f — returns 422.</summary>
+    [TestMethod]
+    public async Task GetAll_PageSizeNotInteger_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=x");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>limit=0 on search is semantically out of range — returns 422.</summary>
+    [TestMethod]
+    public async Task Search_LimitZero_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&limit=0");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>A non-integer limit is the same kind of error as yearFrom=5f — returns 422.</summary>
+    [TestMethod]
+    public async Task Search_LimitNotInteger_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&limit=x");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     /// <summary>?type=person filters to person quotes only.</summary>
@@ -546,16 +592,28 @@ public class QuoteEndpointsTests
         }
     }
 
-    /// <summary>Unknown type on / silently returns empty result (no 400, no envelope).</summary>
+    /// <summary>Unknown type on / returns 422 envelope with status=InvalidType.</summary>
     [TestMethod]
-    public async Task GetAll_UnknownType_ReturnsEmptyPaginatedResult()
+    public async Task GetAll_UnknownType_Returns422WithInvalidTypeEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=cartoon");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
+        Assert.AreEqual("InvalidType", doc.RootElement.GetProperty("status").GetString());
+    }
+
+    /// <summary>Unknown genre on / returns 422 envelope with status=InvalidGenre.</summary>
+    [TestMethod]
+    public async Task GetAll_UnknownGenre_Returns422WithInvalidGenreEnvelope()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?genre=notarealgenre");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("InvalidGenre", doc.RootElement.GetProperty("status").GetString());
     }
 
     // ── /random — year/decade filters ────────────────────────────────────
@@ -613,29 +671,77 @@ public class QuoteEndpointsTests
         Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
     }
 
-    /// <summary>decade not divisible by 10 returns 200 envelope with status=InvalidInput.</summary>
+    /// <summary>decade=40 is shorthand for 1940–1949 — same result as decade=1940.</summary>
     [TestMethod]
-    public async Task GetRandom_DecadeNotDivisibleByTen_ReturnsInvalidInputEnvelope()
+    public async Task GetRandom_DecadeShorthand2Digit40_EquivalentTo1940s()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&decade=40");
+
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
+    }
+
+    /// <summary>decade not divisible by 10 returns 422 envelope with status=InvalidInput.</summary>
+    [TestMethod]
+    public async Task GetRandom_DecadeNotDivisibleByTen_Returns422WithInvalidInputEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?decade=1941");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
-    /// <summary>yearFrom greater than yearTo returns 200 envelope with status=InvalidInput.</summary>
+    /// <summary>yearFrom greater than yearTo returns 422 envelope with status=InvalidInput.</summary>
     [TestMethod]
-    public async Task GetRandom_YearFromGreaterThanYearTo_ReturnsInvalidInputEnvelope()
+    public async Task GetRandom_YearFromGreaterThanYearTo_Returns422WithInvalidInputEnvelope()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?yearFrom=1984&yearTo=1942");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
+    }
+
+    /// <summary>yearFrom greater than yearTo on /search returns 422.</summary>
+    [TestMethod]
+    public async Task Search_YearFromGreaterThanYearTo_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&yearFrom=1984&yearTo=1942");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>yearFrom greater than yearTo on / returns 422.</summary>
+    [TestMethod]
+    public async Task GetAll_YearFromGreaterThanYearTo_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?yearFrom=1984&yearTo=1942");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>An invalid lang value on /search is rejected with 400.</summary>
+    [TestMethod]
+    public async Task Search_InvalidLang_ReturnsBadRequest()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&lang=not-a-real-lang-code-xyz");
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>An invalid lang value on / is rejected with 400.</summary>
+    [TestMethod]
+    public async Task GetAll_InvalidLang_ReturnsBadRequest()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?lang=not-a-real-lang-code-xyz");
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // ── / (paginated list) — year/decade filters ─────────────────────────
@@ -654,13 +760,54 @@ public class QuoteEndpointsTests
         Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
     }
 
-    /// <summary>decade not divisible by 10 on / returns 400.</summary>
+    /// <summary>decade not divisible by 10 on / returns 422 — semantic error, same as /random.</summary>
     [TestMethod]
-    public async Task GetAll_DecadeNotDivisibleByTen_ReturnsBadRequest()
+    public async Task GetAll_DecadeNotDivisibleByTen_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1941");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>decade=80 is shorthand for 1980–1989 — same result as decade=1980.</summary>
+    [TestMethod]
+    public async Task GetAll_DecadeShorthand2Digit80_EquivalentTo1980s()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=80");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = doc.RootElement.GetProperty("items");
+        Assert.AreEqual(1, items.GetArrayLength());
+        Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>decade=40 is shorthand for 1940–1949 — same result as decade=1940.</summary>
+    [TestMethod]
+    public async Task GetAll_DecadeShorthand2Digit40_EquivalentTo1940s()
+    {
+        using var factory = CreateFactory();
+        var twoDigit  = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=40");
+        var fourDigit = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1940");
+
+        var two  = JsonDocument.Parse(await twoDigit.Content.ReadAsStringAsync()).RootElement;
+        var four = JsonDocument.Parse(await fourDigit.Content.ReadAsStringAsync()).RootElement;
+        Assert.AreEqual(four.GetProperty("items").GetArrayLength(),
+                        two.GetProperty("items").GetArrayLength(),
+                        "decade=40 must return the same count as decade=1940");
+    }
+
+    /// <summary>decade=00 is shorthand for 2000–2009 — valid, no results in fake data.</summary>
+    [TestMethod]
+    public async Task GetAll_DecadeShorthand2Digit00_ValidNoResults()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=00");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
     // ── /search — year/decade filters ────────────────────────────────────
@@ -680,12 +827,77 @@ public class QuoteEndpointsTests
         Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
     }
 
-    /// <summary>decade not divisible by 10 on /search returns 400.</summary>
+    /// <summary>decade not divisible by 10 on /search returns 422 — semantic error, same as /random.</summary>
     [TestMethod]
-    public async Task Search_DecadeNotDivisibleByTen_ReturnsBadRequest()
+    public async Task Search_DecadeNotDivisibleByTen_Returns422()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&decade=1941");
-        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    // ── parameter binding errors ──────────────────────────────────────────
+
+    /// <summary>Non-integer yearTo returns 422 — wrong value type is a semantic error.</summary>
+    [TestMethod]
+    public async Task Search_NonIntegerYearTo_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient()
+            .GetAsync("/api/v1/quotes/search?q=x&yearFrom=1980&yearTo=1981x");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>Non-integer yearFrom returns 422 — wrong value type is a semantic error.</summary>
+    [TestMethod]
+    public async Task GetRandom_NonIntegerYearFrom_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient()
+            .GetAsync("/api/v1/quotes/random?yearFrom=abc");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>Non-integer decade returns 422 — wrong value type is a semantic error.</summary>
+    [TestMethod]
+    public async Task GetAll_NonIntegerDecade_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient()
+            .GetAsync("/api/v1/quotes?decade=1980x");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>Error detail names the specific parameter that failed — not a generic list of all params.</summary>
+    [TestMethod]
+    public async Task GetRandom_NonIntegerYearFrom_DetailNamesParameter()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?yearFrom=abc");
+        var body = await response.Content.ReadAsStringAsync();
+        StringAssert.Contains(body, "yearFrom");
+        Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
+    }
+
+    /// <summary>Error detail names yearTo specifically — not a generic list of all params.</summary>
+    [TestMethod]
+    public async Task Search_NonIntegerYearTo_DetailNamesParameter()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&yearTo=1981x");
+        var body = await response.Content.ReadAsStringAsync();
+        StringAssert.Contains(body, "yearTo");
+        Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
+    }
+
+    /// <summary>Error detail names decade specifically — not a generic list of all params.</summary>
+    [TestMethod]
+    public async Task GetAll_NonIntegerDecade_DetailNamesParameter()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1980x");
+        var body = await response.Content.ReadAsStringAsync();
+        StringAssert.Contains(body, "decade");
+        Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
     }
 }

@@ -1,0 +1,519 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Dapper;
+using Dapper.Contrib.Extensions;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
+using Quotinator.Core.Import;
+using Quotinator.Core.Models;
+using Quotinator.Data.Connections;
+using Quotinator.Data.Database;
+using Quotinator.Data.Entities;
+using Quotinator.Data.Import;
+using Quotinator.Data.Models;
+using Quotinator.Data.Queries;
+using Quotinator.Data.Repositories;
+using Quotinator.Engine.Entities;
+using Quotinator.Engine.Repositories;
+
+namespace Quotinator.Engine.Database;
+
+/// <summary>
+/// Quotinator-specific database initialiser. Extends <see cref="DatabaseInitializer"/> with
+/// seeding logic for Quotinator domain tables (Quotes, Sources, Characters, People, Genres).
+/// </summary>
+public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
+{
+    private readonly IReadOnlyList<SeedBatch>    _batches;
+    private readonly IImportBatchRepository      _importBatches;
+
+    // API genre tag → database enum name (matches Genre enum values).
+    private static readonly IReadOnlyDictionary<string, string> GenreApiToDb =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["action"]      = "Action",
+            ["adventure"]   = "Adventure",
+            ["animation"]   = "Animation",
+            ["comedy"]      = "Comedy",
+            ["drama"]       = "Drama",
+            ["fantasy"]     = "Fantasy",
+            ["fiction"]     = "Fiction",
+            ["horror"]      = "Horror",
+            ["mystery"]     = "Mystery",
+            ["non-fiction"] = "NonFiction",
+            ["romance"]     = "Romance",
+            ["sci-fi"]      = "SciFi",
+            ["thriller"]    = "Thriller",
+        };
+
+    /// <summary>Initialises the instance with all dependencies required for Quotinator seeding.</summary>
+    public QuotinatorDatabaseInitializer(
+        IDbConnectionFactory           factory,
+        DatabaseOptions                options,
+        IReadOnlyList<SchemaMigration> migrations,
+        IReadOnlyList<SeedBatch>       batches,
+        IImportBatchRepository         importBatches,
+        IAuditWriter                   auditWriter,
+        ICallerContext                 callerContext,
+        ILogger<DatabaseInitializer>   logger)
+        : base(factory, options, migrations, auditWriter, callerContext, logger)
+    {
+        _batches       = batches;
+        _importBatches = importBatches;
+    }
+
+    /// <inheritdoc/>
+    protected override async Task OnInitialisedAsync(SqliteConnection connection)
+    {
+        await SeedIfEmptyAsync(connection);
+        await ReSeedGenresIfEmptyAsync(connection);
+        await LogDatabaseStatsAsync(connection);
+    }
+
+    /// <inheritdoc/>
+    protected override async Task OnReseedAsync(SqliteConnection connection)
+    {
+        var totalFiles = _batches.Sum(b => b.Files.Count);
+        Logger.LogInformation("[Database - Seed] reseed requested — clearing all data and reimporting from {Count} source file(s)...", totalFiles);
+
+        await SharedSeedLock.WaitAsync();
+        try
+        {
+            await TruncateDataAsync(connection);
+            await SeedIfEmptyInternalAsync(connection);
+        }
+        finally
+        {
+            SharedSeedLock.Release();
+        }
+
+        await LogDatabaseStatsAsync(connection);
+        await AuditWriter.WriteAsync(new AuditEntry
+        {
+            TableName   = "Database",
+            Operation   = AuditOperation.Reseed,
+            Agent       = CallerContext.Agent,
+            PerformedAt = DateTime.UtcNow,
+        });
+        Logger.LogInformation("[Database - Seed] reseed complete");
+    }
+
+    /// <inheritdoc/>
+    protected override async Task OnResetAsync(SqliteConnection connection)
+    {
+        var totalFiles = _batches.Sum(b => b.Files.Count);
+        Logger.LogInformation("[Database - Init] reset requested — rebuilding schema and reimporting from {Count} source file(s)...", totalFiles);
+
+        await SharedSeedLock.WaitAsync();
+        try
+        {
+            await DropAndRebuildAsync(connection);
+            await SeedIfEmptyInternalAsync(connection);
+        }
+        finally
+        {
+            SharedSeedLock.Release();
+        }
+
+        await LogDatabaseStatsAsync(connection);
+        await AuditWriter.WriteAsync(new AuditEntry
+        {
+            TableName   = "Database",
+            Operation   = AuditOperation.Reset,
+            Agent       = CallerContext.Agent,
+            PerformedAt = DateTime.UtcNow,
+        });
+        Logger.LogInformation("[Database - Init] reset complete");
+    }
+
+    /// <inheritdoc/>
+    public override Task<SeedPreviewResult> PreviewSeedAsync()
+    {
+        var filePreviews = new List<SeedFilePreview>();
+        var duplicates   = new List<SeedDuplicateRecord>();
+        var seenIds      = new Dictionary<string, string>(StringComparer.Ordinal);
+        var totalQuotes  = 0;
+
+        foreach (var batch in _batches)
+        {
+            foreach (var file in batch.Files)
+            {
+                var fileName = Path.GetFileName(file);
+                var quotes   = LoadQuotesFromFile(file);
+                filePreviews.Add(new SeedFilePreview(fileName, quotes.Count));
+                totalQuotes += quotes.Count;
+
+                foreach (var q in quotes)
+                {
+                    if (seenIds.TryGetValue(q.Id, out var firstFile))
+                    {
+                        duplicates.Add(new SeedDuplicateRecord(
+                            "quote", q.Id, TruncateLabel(q.QuoteText),
+                            Path.GetFileName(firstFile), fileName,
+                            batch.Policy.ForQuotes));
+                    }
+                    else
+                    {
+                        seenIds[q.Id] = file;
+                    }
+                }
+            }
+        }
+
+        return Task.FromResult(new SeedPreviewResult(
+            filePreviews,
+            duplicates,
+            totalQuotes,
+            seenIds.Count));
+    }
+
+    private async Task SeedIfEmptyAsync(SqliteConnection connection)
+    {
+        await SharedSeedLock.WaitAsync();
+        try
+        {
+            await SeedIfEmptyInternalAsync(connection);
+        }
+        finally
+        {
+            SharedSeedLock.Release();
+        }
+    }
+
+    private async Task SeedIfEmptyInternalAsync(SqliteConnection connection)
+    {
+        var count = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
+        if (count > 0) return;
+
+        if (_batches.Count == 0)
+        {
+            Logger.LogWarning("[Database - Seed] no source files configured — database will be empty");
+            return;
+        }
+
+        LastSeedDuplicates = [];
+
+        var seenIds        = new Dictionary<string, string>(StringComparer.Ordinal);
+        var sourceIndex    = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var characterIndex = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var personIndex    = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var duplicates     = new List<SeedDuplicateRecord>();
+
+        var now = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+
+        foreach (var batch in _batches)
+        {
+            foreach (var file in batch.Files)
+            {
+                var fileName    = Path.GetFileName(file);
+                var quotes      = LoadQuotesFromFile(file);
+                var importBatch = await CreateImportBatchAsync(file);
+
+                Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
+                    quotes.Count, fileName, batch.Label);
+
+                var fileQuoteCount = 0;
+
+                foreach (var q in quotes)
+                {
+                    if (seenIds.TryGetValue(q.Id, out var firstFile))
+                    {
+                        duplicates.Add(new SeedDuplicateRecord(
+                            "quote", q.Id, TruncateLabel(q.QuoteText),
+                            Path.GetFileName(firstFile), fileName,
+                            batch.Policy.ForQuotes));
+
+                        if (batch.Policy.ForQuotes == DuplicateResolutionPolicy.Skip)
+                        {
+                            Logger.LogDebug(
+                                "[Database - Seed] skipping duplicate quote {Id} in {File} (first seen in {First})",
+                                q.Id, fileName, Path.GetFileName(firstFile));
+                            continue;
+                        }
+
+                        Logger.LogDebug(
+                            "[Database - Seed] overwriting duplicate quote {Id} in {File} (was {First})",
+                            q.Id, fileName, Path.GetFileName(firstFile));
+
+                        await connection.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote,      new { id = q.Id });
+                        await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteForQuote, new { id = q.Id });
+
+                        var owSourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex, importBatch.Id);
+                        var owCharacterId = await GetOrCreateCharacterAsync(connection, q, owSourceId, characterIndex, importBatch.Id);
+                        var owPersonId    = await GetOrCreatePersonAsync(connection, q, personIndex, importBatch.Id);
+
+                        await connection.ExecuteAsync(
+                            Sql.Quotes.UpdateOnOverwrite,
+                            new
+                            {
+                                text    = q.QuoteText,
+                                lang    = q.OriginalLanguage,
+                                sid     = owSourceId,
+                                cid     = owCharacterId,
+                                pid     = owPersonId,
+                                batchId = importBatch.Id,
+                                mod     = now,
+                                id      = q.Id
+                            });
+
+                        seenIds[q.Id] = file;
+
+                        var owQuoteId = Guid.Parse(q.Id);
+                        await InsertTranslationsAsync(connection, q, owQuoteId, owSourceId, now);
+                        await InsertGenresAsync(connection, q, owQuoteId, now);
+                        continue;
+                    }
+
+                    seenIds[q.Id] = file;
+
+                    var sourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex, importBatch.Id);
+                    var characterId = await GetOrCreateCharacterAsync(connection, q, sourceId, characterIndex, importBatch.Id);
+                    var personId    = await GetOrCreatePersonAsync(connection, q, personIndex, importBatch.Id);
+                    var quoteId     = Guid.Parse(q.Id);
+
+                    await connection.ExecuteAsync(
+                        Sql.Quotes.Insert,
+                        new
+                        {
+                            Id               = q.Id,
+                            QuoteText        = q.QuoteText,
+                            OriginalLanguage = q.OriginalLanguage,
+                            SourceId         = sourceId,
+                            CharacterId      = characterId,
+                            PersonId         = personId,
+                            ImportBatchId    = importBatch.Id,
+                            DateCreated      = now
+                        });
+
+                    await InsertTranslationsAsync(connection, q, quoteId, sourceId, now);
+                    await InsertGenresAsync(connection, q, quoteId, now);
+                    fileQuoteCount++;
+                }
+
+                await _importBatches.UpdateRecordCountAsync(importBatch.Id, fileQuoteCount);
+
+                await AuditWriter.WriteAsync(new AuditEntry
+                {
+                    TableName   = "Quotes",
+                    RecordId    = importBatch.Id.ToString("D").ToUpperInvariant(),
+                    Operation   = AuditOperation.BulkInsert,
+                    Agent       = CallerContext.Agent,
+                    PerformedAt = DateTime.UtcNow,
+                }, connection);
+            }
+        }
+
+        LastSeedDuplicates = duplicates;
+
+        var dupCount = duplicates.Count;
+        Logger.LogInformation(
+            "[Database - Seed] seeding complete — {Unique} unique quotes from {Total} total ({Dups} duplicate{S})",
+            seenIds.Count, seenIds.Count + dupCount, dupCount, dupCount == 1 ? "" : "s");
+    }
+
+    private async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection)
+    {
+        var genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
+        if (genreCount > 0) return;
+
+        var quoteCount = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
+        if (quoteCount == 0) return;
+
+        if (_batches.Count == 0)
+        {
+            Logger.LogWarning("[Database - Seed] cannot re-seed genres — no source files configured");
+            return;
+        }
+
+        Logger.LogInformation("[Database - Seed] re-seeding genres from source files...");
+
+        var now      = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+        var inserted = 0;
+
+        foreach (var batch in _batches)
+        {
+            foreach (var file in batch.Files)
+            {
+                var quotes = LoadQuotesFromFile(file);
+                foreach (var q in quotes)
+                {
+                    foreach (var genre in q.Genres)
+                    {
+                        if (TryNormaliseGenre(genre, out var g))
+                        {
+                            await connection.ExecuteAsync(
+                                Sql.QuoteGenres.InsertWithExistsGuard,
+                                new { Id = Guid.NewGuid().ToString(), QuoteId = q.Id, Genre = g.ToString(), DateCreated = now });
+                            inserted++;
+                        }
+                    }
+                }
+            }
+        }
+
+        Logger.LogInformation("[Database - Seed] genre re-seed complete — {Count} genre rows processed", inserted);
+    }
+
+    private async Task LogDatabaseStatsAsync(SqliteConnection connection)
+    {
+        QuoteCount     = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountActive);
+        SourceCount    = await connection.ExecuteScalarAsync<int>(Sql.Sources.CountActive);
+        CharacterCount = await connection.ExecuteScalarAsync<int>(Sql.Characters.CountActive);
+        PeopleCount    = await connection.ExecuteScalarAsync<int>(Sql.People.CountActive);
+
+        Logger.LogInformation(
+            "[Database - Stats] {Quotes} quotes  {Sources} sources  {Characters} characters  {People} people",
+            QuoteCount, SourceCount, CharacterCount, PeopleCount);
+    }
+
+    private async Task InsertTranslationsAsync(
+        SqliteConnection connection, SourceQuote q, Guid quoteId, Guid sourceId, string now)
+    {
+        foreach (var (lang, t) in q.Translations)
+        {
+            await connection.ExecuteAsync(
+                Sql.QuoteTranslations.Insert,
+                new
+                {
+                    Id        = Guid.NewGuid().ToString(),
+                    QuoteId   = quoteId.ToString(),
+                    Language  = lang,
+                    QuoteText = t.QuoteText,
+                    DateCreated = now
+                });
+
+            if (t.Source is not null)
+            {
+                var exists = await connection.ExecuteScalarAsync<int>(
+                    Sql.SourceTranslations.CountForSource,
+                    new { sid = sourceId, lang });
+                if (exists == 0)
+                    await connection.InsertAsync(new SourceTranslation
+                    {
+                        SourceId = sourceId,
+                        Language = lang,
+                        Title    = t.Source
+                    });
+            }
+        }
+    }
+
+    private async Task InsertGenresAsync(SqliteConnection connection, SourceQuote q, Guid quoteId, string now)
+    {
+        foreach (var genre in q.Genres)
+        {
+            if (TryNormaliseGenre(genre, out var g))
+            {
+                await connection.ExecuteAsync(
+                    Sql.QuoteGenres.Insert,
+                    new { Id = Guid.NewGuid().ToString(), QuoteId = quoteId.ToString(), Genre = g.ToString(), DateCreated = now });
+            }
+        }
+    }
+
+    private async Task<ImportBatch> CreateImportBatchAsync(string filePath)
+    {
+        var batch = new ImportBatch
+        {
+            Name       = Path.GetFileName(filePath),
+            Type       = ImportBatchType.System.ToString(),
+            ImportedAt = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat)
+        };
+        await _importBatches.InsertAsync(batch);
+        return batch;
+    }
+
+    private static async Task<Guid> GetOrCreateSourceAsync(
+        SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId)
+    {
+        var typeStr = NormaliseType(q.Type);
+        var key     = $"{q.Source}|{typeStr}";
+        if (index.TryGetValue(key, out var existing)) return existing;
+
+        var id = Guid.NewGuid();
+        await connection.InsertAsync(new Source
+        {
+            Id            = id,
+            Title         = q.Source,
+            Type          = new SafeValue<QuoteType?>(typeStr, ParseQuoteType(q.Type)),
+            Date          = string.IsNullOrEmpty(q.Date) ? SafeDateValue.Empty : new SafeValue<DateTime?>(q.Date, null),
+            ImportBatchId = importBatchId
+        });
+
+        index[key] = id;
+        return id;
+    }
+
+    private static async Task<Guid?> GetOrCreateCharacterAsync(
+        SqliteConnection connection, SourceQuote q, Guid sourceId, Dictionary<string, Guid> index, Guid importBatchId)
+    {
+        if (string.IsNullOrWhiteSpace(q.Character)) return null;
+
+        var key = $"{sourceId}|{q.Character}";
+        if (index.TryGetValue(key, out var existing)) return existing;
+
+        var id = Guid.NewGuid();
+        await connection.InsertAsync(new Character
+        {
+            Id            = id,
+            SourceId      = sourceId,
+            Name          = q.Character,
+            ImportBatchId = importBatchId
+        });
+
+        index[key] = id;
+        return id;
+    }
+
+    private static async Task<Guid?> GetOrCreatePersonAsync(
+        SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId)
+    {
+        if (string.IsNullOrWhiteSpace(q.Author)) return null;
+
+        if (index.TryGetValue(q.Author, out var existing)) return existing;
+
+        var id = Guid.NewGuid();
+        await connection.InsertAsync(new Person
+        {
+            Id            = id,
+            Name          = q.Author,
+            ImportBatchId = importBatchId
+        });
+
+        index[q.Author] = id;
+        return id;
+    }
+
+    private static string NormaliseType(string raw) => ParseQuoteType(raw).ToString();
+
+    private static QuoteType ParseQuoteType(string raw)
+        => Enum.TryParse<QuoteType>(raw, ignoreCase: true, out var t) ? t : QuoteType.Unknown;
+
+    private static bool TryNormaliseGenre(string raw, out Genre result)
+    {
+        if (GenreApiToDb.TryGetValue(raw, out var dbName) &&
+            Enum.TryParse<Genre>(dbName, out result))
+            return true;
+        result = default;
+        return false;
+    }
+
+    private static List<SourceQuote> LoadQuotesFromFile(string filePath)
+    {
+        if (!File.Exists(filePath)) return [];
+
+        var json    = File.ReadAllText(filePath);
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var root    = JsonNode.Parse(json);
+
+        if (root is JsonArray)
+            return JsonSerializer.Deserialize<List<SourceQuote>>(json, options) ?? [];
+
+        var quotesNode = root?["quotes"];
+        if (quotesNode is null) return [];
+        return quotesNode.Deserialize<List<SourceQuote>>(options) ?? [];
+    }
+
+    private static string TruncateLabel(string text, int maxLen = 60)
+        => text.Length <= maxLen ? text : text[..maxLen] + "…";
+}

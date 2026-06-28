@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
+using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
+using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Tests.Endpoints;
 
@@ -21,6 +23,9 @@ public class AdminEndpointsTests
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
+                services.AddSingleton<IAuditWriter>(new NoOpAuditWriter());
+                services.AddSingleton<IAuditReader>(new NoOpAuditReader());
+                services.AddSingleton<ICallerContext>(new NoOpCallerContext());
             });
 
             // ConfigureAppConfiguration runs after all file-based sources (including
@@ -43,41 +48,21 @@ public class AdminEndpointsTests
 
     // ── GET /admin/database/seed/preview ─────────────────────────────────────
 
-    /// <summary>GET /admin/database/seed/preview returns 401 when AdminApiKey is not configured.</summary>
+    /// <summary>GET /admin/database/seed/preview is publicly accessible — no API key required.</summary>
     [TestMethod]
-    public async Task PreviewSeed_NoKeyConfigured_Returns401()
+    public async Task PreviewSeed_NoKey_Returns200()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/admin/database/seed/preview");
-        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
 
-    /// <summary>GET /admin/database/seed/preview returns 401 when the Authorization header is missing.</summary>
+    /// <summary>GET /admin/database/seed/preview returns 200 with the expected shape.</summary>
     [TestMethod]
-    public async Task PreviewSeed_MissingAuthHeader_Returns401()
+    public async Task PreviewSeed_Returns200WithPreviewShape()
     {
         using var factory = CreateFactory(TestKey);
         var response = await factory.CreateClient().GetAsync("/api/v1/admin/database/seed/preview");
-        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    /// <summary>GET /admin/database/seed/preview returns 401 when the wrong key is supplied.</summary>
-    [TestMethod]
-    public async Task PreviewSeed_WrongKey_Returns401()
-    {
-        using var factory = CreateFactory(TestKey);
-        var client = factory.CreateClient();
-        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Api-Key", "wrong-key");
-        var response = await client.GetAsync("/api/v1/admin/database/seed/preview");
-        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    /// <summary>GET /admin/database/seed/preview returns 200 with the expected shape when the correct key is supplied.</summary>
-    [TestMethod]
-    public async Task PreviewSeed_CorrectKey_Returns200WithPreviewShape()
-    {
-        using var factory = CreateFactory(TestKey);
-        var response = await CreateClientWithKey(factory).GetAsync("/api/v1/admin/database/seed/preview");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -85,37 +70,6 @@ public class AdminEndpointsTests
         Assert.IsTrue(doc.RootElement.TryGetProperty("totalQuotes",         out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("uniqueQuotes",        out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("crossFileDuplicates", out _));
-    }
-
-    /// <summary>GET /admin/database/seed/preview returns 401 when AdminApiKey is an empty string.</summary>
-    [TestMethod]
-    public async Task PreviewSeed_EmptyKeyConfigured_Returns401()
-    {
-        using var factory = CreateFactory(string.Empty);
-        var response = await factory.CreateClient().GetAsync("/api/v1/admin/database/seed/preview");
-        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    /// <summary>GET /admin/database/seed/preview returns 401 when the Authorization header is supplied instead of X-Api-Key.</summary>
-    [TestMethod]
-    public async Task PreviewSeed_WrongHeader_Returns401()
-    {
-        using var factory = CreateFactory(TestKey);
-        var client = factory.CreateClient();
-        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {TestKey}");
-        var response = await client.GetAsync("/api/v1/admin/database/seed/preview");
-        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    /// <summary>GET /admin/database/seed/preview returns 401 when X-Api-Key contains a Bearer prefix — clients migrating from OAuth may send this by mistake.</summary>
-    [TestMethod]
-    public async Task PreviewSeed_MalformedAuthHeader_Returns401()
-    {
-        using var factory = CreateFactory(TestKey);
-        var client = factory.CreateClient();
-        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Api-Key", $"Bearer {TestKey}");
-        var response = await client.GetAsync("/api/v1/admin/database/seed/preview");
-        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     // ── POST /admin/database/reseed ───────────────────────────────────────────

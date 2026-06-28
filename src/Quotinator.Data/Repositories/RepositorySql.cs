@@ -31,4 +31,26 @@ internal static class RepositorySql
     /// <summary>Purges all soft-deleted records from the table.</summary>
     internal static string Purge(string tableName)
         => $"DELETE FROM {tableName} WHERE IsDeleted = 1";
+
+    /// <summary>
+    /// Selects the active detail record whose <paramref name="fkColumn"/> matches the given parent ID.
+    /// Used by <see cref="SqliteOneToOneRepository{TParent,TDetail}"/> for separate-FK layouts.
+    /// </summary>
+    internal static string SelectByForeignKey(string tableName, string fkColumn)
+        => $"SELECT * FROM [{tableName}] WHERE [{fkColumn}] = @parentId AND [IsDeleted] = 0";
+
+    /// <summary>
+    /// Selects a junction row by the two FK columns — active or soft-deleted.
+    /// No <c>IsDeleted</c> filter: <see cref="SqliteLinkRepository{TLeft,TRight,TJunction}"/>
+    /// needs to see soft-deleted rows to decide whether to restore or insert.
+    /// </summary>
+    internal static string SelectJunctionRow(string tableName, string leftFkColumn, string rightFkColumn)
+        => $"SELECT * FROM [{tableName}] WHERE [{leftFkColumn}] = @leftId AND [{rightFkColumn}] = @rightId";
+
+    /// <summary>
+    /// Selects a set of active records by primary key list.
+    /// Dapper expands <c>@ids</c> from any <see cref="System.Collections.Generic.IEnumerable{T}"/> automatically.
+    /// </summary>
+    internal static string SelectByIds(string tableName)
+        => $"SELECT * FROM [{tableName}] WHERE [Id] IN @ids AND [IsDeleted] = 0";
 }

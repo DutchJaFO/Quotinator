@@ -13,10 +13,14 @@ using Quotinator.Api.Endpoints;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
-using Quotinator.Core.Data;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
-using Quotinator.Data.Helpers;
+using Quotinator.Engine.Database;
+using Quotinator.Engine.Helpers;
+using Quotinator.Engine.Repositories;
+using Quotinator.Engine.Services;
+using Quotinator.Api.Middleware;
+using Quotinator.Api.OpenApi;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
@@ -25,7 +29,7 @@ using Quotinator.Core.Services;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
 
-DapperConfiguration.Configure();
+new QuotinatorDapperConfiguration().Configure();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -100,6 +104,8 @@ builder.Services.AddOpenApi(options =>
         }
         return Task.CompletedTask;
     });
+
+    options.AddOperationTransformer<YearParameterSchemaTransformer>();
 });
 
 builder.Services.AddRateLimiter(options =>
@@ -322,6 +328,7 @@ if (isContainer)
     });
 }
 
+builder.Services.AddExceptionHandler<BadRequestExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
 builder.Services.AddSingleton<IChangelogService>(sp =>
@@ -338,18 +345,24 @@ var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
+builder.Services.AddSingleton<ICallerContext, CallerContext>();
+builder.Services.AddSingleton<IAuditWriter, AuditWriter>();
+builder.Services.AddSingleton<IAuditReader, AuditReader>();
 
 // Resolve seed batches before building the host — uses the early logger factory so errors
 // surface before the DI container starts up. Batches are captured into the lambda closure.
 var earlyLoggerFactory = LoggerFactory.Create(b => b.AddConsole());
 var earlyLogger        = earlyLoggerFactory.CreateLogger<Program>();
 var seedBatches        = BuildSeedBatches(bundledSourcesDir, importsDir, configPolicy, earlyLogger);
-builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepository>();
-builder.Services.AddSingleton<IDatabaseInitializer>(sp => new DatabaseInitializer(
+builder.Services.AddSingleton<Quotinator.Engine.Repositories.IImportBatchRepository, SqliteImportBatchRepository>();
+builder.Services.AddSingleton<IDatabaseInitializer>(sp => new QuotinatorDatabaseInitializer(
     connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
-    sp.GetRequiredService<IImportBatchRepository>(),
+    sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
+    sp.GetRequiredService<IAuditWriter>(),
+    sp.GetRequiredService<ICallerContext>(),
     sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
-builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));
+builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Engine.Services.SqliteQuoteService(connectionFactory));
+builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
 builder.Services.AddI18nText(options =>
@@ -462,34 +475,21 @@ app.UseStatusCodePages();
 app.UseRequestLocalization();
 app.UseRateLimiter();
 
-// Optional request logging for /api/v1/quotes/* — off by default so the supervisor log
-// stays clean. Enable with log_requests: true in the add-on config (or Quotinator__LogRequests=true).
-// Uses a dedicated logger category so it can be suppressed independently if needed.
-if (logRequests)
+// Populate ICallerContext.Agent from the User-Agent header for audit trail entries.
+// Only the value is read — the header name is not logged or stored anywhere.
+app.Use(async (context, next) =>
 {
-    var requestLogger = app.Services.GetRequiredService<ILoggerFactory>()
-        .CreateLogger("Quotinator.Requests");
+    var callerContext = context.RequestServices.GetRequiredService<ICallerContext>();
+    callerContext.Agent = context.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;
+    await next();
+});
 
-    app.Use(async (context, next) =>
-    {
-        if (!context.Request.Path.StartsWithSegments("/api/v1/quotes"))
-        {
-            await next();
-            return;
-        }
-
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        await next();
-        sw.Stop();
-
-        requestLogger.LogInformation("{Method} {Path}{Query} → {Status} in {Ms}ms",
-            context.Request.Method,
-            context.Request.Path,
-            context.Request.QueryString.Value,
-            context.Response.StatusCode,
-            sw.ElapsedMilliseconds);
-    });
-}
+// Optional request logging — logs every endpoint call as two lines (start + end) with a
+// per-request correlation ID. Off by default. Enable with log_requests: true in the add-on
+// config (or Quotinator__LogRequests=true). All endpoints are logged; header values are never
+// captured (X-Api-Key, Authorization, Cookie must not appear in logs).
+if (logRequests)
+    app.UseMiddleware<RequestLoggingMiddleware>();
 
 app.MapOpenApi();
 app.MapScalarApiReference();

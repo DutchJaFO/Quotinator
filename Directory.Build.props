@@ -1,9 +1,10 @@
 <Project>
 
   <PropertyGroup>
-    <Version>1.7.0</Version>
-    <AssemblyVersion>$(Version).0</AssemblyVersion>
-    <FileVersion>$(Version).0</FileVersion>
+    <Version>1.7.1-beta</Version>
+    <!-- AssemblyVersion and FileVersion require numeric-only; pin to base version when Version carries a prerelease suffix -->
+    <AssemblyVersion>1.7.1.0</AssemblyVersion>
+    <FileVersion>1.7.1.0</FileVersion>
     <Product>Quotinator</Product>
     <Authors>DutchJaFO</Authors>
     <Copyright>Copyright © 2026 DutchJaFO</Copyright>

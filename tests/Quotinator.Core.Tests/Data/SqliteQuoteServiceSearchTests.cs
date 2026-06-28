@@ -1,12 +1,14 @@
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
-using Quotinator.Core.Data;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
-using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.NoOps;
+using Quotinator.Engine.Database;
+using Quotinator.Engine.Repositories;
+using Quotinator.Engine.Services;
 
 namespace Quotinator.Core.Tests.Data;
 
@@ -78,10 +80,11 @@ public class SqliteQuoteServiceSearchTests
 
         _factory = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(_factory);
+        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         var batch         = new SeedBatch([_fixture], ManifestPolicy.HardcodedDefault, "search-fixture");
-        var db            = new DatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches, logger);
+        var db            = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
+                              NoOpAuditWriter.Instance, NoOpCallerContext.Instance, logger);
         await db.InitialiseAsync();
     }
 

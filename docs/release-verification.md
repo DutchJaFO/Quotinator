@@ -88,6 +88,7 @@ If an issue requires T3, it must go through a beta release before the final tag 
 | Final | `v1.7.0` | `1.7.0` | `1.7.0`, `1.7`, `1`, `latest` | Full release |
 
 **T1 + T2 must be verified before pushing a beta tag.**  
-**T3 must be verified before pushing a final tag.**
+**T3 must be verified before pushing a final tag.**  
+**A beta tag is mandatory for every release, without exception.**
 
-The only case where a final tag is pushed without a prior beta is an issue that has no T1 or T2 changes — i.e. every changed file is HA-supervisor-only and Docker/VS behaviour is provably unaffected. This is the exception, not the default; confirm explicitly before skipping the beta stage.
+The release workflow enforces this: pushing a final tag (e.g. `v1.7.0`) without a prior beta tag (e.g. `v1.7.0-beta`) for the same version will cause the workflow to fail immediately.

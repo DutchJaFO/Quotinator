@@ -2,39 +2,295 @@
 
 **Milestone:** v1.7.0  
 **Status:** Open  
-**Branch:** `claude/7-0-milestone-issues-8ubkfo`
+
+---
+
+## Depends on
+
+- **#73** (audit trail) — complete ✅
 
 ---
 
 ## Problem
 
-`IRepository<T>` assumes a single flat table. Queries that join two or more tables, or that return a projection (a subset or combination of columns), cannot be expressed through it:
-- `SELECT * FROM {TableName}` returns one table's columns; a join brings in a second table with overlapping column names (`Id`, `IsDeleted`, `DateCreated`) that collide in the Dapper mapping.
-- `T` is a `RecordBase` entity — it has no place to hold columns from a joined table.
-- Forcing joins through `IRepository` would break its single-responsibility.
+`IRepository<T>` targets one flat table. Queries that join two or more tables, or return a projection (a subset or combination of columns), cannot be expressed through it. The first real consumer is **#121** (`SqliteQuoteService` refactor), which joins `Quotes → Sources → Characters → People`.
 
-## Approach
-
-Introduce a **read-model query service** alongside (not inside) `IRepository`:
-- A *read model* is a plain class (not a `RecordBase`, not a table entity) shaped to match the result of a specific query.
-- A *query service* holds the hand-written Dapper query and returns the read model.
-- `IRepository` is unchanged.
-
-## Scope
-
-1. Define the convention in `Quotinator.Data` (folder structure, naming, base class or marker interface if needed)
-2. Add at least one canonical implementation when the first real join query is needed
-3. Document the pattern in `docs/data-access.md` or `docs/sql-safety.md`
-4. Add tests for the first concrete query service
+Consumers building repositories on top of `Quotinator.Data` also have no test helpers — no-op stubs and temp-database infrastructure are duplicated across three internal test projects and unavailable to external consumers.
 
 ---
 
-## Design decisions to make at implementation time
+## Design decisions (all confirmed)
 
-- **Folder**: likely `Quotinator.Data/Queries/` or `Quotinator.Data/ReadModels/` — decide based on what exists when this is worked
-- **Base class**: a bare POCO class is sufficient; a marker interface (`IReadModel`) may help with discoverability but is not required
-- **Multi-mapping**: evaluate Dapper's `QueryAsync<T1, T2, TResult>` vs single-column projection at implementation time
-- **SQL placement**: all SQL must live in `Sql.cs` as constants or factory methods — the read-model class holds no SQL
+| Decision | Choice |
+|----------|--------|
+| SQL fragment helpers | `Sql.Joins.Inner(...)` and `Sql.Joins.Left(...)` in `Sql.cs` — identifiers bracket-quoted |
+| Full query assembly | `Sql.Queries.*` factory methods in `Sql.cs`, assembled from `Sql.Joins.*` fragments |
+| Join abstraction | `IJoinStrategy<TResult>` interface — concrete strategy classes call `Sql.Queries.*` |
+| DI registration | Strategy registered as `IJoinStrategy<TResult>`; injected into query repository |
+| Projection | Caller specifies SELECT columns in the `Sql.Queries.*` factory method |
+| Read model POCOs | Plain classes (no `RecordBase`, no `[Table]`) in `Quotinator.Data/Models/` |
+| Strategy classes | In `Quotinator.Data/Queries/` alongside `Sql.cs` |
+| Test helpers | New `Quotinator.Data.Testing` project — public API, XML summaries, referenced only from test projects |
+| Documentation | New `docs/data-access.md` (referenced by #75 and #76); includes `Quotinator.Data.Testing` usage |
+| First concrete example | Test-only `Widget`/`Owner` pair — domain joins land in #121 |
+| `SqlQueryGuardTests` | `Sql.Queries.*` methods in `AssembledQueryCases`; reflection scan covers all `IJoinStrategy<TResult>` implementations |
+
+---
+
+## What gets built
+
+### 1. `Sql.Joins` — fragment helpers (in `Sql.cs`)
+
+Table names, column names, and aliases are quoted with `[…]` (SQLite bracket quoting). This neutralises injection even if a string literal is accidentally non-constant — a `]` inside a value breaks the identifier rather than escaping into SQL.
+
+```csharp
+internal static class Joins
+{
+    internal static string Inner(string rightTable, string rightAlias,
+                                 string leftAlias,  string leftKey, string rightKey)
+        => $"INNER JOIN [{rightTable}] [{rightAlias}] ON [{leftAlias}].[{leftKey}] = [{rightAlias}].[{rightKey}]";
+
+    internal static string Left(string rightTable, string rightAlias,
+                                string leftAlias,  string leftKey, string rightKey)
+        => $"LEFT JOIN [{rightTable}] [{rightAlias}] ON [{leftAlias}].[{leftKey}] = [{rightAlias}].[{rightKey}]";
+}
+```
+
+> **Rule:** `Sql.Joins.*` parameters must always be compile-time string literals — never user input, never runtime strings. Bracket quoting is a defence-in-depth measure, not a licence to pass dynamic values.
+
+### 2. `Sql.Queries` — full query factory methods (in `Sql.cs`)
+
+```csharp
+internal static class Queries
+{
+    // Example — #121 will add real domain queries here
+    internal static string WidgetWithOwner() => $"""
+        SELECT w.Id AS WidgetId, w.Label,
+               o.Name AS OwnerName
+        FROM   Widgets w
+        {Joins.Inner("Owners", "o", "w", "OwnerId", "Id")}
+        WHERE  w.IsDeleted = 0
+        """;
+}
+```
+
+### 3. `IJoinStrategy<TResult>` — interface (new file in `Quotinator.Data/Queries/`)
+
+```csharp
+/// <summary>Provides the SQL for a join query that returns <typeparamref name="TResult"/> read models.</summary>
+public interface IJoinStrategy<TResult>
+{
+    /// <summary>Returns the full parameterised SELECT … FROM … JOIN … SQL string.</summary>
+    string BuildSql();
+}
+```
+
+### 4. Concrete strategy class — example (in `Quotinator.Data/Queries/`)
+
+```csharp
+/// <summary>Join strategy for Widget with its Owner — canonical example for the pattern.</summary>
+public sealed class WidgetWithOwnerStrategy : IJoinStrategy<WidgetWithOwner>
+{
+    /// <inheritdoc/>
+    public string BuildSql() => Sql.Queries.WidgetWithOwner();
+}
+```
+
+### 5. Read model POCO — example (in `Quotinator.Data/Models/`)
+
+```csharp
+/// <summary>Read model returned by the Widget-with-Owner join query.</summary>
+public sealed class WidgetWithOwner
+{
+    /// <summary>Widget primary key.</summary>
+    public Guid   WidgetId  { get; init; }
+    /// <summary>Widget display label.</summary>
+    public string Label     { get; init; } = string.Empty;
+    /// <summary>Name of the owning entity.</summary>
+    public string OwnerName { get; init; } = string.Empty;
+}
+```
+
+### 6. `JoinQueryRepository<TResult>` — reusable base (in `Quotinator.Data/Repositories/`)
+
+Executes any `IJoinStrategy<TResult>`. Domain-specific repositories extend this or use it directly.
+
+```csharp
+/// <summary>Executes a join query defined by an <see cref="IJoinStrategy{TResult}"/>.</summary>
+public class JoinQueryRepository<TResult>(
+    IDbConnectionFactory        factory,
+    IJoinStrategy<TResult>      strategy)
+{
+    /// <summary>Returns all rows matching the strategy's SQL with optional Dapper parameters.</summary>
+    public async Task<IReadOnlyList<TResult>> QueryAsync(object? parameters = null)
+    {
+        using var conn = factory.CreateConnection();
+        conn.Open();
+        return (await conn.QueryAsync<TResult>(strategy.BuildSql(), parameters)).ToList();
+    }
+}
+```
+
+### 7. `Quotinator.Data.Testing` — new companion project
+
+A dedicated project for test infrastructure. Consumers add it as a test-only project reference. All types are `public` with XML `<summary>` tags. CS1591 is enabled (`<GenerateDocumentationFile>true</GenerateDocumentationFile>`) and treated as a warning-as-error so missing summaries fail the build — same policy as `Quotinator.Data` and `Quotinator.Core`.
+
+**Contents:**
+
+#### `NoOps/` — no-op stubs for all `Quotinator.Data` interfaces
+
+Consolidates the three duplicate copies currently spread across `Quotinator.Api.Tests`, `Quotinator.Core.Tests`, and `Quotinator.Data.Tests`. Each stub implements the interface with no-op behaviour suitable for unit tests that do not exercise audit or caller-context logic.
+
+```csharp
+/// <summary>No-op <see cref="IAuditWriter"/> for use in unit tests that do not exercise audit behaviour.</summary>
+public sealed class NoOpAuditWriter : IAuditWriter
+{
+    /// <summary>Shared singleton instance.</summary>
+    public static readonly NoOpAuditWriter Instance = new();
+    /// <inheritdoc/>
+    public Task WriteAsync(AuditEntry entry, IDbConnection connection, IDbTransaction? transaction = null) => Task.CompletedTask;
+    /// <inheritdoc/>
+    public Task WriteAsync(AuditEntry entry) => Task.CompletedTask;
+    /// <inheritdoc/>
+    public Task ClearAsync(string? table = null) => Task.CompletedTask;
+}
+
+// Similarly: NoOpAuditReader, NoOpCallerContext, NoOpDatabaseInitializer
+```
+
+#### `Fakes/` — configurable test doubles
+
+```csharp
+/// <summary>
+/// Configurable <see cref="IJoinStrategy{TResult}"/> for unit tests.
+/// Constructed with a SQL string; <see cref="BuildSql"/> returns it unchanged.
+/// </summary>
+public sealed class FakeJoinStrategy<TResult>(string sql) : IJoinStrategy<TResult>
+{
+    /// <inheritdoc/>
+    public string BuildSql() => sql;
+}
+```
+
+#### `Database/` — temp database helper
+
+Creates a real SQLite database in a temp directory, applies a caller-supplied migration set, and deletes everything on `Dispose`. Replaces the boilerplate currently repeated in every `[TestInitialize]` across the data and core test projects.
+
+```csharp
+/// <summary>
+/// Disposable temp SQLite database for integration tests.
+/// Creates a real database, applies the supplied migrations, and deletes all files on dispose.
+/// </summary>
+public sealed class TempDatabase : IDisposable
+{
+    /// <summary>Absolute path to the temp database file.</summary>
+    public string DbPath { get; }
+    /// <summary>Connection factory pointed at <see cref="DbPath"/>.</summary>
+    public IDbConnectionFactory ConnectionFactory { get; }
+
+    /// <summary>
+    /// Creates a temp database and applies <paramref name="migrations"/> in order.
+    /// </summary>
+    public TempDatabase(IReadOnlyList<string> migrations) { … }
+
+    /// <inheritdoc/>
+    public void Dispose() { … } // SqliteConnection.ClearAllPools(); Directory.Delete(tempDir, recursive: true)
+}
+```
+
+**Usage in a test:**
+
+```csharp
+[TestInitialize]
+public void Init()
+{
+    _db   = new TempDatabase(QuotinatorMigrations.All);
+    _repo = new SqliteRepository<Widget>(_db.ConnectionFactory, NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
+}
+
+[TestCleanup]
+public void Cleanup() => _db.Dispose();
+```
+
+**Existing no-op stub files to remove once consolidated:**
+- `tests/Quotinator.Api.Tests/Fakes/NoOpAuditStubs.cs`
+- `tests/Quotinator.Core.Tests/Helpers/AuditStubs.cs`
+- `tests/Quotinator.Data.Tests/Helpers/AuditStubs.cs`
+
+Each test project adds a project reference to `Quotinator.Data.Testing` instead.
+
+### 8. `docs/data-access.md` — new doc
+
+Covers:
+- When to use `IRepository<T>` vs a join query
+- `IJoinStrategy<TResult>` pattern: interface, strategy class, `Sql.Queries.*`, registration, injection
+- `Sql.Joins.*` fragment helpers and identifier-quoting rule
+- Read model naming and folder rules (no `RecordBase`, no `[Table]`, lives in `Models/`)
+- How to add a complex query with WHERE parameters
+- **`Quotinator.Data.Testing` usage guide** — `TempDatabase`, `NoOp*`, `FakeJoinStrategy<TResult>`
+- Cross-reference to #75 (master/detail), #76 (1:1), #77 (many-to-many)
+
+---
+
+## Folder structure after this issue
+
+```
+src/
+  Quotinator.Data/
+    Models/
+      AuditPageResult.cs          ← existing
+      WidgetWithOwner.cs          ← new (example read model)
+    Queries/
+      Sql.cs                      ← add Sql.Joins + Sql.Queries nested classes
+      IJoinStrategy.cs            ← new
+      WidgetWithOwnerStrategy.cs  ← new (example strategy)
+    Repositories/
+      JoinQueryRepository.cs      ← new (reusable base)
+  Quotinator.Data.Testing/        ← new project
+    NoOps/
+      NoOpAuditWriter.cs
+      NoOpAuditReader.cs
+      NoOpCallerContext.cs
+      NoOpDatabaseInitializer.cs
+    Fakes/
+      FakeJoinStrategy.cs
+    Database/
+      TempDatabase.cs
+tests/
+  Quotinator.Data.Tests/
+    Helpers/AuditStubs.cs         ← DELETE (replaced by Quotinator.Data.Testing)
+  Quotinator.Core.Tests/
+    Helpers/AuditStubs.cs         ← DELETE (replaced by Quotinator.Data.Testing)
+  Quotinator.Api.Tests/
+    Fakes/NoOpAuditStubs.cs       ← DELETE (replaced by Quotinator.Data.Testing)
+docs/
+  data-access.md                  ← new
+```
+
+---
+
+## SQL safety
+
+**Identifier quoting:** `Sql.Joins.*` wraps every table name, alias, and column name in `[…]` (SQLite bracket quoting). A `]` inside a value breaks the identifier rather than escaping into SQL, providing defence-in-depth even if a literal is accidentally non-constant. Parameters must still always be compile-time string literals.
+
+**`Sql.Queries.*` coverage:** every factory method must be added to `SqlQueryGuardTests.AssembledQueryCases`.
+
+**`IJoinStrategy<TResult>` coverage:** `SqlQueryGuardTests` discovers all concrete implementations in `Quotinator.Data` via reflection, calls `BuildSql()` on each, and runs the output through the same vulnerability checks.
+
+```csharp
+// Sketch of the reflection-driven strategy scan
+var strategyTypes = typeof(IJoinStrategy<>).Assembly.GetTypes()
+    .Where(t => !t.IsAbstract && !t.IsInterface)
+    .Where(t => t.GetInterfaces()
+        .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IJoinStrategy<>)));
+
+foreach (var type in strategyTypes)
+{
+    var instance = Activator.CreateInstance(type)!;
+    var sql      = (string)type.GetMethod("BuildSql")!.Invoke(instance, null)!;
+    AssertNoVulnerablePatterns(sql, type.Name);
+}
+```
 
 ---
 
@@ -42,10 +298,21 @@ Introduce a **read-model query service** alongside (not inside) `IRepository`:
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | Convention documented (`docs/data-access.md` or `docs/sql-safety.md`) | Code review | Doc exists; describes read-model naming, folder, and SQL placement rules |
-| 2 | ⬜ | At least one concrete read-model class and query service added | Code review | Class in correct folder; no `RecordBase` inheritance; SQL in `Sql.cs` |
-| 3 | ⬜ | Integration test covers the first concrete query service | Unit test | Test class + method names in verification (TBD at implementation) |
-| 4 | ⬜ | `SqlSourceScanTests` still passes | Unit test | `SqlSourceScanTests` — all pass |
-| 5 | ⬜ | Build clean — 0 warnings, 0 errors | Live | `dotnet build --configuration Release` |
-| 6 | ⬜ | All tests pass | Live | `dotnet test --configuration Release` |
-| 7 | ⬜ | User manual test — app starts without error | Live | User starts app in VS; confirms startup without error |
+| 1 | ✅ | `Sql.Joins.Inner` and `Sql.Joins.Left` exist in `Sql.cs` with bracket-quoted output | Unit test | `SqlQueryGuardTests.SqlJoins_Inner_OutputIsBracketQuoted` and `SqlJoins_Left_OutputIsBracketQuoted` — passed |
+| 2 | ✅ | `Sql.Queries.WidgetWithOwner()` covered by `SqlQueryGuardTests` | Unit test | `SqlQueryGuardTests.AssembledQueryCases` — `WidgetWithOwner` case included and passed |
+| 3 | ✅ | `IJoinStrategy<TResult>` defined in `Quotinator.Data.Queries` | Build + integration tests | Builds clean; rows 5–8 exercise it end-to-end |
+| 4 | ✅ | `WidgetWithOwnerStrategy` implements `IJoinStrategy<WidgetWithOwner>` and delegates to `Sql.Queries` | Build + integration tests | Builds clean; `AllJoinStrategies_BuildSql_PassesAggregateGuard` and `QueryAsync_WidgetWithOwner_MapsAllColumns` passed |
+| 5 | ✅ | `SqlQueryGuardTests` reflection scan finds all `IJoinStrategy<TResult>` implementations and passes vulnerability check | Unit test | `SqlQueryGuardTests.AllJoinStrategies_BuildSql_PassesAggregateGuard` — passed |
+| 6 | ✅ | `JoinQueryRepository<TResult>` executes the strategy and returns results | Integration test | `JoinQueryRepositoryTests.QueryAsync_ReturnsProjectedReadModels` — passed |
+| 7 | ✅ | Integration test: Widget+Owner INNER JOIN returns correct read model fields | Integration test | `JoinQueryRepositoryTests.QueryAsync_WidgetWithOwner_MapsAllColumns` — passed |
+| 8 | ✅ | Integration test: LEFT JOIN returns read model with default values when right side is absent | Integration test | `JoinQueryRepositoryTests.QueryAsync_LeftJoin_NullRightSide_ReturnedWithDefaults` — passed |
+| 9 | ✅ | `Quotinator.Data.Testing` project exists; builds clean | Build | `dotnet build --configuration Release` — 0 warnings, 0 errors |
+| 10 | ✅ | `NoOpAuditWriter`, `NoOpAuditReader`, `NoOpCallerContext`, `NoOpDatabaseInitializer` in `Quotinator.Data.Testing`; all public with XML summaries | Build | CS1591 enforced via `<GenerateDocumentationFile>true</GenerateDocumentationFile>`; builds clean with 0 warnings |
+| 11 | ✅ | `FakeJoinStrategy<TResult>.BuildSql()` returns the SQL supplied to the constructor | Unit test | `FakeJoinStrategyTests.BuildSql_ReturnsConstructorSuppliedSql` — passed |
+| 12 | ✅ | `TempDatabase` in `Quotinator.Data.Testing`; creates real DB, applies migrations, disposes cleanly | Integration test | `TempDatabaseTests.Dispose_DeletesTempDirectory`, `TempDatabase_CreatesFileAndAppliesDdl`, `ConnectionFactory_CanOpenConnection` — all passed |
+| 13 | ✅ | Duplicate no-op stubs removed from `Api.Tests`, `Core.Tests`, `Data.Tests`; replaced with project reference to `Quotinator.Data.Testing` | Code review | Old stub files absent; all three test projects reference `Quotinator.Data.Testing` |
+| 14 | ✅ | `docs/data-access.md` created; covers all required topics including `Quotinator.Data.Testing` usage | Code review | `docs/data-access.md` exists; covers `IJoinStrategy<TResult>`, `JoinQueryRepository<TResult>`, `Sql.Joins`, `TempDatabase`, `NoOp*`, `FakeJoinStrategy<TResult>` |
+| 15 | ✅ | No inline SQL outside `Sql.cs` — `SqlSourceScanTests` passes | Unit test | `SqlSourceScanTests.AllSqlInSourceFiles_NoVulnerableAggregatePatterns` — passed |
+| 16 | ✅ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` — 0 warnings, 0 errors |
+| 17 | ✅ | All tests pass | Build | `dotnet test --configuration Release` — all tests passed |
+| 18 | ✅ | App starts without error | T1 | App started in VS — schema v4, 788 quotes, startup banner confirmed clean |

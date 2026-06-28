@@ -6,21 +6,34 @@ Quotinator uses GitHub Actions for continuous integration and delivery.
 
 ## Workflows
 
+### Shared build/test — `.github/workflows/_build-test.yml`
+
+A reusable workflow called by both `ci.yml` and `release.yml` via `workflow_call`. Never triggered directly.
+
+**Input:**
+
+| Name | Type | Default | Purpose |
+|---|---|---|---|
+| `test-filter` | string | `TestCategory!=Live` | Passed to `dotnet test --filter` |
+
+**Steps (always in this order):**
+
+1. Checkout
+2. Setup .NET 10.x
+3. `dotnet restore`
+4. `dotnet build --no-restore --configuration Release` — must produce 0 warnings, 0 errors
+5. `dotnet test --no-build --configuration Release --verbosity normal --filter "<input>"` — must produce 0 warnings, 0 errors; all tests pass
+6. Publish smoke test — runs `dotnet publish --no-restore` and asserts `data/sources/` is present and non-empty in the output
+
+> CI does **not** build the Docker image. A broken Dockerfile is only caught by the release workflow or a local build. Always do a local `docker build` before tagging — see the Pre-Push Checklist in `CLAUDE.md`.
+
+---
+
 ### CI — `.github/workflows/ci.yml`
 
 Triggers on every push to `main` and every pull request targeting `main`.
 
-Steps:
-1. Restore NuGet packages
-2. Build (Release configuration) — must produce 0 warnings and 0 errors
-3. Run all MSTest tests — must all pass with 0 warnings and 0 errors
-4. Publish smoke test — runs `dotnet publish` and asserts `data/sources/` directory is present and non-empty in the output
-
-> CI does **not** build the Docker image. A broken Dockerfile will only be caught by the release workflow. Always do a local `docker build` before tagging — see the [Pre-Push Checklist](../CLAUDE.md#pre-push-checklist).
-
-**Branch protection (configure in GitHub → Settings → Branches):**
-- Require this workflow to pass before merging into `main`
-- Require pull request reviews (optional, solo project)
+Calls `_build-test.yml` as a single job named `build-and-test`. No other steps.
 
 ---
 
@@ -28,74 +41,144 @@ Steps:
 
 Triggers when a tag matching `v*.*.*` is pushed.
 
-Steps:
-1. Create a GitHub Release with auto-generated notes from commits
-2. Build multi-arch Docker image (`linux/amd64` + `linux/arm64`)
-3. Push to GitHub Container Registry (`ghcr.io`)
+**Jobs:**
 
-> The release workflow runs in parallel with CI — there is no guarantee CI has passed when the Docker image is pushed. A future improvement is to gate the release on CI passing via a `workflow_run` trigger.
+| Job | Runs when | Purpose |
+|---|---|---|
+| `enforce-beta-first` | Final tags only (no `-` in tag) | Fetches all tags; fails if no `vX.Y.Z-*` tag exists for this version |
+| `build-and-test` | Always (after `enforce-beta-first`) | Calls `_build-test.yml` — runs build, test, and smoke test against the exact tagged commit |
+| `build-and-push` | Always (after both above) | Builds multi-arch Docker image and pushes to GHCR; creates GitHub Release |
 
 **Image published:** `ghcr.io/dutchjafo/quotinator`
 
-Tags produced vary by release channel:
+Docker tags produced vary by release channel:
 
-| Tag pushed | Docker tags produced |
-|---|---|
-| `v1.2.3` (stable) | `1.2.3`, `1.2`, `1`, `latest` |
-| `v1.2.3-beta.1` (pre-release) | `1.2.3-beta.1` only |
+| Tag pushed | Docker tags produced | GitHub Release |
+|---|---|---|
+| `v1.7.0-beta` | `1.7.0-beta` only (no `latest`) | Pre-release |
+| `v1.7.0` | `1.7.0`, `1.7`, `1`, `latest` | Full release |
 
-Pre-release tags (anything containing `-`) never receive `latest`, `major`, or `major.minor` aliases. This is the standard behaviour of `docker/metadata-action` with semver tagging.
+Pre-release tags (containing `-`) never receive `latest`, `major`, or `major.minor` aliases.
 
 **Prerequisites:**
-- The `ghcr.io/dutchjafo/quotinator` package must be set to **Public** in GitHub package settings. The Home Assistant Supervisor pulls the image without credentials — a private package returns 401 and the add-on fails to install.
+- The `ghcr.io/dutchjafo/quotinator` package must be set to **Public** in GitHub package settings. The HA Supervisor pulls without credentials — a private package returns 401 and the add-on fails to install.
+- A beta tag for the same version must exist before a final tag is pushed. The `enforce-beta-first` job enforces this automatically.
 
 ---
 
 ## Release process
 
-### Before tagging
+See `docs/release-verification.md` for the full tier model (T1/T2/T3) and the milestone-close gate checklists in `docs/workflow/checklist.md`.
 
-Every release requires these file updates — commit them all before creating the tag:
+**Summary:**
 
-1. **`src/Quotinator.Api/Quotinator.Api.csproj`** — set `<Version>` to match the tag (without the `v` prefix):
-   ```xml
-   <Version>1.0.3</Version>
-   ```
-   This version is read at runtime and exposed via `GET /api/v1/version`.
+1. Verify T1 (VS/local) and T2 (Docker build + smoke test)
+2. Bump versions to `X.Y.Z-beta`, push beta tag → CI builds pre-release image
+3. Install beta add-on in HA; verify T3 items
+4. Bump versions to `X.Y.Z`, promote changelog, push final tag → CI builds full release
 
-2. **`addon/config.yaml`** — set `version` to match the tag (without the `v` prefix):
-   ```yaml
-   version: "1.0.3"
-   ```
-   The HA Supervisor appends this value as the Docker image tag when pulling from GHCR. If it does not match a published tag the install will fail.
+### Version files to update before any tag
 
-3. **`CHANGELOG.md`** (root) — move items from `[Unreleased]` to a new versioned section. Every versioned section must include a `### Highlights` block written in plain, user-facing English — this is what the Blazor frontend displays. For purely internal releases write a short generic phrase (e.g. `Bug fix — no user-facing changes`). Include GitHub issue links in highlight items where applicable.
+All three must match the tag (without the `v` prefix):
 
-4. **`addon/CHANGELOG.md`** — add a matching entry for the HA add-on release. Use a flat bullet list with no `### Added/Fixed/Changed` subsections (HA convention).
+| File | Field |
+|---|---|
+| `Directory.Build.props` | `<Version>` — the only file to edit; `AssemblyVersion` and `FileVersion` derive from it automatically |
+| `addon/config.yaml` | `version` — HA Supervisor appends this as the Docker image tag when pulling from GHCR |
+| `src/Quotinator.Api/resources/changelog.en.json` | new release entry at top of `releases` array (+ `nl.json`, `de.json` lockstep); regenerate `CHANGELOG.md` and `addon/CHANGELOG.md` |
 
-Then run the [Pre-Push Checklist](../CLAUDE.md#pre-push-checklist) before tagging.
+---
 
-### Stable release
+## Branch protection
+
+Main branch is protected by the **"Protect main"** ruleset (id `17924200`). Changes must go through a PR; the required status check must pass before merging.
+
+**Current required status check:** `Build & Test / Build & Test`
+
+This name is derived from the CI workflow calling the reusable workflow:
+- The reusable workflow job is named `build-and-test` with display name `Build & Test`
+- GitHub reports the check as `<caller-job-display-name> / <reusable-job-display-name>` = `Build & Test / Build & Test`
+- The workflow name (`CI`) is **not** included in the check name
+
+> **Important:** if a future refactor renames any job in `ci.yml` or `_build-test.yml`, the required check name will change and PRs will show "Build & Test — Expected — Waiting for status to be reported" and block all merges. Always verify after renaming — see Audit section below.
+
+---
+
+## Audit and verification
+
+### Verify the reusable workflow wiring
 
 ```bash
-git tag v1.0.3
-git push origin v1.0.3
+# Confirm _build-test.yml has the workflow_call trigger and test-filter input
+grep "workflow_call" .github/workflows/_build-test.yml
+grep "test-filter" .github/workflows/_build-test.yml
+
+# Confirm ci.yml calls it and has no duplicated dotnet steps
+grep "uses:" .github/workflows/ci.yml
+grep -c "dotnet build" .github/workflows/ci.yml    # expect 0
+
+# Confirm release.yml calls it and enforce-beta-first is wired up
+grep "uses:" .github/workflows/release.yml
+grep "enforce-beta-first" .github/workflows/release.yml
+grep "needs:" .github/workflows/release.yml
 ```
 
-Produces `1.0.3`, `1.0`, `1`, and `latest`.
+### Verify the required status check name matches CI output
 
-### Pre-release
+Run after any CI workflow run:
 
 ```bash
-git tag v2.0.0-beta.1
-git push origin v2.0.0-beta.1
+# What the ruleset currently requires
+gh api repos/DutchJaFO/Quotinator/rulesets/17924200 \
+  --jq '.rules[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context'
+
+# What the last CI run actually reported
+gh api repos/DutchJaFO/Quotinator/commits/main/check-runs \
+  --jq '.check_runs[] | select(.app.slug=="github-actions") | .name'
 ```
 
-Produces image tag `2.0.0-beta.1` only. Safe to share for testing without affecting `latest`.
+If these do not match, update the ruleset:
 
-### Subsequent pre-releases
+```bash
+# Edit the context value in the required_status_checks rule and PUT the full ruleset back
+gh api repos/DutchJaFO/Quotinator/rulesets/17924200 -X PUT --input ruleset.json
+```
 
-Increment the suffix: `v2.0.0-beta.2`, `v2.0.0-beta.3`, etc.
+### Verify the beta-before-final enforcement
+
+```bash
+# Confirm enforce-beta-first job exists and checks for prior beta tag
+grep -A 20 "enforce-beta-first" .github/workflows/release.yml
+
+# Confirm --prerelease is conditional on the tag containing '-'
+grep "prerelease" .github/workflows/release.yml
+```
+
+**To test the failure case:** push a final tag `vX.Y.Z` for a version with no `vX.Y.Z-*` tag in the repo. The `enforce-beta-first` job must fail; `build-and-test` and `build-and-push` must not run. Verify in the Actions tab.
+
+**To test the success case:** push `vX.Y.Z-beta` first (creates pre-release), then push `vX.Y.Z` (enforce-beta-first passes; full release created with `latest` tag).
+
+### Verify the Docker smoke test
+
+```bash
+docker build -f docker/Dockerfile -t quotinator:local .
+docker run --rm -d -p 8080:8080 --name quotinator-test quotinator:local
+
+curl -s http://localhost:8080/api/v1/health
+curl -s http://localhost:8080/api/v1/version           # must show current version, not 1.0.0
+curl -s http://localhost:8080/api/v1/quotes/random
+curl -s "http://localhost:8080/api/v1/quotes/search?q=love"
+curl -s "http://localhost:8080/api/v1/quotes/search?q=Casablanca&field=source"
+curl -s "http://localhost:8080/api/v1/quotes/search?q=Churchill&field=author"
+curl -s "http://localhost:8080/api/v1/quotes/search?q=Rick&field=character"
+curl -s "http://localhost:8080/api/v1/quotes/search?q=love&type=person"
+
+docker stop quotinator-test
+```
+
+`/version` returning `1.0.0` instead of the current version means `Directory.Build.props` was missing from the build context.
+
+The `field=author`, `field=character`, and `type=person` searches may return `{"status":"NoResults",...}` with the current dataset — that is expected behaviour, not a bug.
 
 ---
 

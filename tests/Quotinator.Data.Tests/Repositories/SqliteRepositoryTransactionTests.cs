@@ -1,9 +1,11 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Example.Common;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Data.Tests.Repositories;
 
@@ -33,7 +35,7 @@ public class SqliteRepositoryTransactionTests
             );
             """);
 
-        _repository = new SqliteRepository<Widget>(new SqliteConnectionFactory(_dbPath));
+        _repository = new SqliteRepository<Widget>(new SqliteConnectionFactory(_dbPath), NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
     }
 
     [TestCleanup]

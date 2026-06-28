@@ -2,86 +2,188 @@
 
 **Issue:** https://github.com/DutchJaFO/Quotinator/issues/75  
 **Milestone:** v1.7.0  
-**Status:** 🔴 Open
+**Status:** 🟡 Code complete — pending release | T1 ✅ T2 ✅
 
 ---
 
 ## Depends on
 
-- **#74** (read-model query pattern) — must be complete before starting this issue
+- **#73** (audit trail) — `IAuditWriter` and `ICallerContext` are required constructor parameters on every `SqliteRepository<T>` derivation; `IAuditWriter` also receives a bulk overload in this issue
+- **#74** (read-model query pattern) — `IUnitOfWork` is the established transaction mechanism; `IRepository<T>` already has `IUnitOfWork? unitOfWork = null` on all mutating methods
 
 ---
 
 ## Summary
 
-`IRepository<T>` targets one flat table. Parent/child relationships (master/detail) require coordinated writes across two tables, usually in a single transaction. This issue formalises **both** patterns as first-class documented options in `Quotinator.Data`. Since `Quotinator.Data` is a generic reusable library, both have distinct valid use cases — the documentation must be clear about when to choose each.
+Pattern A (separate repos, composed by the caller) and Pattern B (aggregate root) are not distinct patterns — they are the same unit-of-work coordination used at different call sites. The real deliverables are:
+
+1. **`TransactionScope` static helper** — removes UoW boilerplate from every call site
+2. **`InsertStrategy` enum** — `Bulk` (one SQL round-trip) or `Sequential` (per-row, identifies failing row)
+3. **`InsertManyAsync` on `IRepository<T>`** — bulk or sequential insert + matching audit write in one pass
+4. **`IAuditWriter` bulk overload** — required by `InsertManyAsync` in `Bulk` mode
+5. **`AggregateRepository<TParent, TChild>` generic base** — encapsulates the parent+children pattern; exposes `ChildInsertStrategy` for subclasses to override
 
 ---
 
-## Decision (confirmed)
+## `TransactionScope` static helper
 
-**Implement both Option A and Option B.** Each has real use cases where it is the better fit. Both must be documented with clear when-to-use guidance so consumers can make an informed choice.
-
----
-
-## Pattern A — Separate repositories, composed in the service layer
-
-**When to use:** parent and children may be written independently (e.g. add a line to an existing order, update a child without touching the parent, delete a child without deleting the parent).
-
-**Mechanism:** add an optional `IDbTransaction? tx = null` parameter to `InsertAsync`, `UpdateAsync`, `SoftDeleteAsync`, and `RestoreAsync` on `IRepository<T>` and `SqliteRepository<T>`. The service layer opens a connection and transaction once, then passes the transaction to both repositories.
+Wraps the `SqliteUnitOfWork` lifecycle. Accepts an optional existing `IUnitOfWork`:
+- If `existing` is provided — calls `work(existing)` and **does not commit** (the caller owns the transaction)
+- If `existing` is null — creates a new `SqliteUnitOfWork`, calls `work(uow)`, commits
 
 ```csharp
-// Service layer composes two repositories in one transaction
-await using var conn = factory.CreateConnection();
-conn.Open();
-await using var tx = await conn.BeginTransactionAsync();
-await orderRepo.InsertAsync(order, tx);
-foreach (var line in lines)
-    await lineRepo.InsertAsync(line, tx);
-tx.Commit();
-```
-
-**Impact:** all existing callers that do not pass `tx` are unaffected (optional parameter, default `null`). Verify 0 warnings after the change.
-
----
-
-## Pattern B — Aggregate root repository
-
-**When to use:** parent and children are always written together and the child list is semantically owned by the parent (e.g. an import batch with its batch lines — a batch without lines is meaningless).
-
-**Mechanism:** a concrete `ParentRepository : SqliteRepository<Parent>` overrides `InsertAsync` to write parent + children in one transaction. `Parent` carries `IList<Child>` as a navigation property used only for writes; reads go through read-model query services (per #74).
-
-```csharp
-public class ImportBatchRepository(IDbConnectionFactory factory)
-    : SqliteRepository<ImportBatch>(factory)
+public static class TransactionScope
 {
-    public override async Task InsertAsync(ImportBatch batch)
+    public static async Task ExecuteAsync(
+        IDbConnectionFactory factory,
+        Func<IUnitOfWork, Task> work,
+        IUnitOfWork? existing = null)
     {
-        using var conn = Factory.CreateConnection();
-        conn.Open();
-        using var tx = conn.BeginTransaction();
-        await conn.InsertAsync(batch, tx);
-        foreach (var line in batch.Lines)
-            await conn.InsertAsync(line, tx);
-        tx.Commit();
+        if (existing != null)
+        {
+            await work(existing);
+            return;
+        }
+        await using var uow = new SqliteUnitOfWork(factory);
+        await uow.BeginTransactionAsync();
+        await work(uow);
+        await uow.CommitAsync();
     }
 }
 ```
 
-Navigation properties are **write-only** — they are populated by the caller before passing to `InsertAsync`, and are never populated by repository read methods. Read back parent + children via a read-model query service.
+---
+
+## `InsertStrategy` enum
+
+```csharp
+public enum InsertStrategy
+{
+    Bulk,        // one SQL round-trip for all rows + one bulk audit write — fastest
+    Sequential   // loops through InsertAsync per row — each row's failure is identifiable
+}
+```
+
+**When to choose Sequential:** the caller needs to know which specific row failed (e.g. a batch importer reporting per-line errors), or business logic must execute between each insert. Within a shared `IUnitOfWork`, a failure in sequential mode still rolls back all rows committed so far in that transaction — the difference is that the exception identifies the failing entity, not just "the batch failed."
+
+---
+
+## `InsertManyAsync` — layered across the class hierarchy
+
+Defined on `SqliteRepositoryBase<T>` so every derived type benefits, including `AuditWriter` itself.
+
+### `SqliteRepositoryBase<T>` — data INSERT only, no audit
+
+```csharp
+// Pure data insert — no audit wiring (safe for AuditWriter to inherit without recursion)
+public virtual async Task InsertManyAsync(
+    IEnumerable<T> entities,
+    IUnitOfWork? unitOfWork = null,
+    InsertStrategy strategy = InsertStrategy.Bulk)
+{
+    var list = entities.ToList();
+    await TransactionScope.ExecuteAsync(Factory, async uow =>
+    {
+        if (strategy == InsertStrategy.Bulk)
+            await uow.Connection.InsertAsync(list, uow.Transaction);
+        else
+            foreach (var entity in list)
+                await uow.Connection.InsertAsync(entity, uow.Transaction);
+    }, unitOfWork);
+}
+```
+
+### `IRepository<T>` — interface declaration
+
+```csharp
+Task InsertManyAsync(IEnumerable<T> entities, IUnitOfWork? unitOfWork = null, InsertStrategy strategy = InsertStrategy.Bulk);
+```
+
+### `SqliteRepository<T>` — override adds audit write matched to strategy
+
+```csharp
+public override async Task InsertManyAsync(
+    IEnumerable<T> entities,
+    IUnitOfWork? unitOfWork = null,
+    InsertStrategy strategy = InsertStrategy.Bulk)
+{
+    var list = entities.ToList();
+    await TransactionScope.ExecuteAsync(Factory, async uow =>
+    {
+        if (strategy == InsertStrategy.Bulk)
+        {
+            await uow.Connection.InsertAsync(list, uow.Transaction);
+            var entries = list.Select(e => BuildEntry(AuditOperation.Insert, e.Id)).ToList();
+            await _auditWriter.WriteAsync(entries, uow.Connection, uow.Transaction);  // one bulk audit INSERT
+        }
+        else
+        {
+            foreach (var entity in list)
+                await InsertAsync(entity, uow);  // reuses single-entry path — one audit entry per row
+        }
+    }, unitOfWork);
+}
+```
+
+`SqliteRestorableRepository<T>` inherits the override for free.
+
+---
+
+## `IAuditWriter` bulk overload
+
+```csharp
+// New overload alongside the existing single-entry WriteAsync
+Task WriteAsync(IReadOnlyList<AuditEntry> entries, IDbConnection connection, IDbTransaction? transaction = null);
+```
+
+The `AuditWriter` implementation delegates to `base.InsertManyAsync` (inherited from `SqliteRepositoryBase<AuditEntry>`) — one SQL round-trip for N entries, no recursion risk.
+
+---
+
+## `AggregateRepository<TParent, TChild>` generic base
+
+Encapsulates the parent+children write covenant. `unitOfWork` is passed through to `TransactionScope` so the aggregate can participate in a caller's transaction.
+
+```csharp
+public abstract class AggregateRepository<TParent, TChild>(
+    IDbConnectionFactory factory,
+    IAuditWriter auditWriter,
+    ICallerContext callerContext)
+    : SqliteRepository<TParent>(factory, auditWriter, callerContext)
+    where TParent : RecordBase
+    where TChild  : RecordBase
+{
+    protected abstract IReadOnlyList<TChild> GetChildren(TParent parent);
+    protected abstract SqliteRepository<TChild> ChildRepository { get; }
+
+    // Override to Sequential when the concrete aggregate needs per-row error identification
+    protected virtual InsertStrategy ChildInsertStrategy => InsertStrategy.Bulk;
+
+    public override async Task InsertAsync(TParent parent, IUnitOfWork? unitOfWork = null)
+    {
+        await TransactionScope.ExecuteAsync(Factory, async uow =>
+        {
+            await base.InsertAsync(parent, uow);
+            await ChildRepository.InsertManyAsync(GetChildren(parent), uow, ChildInsertStrategy);
+        }, unitOfWork);
+    }
+}
+```
+
+Navigation properties (`GetChildren`) are **write-only** — populated by the caller, never populated by read methods. Reads go through `JoinQueryRepository` / `IJoinStrategy` (per #74).
 
 ---
 
 ## Approach
 
-1. Add `IDbTransaction? tx = null` to `IRepository<T>` and `SqliteRepository<T>` method signatures (enables Pattern A).
-2. Verify all existing callers compile and tests pass (the parameter is optional; nothing breaks).
-3. Add a concrete aggregate root example (enables Pattern B) — use `ImportBatch` / `ImportBatchLine` if #58 is still in scope, otherwise a self-contained test-only pair.
-4. Document both patterns in `docs/data-access.md` (created in #74), with:
-   - Clear when-to-use guidance for each
-   - Code examples for both
-   - Note that navigation properties are write-only; reads use query services
-5. Add integration tests for both patterns.
+1. Add `InsertStrategy` enum to `Quotinator.Data`
+2. Add `TransactionScope` static helper to `Quotinator.Data`
+3. Add bulk `WriteAsync` overload to `IAuditWriter` and its `AuditWriter` implementation
+4. Add `InsertManyAsync(entities, unitOfWork?, strategy?)` to `SqliteRepositoryBase<T>` (data only), `IRepository<T>` (interface), and `SqliteRepository<T>` (override with audit)
+5. Add `AggregateRepository<TParent, TChild>` abstract base with `ChildInsertStrategy` virtual property to `Quotinator.Data`
+6. Add a concrete aggregate example — `Widget`/`WidgetLine` test-only pair in `Quotinator.Data.Tests`; `WidgetLines` DDL in test setup only
+7. Update `docs/data-access.md`: replace old Pattern A/B framing with unified `TransactionScope` + `InsertManyAsync` + `AggregateRepository` documentation; document `InsertStrategy` with when-to-use guidance
+8. Add integration tests for all new types covering both `Bulk` and `Sequential` strategies
 
 ---
 
@@ -89,12 +191,26 @@ Navigation properties are **write-only** — they are populated by the caller be
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `IRepository<T>` and `SqliteRepository<T>` have optional `IDbTransaction?` parameter on mutating methods | Live | `dotnet build --configuration Release` — 0 warnings, 0 errors |
-| 2 | ❌ | All existing callers unaffected (parameter is optional, default null) | Live | Build clean; all existing tests still pass |
-| 3 | ❌ | Pattern A integration test: two repositories share one transaction; both rows committed | Unit test | `MasterDetailPatternATests` — `InsertParentAndChildren_SeparateRepos_BothRowsExist` |
-| 4 | ❌ | Pattern A integration test: rollback on failure leaves no orphaned parent | Unit test | `MasterDetailPatternATests` — `InsertParentAndChildren_RollbackOnChildFailure_NoOrphan` |
-| 5 | ❌ | Pattern B aggregate root repository exists with overridden `InsertAsync` | Live | Concrete class exists in `Quotinator.Data`; overrides `InsertAsync` |
-| 6 | ❌ | Pattern B integration test: aggregate insert commits parent + children in one transaction | Unit test | `MasterDetailPatternBTests` — `InsertAggregate_AllRowsExist` |
-| 7 | ❌ | Pattern B integration test: rollback on child failure leaves no orphaned parent | Unit test | `MasterDetailPatternBTests` — `InsertAggregate_RollbackOnFailure_NoOrphan` |
-| 8 | ❌ | Both patterns documented in `docs/data-access.md` with when-to-use guidance | Live | Section exists; covers both options with code examples; navigation-property write-only rule documented |
-| 9 | ❌ | Full test suite green | Live | `dotnet test --configuration Release` — all tests pass |
+| 1 | ✅ | `InsertStrategy` enum exists with `Bulk` and `Sequential` values | Build | `dotnet build --configuration Release` — 0 errors |
+| 2 | ✅ | `TransactionScope.ExecuteAsync` — no existing UoW: creates its own, commits on success | Integration test | `TransactionScopeTests.ExecuteAsync_NoExisting_CreatesAndCommits` |
+| 3 | ✅ | `TransactionScope.ExecuteAsync` — existing UoW provided: joins it, does not commit | Integration test | `TransactionScopeTests.ExecuteAsync_WithExisting_JoinsAndDoesNotCommit` |
+| 4 | ✅ | `TransactionScope.ExecuteAsync` — exception when owner: rolls back, leaves no rows | Integration test | `TransactionScopeTests.ExecuteAsync_OnException_Rollback_LeavesNoRows` |
+| 5 | ✅ | `SqliteRepositoryBase<T>` declares virtual `InsertManyAsync(entities, unitOfWork?, strategy?)` — data only, no audit | Build | `dotnet build --configuration Release` — 0 errors |
+| 6 | ✅ | `IRepository<T>` declares `InsertManyAsync` with `strategy` parameter | Build | `dotnet build --configuration Release` — 0 errors |
+| 7 | ✅ | `InsertManyAsync` Bulk strategy — all entities inserted in one SQL call | Integration test | `InsertManyAsyncTests.InsertManyAsync_Bulk_AllRowsPersisted` |
+| 8 | ✅ | `InsertManyAsync` Sequential strategy — all entities inserted row by row | Integration test | `InsertManyAsyncTests.InsertManyAsync_Sequential_AllRowsPersisted` |
+| 9 | ✅ | `SqliteRepository<T>` override: Bulk — one bulk data INSERT + one bulk audit INSERT | Integration test | `InsertManyAsyncTests.InsertManyAsync_Bulk_AuditEntriesWrittenForAll` |
+| 10 | ✅ | `SqliteRepository<T>` override: Sequential — each row calls `InsertAsync`; produces one audit entry per row | Integration test | `InsertManyAsyncTests.InsertManyAsync_Sequential_AuditEntryPerRow` |
+| 11 | ✅ | `InsertManyAsync` Sequential — failure on a specific row propagates that row's exception | Integration test | `InsertManyAsyncTests.InsertManyAsync_Sequential_FailingRowPropagatesException` |
+| 12 | ✅ | `IAuditWriter` bulk `WriteAsync` overload — all entries persisted in one round-trip | Integration test | `InsertManyAsyncTests.AuditWriter_WriteAsync_BulkEntries_AllPersisted` |
+| 13 | ✅ | `InsertManyAsync` passes `unitOfWork` through to `TransactionScope` correctly | Integration test | `InsertManyAsyncTests.InsertManyAsync_WithUow_JoinsTransaction` |
+| 14 | ✅ | `AggregateRepository<TParent, TChild>` exists; `ChildInsertStrategy` defaults to `Bulk`; abstract members compile | Build + Integration test | `dotnet build` — 0 errors; `AggregateRepositoryTests.AggregateRepository_ChildInsertStrategy_DefaultsTo_Bulk` |
+| 15 | ✅ | `AggregateRepository.InsertAsync` — existing UoW provided: joins caller's transaction | Integration test | `AggregateRepositoryTests.InsertAsync_WithExistingUow_JoinsCaller` |
+| 16 | ✅ | `AggregateRepository.InsertAsync` — no UoW: commits parent + all children | Integration test | `AggregateRepositoryTests.InsertAsync_NoUow_CommitsParentAndChildren` |
+| 17 | ✅ | `AggregateRepository.InsertAsync` — child failure: rolls back, no orphaned parent | Integration test | `AggregateRepositoryTests.InsertAsync_ChildFailure_RollsBackParent` |
+| 18 | ✅ | `AggregateRepository.InsertAsync` — audit entries written for parent and all children | Integration test | `AggregateRepositoryTests.InsertAsync_AuditEntriesForParentAndAllChildren` |
+| 19 | ✅ | `AggregateRepository` with `ChildInsertStrategy = Sequential` — constraint violation propagates; transaction rolled back | Integration test | `AggregateRepositoryTests.InsertAsync_Sequential_PerRowAuditAndFailureIdentified` |
+| 20 | ✅ | `docs/data-access.md` updated — `InsertStrategy`, `TransactionScope`, `InsertManyAsync`, `AggregateRepository` documented; when-to-use for each strategy | Code review | Sections added; navigation-property write-only rule documented |
+| 21 | ✅ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` — 0 Warning(s) 0 Error(s) |
+| 22 | ✅ | All tests pass | Build | `dotnet test --configuration Release` — 526 passed, 0 failed |
+| 23 | ✅ | App starts without error | T1 | App started in VS — schema v4, 788 quotes, startup banner confirmed clean |

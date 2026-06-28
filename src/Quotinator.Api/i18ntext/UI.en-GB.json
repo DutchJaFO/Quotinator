@@ -46,11 +46,15 @@
   "InfoNoQuotesMatchFilters": "No quotes match the given filters.",
   "ErrorFilterInputTooLong": "Filter values must not exceed 200 characters.",
   "ErrorFilterInputInvalid": "One or more filter values contain invalid characters.",
-  "ErrorDecadeInvalid": "decade must be a year divisible by 10 (e.g. 1980, 1990, 2000).",
+  "ErrorDecadeInvalid": "decade must be divisible by 10 (e.g. 80 or 1980 for the 1980s, 00 or 2000 for the 2000s).",
   "ErrorYearRangeInvalid": "yearFrom must not be greater than yearTo.",
+  "ErrorNumericParameterInvalid": "One or more query parameters contain an invalid value. Numeric parameters (yearFrom, yearTo, year, decade, page, pageSize, n) must be whole numbers.",
+  "ErrorYearParamNotInteger": "{0} must be a whole number.",
   "AdminEndpointsHeading": "Admin endpoints",
   "AdminEndpointsDescription": "These endpoints require an X-Api-Key header matching the admin_api_key configured in the add-on options. They are unavailable when no key is configured.",
   "AdminPreviewSeedLabel": "Preview seed import",
   "AdminReseedLabel": "Reseed database",
-  "AdminResetLabel": "Reset database"
+  "AdminResetLabel": "Reset database",
+  "AdminAuditLogLabel": "View audit log",
+  "AdminClearAuditLogLabel": "Clear audit log"
 }

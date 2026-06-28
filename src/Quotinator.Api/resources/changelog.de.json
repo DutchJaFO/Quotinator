@@ -11,6 +11,42 @@
   },
   "releases": [
     {
+      "version": "1.7.1-beta",
+      "date": "2026-06-28",
+      "issues": [73, 74, 75, 76, 77, 121, 125, 126],
+      "highlights": [
+        "Endpoint-Anfragen werden jetzt als zusammengehöriges Start- und Endpaar protokolliert — eine kurze ID verbindet beide Zeilen und erleichtert das Nachverfolgen überlappender Anfragen. Webseiten- und Asset-Anfragen werden in eigene Log-Kategorien eingeordnet, sodass die Standardausgabe nur API-Aktivität zeigt.",
+        "Validierungsfehler an Quote-Endpunkten geben jetzt den richtigen HTTP-Fehlerstatuscode zurück — Filter mit ungültigen Werten geben 422, strukturell ungültige Anfragen geben 400. Clients können Fehler jetzt allein anhand des HTTP-Statuscodes erkennen, ohne den Antworttext analysieren zu müssen.",
+        "Jede Schreiboperation wird jetzt in einem Auditprotokoll erfasst — sehen Sie, wer was an welchem Datensatz wann durchgeführt hat. Administratoren können das Protokoll über die API einsehen und löschen."
+      ],
+      "added": [
+        "Audit-Trail: jede Schreiboperation (Einfügen, Aktualisieren, Soft-Delete, Wiederherstellen, Hard-Delete, Bereinigen, Massenimport, erneutes Seeden, Zurücksetzen) wird in einer `AuditEntries`-Tabelle mit Tabellenname, Datensatz-ID, Operation, Caller-Agent und Zeitstempel erfasst (issue #73)",
+        "`GET /api/v1/admin/audit` — paginiertes Auditprotokoll, filterbar nach Tabelle und Datensatz-ID; öffentlich zugänglich, kein API-Schlüssel erforderlich (issue #73)",
+        "`DELETE /api/v1/admin/audit` — das gesamte Auditprotokoll oder die Einträge einer bestimmten Tabelle löschen; Admin-API-Schlüssel erforderlich; nach dem Löschen wird ein Bereinigungseintrag geschrieben (issue #73)",
+        "`GET /api/v1/admin/database/seed/preview` — jetzt öffentlich zugänglich; kein API-Schlüssel erforderlich (nicht-destruktiver Lesevorgang) (issue #73)",
+        "`decade`-Filter akzeptiert jetzt zweistellige Kurzschreibweise — `80` steht für 1980–1989, `00` für 2000–2009, `20` für 2020–2029; die vierstellige Form funktioniert weiterhin unverändert (issue #126)",
+        "Lesemodell-Abfragemuster: `SqliteReadModelRepository<TRow>` und `IJoinStrategy` — typisierte Projektionsabfragen über verknüpfte Tabellen mit konfigurierbarer Spaltenzuordnung (issue #74)",
+        "Master/Detail-Repository-Muster: `SqliteMasterDetailRepository<TParent, TChild>` — fügt eine übergeordnete Entität zusammen mit ihren untergeordneten Zeilen ein und ruft sie als Einheit ab (issue #75)",
+        "`IOneToOneRepository<TParent, TDetail>` und `SqliteOneToOneRepository` — übergeordnete Entität mit ihrem optionalen 1:1-Detaildatensatz als Einheit abfragen und aktualisieren (issue #76)",
+        "`ILinkRepository<TLink>` und `SqliteLinkRepository` — Zeilen in einer Verknüpfungstabelle für Viele-zu-Viele-Beziehungen einfügen, löschen und als Ganzes ersetzen (issue #77)"
+      ],
+      "changed": [
+        "Request-Logging-Middleware aus `Program.cs` nach `RequestLoggingMiddleware : IMiddleware` ausgelagert — jede HTTP-Anfrage erzeugt zwei Logzeilen: eine beim Eingang (vor der Verarbeitung) und eine beim Abschluss, mit einer gemeinsamen 8-stelligen Hex-Korrelations-ID (issue #125)",
+        "Request-Log leitet nun nach Pfad in drei Kategorien weiter: `[Api - Request]` auf Information-Ebene für `/api/**`-Endpunkte; `[Web - Request]` auf Debug-Ebene für Blazor-Seiten, Scalar-UI und Kulturrouten; `[Web - Asset]` auf Debug-Ebene für statische Dateien und Framework-Assets — Betreiber sehen auf dem Standard-`info`-Level nur API-Verkehr (issue #125)",
+        "Serilog `{:l}`-Literalformatbezeichner auf alle String-Eigenschaften in Request-Log-Templates angewendet — Methode, Korrelations-ID und URL werden in der gerenderten Ausgabe nicht mehr mit doppelten Anführungszeichen umschlossen (issue #125)",
+        "`Scalar.AspNetCore` von 2.16.4 auf 2.16.6 aktualisiert",
+        "`MSTest` von 4.0.2 auf 4.2.3 in `Quotinator.Data.Tests` aktualisiert (nur Tests)",
+        "`Microsoft.Extensions.Logging.Abstractions` von 10.0.0 auf 10.0.9 in `Quotinator.Data` aktualisiert",
+        "`Quotinator.Engine`-Projekt eingeführt — `SqliteQuoteService`, `QuotinatorDatabaseInitializer` und alle domänenspezifischen DB-Entitäten von `Quotinator.Core` und `Quotinator.Data` nach Engine verschoben; `Quotinator.Core` referenziert weder Dapper noch SQLite (issue #121)",
+        "Dockerfile aktualisiert, um `Quotinator.Engine` und `Quotinator.Changelog` in die NuGet-Wiederherstellungsschicht aufzunehmen — alle Projekte werden jetzt korrekt im Build-Cache gespeichert (issue #121)"
+      ],
+      "fixed": [
+        "Validierungsfehler an Quote-Endpunkten geben jetzt 4xx-Statuscodes zurück — nicht erkanntes Genre oder Typ gibt 422, decade nicht durch 10 teilbar gibt 422, unmöglicher Jahresbereich gibt 422, zu lange oder verdächtige Filterwerte geben 400; bisher gaben alle Endpunkte 200 mit einem Fehler-Envelope im Antworttext zurück (issue #126)",
+        "Ungültige Werte für numerische Parameter (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) geben jetzt 422 zurück; die Fehlerdetails nennen den spezifischen Parameter, der die Validierung nicht bestanden hat (issue #126)",
+        "Die REST-API-Seite listet jetzt die Auditprotokoll-Endpunkte (`GET` und `DELETE /api/v1/admin/audit`) im Administratorbereich auf (issue #73)"
+      ]
+    },
+    {
       "version": "1.7.0",
       "date": "2026-06-27",
       "issues": [70, 109, 111, 115, 117],
