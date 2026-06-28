@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
+using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;

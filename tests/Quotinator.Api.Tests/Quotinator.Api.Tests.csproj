@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Quotinator.Api\Quotinator.Api.csproj" />
     <ProjectReference Include="..\..\src\Quotinator.Data\Quotinator.Data.csproj" />
+    <ProjectReference Include="..\..\src\Quotinator.Data.Testing\Quotinator.Data.Testing.csproj" />
   </ItemGroup>
 
   <!-- Make i18ntext source files available in the test output directory -->

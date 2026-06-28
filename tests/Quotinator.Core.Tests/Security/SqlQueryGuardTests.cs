@@ -110,6 +110,9 @@ public class SqlQueryGuardTests
             yield return [$"SelectPaged({label})",    Sql.Quotes.SelectPaged(whereClause)];
         }
 
+        // Sql.Queries factory methods — one case per method.
+        yield return ["Queries.WidgetWithOwner()", Sql.Queries.WidgetWithOwner()];
+
         // SelectById has no dynamic clauses — one case covers it.
         yield return ["SelectById()", Sql.Quotes.SelectById()];
 
@@ -127,6 +130,37 @@ public class SqlQueryGuardTests
             yield return [$"SelectSearch(field={fieldName})", Sql.Quotes.SelectSearch(baseWhere, fieldFilter)];
         }
 
+    }
+
+    /// <summary>
+    /// Discovers all concrete <see cref="IJoinStrategy{TResult}"/> implementations in <c>Quotinator.Data</c>
+    /// via reflection, calls <see cref="IJoinStrategy{TResult}.BuildSql"/> on each, and asserts the result
+    /// passes the aggregate vulnerability guard. Adding a new strategy class automatically adds it to this test.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(AllJoinStrategyBuildSqlCases))]
+    public void AllJoinStrategies_BuildSql_PassesAggregateGuard(string typeName, string sql)
+    {
+        Assert.IsFalse(
+            SqlAggregateGuard.IsVulnerablePattern(sql),
+            $"{typeName}.BuildSql() contains a vulnerable aggregate pattern. " +
+            "Review the strategy and consult docs/sql-safety.md before suppressing.");
+    }
+
+    public static IEnumerable<object[]> AllJoinStrategyBuildSqlCases()
+    {
+        var joinStrategyType = typeof(IJoinStrategy<>);
+        return typeof(IJoinStrategy<>).Assembly
+            .GetTypes()
+            .Where(t => !t.IsAbstract && !t.IsInterface)
+            .Where(t => t.GetInterfaces()
+                .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == joinStrategyType))
+            .Select(t =>
+            {
+                var instance = Activator.CreateInstance(t)!;
+                var sql      = (string)t.GetMethod("BuildSql")!.Invoke(instance, null)!;
+                return new object[] { t.Name, sql };
+            });
     }
 
     /// <summary>Enumerates all string constants in <see cref="Sql"/> and its nested classes.</summary>

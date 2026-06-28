@@ -6,7 +6,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
-using Quotinator.Data.Tests.Helpers;
+using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Data.Tests.Database;
 

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
+using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 

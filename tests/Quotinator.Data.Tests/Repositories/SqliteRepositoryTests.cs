@@ -5,7 +5,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
-using Quotinator.Data.Tests.Helpers;
+using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Data.Tests.Repositories;
 
