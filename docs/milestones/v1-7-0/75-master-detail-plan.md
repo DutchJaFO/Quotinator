@@ -2,7 +2,7 @@
 
 **Issue:** https://github.com/DutchJaFO/Quotinator/issues/75  
 **Milestone:** v1.7.0  
-**Status:** 🟡 Code complete — pending release | T1 ⬜ T2 ⬜
+**Status:** 🟡 Code complete — pending release | T1 ✅ T2 ⬜
 
 ---
 
@@ -213,4 +213,4 @@ Navigation properties (`GetChildren`) are **write-only** — populated by the ca
 | 20 | ✅ | `docs/data-access.md` updated — `InsertStrategy`, `TransactionScope`, `InsertManyAsync`, `AggregateRepository` documented; when-to-use for each strategy | Code review | Sections added; navigation-property write-only rule documented |
 | 21 | ✅ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` — 0 Warning(s) 0 Error(s) |
 | 22 | ✅ | All tests pass | Build | `dotnet test --configuration Release` — 526 passed, 0 failed |
-| 23 | ⬜ | App starts without error | T1 | User starts app in VS; confirms startup banner |
+| 23 | ✅ | App starts without error | T1 | App started in VS — schema v4, 788 quotes, startup banner confirmed clean |
