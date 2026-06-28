@@ -315,4 +315,4 @@ foreach (var type in strategyTypes)
 | 15 | ✅ | No inline SQL outside `Sql.cs` — `SqlSourceScanTests` passes | Unit test | `SqlSourceScanTests.AllSqlInSourceFiles_NoVulnerableAggregatePatterns` — passed |
 | 16 | ✅ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` — 0 warnings, 0 errors |
 | 17 | ✅ | All tests pass | Build | `dotnet test --configuration Release` — all tests passed |
-| 18 | ⬜ | App starts without error | T1 | User starts app in VS; confirms startup banner |
+| 18 | ✅ | App starts without error | T1 | App started in VS — schema v4, 788 quotes, startup banner confirmed clean |
