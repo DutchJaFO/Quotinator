@@ -211,6 +211,8 @@ public class AdminAuditEndpointTests
     {
         public Task WriteAsync(AuditEntry entry, IDbConnection connection, IDbTransaction? transaction = null)
             => Task.CompletedTask;
+        public Task WriteAsync(IReadOnlyList<AuditEntry> entries, IDbConnection connection, IDbTransaction? transaction = null)
+            => Task.CompletedTask;
         public Task WriteAsync(AuditEntry entry)
             => Task.CompletedTask;
         public Task ClearAsync(string? table = null)

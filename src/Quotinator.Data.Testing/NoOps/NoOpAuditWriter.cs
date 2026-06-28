@@ -15,6 +15,10 @@ public sealed class NoOpAuditWriter : IAuditWriter
         => Task.CompletedTask;
 
     /// <inheritdoc/>
+    public Task WriteAsync(IReadOnlyList<AuditEntry> entries, IDbConnection connection, IDbTransaction? transaction = null)
+        => Task.CompletedTask;
+
+    /// <inheritdoc/>
     public Task WriteAsync(AuditEntry entry)
         => Task.CompletedTask;
 

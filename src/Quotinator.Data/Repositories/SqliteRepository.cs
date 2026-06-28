@@ -44,7 +44,7 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T> where
     }
 
     /// <inheritdoc/>
-    public async Task InsertAsync(T entity, IUnitOfWork? unitOfWork = null)
+    public virtual async Task InsertAsync(T entity, IUnitOfWork? unitOfWork = null)
     {
         if (unitOfWork is SqliteUnitOfWork uow)
         {
@@ -89,6 +89,30 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T> where
         conn.Open();
         await conn.ExecuteAsync(RepositorySql.SoftDelete(TableName), param);
         await _auditWriter.WriteAsync(BuildEntry(AuditOperation.SoftDelete, id), conn);
+    }
+
+    /// <inheritdoc/>
+    public override async Task InsertManyAsync(
+        IEnumerable<T> entities,
+        IUnitOfWork? unitOfWork = null,
+        InsertStrategy strategy = InsertStrategy.Bulk)
+    {
+        var list = entities.ToList();
+        await TransactionScope.ExecuteAsync(Factory, async uow =>
+        {
+            var sqlite = (SqliteUnitOfWork)uow;
+            if (strategy == InsertStrategy.Bulk)
+            {
+                await sqlite.Connection.InsertAsync(list, sqlite.Transaction);
+                var auditEntries = list.Select(e => BuildEntry(AuditOperation.Insert, e.Id)).ToList();
+                await _auditWriter.WriteAsync(auditEntries, sqlite.Connection, sqlite.Transaction);
+            }
+            else
+            {
+                foreach (var entity in list)
+                    await InsertAsync(entity, uow);
+            }
+        }, unitOfWork);
     }
 
     /// <summary>

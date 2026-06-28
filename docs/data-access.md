@@ -9,9 +9,74 @@ This document covers the two data access patterns in `Quotinator.Data` and the t
 | Pattern | Use when |
 |---------|----------|
 | `IRepository<T>` / `SqliteRepository<T>` | CRUD on a single, flat table |
+| `AggregateRepository<TParent, TChild>` | Parent table with a child collection written atomically |
 | `JoinQueryRepository<TResult>` + `IJoinStrategy<TResult>` | Read-only query that joins two or more tables, or returns a projection (a subset or combination of columns) |
 
 Never reach for a join strategy for single-table reads — `IRepository<T>` is simpler and already tested.
+
+---
+
+## Transaction coordination — `TransactionScope`
+
+`TransactionScope` removes the `SqliteUnitOfWork` lifecycle boilerplate from multi-step write operations.
+
+```csharp
+await TransactionScope.ExecuteAsync(factory, async uow =>
+{
+    await repoA.InsertAsync(entityA, uow);
+    await repoB.InsertAsync(entityB, uow);
+}, existingUow);  // null = create own; non-null = join caller's
+```
+
+- **`existing` is `null`** — creates a new `SqliteUnitOfWork`, begins a transaction, commits on success, rolls back on exception.
+- **`existing` is non-null** — calls `work(existing)` and returns. The caller's unit of work is not committed here; the caller remains responsible for committing or rolling back.
+
+---
+
+## Bulk insert — `InsertManyAsync` and `InsertStrategy`
+
+`IRepository<T>.InsertManyAsync` inserts a collection in one operation. The strategy controls performance vs. diagnostics:
+
+| Strategy | Behaviour |
+|----------|-----------|
+| `InsertStrategy.Bulk` (default) | One SQL round-trip for all rows + one bulk audit write. Fastest. |
+| `InsertStrategy.Sequential` | Loops through `InsertAsync` per entity. A failure on any row propagates with that row's exception. One audit entry per row. |
+
+Both strategies share the same rollback behaviour: within a shared `IUnitOfWork`, a failure rolls back everything committed so far in that transaction. The difference is whether the exception identifies the specific failing entity.
+
+```csharp
+// Fastest — one SQL statement per table
+await repo.InsertManyAsync(entities, unitOfWork, InsertStrategy.Bulk);
+
+// Row-by-row — identifies which entity failed
+await repo.InsertManyAsync(entities, unitOfWork, InsertStrategy.Sequential);
+```
+
+**When to choose Sequential:** the caller needs to report per-row import errors, or business logic must execute between each insert.
+
+---
+
+## Parent/child writes — `AggregateRepository<TParent, TChild>`
+
+Encapsulates the pattern of inserting a parent entity and its child collection atomically. Navigation properties on the parent are write-only — the `GetChildren` method supplies the collection; reads go through `JoinQueryRepository` / `IJoinStrategy`.
+
+```csharp
+public class OrderRepository(
+    IDbConnectionFactory factory,
+    IAuditWriter auditWriter,
+    ICallerContext callerContext,
+    SqliteRepository<OrderLine> lineRepo)
+    : AggregateRepository<Order, OrderLine>(factory, auditWriter, callerContext)
+{
+    protected override IReadOnlyList<OrderLine> GetChildren(Order parent) => parent.Lines;
+    protected override SqliteRepository<OrderLine> ChildRepository => lineRepo;
+
+    // Override only when per-row error identification is needed:
+    // protected override InsertStrategy ChildInsertStrategy => InsertStrategy.Sequential;
+}
+```
+
+`AggregateRepository.InsertAsync` wraps the entire write in `TransactionScope.ExecuteAsync`, so a child failure rolls back the parent insert. If a caller-provided `IUnitOfWork` is passed, the aggregate joins that transaction without committing it.
 
 ---
 

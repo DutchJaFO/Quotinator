@@ -29,6 +29,10 @@ public sealed class AuditWriter : SqliteRepositoryBase<AuditEntry>, IAuditWriter
         => await connection.InsertAsync(entry, transaction);
 
     /// <inheritdoc/>
+    public async Task WriteAsync(IReadOnlyList<AuditEntry> entries, IDbConnection connection, IDbTransaction? transaction = null)
+        => await connection.InsertAsync(entries, transaction);
+
+    /// <inheritdoc/>
     public async Task WriteAsync(AuditEntry entry)
     {
         using var conn = Factory.CreateConnection();

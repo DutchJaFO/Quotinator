@@ -6,10 +6,12 @@ namespace Quotinator.Data.Repositories;
 /// Writes and clears immutable audit entries in the <c>AuditEntries</c> table.
 /// </summary>
 /// <remarks>
-/// Two <c>WriteAsync</c> overloads exist by design:
+/// Three <c>WriteAsync</c> overloads exist by design:
 /// <list type="bullet">
-/// <item>The connection overload is used by the repository base class so the audit INSERT
+/// <item>The connection overload (single entry) is used by the repository base class so the audit INSERT
 /// participates in the same transaction as the triggering write operation.</item>
+/// <item>The connection overload (bulk) is used by <see cref="IRepository{T}.InsertManyAsync"/> in
+/// <see cref="InsertStrategy.Bulk"/> mode to write all audit entries in one SQL round-trip.</item>
 /// <item>The no-connection overload is used by services (reseed, reset) where
 /// the operation itself completes before the audit entry is written.</item>
 /// </list>
@@ -24,6 +26,12 @@ public interface IAuditWriter
     /// The INSERT participates in <paramref name="transaction"/> when supplied.
     /// </summary>
     Task WriteAsync(Entities.AuditEntry entry, IDbConnection connection, IDbTransaction? transaction = null);
+
+    /// <summary>
+    /// Writes multiple audit entries using an existing connection and optional transaction.
+    /// All entries participate in <paramref name="transaction"/> when supplied.
+    /// </summary>
+    Task WriteAsync(IReadOnlyList<Entities.AuditEntry> entries, IDbConnection connection, IDbTransaction? transaction = null);
 
     /// <summary>
     /// Writes an audit entry by opening its own connection.

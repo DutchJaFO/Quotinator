@@ -29,4 +29,31 @@ public abstract class SqliteRepositoryBase<T> where T : class
     {
         Factory = factory;
     }
+
+    /// <summary>
+    /// Inserts a collection of entities. Data only — no audit entries are written.
+    /// <see cref="SqliteRepository{T}"/> overrides this to add audit trail support.
+    /// </summary>
+    /// <param name="entities">Entities to insert.</param>
+    /// <param name="unitOfWork">Optional. When supplied, the inserts participate in the caller's transaction.</param>
+    /// <param name="strategy">
+    /// Controls whether all entities are inserted in a single SQL call (<see cref="InsertStrategy.Bulk"/>)
+    /// or individually per entity (<see cref="InsertStrategy.Sequential"/>).
+    /// </param>
+    public virtual async Task InsertManyAsync(
+        IEnumerable<T> entities,
+        IUnitOfWork? unitOfWork = null,
+        InsertStrategy strategy = InsertStrategy.Bulk)
+    {
+        var list = entities.ToList();
+        await TransactionScope.ExecuteAsync(Factory, async uow =>
+        {
+            var sqlite = (SqliteUnitOfWork)uow;
+            if (strategy == InsertStrategy.Bulk)
+                await sqlite.Connection.InsertAsync(list, sqlite.Transaction);
+            else
+                foreach (var entity in list)
+                    await sqlite.Connection.InsertAsync(entity, sqlite.Transaction);
+        }, unitOfWork);
+    }
 }
