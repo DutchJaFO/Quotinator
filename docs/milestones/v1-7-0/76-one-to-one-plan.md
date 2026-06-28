@@ -2,7 +2,7 @@
 
 **Issue:** https://github.com/DutchJaFO/Quotinator/issues/76  
 **Milestone:** v1.7.0  
-**Status:** 🔴 Open
+**Status:** 🟡 Code complete — pending release | T1 ⬜ T2 ⬜
 
 ---
 
@@ -127,22 +127,22 @@ Cascade soft-delete is the expected pattern for most 1:1 relationships. Document
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | Shared-PK vs separate-PK convention documented with when-to-use guidance and soft-delete strategy | Code review | `docs/data-access.md` — both layouts described, helper methods documented |
-| 2 | ⬜ | `IOneToOneRepository<TParent, TDetail>` interface exists with `GetDetailAsync` | Build | `dotnet build --configuration Release` — 0 errors |
-| 3 | ⬜ | `SqliteOneToOneRepository<TParent, TDetail>` abstract base exists; extends `AggregateRepository`; provides `GetDetailBySharedKeyAsync` and `GetDetailByForeignKeyAsync` helpers | Build | `dotnet build --configuration Release` — 0 errors |
-| 4 | ⬜ | `RepositorySql.SelectByForeignKey` passes CVE aggregate guard | Unit test | `RepositorySqlGuardTests.RepositorySqlFactory_PassesAggregateGuard["SelectByForeignKey"]` |
-| 5 | ⬜ | Shared PK: insert parent+detail in one transaction — both rows committed | Integration test | `OneToOneRepositoryTests.SharedPk_Insert_BothRowsCommitted` |
-| 6 | ⬜ | Shared PK: both inserts produce audit entries | Integration test | `OneToOneRepositoryTests.SharedPk_Insert_AuditEntriesForBoth` |
-| 7 | ⬜ | Shared PK: rollback leaves neither row | Integration test | `OneToOneRepositoryTests.SharedPk_Insert_Rollback_NeitherRowPersists` |
-| 8 | ⬜ | Shared PK: `GetDetailAsync` returns the detail by parent ID | Integration test | `OneToOneRepositoryTests.SharedPk_GetDetailAsync_ReturnsDetail` |
-| 9 | ⬜ | Shared PK: `GetDetailAsync` returns null when no detail exists | Integration test | `OneToOneRepositoryTests.SharedPk_GetDetailAsync_ReturnsNull_WhenNoDetail` |
-| 10 | ⬜ | Separate FK: insert parent+detail in one transaction — both rows committed | Integration test | `OneToOneRepositoryTests.SeparateFk_Insert_BothRowsCommitted` |
-| 11 | ⬜ | Separate FK: both inserts produce audit entries | Integration test | `OneToOneRepositoryTests.SeparateFk_Insert_AuditEntriesForBoth` |
-| 12 | ⬜ | Separate FK: rollback leaves neither row | Integration test | `OneToOneRepositoryTests.SeparateFk_Insert_Rollback_NeitherRowPersists` |
-| 13 | ⬜ | Separate FK: `GetDetailAsync` returns the detail by FK column | Integration test | `OneToOneRepositoryTests.SeparateFk_GetDetailAsync_ReturnsDetail` |
-| 14 | ⬜ | Separate FK: `GetDetailAsync` returns null when no detail exists | Integration test | `OneToOneRepositoryTests.SeparateFk_GetDetailAsync_ReturnsNull_WhenNoDetail` |
-| 15 | ⬜ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` |
-| 16 | ⬜ | All tests pass | Build | `dotnet test --configuration Release` |
+| 1 | ✅ | Shared-PK vs separate-PK convention documented with when-to-use guidance and soft-delete strategy | Code review | `docs/data-access.md` — both layouts described, helper methods documented |
+| 2 | ✅ | `IOneToOneRepository<TParent, TDetail>` interface exists with `GetDetailAsync` | Build | `dotnet build --configuration Release` — 0 errors |
+| 3 | ✅ | `SqliteOneToOneRepository<TParent, TDetail>` abstract base exists; extends `AggregateRepository`; provides `GetDetailBySharedKeyAsync` and `GetDetailByForeignKeyAsync` helpers | Build | `dotnet build --configuration Release` — 0 errors |
+| 4 | ✅ | `RepositorySql.SelectByForeignKey` passes CVE aggregate guard | Unit test | `RepositorySqlGuardTests.RepositorySqlFactory_PassesAggregateGuard["SelectByForeignKey"]` — ✅ |
+| 5 | ✅ | Shared PK: insert parent+detail in one transaction — both rows committed | Integration test | `OneToOneRepositoryTests.SharedPk_Insert_BothRowsCommitted` — ✅ |
+| 6 | ✅ | Shared PK: both inserts produce audit entries | Integration test | `OneToOneRepositoryTests.SharedPk_Insert_AuditEntriesForBoth` — ✅ |
+| 7 | ✅ | Shared PK: rollback leaves neither row | Integration test | `OneToOneRepositoryTests.SharedPk_Insert_Rollback_NeitherRowPersists` — ✅ |
+| 8 | ✅ | Shared PK: `GetDetailAsync` returns the detail by parent ID | Integration test | `OneToOneRepositoryTests.SharedPk_GetDetailAsync_ReturnsDetail` — ✅ |
+| 9 | ✅ | Shared PK: `GetDetailAsync` returns null when no detail exists | Integration test | `OneToOneRepositoryTests.SharedPk_GetDetailAsync_ReturnsNull_WhenNoDetail` — ✅ |
+| 10 | ✅ | Separate FK: insert parent+detail in one transaction — both rows committed | Integration test | `OneToOneRepositoryTests.SeparateFk_Insert_BothRowsCommitted` — ✅ |
+| 11 | ✅ | Separate FK: both inserts produce audit entries | Integration test | `OneToOneRepositoryTests.SeparateFk_Insert_AuditEntriesForBoth` — ✅ |
+| 12 | ✅ | Separate FK: rollback leaves neither row | Integration test | `OneToOneRepositoryTests.SeparateFk_Insert_Rollback_NeitherRowPersists` — ✅ |
+| 13 | ✅ | Separate FK: `GetDetailAsync` returns the detail by FK column | Integration test | `OneToOneRepositoryTests.SeparateFk_GetDetailAsync_ReturnsDetail` — ✅ |
+| 14 | ✅ | Separate FK: `GetDetailAsync` returns null when no detail exists | Integration test | `OneToOneRepositoryTests.SeparateFk_GetDetailAsync_ReturnsNull_WhenNoDetail` — ✅ |
+| 15 | ✅ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` — 0 warnings, 0 errors |
+| 16 | ✅ | All tests pass | Build | `dotnet test --configuration Release` — 179 passed, 0 warnings |
 | 17 | ⬜ | App starts without error | T1 | User starts app in VS; confirms startup banner |
 
 ### T1 / T2 / T3
