@@ -10,6 +10,7 @@ This document covers the two data access patterns in `Quotinator.Data` and the t
 |---------|----------|
 | `IRepository<T>` / `SqliteRepository<T>` | CRUD on a single, flat table |
 | `AggregateRepository<TParent, TChild>` | Parent table with a child collection written atomically |
+| `SqliteOneToOneRepository<TParent, TDetail>` | Parent table paired with exactly one detail row, written atomically and loaded by parent ID |
 | `JoinQueryRepository<TResult>` + `IJoinStrategy<TResult>` | Read-only query that joins two or more tables, or returns a projection (a subset or combination of columns) |
 
 Never reach for a join strategy for single-table reads — `IRepository<T>` is simpler and already tested.
@@ -77,6 +78,81 @@ public class OrderRepository(
 ```
 
 `AggregateRepository.InsertAsync` wraps the entire write in `TransactionScope.ExecuteAsync`, so a child failure rolls back the parent insert. If a caller-provided `IUnitOfWork` is passed, the aggregate joins that transaction without committing it.
+
+---
+
+## One-to-one writes and reads — `SqliteOneToOneRepository<TParent, TDetail>`
+
+Extends `AggregateRepository<TParent, TDetail>` (which handles atomic writes) and adds a read side for loading the paired detail record.
+
+### Two layouts
+
+#### Shared primary key
+
+Detail's `Id` equals the parent's `Id`. Use when parent and detail are inseparable.
+
+```sql
+CREATE TABLE Widgets      (Id TEXT PRIMARY KEY, ...);
+CREATE TABLE WidgetDetails(Id TEXT PRIMARY KEY REFERENCES Widgets(Id), ...);
+```
+
+Override `GetDetailAsync` to delegate to `GetDetailBySharedKeyAsync`:
+
+```csharp
+public override Task<WidgetDetail?> GetDetailAsync(Guid parentId, IUnitOfWork? uow = null)
+    => GetDetailBySharedKeyAsync(parentId, uow);
+```
+
+#### Separate foreign key
+
+Detail has its own `Id` and a FK column pointing back to the parent. Use when the detail can have an independent lifetime or may not always be present.
+
+```sql
+CREATE TABLE Widgets        (Id TEXT PRIMARY KEY, ...);
+CREATE TABLE WidgetDetailsFk(Id TEXT PRIMARY KEY, WidgetId TEXT REFERENCES Widgets(Id), ...);
+```
+
+Override `GetDetailAsync` to delegate to `GetDetailByForeignKeyAsync`, passing the FK column name:
+
+```csharp
+public override Task<WidgetDetailFk?> GetDetailAsync(Guid parentId, IUnitOfWork? uow = null)
+    => GetDetailByForeignKeyAsync("WidgetId", parentId, uow);
+```
+
+The FK query uses `RepositorySql.SelectByForeignKey(tableName, fkColumn)` — bracket-quoted, parameterised, and guard-tested.
+
+### Soft-delete strategy
+
+The base class does not prescribe a soft-delete strategy. Document the choice in the concrete repository:
+
+| Strategy | When to use |
+|----------|-------------|
+| **Cascade** — soft-delete parent also soft-deletes the detail in one `TransactionScope` | Parent and detail are always queried together |
+| **Independent** — only the parent is soft-deleted; detail remains active | Detail has a meaningful independent lifetime |
+
+### Full example
+
+```csharp
+public sealed class WidgetRepository(
+    IDbConnectionFactory factory,
+    IAuditWriter auditWriter,
+    ICallerContext callerContext,
+    SqliteRepository<WidgetDetail> detailRepo)
+    : SqliteOneToOneRepository<Widget, WidgetDetail>(factory, auditWriter, callerContext)
+{
+    protected override SqliteRepository<WidgetDetail> ChildRepository => detailRepo;
+
+    protected override IReadOnlyList<WidgetDetail> GetChildren(Widget parent) =>
+    [
+        new WidgetDetail { Id = parent.Id, Notes = parent.Notes }  // shared PK: copy Id
+    ];
+
+    public override Task<WidgetDetail?> GetDetailAsync(Guid parentId, IUnitOfWork? uow = null)
+        => GetDetailBySharedKeyAsync(parentId, uow);
+}
+```
+
+`InsertAsync(parent)` atomically writes the parent row, the detail row, and an audit entry for each. `GetDetailAsync(parentId)` returns the detail or `null` if none exists.
 
 ---
 

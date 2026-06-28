@@ -31,4 +31,11 @@ internal static class RepositorySql
     /// <summary>Purges all soft-deleted records from the table.</summary>
     internal static string Purge(string tableName)
         => $"DELETE FROM {tableName} WHERE IsDeleted = 1";
+
+    /// <summary>
+    /// Selects the active detail record whose <paramref name="fkColumn"/> matches the given parent ID.
+    /// Used by <see cref="SqliteOneToOneRepository{TParent,TDetail}"/> for separate-FK layouts.
+    /// </summary>
+    internal static string SelectByForeignKey(string tableName, string fkColumn)
+        => $"SELECT * FROM [{tableName}] WHERE [{fkColumn}] = @parentId AND [IsDeleted] = 0";
 }

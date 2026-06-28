@@ -30,8 +30,9 @@ public class RepositorySqlGuardTests
             ["SoftDelete",    RepositorySql.SoftDelete(t)],
             ["SelectDeleted", RepositorySql.SelectDeleted(t)],
             ["Restore",       RepositorySql.Restore(t)],
-            ["HardDelete",    RepositorySql.HardDelete(t)],
-            ["Purge",         RepositorySql.Purge(t)],
+            ["HardDelete",           RepositorySql.HardDelete(t)],
+            ["Purge",                RepositorySql.Purge(t)],
+            ["SelectByForeignKey",   RepositorySql.SelectByForeignKey(t, "ParentId")],
 
             // Audit factory methods — all four filter-flag combinations.
             ["Audit.SelectPaged(false,false)", Sql.Audit.SelectPaged(false, false)],
