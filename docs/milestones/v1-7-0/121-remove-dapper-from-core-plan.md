@@ -242,7 +242,7 @@ A corresponding `/CVE/Quotinator.Engine/` and `/CVE/Quotinator.Engine.Tests/` so
 | 9 | ❌ | `AuditEntry` remains in `Quotinator.Data.Entities`; Data has no other domain entities | Code review | `src/Quotinator.Data/Entities/` contains only `AuditEntry.cs` |
 | 10 | ✅ | `DatabaseConfiguration` abstract base exists in Data with `RegisterEnumHandler<TEnum>()` helper | Build | `dotnet build --configuration Release` — 0 errors |
 | 11 | ❌ | `QuotinatorDapperConfiguration` in Engine extends `DatabaseConfiguration`; registers `Genre` and `QuoteType` handlers | Build | `dotnet build --configuration Release` — 0 errors |
-| 12 | ❌ | `DatabaseInitializer` base in Data is abstract; generic migration execution only | Code review | No Quotinator-domain SQL or seeding logic in `DatabaseInitializer` |
+| 12 | 🔵 | `DatabaseInitializer` base in Data has virtual seeding hooks; domain seeding overridden by Engine subclass in step 9 | Code review | `OnInitialisedAsync`, `OnReseedAsync`, `OnResetAsync` are protected virtual |
 | 13 | ❌ | `QuotinatorDatabaseInitializer` in Engine provides migrations and seeds via `IRepository<T>` — no Dapper calls in Engine seeding | Code review | `QuotinatorDatabaseInitializer.cs` contains no `using Dapper` |
 | 14 | ❌ | `SqliteQuoteService` in Engine implements `IQuoteService` | Build | `dotnet build --configuration Release` — 0 errors |
 | 15 | ❌ | `Quotinator.Data` contains no Quotinator-domain types (Quotes, Sources, Persons, etc.) | Code review | `src/Quotinator.Data/` has no files referencing `IQuoteService`, `QuoteResponse`, or domain entity names |
