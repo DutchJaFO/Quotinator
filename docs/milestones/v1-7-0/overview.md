@@ -37,7 +37,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#76](https://github.com/DutchJaFO/Quotinator/issues/76) | Add 1:1 relationship pattern to Quotinator.Data | 🟡 Code complete — pending release | T1 ✅ T2 ✅ | [76-one-to-one-plan.md](76-one-to-one-plan.md) |
 | [#77](https://github.com/DutchJaFO/Quotinator/issues/77) | Add many-to-many relationship pattern to Quotinator.Data | 🟡 Code complete — pending release | T1 ✅ T2 ✅ | [77-many-to-many-plan.md](77-many-to-many-plan.md) |
 | [#73](https://github.com/DutchJaFO/Quotinator/issues/73) | Audit trail: record who did what on which record in which table | 🟡 Code complete — pending release | T1 ✅ T2 ✅ | [73-audit-trail-plan.md](73-audit-trail-plan.md) |
-| [#121](https://github.com/DutchJaFO/Quotinator/issues/121) | Refactor: remove Dapper dependency from SqliteQuoteService | 🔴 Not started | T1, T2 | [121-remove-dapper-from-core-plan.md](121-remove-dapper-from-core-plan.md) |
+| [#121](https://github.com/DutchJaFO/Quotinator/issues/121) | Refactor: remove Dapper dependency from SqliteQuoteService | 🔵 In progress — steps 1–2 complete | T1, T2 | [121-remove-dapper-from-core-plan.md](121-remove-dapper-from-core-plan.md) |
 
 ---
 

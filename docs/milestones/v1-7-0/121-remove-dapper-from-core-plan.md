@@ -234,13 +234,13 @@ A corresponding `/CVE/Quotinator.Engine/` and `/CVE/Quotinator.Engine.Tests/` so
 | 1 | ❌ | `grep -rn "using Dapper" src/Quotinator.Core/` returns no matches | Shell | Command returns no output |
 | 2 | ❌ | Dapper absent from `Quotinator.Core.csproj` | Code review | No `Dapper` or `Microsoft.Data.Sqlite` in package references |
 | 3 | ❌ | `Quotinator.Core.csproj` has no project reference to `Quotinator.Data` | Code review | ProjectReference entry removed |
-| 4 | ❌ | `Quotinator.Engine` project exists; builds clean | Build | `dotnet build --configuration Release` — 0 errors |
-| 5 | ❌ | `Quotinator.Engine` references Core and Data; is not referenced by either | Code review | `.csproj` project references correct; Core and Data `.csproj` do not reference Engine |
+| 4 | ✅ | `Quotinator.Engine` project exists; builds clean | Build | `dotnet build --configuration Release` — 0 errors |
+| 5 | ✅ | `Quotinator.Engine` references Core and Data; is not referenced by either | Code review | `.csproj` project references correct; Core and Data `.csproj` do not reference Engine |
 | 6 | ❌ | `Genre`, `QuoteType` in `Quotinator.Core.Models` | Build | `dotnet build --configuration Release` — 0 errors |
 | 7 | ❌ | `SourceQuote`, `SourceQuoteTranslation` in `Quotinator.Core.Import` | Build | `dotnet build --configuration Release` — 0 errors |
 | 8 | ❌ | Domain entities (`Character`, `Source`, `QuoteEntity`, etc.) in `Quotinator.Engine.Entities` | Build | `dotnet build --configuration Release` — 0 errors |
 | 9 | ❌ | `AuditEntry` remains in `Quotinator.Data.Entities`; Data has no other domain entities | Code review | `src/Quotinator.Data/Entities/` contains only `AuditEntry.cs` |
-| 10 | ❌ | `DatabaseConfiguration` abstract base exists in Data with `RegisterEnumHandler<TEnum>()` helper | Build | `dotnet build --configuration Release` — 0 errors |
+| 10 | ✅ | `DatabaseConfiguration` abstract base exists in Data with `RegisterEnumHandler<TEnum>()` helper | Build | `dotnet build --configuration Release` — 0 errors |
 | 11 | ❌ | `QuotinatorDapperConfiguration` in Engine extends `DatabaseConfiguration`; registers `Genre` and `QuoteType` handlers | Build | `dotnet build --configuration Release` — 0 errors |
 | 12 | ❌ | `DatabaseInitializer` base in Data is abstract; generic migration execution only | Code review | No Quotinator-domain SQL or seeding logic in `DatabaseInitializer` |
 | 13 | ❌ | `QuotinatorDatabaseInitializer` in Engine provides migrations and seeds via `IRepository<T>` — no Dapper calls in Engine seeding | Code review | `QuotinatorDatabaseInitializer.cs` contains no `using Dapper` |
