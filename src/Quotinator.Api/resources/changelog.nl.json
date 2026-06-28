@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": true,
   "unreleased": {
-    "issues": [73, 125, 126],
+    "issues": [73, 74, 125, 126],
     "highlights": [
       "Endpoint-verzoeken worden nu vastgelegd als een gekoppeld start- en eindpaar — een korte ID verbindt beide regels, waardoor overlappende verzoeken eenvoudig te traceren zijn. Webpagina- en bestandsverzoeken zijn ondergebracht in eigen logcategorieën zodat de standaarduitvoer alleen API-activiteit toont.",
       "Validatiefouten op quote-eindpunten geven nu de juiste HTTP-foutstatuscode terug — filters met ongeldige waarden geven 422, structureel ongeldige verzoeken geven 400. Clients kunnen nu fouten herkennen aan de HTTP-statuscode zonder de antwoordtekst te hoeven verwerken.",
@@ -19,11 +19,15 @@
     "changed": [
       "Middleware voor verzoekregistratie verplaatst van `Program.cs` naar `RequestLoggingMiddleware : IMiddleware` — elk HTTP-verzoek produceert twee logregels: één bij aankomst (voor verwerking) en één bij voltooiing, met een gemeenschappelijk correlatie-ID van 8 hexadecimale tekens (issue #125)",
       "Verzoekregistratie routeert nu op pad naar drie categorieën: `[Api - Request]` op Information-niveau voor `/api/**`-endpoints; `[Web - Request]` op Debug-niveau voor Blazor-pagina's, Scalar-interface en taalroutes; `[Web - Asset]` op Debug-niveau voor statische bestanden en framework-assets — operators zien op het standaard `info`-niveau alleen API-verkeer (issue #125)",
-      "Serilog `{:l}` letterlijk-formaatspecificatie toegepast op alle tekenreekseigenschappen in verzoeklogsjablonen — methode, correlatie-ID en URL worden niet langer omsloten door dubbele aanhalingstekens in de gerenderde uitvoer (issue #125)"
+      "Serilog `{:l}` letterlijk-formaatspecificatie toegepast op alle tekenreekseigenschappen in verzoeklogsjablonen — methode, correlatie-ID en URL worden niet langer omsloten door dubbele aanhalingstekens in de gerenderde uitvoer (issue #125)",
+      "`Scalar.AspNetCore` bijgewerkt van 2.16.4 naar 2.16.6",
+      "`MSTest` bijgewerkt van 4.0.2 naar 4.2.3 in `Quotinator.Data.Tests` (alleen tests)",
+      "`Microsoft.Extensions.Logging.Abstractions` bijgewerkt van 10.0.0 naar 10.0.9 in `Quotinator.Data`"
     ],
     "fixed": [
       "Validatiefouten op quote-eindpunten geven nu 4xx-statuscodes terug — niet-herkend genre of type geeft 422, decade niet deelbaar door 10 geeft 422, onmogelijk jaarbereik geeft 422, te lange of verdachte filterwaarden geven 400; voorheen gaven alle eindpunten 200 terug met een foutomslag in de antwoordtekst (issue #126)",
-      "Ongeldige waarden voor numerieke parameters (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) geven nu 422 terug; de foutmelding vermeldt de specifieke parameter die niet kon worden verwerkt (issue #126)"
+      "Ongeldige waarden voor numerieke parameters (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) geven nu 422 terug; de foutmelding vermeldt de specifieke parameter die niet kon worden verwerkt (issue #126)",
+      "De REST API-pagina toont nu de auditlog-eindpunten (`GET` en `DELETE /api/v1/admin/audit`) in het beheerdersgedeelte (issue #73)"
     ]
   },
   "sectionHeaders": {

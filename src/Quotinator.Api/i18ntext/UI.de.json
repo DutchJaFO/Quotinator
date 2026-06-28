@@ -54,5 +54,7 @@
   "AdminEndpointsDescription": "Diese Endpunkte erfordern einen X-Api-Key-Header, der mit dem in den Add-on-Optionen konfigurierten admin_api_key übereinstimmt. Sie sind nicht verfügbar, wenn kein Schlüssel konfiguriert ist.",
   "AdminPreviewSeedLabel": "Importvorschau anzeigen",
   "AdminReseedLabel": "Datenbank neu befüllen",
-  "AdminResetLabel": "Datenbank zurücksetzen"
+  "AdminResetLabel": "Datenbank zurücksetzen",
+  "AdminAuditLogLabel": "Auditprotokoll anzeigen",
+  "AdminClearAuditLogLabel": "Auditprotokoll löschen"
 }

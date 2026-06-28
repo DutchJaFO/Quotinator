@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-27 19:36 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-28 08:44 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -26,10 +26,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Request logging middleware extracted from `Program.cs` to `RequestLoggingMiddleware : IMiddleware` — each HTTP request produces two log lines: one on arrival (before processing) and one on completion, sharing an 8-character hex correlation ID (issue #125)
 - Request log now routes by path to three categories: `[Api - Request]` at Information for `/api/**` endpoints; `[Web - Request]` at Debug for Blazor pages, Scalar UI, and culture routes; `[Web - Asset]` at Debug for static files and framework assets — operators see only API traffic at the default `info` log level (issue #125)
 - Serilog `{:l}` literal format specifier applied to all string properties in request log templates — method, correlation ID, and URL are no longer wrapped in double-quotes in rendered output (issue #125)
+- `Scalar.AspNetCore` updated from 2.16.4 to 2.16.6
+- `MSTest` updated from 4.0.2 to 4.2.3 in `Quotinator.Data.Tests` (test only)
+- `Microsoft.Extensions.Logging.Abstractions` updated from 10.0.0 to 10.0.9 in `Quotinator.Data`
 
 ### Fixed
 - Validation errors on quote endpoints now return 4xx status codes — unrecognised genre or type returns 422, decade not divisible by 10 returns 422, impossible year range returns 422, oversized or suspicious filter values return 400; previously all returned 200 with an error envelope in the body (issue #126)
 - Invalid values for numeric parameters (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) now return 422; the error detail names the specific parameter that failed (issue #126)
+- REST API page now lists the audit log endpoints (`GET` and `DELETE /api/v1/admin/audit`) in the admin section (issue #73)
 
 ---
 

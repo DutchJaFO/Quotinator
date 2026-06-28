@@ -54,5 +54,7 @@
   "AdminEndpointsDescription": "Deze eindpunten vereisen een X-Api-Key-header die overeenkomt met de admin_api_key in de add-on-opties. Ze zijn niet beschikbaar als er geen sleutel is ingesteld.",
   "AdminPreviewSeedLabel": "Importvoorbeeld bekijken",
   "AdminReseedLabel": "Database opnieuw seeden",
-  "AdminResetLabel": "Database resetten"
+  "AdminResetLabel": "Database resetten",
+  "AdminAuditLogLabel": "Auditlog bekijken",
+  "AdminClearAuditLogLabel": "Auditlog wissen"
 }

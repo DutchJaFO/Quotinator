@@ -133,6 +133,34 @@ public class SqlQueryGuardTests
     }
 
     /// <summary>
+    /// Asserts that <c>Sql.Joins.Inner</c> and <c>Sql.Joins.Left</c> bracket-quote all identifiers
+    /// in their output — table name, alias, and column references all wrapped in <c>[…]</c>.
+    /// </summary>
+    [TestMethod]
+    public void SqlJoins_Inner_OutputIsBracketQuoted()
+    {
+        var sql = Sql.Joins.Inner("Owners", "o", "w", "OwnerId", "Id");
+        StringAssert.Contains(sql, "[Owners]",  "Table name must be bracket-quoted");
+        StringAssert.Contains(sql, "[o]",       "Right alias must be bracket-quoted");
+        StringAssert.Contains(sql, "[w]",       "Left alias must be bracket-quoted");
+        StringAssert.Contains(sql, "[OwnerId]", "Left key must be bracket-quoted");
+        StringAssert.Contains(sql, "[Id]",      "Right key must be bracket-quoted");
+        StringAssert.Contains(sql, "INNER JOIN", "Fragment must be an INNER JOIN");
+    }
+
+    [TestMethod]
+    public void SqlJoins_Left_OutputIsBracketQuoted()
+    {
+        var sql = Sql.Joins.Left("Owners", "o", "w", "OwnerId", "Id");
+        StringAssert.Contains(sql, "[Owners]",  "Table name must be bracket-quoted");
+        StringAssert.Contains(sql, "[o]",       "Right alias must be bracket-quoted");
+        StringAssert.Contains(sql, "[w]",       "Left alias must be bracket-quoted");
+        StringAssert.Contains(sql, "[OwnerId]", "Left key must be bracket-quoted");
+        StringAssert.Contains(sql, "[Id]",      "Right key must be bracket-quoted");
+        StringAssert.Contains(sql, "LEFT JOIN", "Fragment must be a LEFT JOIN");
+    }
+
+    /// <summary>
     /// Discovers all concrete <see cref="IJoinStrategy{TResult}"/> implementations in <c>Quotinator.Data</c>
     /// via reflection, calls <see cref="IJoinStrategy{TResult}.BuildSql"/> on each, and asserts the result
     /// passes the aggregate vulnerability guard. Adding a new strategy class automatically adds it to this test.

@@ -54,5 +54,7 @@
   "AdminEndpointsDescription": "These endpoints require an X-Api-Key header matching the admin_api_key configured in the add-on options. They are unavailable when no key is configured.",
   "AdminPreviewSeedLabel": "Preview seed import",
   "AdminReseedLabel": "Reseed database",
-  "AdminResetLabel": "Reset database"
+  "AdminResetLabel": "Reset database",
+  "AdminAuditLogLabel": "View audit log",
+  "AdminClearAuditLogLabel": "Clear audit log"
 }

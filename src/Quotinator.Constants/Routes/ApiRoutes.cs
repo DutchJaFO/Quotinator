@@ -8,6 +8,7 @@ public static class ApiRoutes
     public const string DatabaseSeedPreview = "/api/v1/admin/database/seed/preview";
     public const string DatabaseReseed      = "/api/v1/admin/database/reseed";
     public const string DatabaseReset       = "/api/v1/admin/database/reset";
+    public const string AuditLog            = "/api/v1/admin/audit";
     public const string CultureSet       = "/Culture/Set";
     public const string ScalarUi         = "/scalar/v1";
     public const string OpenApiSpec      = "/openapi/v1.json";
