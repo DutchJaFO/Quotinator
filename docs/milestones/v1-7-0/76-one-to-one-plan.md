@@ -2,7 +2,7 @@
 
 **Issue:** https://github.com/DutchJaFO/Quotinator/issues/76  
 **Milestone:** v1.7.0  
-**Status:** 🟡 Code complete — pending release | T1 ⬜ T2 ⬜
+**Status:** 🟡 Code complete — pending release | T1 ✅ T2 ⬜
 
 ---
 
@@ -143,7 +143,7 @@ Cascade soft-delete is the expected pattern for most 1:1 relationships. Document
 | 14 | ✅ | Separate FK: `GetDetailAsync` returns null when no detail exists | Integration test | `OneToOneRepositoryTests.SeparateFk_GetDetailAsync_ReturnsNull_WhenNoDetail` — ✅ |
 | 15 | ✅ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` — 0 warnings, 0 errors |
 | 16 | ✅ | All tests pass | Build | `dotnet test --configuration Release` — 179 passed, 0 warnings |
-| 17 | ⬜ | App starts without error | T1 | User starts app in VS; confirms startup banner |
+| 17 | ✅ | App starts without error | T1 | Confirmed 2026-06-28: schema v4, 788 quotes, banner clean |
 
 ### T1 / T2 / T3
 
