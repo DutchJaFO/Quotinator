@@ -215,29 +215,52 @@
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
     <Project Path="tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" />
+    <Project Path="tests/Quotinator.Constants.Tests/Quotinator.Constants.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
     <Project Path="tests/Quotinator.Data.Example/Quotinator.Data.Example.csproj" />
     <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
+    <Project Path="tests/Quotinator.Data.Testing.Tests/Quotinator.Data.Testing.Tests.csproj" />
     <Project Path="tests/Quotinator.Engine.Tests/Quotinator.Engine.Tests.csproj" />
   </Folder>
   <Folder Name="/CVE/" />
+  <Folder Name="/CVE/Quotinator.Api/">
+    <File Path="src/Quotinator.Api/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Api.Tests/">
+    <File Path="tests/Quotinator.Api.Tests/CVE/.gitkeep" />
+  </Folder>
   <Folder Name="/CVE/Quotinator.Changelog/">
     <File Path="src/Quotinator.Changelog/CVE/.gitkeep" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Changelog.Tests/">
     <File Path="tests/Quotinator.Changelog.Tests/CVE/.gitkeep" />
   </Folder>
+  <Folder Name="/CVE/Quotinator.Constants/">
+    <File Path="src/Quotinator.Constants/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Constants.Tests/">
+    <File Path="tests/Quotinator.Constants.Tests/CVE/.gitkeep" />
+  </Folder>
   <Folder Name="/CVE/Quotinator.Core/">
     <File Path="src/Quotinator.Core/CVE/CVE-2025-6965.md" />
   </Folder>
+  <Folder Name="/CVE/Quotinator.Core.Tests/">
+    <File Path="tests/Quotinator.Core.Tests/CVE/.gitkeep" />
+  </Folder>
   <Folder Name="/CVE/Quotinator.Data/">
     <File Path="src/Quotinator.Data/CVE/CVE-2025-6965.md" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Data.Example/">
+    <File Path="tests/Quotinator.Data.Example/CVE/.gitkeep" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Data.Tests/">
     <File Path="tests/Quotinator.Data.Tests/CVE/CVE-2025-6965.md" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Data.Testing/">
     <File Path="src/Quotinator.Data.Testing/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Data.Testing.Tests/">
+    <File Path="tests/Quotinator.Data.Testing.Tests/CVE/.gitkeep" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Engine/">
     <File Path="src/Quotinator.Engine/CVE/.gitkeep" />

@@ -101,16 +101,22 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 ### Project structure
 ```
 src/
-  Quotinator.Constants/   # Route strings, tag names, error message keys — no dependencies
-  Quotinator.Core/        # Models, interfaces, all service implementations
-  Quotinator.Data/        # SQLite infrastructure — Dapper, connection factory, type handlers, migrations
-  Quotinator.Changelog/   # Changelog schema, models, and generator logic
-  Quotinator.Api/         # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
+  Quotinator.Constants/        # Route strings, tag names, error message keys — no dependencies
+  Quotinator.Core/             # Domain models, interfaces, and in-memory service implementations
+  Quotinator.Data/             # Generic, reusable SQLite/Dapper infrastructure — domain-agnostic
+  Quotinator.Data.Testing/     # Test helper library — stubs, fakes, disposable SQLite DB (reference from test projects only)
+  Quotinator.Engine/           # SQLite-backed Quotinator domain implementation — bridges Core + Data
+  Quotinator.Changelog/        # Changelog schema, models, and generator logic
+  Quotinator.Api/              # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
 tests/
-  Quotinator.Api.Tests/          # Endpoint integration tests (WebApplicationFactory)
-  Quotinator.Changelog.Tests/    # Changelog schema and generation tests
-  Quotinator.Core.Tests/         # Unit and service tests
-  Quotinator.Data.Tests/         # SQLite integration tests (real DB, no fakes)
+  Quotinator.Api.Tests/             # Endpoint integration tests (WebApplicationFactory)
+  Quotinator.Changelog.Tests/       # Changelog schema and generation tests
+  Quotinator.Constants.Tests/       # Tests for route and constant definitions
+  Quotinator.Core.Tests/            # Unit tests for domain logic and in-memory service
+  Quotinator.Data.Example/          # Concrete example implementations of Data patterns (not a test runner)
+  Quotinator.Data.Testing.Tests/    # Tests for the Data.Testing helper library
+  Quotinator.Data.Tests/            # Integration tests for Data infrastructure (real SQLite, no fakes)
+  Quotinator.Engine.Tests/          # Integration tests for Engine (SqliteQuoteService, migrations)
 data/sources/             # Bundled source files (one JSON per dataset) + manifest
 docs/                     # Workflow guides, testing policy, CVE docs, milestone plans
 scripts/
@@ -120,7 +126,7 @@ docker/Dockerfile         # Multi-stage build, targets linux/amd64 + linux/arm64
 addon/                    # Home Assistant add-on manifest and assets
 ```
 
-Dependency direction: `Quotinator.Api` → `Quotinator.Core` → (no deps); `Quotinator.Api` → `Quotinator.Constants` (no deps); `Quotinator.Api` → `Quotinator.Data`; `Quotinator.Core` → `Quotinator.Data`. Core does not reference Constants.
+Dependency direction: `Quotinator.Api` → `Quotinator.Engine` → `Quotinator.Core`; `Quotinator.Engine` → `Quotinator.Data`; `Quotinator.Api` → `Quotinator.Constants`. Core and Data have no dependencies on each other or on Engine. `Quotinator.Data.Testing` → `Quotinator.Data` only.
 
 ### File placement rule
 

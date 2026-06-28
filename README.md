@@ -25,14 +25,20 @@ Quotinator/
 ├── src/
 │   ├── Quotinator.Api/          # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
 │   ├── Quotinator.Changelog/    # Changelog library — models, schema validation, formatters
-│   ├── Quotinator.Core/         # Models, interfaces, service implementations, SQLite services
-│   ├── Quotinator.Data/         # SQLite infrastructure — connection factory, type handlers, base types
-│   └── Quotinator.Constants/    # Route strings, tag names, error message keys (no dependencies)
+│   ├── Quotinator.Constants/    # Route strings, tag names, error message keys (no dependencies)
+│   ├── Quotinator.Core/         # Domain models, interfaces, and in-memory service implementations
+│   ├── Quotinator.Data/         # Generic, reusable SQLite/Dapper infrastructure (domain-agnostic)
+│   ├── Quotinator.Data.Testing/ # Test helper library — stubs, fakes, and disposable SQLite DB
+│   └── Quotinator.Engine/       # SQLite-backed Quotinator domain implementation (bridges Core + Data)
 ├── tests/
-│   ├── Quotinator.Api.Tests/    # Endpoint integration tests (WebApplicationFactory)
-│   ├── Quotinator.Changelog.Tests/ # Changelog schema and generation tests
-│   ├── Quotinator.Core.Tests/   # Unit tests for core logic and input validation
-│   └── Quotinator.Data.Tests/   # SQLite integration tests for seeder and migrations
+│   ├── Quotinator.Api.Tests/         # Endpoint integration tests (WebApplicationFactory)
+│   ├── Quotinator.Changelog.Tests/   # Changelog schema and generation tests
+│   ├── Quotinator.Constants.Tests/   # Tests for route and constant definitions
+│   ├── Quotinator.Core.Tests/        # Unit tests for domain logic and in-memory service
+│   ├── Quotinator.Data.Example/      # Concrete example implementations of Data patterns (not a test runner)
+│   ├── Quotinator.Data.Testing.Tests/ # Tests for the Data.Testing helper library
+│   ├── Quotinator.Data.Tests/        # Integration tests for Data infrastructure (real SQLite, no fakes)
+│   └── Quotinator.Engine.Tests/      # Integration tests for Engine (SqliteQuoteService, migrations)
 ├── addon/                       # Home Assistant add-on manifest, config, and translations
 ├── data/
 │   └── sources/                 # Bundled source files (one JSON per dataset) + manifest
