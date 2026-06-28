@@ -30,24 +30,38 @@ CREATE TABLE Quotes      (Id TEXT PRIMARY KEY, ...);
 CREATE TABLE QuoteDetail (Id TEXT PRIMARY KEY, QuoteId TEXT REFERENCES Quotes(Id), ExtraField TEXT);
 ```
 
+## Depends on
+
+- **#73** (audit trail) — `IAuditWriter` and `ICallerContext` are required on any `SqliteRepository<T>` derivation; all write paths route through the base class
+- **#74** (read-model query pattern) — `IUnitOfWork` is the established transaction coordination mechanism; `IRepository<T>` already has `IUnitOfWork? unitOfWork = null` on all mutating methods
+- **#75** (master/detail) — the transactional two-table write pattern is identical in structure; implement #75 first
+
 ## Scope
 
 1. Define and document the convention for shared-PK vs separate-PK layouts in `Quotinator.Data`
 2. Add a concrete implementation when the first 1:1 entity pair is needed in a milestone
-3. Evaluate whether `IRepository` methods need an optional `IDbTransaction` parameter (shared with #75 concern)
+3. All write methods use `IUnitOfWork` for transaction coordination — `IDbTransaction` is not used directly (resolved in #74/#75)
 4. Integration tests: insert both sides in one transaction; load child by parent id; rollback leaves neither row
 
 ---
+
+## Implementation notes
+
+- Concrete repository constructor must accept `IAuditWriter` and `ICallerContext` and pass them to `base`
+- All inserts route through `base.InsertAsync(entity, uow)` or a child `SqliteRepository<T>.InsertAsync(entity, uow)` — never call Dapper directly inside an override
+- For loading (`GetDetailAsync`), use a single-table query (by parent-Id or by shared PK) — no join needed for 1:1 reads; use `JoinQueryRepository` only if a denormalised read model is required
+- Soft-delete strategy for the pair must be documented per use case: either cascade (both sides soft-deleted together) or independent (only parent is soft-deleted; child remains queryable)
 
 ## Verification
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | Shared-PK vs separate-PK convention documented | Code review | `docs/data-access.md` — both layouts described with guidance on when to use each |
-| 2 | ⬜ | At least one concrete 1:1 implementation added | Code review | Repository class with `GetDetailAsync` and transactional insert |
-| 3 | ⬜ | Insert both sides in one transaction succeeds | Unit test | Test class + method (TBD at implementation) |
-| 4 | ⬜ | Rollback leaves neither row | Unit test | Test class + method (TBD at implementation) |
-| 5 | ⬜ | Load child by parent id works | Unit test | Test class + method (TBD at implementation) |
-| 6 | ⬜ | Build clean — 0 warnings, 0 errors | Live | `dotnet build --configuration Release` |
-| 7 | ⬜ | All tests pass | Live | `dotnet test --configuration Release` |
-| 8 | ⬜ | User manual test — app starts without error | Live | User starts app in VS; confirms startup without error |
+| 1 | ⬜ | Shared-PK vs separate-PK convention documented with when-to-use guidance and soft-delete strategy | Code review | `docs/data-access.md` — both layouts described |
+| 2 | ⬜ | Concrete 1:1 repository exists; constructor takes `IAuditWriter` and `ICallerContext` | Code review | Class compiles; no raw Dapper calls inside write overrides |
+| 3 | ⬜ | Insert both sides in one `IUnitOfWork` transaction succeeds | Integration test | Test class + method (TBD at implementation) |
+| 4 | ⬜ | Both inserts produce audit entries in `AuditEntries` | Integration test | Test class + method (TBD at implementation) |
+| 5 | ⬜ | Rollback leaves neither row (and no stale audit entry) | Integration test | Test class + method (TBD at implementation) |
+| 6 | ⬜ | Load child by parent id works | Integration test | Test class + method (TBD at implementation) |
+| 7 | ⬜ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` |
+| 8 | ⬜ | All tests pass | Build | `dotnet test --configuration Release` |
+| 9 | ⬜ | App starts without error | T1 | User starts app in VS; confirms startup banner |
