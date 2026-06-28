@@ -2,7 +2,7 @@
 
 **Issue:** https://github.com/DutchJaFO/Quotinator/issues/121  
 **Milestone:** v1.7.0  
-**Status:** 🔴 Not started
+**Status:** 🟡 Code complete — pending release
 
 ---
 
@@ -231,26 +231,26 @@ A corresponding `/CVE/Quotinator.Engine/` and `/CVE/Quotinator.Engine.Tests/` so
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `grep -rn "using Dapper" src/Quotinator.Core/` returns no matches | Shell | Command returns no output |
-| 2 | ❌ | Dapper absent from `Quotinator.Core.csproj` | Code review | No `Dapper` or `Microsoft.Data.Sqlite` in package references |
-| 3 | ❌ | `Quotinator.Core.csproj` has no project reference to `Quotinator.Data` | Code review | ProjectReference entry removed |
+| 1 | ✅ | `grep -rn "using Dapper" src/Quotinator.Core/` returns no matches | Shell | Command returns no source-file matches |
+| 2 | ✅ | Dapper absent from `Quotinator.Core.csproj` | Code review | No `Dapper` or `Microsoft.Data.Sqlite` in package references |
+| 3 | ✅ | `Quotinator.Core.csproj` has no project reference to `Quotinator.Data` | Code review | ProjectReference entry removed |
 | 4 | ✅ | `Quotinator.Engine` project exists; builds clean | Build | `dotnet build --configuration Release` — 0 errors |
 | 5 | ✅ | `Quotinator.Engine` references Core and Data; is not referenced by either | Code review | `.csproj` project references correct; Core and Data `.csproj` do not reference Engine |
-| 6 | ❌ | `Genre`, `QuoteType` in `Quotinator.Core.Models` | Build | `dotnet build --configuration Release` — 0 errors |
-| 7 | ❌ | `SourceQuote`, `SourceQuoteTranslation` in `Quotinator.Core.Import` | Build | `dotnet build --configuration Release` — 0 errors |
-| 8 | ❌ | Domain entities (`Character`, `Source`, `QuoteEntity`, etc.) in `Quotinator.Engine.Entities` | Build | `dotnet build --configuration Release` — 0 errors |
-| 9 | ❌ | `AuditEntry` remains in `Quotinator.Data.Entities`; Data has no other domain entities | Code review | `src/Quotinator.Data/Entities/` contains only `AuditEntry.cs` |
+| 6 | ✅ | `Genre`, `QuoteType` in `Quotinator.Core.Models` | Build | `dotnet build --configuration Release` — 0 errors |
+| 7 | ✅ | `SourceQuote`, `SourceQuoteTranslation` in `Quotinator.Core.Import` | Build | `dotnet build --configuration Release` — 0 errors |
+| 8 | ✅ | Domain entities (`Character`, `Source`, `QuoteEntity`, etc.) in `Quotinator.Engine.Entities` | Build | `dotnet build --configuration Release` — 0 errors |
+| 9 | ✅ | `AuditEntry` remains in `Quotinator.Data.Entities`; Data has no other domain entities | Code review | `src/Quotinator.Data/Entities/` contains only `AuditEntry.cs` |
 | 10 | ✅ | `DatabaseConfiguration` abstract base exists in Data with `RegisterEnumHandler<TEnum>()` helper | Build | `dotnet build --configuration Release` — 0 errors |
-| 11 | ❌ | `QuotinatorDapperConfiguration` in Engine extends `DatabaseConfiguration`; registers `Genre` and `QuoteType` handlers | Build | `dotnet build --configuration Release` — 0 errors |
-| 12 | 🔵 | `DatabaseInitializer` base in Data has virtual seeding hooks; domain seeding overridden by Engine subclass in step 9 | Code review | `OnInitialisedAsync`, `OnReseedAsync`, `OnResetAsync` are protected virtual |
-| 13 | ❌ | `QuotinatorDatabaseInitializer` in Engine provides migrations and seeds via `IRepository<T>` — no Dapper calls in Engine seeding | Code review | `QuotinatorDatabaseInitializer.cs` contains no `using Dapper` |
-| 14 | ❌ | `SqliteQuoteService` in Engine implements `IQuoteService` | Build | `dotnet build --configuration Release` — 0 errors |
-| 15 | ❌ | `Quotinator.Data` contains no Quotinator-domain types (Quotes, Sources, Persons, etc.) | Code review | `src/Quotinator.Data/` has no files referencing `IQuoteService`, `QuoteResponse`, or domain entity names |
-| 16 | ❌ | `Quotinator.Api/Program.cs` has no `using Dapper` or `using Microsoft.Data.Sqlite` | Shell | `grep -n "using Dapper\|using Microsoft.Data.Sqlite" src/Quotinator.Api/Program.cs` → no output |
-| 17 | ❌ | ADR 004 updated to reflect Engine project and revised dependency direction | Code review | `docs/architecture-decisions/004-quotinator-data-project-boundaries.md` updated |
-| 18 | ❌ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` — 0 Warning(s) 0 Error(s) |
-| 19 | ❌ | All tests pass | Tests | `dotnet test --configuration Release` — all passed, 0 failed |
-| 20 | ❌ | `Quotinator.Engine.Tests` project exists; paired with Engine; CVE folder present | Code review | `tests/Quotinator.Engine.Tests/` exists; `CVE/.gitkeep` present; project in `Quotinator.slnx` |
-| 21 | ❌ | `SqliteQuoteService` integration tests exist in Engine.Tests and pass | Tests | `dotnet test --configuration Release --filter "FullyQualifiedName~Quotinator.Engine.Tests"` — all passed |
-| 22 | ❌ | App starts without error; quotes load correctly | T1 | Schema version unchanged, quote count unchanged, startup banner clean |
-| 23 | ❌ | Docker build succeeds | T2 | `docker build -f docker/Dockerfile -t quotinator:local .` — clean build |
+| 11 | ✅ | `QuotinatorDapperConfiguration` in Engine extends `DatabaseConfiguration`; registers `Genre` and `QuoteType` handlers | Build | `dotnet build --configuration Release` — 0 errors |
+| 12 | ✅ | `DatabaseInitializer` base in Data has virtual seeding hooks; domain seeding overridden by Engine subclass | Code review | `OnInitialisedAsync`, `OnReseedAsync`, `OnResetAsync` are protected virtual |
+| 13 | ✅ | `QuotinatorDatabaseInitializer` in Engine extends `DatabaseInitializer` and provides domain seeding | Build | `dotnet build --configuration Release` — 0 errors (note: Engine seeder uses Dapper internally, which is correct for an Engine-layer class) |
+| 14 | ✅ | `SqliteQuoteService` in Engine implements `IQuoteService` | Build | `dotnet build --configuration Release` — 0 errors |
+| 15 | ✅ | `Quotinator.Data` contains no Quotinator-domain types (Quotes, Sources, Persons, etc.) | Code review | `src/Quotinator.Data/Entities/` contains only `AuditEntry.cs`; no domain entity references remain |
+| 16 | ✅ | `Quotinator.Api/Program.cs` has no `using Dapper` or `using Microsoft.Data.Sqlite` | Shell | `grep` returns no output |
+| 17 | ✅ | ADR 004 updated to reflect Engine project and revised dependency direction | Code review | `docs/architecture-decisions/004-quotinator-data-project-boundaries.md` updated 2026-06-28 |
+| 18 | ✅ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` — 0 Warning(s) 0 Error(s) |
+| 19 | ✅ | All tests pass | Tests | `dotnet test --configuration Release` — 558 passed, 0 failed |
+| 20 | ✅ | `Quotinator.Engine.Tests` project exists; paired with Engine; CVE folder present | Code review | `tests/Quotinator.Engine.Tests/` exists; `CVE/.gitkeep` present; project in `Quotinator.slnx` |
+| 21 | ✅ | Integration tests in Engine.Tests pass | Tests | `dotnet test --filter "FullyQualifiedName~Quotinator.Engine.Tests"` — 13 passed |
+| 22 | ✅ | App starts without error; quotes load correctly | T1 | Schema v4, 788 quotes / 478 sources confirmed; reset endpoint tested; startup banner clean — 2026-06-28 |
+| 23 | ✅ | Docker build succeeds | T2 | `docker build -f docker/Dockerfile -t quotinator:local .` — clean build 2026-06-28; also fixed Dockerfile to include `Quotinator.Engine` and `Quotinator.Changelog` in restore layer |

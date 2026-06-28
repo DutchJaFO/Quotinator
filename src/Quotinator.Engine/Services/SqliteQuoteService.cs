@@ -3,12 +3,10 @@ using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Connections;
-using Quotinator.Data.Entities;
 using Quotinator.Data.Models;
 using Quotinator.Data.Queries;
-using GenreEnum = Quotinator.Data.Entities.Genre;
 
-namespace Quotinator.Core.Data;
+namespace Quotinator.Engine.Services;
 
 /// <summary>
 /// <see cref="IQuoteService"/> implementation backed by SQLite + Dapper.
@@ -182,12 +180,12 @@ public sealed class SqliteQuoteService : IQuoteService
         return lang;
     }
 
-    private static IReadOnlyList<SafeValue<GenreEnum?>> LoadGenres(System.Data.IDbConnection connection, string quoteId)
-        => connection.Query<SafeValue<GenreEnum?>>(
+    private static IReadOnlyList<SafeValue<Genre?>> LoadGenres(System.Data.IDbConnection connection, string quoteId)
+        => connection.Query<SafeValue<Genre?>>(
             Sql.QuoteGenres.LoadForQuote,
             new { id = quoteId }).ToList();
 
-    private static QuoteResponse ToResponse(QuoteRow row, IReadOnlyList<SafeValue<GenreEnum?>> genres, string? requestedLang)
+    private static QuoteResponse ToResponse(QuoteRow row, IReadOnlyList<SafeValue<Genre?>> genres, string? requestedLang)
     {
         var effectiveLang = string.IsNullOrEmpty(row.EffectiveLanguage)
             ? row.OriginalLanguage

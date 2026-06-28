@@ -1,7 +1,8 @@
 using Dapper.Contrib.Extensions;
+using Quotinator.Core.Models;
 using Quotinator.Data.Models;
 
-namespace Quotinator.Data.Entities;
+namespace Quotinator.Engine.Entities;
 
 /// <summary>A film, television series, book, or other source from which quotes are drawn.</summary>
 [Table("Sources")]

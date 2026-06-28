@@ -13,10 +13,12 @@ using Quotinator.Api.Endpoints;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
-using Quotinator.Core.Data;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
-using Quotinator.Data.Helpers;
+using Quotinator.Engine.Database;
+using Quotinator.Engine.Helpers;
+using Quotinator.Engine.Repositories;
+using Quotinator.Engine.Services;
 using Quotinator.Api.Middleware;
 using Quotinator.Api.OpenApi;
 using Quotinator.Data.Import;
@@ -27,7 +29,7 @@ using Quotinator.Core.Services;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
 
-new DapperConfiguration().Configure();
+new QuotinatorDapperConfiguration().Configure();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -352,14 +354,14 @@ builder.Services.AddSingleton<IAuditReader, AuditReader>();
 var earlyLoggerFactory = LoggerFactory.Create(b => b.AddConsole());
 var earlyLogger        = earlyLoggerFactory.CreateLogger<Program>();
 var seedBatches        = BuildSeedBatches(bundledSourcesDir, importsDir, configPolicy, earlyLogger);
-builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepository>();
-builder.Services.AddSingleton<IDatabaseInitializer>(sp => new DatabaseInitializer(
+builder.Services.AddSingleton<Quotinator.Engine.Repositories.IImportBatchRepository, SqliteImportBatchRepository>();
+builder.Services.AddSingleton<IDatabaseInitializer>(sp => new QuotinatorDatabaseInitializer(
     connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
-    sp.GetRequiredService<IImportBatchRepository>(),
+    sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
     sp.GetRequiredService<IAuditWriter>(),
     sp.GetRequiredService<ICallerContext>(),
     sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
-builder.Services.AddSingleton<IQuoteService>(_ => new SqliteQuoteService(connectionFactory));
+builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Engine.Services.SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));

@@ -1,7 +1,7 @@
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Models;
 
-namespace Quotinator.Data.Entities;
+namespace Quotinator.Engine.Entities;
 
 /// <summary>A real person who said or wrote a quote — an author or public figure.</summary>
 [Table("People")]

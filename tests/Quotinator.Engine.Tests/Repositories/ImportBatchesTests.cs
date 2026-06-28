@@ -1,14 +1,14 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
-using Quotinator.Core.Data;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
-using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
+using Quotinator.Engine.Database;
+using Quotinator.Engine.Repositories;
 
-namespace Quotinator.Data.Tests.Repositories;
+namespace Quotinator.Engine.Tests.Repositories;
 
 [TestClass]
 public class ImportBatchesTests
@@ -37,26 +37,22 @@ public class ImportBatchesTests
     [TestCleanup]
     public void TestCleanup()
     {
-        // Release pooled SQLite connections before deleting the temp DB file.
         SqliteConnection.ClearAllPools();
 
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private DatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches)
+    private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
-        return new DatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
+        return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
             NoOpAuditWriter.Instance, NoOpCallerContext.Instance, logger);
     }
 
-    // Creates a minimal v2-schema database with one pre-existing quote, simulating an upgrade path.
-    // The SchemaVersion is set to 2 so that InitialiseAsync only applies Migration003.
-    // Tables include all tables queried by InitialiseAsync after migrations (CountActive, CountAll, genre re-seed).
     private async Task CreateV2DatabaseAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -111,7 +107,7 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>Schema migration version is bumped to 4 after <see cref="DatabaseInitializer.InitialiseAsync"/>.</summary>
+    /// <summary>Schema migration version is bumped to 4 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {

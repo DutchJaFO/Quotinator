@@ -1,4 +1,4 @@
-namespace Quotinator.Data.Entities;
+namespace Quotinator.Core.Models;
 
 /// <summary>Genre tags used to classify and filter quotes.</summary>
 public enum Genre

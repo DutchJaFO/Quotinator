@@ -37,7 +37,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#76](https://github.com/DutchJaFO/Quotinator/issues/76) | Add 1:1 relationship pattern to Quotinator.Data | 🟡 Code complete — pending release | T1 ✅ T2 ✅ | [76-one-to-one-plan.md](76-one-to-one-plan.md) |
 | [#77](https://github.com/DutchJaFO/Quotinator/issues/77) | Add many-to-many relationship pattern to Quotinator.Data | 🟡 Code complete — pending release | T1 ✅ T2 ✅ | [77-many-to-many-plan.md](77-many-to-many-plan.md) |
 | [#73](https://github.com/DutchJaFO/Quotinator/issues/73) | Audit trail: record who did what on which record in which table | 🟡 Code complete — pending release | T1 ✅ T2 ✅ | [73-audit-trail-plan.md](73-audit-trail-plan.md) |
-| [#121](https://github.com/DutchJaFO/Quotinator/issues/121) | Refactor: remove Dapper dependency from SqliteQuoteService | 🔵 In progress — steps 1–3 complete | T1, T2 | [121-remove-dapper-from-core-plan.md](121-remove-dapper-from-core-plan.md) |
+| [#121](https://github.com/DutchJaFO/Quotinator/issues/121) | Refactor: remove Dapper dependency from SqliteQuoteService | 🟡 Code complete — pending release | T1 ✅ T2 ✅ | [121-remove-dapper-from-core-plan.md](121-remove-dapper-from-core-plan.md) |
 
 ---
 
@@ -126,7 +126,16 @@ Full verification table: [126-validation-status-codes-plan.md](126-validation-st
 | 10 | 🟡 **#75** — Master/detail pattern | Code complete; T1 ✅ T2 ✅; pending release |
 | 11 | 🟡 **#76** — 1:1 pattern | Code complete; T1 ✅ T2 ✅; pending release |
 | 12 | 🟡 **#77** — Many-to-many pattern | Code complete; T1 ✅ T2 ✅; pending release |
-| 13 | **#121** — Remove Dapper from SqliteQuoteService | After #73 (audit) + #74–#77 (all patterns in place) |
+| 13 | 🟡 **#121** — Remove Dapper from SqliteQuoteService | Code complete; T1 ✅ T2 ✅ 2026-06-28; pending next release |
+
+---
+
+### #121 — Remove Dapper from SqliteQuoteService / Core
+**Shipped in:** (next release)  
+T1 ✅ verified 2026-06-28 (app started in VS; schema v4, 788 quotes / 478 sources; `/api/v1/quotes/random` → 200; `/api/v1/admin/database/reset` → rebuild + reseed confirmed; startup banner clean)  
+T2 ✅ verified 2026-06-28 (`docker build -f docker/Dockerfile -t quotinator:local .` — clean build; also fixed Dockerfile to include `Quotinator.Engine` and `Quotinator.Changelog` in NuGet restore layer)
+
+Full verification table: [121-remove-dapper-from-core-plan.md](121-remove-dapper-from-core-plan.md)
 
 ---
 
@@ -146,4 +155,4 @@ Full verification table: [126-validation-status-codes-plan.md](126-validation-st
 | #75  | Yes (after #74) | New infrastructure. |
 | #76  | Yes (after #74) | New infrastructure. |
 | #77  | Yes (after #74–#76) | New infrastructure. |
-| #121 | Yes (after #73 + #74–#77) | Depends on audit integration and full repository pattern. |
+| #121 | Yes (after #73 + #74–#77) | Code complete; T1 ✅ T2 ✅; pending next release before close. |

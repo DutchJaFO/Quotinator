@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Quotinator.Data.Import;
+namespace Quotinator.Core.Import;
 
 /// <summary>A translated version of a <see cref="SourceQuote"/>'s text and source title for a specific language.</summary>
 public class SourceQuoteTranslation

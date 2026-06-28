@@ -1,14 +1,14 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
-using Quotinator.Core.Data;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
-using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
+using Quotinator.Engine.Database;
+using Quotinator.Engine.Repositories;
 
-namespace Quotinator.Data.Tests.Database;
+namespace Quotinator.Engine.Tests.Database;
 
 [TestClass]
 public class DatabaseInitializerTests
@@ -37,20 +37,19 @@ public class DatabaseInitializerTests
     [TestCleanup]
     public void TestCleanup()
     {
-        // Release pooled SQLite connections before deleting the temp DB file.
         SqliteConnection.ClearAllPools();
 
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private DatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches)
+    private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
-        return new DatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
+        return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
             NoOpAuditWriter.Instance, NoOpCallerContext.Instance, logger);
     }
 
@@ -146,15 +145,10 @@ public class DatabaseInitializerTests
     /// Regression test for issue #106: if SchemaVersion is rolled back to v2 while the
     /// underlying tables already have v3 columns (ImportBatchId), InitialiseAsync must
     /// self-heal — record the version and reseed — rather than crash-looping on every startup.
-    /// This state was produced by the broken ResetAsync in v1.5.x–v1.6.1.
-    /// The test rolls back to v2 by removing v3 and v4 version records so that the self-heal
-    /// path (idempotent IF NOT EXISTS DDL) runs and brings the schema back to current.
     /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_PartialMigrationState_SelfHealsAndReseeds()
     {
-        // Arrange: seed a healthy database then simulate the broken state by rolling
-        // SchemaVersion back to v2 — exactly what the pre-fix ResetAsync left behind.
         var db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
@@ -165,11 +159,8 @@ public class DatabaseInitializerTests
         await conn.ExecuteAsync("DELETE FROM SchemaVersion WHERE Version IN (3, 4);");
         await conn.CloseAsync();
 
-        // Act: InitialiseAsync must not throw. It detects the duplicate-column situation,
-        // records the missing versions, and leaves existing data intact.
         await db.InitialiseAsync();
 
-        // Assert: schema is at current version and existing data is undisturbed.
         Assert.AreEqual(4,              db.SchemaVersion, "Schema must be recorded at v4 after self-heal");
         Assert.AreEqual(countAfterInit, db.QuoteCount,    "Quote count must be unchanged after self-heal");
     }

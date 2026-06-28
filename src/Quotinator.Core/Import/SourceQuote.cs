@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Quotinator.Data.Import;
+namespace Quotinator.Core.Import;
 
 /// <summary>Represents a single quote entry deserialized from a Quotinator source file (<c>data/sources/*.json</c>).</summary>
 public class SourceQuote

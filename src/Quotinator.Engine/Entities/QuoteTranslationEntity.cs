@@ -1,7 +1,7 @@
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Models;
 
-namespace Quotinator.Data.Entities;
+namespace Quotinator.Engine.Entities;
 
 /// <summary>A translated version of a quote's text for a specific language.</summary>
 [Table("QuoteTranslations")]

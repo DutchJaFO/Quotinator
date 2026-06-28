@@ -6,8 +6,10 @@ WORKDIR /src
 # are layer-cached independently of source changes. Add a line here for each new project.
 COPY Directory.Build.props .
 COPY src/Quotinator.Constants/Quotinator.Constants.csproj src/Quotinator.Constants/
+COPY src/Quotinator.Changelog/Quotinator.Changelog.csproj src/Quotinator.Changelog/
 COPY src/Quotinator.Data/Quotinator.Data.csproj src/Quotinator.Data/
 COPY src/Quotinator.Core/Quotinator.Core.csproj src/Quotinator.Core/
+COPY src/Quotinator.Engine/Quotinator.Engine.csproj src/Quotinator.Engine/
 COPY src/Quotinator.Api/Quotinator.Api.csproj src/Quotinator.Api/
 RUN dotnet restore src/Quotinator.Api/Quotinator.Api.csproj
 

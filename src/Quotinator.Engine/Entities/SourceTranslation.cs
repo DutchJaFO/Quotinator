@@ -1,7 +1,7 @@
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Models;
 
-namespace Quotinator.Data.Entities;
+namespace Quotinator.Engine.Entities;
 
 /// <summary>A translated title for a <see cref="Source"/>.</summary>
 [Table("SourceTranslations")]

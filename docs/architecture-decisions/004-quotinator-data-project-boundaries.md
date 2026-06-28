@@ -1,8 +1,9 @@
 # ADR 004 — Quotinator.Data project boundaries and design intent
 
-**Status:** Accepted  
+**Status:** Superseded in part by ADR 004-A (Engine layer)  
 **Date:** 2026-06-25  
-**GitHub issue:** #115
+**GitHub issue:** #115  
+**Updated:** 2026-06-28 (issue #121 — introduced `Quotinator.Engine`; revised dependency direction)
 
 ---
 
@@ -55,6 +56,43 @@ Import pipelines in many applications need to handle duplicate records. `Duplica
 ## Consequences
 
 - ADR 003 design goals remain in force and are not superseded — this ADR adds the project boundary rules that ADR 003 did not address.
-- Issue #115 moves the following from `Quotinator.Core` to `Quotinator.Data`: all Dapper entity classes, `DatabaseInitializer`, `SqliteImportBatchRepository`, `SqliteQuoteService`, `DapperConfiguration`, `IDatabaseInitializer`, `IImportBatchRepository`, `DuplicateResolutionPolicy`, `ManifestPolicy`, `SeedDuplicateRecord`, `SeedPreviewResult`, `SeedBatch`, `ImportBatchType`.
-- When adding new data-manipulation code to Core in future: check whether it belongs in Data first. If it uses Dapper, references an entity, or is a reusable import/export concern, it belongs in Data.
-- `DataPaths.cs` (path constants for the data directory) is a decision point: the database/backup constants belong in Data, but `DataProtectionFolder` is an ASP.NET Core concern used in `Program.cs`. To be resolved during #115 implementation.
+- Issue #115 moves the following from `Quotinator.Core` to `Quotinator.Data`: `DatabaseInitializer`, `DapperConfiguration`, `IDatabaseInitializer`, `DuplicateResolutionPolicy`, `ManifestPolicy`, `SeedDuplicateRecord`, `SeedPreviewResult`, `SeedBatch`.
+- When adding new data-manipulation code in future: check whether it belongs in Data (generic infrastructure) or Engine (Quotinator-domain SQLite implementation) first.
+- `DataPaths.cs` (path constants for the data directory) remains in Data — these are infrastructure constants used by `DatabaseInitializer`.
+
+---
+
+## Revision — issue #121 introduced `Quotinator.Engine`
+
+The original decision ("Core → Data") turned out to be incomplete. `Quotinator.Data` must be **domain-agnostic** — a generic, reusable library. This ruled out placing domain entity classes (`Source`, `QuoteEntity`, etc.) and `SqliteQuoteService` in Data, since they carry Quotinator-specific types (`Genre`, `QuoteType`, `IQuoteService`).
+
+The revised architecture introduces **`Quotinator.Engine`** as a third project:
+
+```
+Quotinator.Constants  ←  Quotinator.Core  ←  Quotinator.Engine  ←  Quotinator.Api
+                                                      ↑
+                          Quotinator.Data  ←──────────┘
+```
+
+### Revised boundary rules
+
+| What | Where | Rule |
+|------|-------|------|
+| Domain service interfaces (`IQuoteService`) | Core | Core defines the contract |
+| Domain models and DTOs (`QuoteResponse`, `QuoteTranslation`) | Core | Core owns domain models |
+| Domain enums (`QuoteType`, `Genre`) | Core | Surfaced in service signatures; must not drag in Data types |
+| Domain import models (`SourceQuote`) | Core | Used by `QuoteService` (flat-file implementation) in Core |
+| Generic DB infrastructure (repositories, UoW, migrations base, type handlers) | Data | Domain-agnostic; no Core reference |
+| Generic import infrastructure (`SeedBatch`, `ManifestPolicy`) | Data | Reusable across future projects |
+| Quotinator-domain DB entities (`Source`, `QuoteEntity`, etc.) | Engine | Reference both Core types and Data infrastructure |
+| Quotinator-specific migrations and seeding | Engine | `QuotinatorDatabaseInitializer` extends `DatabaseInitializer` |
+| Quotinator-specific Dapper handler registration | Engine | `QuotinatorDapperConfiguration` extends `DatabaseConfiguration` |
+| SQLite implementation of `IQuoteService` | Engine | `SqliteQuoteService` — bridges Core and Data |
+| DI wiring | Api | `Program.cs` registers Engine types; no Dapper or SQLite in Api |
+
+### Invariants
+
+- `Quotinator.Core` must have zero Dapper, zero SQLite, zero Data project references.
+- `Quotinator.Data` must have zero Core project references and zero Quotinator-domain types.
+- `Quotinator.Engine` may reference both Core and Data. It is the only project with this privilege.
+- `Quotinator.Api` wires everything via DI. It may reference Engine (to register types) but must not contain business logic.

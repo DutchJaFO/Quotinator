@@ -1,10 +1,11 @@
 using Dapper;
 using Quotinator.Data.Connections;
-using Quotinator.Data.Entities;
 using Quotinator.Data.Models;
 using Quotinator.Data.Queries;
+using Quotinator.Data.Repositories;
+using Quotinator.Engine.Entities;
 
-namespace Quotinator.Data.Repositories;
+namespace Quotinator.Engine.Repositories;
 
 /// <summary>SQLite implementation of <see cref="IImportBatchRepository"/>.</summary>
 public sealed class SqliteImportBatchRepository : SqliteRepository<ImportBatch>, IImportBatchRepository

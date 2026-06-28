@@ -1,10 +1,10 @@
 using Quotinator.Data.Database;
 
-namespace Quotinator.Core.Data;
+namespace Quotinator.Engine.Database;
 
 /// <summary>
 /// Ordered, append-only list of schema migrations for the Quotinator database.
-/// Passed to <see cref="DatabaseInitializer"/> at startup via DI.
+/// Passed to <see cref="QuotinatorDatabaseInitializer"/> at startup via DI.
 /// </summary>
 /// <remarks>
 /// Never reorder or edit an existing entry. Every SQL statement must be idempotent.
@@ -165,5 +165,4 @@ public static class QuotinatorMigrations
                strftime('%Y-%m-%d %H:%M:%S', 'now'), NULL, NULL, 0
         WHERE EXISTS (SELECT 1 FROM Quotes LIMIT 1);
         """;
-
 }

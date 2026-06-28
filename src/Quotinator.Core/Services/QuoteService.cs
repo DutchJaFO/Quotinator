@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Quotinator.Core.Models;
-using Quotinator.Data.Import;
+using Quotinator.Core.Import;
 
 namespace Quotinator.Core.Services;
 

@@ -1,4 +1,4 @@
-using Quotinator.Core.Data;
+using Quotinator.Engine.Database;
 
 namespace Quotinator.Core.Tests.Data;
 

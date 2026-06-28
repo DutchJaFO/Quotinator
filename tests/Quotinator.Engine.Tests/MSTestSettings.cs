@@ -1,6 +1,9 @@
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Quotinator.Engine.Helpers;
 
-namespace Quotinator.Core.Tests;
+[assembly: DoNotParallelize]
+
+namespace Quotinator.Engine.Tests;
 
 /// <summary>Assembly-level setup that runs once before any test in this project.</summary>
 [TestClass]

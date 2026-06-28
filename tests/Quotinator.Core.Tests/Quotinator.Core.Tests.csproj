@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\src\Quotinator.Core\Quotinator.Core.csproj" />
     <ProjectReference Include="..\..\src\Quotinator.Data\Quotinator.Data.csproj" />
     <ProjectReference Include="..\..\src\Quotinator.Data.Testing\Quotinator.Data.Testing.csproj" />
+    <ProjectReference Include="..\..\src\Quotinator.Engine\Quotinator.Engine.csproj" />
   </ItemGroup>
 
 </Project>
