@@ -34,7 +34,7 @@ public class RequestLoggingMiddleware : IMiddleware
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
         var id  = Guid.NewGuid().ToString("N")[..8];
-        var url = context.Request.Path + context.Request.QueryString.Value;
+        var url = SanitiseForLog(context.Request.Path + context.Request.QueryString.Value);
         var (tag, isDebug) = Categorise(context.Request.Path.Value ?? string.Empty);
 
         Log(isDebug, "{Tag:l} {Id:l} {Method:l} {Url:l}",
@@ -74,6 +74,9 @@ public class RequestLoggingMiddleware : IMiddleware
 
         return ("[Web - Request]", true);
     }
+
+    private static string SanitiseForLog(string value)
+        => value.Replace('\r', ' ').Replace('\n', ' ');
 
     private static bool IsStaticAsset(string path)
     {
