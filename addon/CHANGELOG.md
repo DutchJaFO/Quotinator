@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-28 16:46 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-28 19:01 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - Endpoint requests are now logged as a matched start and end pair — a short ID links both lines, making it easy to trace overlapping calls. Web page and asset requests are separated into their own log categories so the default output shows only API activity.
 - Validation errors on quote endpoints now return the correct HTTP error status code — filters with invalid values return 422, structurally invalid requests return 400. Clients can now detect errors by HTTP status code alone without parsing the response body.
 - Every write operation is now recorded in an audit log — see who did what, on which record, and when. Administrators can view and clear the log via the API.
+- Security: a log injection vulnerability (CWE-117) in the request logging middleware was identified and fixed — crafted request paths and HTTP methods could no longer forge fake log entries.
+- Security: the existing CVE-2025-6965 mitigation (SQLite aggregate query guard) was extended to four new projects added in this release; no user data was affected.
 
 ---
 

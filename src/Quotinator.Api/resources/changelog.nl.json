@@ -14,10 +14,13 @@
       "version": "1.7.1-beta",
       "date": "2026-06-28",
       "issues": [73, 74, 75, 76, 77, 121, 125, 126],
+      "cves": ["CVE-2025-6965"],
       "highlights": [
         "Endpoint-verzoeken worden nu vastgelegd als een gekoppeld start- en eindpaar — een korte ID verbindt beide regels, waardoor overlappende verzoeken eenvoudig te traceren zijn. Webpagina- en bestandsverzoeken zijn ondergebracht in eigen logcategorieën zodat de standaarduitvoer alleen API-activiteit toont.",
         "Validatiefouten op quote-eindpunten geven nu de juiste HTTP-foutstatuscode terug — filters met ongeldige waarden geven 422, structureel ongeldige verzoeken geven 400. Clients kunnen nu fouten herkennen aan de HTTP-statuscode zonder de antwoordtekst te hoeven verwerken.",
-        "Elke schrijfoperatie wordt nu vastgelegd in een auditlog — zie wie wat heeft gedaan, op welk record en wanneer. Beheerders kunnen het log bekijken en wissen via de API."
+        "Elke schrijfoperatie wordt nu vastgelegd in een auditlog — zie wie wat heeft gedaan, op welk record en wanneer. Beheerders kunnen het log bekijken en wissen via de API.",
+        "Beveiliging: een kwetsbaarheid voor loginjectie (CWE-117) in de middleware voor verzoekregistratie is ontdekt en verholpen — vervaardigde verzoekpaden en HTTP-methoden konden geen nep-logregels meer invoegen.",
+        "Beveiliging: de bestaande beperking voor CVE-2025-6965 (SQLite geaggregeerde querybeveiliging) is uitgebreid naar vier nieuwe projecten die in deze release zijn toegevoegd; er zijn geen gebruikersgegevens getroffen."
       ],
       "added": [
         "Audittrail: elke schrijfoperatie (invoegen, bijwerken, zacht verwijderen, herstellen, hard verwijderen, leegmaken, bulkimport, opnieuw seeden, resetten) wordt vastgelegd in een `AuditEntries`-tabel met tabelnaam, record-ID, operatie, caller-agent en tijdstempel (issue #73)",
@@ -44,7 +47,8 @@
         "Validatiefouten op quote-eindpunten geven nu 4xx-statuscodes terug — niet-herkend genre of type geeft 422, decade niet deelbaar door 10 geeft 422, onmogelijk jaarbereik geeft 422, te lange of verdachte filterwaarden geven 400; voorheen gaven alle eindpunten 200 terug met een foutomslag in de antwoordtekst (issue #126)",
         "Ongeldige waarden voor numerieke parameters (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) geven nu 422 terug; de foutmelding vermeldt de specifieke parameter die niet kon worden verwerkt (issue #126)",
         "De REST API-pagina toont nu de auditlog-eindpunten (`GET` en `DELETE /api/v1/admin/audit`) in het beheerdersgedeelte (issue #73)",
-        "Middleware voor verzoekregistratie verwijdert nu regeleinden uit URL's vóór het loggen — voorkomt logvervalsing via speciaal vervaardigde verzoekpaden (CWE-117; gevonden door CodeQL)"
+        "Middleware voor verzoekregistratie verwijdert nu regeleinden uit HTTP-methode en URL vóór het loggen — voorkomt logvervalsing via speciaal vervaardigde verzoekpaden of -methoden (CWE-117; gevonden door CodeQL)",
+        "CVE-2025-6965-beperking uitgebreid naar `Quotinator.Engine`, `Quotinator.Data.Testing`, `Quotinator.Engine.Tests` en `Quotinator.Data.Testing.Tests` — vier nieuwe projecten in deze release dragen dezelfde transitieve `SQLitePCLRaw.lib.e_sqlite3`-afhankelijkheid; de bestaande geaggregeerde querybeveiliging dekt alle SQL in deze projecten"
       ]
     },
     {

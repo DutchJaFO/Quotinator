@@ -14,10 +14,13 @@
       "version": "1.7.1-beta",
       "date": "2026-06-28",
       "issues": [73, 74, 75, 76, 77, 121, 125, 126],
+      "cves": ["CVE-2025-6965"],
       "highlights": [
         "Endpoint-Anfragen werden jetzt als zusammengehöriges Start- und Endpaar protokolliert — eine kurze ID verbindet beide Zeilen und erleichtert das Nachverfolgen überlappender Anfragen. Webseiten- und Asset-Anfragen werden in eigene Log-Kategorien eingeordnet, sodass die Standardausgabe nur API-Aktivität zeigt.",
         "Validierungsfehler an Quote-Endpunkten geben jetzt den richtigen HTTP-Fehlerstatuscode zurück — Filter mit ungültigen Werten geben 422, strukturell ungültige Anfragen geben 400. Clients können Fehler jetzt allein anhand des HTTP-Statuscodes erkennen, ohne den Antworttext analysieren zu müssen.",
-        "Jede Schreiboperation wird jetzt in einem Auditprotokoll erfasst — sehen Sie, wer was an welchem Datensatz wann durchgeführt hat. Administratoren können das Protokoll über die API einsehen und löschen."
+        "Jede Schreiboperation wird jetzt in einem Auditprotokoll erfasst — sehen Sie, wer was an welchem Datensatz wann durchgeführt hat. Administratoren können das Protokoll über die API einsehen und löschen.",
+        "Sicherheit: eine Log-Injection-Schwachstelle (CWE-117) in der Request-Logging-Middleware wurde identifiziert und behoben — präparierte Anfragepfade und HTTP-Methoden konnten keine gefälschten Logzeilen mehr einschleusen.",
+        "Sicherheit: die bestehende CVE-2025-6965-Absicherung (SQLite-Aggregatabfrage-Guard) wurde auf vier neue Projekte dieser Version ausgeweitet; keine Benutzerdaten waren betroffen."
       ],
       "added": [
         "Audit-Trail: jede Schreiboperation (Einfügen, Aktualisieren, Soft-Delete, Wiederherstellen, Hard-Delete, Bereinigen, Massenimport, erneutes Seeden, Zurücksetzen) wird in einer `AuditEntries`-Tabelle mit Tabellenname, Datensatz-ID, Operation, Caller-Agent und Zeitstempel erfasst (issue #73)",
@@ -44,7 +47,8 @@
         "Validierungsfehler an Quote-Endpunkten geben jetzt 4xx-Statuscodes zurück — nicht erkanntes Genre oder Typ gibt 422, decade nicht durch 10 teilbar gibt 422, unmöglicher Jahresbereich gibt 422, zu lange oder verdächtige Filterwerte geben 400; bisher gaben alle Endpunkte 200 mit einem Fehler-Envelope im Antworttext zurück (issue #126)",
         "Ungültige Werte für numerische Parameter (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) geben jetzt 422 zurück; die Fehlerdetails nennen den spezifischen Parameter, der die Validierung nicht bestanden hat (issue #126)",
         "Die REST-API-Seite listet jetzt die Auditprotokoll-Endpunkte (`GET` und `DELETE /api/v1/admin/audit`) im Administratorbereich auf (issue #73)",
-        "Request-Logging-Middleware entfernt jetzt Zeilenumbrüche aus URLs vor dem Protokollieren — verhindert Log-Fälschung durch speziell präparierte Anfragepfade (CWE-117; gemeldet von CodeQL)"
+        "Request-Logging-Middleware entfernt jetzt Zeilenumbrüche aus HTTP-Methode und URL vor dem Protokollieren — verhindert Log-Fälschung durch speziell präparierte Anfragepfade oder -methoden (CWE-117; gemeldet von CodeQL)",
+        "CVE-2025-6965-Absicherung auf `Quotinator.Engine`, `Quotinator.Data.Testing`, `Quotinator.Engine.Tests` und `Quotinator.Data.Testing.Tests` ausgeweitet — vier neue Projekte dieser Version tragen dieselbe transitive `SQLitePCLRaw.lib.e_sqlite3`-Abhängigkeit; der bestehende Aggregatabfrage-Guard deckt alle SQL-Abfragen in diesen Projekten ab"
       ]
     },
     {
