@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-28 08:44 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-28 16:30 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.7.1-beta] - 2026-06-28
 
 ### Highlights
 - Endpoint requests are now logged as a matched start and end pair — a short ID links both lines, making it easy to trace overlapping calls. Web page and asset requests are separated into their own log categories so the default output shows only API activity.
@@ -21,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `DELETE /api/v1/admin/audit` — clear the entire audit log or a specific table's entries; admin API key required; a purge sentinel entry is written after the delete (issue #73)
 - `GET /api/v1/admin/database/seed/preview` — now publicly accessible; no API key required (non-destructive read) (issue #73)
 - `decade` filter now accepts two-digit shorthand — `80` means 1980–1989, `00` means 2000–2009, `20` means 2020–2029; four-digit form continues to work unchanged (issue #126)
+- Read-model query pattern: `SqliteReadModelRepository<TRow>` and `IJoinStrategy` — typed projection queries over joined tables with configurable column mapping (issue #74)
+- Master/detail repository pattern: `SqliteMasterDetailRepository<TParent, TChild>` — inserts, updates, and retrieves a parent entity together with its child rows as a single unit (issue #75)
+- `IOneToOneRepository<TParent, TDetail>` and `SqliteOneToOneRepository` — query and update a parent entity with its optional 1:1 detail record as a single unit (issue #76)
+- `ILinkRepository<TLink>` and `SqliteLinkRepository` — insert, delete, and bulk-replace rows in a many-to-many join table (issue #77)
 
 ### Changed
 - Request logging middleware extracted from `Program.cs` to `RequestLoggingMiddleware : IMiddleware` — each HTTP request produces two log lines: one on arrival (before processing) and one on completion, sharing an 8-character hex correlation ID (issue #125)
@@ -29,6 +33,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `Scalar.AspNetCore` updated from 2.16.4 to 2.16.6
 - `MSTest` updated from 4.0.2 to 4.2.3 in `Quotinator.Data.Tests` (test only)
 - `Microsoft.Extensions.Logging.Abstractions` updated from 10.0.0 to 10.0.9 in `Quotinator.Data`
+- `Quotinator.Engine` project introduced — `SqliteQuoteService`, `QuotinatorDatabaseInitializer`, and all domain-specific DB entities moved from `Quotinator.Core` and `Quotinator.Data` into Engine; `Quotinator.Core` no longer references Dapper or SQLite (issue #121)
+- Dockerfile updated to include `Quotinator.Engine` and `Quotinator.Changelog` in the NuGet restore layer — all projects are now correctly cache-layered (issue #121)
 
 ### Fixed
 - Validation errors on quote endpoints now return 4xx status codes — unrecognised genre or type returns 422, decade not divisible by 10 returns 422, impossible year range returns 422, oversized or suspicious filter values return 400; previously all returned 200 with an error envelope in the body (issue #126)
@@ -655,7 +661,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.0...HEAD
+[1.7.1-beta]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.0...v1.7.1-beta
 [1.7.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.5...v1.7.0
 [1.6.5]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.3...v1.6.4
