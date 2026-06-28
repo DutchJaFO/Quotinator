@@ -43,7 +43,8 @@
       "fixed": [
         "Validatiefouten op quote-eindpunten geven nu 4xx-statuscodes terug — niet-herkend genre of type geeft 422, decade niet deelbaar door 10 geeft 422, onmogelijk jaarbereik geeft 422, te lange of verdachte filterwaarden geven 400; voorheen gaven alle eindpunten 200 terug met een foutomslag in de antwoordtekst (issue #126)",
         "Ongeldige waarden voor numerieke parameters (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) geven nu 422 terug; de foutmelding vermeldt de specifieke parameter die niet kon worden verwerkt (issue #126)",
-        "De REST API-pagina toont nu de auditlog-eindpunten (`GET` en `DELETE /api/v1/admin/audit`) in het beheerdersgedeelte (issue #73)"
+        "De REST API-pagina toont nu de auditlog-eindpunten (`GET` en `DELETE /api/v1/admin/audit`) in het beheerdersgedeelte (issue #73)",
+        "Middleware voor verzoekregistratie verwijdert nu regeleinden uit URL's vóór het loggen — voorkomt logvervalsing via speciaal vervaardigde verzoekpaden (CWE-117; gevonden door CodeQL)"
       ]
     },
     {
