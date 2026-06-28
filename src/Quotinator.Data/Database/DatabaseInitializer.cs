@@ -17,8 +17,10 @@ namespace Quotinator.Data.Database;
 /// <summary>
 /// Runs schema migrations and seeds the database from one or more source files on first run.
 /// Call <see cref="InitialiseAsync"/> once at startup before serving requests.
+/// Subclasses may override the protected virtual hooks to replace the default seeding behaviour
+/// with domain-specific implementations that use repository interfaces instead of raw Dapper.
 /// </summary>
-public sealed class DatabaseInitializer : IDatabaseInitializer
+public class DatabaseInitializer : IDatabaseInitializer
 {
     private readonly IDbConnectionFactory            _factory;
     private readonly DatabaseOptions                 _options;
@@ -117,6 +119,16 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
 
         EnableWal(connection);
         await ApplyMigrationsAsync(connection);
+        await OnInitialisedAsync(connection);
+    }
+
+    /// <summary>
+    /// Called after migrations are applied. Override to perform domain-specific seeding and
+    /// statistics collection. The default implementation seeds from source files if the
+    /// database is empty, re-seeds genres if missing, and logs row counts.
+    /// </summary>
+    protected virtual async Task OnInitialisedAsync(SqliteConnection connection)
+    {
         await SeedIfEmptyAsync(connection);
         await ReSeedGenresIfEmptyAsync(connection);
         await LogDatabaseStatsAsync(connection);
@@ -276,6 +288,16 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         using var connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
 
+        await OnReseedAsync(connection);
+    }
+
+    /// <summary>
+    /// Called by <see cref="ReseedAsync"/>. Override to replace the default truncate-and-reseed
+    /// behaviour with a domain-specific implementation. The default implementation truncates all
+    /// data tables, reimports from source files, logs stats, and writes an audit entry.
+    /// </summary>
+    protected virtual async Task OnReseedAsync(SqliteConnection connection)
+    {
         var totalFiles = _batches.Sum(b => b.Files.Count);
         _logger.LogInformation("[Database - Seed] reseed requested — clearing all data and reimporting from {Count} source file(s)...", totalFiles);
 
@@ -307,6 +329,16 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
         using var connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
 
+        await OnResetAsync(connection);
+    }
+
+    /// <summary>
+    /// Called by <see cref="ResetAsync"/>. Override to replace the default drop-recreate-reseed
+    /// behaviour. The default implementation drops all tables, reapplies all migrations, reimports
+    /// from source files, logs stats, and writes an audit entry.
+    /// </summary>
+    protected virtual async Task OnResetAsync(SqliteConnection connection)
+    {
         var totalFiles = _batches.Sum(b => b.Files.Count);
         _logger.LogInformation("[Database - Init] reset requested — rebuilding schema and reimporting from {Count} source file(s)...", totalFiles);
 
@@ -377,7 +409,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
             seenIds.Count));
     }
 
-    private async Task SeedIfEmptyAsync(SqliteConnection connection)
+    /// <summary>Acquires the seed lock and seeds from source files if the database is empty.</summary>
+    protected virtual async Task SeedIfEmptyAsync(SqliteConnection connection)
     {
         await _seedLock.WaitAsync();
         try
@@ -537,7 +570,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
             seenIds.Count, seenIds.Count + dupCount, dupCount, dupCount == 1 ? "" : "s");
     }
 
-    private async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection)
+    /// <summary>Re-seeds genre rows from source files if genres are missing but quotes exist.</summary>
+    protected virtual async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection)
     {
         var genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
         if (genreCount > 0) return;
@@ -742,7 +776,8 @@ public sealed class DatabaseInitializer : IDatabaseInitializer
     // -------------------------------------------------------------------------
     #region Stats
 
-    private async Task LogDatabaseStatsAsync(SqliteConnection connection)
+    /// <summary>Reads row counts from the database and logs the startup statistics banner.</summary>
+    protected virtual async Task LogDatabaseStatsAsync(SqliteConnection connection)
     {
         QuoteCount     = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountActive);
         SourceCount    = await connection.ExecuteScalarAsync<int>(Sql.Sources.CountActive);
