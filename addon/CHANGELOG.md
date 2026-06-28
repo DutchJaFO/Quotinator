@@ -1,10 +1,16 @@
-##### *GENERATED FILE [2026-06-28 19:34 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-28 19:38 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
+
+## [1.7.2-beta] - 2026-06-28
+
+- Internal improvements — no user-facing changes.
+
+---
 
 ## [1.7.1] - 2026-06-28
 
