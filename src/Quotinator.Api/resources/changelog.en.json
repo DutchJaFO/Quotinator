@@ -4,7 +4,7 @@
   "machineTranslated": false,
   "releases": [
     {
-      "version": "1.7.1-beta",
+      "version": "1.7.1",
       "date": "2026-06-28",
       "issues": [73, 74, 75, 76, 77, 121, 125, 126],
       "cves": ["CVE-2025-6965"],

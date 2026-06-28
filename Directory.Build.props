@@ -1,8 +1,7 @@
 <Project>
 
   <PropertyGroup>
-    <Version>1.7.1-beta</Version>
-    <!-- AssemblyVersion and FileVersion require numeric-only; pin to base version when Version carries a prerelease suffix -->
+    <Version>1.7.1</Version>
     <AssemblyVersion>1.7.1.0</AssemblyVersion>
     <FileVersion>1.7.1.0</FileVersion>
     <Product>Quotinator</Product>
