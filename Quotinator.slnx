@@ -209,10 +209,6 @@
     <File Path="src/Quotinator.Api/resources/changelog.en.json" />
     <File Path="src/Quotinator.Api/resources/changelog.nl.json" />
     <File Path="src/Quotinator.Api/resources/changelog.de.json" />
-    <File Path="src/Quotinator.Changelog/Models/ChangelogRoot.cs" />
-    <File Path="src/Quotinator.Changelog/Models/ChangelogUnreleased.cs" />
-    <File Path="src/Quotinator.Api/Components/Controls/ChangelogUnreleasedEntry.razor" />
-    <File Path="src/Quotinator.Api/Components/Controls/ChangelogUnreleasedEntry.razor.cs" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
