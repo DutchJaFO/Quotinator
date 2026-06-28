@@ -2,7 +2,7 @@
 
 **Issue:** https://github.com/DutchJaFO/Quotinator/issues/77  
 **Milestone:** v1.7.0  
-**Status:** 🟡 Code complete — pending release | T1 ⬜ T2 ⬜
+**Status:** 🟡 Code complete — pending release | T1 ✅ T2 ⬜
 
 ---
 
@@ -218,7 +218,7 @@ Both get a case in `RepositorySqlGuardTests`.
 | 27 | ✅ | `docs/data-access.md` updated with many-to-many section | Code review | Section present; layout, abstract members, cascade note all documented |
 | 28 | ✅ | Build clean — 0 warnings, 0 errors | Build | `dotnet build --configuration Release` — 0 Warning(s) 0 Error(s) |
 | 29 | ✅ | All tests pass | Build | `dotnet test --configuration Release` — 142 Quotinator.Data.Tests passed |
-| 30 | ⬜ | App starts without error | T1 | User starts app in VS; confirms startup banner |
+| 30 | ✅ | App starts without error | T1 | schema v4, 788 quotes, banner clean — confirmed 2026-06-28 |
 
 ### T1 / T2 / T3
 
