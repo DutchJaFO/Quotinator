@@ -1,10 +1,7 @@
 <Project>
 
   <PropertyGroup>
-    <Version>1.7.2-beta</Version>
-    <!-- AssemblyVersion and FileVersion require numeric-only; pin to base version when Version carries a prerelease suffix -->
-    <AssemblyVersion>1.7.2.0</AssemblyVersion>
-    <FileVersion>1.7.2.0</FileVersion>
+    <Version>1.7.2</Version>
     <Product>Quotinator</Product>
     <Authors>DutchJaFO</Authors>
     <Copyright>Copyright © 2026 DutchJaFO</Copyright>

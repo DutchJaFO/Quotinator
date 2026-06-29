@@ -4,8 +4,8 @@
   "machineTranslated": false,
   "releases": [
     {
-      "version": "1.7.2-beta",
-      "date": "2026-06-28",
+      "version": "1.7.2",
+      "date": "2026-06-29",
       "issues": [],
       "highlights": [
         "Internal improvements — no user-facing changes."
