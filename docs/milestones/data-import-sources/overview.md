@@ -42,7 +42,7 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 | 1  | #61 | Seed script: one file per source | Closed ✅ |
 | 2  | #71 | Generic repository pattern | Closed ✅ |
 | 3  | #78 | Repository: transaction and shared connection support | Closed ✅ |
-| 4  | #58 | ImportBatches schema | Merged to main (PR #85, 2026-06-20) — issue not yet closed; closing checklist pending |
+| 4  | #58 | ImportBatches schema | Closed ✅ |
 | 5  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 now unblocked (#58 done) |
 | 6  | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
 | 7  | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources`, `ImportsPath` config keys and legacy warning missing; ImportBatch row now unblocked (#58 done) |
