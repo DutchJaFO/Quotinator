@@ -1,8 +1,8 @@
 # Data Import & Sources — Milestone Overview
 
 **GitHub milestone:** #10  
-**Branch:** `feature/data-import-sources` (merged to main 2026-06-17)  
-**Status:** In progress
+**Branch:** `feature/data-import-sources`  
+**Status:** In progress — session resumed 2026-06-29; branch reset to current main (v1.7.2)
 
 ---
 
@@ -42,20 +42,19 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 | 1  | #61 | Seed script: one file per source | Closed ✅ |
 | 2  | #71 | Generic repository pattern | Closed ✅ |
 | 3  | #78 | Repository: transaction and shared connection support | Closed ✅ |
-| 4  | #58 | ImportBatches schema | Complete on branch — pending PR merge to close |
-| 5  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 can close after #58 |
+| 4  | #58 | ImportBatches schema | Merged to main (PR #85, 2026-06-20) — issue not yet closed; closing checklist pending |
+| 5  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 now unblocked (#58 done) |
 | 6  | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
-| 7  | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources` and `ImportsPath` config keys missing |
-| 8  | #64 | Conflict resolution policy | Partially done — naming mismatch (`overwrite` vs `newest-wins`), wrong default |
+| 7  | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources`, `ImportsPath` config keys and legacy warning missing; ImportBatch row now unblocked (#58 done) |
+| 8  | #64 | Conflict resolution policy | Partially done — rename `overwrite` → `newest-wins`, change default, align config key; ImportBatch recording now unblocked (#58 done) |
 | 9  | #45 | Import endpoint | Not started |
-| 10 | #65 | Import endpoint: preview/dry-run | Partially done — wrong endpoint shape (needs #45) |
+| 10 | #65 | Import endpoint: preview/dry-run | Partially done — existing startup preview is different feature; `?preview=true` on import needs #45 |
 | 11 | #55 | Record completeness flag | Not started |
 | 12 | #56 | Audit log | Not started |
 | 13 | #59 | Admin: soft-reset by batch | Not started |
 | 14 | #67 | Conversations schema | Not started |
 | 15 | #68 | Curated JSON conversations | Not started |
 | 16 | #69 | API conversations | Not started |
-| 17 | #79 | Fix Highlights sections in CHANGELOG.md for 1.3.0 and 1.4.0 | In progress — no plan doc (pure content fix, no implementation decisions) |
 
 ---
 
@@ -70,18 +69,11 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 | #61 | ✅ | Self-contained — per-source file layout; no dependents called it at merge time |
 | #71 | ✅ | Self-contained — generic repository infrastructure; nothing called it at merge time |
 | #78 | ✅ | Self-contained — transaction support; nothing called it at merge time |
+| #58 | ✅ | Merged via PR #85 (2026-06-20). Adds `ImportBatches` table, repository, and seeder wiring. Issue not yet closed — closing checklist pending. |
 
-### Evaluation of remaining completed issues
+### Evaluation of remaining issues
 
-| Issue | Safe to merge early? | Reasoning |
-|-------|---------------------|-----------|
-| #58 | ✅ Yes | Adds `ImportBatches` table, repository, and seeder wiring. No existing endpoint reads it. The seeder populates it correctly on a fresh install; a re-seed covers any data gap on upgraded databases. Nothing in the current API exposes import batch data — the dependents (#59, #45, #60) are all not yet started. |
-| #57 | Deferred | Problem 4 of #57 depends on #58 being closed first. Evaluate after #58 is merged. |
-| All others | ❌ Not yet | All remaining issues are either not started or partially done and not yet inert. |
-
-### Decision
-
-Merge #58 to `main` as part of the next partial PR. Re-evaluate after each subsequent issue completes.
+All remaining issues are either partially done or not started. Evaluate each for early merge when complete — the default is to merge the full milestone together.
 
 ---
 
