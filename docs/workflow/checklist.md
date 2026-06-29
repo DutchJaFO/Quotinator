@@ -105,8 +105,9 @@ Push the final tag after T3 is verified in the live HA add-on.
 
 - [ ] T3 verified: beta add-on installed in HA; all T3-classified requirements confirmed in the live supervisor
 - [ ] `addon/config.yaml version` bumped to final version (e.g. `1.7.0`)
-- [ ] `Directory.Build.props <Version>` bumped to final version
+- [ ] `Directory.Build.props <Version>` bumped to final version (remove prerelease suffix; also remove the pinned `AssemblyVersion`/`FileVersion` lines — they are only needed when `<Version>` carries a suffix)
 - [ ] Changelog final entry promoted from beta; `CHANGELOG.md` and `addon/CHANGELOG.md` regenerated
+- [ ] **Version bump PR merged to `main` before tagging** — confirm the above three changes are on `main`, not just a local commit. Tags are immutable once pushed; pushing a tag against un-merged version files burns a patch version.
 - [ ] Push final tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
 - [ ] Confirm GitHub Actions release workflow completes; full release created on GitHub; `latest` Docker tag updated
 - [ ] Milestone closed on GitHub: `gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed`

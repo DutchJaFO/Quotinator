@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-28 19:38 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-29 05:53 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [1.7.2-beta] - 2026-06-28
+## [1.7.2] - 2026-06-29
 
 ### Highlights
 - Internal improvements — no user-facing changes.
@@ -675,7 +675,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
-[1.7.2-beta]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.1...v1.7.2-beta
+[1.7.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.5...v1.7.0
 [1.6.5]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.4...v1.6.5
