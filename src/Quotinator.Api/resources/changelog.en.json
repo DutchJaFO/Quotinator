@@ -2,6 +2,12 @@
   "language": "en",
   "sourceLanguage": "en",
   "machineTranslated": false,
+  "unreleased": {
+    "issues": [58],
+    "fixed": [
+      "ImportBatch rows created during seeding now record the correct `Type` (`Seed` for externally-sourced files with a manifest URL, `System` for internally-curated files) and persist the source URL; previously every seeded batch was recorded as `System` with no URL"
+    ]
+  },
   "releases": [
     {
       "version": "1.7.2",

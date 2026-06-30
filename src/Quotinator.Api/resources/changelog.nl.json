@@ -9,6 +9,12 @@
     "fixed": "Opgelost",
     "removed": "Verwijderd"
   },
+  "unreleased": {
+    "issues": [58],
+    "fixed": [
+      "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor extern aangeleverde bestanden met een manifest-URL, `System` voor intern samengestelde bestanden) en bewaren de bron-URL; voorheen werd elke geseede batch geregistreerd als `System` zonder URL"
+    ]
+  },
   "releases": [
     {
       "version": "1.7.2",

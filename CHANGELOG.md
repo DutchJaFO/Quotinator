@@ -1,10 +1,17 @@
-##### *GENERATED FILE [2026-06-29 18:41 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-30 20:00 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Fixed
+- ImportBatch rows created during seeding now record the correct `Type` (`Seed` for externally-sourced files with a manifest URL, `System` for internally-curated files) and persist the source URL; previously every seeded batch was recorded as `System` with no URL
 
 ---
 
@@ -675,6 +682,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.2...HEAD
 [1.7.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.5...v1.7.0

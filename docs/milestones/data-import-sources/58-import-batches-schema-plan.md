@@ -1,9 +1,12 @@
 # #58 — ImportBatches schema
 
-**Status:** Closed ✅  
+**Status:** Issue closed ✅ — post-closure regression fix pending release  
 **GitHub issue:** #58  
+**Tiers required:** T1, T2  
 **Depends on:** #71 (generic repository pattern)  
 **Unblocks:** #56, #57 (Problem 4), #59, #45 (batch row), #64 (policy recording), #67, #68, #69
+
+**Note (2026-06-30):** items 7–8 in the verification table cover a regression found *after* #58 was closed (`Type`/`Url` hardcoded wrong on `ImportBatch` rows). The fix is committed on `feature/data-import-sources` with T1+T2 verified, but has not shipped in any release yet. This is "pending release", not "done" — no further closing action applies since #58 is already closed; this is tracked here purely as a verification record for the fix itself.
 
 ---
 
@@ -40,9 +43,11 @@
 | 1 | ✅ | `ImportBatches` table created with correct columns | Unit test | `ImportBatchesTests.Schema_ImportBatchesTable_HasAllRequiredColumns` |
 | 2 | ✅ | Nullable `ImportBatchId` FK on all four entity tables | Unit test | `ImportBatchesTests.Schema_EntityTables_HaveNullableImportBatchIdFK` |
 | 3 | ✅ | Pre-seed rows for vilaboim and NikhilNamal17 present after migration | Unit test | `ImportBatchesTests.Seeding_PreSeedBatches_ExistAfterMigration` |
-| 4 | ✅ | Seeder creates one `ImportBatch` row per source file | Unit test | `ImportBatchesTests.Seeding_TwoSourceFiles_ProduceTwoDistinctBatches` |
+| 4 | ✅ | Seeder creates one `ImportBatch` row per source file | Unit test | `ImportBatchesTests.Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes` |
 | 5 | ✅ | Existing records retain `NULL` `ImportBatchId` after migration | Unit test | `ImportBatchesTests.Migration_ExistingRecords_HaveNullImportBatchId` |
 | 6 | ✅ | Schema migration version bumped | Unit test | `ImportBatchesTests.Schema_MigrationVersion_IsBumped` |
+| 7 | ✅ | Seeder sets correct `Type`/`Url` per file (Seed when manifest has a `url`, System otherwise) | Unit test + T1 Live | `ImportBatchesTests.Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes` + verified in SQL Server Object Explorer after fresh seed in VS (2026-06-30): curated→System/NULL, vilaboim/NikhilNamal17→Seed/GitHub URL |
+| 8 | ✅ | T2 — Docker build/publish includes updated `manifest.json`; seeding behaves identically in container | T2 Live | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded (2026-06-30); container log shows same counts as T1 (788/478/2/0); `/api/v1/health`, `/api/v1/version`, `/api/v1/quotes/random` smoke tests passed |
 
 ---
 

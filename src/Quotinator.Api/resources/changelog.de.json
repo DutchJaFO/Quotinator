@@ -9,6 +9,12 @@
     "fixed": "Behoben",
     "removed": "Entfernt"
   },
+  "unreleased": {
+    "issues": [58],
+    "fixed": [
+      "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für extern bezogene Dateien mit einer Manifest-URL, `System` für intern kuratierte Dateien) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch als `System` ohne URL erfasst"
+    ]
+  },
   "releases": [
     {
       "version": "1.7.2",
