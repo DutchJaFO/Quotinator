@@ -146,6 +146,39 @@ public class ImportBatchesTests
         Assert.AreEqual("https://github.com/vilaboim/movie-quotes", seedRow.Url, "Url should match the manifest URL");
     }
 
+    /// <summary>Every Quotes row created during seeding is linked, via <c>ImportBatchId</c>, to the batch for the file it came from — not to some other batch or left <c>NULL</c>. Closes #57 Problem 4.</summary>
+    [TestMethod]
+    public async Task Seeding_TwoSourceFiles_QuotesLinkToOwningBatchAndRecordCountMatches()
+    {
+        var systemFile = new SeedFile(CuratedFile, null);
+        var seedFile   = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        var batch      = new SeedBatch([systemFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
+        var db         = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+
+        var batches = (await conn.QueryAsync<(string Id, string Name, int RecordCount)>(
+            "SELECT Id, Name, RecordCount FROM ImportBatches WHERE IsDeleted = 0")).ToList();
+        var curatedBatch  = batches.Single(b => b.Name == Path.GetFileName(CuratedFile));
+        var vilaboimBatch = batches.Single(b => b.Name == Path.GetFileName(VilaboimFile));
+
+        var quoteBatchIds = (await conn.QueryAsync<string?>("SELECT ImportBatchId FROM Quotes")).ToList();
+
+        Assert.IsTrue(quoteBatchIds.All(id => id is not null), "Every seeded quote must have a non-null ImportBatchId");
+        Assert.IsTrue(quoteBatchIds.All(id => id == curatedBatch.Id || id == vilaboimBatch.Id),
+            "Every seeded quote must be linked to one of the two batches created for this seed run — not a third/unrelated batch");
+
+        var curatedQuoteCount  = quoteBatchIds.Count(id => id == curatedBatch.Id);
+        var vilaboimQuoteCount = quoteBatchIds.Count(id => id == vilaboimBatch.Id);
+
+        Assert.IsTrue(curatedQuoteCount  > 0, "Curated batch should own at least one quote");
+        Assert.IsTrue(vilaboimQuoteCount > 0, "Vilaboim batch should own at least one quote");
+        Assert.AreEqual(curatedBatch.RecordCount,  curatedQuoteCount,  "ImportBatches.RecordCount must match the actual number of Quotes rows linked to the curated batch");
+        Assert.AreEqual(vilaboimBatch.RecordCount, vilaboimQuoteCount, "ImportBatches.RecordCount must match the actual number of Quotes rows linked to the vilaboim batch");
+    }
+
     // ── Migration (upgrade path) ───────────────────────────────────────────────
 
     /// <summary>Pre-seed batch rows for the two external datasets are inserted when upgrading a non-empty database.</summary>
