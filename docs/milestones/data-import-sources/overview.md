@@ -2,7 +2,7 @@
 
 **GitHub milestone:** #10  
 **Branch:** `feature/data-import-sources`  
-**Status:** In progress — session resumed 2026-06-29; branch reset to current main (v1.7.2)
+**Status:** In progress — session 2026-06-30: #58 post-closure regression fixed (T1+T2 verified), #57 fully resolved in code, #63 implemented and verified (T1+T2), #140 unblocked by #63's manifest groundwork. Nothing in this milestone has shipped in a release since v1.4.1 — all of the above is "pending release."
 
 ---
 
@@ -42,11 +42,11 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 | 1  | #61 | Seed script: one file per source | Closed ✅ |
 | 2  | #71 | Generic repository pattern | Closed ✅ |
 | 3  | #78 | Repository: transaction and shared connection support | Closed ✅ |
-| 4  | #58 | ImportBatches schema | Closed ✅ |
-| 5  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 now unblocked (#58 done) |
-| 6  | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
+| 4  | #58 | ImportBatches schema | Closed ✅ — post-closure `Type`/`Url` regression fixed 2026-06-30, T1+T2 verified, pending release |
+| 5  | #57 | Seed script: dedup inconsistent | All problems resolved in code 2026-06-30 (Problem 4 done, unit-tested), pending release |
+| 6  | #63 | Import manifest | Resolved in code 2026-06-30 — T1+T2 verified, pending release. Added `github`/`downloadUrl` manifest source kinds (see Manifest data fix note in plan doc) |
 | 7  | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources`, `ImportsPath` config keys and legacy warning missing; ImportBatch row now unblocked (#58 done) |
-| 7a | #140 | Auto-update bundled sources from manifest URL | Not started — depends on #58 fix (manifest `url`) and #62 config pattern |
+| 7a | #140 | Auto-update bundled sources from manifest URL | Not started — schema/manifest/`SeedFile` groundwork (`downloadUrl`, `github` object) now done by #63; remaining scope is the HTTP GET + temp-file-substitution mechanism and the `Quotinator__AutoUpdateSources` config key |
 | 8  | #64 | Conflict resolution policy | Partially done — rename `overwrite` → `newest-wins`, change default, align config key; ImportBatch recording now unblocked (#58 done) |
 | 9  | #45 | Import endpoint | Not started |
 | 10 | #65 | Import endpoint: preview/dry-run | Partially done — existing startup preview is different feature; `?preview=true` on import needs #45 |
@@ -70,7 +70,7 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 | #61 | ✅ | Self-contained — per-source file layout; no dependents called it at merge time |
 | #71 | ✅ | Self-contained — generic repository infrastructure; nothing called it at merge time |
 | #78 | ✅ | Self-contained — transaction support; nothing called it at merge time |
-| #58 | ✅ | Merged via PR #85 (2026-06-20). Adds `ImportBatches` table, repository, and seeder wiring. Issue not yet closed — closing checklist pending. |
+| #58 | ✅ | Merged via PR #85 (2026-06-20). Adds `ImportBatches` table, repository, and seeder wiring. Issue closed; a post-closure `Type`/`Url` regression was found and fixed 2026-06-30 (T1+T2 verified) but has not shipped in a release yet — see [58-import-batches-schema-plan.md](58-import-batches-schema-plan.md). |
 
 ### Evaluation of remaining issues
 
