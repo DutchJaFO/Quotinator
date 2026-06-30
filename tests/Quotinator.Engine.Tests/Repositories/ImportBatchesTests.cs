@@ -179,6 +179,31 @@ public class ImportBatchesTests
         Assert.AreEqual(vilaboimBatch.RecordCount, vilaboimQuoteCount, "ImportBatches.RecordCount must match the actual number of Quotes rows linked to the vilaboim batch");
     }
 
+    /// <summary>An empty or otherwise invalid-JSON source file is skipped with a warning rather than crashing startup.</summary>
+    [TestMethod]
+    public async Task Seeding_EmptyOrInvalidJsonSourceFile_IsSkippedWithoutCrashing()
+    {
+        var emptyFile = Path.Combine(_tempDir, "empty.json");
+        File.WriteAllText(emptyFile, string.Empty);
+
+        var systemFile = new SeedFile(CuratedFile, null);
+        var emptySeedFile = new SeedFile(emptyFile, null);
+        var batch = new SeedBatch([systemFile, emptySeedFile], ManifestPolicy.HardcodedDefault, "test");
+        var db = CreateInitializer([batch]);
+
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+
+        var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes");
+        Assert.IsTrue(quoteCount > 0, "Quotes from the valid curated file should still be seeded");
+
+        var emptyBatch = await conn.QuerySingleAsync<(string Id, int RecordCount)>(
+            "SELECT Id, RecordCount FROM ImportBatches WHERE Name = @name", new { name = "empty.json" });
+        Assert.AreEqual(0, emptyBatch.RecordCount, "The empty/invalid file's batch should record zero quotes, not crash");
+    }
+
     // ── Migration (upgrade path) ───────────────────────────────────────────────
 
     /// <summary>Pre-seed batch rows for the two external datasets are inserted when upgrading a non-empty database.</summary>

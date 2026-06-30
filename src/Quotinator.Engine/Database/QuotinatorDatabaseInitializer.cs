@@ -500,20 +500,29 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         return false;
     }
 
-    private static List<SourceQuote> LoadQuotesFromFile(string filePath)
+    private List<SourceQuote> LoadQuotesFromFile(string filePath)
     {
         if (!File.Exists(filePath)) return [];
 
         var json    = File.ReadAllText(filePath);
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        var root    = JsonNode.Parse(json);
 
-        if (root is JsonArray)
-            return JsonSerializer.Deserialize<List<SourceQuote>>(json, options) ?? [];
+        try
+        {
+            var root = JsonNode.Parse(json);
 
-        var quotesNode = root?["quotes"];
-        if (quotesNode is null) return [];
-        return quotesNode.Deserialize<List<SourceQuote>>(options) ?? [];
+            if (root is JsonArray)
+                return JsonSerializer.Deserialize<List<SourceQuote>>(json, options) ?? [];
+
+            var quotesNode = root?["quotes"];
+            if (quotesNode is null) return [];
+            return quotesNode.Deserialize<List<SourceQuote>>(options) ?? [];
+        }
+        catch (JsonException ex)
+        {
+            Logger.LogWarning(ex, "[Database - Seed] {File} is empty or not valid JSON — skipping", Path.GetFileName(filePath));
+            return [];
+        }
     }
 
     private static string TruncateLabel(string text, int maxLen = 60)
