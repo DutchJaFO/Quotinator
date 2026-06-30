@@ -10,7 +10,11 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [58],
+    "issues": [58, 63],
+    "added": [
+      "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
+      "Manifest-Quelleinträge können nun ein `github`-Objekt (`owner`, `repo`, `path`, `branch`) statt einer einfachen `url` angeben — sowohl der Herkunftslink als auch ein abrufbarer Rohdatei-Download-Link werden daraus automatisch abgeleitet"
+    ],
     "fixed": [
       "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für extern bezogene Dateien mit einer Manifest-URL, `System` für intern kuratierte Dateien) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch als `System` ohne URL erfasst"
     ]
