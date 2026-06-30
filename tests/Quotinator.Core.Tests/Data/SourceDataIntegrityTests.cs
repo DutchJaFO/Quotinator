@@ -84,6 +84,32 @@ public class SourceDataIntegrityTests
         }
     }
 
+    /// <summary>A manifest file entry that sets both `github` and `url` violates the schema — the two source kinds are mutually exclusive.</summary>
+    [TestMethod]
+    public void Manifest_EntryWithBothGithubAndUrl_FailsSchemaValidation()
+    {
+        var manifest = new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]   = "a.json",
+                ["name"]   = "a",
+                ["url"]    = "https://example.com/a",
+                ["github"] = new JsonObject
+                {
+                    ["owner"] = "owner",
+                    ["repo"]  = "repo",
+                    ["path"]  = "a.json"
+                }
+            })
+        };
+
+        var element = JsonSerializer.Deserialize<JsonElement>(manifest.ToJsonString());
+        var result  = ManifestSchema.Evaluate(element, StrictOptions);
+
+        Assert.IsFalse(result.IsValid, "A manifest entry with both github and url should fail schema validation");
+    }
+
     // ── Manifest structure ────────────────────────────────────────────────────
 
     /// <summary>Every file listed in manifest.json exists on disk.</summary>

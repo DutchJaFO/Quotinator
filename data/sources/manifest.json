@@ -11,12 +11,22 @@
     {
       "file": "vilaboim_movie-quotes.json",
       "name": "vilaboim/movie-quotes",
-      "url": "https://github.com/vilaboim/movie-quotes"
+      "github": {
+        "owner": "vilaboim",
+        "repo": "movie-quotes",
+        "path": "movie-quotes.json",
+        "branch": "master"
+      }
     },
     {
       "file": "NikhilNamal17_popular-movie-quotes.json",
       "name": "NikhilNamal17/popular-movie-quotes",
-      "url": "https://github.com/NikhilNamal17/popular-movie-quotes"
+      "github": {
+        "owner": "NikhilNamal17",
+        "repo": "popular-movie-quotes",
+        "path": "data/data.json",
+        "branch": "master"
+      }
     }
   ]
 }

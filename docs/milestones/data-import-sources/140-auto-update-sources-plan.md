@@ -6,6 +6,8 @@
 **Depends on:** #58 fix (manifest `url` field), #62 (`AutoUpdateSources` follows same config pattern)  
 **Unblocks:** retirement of `scripts/sources.json`
 
+**Note (2026-06-30):** #63 already did the schema/manifest/`SeedFile` groundwork this spec needs — `schemas/manifest.schema.json` now has a `downloadUrl` field plus a `github: {owner, repo, path, branch}` object (computes `url`/`downloadUrl` from GitHub's standard URL conventions), `data/sources/manifest.json`'s `vilaboim`/`NikhilNamal17` entries use the `github` kind, and `SeedFile` carries a `DownloadUrl`. #140's remaining scope is purely the HTTP GET + temp-file-substitution mechanism described below, plus the `Quotinator__AutoUpdateSources` config key — it can consume `SeedFile.DownloadUrl` directly via `IManifestSeedPlanner`/`ManifestSeedPlanner`, no further manifest-format work needed.
+
 ---
 
 ## Spec requirements
