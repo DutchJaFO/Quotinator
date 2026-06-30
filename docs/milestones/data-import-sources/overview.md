@@ -46,6 +46,7 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 | 5  | #57 | Seed script: dedup inconsistent | Partially resolved — Problems 1–3 closed by #61; Problem 4 now unblocked (#58 done) |
 | 6  | #63 | Import manifest | Partially done — unlisted-file sorting and auto-creation missing |
 | 7  | #62 | Folder-based seeder | Partially done — `IncludeDefaultSources`, `ImportsPath` config keys and legacy warning missing; ImportBatch row now unblocked (#58 done) |
+| 7a | #140 | Auto-update bundled sources from manifest URL | Not started — depends on #58 fix (manifest `url`) and #62 config pattern |
 | 8  | #64 | Conflict resolution policy | Partially done — rename `overwrite` → `newest-wins`, change default, align config key; ImportBatch recording now unblocked (#58 done) |
 | 9  | #45 | Import endpoint | Not started |
 | 10 | #65 | Import endpoint: preview/dry-run | Partially done — existing startup preview is different feature; `?preview=true` on import needs #45 |
@@ -95,3 +96,4 @@ All remaining issues are either partially done or not started. Evaluate each for
 - [#67 — Conversations schema](67-conversations-schema-plan.md)
 - [#68 — Curated JSON conversations](68-curated-json-conversations-plan.md)
 - [#69 — API conversations](69-api-conversations-plan.md)
+- [#140 — Auto-update bundled sources from manifest URL](140-auto-update-sources-plan.md)
