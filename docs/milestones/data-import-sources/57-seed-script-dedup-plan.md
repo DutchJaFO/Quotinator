@@ -3,7 +3,7 @@
 **Status:** All problems resolved in code — pending release
 **GitHub issue:** #57
 **Closed by:** #61
-**Tiers required:** T1 only — pure data-layer logic, no Docker/HA-specific surface
+**Tiers required:** None — Problem 4's fix lives entirely in `QuotinatorDatabaseInitializer` (engine layer); it never touches `.razor`/Blazor/pre-Blazor middleware (T1), the Dockerfile/publish output/`Program.cs` startup/SSL config (T2), or any T3 surface. Fully covered by unit tests; no live verification gate applies.
 
 ---
 
@@ -35,7 +35,7 @@ Problems 1–3 are eliminated by #61: each source writes its own file; cross-sou
 
 Problem 4 (ImportBatch entries) required #58 to land first. With #58's `Type`/`Url` fix in place, the seeder creates one `ImportBatch` row per source dataset and links every record from that source to it via `ImportBatchId`; `ImportBatches.RecordCount` is verified to match the actual linked row count per batch.
 
-**Note (2026-06-30):** this fix is committed on `feature/data-import-sources` with T1 verified (unit tests, no Docker/HA-specific behaviour involved). It has not shipped in any release yet — "pending release", not "done".
+**Note (2026-06-30):** this fix is committed on `feature/data-import-sources`, fully verified by unit tests (no live tier required — see Tiers line above). It has not shipped in any release yet — "pending release", not "done".
 
 ## Verification
 

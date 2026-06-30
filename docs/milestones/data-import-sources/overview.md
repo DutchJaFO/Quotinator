@@ -59,6 +59,22 @@ Import pipeline infrastructure: per-source data files, startup seeder, import en
 
 ---
 
+## Tier verification status
+
+Per `docs/release-verification.md`, every issue must declare which of T1 (VS/local), T2 (Docker), T3 (HA add-on) apply, and each required tier must be confirmed before a release tag. Only issues actually assessed are listed — see each plan doc's `**Tiers required:**` line for the full reasoning.
+
+| Issue | Tiers required | Status |
+|-------|-----------------|--------|
+| #57 | None — pure data-layer logic in `QuotinatorDatabaseInitializer`; never touches `.razor`/Blazor (T1), Dockerfile/publish/`Program.cs` startup/SSL (T2), or any T3 surface | N/A — fully covered by unit tests |
+| #58 (regression fix) | T1, T2 | ✅ Both confirmed live 2026-06-30 — VS run (DB screenshot) + `docker build`/`docker run` smoke tests |
+| #63 | T1, T2 | ✅ Both confirmed live 2026-06-30 — VS run (manifest auto-create + warning log) + Docker (`docker exec` into running container, same auto-create behaviour confirmed) |
+| #140 | T1 (Program.cs startup change), T2 (Docker — write-path constraint is the whole point of this issue) | Not started — tiers will need confirming once implemented |
+| #62, #64, #65, #45, #55, #56, #59, #67, #68, #69 | Not yet assessed | — |
+
+**None of the above have shipped in a release.** T1+T2 confirmation on a feature branch is not equivalent to "released" — see the Status line at the top of this doc.
+
+---
+
 ## PR merge plan
 
 **Default assumption:** the full milestone is completed before merging to `main`.
