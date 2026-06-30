@@ -54,7 +54,11 @@ public class DatabaseInitializerTests
     }
 
     private static SeedBatch AllFilesBatch() => new(
-        [CuratedFile, VilaboimFile, NikhilNamal17File],
+        [
+            new SeedFile(CuratedFile,        null),
+            new SeedFile(VilaboimFile,        "https://github.com/vilaboim/movie-quotes"),
+            new SeedFile(NikhilNamal17File,   "https://github.com/NikhilNamal17/popular-movie-quotes")
+        ],
         ManifestPolicy.HardcodedDefault,
         "bundled sources");
 
@@ -90,7 +94,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_CuratedFileOnly_SeedsFkChainCorrectly()
     {
-        var batch = new SeedBatch([CuratedFile], ManifestPolicy.HardcodedDefault, "curated");
+        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
         var db    = CreateInitializer([batch]);
         await db.InitialiseAsync();
 

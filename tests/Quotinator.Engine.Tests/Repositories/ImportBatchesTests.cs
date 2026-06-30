@@ -119,22 +119,31 @@ public class ImportBatchesTests
 
     // ── Seeding ───────────────────────────────────────────────────────────────
 
-    /// <summary>Seeder creates one <c>ImportBatch</c> row per source file with distinct names and <c>System</c> type.</summary>
+    /// <summary>Seeder creates one <c>ImportBatch</c> row per source file; files with a URL get <c>Seed</c> type, files without get <c>System</c>.</summary>
     [TestMethod]
-    public async Task Seeding_TwoSourceFiles_ProduceTwoDistinctBatches()
+    public async Task Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes()
     {
-        var batch = new SeedBatch([CuratedFile, VilaboimFile], ManifestPolicy.HardcodedDefault, "test");
-        var db    = CreateInitializer([batch]);
+        var systemFile = new SeedFile(CuratedFile, null);
+        var seedFile   = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        var batch      = new SeedBatch([systemFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
+        var db         = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var rows = (await conn.QueryAsync<(string Name, string Type)>(
-            "SELECT Name, Type FROM ImportBatches WHERE Type = 'System' AND IsDeleted = 0")).ToList();
+        var rows = (await conn.QueryAsync<(string Name, string Type, string? Url)>(
+            "SELECT Name, Type, Url FROM ImportBatches WHERE IsDeleted = 0")).ToList();
 
         Assert.AreEqual(2, rows.Count, "One ImportBatch row per source file");
         Assert.AreEqual(rows.Count, rows.DistinctBy(r => r.Name).Count(), "All batch names are distinct");
-        Assert.IsTrue(rows.All(r => r.Type == "System"), "All seeder-created batches have Type='System'");
+
+        var systemRow = rows.Single(r => r.Name == Path.GetFileName(CuratedFile));
+        Assert.AreEqual("System", systemRow.Type, "File without URL should have Type=System");
+        Assert.IsNull(systemRow.Url, "File without URL should have Url=NULL");
+
+        var seedRow = rows.Single(r => r.Name == Path.GetFileName(VilaboimFile));
+        Assert.AreEqual("Seed", seedRow.Type, "File with URL should have Type=Seed");
+        Assert.AreEqual("https://github.com/vilaboim/movie-quotes", seedRow.Url, "Url should match the manifest URL");
     }
 
     // ── Migration (upgrade path) ───────────────────────────────────────────────

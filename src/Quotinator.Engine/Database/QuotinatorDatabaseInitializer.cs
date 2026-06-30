@@ -136,10 +136,10 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         foreach (var batch in _batches)
         {
-            foreach (var file in batch.Files)
+            foreach (var seedFile in batch.Files)
             {
-                var fileName = Path.GetFileName(file);
-                var quotes   = LoadQuotesFromFile(file);
+                var fileName = Path.GetFileName(seedFile.FilePath);
+                var quotes   = LoadQuotesFromFile(seedFile.FilePath);
                 filePreviews.Add(new SeedFilePreview(fileName, quotes.Count));
                 totalQuotes += quotes.Count;
 
@@ -154,7 +154,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                     }
                     else
                     {
-                        seenIds[q.Id] = file;
+                        seenIds[q.Id] = seedFile.FilePath;
                     }
                 }
             }
@@ -203,11 +203,11 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         foreach (var batch in _batches)
         {
-            foreach (var file in batch.Files)
+            foreach (var seedFile in batch.Files)
             {
-                var fileName    = Path.GetFileName(file);
-                var quotes      = LoadQuotesFromFile(file);
-                var importBatch = await CreateImportBatchAsync(file);
+                var fileName    = Path.GetFileName(seedFile.FilePath);
+                var quotes      = LoadQuotesFromFile(seedFile.FilePath);
+                var importBatch = await CreateImportBatchAsync(seedFile);
 
                 Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
                     quotes.Count, fileName, batch.Label);
@@ -256,7 +256,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                                 id      = q.Id
                             });
 
-                        seenIds[q.Id] = file;
+                        seenIds[q.Id] = seedFile.FilePath;
 
                         var owQuoteId = Guid.Parse(q.Id);
                         await InsertTranslationsAsync(connection, q, owQuoteId, owSourceId, now);
@@ -264,7 +264,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                         continue;
                     }
 
-                    seenIds[q.Id] = file;
+                    seenIds[q.Id] = seedFile.FilePath;
 
                     var sourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex, importBatch.Id);
                     var characterId = await GetOrCreateCharacterAsync(connection, q, sourceId, characterIndex, importBatch.Id);
@@ -332,9 +332,9 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         foreach (var batch in _batches)
         {
-            foreach (var file in batch.Files)
+            foreach (var seedFile in batch.Files)
             {
-                var quotes = LoadQuotesFromFile(file);
+                var quotes = LoadQuotesFromFile(seedFile.FilePath);
                 foreach (var q in quotes)
                 {
                     foreach (var genre in q.Genres)
@@ -411,12 +411,14 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         }
     }
 
-    private async Task<ImportBatch> CreateImportBatchAsync(string filePath)
+    private async Task<ImportBatch> CreateImportBatchAsync(SeedFile seedFile)
     {
+        var type = string.IsNullOrEmpty(seedFile.Url) ? ImportBatchType.System : ImportBatchType.Seed;
         var batch = new ImportBatch
         {
-            Name       = Path.GetFileName(filePath),
-            Type       = ImportBatchType.System.ToString(),
+            Name       = Path.GetFileName(seedFile.FilePath),
+            Type       = type.ToString(),
+            Url        = seedFile.Url,
             ImportedAt = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat)
         };
         await _importBatches.InsertAsync(batch);

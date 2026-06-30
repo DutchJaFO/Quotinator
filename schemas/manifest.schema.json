@@ -44,6 +44,11 @@
             "type": "string",
             "minLength": 1,
             "description": "Human-readable source identifier shown in the import log and management UI (e.g. 'vilaboim/movie-quotes')."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Upstream URL for this source file (e.g. the GitHub repository). When present, the seeder records the import batch as type 'seed' and stores the URL for provenance."
           }
         }
       }

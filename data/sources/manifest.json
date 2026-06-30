@@ -10,11 +10,13 @@
     },
     {
       "file": "vilaboim_movie-quotes.json",
-      "name": "vilaboim/movie-quotes"
+      "name": "vilaboim/movie-quotes",
+      "url": "https://github.com/vilaboim/movie-quotes"
     },
     {
       "file": "NikhilNamal17_popular-movie-quotes.json",
-      "name": "NikhilNamal17/popular-movie-quotes"
+      "name": "NikhilNamal17/popular-movie-quotes",
+      "url": "https://github.com/NikhilNamal17/popular-movie-quotes"
     }
   ]
 }

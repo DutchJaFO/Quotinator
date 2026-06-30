@@ -19,14 +19,17 @@
 
 ---
 
-## Key decision before implementation
+## Write-path approach — temp directory
 
-**HA write path:** bundled sources in the image (`/app/data/sources/`) are read-only under the HA supervisor. Downloaded files must target a writable location. Options:
+Downloaded files are written to a temp directory (`Path.GetTempPath()`), not to the image-bundled `data/sources/` directory (which is read-only under the HA supervisor). The temp path is passed to the seeder in place of the bundled path for that file. After seeding completes the temp files are deleted.
 
-- Write to `{dataDir}/sources/` and scan both image-bundled and persistent-volume sources at startup
-- Write to a temp location and swap atomically
+This works because seeding only runs when the database is empty (or on explicit reseed) — the download only needs to survive long enough to seed from. On container restart with a populated database, seeding is skipped and the temp files are never needed.
 
-Resolve this before writing any code — it affects the seeder's source discovery logic.
+**Flow:**
+1. For each manifest entry with a `url` (and `AutoUpdateSources=true`): attempt `GET` with 5 s timeout
+2. On success: write to a temp file; substitute the temp path for the bundled path in the seeder's file list; log at `Information`
+3. On failure: log a warning; keep the bundled path — seeder uses the existing local file
+4. Seeding completes → delete all temp files
 
 ---
 

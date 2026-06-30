@@ -220,12 +220,13 @@ static IReadOnlyList<SeedBatch> BuildSeedBatches(
     return batches;
 }
 
-static (IReadOnlyList<string> Files, ManifestPolicy Policy) OrderedByManifest(
+static (IReadOnlyList<SeedFile> Files, ManifestPolicy Policy) OrderedByManifest(
     string dir, ManifestPolicy configPolicy, ILogger<Program> log)
 {
     var allJson = Directory.GetFiles(dir, "*.json")
                            .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
                            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                           .Select(f => new SeedFile(f, null))
                            .ToList();
 
     var manifestPath = Path.Combine(dir, "manifest.json");
@@ -243,15 +244,20 @@ static (IReadOnlyList<string> Files, ManifestPolicy Policy) OrderedByManifest(
         var resolvedPolicy    = ManifestPolicy.Resolve(fromManifest, configPolicy);
 
         var listed = (root?["files"]?.AsArray() ?? [])
-            .Select(e => Path.Combine(dir, e!["file"]!.GetValue<string>()))
-            .Where(File.Exists)
+            .Select(e =>
+            {
+                var path = Path.Combine(dir, e!["file"]!.GetValue<string>());
+                var url  = e["url"]?.GetValue<string>();
+                return new SeedFile(path, url);
+            })
+            .Where(f => File.Exists(f.FilePath))
             .ToList();
 
-        var listedSet = new HashSet<string>(listed, StringComparer.OrdinalIgnoreCase);
-        var unlisted  = allJson.Where(f => !listedSet.Contains(f)).ToList();
+        var listedPaths = new HashSet<string>(listed.Select(f => f.FilePath), StringComparer.OrdinalIgnoreCase);
+        var unlisted    = allJson.Where(f => !listedPaths.Contains(f.FilePath)).ToList();
         if (unlisted.Count > 0)
             log.LogInformation("[Database - Init] {Count} file(s) not listed in manifest will be appended: {Files}",
-                unlisted.Count, string.Join(", ", unlisted.Select(Path.GetFileName)));
+                unlisted.Count, string.Join(", ", unlisted.Select(f => Path.GetFileName(f.FilePath))));
 
         return ([.. listed, .. unlisted], resolvedPolicy);
     }
