@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-06-30 20:45 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-06-30 21:15 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Fixed
 - ImportBatch rows created during seeding now record the correct `Type` (`Seed` for externally-sourced files with a manifest URL, `System` for internally-curated files) and persist the source URL; previously every seeded batch was recorded as `System` with no URL
+- Seeding no longer crashes on an empty or otherwise invalid JSON source file — the file is now skipped with a logged warning instead of stopping startup
 
 ---
 

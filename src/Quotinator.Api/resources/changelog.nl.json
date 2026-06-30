@@ -10,13 +10,14 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [58, 63],
+    "issues": [57, 58, 63],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
       "Manifestbronvermeldingen kunnen nu een `github`-object (`owner`, `repo`, `path`, `branch`) bevatten in plaats van een gewone `url` — zowel de herkomstlink als een downloadbare ruwe-bestandslink worden hier automatisch uit afgeleid"
     ],
     "fixed": [
-      "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor extern aangeleverde bestanden met een manifest-URL, `System` voor intern samengestelde bestanden) en bewaren de bron-URL; voorheen werd elke geseede batch geregistreerd als `System` zonder URL"
+      "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor extern aangeleverde bestanden met een manifest-URL, `System` voor intern samengestelde bestanden) en bewaren de bron-URL; voorheen werd elke geseede batch geregistreerd als `System` zonder URL",
+      "Het seeden crasht niet meer op een leeg of ongeldig JSON-bronbestand — het bestand wordt nu overgeslagen met een gelogde waarschuwing in plaats van de opstart te stoppen"
     ]
   },
   "releases": [
