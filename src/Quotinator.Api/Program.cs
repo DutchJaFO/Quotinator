@@ -206,7 +206,7 @@ static IReadOnlyList<SeedBatch> BuildSeedBatches(
     {
         var (files, policy) = planner.PlanSeed(bundledDir, configPolicy, allowAutoCreate: false);
         if (files.Count > 0)
-            batches.Add(new SeedBatch(files, policy, "bundled sources"));
+            batches.Add(new SeedBatch(files, policy, "bundled sources", SeedBatchOrigin.Bundled));
     }
     else
     {
@@ -217,7 +217,7 @@ static IReadOnlyList<SeedBatch> BuildSeedBatches(
     {
         var (files, policy) = planner.PlanSeed(importsDir, configPolicy, allowAutoCreate: createMissingManifest);
         if (files.Count > 0)
-            batches.Add(new SeedBatch(files, policy, "user imports"));
+            batches.Add(new SeedBatch(files, policy, "user imports", SeedBatchOrigin.UserImports));
     }
 
     return batches;

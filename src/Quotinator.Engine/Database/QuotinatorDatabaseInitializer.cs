@@ -207,7 +207,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             {
                 var fileName    = Path.GetFileName(seedFile.FilePath);
                 var quotes      = LoadQuotesFromFile(seedFile.FilePath);
-                var importBatch = await CreateImportBatchAsync(seedFile);
+                var importBatch = await CreateImportBatchAsync(batch, seedFile);
 
                 Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
                     quotes.Count, fileName, batch.Label);
@@ -411,9 +411,9 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         }
     }
 
-    private async Task<ImportBatch> CreateImportBatchAsync(SeedFile seedFile)
+    private async Task<ImportBatch> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile)
     {
-        var type = string.IsNullOrEmpty(seedFile.Url) ? ImportBatchType.System : ImportBatchType.Seed;
+        var type = DetermineType(seedBatch.Origin, seedFile.Url);
         var batch = new ImportBatch
         {
             Name       = Path.GetFileName(seedFile.FilePath),
@@ -424,6 +424,14 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         await _importBatches.InsertAsync(batch);
         return batch;
     }
+
+    // Origin always wins over URL presence — a user-imports-folder file that happens to declare
+    // its own url/github manifest entry is still UserSeed, never Seed, so provenance always
+    // reflects which folder the file was actually scanned from.
+    private static ImportBatchType DetermineType(SeedBatchOrigin origin, string? url) =>
+        origin == SeedBatchOrigin.UserImports
+            ? ImportBatchType.UserSeed
+            : string.IsNullOrEmpty(url) ? ImportBatchType.System : ImportBatchType.Seed;
 
     private static async Task<Guid> GetOrCreateSourceAsync(
         SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId)

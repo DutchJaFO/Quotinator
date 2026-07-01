@@ -160,12 +160,12 @@ public class DatabaseInitializerTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
-        await conn.ExecuteAsync("DELETE FROM SchemaVersion WHERE Version IN (3, 4);");
+        await conn.ExecuteAsync("DELETE FROM SchemaVersion WHERE Version IN (3, 4, 5);");
         await conn.CloseAsync();
 
         await db.InitialiseAsync();
 
-        Assert.AreEqual(4,              db.SchemaVersion, "Schema must be recorded at v4 after self-heal");
+        Assert.AreEqual(5,              db.SchemaVersion, "Schema must be recorded at v5 after self-heal");
         Assert.AreEqual(countAfterInit, db.QuoteCount,    "Quote count must be unchanged after self-heal");
     }
 }

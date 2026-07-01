@@ -235,6 +235,23 @@ public class DatabaseInitializer : IDatabaseInitializer
             CreateBackup(connection, current);
         }
 
+        // Some migrations recreate a table (SQLite has no ALTER ... CHECK) to widen a constraint,
+        // which requires dropping a table that other tables still hold live foreign-key references
+        // to. Foreign key enforcement must be off for the duration — PRAGMA foreign_keys is a no-op
+        // inside a transaction, so it cannot be toggled from within a migration's own SQL text.
+        await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+        try
+        {
+            await ApplyPendingMigrationsAsync(connection, current);
+        }
+        finally
+        {
+            await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
+        }
+    }
+
+    private async Task ApplyPendingMigrationsAsync(SqliteConnection connection, int current)
+    {
         for (var i = current; i < _migrations.Count; i++)
         {
             using var tx = connection.BeginTransaction();

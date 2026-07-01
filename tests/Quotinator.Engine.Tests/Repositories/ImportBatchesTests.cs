@@ -107,14 +107,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>Schema migration version is bumped to 4 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>Schema migration version is bumped to 5 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(4, db.SchemaVersion, "SchemaVersion should be 4 after Migration004");
+        Assert.AreEqual(5, db.SchemaVersion, "SchemaVersion should be 5 after Migration005");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────
@@ -204,7 +204,68 @@ public class ImportBatchesTests
         Assert.AreEqual(0, emptyBatch.RecordCount, "The empty/invalid file's batch should record zero quotes, not crash");
     }
 
+    /// <summary>A file scanned from the user imports folder (Origin=UserImports) with no URL gets Type=UserSeed, not System.</summary>
+    [TestMethod]
+    public async Task Seeding_UserImportsOriginNoUrl_TypeIsUserSeed()
+    {
+        var userFile = new SeedFile(CuratedFile, null);
+        var batch    = new SeedBatch([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
+        var db       = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var type = await conn.ExecuteScalarAsync<string>(
+            "SELECT Type FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
+
+        Assert.AreEqual("UserSeed", type, "A file scanned from the user imports folder must be UserSeed regardless of URL absence");
+    }
+
+    /// <summary>A file scanned from the user imports folder (Origin=UserImports) that DOES declare a URL still gets Type=UserSeed, not Seed — origin wins over URL presence.</summary>
+    [TestMethod]
+    public async Task Seeding_UserImportsOriginWithUrl_TypeIsStillUserSeed()
+    {
+        var userFile = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        var batch    = new SeedBatch([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
+        var db       = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var type = await conn.ExecuteScalarAsync<string>(
+            "SELECT Type FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
+
+        Assert.AreEqual("UserSeed", type, "A user-imports-folder file must stay UserSeed even when it declares its own URL — origin, not URL presence, decides the type");
+    }
+
     // ── Migration (upgrade path) ───────────────────────────────────────────────
+
+    /// <summary>Migration 5 widens the ImportBatches.Type CHECK constraint to allow 'UserSeed' without losing existing rows.</summary>
+    [TestMethod]
+    public async Task Migration005_WideningTypeCheckConstraint_PreservesExistingRows()
+    {
+        var seedBatch = new SeedBatch([new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes")],
+            ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.Bundled);
+        var db = CreateInitializer([seedBatch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var existingRow = await conn.QuerySingleAsync<(string Id, string Type)>(
+            "SELECT Id, Type FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
+
+        Assert.AreEqual("Seed", existingRow.Type, "Pre-existing row must survive migration 5 with its original Type intact");
+
+        var newId = Guid.NewGuid().ToString();
+        var now   = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) VALUES (@id, 'manual-user-seed.json', 'UserSeed', @now, 0, @now, 0)",
+            new { id = newId, now });
+
+        var insertedType = await conn.ExecuteScalarAsync<string>(
+            "SELECT Type FROM ImportBatches WHERE Id = @id", new { id = newId });
+        Assert.AreEqual("UserSeed", insertedType, "The widened CHECK constraint must accept 'UserSeed'");
+    }
 
     /// <summary>Pre-seed batch rows for the two external datasets are inserted when upgrading a non-empty database.</summary>
     [TestMethod]

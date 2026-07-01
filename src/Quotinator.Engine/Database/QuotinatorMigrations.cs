@@ -19,6 +19,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 2, Sql = Migration002_ReseedGenres },
         new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
         new SchemaMigration { Version = 4, Sql = AuditMigrations.CreateAuditEntriesTable },
+        new SchemaMigration { Version = 5, Sql = Migration005_ImportBatchTypeUserSeed },
     ];
 
     // All tables use RecordBase columns (Id, DateCreated, DateModified, DateDeleted, IsDeleted).
@@ -164,5 +165,34 @@ public static class QuotinatorMigrations
                strftime('%Y-%m-%d %H:%M:%S', 'now'), NULL, 0,
                strftime('%Y-%m-%d %H:%M:%S', 'now'), NULL, NULL, 0
         WHERE EXISTS (SELECT 1 FROM Quotes LIMIT 1);
+        """;
+
+    // Widens the ImportBatches.Type CHECK constraint to add 'UserSeed' (files scanned from the
+    // user's imports folder, distinct from 'System'/'Seed' bundled content). SQLite cannot ALTER
+    // a CHECK constraint, so the table is recreated with the new constraint and existing rows are
+    // copied across. Wrapped in the caller's transaction, so a failure rolls back to the
+    // pre-migration table intact — safe to retry.
+    private const string Migration005_ImportBatchTypeUserSeed = """
+        CREATE TABLE IF NOT EXISTS ImportBatches_New (
+            Id           TEXT    PRIMARY KEY,
+            Name         TEXT    NOT NULL,
+            Type         TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System', 'UserSeed')),
+            Url          TEXT,
+            ImportedAt   TEXT    NOT NULL,
+            ImportedBy   TEXT,
+            RecordCount  INTEGER NOT NULL DEFAULT 0,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0
+        );
+
+        INSERT INTO ImportBatches_New (Id, Name, Type, Url, ImportedAt, ImportedBy, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Name, Type, Url, ImportedAt, ImportedBy, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted
+        FROM ImportBatches;
+
+        DROP TABLE ImportBatches;
+
+        ALTER TABLE ImportBatches_New RENAME TO ImportBatches;
         """;
 }
