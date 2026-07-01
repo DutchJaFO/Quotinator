@@ -17,7 +17,10 @@
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
-      "Manifest-Quelleinträge können nun ein `github`-Objekt (`owner`, `repo`, `path`, `branch`) statt einer einfachen `url` angeben — sowohl der Herkunftslink als auch ein abrufbarer Rohdatei-Download-Link werden daraus automatisch abgeleitet"
+      "Manifest-Quelleinträge können nun ein `github`-Objekt (`owner`, `repo`, `path`, `branch`) statt einer einfachen `url` angeben — sowohl der Herkunftslink als auch ein abrufbarer Rohdatei-Download-Link werden daraus automatisch abgeleitet",
+      "Konfigurationsschlüssel `Quotinator__IncludeDefaultSources` (Standard `true`) — auf `false` gesetzt werden die gebündelten Quellen vollständig übersprungen, nützlich für eine vollständig angepasste Datenkonfiguration",
+      "Konfigurationsschlüssel `Quotinator__ImportsPath` (Standard `{DataDir}/imports`) — legt fest, aus welchem Ordner der Benutzer-Importordner gescannt wird",
+      "Beim Start wird nun eine Warnung protokolliert, wenn die veraltete Umgebungsvariable `Quotinator__DataPath` noch gesetzt ist, mit Verweis auf `Quotinator__DataDir`"
     ],
     "fixed": [
       "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für extern bezogene Dateien mit einer Manifest-URL, `System` für intern kuratierte Dateien) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch als `System` ohne URL erfasst",

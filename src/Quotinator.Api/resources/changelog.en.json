@@ -10,7 +10,10 @@
     ],
     "added": [
       "A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)",
-      "Manifest source entries can now declare a `github` object (`owner`, `repo`, `path`, `branch`) instead of a plain `url` — the provenance link and a fetchable raw-file download link are both derived from it automatically"
+      "Manifest source entries can now declare a `github` object (`owner`, `repo`, `path`, `branch`) instead of a plain `url` — the provenance link and a fetchable raw-file download link are both derived from it automatically",
+      "`Quotinator__IncludeDefaultSources` config key (default `true`) — when set to `false`, the bundled sources are skipped entirely, useful for a fully custom data setup",
+      "`Quotinator__ImportsPath` config key (default `{DataDir}/imports`) — overrides where the user imports folder is scanned from",
+      "A startup warning is now logged when the legacy `Quotinator__DataPath` environment variable is still set, pointing users to `Quotinator__DataDir` instead"
     ],
     "fixed": [
       "ImportBatch rows created during seeding now record the correct `Type` (`Seed` for externally-sourced files with a manifest URL, `System` for internally-curated files) and persist the source URL; previously every seeded batch was recorded as `System` with no URL",
