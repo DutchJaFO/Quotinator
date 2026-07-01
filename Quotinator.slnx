@@ -212,6 +212,9 @@
     <File Path="src/Quotinator.Api/resources/changelog.nl.json" />
     <File Path="src/Quotinator.Api/resources/changelog.de.json" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Quotinator.Tools.DbInspector/Quotinator.Tools.DbInspector.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
     <Project Path="tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" />
