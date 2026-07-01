@@ -11,6 +11,10 @@
   },
   "unreleased": {
     "issues": [57, 58, 62, 63],
+    "cves": ["CVE-2026-49451"],
+    "highlights": [
+      "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen."
+    ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
       "Manifestbronvermeldingen kunnen nu een `github`-object (`owner`, `repo`, `path`, `branch`) bevatten in plaats van een gewone `url` — zowel de herkomstlink als een downloadbare ruwe-bestandslink worden hier automatisch uit afgeleid"
@@ -18,7 +22,8 @@
     "fixed": [
       "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor extern aangeleverde bestanden met een manifest-URL, `System` voor intern samengestelde bestanden) en bewaren de bron-URL; voorheen werd elke geseede batch geregistreerd als `System` zonder URL",
       "Het seeden crasht niet meer op een leeg of ongeldig JSON-bronbestand — het bestand wordt nu overgeslagen met een gelogde waarschuwing in plaats van de opstart te stoppen",
-      "Een bestand in de gebruikersimportmap zonder URL werd voorheen op dezelfde manier geclassificeerd als intern samengestelde data; ImportBatch-herkomst heeft nu een apart `UserSeed`-type voor bestanden uit de importmap, los van `System` (gebundeld) en `Seed` (onze eigen gebundelde externe datasets)"
+      "Een bestand in de gebruikersimportmap zonder URL werd voorheen op dezelfde manier geclassificeerd als intern samengestelde data; ImportBatch-herkomst heeft nu een apart `UserSeed`-type voor bestanden uit de importmap, los van `System` (gebundeld) en `Seed` (onze eigen gebundelde externe datasets)",
+      "CVE-2026-49451: `Microsoft.OpenApi` (transitief via `Microsoft.AspNetCore.OpenApi`) had een stack-overflow-kwetsbaarheid bij het parsen van OpenAPI-documenten met circulaire schemaverwijzingen; Quotinator genereert alleen zijn eigen OpenAPI-document en parset nooit onvertrouwde documenten, dus het kwetsbare pad was onbereikbaar — desondanks gepatcht naar 2.7.5 via een directe package-override"
     ]
   },
   "releases": [

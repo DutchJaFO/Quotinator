@@ -229,6 +229,9 @@
   <Folder Name="/CVE/Quotinator.Api/">
     <File Path="src/Quotinator.Api/CVE/.gitkeep" />
   </Folder>
+  <Folder Name="/CVE/Quotinator.Api/archived/">
+    <File Path="src/Quotinator.Api/CVE/archived/CVE-2026-49451.md" />
+  </Folder>
   <Folder Name="/CVE/Quotinator.Api.Tests/">
     <File Path="tests/Quotinator.Api.Tests/CVE/.gitkeep" />
   </Folder>

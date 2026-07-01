@@ -11,6 +11,10 @@
   },
   "unreleased": {
     "issues": [57, 58, 62, 63],
+    "cves": ["CVE-2026-49451"],
+    "highlights": [
+      "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen."
+    ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
       "Manifest-Quelleinträge können nun ein `github`-Objekt (`owner`, `repo`, `path`, `branch`) statt einer einfachen `url` angeben — sowohl der Herkunftslink als auch ein abrufbarer Rohdatei-Download-Link werden daraus automatisch abgeleitet"
@@ -18,7 +22,8 @@
     "fixed": [
       "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für extern bezogene Dateien mit einer Manifest-URL, `System` für intern kuratierte Dateien) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch als `System` ohne URL erfasst",
       "Das Seeding stürzt nicht mehr bei einer leeren oder ungültigen JSON-Quelldatei ab — die Datei wird jetzt mit einer protokollierten Warnung übersprungen, anstatt den Start zu stoppen",
-      "Eine Datei im Benutzer-Importordner ohne URL wurde bisher genauso eingestuft wie intern kuratierte Daten; die ImportBatch-Herkunft hat jetzt einen eigenen `UserSeed`-Typ für Dateien aus dem Importordner, getrennt von `System` (gebündelt) und `Seed` (unsere eigenen gebündelten externen Datensätze)"
+      "Eine Datei im Benutzer-Importordner ohne URL wurde bisher genauso eingestuft wie intern kuratierte Daten; die ImportBatch-Herkunft hat jetzt einen eigenen `UserSeed`-Typ für Dateien aus dem Importordner, getrennt von `System` (gebündelt) und `Seed` (unsere eigenen gebündelten externen Datensätze)",
+      "CVE-2026-49451: `Microsoft.OpenApi` (transitiv über `Microsoft.AspNetCore.OpenApi`) hatte eine Stack-Overflow-Schwachstelle beim Parsen von OpenAPI-Dokumenten mit zirkulären Schemaverweisen; Quotinator generiert nur sein eigenes OpenAPI-Dokument und parst niemals nicht vertrauenswürdige Dokumente, daher war der verwundbare Pfad unerreichbar — trotzdem auf 2.7.5 gepatcht über eine direkte Paket-Überschreibung"
     ]
   },
   "releases": [

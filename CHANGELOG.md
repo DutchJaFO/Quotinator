@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-01 19:07 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-01 20:15 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Highlights
+- Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.
+
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
 - Manifest source entries can now declare a `github` object (`owner`, `repo`, `path`, `branch`) instead of a plain `url` — the provenance link and a fetchable raw-file download link are both derived from it automatically
@@ -18,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - ImportBatch rows created during seeding now record the correct `Type` (`Seed` for externally-sourced files with a manifest URL, `System` for internally-curated files) and persist the source URL; previously every seeded batch was recorded as `System` with no URL
 - Seeding no longer crashes on an empty or otherwise invalid JSON source file — the file is now skipped with a logged warning instead of stopping startup
 - A file placed in the user imports folder with no URL was previously misclassified the same as internally-curated data; ImportBatch provenance now has a distinct `UserSeed` type for imports-folder files, separate from `System` (bundled) and `Seed` (our own bundled external datasets)
+- CVE-2026-49451: `Microsoft.OpenApi` (transitive via `Microsoft.AspNetCore.OpenApi`) had a stack-overflow vulnerability when parsing OpenAPI documents with circular schema references; Quotinator only generates its own OpenAPI document and never parses untrusted ones, so the vulnerable path was unreachable — patched to 2.7.5 via a direct package override regardless
 
 ---
 
