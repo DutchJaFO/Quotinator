@@ -12,8 +12,8 @@
 
 ## Spec requirements
 
-1. New `ImportBatches` table with columns: `Id` (UUID, PK), `Name` (TEXT NOT NULL), `Type` (TEXT NOT NULL — `seed` | `import` | `system`), `Url` (TEXT, nullable), `ImportedAt` (TEXT NOT NULL, ISO 8601 UTC), `ImportedBy` (TEXT, nullable), `RecordCount` (INT NOT NULL DEFAULT 0)
-2. Type values: `seed` (external dataset, has a `Url`), `import` (via bulk import endpoint, `ImportedBy` = user UUID), `system` (startup seeding from bundled sources)
+1. New `ImportBatches` table with columns: `Id` (UUID, PK), `Name` (TEXT NOT NULL), `Type` (TEXT NOT NULL — `seed` | `import` | `system` | `user-seed`), `Url` (TEXT, nullable), `ImportedAt` (TEXT NOT NULL, ISO 8601 UTC), `ImportedBy` (TEXT, nullable), `RecordCount` (INT NOT NULL DEFAULT 0)
+2. Type values: `seed` (our own bundled external dataset, has a `Url`/`github` object), `system` (fixed/predetermined bundled data with no `Url`, e.g. curated quotes), `user-seed` (file scanned from the user's imports folder at startup, regardless of `Url`), `import` (via bulk import endpoint, `ImportedBy` = user UUID). **`user-seed` added 2026-07-01 (#62) — see that plan doc for the full rationale and the `SeedBatchOrigin` mechanism that determines it.** Conceptually, `system` is meant to survive reseed/reset while `seed`/`user-seed`/`import` are replaceable content that gets cleared — that preservation *behavior* is not yet implemented; tracked as a follow-up issue under milestone #10.
 3. Nullable `ImportBatchId TEXT REFERENCES ImportBatches(Id)` column on `Quotes`, `Characters`, `Sources`, `People`
 4. Pre-seeded batch rows for vilaboim and NikhilNamal17 (Type = `seed`); existing records stay `NULL` — provenance not captured retroactively
 5. Seeder creates one `ImportBatch` row per source file before seeding; writes `ImportBatchId` on all inserts for that file
