@@ -75,4 +75,36 @@ public class ConnectionStringsTests
         var name = connection.QuerySingle<string>("SELECT Name FROM Widgets WHERE Id = 1");
         Assert.AreEqual("original", name);
     }
+
+    /// <summary>
+    /// Quotinator's real databases run in WAL mode (see <c>DatabaseInitializer.EnableWal</c>).
+    /// SQLite's WAL implementation has a documented quirk: a read-only connection can only open a
+    /// WAL-mode database if the -shm/-wal files already exist (or can be created) — see
+    /// https://sqlite.org/wal.html. This test replicates that exact scenario (WAL enabled, -shm/-wal
+    /// files present from a prior write) rather than the default rollback-journal mode the other
+    /// tests in this class use, so the read-only guarantee is verified against what production
+    /// databases actually look like, not just a default-mode SQLite file.
+    /// </summary>
+    [TestMethod]
+    public void BuildReadOnly_WalModeDatabaseWithExistingShmWalFiles_OpensAndStaysReadOnly()
+    {
+        using (var setup = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            setup.Open();
+            setup.Execute("PRAGMA journal_mode=WAL;");
+            setup.Execute("INSERT INTO Widgets (Name) VALUES ('wal-written')");
+        }
+
+        Assert.IsTrue(File.Exists($"{_dbPath}-wal"), "Expected a -wal file after a WAL-mode write");
+        Assert.IsTrue(File.Exists($"{_dbPath}-shm"), "Expected a -shm file after a WAL-mode write");
+
+        using var readOnly = new SqliteConnection(ConnectionStrings.BuildReadOnly(_dbPath));
+        readOnly.Open();
+
+        var count = readOnly.QuerySingle<int>("SELECT COUNT(*) FROM Widgets");
+        Assert.AreEqual(2, count, "Should see both the original row and the WAL-mode write");
+
+        Assert.ThrowsExactly<SqliteException>(() =>
+            readOnly.Execute("UPDATE Widgets SET Name = 'tampered' WHERE Id = 1"));
+    }
 }
