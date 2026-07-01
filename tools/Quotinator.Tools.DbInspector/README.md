@@ -28,8 +28,16 @@ Inspecting a database file produced by a Docker container: if the container was 
 
 Any table can be queried this way — `Quotes`, `Sources`, `AuditEntries`, `SchemaVersion`, etc.
 
+## Read-only by design
+
+The connection opens with `Mode=ReadOnly` (`ConnectionStrings.BuildReadOnly`) — no query, however it's crafted, can `INSERT`/`UPDATE`/`DELETE`/`DROP`. This is deliberate, and is this tool's equivalent of the project's mandatory SQL policy (`CLAUDE.md` → SQL injection policy): the rest of the codebase enforces safety by parameterising every query, but this tool's entire purpose is running arbitrary, non-parameterisable query *text* supplied directly by the developer — there's no fixed structure to bind parameters into. Read-only mode is the correct analogous protection: it can't do damage regardless of what's typed, and it also means this tool won't read as a SQL-injection-shaped pattern to security scanners the way an unguarded `connection.Query(freeformSql)` normally would, since there's no write capability to exploit even if the "injection" succeeded.
+
+Covered by `ConnectionStringsTests` (`tests/Quotinator.Tools.DbInspector.Tests`) — real SQLite file, not mocked: confirms `SELECT` works, confirms `UPDATE`/`INSERT` throw, and confirms data is provably unchanged after a rejected write attempt.
+
+This also means the tool can never create a database file that doesn't already exist — SQLite rejects the open outright in read-only mode if the path is missing.
+
 ## Design notes
 
-- `ArgsParser` and `TableFormatter` are the only two pieces of logic — both pure functions, both unit-tested in `tests/Quotinator.Tools.DbInspector.Tests`. `Program.cs` itself (argument-to-exit-code wiring, the actual `SqliteConnection`/Dapper call) is intentionally left untested — it's a thin I/O shim with no independent logic worth covering.
+- `ArgsParser`, `TableFormatter`, and `ConnectionStrings` are the only pieces of logic — all pure functions, all unit-tested in `tests/Quotinator.Tools.DbInspector.Tests`. `Program.cs` itself (argument-to-exit-code wiring, the actual `SqliteConnection`/Dapper call) is intentionally left untested — it's a thin I/O shim with no independent logic worth covering.
 - Uses Dapper's dynamic `Query` — there's no fixed result shape to model, since the whole point is running arbitrary queries.
 - No `appsettings.json`, no DI container, no config — just two required CLI arguments. Keep it that way; if this tool starts growing features, that's a signal it should become a real admin endpoint instead (see `AdminEndpoints.cs`), not a bigger CLI tool.

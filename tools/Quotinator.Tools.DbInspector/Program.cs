@@ -9,7 +9,7 @@ if (parsed is null)
     return 1;
 }
 
-using var connection = new SqliteConnection($"Data Source={parsed.Value.DbPath}");
+using var connection = new SqliteConnection(ConnectionStrings.BuildReadOnly(parsed.Value.DbPath));
 IEnumerable<dynamic> rows;
 try
 {
