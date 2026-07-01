@@ -224,6 +224,7 @@
     <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
     <Project Path="tests/Quotinator.Data.Testing.Tests/Quotinator.Data.Testing.Tests.csproj" />
     <Project Path="tests/Quotinator.Engine.Tests/Quotinator.Engine.Tests.csproj" />
+    <Project Path="tests/Quotinator.Tools.DbInspector.Tests/Quotinator.Tools.DbInspector.Tests.csproj" />
   </Folder>
   <Folder Name="/CVE/" />
   <Folder Name="/CVE/Quotinator.Api/">
@@ -273,5 +274,11 @@
   </Folder>
   <Folder Name="/CVE/Quotinator.Engine.Tests/">
     <File Path="tests/Quotinator.Engine.Tests/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Tools.DbInspector/">
+    <File Path="tools/Quotinator.Tools.DbInspector/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Tools.DbInspector.Tests/">
+    <File Path="tests/Quotinator.Tools.DbInspector.Tests/CVE/.gitkeep" />
   </Folder>
 </Solution>
