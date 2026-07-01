@@ -78,8 +78,8 @@ Scope-change comment posted on #62 documenting this, per `process.md`'s deferral
 | 8 | ✅ | One `ImportBatch` row per source file, typed accurately (`System`/`Seed`/`UserSeed`/`Import`) | Unit test | `ImportBatchesTests.Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes`, `Seeding_UserImportsOriginNoUrl_TypeIsUserSeed`, `Seeding_UserImportsOriginWithUrl_TypeIsStillUserSeed` |
 | 9 | ✅ | Migration 5 widens the `Type` CHECK constraint without losing existing rows | Unit test | `ImportBatchesTests.Migration005_WideningTypeCheckConstraint_PreservesExistingRows` |
 | 10 | ✅ | Schema migration version bumped to 5 | Unit test | `ImportBatchesTests.Schema_MigrationVersion_IsBumped` |
-| 11 | ✅ | App starts cleanly in VS; migration 4→5 applies against a live non-empty database; `IncludeDefaultSources=false` skips bundled sources on a fresh DB; custom `ImportsPath` scanned instead of default; `DataPath` deprecation warning logged | T1 gate | Delete DB, start app with each env var set in turn; observe startup log for each scenario. Confirmed 2026-07-01 — see notes above for exact output per scenario |
-| 12 | ✅ | Fresh container builds schema to v5; all three config keys behave identically to T1 via `-e` env vars | T2 gate | `docker build -f docker/Dockerfile -t quotinator:local .`; run with each `-e Quotinator__*` override in turn; confirm matching behavior. Confirmed 2026-07-01 |
+| 11 | ✅ | App starts cleanly in VS; migration 4→5 applies against a live non-empty database; `IncludeDefaultSources=false` skips bundled sources on a fresh DB; custom `ImportsPath` scanned instead of default; `DataPath` deprecation warning logged | Live | Delete DB, start app with each env var set in turn; observe startup log for each scenario. Confirmed 2026-07-01 — see notes above for exact output per scenario |
+| 12 | ✅ | Fresh container builds schema to v5; all three config keys behave identically to T1 via `-e` env vars | Live | `docker build -f docker/Dockerfile -t quotinator:local .`; run with each `-e Quotinator__*` override in turn; confirm matching behavior. Confirmed 2026-07-01 |
 
 ---
 

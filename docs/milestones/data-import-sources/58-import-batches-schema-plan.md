@@ -47,8 +47,8 @@
 | 5 | ✅ | Existing records retain `NULL` `ImportBatchId` after migration | Unit test | `ImportBatchesTests.Migration_ExistingRecords_HaveNullImportBatchId` |
 | 6 | ✅ | Schema migration version bumped | Unit test | `ImportBatchesTests.Schema_MigrationVersion_IsBumped` |
 | 7 | ✅ | Seeder sets correct `Type`/`Url` per file (Seed when manifest has a `url`, System otherwise) | Unit test | `ImportBatchesTests.Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes` |
-| 8 | ✅ | Fresh seed in Visual Studio produces correct `Type`/`Url` per row | T1 gate | Start app in VS with an empty database; inspect `ImportBatches` table; confirm curated→`System`/`NULL`, vilaboim/NikhilNamal17→`Seed`/GitHub URL. Confirmed 2026-06-30 |
-| 9 | ✅ | Docker build/publish includes updated `manifest.json`; seeding behaves identically in container | T2 gate | `docker build -f docker/Dockerfile -t quotinator:local .`; run; confirm container log shows same counts as T1 (788/478/2/0); `/api/v1/health`, `/api/v1/version`, `/api/v1/quotes/random` return expected output. Confirmed 2026-06-30 |
+| 8 | ✅ | Fresh seed in Visual Studio produces correct `Type`/`Url` per row | Live | Start app in VS with an empty database; inspect `ImportBatches` table; confirm curated→`System`/`NULL`, vilaboim/NikhilNamal17→`Seed`/GitHub URL. Confirmed 2026-06-30 |
+| 9 | ✅ | Docker build/publish includes updated `manifest.json`; seeding behaves identically in container | Live | `docker build -f docker/Dockerfile -t quotinator:local .`; run; confirm container log shows same counts as T1 (788/478/2/0); `/api/v1/health`, `/api/v1/version`, `/api/v1/quotes/random` return expected output. Confirmed 2026-06-30 |
 
 ---
 
