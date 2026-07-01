@@ -186,7 +186,8 @@ var configPolicy = new ManifestPolicy(
     People:       ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:People"]),
     Translations: ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Translations"]));
 
-var createMissingManifest = builder.Configuration.GetValue("Quotinator:CreateMissingManifest", true);
+var createMissingManifest  = builder.Configuration.GetValue("Quotinator:CreateMissingManifest", true);
+var includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeDefaultSources", true);
 
 // Bundled sources are always read from the Docker image (AppContext.BaseDirectory/data/sources/).
 // No file copy to the persistent volume is needed — only the database and DataProtection keys
@@ -194,34 +195,10 @@ var createMissingManifest = builder.Configuration.GetValue("Quotinator:CreateMis
 var bundledSourcesDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SourcesFolder);
 
 // User imports: optional directory in the data volume. Create it so users can drop files in.
-var importsDir = Path.Combine(dataDir, DataPaths.ImportsFolder);
-
-static IReadOnlyList<SeedBatch> BuildSeedBatches(
-    string bundledDir, string importsDir, ManifestPolicy configPolicy, bool createMissingManifest,
-    IManifestSeedPlanner planner, ILogger<Program> log)
-{
-    var batches = new List<SeedBatch>();
-
-    if (Directory.Exists(bundledDir))
-    {
-        var (files, policy) = planner.PlanSeed(bundledDir, configPolicy, allowAutoCreate: false);
-        if (files.Count > 0)
-            batches.Add(new SeedBatch(files, policy, "bundled sources", SeedBatchOrigin.Bundled));
-    }
-    else
-    {
-        log.LogWarning("[Database - Init] bundled sources directory not found at {Dir} — database will be empty on first run", bundledDir);
-    }
-
-    if (Directory.Exists(importsDir))
-    {
-        var (files, policy) = planner.PlanSeed(importsDir, configPolicy, allowAutoCreate: createMissingManifest);
-        if (files.Count > 0)
-            batches.Add(new SeedBatch(files, policy, "user imports", SeedBatchOrigin.UserImports));
-    }
-
-    return batches;
-}
+// Quotinator:ImportsPath overrides the default location when set.
+var importsDir = builder.Configuration["Quotinator:ImportsPath"] is { Length: > 0 } customImportsPath
+    ? customImportsPath
+    : Path.Combine(dataDir, DataPaths.ImportsFolder);
 
 // Persist DataProtection keys to a subdirectory of the data volume so antiforgery tokens
 // and Blazor circuit descriptors survive container restarts and add-on updates.
@@ -294,10 +271,12 @@ builder.Services.AddSingleton<IManifestSeedPlanner, ManifestSeedPlanner>();
 builder.Services.AddSingleton<Quotinator.Engine.Repositories.IImportBatchRepository, SqliteImportBatchRepository>();
 builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
 {
-    var seedBatches = BuildSeedBatches(
-        bundledSourcesDir, importsDir, configPolicy, createMissingManifest,
-        sp.GetRequiredService<IManifestSeedPlanner>(),
-        sp.GetRequiredService<ILogger<Program>>());
+    var logger = sp.GetRequiredService<ILogger<Program>>();
+    LegacyConfigWarnings.WarnIfDataPathStillSet(builder.Configuration["Quotinator:DataPath"], logger);
+
+    var seedBatches = SeedBatchesBuilder.Build(
+        bundledSourcesDir, importsDir, configPolicy, includeDefaultSources, createMissingManifest,
+        sp.GetRequiredService<IManifestSeedPlanner>(), logger);
 
     return new QuotinatorDatabaseInitializer(
         connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
