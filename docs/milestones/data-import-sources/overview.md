@@ -2,7 +2,7 @@
 
 **GitHub milestone:** [#10](https://github.com/DutchJaFO/Quotinator/milestone/10)
 **Branch:** `feature/data-import-sources`
-**Status:** In progress — session 2026-06-30: #58 post-closure regression fixed, #57 fully resolved in code, #63 implemented, all three T1+T2 verified. #140 unblocked by #63's manifest groundwork but not started. Session 2026-07-01: #62's `ImportBatchType` accuracy conflict resolved (four-value type + migration 5), T1+T2 verified; reseed/reset preservation split out as follow-up #141 under this milestone. Nothing in this milestone has shipped in a release since v1.4.1 — all completed work below is "pending release."
+**Status:** In progress — session 2026-06-30: #58 post-closure regression fixed, #57 fully resolved in code, #63 implemented, all three T1+T2 verified. #140 unblocked by #63's manifest groundwork but not started. Session 2026-07-01: #62's `ImportBatchType` accuracy conflict resolved (four-value type + migration 5) plus all three remaining config keys (`IncludeDefaultSources`, `ImportsPath`, legacy `DataPath` warning) — #62 is now **fully resolved in code**, T1+T2 verified for all of it; reseed/reset preservation split out as follow-up #141 under this milestone. Nothing in this milestone has shipped in a release since v1.4.1 — all completed work below is "pending release," including #62 in full.
 
 ---
 
@@ -39,7 +39,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#58](https://github.com/DutchJaFO/Quotinator/issues/58) | ImportBatches schema | ✅ Closed — post-closure regression fixed, pending release | T1 ✅ T2 ✅ (regression fix, 2026-06-30) | [58-import-batches-schema-plan.md](58-import-batches-schema-plan.md) |
 | [#57](https://github.com/DutchJaFO/Quotinator/issues/57) | Seed script: dedup inconsistent | 🟡 Code complete — pending release | None required | [57-seed-script-dedup-plan.md](57-seed-script-dedup-plan.md) |
 | [#63](https://github.com/DutchJaFO/Quotinator/issues/63) | Import manifest | 🟡 Code complete — pending release | T1 ✅ T2 ✅ (2026-06-30) | [63-import-manifest-plan.md](63-import-manifest-plan.md) |
-| [#62](https://github.com/DutchJaFO/Quotinator/issues/62) | Folder-based seeder | 🟡 Partially done — `ImportBatchType` accuracy fixed, 3 config keys remain | T1 ✅ T2 ✅ (2026-07-01, for the ImportBatchType fix) | [62-folder-based-seeder-plan.md](62-folder-based-seeder-plan.md) |
+| [#62](https://github.com/DutchJaFO/Quotinator/issues/62) | Folder-based seeder | 🟡 Code complete — pending release | T1 ✅ T2 ✅ (2026-07-01) | [62-folder-based-seeder-plan.md](62-folder-based-seeder-plan.md) |
 | [#141](https://github.com/DutchJaFO/Quotinator/issues/141) | Reseed/reset must preserve System-classified data | ⬜ Not started | Not yet assessed | (no plan doc yet — filed 2026-07-01) |
 | [#140](https://github.com/DutchJaFO/Quotinator/issues/140) | Auto-update bundled sources from manifest URL | ⬜ Not started | Not yet assessed | [140-auto-update-sources-plan.md](140-auto-update-sources-plan.md) |
 | [#64](https://github.com/DutchJaFO/Quotinator/issues/64) | Conflict resolution policy | 🟡 Partially done | Not yet assessed | [64-conflict-resolution-plan.md](64-conflict-resolution-plan.md) |
@@ -86,13 +86,17 @@ Full verification table: [63-import-manifest-plan.md](63-import-manifest-plan.md
 
 ---
 
-### #62 — Folder-based seeder (`ImportBatchType` accuracy fix only — 3 config keys still open)
+### #62 — Folder-based seeder (fully resolved in code)
 **Shipped in:** (next release)
-T1 ✅ verified 2026-07-01 (VS run against an existing non-empty dev database — migration 4→5 applied cleanly, `dummy1.json`/`Dummy2.JSON` in the imports folder correctly reclassified `UserSeed` on reseed)
-T2 ✅ verified 2026-07-01 (`docker build`/`docker run`; fresh container built schema straight to v5; `container-dummy.json` present in a pre-mounted volume confirmed `UserSeed` via direct DB query)
-No T3 requirements for this fix.
+T1 ✅ verified 2026-07-01 — two rounds:
+  - `ImportBatchType` accuracy fix: VS run against an existing non-empty dev database — migration 4→5 applied cleanly, `dummy1.json`/`Dummy2.JSON` in the imports folder correctly reclassified `UserSeed` on reseed.
+  - Three config keys: `Quotinator__IncludeDefaultSources=false` correctly skips bundled sources on a fresh DB; `Quotinator__ImportsPath` correctly redirects the imports scan to a custom folder; `Quotinator__DataPath` still set correctly logs the deprecation warning. Default behavior (no overrides) confirmed unchanged.
 
-This verification covers only the `ImportBatchType` fix — the three remaining config keys (`IncludeDefaultSources`, `ImportsPath`, legacy `DataPath` warning) are unstarted and will need their own T1/T2 pass when implemented.
+T2 ✅ verified 2026-07-01 — same two rounds, in Docker:
+  - `docker build`/`docker run`; fresh container built schema straight to v5; `container-dummy.json` present in a pre-mounted volume confirmed `UserSeed` via direct DB query.
+  - All three config keys confirmed via `-e` env vars against fresh containers, identical behavior to T1.
+
+No T3 requirements for any part of this issue.
 
 Full verification table: [62-folder-based-seeder-plan.md](62-folder-based-seeder-plan.md)
 
@@ -133,7 +137,7 @@ Full verification table: [62-folder-based-seeder-plan.md](62-folder-based-seeder
 | 4  | #58 | ImportBatches schema | Closed ✅ — post-closure `Type`/`Url` regression fixed 2026-06-30, T1+T2 verified, pending release |
 | 5  | #57 | Seed script: dedup inconsistent | All problems resolved in code 2026-06-30 (Problem 4 done, unit-tested, no tier required), pending release |
 | 6  | #63 | Import manifest | Resolved in code 2026-06-30 — T1+T2 verified, pending release. Added `github`/`downloadUrl` manifest source kinds (see Manifest data fix note in plan doc) |
-| 7  | #62 | Folder-based seeder | `ImportBatchType` accuracy fixed 2026-07-01 (four-value type + migration 5), T1+T2 verified, pending release — see Scope changes in plan doc. Still missing: `IncludeDefaultSources`, `ImportsPath` config keys, legacy `DataPath` warning |
+| 7  | #62 | Folder-based seeder | Fully resolved in code 2026-07-01 — `ImportBatchType` fix (four-value type + migration 5) plus all three config keys (`IncludeDefaultSources`, `ImportsPath`, legacy `DataPath` warning), T1+T2 verified, pending release — see Scope changes in plan doc |
 | 7a | #141 | Reseed/reset must preserve System-classified data | Not started — filed 2026-07-01 as a follow-up to #62; needs a table-level classification mechanism, open question on `SchemaVersion` |
 | 7b | #140 | Auto-update bundled sources from manifest URL | Not started — schema/manifest/`SeedFile` groundwork (`downloadUrl`, `github` object) now done by #63; remaining scope is the HTTP GET + temp-file-substitution mechanism and the `Quotinator__AutoUpdateSources` config key |
 | 8  | #64 | Conflict resolution policy | Partially done — rename `overwrite` → `newest-wins`, change default, align config key; ImportBatch recording now unblocked (#58 done) |

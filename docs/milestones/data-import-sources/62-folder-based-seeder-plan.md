@@ -1,6 +1,6 @@
 # #62 — Folder-based seeder
 
-**Status:** Partially done — `ImportBatchType` accuracy fixed and T1+T2 verified 2026-07-01, three config keys still not started
+**Status:** All spec requirements resolved in code, T1+T2 verified — pending release (issue cannot close until then)
 **GitHub issue:** #62
 **Tiers required:** T1, T2 — this issue touches `Program.cs` startup config reading, same reasoning as #63.
 **Depends on:** #63 (manifest) — done; #58 (ImportBatch rows) — done
@@ -30,9 +30,9 @@
 - [x] `CLAUDE.md` updated
 - [x] CI's publish-output check verifies `data/sources/` presence (already correct — not previously tracked here)
 - [x] One `ImportBatch` row per source file, typed accurately by both origin and URL presence (`System`/`Seed`/`UserSeed`/`Import`) — fixed 2026-07-01
-- [ ] `Quotinator__IncludeDefaultSources` config key — bundled sources are always included currently
-- [ ] `Quotinator__ImportsPath` config key — imports path is hardcoded to `{DataDir}/imports`
-- [ ] Startup warning when `Quotinator__DataPath` is still set in the environment
+- [x] `Quotinator__IncludeDefaultSources` config key — fixed 2026-07-01
+- [x] `Quotinator__ImportsPath` config key — fixed 2026-07-01
+- [x] Startup warning when `Quotinator__DataPath` is still set in the environment — fixed 2026-07-01
 
 ---
 
@@ -54,47 +54,35 @@ This required a new schema migration (**migration 5**) — the `ImportBatches.Ty
 
 Scope-change comment posted on #62 documenting this, per `process.md`'s deferral rule (the original issue text no longer matches what shipped).
 
-**Not superseded, still open:** the three still-missing config keys below remain #62's own unstarted work — this fix only resolved the `ImportBatchType` accuracy problem.
-
 **T1 verified 2026-07-01** — VS run against an existing, non-empty dev database (schema v4 → v5 migration confirmed live, not just in a unit test): startup log showed `schema updated at version 5` with a pre-migration backup taken automatically, no errors. `ImportBatches` table inspected directly (SQL Server Object Explorer): `quotinator-curated.json → System`, `vilaboim`/`NikhilNamal17 → Seed` unchanged. Triggered `POST /api/v1/admin/database/reseed` with two empty files (`dummy1.json`, `Dummy2.JSON`) present in the imports folder — both correctly classified `UserSeed` (previously would have been `System`). The empty-file warning/skip behavior from the #63 session's fix was also re-confirmed working (no crash).
 
-**T2 verified 2026-07-01** — `docker build` succeeded; fresh container built schema straight to v5 with no errors; `/api/v1/health`, `/api/v1/version` (`schemaVersion: 5`), `/api/v1/quotes/random` all correct. Confirmed `UserSeed` classification inside the container too: mounted a host volume (`-v` with `MSYS_NO_PATHCONV=1` and a Windows-style path — Git Bash's `/tmp` doesn't map to a real path Docker Desktop on Windows can bind-mount, which is what caused an initial false negative) with a file already present in `imports/` before container start (seed batches are scanned once at startup — a file added via `docker exec` after the container is running has no effect on reseed, since `IDatabaseInitializer` is a singleton and its batch list is captured once). After reseed, queried the container's `quotinatordata.db` file directly from the host (via a throwaway `dotnet run` console app using Dapper — matches the project's existing patterns, no need for raw ADO.NET or fighting `dotnet-script`'s native-library resolution) and confirmed `container-dummy.json → UserSeed`.
+**T2 verified 2026-07-01** — `docker build` succeeded; fresh container built schema straight to v5 with no errors; `/api/v1/health`, `/api/v1/version` (`schemaVersion: 5`), `/api/v1/quotes/random` all correct. Confirmed `UserSeed` classification inside the container too: mounted a host volume (`-v` with `MSYS_NO_PATHCONV=1` and a Windows-style path — Git Bash's `/tmp` doesn't map to a real path Docker Desktop on Windows can bind-mount, which is what caused an initial false negative) with a file already present in `imports/` before container start (seed batches are scanned once at startup — a file added via `docker exec` after the container is running has no effect on reseed, since `IDatabaseInitializer` is a singleton and its batch list is captured once). After reseed, queried the container's `quotinatordata.db` file directly from the host (via a throwaway, now-reusable `Quotinator.Tools.DbInspector` tool, read-only-mode SQLite connection) and confirmed `container-dummy.json → UserSeed`.
 
----
+## Three config keys — resolved 2026-07-01
 
-## Remaining work
+`BuildSeedBatches` (a `Program.cs` local static function, previously untestable — the same shape and reason `ManifestSeedPlanner` was extracted for #63) was extracted into `Quotinator.Data.Import.SeedBatchesBuilder.Build(...)`, adding an `includeDefaultSources` gate directly. A small new `Quotinator.Data.Import.LegacyConfigWarnings.WarnIfDataPathStillSet(...)` class covers the deprecation warning. `ImportsPath`'s override is a plain one-line `??`-style resolution in `Program.cs`, mirroring the already-established, untested-individually `Quotinator:BackupPath` pattern in the same file — no `appsettings.json` entries were needed for any of the three, matching how `Quotinator:DataDir`, `Quotinator:BackupPath`, and `Quotinator:CreateMissingManifest` are already handled (code-defaulted, not declared in `appsettings.json`).
 
-### `Quotinator__IncludeDefaultSources`
-
-Add to `appsettings.json` (default `true`). When `false`, skip the bundled sources folder entirely (useful for a fully custom data setup).
-
-### `Quotinator__ImportsPath`
-
-Add to `appsettings.json` (default: `Path.Combine(dataDir, "imports")`). When set, use that path instead.
-
-### Legacy env var warning
-
-At startup, check `Environment.GetEnvironmentVariable("Quotinator__DataPath")`. If set and non-empty, log a warning: "Quotinator__DataPath is deprecated; use Quotinator__DataDir instead."
-
-### Small drift cleanup found this session
-
-`addon/config.yaml:37`'s comment still reads `"Quotinator__DataPath points to the supervisor-mounted persistent volume"` — the actual env var below it is `Quotinator__DataDir`. Update the comment when next touching this file (not fixed as part of this pass — noted here so it isn't lost).
-
----
+**Live testing found a real pitfall worth recording:** early live-verification attempts appeared to show `Quotinator__IncludeDefaultSources=false` being silently ignored (bundled sources kept seeding). This was **not a code bug** — it was caused by stale background `dotnet` processes from improperly-terminated prior test runs still holding the old database file open and/or still bound to the test port, serving old behavior while a new, differently-configured process failed to start cleanly. A debug print of the resolved config value confirmed the config read itself was always correct (`includeDefaultSources=False` when the env var was set). Once ports/processes were verified clean before each run (`netstat`/`taskkill` by exact PID, never a broad `taskkill /IM dotnet.exe`), all three config keys behaved correctly on the first clean attempt, in both VS and Docker.
 
 ## Verification
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ✅ | `Quotinator__DataDir` replaces `Quotinator__DataPath` | Live | Confirmed in `Program.cs:161`; `HaFallbackDir()` uses `DataDir` semantics |
-| 2 | ✅ | Seeder scans bundled sources dir at startup | Live | Confirmed via `BuildSeedBatches` in `Program.cs` |
+| 1 | ✅ | `Quotinator__DataDir` replaces `Quotinator__DataPath` | Live | Confirmed in `Program.cs`; `HaFallbackDir()` uses `DataDir` semantics |
+| 2 | ✅ | Seeder scans bundled sources dir at startup | Live | Confirmed via `SeedBatchesBuilder.Build` in `Program.cs` |
 | 3 | ✅ | Seeder scans `{DataDir}/imports/` when it exists; silently skips when missing | Live | Confirmed via `Directory.Exists(importsDir)` guard |
 | 4 | ✅ | `HaFallbackDir()` updated to use `DataDir` semantics | Live | Confirmed in `Program.cs` |
-| 5 | ❌ | `Quotinator__IncludeDefaultSources` config key (default `true`); when `false`, bundled sources skipped | Unit test | Not implemented |
-| 6 | ❌ | `Quotinator__ImportsPath` config key (default `{DataDir}/imports`) | Unit test | Not implemented |
-| 7 | ❌ | Startup warning logged when `Quotinator__DataPath` still set in environment | Unit test | Not implemented |
+| 5 | ✅ | `Quotinator__IncludeDefaultSources` config key (default `true`); when `false`, bundled sources skipped | Unit test + Live | `SeedBatchesBuilderTests.Build_IncludeDefaultSourcesTrue_BundledBatchIncluded`, `Build_IncludeDefaultSourcesFalse_BundledBatchExcluded`, `Build_IncludeDefaultSourcesFalse_ImportsBatchStillIncluded`; confirmed live in VS + Docker 2026-07-01 |
+| 6 | ✅ | `Quotinator__ImportsPath` config key (default `{DataDir}/imports`) | Live | Confirmed live in VS (custom Windows temp path) + Docker (volume-mounted path) 2026-07-01 — one-line resolution, no dedicated unit test needed (matches the untested `BackupPath` precedent) |
+| 7 | ✅ | Startup warning logged when `Quotinator__DataPath` still set in environment | Unit test + Live | `LegacyConfigWarningsTests.WarnIfDataPathStillSet_ValueSet_LogsWarning`, `_ValueNull_DoesNotLog`, `_ValueEmptyString_DoesNotLog`; confirmed live in VS + Docker 2026-07-01 |
 | 8 | ✅ | One `ImportBatch` row per source file, typed accurately (`System`/`Seed`/`UserSeed`/`Import`) | Unit test | `ImportBatchesTests.Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes`, `Seeding_UserImportsOriginNoUrl_TypeIsUserSeed`, `Seeding_UserImportsOriginWithUrl_TypeIsStillUserSeed` |
 | 9 | ✅ | Migration 5 widens the `Type` CHECK constraint without losing existing rows | Unit test | `ImportBatchesTests.Migration005_WideningTypeCheckConstraint_PreservesExistingRows` |
 | 10 | ✅ | Schema migration version bumped to 5 | Unit test | `ImportBatchesTests.Schema_MigrationVersion_IsBumped` |
-| T1 | ✅ | Migration 4→5 applies cleanly against a live, non-empty dev database (the exact scenario that exposed the FK bug); `UserSeed` correctly assigned on reseed | Live (VS) | Confirmed 2026-07-01 — see note above; `ImportBatches` table inspected directly, `dummy1.json`/`Dummy2.JSON` → `UserSeed` |
-| T2 | ✅ | Fresh container builds schema to v5; `UserSeed` classification works identically inside the container | Live (Docker) | Confirmed 2026-07-01 — `docker build`/`docker run`, smoke tests passed, `container-dummy.json` → `UserSeed` confirmed via direct DB query |
+| T1 | ✅ | All of the above confirmed live in Visual Studio | Live (VS) | Confirmed 2026-07-01 — default behavior unchanged, `IncludeDefaultSources=false` skips bundled sources, custom `ImportsPath` scanned correctly, `DataPath` deprecation warning logged |
+| T2 | ✅ | All of the above confirmed live in Docker | Live (Docker) | Confirmed 2026-07-01 — `docker build`/`docker run` for each scenario, identical behavior to T1 |
+
+---
+
+## Small drift cleanup found this session (still open, unrelated to this fix)
+
+`addon/config.yaml:37`'s comment still reads `"Quotinator__DataPath points to the supervisor-mounted persistent volume"` — the actual env var below it is `Quotinator__DataDir`. Update the comment when next touching this file — not part of this pass, noted here so it isn't lost.
