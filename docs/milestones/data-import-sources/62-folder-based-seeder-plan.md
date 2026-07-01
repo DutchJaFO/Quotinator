@@ -1,6 +1,6 @@
 # #62 — Folder-based seeder
 
-**Status:** Partially done — `ImportBatchType` accuracy fixed 2026-07-01, three config keys still not started
+**Status:** Partially done — `ImportBatchType` accuracy fixed and T1+T2 verified 2026-07-01, three config keys still not started
 **GitHub issue:** #62
 **Tiers required:** T1, T2 — this issue touches `Program.cs` startup config reading, same reasoning as #63.
 **Depends on:** #63 (manifest) — done; #58 (ImportBatch rows) — done
@@ -52,9 +52,13 @@ This required a new schema migration (**migration 5**) — the `ImportBatches.Ty
 
 **Bug found and fixed during this work:** the recreate-table migration initially failed with `FOREIGN KEY constraint failed` when re-run against a non-empty database (`Quotes.ImportBatchId` etc. reference `ImportBatches(Id)`). `Microsoft.Data.Sqlite` defaults `PRAGMA foreign_keys` to **ON** per connection (unlike the raw SQLite C library, which defaults to OFF) — contrary to what earlier session notes assumed. `PRAGMA foreign_keys` is also a no-op inside a transaction, so it can't be toggled from within a migration's own SQL text. Fixed generically in `Quotinator.Data.Database.DatabaseInitializer.ApplyMigrationsAsync` — foreign key enforcement is now suspended for the duration of applying pending migrations (not just this one), restored afterward. This benefits any future migration that needs to recreate a table, not just this one.
 
-A GitHub issue comment should be posted on #62 documenting this scope change, per `process.md`'s deferral rule (the original issue text no longer matches what shipped).
+Scope-change comment posted on #62 documenting this, per `process.md`'s deferral rule (the original issue text no longer matches what shipped).
 
 **Not superseded, still open:** the three still-missing config keys below remain #62's own unstarted work — this fix only resolved the `ImportBatchType` accuracy problem.
+
+**T1 verified 2026-07-01** — VS run against an existing, non-empty dev database (schema v4 → v5 migration confirmed live, not just in a unit test): startup log showed `schema updated at version 5` with a pre-migration backup taken automatically, no errors. `ImportBatches` table inspected directly (SQL Server Object Explorer): `quotinator-curated.json → System`, `vilaboim`/`NikhilNamal17 → Seed` unchanged. Triggered `POST /api/v1/admin/database/reseed` with two empty files (`dummy1.json`, `Dummy2.JSON`) present in the imports folder — both correctly classified `UserSeed` (previously would have been `System`). The empty-file warning/skip behavior from the #63 session's fix was also re-confirmed working (no crash).
+
+**T2 verified 2026-07-01** — `docker build` succeeded; fresh container built schema straight to v5 with no errors; `/api/v1/health`, `/api/v1/version` (`schemaVersion: 5`), `/api/v1/quotes/random` all correct. Confirmed `UserSeed` classification inside the container too: mounted a host volume (`-v` with `MSYS_NO_PATHCONV=1` and a Windows-style path — Git Bash's `/tmp` doesn't map to a real path Docker Desktop on Windows can bind-mount, which is what caused an initial false negative) with a file already present in `imports/` before container start (seed batches are scanned once at startup — a file added via `docker exec` after the container is running has no effect on reseed, since `IDatabaseInitializer` is a singleton and its batch list is captured once). After reseed, queried the container's `quotinatordata.db` file directly from the host (via a throwaway `dotnet run` console app using Dapper — matches the project's existing patterns, no need for raw ADO.NET or fighting `dotnet-script`'s native-library resolution) and confirmed `container-dummy.json → UserSeed`.
 
 ---
 
@@ -92,3 +96,5 @@ At startup, check `Environment.GetEnvironmentVariable("Quotinator__DataPath")`. 
 | 8 | ✅ | One `ImportBatch` row per source file, typed accurately (`System`/`Seed`/`UserSeed`/`Import`) | Unit test | `ImportBatchesTests.Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes`, `Seeding_UserImportsOriginNoUrl_TypeIsUserSeed`, `Seeding_UserImportsOriginWithUrl_TypeIsStillUserSeed` |
 | 9 | ✅ | Migration 5 widens the `Type` CHECK constraint without losing existing rows | Unit test | `ImportBatchesTests.Migration005_WideningTypeCheckConstraint_PreservesExistingRows` |
 | 10 | ✅ | Schema migration version bumped to 5 | Unit test | `ImportBatchesTests.Schema_MigrationVersion_IsBumped` |
+| T1 | ✅ | Migration 4→5 applies cleanly against a live, non-empty dev database (the exact scenario that exposed the FK bug); `UserSeed` correctly assigned on reseed | Live (VS) | Confirmed 2026-07-01 — see note above; `ImportBatches` table inspected directly, `dummy1.json`/`Dummy2.JSON` → `UserSeed` |
+| T2 | ✅ | Fresh container builds schema to v5; `UserSeed` classification works identically inside the container | Live (Docker) | Confirmed 2026-07-01 — `docker build`/`docker run`, smoke tests passed, `container-dummy.json` → `UserSeed` confirmed via direct DB query |
