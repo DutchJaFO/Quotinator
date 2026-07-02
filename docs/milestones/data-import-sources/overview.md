@@ -104,7 +104,7 @@ Full verification table: [62-folder-based-seeder-plan.md](62-folder-based-seeder
 
 ### #141 — System table preservation on Reset (AuditEntries, SchemaVersion)
 **Shipped in:** (next release)
-No live tier applies — the change is confined to `Sql.cs`, `DatabaseInitializer.cs`, `IDatabaseInitializer.cs`, and `AdminEndpoints.cs`; no Razor/Blazor, Dockerfile, or `Program.cs` startup changes. Fully covered by unit tests.
+No live tier applies, assessed against `docs/release-verification.md`'s criteria — the change is confined to `Sql.cs`, `DatabaseInitializer.cs`, `IDatabaseInitializer.cs`, and `AdminEndpoints.cs`. T1 ⬜ not required (no `.razor`/Blazor/pre-Blazor middleware). T2 ⬜ not required (no Dockerfile/publish output/`Program.cs` startup/SSL config — `AdminEndpoints.cs` only gained a parameter on an existing route). T3 ⬜ not required (no ingress/`X-Ingress-Path`/DataProtection/SSL/`addon/config.yaml`/log-format surface touched). Fully covered by unit tests.
 
 Scope was narrowed from the original issue text after cross-checking it against the current code (see plan doc's "Scope narrowed" section): `AuditEntries` preservation was pulled into scope (the issue's premise that it already survived reset was wrong for a full Reset — only true for Reseed), while row-level preservation of curated content inside `Quotes`/`Sources`/`Characters`/`People` was ruled out (that content is always re-seeded, so it doesn't need protecting).
 

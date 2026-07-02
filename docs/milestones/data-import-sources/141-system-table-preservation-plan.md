@@ -2,7 +2,7 @@
 
 **Status:** All spec requirements resolved in code, all unit tests green — pending release (no live tier required, issue cannot close until merged/released)
 **GitHub issue:** #141
-**Tiers required:** None — this issue touches `Sql.cs`, `DatabaseInitializer.cs`, `IDatabaseInitializer.cs`, and `AdminEndpoints.cs` only; no Razor/Blazor, Dockerfile, or `Program.cs` startup changes. Same reasoning as #57.
+**Tiers required:** None, assessed against `docs/release-verification.md`'s criteria — this issue touches only `Sql.cs`, `DatabaseInitializer.cs`, `IDatabaseInitializer.cs`, `AdminEndpoints.cs`, and their tests. T1 does not apply (no `.razor`/`.razor.cs`/`_Imports.razor`/Blazor service/pre-Blazor middleware touched). T2 does not apply (no Dockerfile, publish output, `Program.cs` startup, port/SSL config, or `Directory.Build.props` touched — `AdminEndpoints.cs` gained a parameter on an existing minimal-API route, not a registration change). T3 does not apply (no ingress middleware, `X-Ingress-Path`, `PathBase`, `UseForwardedHeaders`, DataProtection, SSL/Kestrel config, `addon/config.yaml`, addon translation files, or log output format touched). Same reasoning as #57.
 **Depends on:** #62 (`ImportBatchType` accuracy fix) — done, unblocked this issue
 
 ---
