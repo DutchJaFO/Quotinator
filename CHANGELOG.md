@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-01 21:35 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-02 13:17 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -19,12 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `Quotinator__IncludeDefaultSources` config key (default `true`) — when set to `false`, the bundled sources are skipped entirely, useful for a fully custom data setup
 - `Quotinator__ImportsPath` config key (default `{DataDir}/imports`) — overrides where the user imports folder is scanned from
 - A startup warning is now logged when the legacy `Quotinator__DataPath` environment variable is still set, pointing users to `Quotinator__DataDir` instead
+- `POST /api/v1/admin/database/reset` now accepts a `preserveSchemaVersion` query parameter (default `false`) to keep existing schema migration history instead of clearing and replaying it
 
 ### Fixed
 - ImportBatch rows created during seeding now record the correct `Type` (`Seed` for externally-sourced files with a manifest URL, `System` for internally-curated files) and persist the source URL; previously every seeded batch was recorded as `System` with no URL
 - Seeding no longer crashes on an empty or otherwise invalid JSON source file — the file is now skipped with a logged warning instead of stopping startup
 - A file placed in the user imports folder with no URL was previously misclassified the same as internally-curated data; ImportBatch provenance now has a distinct `UserSeed` type for imports-folder files, separate from `System` (bundled) and `Seed` (our own bundled external datasets)
 - CVE-2026-49451: `Microsoft.OpenApi` (transitive via `Microsoft.AspNetCore.OpenApi`) had a stack-overflow vulnerability when parsing OpenAPI documents with circular schema references; Quotinator only generates its own OpenAPI document and never parses untrusted ones, so the vulnerable path was unreachable — patched to 2.7.5 via a direct package override regardless
+- A full database reset (`POST /api/v1/admin/database/reset`) no longer wipes the audit log; `AuditEntries` now always survives a reset, matching the behaviour a normal reseed already had
 
 ---
 

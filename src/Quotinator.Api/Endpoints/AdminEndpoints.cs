@@ -102,9 +102,9 @@ internal static class AdminEndpoints
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db) =>
+        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, bool preserveSchemaVersion = false) =>
         {
-            await db.ResetAsync();
+            await db.ResetAsync(preserveSchemaVersion);
             return Results.Ok(new
             {
                 quotes     = db.QuoteCount,
@@ -117,9 +117,11 @@ internal static class AdminEndpoints
         .WithName("ResetDatabase")
         .WithSummary("Reset the database")
         .WithDescription(
-            "Clears all data and schema version history, reapplies all migrations from scratch, " +
+            "Clears all data, reapplies all migrations from scratch, " +
             "then reimports every quote from the configured source files. " +
             "Equivalent to deleting the database file and restarting. " +
+            "The audit log (`AuditEntries`) always survives a reset — clear it separately via `DELETE /api/v1/admin/audit` if needed. " +
+            "By default, schema migration history is also cleared and replayed; pass `preserveSchemaVersion=true` to keep the existing migration history instead. " +
             "Returns the row counts and duplicate count after the operation completes. " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");

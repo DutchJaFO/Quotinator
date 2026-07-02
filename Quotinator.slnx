@@ -109,6 +109,7 @@
     <File Path="docs/milestones/data-import-sources/71-generic-repository-plan.md" />
     <File Path="docs/milestones/data-import-sources/72-cve-sql-audit-plan.md" />
     <File Path="docs/milestones/data-import-sources/78-repository-transaction-plan.md" />
+    <File Path="docs/milestones/data-import-sources/141-system-table-preservation-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/">
     <File Path="docs/milestones/v1-7-0/overview.md" />

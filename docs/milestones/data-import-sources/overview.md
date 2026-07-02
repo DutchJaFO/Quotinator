@@ -2,7 +2,7 @@
 
 **GitHub milestone:** [#10](https://github.com/DutchJaFO/Quotinator/milestone/10)
 **Branch:** `feature/data-import-sources`
-**Status:** In progress — session 2026-06-30: #58 post-closure regression fixed, #57 fully resolved in code, #63 implemented, all three T1+T2 verified. #140 unblocked by #63's manifest groundwork but not started. Session 2026-07-01: #62's `ImportBatchType` accuracy conflict resolved (four-value type + migration 5) plus all three remaining config keys (`IncludeDefaultSources`, `ImportsPath`, legacy `DataPath` warning) — #62 is now **fully resolved in code**, T1+T2 verified for all of it; reseed/reset preservation split out as follow-up #141 under this milestone. Nothing in this milestone has shipped in a release since v1.4.1 — all completed work below is "pending release," including #62 in full.
+**Status:** In progress — session 2026-06-30: #58 post-closure regression fixed, #57 fully resolved in code, #63 implemented, all three T1+T2 verified. #140 unblocked by #63's manifest groundwork but not started. Session 2026-07-01: #62's `ImportBatchType` accuracy conflict resolved (four-value type + migration 5) plus all three remaining config keys (`IncludeDefaultSources`, `ImportsPath`, legacy `DataPath` warning) — #62 is now **fully resolved in code**, T1+T2 verified for all of it; reseed/reset preservation split out as follow-up #141 under this milestone. Session 2026-07-02: #141 scoped down (after cross-checking the spec against the current code with the user) to genuinely whole-table system tables — `AuditEntries` now always survives a full Reset (previously silently wiped, contradicting the issue's own premise), and `SchemaVersion`'s clear-and-replay-on-Reset behaviour is now optional via `preserveSchemaVersion`, defaulting to the unchanged historical behaviour. Row-level preservation of curated (`System`-classified) rows inside `Quotes`/`Sources`/`Characters`/`People` was explicitly ruled out of scope — that content is re-seeded on every reseed/reset regardless. #141 is code-complete, all unit tests green, no live tier required. Nothing in this milestone has shipped in a release since v1.4.1 — all completed work below is "pending release," including #62 and #141 in full.
 
 ---
 
@@ -40,7 +40,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#57](https://github.com/DutchJaFO/Quotinator/issues/57) | Seed script: dedup inconsistent | 🟡 Code complete — pending release | None required | [57-seed-script-dedup-plan.md](57-seed-script-dedup-plan.md) |
 | [#63](https://github.com/DutchJaFO/Quotinator/issues/63) | Import manifest | 🟡 Code complete — pending release | T1 ✅ T2 ✅ (2026-06-30) | [63-import-manifest-plan.md](63-import-manifest-plan.md) |
 | [#62](https://github.com/DutchJaFO/Quotinator/issues/62) | Folder-based seeder | 🟡 Code complete — pending release | T1 ✅ T2 ✅ (2026-07-01) | [62-folder-based-seeder-plan.md](62-folder-based-seeder-plan.md) |
-| [#141](https://github.com/DutchJaFO/Quotinator/issues/141) | Reseed/reset must preserve System-classified data | ⬜ Not started | Not yet assessed | (no plan doc yet — filed 2026-07-01) |
+| [#141](https://github.com/DutchJaFO/Quotinator/issues/141) | Reseed/reset must preserve System-classified data | 🟡 Code complete — pending release (scope narrowed, see plan doc) | None required | [141-system-table-preservation-plan.md](141-system-table-preservation-plan.md) |
 | [#140](https://github.com/DutchJaFO/Quotinator/issues/140) | Auto-update bundled sources from manifest URL | ⬜ Not started | Not yet assessed | [140-auto-update-sources-plan.md](140-auto-update-sources-plan.md) |
 | [#64](https://github.com/DutchJaFO/Quotinator/issues/64) | Conflict resolution policy | 🟡 Partially done | Not yet assessed | [64-conflict-resolution-plan.md](64-conflict-resolution-plan.md) |
 | [#45](https://github.com/DutchJaFO/Quotinator/issues/45) | Import endpoint | ⬜ Not started | Not yet assessed | [45-import-endpoint-plan.md](45-import-endpoint-plan.md) |
@@ -102,6 +102,16 @@ Full verification table: [62-folder-based-seeder-plan.md](62-folder-based-seeder
 
 ---
 
+### #141 — System table preservation on Reset (AuditEntries, SchemaVersion)
+**Shipped in:** (next release)
+No live tier applies — the change is confined to `Sql.cs`, `DatabaseInitializer.cs`, `IDatabaseInitializer.cs`, and `AdminEndpoints.cs`; no Razor/Blazor, Dockerfile, or `Program.cs` startup changes. Fully covered by unit tests.
+
+Scope was narrowed from the original issue text after cross-checking it against the current code (see plan doc's "Scope narrowed" section): `AuditEntries` preservation was pulled into scope (the issue's premise that it already survived reset was wrong for a full Reset — only true for Reseed), while row-level preservation of curated content inside `Quotes`/`Sources`/`Characters`/`People` was ruled out (that content is always re-seeded, so it doesn't need protecting).
+
+Full verification table: [141-system-table-preservation-plan.md](141-system-table-preservation-plan.md)
+
+---
+
 ## Dependency map
 
 ```
@@ -111,7 +121,7 @@ Full verification table: [62-folder-based-seeder-plan.md](62-folder-based-seeder
 #61 (per-source files) → #62, #63, #68 depend on it
 #63 (manifest) → #62 reads it; #64 references it; #140 needs its downloadUrl/github groundwork — done
 #62 (folder seeder) → prerequisite for #64 per-source overrides; ImportBatchType accuracy fix (2026-07-01) unblocks #141
-#141 (reseed/reset preservation) → requires #62's ImportBatchType fix (done); needs a table-classification mechanism, not yet designed
+#141 (system table preservation on Reset) → requires #62's ImportBatchType fix (done); scoped to AuditEntries/SchemaVersion only — done
 #64 (conflict policy) → requires #63 for manifest field, #45 for per-run override, #58 for batch recording
 #65 (preview) → requires #45 for the correct endpoint shape
 #58 (ImportBatches) → requires #71 and #78; unblocks #56, #57 (Problem 4 — done), #59, #45 (batch row), #64, #67, #68, #69
@@ -138,7 +148,7 @@ Full verification table: [62-folder-based-seeder-plan.md](62-folder-based-seeder
 | 5  | #57 | Seed script: dedup inconsistent | All problems resolved in code 2026-06-30 (Problem 4 done, unit-tested, no tier required), pending release |
 | 6  | #63 | Import manifest | Resolved in code 2026-06-30 — T1+T2 verified, pending release. Added `github`/`downloadUrl` manifest source kinds (see Manifest data fix note in plan doc) |
 | 7  | #62 | Folder-based seeder | Fully resolved in code 2026-07-01 — `ImportBatchType` fix (four-value type + migration 5) plus all three config keys (`IncludeDefaultSources`, `ImportsPath`, legacy `DataPath` warning), T1+T2 verified, pending release — see Scope changes in plan doc |
-| 7a | #141 | Reseed/reset must preserve System-classified data | Not started — filed 2026-07-01 as a follow-up to #62; needs a table-level classification mechanism, open question on `SchemaVersion` |
+| 7a | #141 | Reseed/reset must preserve System-classified data | Resolved in code 2026-07-02 — scoped to `AuditEntries`/`SchemaVersion` only after cross-check with the user; no unit-tested tier required, pending release |
 | 7b | #140 | Auto-update bundled sources from manifest URL | Not started — schema/manifest/`SeedFile` groundwork (`downloadUrl`, `github` object) now done by #63; remaining scope is the HTTP GET + temp-file-substitution mechanism and the `Quotinator__AutoUpdateSources` config key |
 | 8  | #64 | Conflict resolution policy | Partially done — rename `overwrite` → `newest-wins`, change default, align config key; ImportBatch recording now unblocked (#58 done) |
 | 9  | #45 | Import endpoint | Not started |
@@ -190,4 +200,4 @@ All remaining issues are either partially done or not started. Evaluate each for
 - [#68 — Curated JSON conversations](68-curated-json-conversations-plan.md)
 - [#69 — API conversations](69-api-conversations-plan.md)
 - [#140 — Auto-update bundled sources from manifest URL](140-auto-update-sources-plan.md)
-- [#141 — Reseed/reset must preserve System-classified data](https://github.com/DutchJaFO/Quotinator/issues/141) (no plan doc yet)
+- [#141 — System table preservation on Reset (AuditEntries, SchemaVersion)](141-system-table-preservation-plan.md)

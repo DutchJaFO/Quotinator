@@ -31,7 +31,7 @@ The REST API is accessible in two ways:
 | `GET /api/v1/version` | Running version |
 | `GET /api/v1/admin/database/seed/preview` | Preview what a reseed would import — no data is changed (requires `X-Api-Key`) |
 | `POST /api/v1/admin/database/reseed` | Clear all data and reimport from the bundled source files (requires `X-Api-Key`) |
-| `POST /api/v1/admin/database/reset` | Full reset: clear data + schema history, reapply migrations, reimport (requires `X-Api-Key`) |
+| `POST /api/v1/admin/database/reset` | Full reset: clear data, reapply migrations, reimport (requires `X-Api-Key`). Audit log always survives. Schema version history is cleared and replayed by default; pass `?preserveSchemaVersion=true` to keep it |
 
 Admin endpoints require the `X-Api-Key: <key>` request header matching the `admin_api_key` set in the add-on configuration. Requests without the header, or with an incorrect key, receive `401 Unauthorized`.
 

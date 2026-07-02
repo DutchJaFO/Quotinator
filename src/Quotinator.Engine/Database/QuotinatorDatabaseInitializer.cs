@@ -99,7 +99,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     }
 
     /// <inheritdoc/>
-    protected override async Task OnResetAsync(SqliteConnection connection)
+    protected override async Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion)
     {
         var totalFiles = _batches.Sum(b => b.Files.Count);
         Logger.LogInformation("[Database - Init] reset requested — rebuilding schema and reimporting from {Count} source file(s)...", totalFiles);
@@ -107,7 +107,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         await SharedSeedLock.WaitAsync();
         try
         {
-            await DropAndRebuildAsync(connection);
+            await DropAndRebuildAsync(connection, preserveSchemaVersion);
             await SeedIfEmptyInternalAsync(connection);
         }
         finally

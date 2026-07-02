@@ -143,6 +143,104 @@ public class DatabaseInitializerTests
         Assert.AreEqual(countAfterInit, db.QuoteCount, "Quote count after reset should match initial seed");
     }
 
+    // ── System table preservation (#141) ────────────────────────────────────────
+
+    private const string MarkerValue = "manual-test-marker";
+
+    /// <summary>A full Reset must not destroy the audit trail — AuditEntries is excluded from the table wipe.</summary>
+    [TestMethod]
+    public async Task ResetAsync_AfterInitialise_PreservesExistingAuditEntries()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        await InsertAuditMarkerAsync();
+
+        await db.ResetAsync();
+
+        Assert.AreEqual(1, await CountAuditMarkerRowsAsync(), "Full Reset must preserve existing AuditEntries rows");
+    }
+
+    /// <summary>With the default parameter, Reset still clears and replays SchemaVersion — unchanged historical behaviour.</summary>
+    [TestMethod]
+    public async Task ResetAsync_DefaultParameter_StillReplaysSchemaVersion()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        await InsertSchemaVersionMarkerAsync();
+
+        await db.ResetAsync();
+
+        Assert.AreEqual(0, await CountSchemaVersionMarkerRowsAsync(),
+            "Default Reset should clear and replay SchemaVersion, removing the pre-existing marker row");
+    }
+
+    /// <summary>With preserveSchemaVersion:true, Reset leaves existing SchemaVersion rows untouched.</summary>
+    [TestMethod]
+    public async Task ResetAsync_PreserveSchemaVersionTrue_KeepsExistingRows()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        await InsertSchemaVersionMarkerAsync();
+
+        await db.ResetAsync(preserveSchemaVersion: true);
+
+        Assert.AreEqual(1, await CountSchemaVersionMarkerRowsAsync(),
+            "preserveSchemaVersion:true should leave existing SchemaVersion rows untouched");
+    }
+
+    /// <summary>Reseed (not Reset) has always left AuditEntries and SchemaVersion alone — this makes that behaviour explicit.</summary>
+    [TestMethod]
+    public async Task ReseedAsync_AfterInitialise_LeavesAuditEntriesAndSchemaVersionUntouched()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        await InsertAuditMarkerAsync();
+        await InsertSchemaVersionMarkerAsync();
+
+        await db.ReseedAsync();
+
+        Assert.AreEqual(1, await CountAuditMarkerRowsAsync(),        "Reseed must not touch AuditEntries");
+        Assert.AreEqual(1, await CountSchemaVersionMarkerRowsAsync(), "Reseed must not touch SchemaVersion");
+    }
+
+    private async Task InsertAuditMarkerAsync()
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await conn.ExecuteAsync(
+            "INSERT INTO AuditEntries (TableName, RecordId, Operation, Agent, PerformedAt) " +
+            "VALUES ('Quotes', 'test-id', 'Insert', @marker, '2026-01-01 00:00:00');",
+            new { marker = MarkerValue });
+    }
+
+    private async Task<int> CountAuditMarkerRowsAsync()
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        return await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM AuditEntries WHERE Agent = @marker;", new { marker = MarkerValue });
+    }
+
+    private async Task InsertSchemaVersionMarkerAsync()
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await conn.ExecuteAsync(
+            "INSERT INTO SchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
+    }
+
+    private async Task<int> CountSchemaVersionMarkerRowsAsync()
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        return await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM SchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
+    }
+
     // ── Regression ────────────────────────────────────────────────────────────
 
     /// <summary>
