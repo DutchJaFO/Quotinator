@@ -1,10 +1,32 @@
-##### *GENERATED FILE [2026-06-29 05:53 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-02 13:17 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Highlights
+- Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.
+
+### Added
+- A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
+- Manifest source entries can now declare a `github` object (`owner`, `repo`, `path`, `branch`) instead of a plain `url` — the provenance link and a fetchable raw-file download link are both derived from it automatically
+- `Quotinator__IncludeDefaultSources` config key (default `true`) — when set to `false`, the bundled sources are skipped entirely, useful for a fully custom data setup
+- `Quotinator__ImportsPath` config key (default `{DataDir}/imports`) — overrides where the user imports folder is scanned from
+- A startup warning is now logged when the legacy `Quotinator__DataPath` environment variable is still set, pointing users to `Quotinator__DataDir` instead
+- `POST /api/v1/admin/database/reset` now accepts a `preserveSchemaVersion` query parameter (default `false`) to keep existing schema migration history instead of clearing and replaying it
+
+### Fixed
+- ImportBatch rows created during seeding now record the correct `Type` (`Seed` for externally-sourced files with a manifest URL, `System` for internally-curated files) and persist the source URL; previously every seeded batch was recorded as `System` with no URL
+- Seeding no longer crashes on an empty or otherwise invalid JSON source file — the file is now skipped with a logged warning instead of stopping startup
+- A file placed in the user imports folder with no URL was previously misclassified the same as internally-curated data; ImportBatch provenance now has a distinct `UserSeed` type for imports-folder files, separate from `System` (bundled) and `Seed` (our own bundled external datasets)
+- CVE-2026-49451: `Microsoft.OpenApi` (transitive via `Microsoft.AspNetCore.OpenApi`) had a stack-overflow vulnerability when parsing OpenAPI documents with circular schema references; Quotinator only generates its own OpenAPI document and never parses untrusted ones, so the vulnerable path was unreachable — patched to 2.7.5 via a direct package override regardless
+- A full database reset (`POST /api/v1/admin/database/reset`) no longer wipes the audit log; `AuditEntries` now always survives a reset, matching the behaviour a normal reseed already had
 
 ---
 
@@ -675,6 +697,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.2...HEAD
 [1.7.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.5...v1.7.0

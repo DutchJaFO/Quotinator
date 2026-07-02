@@ -14,8 +14,9 @@ This document defines the three verification tiers used in the Quotinator releas
 - Razor component runtime errors — `dotnet build` reports 0 errors but `.razor` files can still reference stale namespaces or broken bindings that only surface when the Blazor circuit starts
 - Blazor component rendering and interactive behaviour
 - App startup errors visible in the VS output window
+- Database/migration behaviour against a real, persistent SQLite file — unit tests run against a fresh temp database every time and can miss failure modes that only appear on an existing, previously-migrated database (e.g. a dropped table that never gets recreated, a migration that behaves differently against non-empty data)
 
-**When required:** any change that touches `.razor`, `.razor.cs`, `_Imports.razor`, Blazor services, or middleware registered before the request pipeline reaches Blazor.
+**When required:** any change that touches `.razor`, `.razor.cs`, `_Imports.razor`, Blazor services, or middleware registered before the request pipeline reaches Blazor; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`, migration SQL, or schema/table-wipe logic (reseed, reset, backup).
 
 **Gate:** user starts the app in Visual Studio and confirms it starts without error; affected pages render correctly.
 
@@ -30,8 +31,9 @@ This document defines the three verification tiers used in the Quotinator releas
 - Container startup errors (Kestrel binding, port config, missing environment variables that have no local fallback)
 - Multi-arch build failures (linux/amd64, linux/arm64)
 - Version number visible at `/api/v1/version` — a missing `Directory.Build.props` in the build context silently produces `1.0.0`
+- Schema/reset behaviour building and running end-to-end from a fresh container image, independent of the local dev environment — confirms the same migration/reset path works identically outside VS
 
-**When required:** any change that touches the Dockerfile, publish output, `Program.cs` startup, port or SSL configuration, or `Directory.Build.props`.
+**When required:** any change that touches the Dockerfile, publish output, `Program.cs` startup, port or SSL configuration, `Directory.Build.props`; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`, migration SQL, or schema/table-wipe logic (reseed, reset, backup).
 
 **Gate:** `docker build` succeeds; smoke-test commands return expected output:
 ```bash
@@ -40,6 +42,7 @@ curl -s http://localhost:8080/api/v1/health
 curl -s http://localhost:8080/api/v1/version
 curl -s http://localhost:8080/api/v1/quotes/random
 ```
+When the change touches schema/reset logic, also exercise the affected admin endpoint(s) directly (e.g. `POST /api/v1/admin/database/reset`) against the running container and confirm the expected before/after state.
 
 ---
 

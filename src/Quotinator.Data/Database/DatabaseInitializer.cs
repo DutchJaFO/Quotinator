@@ -116,18 +116,18 @@ public class DatabaseInitializer : IDatabaseInitializer
     protected virtual Task OnReseedAsync(SqliteConnection connection) => Task.CompletedTask;
 
     /// <inheritdoc/>
-    public async Task ResetAsync()
+    public async Task ResetAsync(bool preserveSchemaVersion = false)
     {
         using var connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
-        await OnResetAsync(connection);
+        await OnResetAsync(connection, preserveSchemaVersion);
     }
 
     /// <summary>
     /// Called by <see cref="ResetAsync"/>. Override to replace the default no-op with a
     /// domain-specific reset implementation. Base implementation does nothing.
     /// </summary>
-    protected virtual Task OnResetAsync(SqliteConnection connection) => Task.CompletedTask;
+    protected virtual Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion) => Task.CompletedTask;
 
     /// <inheritdoc/>
     public virtual Task<SeedPreviewResult> PreviewSeedAsync()
@@ -152,15 +152,34 @@ public class DatabaseInitializer : IDatabaseInitializer
         await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
     }
 
-    /// <summary>Drops and recreates all tables by reapplying migrations. Subclasses call this during reset.</summary>
-    protected async Task DropAndRebuildAsync(SqliteConnection connection)
+    /// <summary>
+    /// Drops and recreates all tables by reapplying migrations. Subclasses call this during reset.
+    /// <c>AuditEntries</c> is never dropped (see <see cref="Sql.Schema.GetUserTables"/>). The rebuild
+    /// always clears and replays <c>SchemaVersion</c> exactly as before — this is what makes every
+    /// data table come back — but when <paramref name="preserveSchemaVersion"/> is <c>true</c>, the
+    /// rows that existed before the rebuild are snapshotted first and restored afterward, so the
+    /// caller observes no change to schema version history even though the rebuild ran underneath.
+    /// </summary>
+    protected async Task DropAndRebuildAsync(SqliteConnection connection, bool preserveSchemaVersion = false)
     {
+        var savedVersions = preserveSchemaVersion
+            ? (await connection.QueryAsync<SchemaVersionRow>(Sql.Schema.GetAllVersions)).ToList()
+            : [];
+
         await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
         await connection.ExecuteAsync(Sql.Schema.DeleteAll);
         await DropAllTablesAsync(connection);
         await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
         await ApplyMigrationsAsync(connection);
+
+        if (!preserveSchemaVersion) return;
+
+        await connection.ExecuteAsync(Sql.Schema.DeleteAll);
+        foreach (var row in savedVersions)
+            await connection.ExecuteAsync(Sql.Schema.InsertVersion, new { v = row.Version, at = row.AppliedAt });
     }
+
+    private sealed record SchemaVersionRow(long Version, string AppliedAt);
 
     /// <summary>Opens a new SQLite connection for use by subclasses.</summary>
     protected SqliteConnection CreateConnection() => (SqliteConnection)_factory.CreateConnection();
@@ -235,6 +254,23 @@ public class DatabaseInitializer : IDatabaseInitializer
             CreateBackup(connection, current);
         }
 
+        // Some migrations recreate a table (SQLite has no ALTER ... CHECK) to widen a constraint,
+        // which requires dropping a table that other tables still hold live foreign-key references
+        // to. Foreign key enforcement must be off for the duration — PRAGMA foreign_keys is a no-op
+        // inside a transaction, so it cannot be toggled from within a migration's own SQL text.
+        await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+        try
+        {
+            await ApplyPendingMigrationsAsync(connection, current);
+        }
+        finally
+        {
+            await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
+        }
+    }
+
+    private async Task ApplyPendingMigrationsAsync(SqliteConnection connection, int current)
+    {
         for (var i = current; i < _migrations.Count; i++)
         {
             using var tx = connection.BeginTransaction();

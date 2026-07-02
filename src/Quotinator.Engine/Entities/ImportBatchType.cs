@@ -9,6 +9,9 @@ public enum ImportBatchType
     /// <summary>Records submitted via the bulk import endpoint by a user.</summary>
     Import,
 
-    /// <summary>Records seeded from bundled source files at startup.</summary>
-    System
+    /// <summary>Fixed/predetermined data bundled with the application (e.g. curated quotes), conceptually distinct from replaceable seed content. Reseed/reset does not yet selectively preserve this category — see the follow-up issue tracking that behavior.</summary>
+    System,
+
+    /// <summary>Records scanned from a file placed in the user's imports folder at startup, regardless of whether that file declares a URL.</summary>
+    UserSeed
 }

@@ -107,37 +107,165 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>Schema migration version is bumped to 4 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>Schema migration version is bumped to 5 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(4, db.SchemaVersion, "SchemaVersion should be 4 after Migration004");
+        Assert.AreEqual(5, db.SchemaVersion, "SchemaVersion should be 5 after Migration005");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────
 
-    /// <summary>Seeder creates one <c>ImportBatch</c> row per source file with distinct names and <c>System</c> type.</summary>
+    /// <summary>Seeder creates one <c>ImportBatch</c> row per source file; files with a URL get <c>Seed</c> type, files without get <c>System</c>.</summary>
     [TestMethod]
-    public async Task Seeding_TwoSourceFiles_ProduceTwoDistinctBatches()
+    public async Task Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes()
     {
-        var batch = new SeedBatch([CuratedFile, VilaboimFile], ManifestPolicy.HardcodedDefault, "test");
-        var db    = CreateInitializer([batch]);
+        var systemFile = new SeedFile(CuratedFile, null);
+        var seedFile   = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        var batch      = new SeedBatch([systemFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
+        var db         = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var rows = (await conn.QueryAsync<(string Name, string Type)>(
-            "SELECT Name, Type FROM ImportBatches WHERE Type = 'System' AND IsDeleted = 0")).ToList();
+        var rows = (await conn.QueryAsync<(string Name, string Type, string? Url)>(
+            "SELECT Name, Type, Url FROM ImportBatches WHERE IsDeleted = 0")).ToList();
 
         Assert.AreEqual(2, rows.Count, "One ImportBatch row per source file");
         Assert.AreEqual(rows.Count, rows.DistinctBy(r => r.Name).Count(), "All batch names are distinct");
-        Assert.IsTrue(rows.All(r => r.Type == "System"), "All seeder-created batches have Type='System'");
+
+        var systemRow = rows.Single(r => r.Name == Path.GetFileName(CuratedFile));
+        Assert.AreEqual("System", systemRow.Type, "File without URL should have Type=System");
+        Assert.IsNull(systemRow.Url, "File without URL should have Url=NULL");
+
+        var seedRow = rows.Single(r => r.Name == Path.GetFileName(VilaboimFile));
+        Assert.AreEqual("Seed", seedRow.Type, "File with URL should have Type=Seed");
+        Assert.AreEqual("https://github.com/vilaboim/movie-quotes", seedRow.Url, "Url should match the manifest URL");
+    }
+
+    /// <summary>Every Quotes row created during seeding is linked, via <c>ImportBatchId</c>, to the batch for the file it came from — not to some other batch or left <c>NULL</c>. Closes #57 Problem 4.</summary>
+    [TestMethod]
+    public async Task Seeding_TwoSourceFiles_QuotesLinkToOwningBatchAndRecordCountMatches()
+    {
+        var systemFile = new SeedFile(CuratedFile, null);
+        var seedFile   = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        var batch      = new SeedBatch([systemFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
+        var db         = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+
+        var batches = (await conn.QueryAsync<(string Id, string Name, int RecordCount)>(
+            "SELECT Id, Name, RecordCount FROM ImportBatches WHERE IsDeleted = 0")).ToList();
+        var curatedBatch  = batches.Single(b => b.Name == Path.GetFileName(CuratedFile));
+        var vilaboimBatch = batches.Single(b => b.Name == Path.GetFileName(VilaboimFile));
+
+        var quoteBatchIds = (await conn.QueryAsync<string?>("SELECT ImportBatchId FROM Quotes")).ToList();
+
+        Assert.IsTrue(quoteBatchIds.All(id => id is not null), "Every seeded quote must have a non-null ImportBatchId");
+        Assert.IsTrue(quoteBatchIds.All(id => id == curatedBatch.Id || id == vilaboimBatch.Id),
+            "Every seeded quote must be linked to one of the two batches created for this seed run — not a third/unrelated batch");
+
+        var curatedQuoteCount  = quoteBatchIds.Count(id => id == curatedBatch.Id);
+        var vilaboimQuoteCount = quoteBatchIds.Count(id => id == vilaboimBatch.Id);
+
+        Assert.IsTrue(curatedQuoteCount  > 0, "Curated batch should own at least one quote");
+        Assert.IsTrue(vilaboimQuoteCount > 0, "Vilaboim batch should own at least one quote");
+        Assert.AreEqual(curatedBatch.RecordCount,  curatedQuoteCount,  "ImportBatches.RecordCount must match the actual number of Quotes rows linked to the curated batch");
+        Assert.AreEqual(vilaboimBatch.RecordCount, vilaboimQuoteCount, "ImportBatches.RecordCount must match the actual number of Quotes rows linked to the vilaboim batch");
+    }
+
+    /// <summary>An empty or otherwise invalid-JSON source file is skipped with a warning rather than crashing startup.</summary>
+    [TestMethod]
+    public async Task Seeding_EmptyOrInvalidJsonSourceFile_IsSkippedWithoutCrashing()
+    {
+        var emptyFile = Path.Combine(_tempDir, "empty.json");
+        File.WriteAllText(emptyFile, string.Empty);
+
+        var systemFile = new SeedFile(CuratedFile, null);
+        var emptySeedFile = new SeedFile(emptyFile, null);
+        var batch = new SeedBatch([systemFile, emptySeedFile], ManifestPolicy.HardcodedDefault, "test");
+        var db = CreateInitializer([batch]);
+
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+
+        var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes");
+        Assert.IsTrue(quoteCount > 0, "Quotes from the valid curated file should still be seeded");
+
+        var emptyBatch = await conn.QuerySingleAsync<(string Id, int RecordCount)>(
+            "SELECT Id, RecordCount FROM ImportBatches WHERE Name = @name", new { name = "empty.json" });
+        Assert.AreEqual(0, emptyBatch.RecordCount, "The empty/invalid file's batch should record zero quotes, not crash");
+    }
+
+    /// <summary>A file scanned from the user imports folder (Origin=UserImports) with no URL gets Type=UserSeed, not System.</summary>
+    [TestMethod]
+    public async Task Seeding_UserImportsOriginNoUrl_TypeIsUserSeed()
+    {
+        var userFile = new SeedFile(CuratedFile, null);
+        var batch    = new SeedBatch([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
+        var db       = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var type = await conn.ExecuteScalarAsync<string>(
+            "SELECT Type FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
+
+        Assert.AreEqual("UserSeed", type, "A file scanned from the user imports folder must be UserSeed regardless of URL absence");
+    }
+
+    /// <summary>A file scanned from the user imports folder (Origin=UserImports) that DOES declare a URL still gets Type=UserSeed, not Seed — origin wins over URL presence.</summary>
+    [TestMethod]
+    public async Task Seeding_UserImportsOriginWithUrl_TypeIsStillUserSeed()
+    {
+        var userFile = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        var batch    = new SeedBatch([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
+        var db       = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var type = await conn.ExecuteScalarAsync<string>(
+            "SELECT Type FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
+
+        Assert.AreEqual("UserSeed", type, "A user-imports-folder file must stay UserSeed even when it declares its own URL — origin, not URL presence, decides the type");
     }
 
     // ── Migration (upgrade path) ───────────────────────────────────────────────
+
+    /// <summary>Migration 5 widens the ImportBatches.Type CHECK constraint to allow 'UserSeed' without losing existing rows.</summary>
+    [TestMethod]
+    public async Task Migration005_WideningTypeCheckConstraint_PreservesExistingRows()
+    {
+        var seedBatch = new SeedBatch([new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes")],
+            ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.Bundled);
+        var db = CreateInitializer([seedBatch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var existingRow = await conn.QuerySingleAsync<(string Id, string Type)>(
+            "SELECT Id, Type FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
+
+        Assert.AreEqual("Seed", existingRow.Type, "Pre-existing row must survive migration 5 with its original Type intact");
+
+        var newId = Guid.NewGuid().ToString();
+        var now   = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) VALUES (@id, 'manual-user-seed.json', 'UserSeed', @now, 0, @now, 0)",
+            new { id = newId, now });
+
+        var insertedType = await conn.ExecuteScalarAsync<string>(
+            "SELECT Type FROM ImportBatches WHERE Id = @id", new { id = newId });
+        Assert.AreEqual("UserSeed", insertedType, "The widened CHECK constraint must accept 'UserSeed'");
+    }
 
     /// <summary>Pre-seed batch rows for the two external datasets are inserted when upgrading a non-empty database.</summary>
     [TestMethod]

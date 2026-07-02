@@ -39,8 +39,16 @@ public interface IDatabaseInitializer
     /// <summary>Clears all data tables and reimports from all configured source files. Schema migration history is preserved. Updates the row-count properties when done.</summary>
     Task ReseedAsync();
 
-    /// <summary>Clears all data tables and schema migration history, reapplies all migrations, then reimports from all configured source files. Updates the row-count properties when done.</summary>
-    Task ResetAsync();
+    /// <summary>
+    /// Clears all data tables, reapplies all migrations, then reimports from all configured source files.
+    /// Updates the row-count properties when done. <c>AuditEntries</c> always survives a reset — it is
+    /// deliberately excluded from the table wipe, and is cleared only via its own admin endpoint.
+    /// </summary>
+    /// <param name="preserveSchemaVersion">
+    /// When <c>true</c>, existing schema migration history is left untouched instead of being cleared
+    /// and replayed from scratch. Defaults to <c>false</c>, matching the historical behaviour.
+    /// </param>
+    Task ResetAsync(bool preserveSchemaVersion = false);
 
     /// <summary>
     /// Scans all configured source files without touching the database and returns a preview of what a

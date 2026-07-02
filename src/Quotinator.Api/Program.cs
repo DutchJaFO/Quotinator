@@ -186,105 +186,19 @@ var configPolicy = new ManifestPolicy(
     People:       ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:People"]),
     Translations: ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Translations"]));
 
+var createMissingManifest  = builder.Configuration.GetValue("Quotinator:CreateMissingManifest", true);
+var includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeDefaultSources", true);
+
 // Bundled sources are always read from the Docker image (AppContext.BaseDirectory/data/sources/).
 // No file copy to the persistent volume is needed — only the database and DataProtection keys
 // need to be on a writable, persistent path.
 var bundledSourcesDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SourcesFolder);
 
 // User imports: optional directory in the data volume. Create it so users can drop files in.
-var importsDir = Path.Combine(dataDir, DataPaths.ImportsFolder);
-
-static IReadOnlyList<SeedBatch> BuildSeedBatches(
-    string bundledDir, string importsDir, ManifestPolicy configPolicy, ILogger<Program> log)
-{
-    var batches = new List<SeedBatch>();
-
-    if (Directory.Exists(bundledDir))
-    {
-        var (files, policy) = OrderedByManifest(bundledDir, configPolicy, log);
-        if (files.Count > 0)
-            batches.Add(new SeedBatch(files, policy, "bundled sources"));
-    }
-    else
-    {
-        log.LogWarning("[Database - Init] bundled sources directory not found at {Dir} — database will be empty on first run", bundledDir);
-    }
-
-    if (Directory.Exists(importsDir))
-    {
-        var (files, policy) = OrderedByManifest(importsDir, configPolicy, log);
-        if (files.Count > 0)
-            batches.Add(new SeedBatch(files, policy, "user imports"));
-    }
-
-    return batches;
-}
-
-static (IReadOnlyList<string> Files, ManifestPolicy Policy) OrderedByManifest(
-    string dir, ManifestPolicy configPolicy, ILogger<Program> log)
-{
-    var allJson = Directory.GetFiles(dir, "*.json")
-                           .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
-                           .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-                           .ToList();
-
-    var manifestPath = Path.Combine(dir, "manifest.json");
-    if (!File.Exists(manifestPath))
-    {
-        log.LogInformation("[Database - Init] no manifest in {Dir} — importing {Count} JSON file(s) in alphabetical order", dir, allJson.Count);
-        return (allJson, configPolicy);
-    }
-
-    try
-    {
-        var root              = JsonNode.Parse(File.ReadAllText(manifestPath));
-        var manifestPolicyNode = root?["duplicateResolution"];
-        var fromManifest      = manifestPolicyNode is null ? null : ParseManifestPolicyNode(manifestPolicyNode);
-        var resolvedPolicy    = ManifestPolicy.Resolve(fromManifest, configPolicy);
-
-        var listed = (root?["files"]?.AsArray() ?? [])
-            .Select(e => Path.Combine(dir, e!["file"]!.GetValue<string>()))
-            .Where(File.Exists)
-            .ToList();
-
-        var listedSet = new HashSet<string>(listed, StringComparer.OrdinalIgnoreCase);
-        var unlisted  = allJson.Where(f => !listedSet.Contains(f)).ToList();
-        if (unlisted.Count > 0)
-            log.LogInformation("[Database - Init] {Count} file(s) not listed in manifest will be appended: {Files}",
-                unlisted.Count, string.Join(", ", unlisted.Select(Path.GetFileName)));
-
-        return ([.. listed, .. unlisted], resolvedPolicy);
-    }
-    catch (Exception ex)
-    {
-        log.LogWarning(ex, "[Database - Init] failed to read manifest at {Path} — falling back to alphabetical order", manifestPath);
-        return (allJson, configPolicy);
-    }
-}
-
-static ManifestPolicy ParseManifestPolicyNode(JsonNode node)
-{
-    static DuplicateResolutionPolicy ParsePol(JsonNode? n) =>
-        n?.GetValue<string>().ToLowerInvariant() == "overwrite"
-            ? DuplicateResolutionPolicy.Overwrite
-            : DuplicateResolutionPolicy.Skip;
-
-    static DuplicateResolutionPolicy? ParseNullPol(JsonNode? n) =>
-        n?.GetValue<string>().ToLowerInvariant() switch
-        {
-            "overwrite" => DuplicateResolutionPolicy.Overwrite,
-            "skip"      => DuplicateResolutionPolicy.Skip,
-            _           => null
-        };
-
-    return new ManifestPolicy(
-        Default:      ParsePol(node["default"]),
-        Quotes:       ParseNullPol(node["quotes"]),
-        Sources:      ParseNullPol(node["sources"]),
-        Characters:   ParseNullPol(node["characters"]),
-        People:       ParseNullPol(node["people"]),
-        Translations: ParseNullPol(node["translations"]));
-}
+// Quotinator:ImportsPath overrides the default location when set.
+var importsDir = builder.Configuration["Quotinator:ImportsPath"] is { Length: > 0 } customImportsPath
+    ? customImportsPath
+    : Path.Combine(dataDir, DataPaths.ImportsFolder);
 
 // Persist DataProtection keys to a subdirectory of the data volume so antiforgery tokens
 // and Blazor circuit descriptors survive container restarts and add-on updates.
@@ -349,18 +263,28 @@ builder.Services.AddSingleton<ICallerContext, CallerContext>();
 builder.Services.AddSingleton<IAuditWriter, AuditWriter>();
 builder.Services.AddSingleton<IAuditReader, AuditReader>();
 
-// Resolve seed batches before building the host — uses the early logger factory so errors
-// surface before the DI container starts up. Batches are captured into the lambda closure.
-var earlyLoggerFactory = LoggerFactory.Create(b => b.AddConsole());
-var earlyLogger        = earlyLoggerFactory.CreateLogger<Program>();
-var seedBatches        = BuildSeedBatches(bundledSourcesDir, importsDir, configPolicy, earlyLogger);
+// Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
+// eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
+// real Serilog pipeline at the same point in startup as the rest of seeding — not through a
+// separate bootstrap console logger that runs before the "Quotinator starting" banner.
+builder.Services.AddSingleton<IManifestSeedPlanner, ManifestSeedPlanner>();
 builder.Services.AddSingleton<Quotinator.Engine.Repositories.IImportBatchRepository, SqliteImportBatchRepository>();
-builder.Services.AddSingleton<IDatabaseInitializer>(sp => new QuotinatorDatabaseInitializer(
-    connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
-    sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
-    sp.GetRequiredService<IAuditWriter>(),
-    sp.GetRequiredService<ICallerContext>(),
-    sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
+builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<Program>>();
+    LegacyConfigWarnings.WarnIfDataPathStillSet(builder.Configuration["Quotinator:DataPath"], logger);
+
+    var seedBatches = SeedBatchesBuilder.Build(
+        bundledSourcesDir, importsDir, configPolicy, includeDefaultSources, createMissingManifest,
+        sp.GetRequiredService<IManifestSeedPlanner>(), logger);
+
+    return new QuotinatorDatabaseInitializer(
+        connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
+        sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
+        sp.GetRequiredService<IAuditWriter>(),
+        sp.GetRequiredService<ICallerContext>(),
+        sp.GetRequiredService<ILogger<DatabaseInitializer>>());
+});
 builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Engine.Services.SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(

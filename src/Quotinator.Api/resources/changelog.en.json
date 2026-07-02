@@ -2,6 +2,28 @@
   "language": "en",
   "sourceLanguage": "en",
   "machineTranslated": false,
+  "unreleased": {
+    "issues": [57, 58, 62, 63, 141],
+    "cves": ["CVE-2026-49451"],
+    "highlights": [
+      "Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected."
+    ],
+    "added": [
+      "A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)",
+      "Manifest source entries can now declare a `github` object (`owner`, `repo`, `path`, `branch`) instead of a plain `url` — the provenance link and a fetchable raw-file download link are both derived from it automatically",
+      "`Quotinator__IncludeDefaultSources` config key (default `true`) — when set to `false`, the bundled sources are skipped entirely, useful for a fully custom data setup",
+      "`Quotinator__ImportsPath` config key (default `{DataDir}/imports`) — overrides where the user imports folder is scanned from",
+      "A startup warning is now logged when the legacy `Quotinator__DataPath` environment variable is still set, pointing users to `Quotinator__DataDir` instead",
+      "`POST /api/v1/admin/database/reset` now accepts a `preserveSchemaVersion` query parameter (default `false`) to keep existing schema migration history instead of clearing and replaying it"
+    ],
+    "fixed": [
+      "ImportBatch rows created during seeding now record the correct `Type` (`Seed` for externally-sourced files with a manifest URL, `System` for internally-curated files) and persist the source URL; previously every seeded batch was recorded as `System` with no URL",
+      "Seeding no longer crashes on an empty or otherwise invalid JSON source file — the file is now skipped with a logged warning instead of stopping startup",
+      "A file placed in the user imports folder with no URL was previously misclassified the same as internally-curated data; ImportBatch provenance now has a distinct `UserSeed` type for imports-folder files, separate from `System` (bundled) and `Seed` (our own bundled external datasets)",
+      "CVE-2026-49451: `Microsoft.OpenApi` (transitive via `Microsoft.AspNetCore.OpenApi`) had a stack-overflow vulnerability when parsing OpenAPI documents with circular schema references; Quotinator only generates its own OpenAPI document and never parses untrusted ones, so the vulnerable path was unreachable — patched to 2.7.5 via a direct package override regardless",
+      "A full database reset (`POST /api/v1/admin/database/reset`) no longer wipes the audit log; `AuditEntries` now always survives a reset, matching the behaviour a normal reseed already had"
+    ]
+  },
   "releases": [
     {
       "version": "1.7.2",
@@ -265,6 +287,7 @@
     {
       "version": "1.4.3",
       "date": "2026-06-20",
+      "issues": [58],
       "highlights": [
         "Internal improvements in preparation for upcoming data import features."
       ],
@@ -311,9 +334,7 @@
     {
       "version": "1.4.1",
       "date": "2026-06-20",
-      "issues": [
-        45
-      ],
+      "issues": [78, 79],
       "highlights": [
         "Fixed: the changelog page now shows plain-English release summaries for all versions instead of technical details.",
         "Internal improvements in preparation for upcoming data import features."
@@ -335,6 +356,7 @@
     {
       "version": "1.4.0",
       "date": "2026-06-20",
+      "issues": [61, 71],
       "cves": [
         "CVE-2025-6965"
       ],
@@ -364,6 +386,7 @@
     {
       "version": "1.3.0",
       "date": "2026-06-17",
+      "issues": [61],
       "highlights": [
         "Quote data now loaded from multiple source files in `data/sources/` — one file per bundled dataset, plus optional user imports in the `imports/` subfolder of the data directory",
         "New `GET /api/v1/admin/database/seed/preview` endpoint shows what would be imported without writing to the database (requires `admin_api_key`)",

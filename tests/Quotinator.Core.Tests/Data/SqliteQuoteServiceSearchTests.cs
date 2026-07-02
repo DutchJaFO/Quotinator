@@ -82,7 +82,7 @@ public class SqliteQuoteServiceSearchTests
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
-        var batch         = new SeedBatch([_fixture], ManifestPolicy.HardcodedDefault, "search-fixture");
+        var batch         = new SeedBatch([new SeedFile(_fixture, null)], ManifestPolicy.HardcodedDefault, "search-fixture");
         var db            = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
                               NoOpAuditWriter.Instance, NoOpCallerContext.Instance, logger);
         await db.InitialiseAsync();

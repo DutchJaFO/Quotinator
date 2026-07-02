@@ -24,12 +24,22 @@ internal static class Sql
         internal const string InsertVersion     = "INSERT INTO SchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
         internal const string DeleteAll         = "DELETE FROM SchemaVersion;";
 
-        // Returns all user-created table names, excluding SQLite internals and the schema
-        // version tracker. Used by ResetAsync to discover tables dynamically so that new
-        // tables added in future migrations are dropped without requiring a manual update here.
-        // FK checks must be off before dropping the results (PRAGMA foreign_keys = OFF).
+        // Used by DropAndRebuildAsync to snapshot existing rows before a rebuild when the caller
+        // asked to preserve schema version history, so they can be restored afterward.
+        internal const string GetAllVersions    = "SELECT Version, AppliedAt FROM SchemaVersion;";
+
+        // Returns all user-created table names, excluding SQLite internals and any table
+        // designated as protected system infrastructure. Used by ResetAsync to discover tables
+        // dynamically so that new tables added in future migrations are dropped without requiring
+        // a manual update here. FK checks must be off before dropping the results
+        // (PRAGMA foreign_keys = OFF).
+        // SchemaVersion is always excluded — its own row-level clearing is handled separately
+        // (see DropAndRebuildAsync's preserveSchemaVersion parameter). AuditEntries is excluded
+        // because the audit trail is deliberately whole-table "system" data: it must survive a
+        // full Reset, and is cleared only via the dedicated DELETE /api/v1/admin/audit endpoint.
         internal const string GetUserTables =
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'SchemaVersion';";
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' " +
+            "AND name NOT IN ('SchemaVersion', 'AuditEntries');";
     }
 
     /// <summary>Quotes table — fixed queries and dynamic-query factory methods.</summary>
