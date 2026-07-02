@@ -2,9 +2,9 @@ using Quotinator.Data.Entities;
 
 namespace Quotinator.Data.Models;
 
-/// <summary>A paginated slice of the audit log returned by <see cref="Repositories.IAuditReader"/>.</summary>
-public sealed record AuditPageResult(
-    IReadOnlyList<AuditEntry> Items,
+/// <summary>A paginated slice of the audit log returned by <see cref="Repositories.ISystemAuditReader"/>.</summary>
+public sealed record SystemAuditPageResult(
+    IReadOnlyList<SystemAuditEntry> Items,
     int Page,
     int PageSize,
     int TotalCount)

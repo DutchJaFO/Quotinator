@@ -8,19 +8,19 @@ namespace Quotinator.Data.Repositories;
 
 /// <summary>
 /// SQLite implementation of <see cref="IRepository{T}"/> using Dapper and Dapper.Contrib.
-/// Extends <see cref="SqliteRepositoryBase{T}"/> and writes an <see cref="AuditEntry"/> in the same
-/// connection and transaction on every write operation.
+/// Extends <see cref="SqliteRepositoryBase{T}"/> and writes a <see cref="SystemAuditEntry"/> in the
+/// same connection and transaction on every write operation.
 /// Derive from <see cref="SqliteRepositoryBase{T}"/> directly — not from this class — when audit
-/// recursion must be avoided (e.g. <see cref="AuditWriter"/>).
+/// recursion must be avoided (e.g. <see cref="SystemAuditWriter"/>).
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
 public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T> where T : RecordBase
 {
-    private readonly IAuditWriter   _auditWriter;
-    private readonly ICallerContext _callerContext;
+    private readonly ISystemAuditWriter _auditWriter;
+    private readonly ICallerContext     _callerContext;
 
     /// <summary>Initialises the repository with the factory, audit writer, and caller context.</summary>
-    public SqliteRepository(IDbConnectionFactory factory, IAuditWriter auditWriter, ICallerContext callerContext)
+    public SqliteRepository(IDbConnectionFactory factory, ISystemAuditWriter auditWriter, ICallerContext callerContext)
         : base(factory)
     {
         _auditWriter   = auditWriter;
@@ -123,7 +123,7 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T> where
         System.Data.IDbConnection connection, System.Data.IDbTransaction? transaction = null)
         => _auditWriter.WriteAsync(BuildEntry(operation, id), connection, transaction);
 
-    private AuditEntry BuildEntry(string operation, Guid? id) => new()
+    private SystemAuditEntry BuildEntry(string operation, Guid? id) => new()
     {
         TableName   = TableName,
         RecordId    = id.HasValue ? id.Value.ToString("D").ToUpperInvariant() : null,

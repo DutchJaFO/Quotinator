@@ -7,16 +7,16 @@ using Quotinator.Data.Queries;
 namespace Quotinator.Data.Repositories;
 
 /// <summary>
-/// SQLite implementation of <see cref="IAuditReader"/>.
+/// SQLite implementation of <see cref="ISystemAuditReader"/>.
 /// Extends <see cref="SqliteRepositoryBase{T}"/> directly — no audit writes are triggered by reads.
 /// </summary>
-public sealed class AuditReader : SqliteRepositoryBase<AuditEntry>, IAuditReader
+public sealed class SystemAuditReader : SqliteRepositoryBase<SystemAuditEntry>, ISystemAuditReader
 {
     /// <summary>Initialises the reader with the connection factory.</summary>
-    public AuditReader(IDbConnectionFactory factory) : base(factory) { }
+    public SystemAuditReader(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
-    public async Task<AuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
+    public async Task<SystemAuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
     {
         var filterTable    = table    is not null;
         var filterRecordId = recordId is not null;
@@ -26,13 +26,13 @@ public sealed class AuditReader : SqliteRepositoryBase<AuditEntry>, IAuditReader
         conn.Open();
 
         var total = await conn.ExecuteScalarAsync<int>(
-            Sql.Audit.CountPaged(filterTable, filterRecordId),
+            Sql.SystemAudit.CountPaged(filterTable, filterRecordId),
             new { table, recordId });
 
-        var items = await conn.QueryAsync<AuditEntry>(
-            Sql.Audit.SelectPaged(filterTable, filterRecordId),
+        var items = await conn.QueryAsync<SystemAuditEntry>(
+            Sql.SystemAudit.SelectPaged(filterTable, filterRecordId),
             new { table, recordId, pageSize, offset });
 
-        return new AuditPageResult(items.ToList(), page, pageSize, total);
+        return new SystemAuditPageResult(items.ToList(), page, pageSize, total);
     }
 }

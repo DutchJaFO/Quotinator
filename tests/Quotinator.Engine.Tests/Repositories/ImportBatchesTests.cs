@@ -47,10 +47,10 @@ public class ImportBatchesTests
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
-            NoOpAuditWriter.Instance, NoOpCallerContext.Instance, logger);
+            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger);
     }
 
     private async Task CreateV2DatabaseAsync()
@@ -107,26 +107,26 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>Schema migration version is bumped to 5 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>Schema migration version is bumped to 6 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(5, db.SchemaVersion, "SchemaVersion should be 5 after Migration005");
+        Assert.AreEqual(6, db.SchemaVersion, "SchemaVersion should be 6 after Migration006");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────
 
-    /// <summary>Seeder creates one <c>ImportBatch</c> row per source file; files with a URL get <c>Seed</c> type, files without get <c>System</c>.</summary>
+    /// <summary>Seeder creates one <c>ImportBatch</c> row per source file; all bundled files get <c>Seed</c> type regardless of whether they declare a URL — the <c>Url</c> column itself carries the externally-sourced-vs-internally-authored distinction.</summary>
     [TestMethod]
     public async Task Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes()
     {
-        var systemFile = new SeedFile(CuratedFile, null);
-        var seedFile   = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
-        var batch      = new SeedBatch([systemFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
-        var db         = CreateInitializer([batch]);
+        var curatedFile = new SeedFile(CuratedFile, null);
+        var seedFile    = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        var batch       = new SeedBatch([curatedFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
+        var db          = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -137,9 +137,9 @@ public class ImportBatchesTests
         Assert.AreEqual(2, rows.Count, "One ImportBatch row per source file");
         Assert.AreEqual(rows.Count, rows.DistinctBy(r => r.Name).Count(), "All batch names are distinct");
 
-        var systemRow = rows.Single(r => r.Name == Path.GetFileName(CuratedFile));
-        Assert.AreEqual("System", systemRow.Type, "File without URL should have Type=System");
-        Assert.IsNull(systemRow.Url, "File without URL should have Url=NULL");
+        var curatedRow = rows.Single(r => r.Name == Path.GetFileName(CuratedFile));
+        Assert.AreEqual("Seed", curatedRow.Type, "A bundled file without a URL is still Seed content, just internally-authored");
+        Assert.IsNull(curatedRow.Url, "File without URL should have Url=NULL");
 
         var seedRow = rows.Single(r => r.Name == Path.GetFileName(VilaboimFile));
         Assert.AreEqual("Seed", seedRow.Type, "File with URL should have Type=Seed");
@@ -150,9 +150,9 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_TwoSourceFiles_QuotesLinkToOwningBatchAndRecordCountMatches()
     {
-        var systemFile = new SeedFile(CuratedFile, null);
-        var seedFile   = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
-        var batch      = new SeedBatch([systemFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
+        var curatedFile = new SeedFile(CuratedFile, null);
+        var seedFile    = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        var batch       = new SeedBatch([curatedFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
         var db         = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
@@ -186,9 +186,9 @@ public class ImportBatchesTests
         var emptyFile = Path.Combine(_tempDir, "empty.json");
         File.WriteAllText(emptyFile, string.Empty);
 
-        var systemFile = new SeedFile(CuratedFile, null);
+        var curatedFile = new SeedFile(CuratedFile, null);
         var emptySeedFile = new SeedFile(emptyFile, null);
-        var batch = new SeedBatch([systemFile, emptySeedFile], ManifestPolicy.HardcodedDefault, "test");
+        var batch = new SeedBatch([curatedFile, emptySeedFile], ManifestPolicy.HardcodedDefault, "test");
         var db = CreateInitializer([batch]);
 
         await db.InitialiseAsync();
@@ -204,7 +204,7 @@ public class ImportBatchesTests
         Assert.AreEqual(0, emptyBatch.RecordCount, "The empty/invalid file's batch should record zero quotes, not crash");
     }
 
-    /// <summary>A file scanned from the user imports folder (Origin=UserImports) with no URL gets Type=UserSeed, not System.</summary>
+    /// <summary>A file scanned from the user imports folder (Origin=UserImports) with no URL gets Type=UserSeed, not Seed.</summary>
     [TestMethod]
     public async Task Seeding_UserImportsOriginNoUrl_TypeIsUserSeed()
     {

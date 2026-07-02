@@ -26,7 +26,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- \
 
 Inspecting a database file produced by a Docker container: if the container was run with a bind-mounted volume (`-v <host-path>:/data`), the database file is directly accessible on the host filesystem at `<host-path>/quotinatordata.db` — point `--db` at that path directly; the container doesn't need to be running.
 
-Any table can be queried this way — `Quotes`, `Sources`, `AuditEntries`, `SchemaVersion`, etc.
+Any table can be queried this way — `Quotes`, `Sources`, `System_AuditEntries`, `System_SchemaVersion`, etc.
 
 ## Read-only by design
 

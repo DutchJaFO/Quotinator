@@ -36,7 +36,7 @@ public class TransactionScopeTests
             """);
 
         _factory    = new SqliteConnectionFactory(_dbPath);
-        _repository = new SqliteRepository<Widget>(_factory, NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
+        _repository = new SqliteRepository<Widget>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
     }
 
     [TestCleanup]

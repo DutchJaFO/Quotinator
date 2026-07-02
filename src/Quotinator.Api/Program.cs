@@ -260,8 +260,8 @@ builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
 builder.Services.AddSingleton<ICallerContext, CallerContext>();
-builder.Services.AddSingleton<IAuditWriter, AuditWriter>();
-builder.Services.AddSingleton<IAuditReader, AuditReader>();
+builder.Services.AddSingleton<ISystemAuditWriter, SystemAuditWriter>();
+builder.Services.AddSingleton<ISystemAuditReader, SystemAuditReader>();
 
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
@@ -281,7 +281,7 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
     return new QuotinatorDatabaseInitializer(
         connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
         sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
-        sp.GetRequiredService<IAuditWriter>(),
+        sp.GetRequiredService<ISystemAuditWriter>(),
         sp.GetRequiredService<ICallerContext>(),
         sp.GetRequiredService<ILogger<DatabaseInitializer>>());
 });

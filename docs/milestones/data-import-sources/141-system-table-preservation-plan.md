@@ -1,8 +1,8 @@
-# #141 — System table preservation on Reset (AuditEntries, SchemaVersion)
+# #141 — System table preservation on Reset (System_AuditEntries, System_SchemaVersion)
 
-**Status:** All spec requirements resolved in code, all unit tests green, **T1 verified** 2026-07-02 (real running app, existing non-empty database, both `preserveSchemaVersion` values). **T2 blocked** — this cloud session has no working Docker daemon; needs a local machine or CI to complete. Issue cannot close until T2 is verified and the change ships in a release.
+**Status:** Amended 2026-07-02 (same day, second pass) — the original hardcoded-exclusion-list mechanism (below, "Scope narrowed") was replaced with a `System_`-prefix naming convention before release, per the user's design intent. `Quotinator.Data` now identifies protected tables generically via `Sql.Schema.GetUserTables`'s escaped `LIKE 'System\_%' ESCAPE '\'` pattern match — it never needs to know specific table names. `AuditEntries`/`SchemaVersion` are renamed to `System_AuditEntries`/`System_SchemaVersion` at both the SQL and C# class level. All code changes complete, full test suite green (build clean, 0 warnings). **T1 verified live 2026-07-02** by the user in Visual Studio, including the exact Reset collision the fix targets — see row 22. **T2 still outstanding.**
 **GitHub issue:** #141
-**Tiers required:** T1, T2 — corrected 2026-07-02 (user disagreed with the initial "none required" call). This issue changes `DatabaseInitializer.DropAndRebuildAsync` and `Sql.Schema.GetUserTables` — the actual table-wipe logic behind `Reset` — which `docs/release-verification.md`'s T1/T2 criteria now explicitly call out as a trigger regardless of whether `.razor`/Dockerfile/`Program.cs` are touched. Reasoning: unit tests run against a fresh temp SQLite file every time and already caught one real bug during this work (`preserveSchemaVersion:true` silently dropping every data table without recreating them) — a second, independent verification pass against a real running app (T1) and a fresh container (T2) is warranted precisely because the failure mode is "the database ends up structurally broken," which unit tests can miss if the test fixture doesn't happen to mirror a real deployment's state. T3 still does not apply — no ingress/`X-Ingress-Path`/DataProtection/SSL/`addon/config.yaml`/log-format surface touched.
+**Tiers required:** T1, T2 — unchanged reasoning from the original pass (this still changes `DatabaseInitializer`/`Sql.Schema.GetUserTables`, the actual table-wipe logic behind `Reset`). T3 still does not apply.
 **Depends on:** #62 (`ImportBatchType` accuracy fix) — done, unblocked this issue
 
 ---
@@ -21,20 +21,55 @@ A comment documenting this scope narrowing will be posted on #141 before work st
 
 ---
 
-## Spec requirements (as narrowed)
+## Scope amendment: hardcoded exclusion list replaced with a naming convention (2026-07-02, same day)
 
-1. `AuditEntries` survives a full `Reset` — table-level protection via a named exclusion, the same mechanism `SchemaVersion` already uses in `Sql.Schema.GetUserTables`
-2. `SchemaVersion` continues to be cleared and replayed on `Reset` **by default** — no change to today's behaviour
-3. A new opt-in parameter (`ResetAsync(bool preserveSchemaVersion = false)`) lets a caller skip the `SchemaVersion` clear + migration replay, preserving existing version history instead
+Before release, the user reviewed the mechanism above and rejected it — the hardcoded `NOT IN ('SchemaVersion', 'AuditEntries')` list in `Sql.Schema.GetUserTables` makes `Quotinator.Data` (the generic, domain-agnostic layer) aware of two specific table names that belong to a consuming project's feature (the audit trail). The user's design intent, verbatim:
+
+> "The original concept was that System-tables would be easy to identify by users. It makes the exclusion list easier to fill as Data project need not know about system tables that Quotinator and other projects would want to define. The concept behind system tables is that these are considered part of the database as they contain meta-data essential for the app that needs to survive reseeding and resets. An example would be if we wanted to store an enum-like data set in a table. We wouldn't have to recompile the app to change the list as we would with a regular enum. However a reset would also empty those tables, which is what we would not want. Regular content is provided by seeding."
+
+Two design questions were resolved before implementing:
+
+1. **Can SQLite support a real `dbo.TableName`-style namespace?** No — checked against sqlite.org docs: `schema-name.table-name` only ever resolves to `main`, `temp`, or an `ATTACH`ed separate database file, never a logical namespace within one file. A prefix on the table name itself is the only option.
+2. **Table-level prefix: `System_TableName` (underscore) or `SystemTableName` (concatenated)?** The user chose `System_` with a literal underscore, mirroring SQLite's own `sqlite_` prefix convention for its internal tables — and specifically so a future table like `SystemInventory` (starts with "System" but has no underscore) is never accidentally treated as protected. This requires an `ESCAPE` clause: SQL `LIKE` treats `_` as a single-character wildcard, so an unescaped `'System_%'` would also match `SystemInventory`. Checked against sqlite.org docs: `LIKE 'System\_%' ESCAPE '\'` matches only a literal underscore. **C# class names** use the concatenated form (`SystemAuditEntry`, `SystemSchemaVersion`) — normal PascalCase, no underscore.
+
+Renamed at both the SQL and C# level:
+
+| Old (SQL table / C# type) | New |
+|---|---|
+| `SchemaVersion` | `System_SchemaVersion` |
+| `AuditEntries` | `System_AuditEntries` |
+| `AuditEntry` (entity) | `SystemAuditEntry` |
+| `IAuditReader` / `AuditReader` | `ISystemAuditReader` / `SystemAuditReader` |
+| `IAuditWriter` / `AuditWriter` | `ISystemAuditWriter` / `SystemAuditWriter` |
+| `AuditPageResult` | `SystemAuditPageResult` |
+| `NoOpAuditReader` / `NoOpAuditWriter` | `NoOpSystemAuditReader` / `NoOpSystemAuditWriter` |
+| `Sql.Audit` (nested class) | `Sql.SystemAudit` |
+
+`AuditMigrations` (the class/file holding migration SQL) was deliberately **not** renamed — it holds migration004's frozen, historically-accurate original SQL (which genuinely creates a table named `AuditEntries`) alongside the new migration006 rename SQL; renaming the container added risk for no benefit.
+
+`SchemaVersion` is bootstrapped directly in code before any numbered migration runs (the migration engine's own version-tracking table), so its rename is a conditional bootstrap check in `DatabaseInitializer.ApplyMigrationsAsync` — not a numbered migration: if a table literally named `SchemaVersion` exists in `sqlite_master`, it is renamed; a fresh database has no such table, so `CREATE TABLE IF NOT EXISTS System_SchemaVersion` runs directly with zero detour. `AuditEntries` was created by an already-applied migration004 (frozen, not edited), so its rename is a new migration006 (`ALTER TABLE AuditEntries RENAME TO System_AuditEntries` + index recreation under new names).
+
+**Bug found during this amendment, fixed:** `System_AuditEntries` surviving the Reset table wipe (by design) collides with `SchemaVersion`'s default wipe-and-replay behaviour. On a default `Reset`, `System_SchemaVersion`'s rows are cleared, so `ApplyMigrationsAsync` reads `current = 0` and replays every migration from scratch — migration004's `CREATE TABLE IF NOT EXISTS AuditEntries` recreates a stray empty legacy-named table (harmless on its own), but migration006's `ALTER TABLE AuditEntries RENAME TO System_AuditEntries` then fails because the destination — the real, preserved `System_AuditEntries` — already exists (`SQLite Error 1: 'there is already another table or index with this name: System_AuditEntries'`). Fixed by extending `IsKnownMigrationError`'s existing recovery pattern (already used for migration003's ALTER TABLE ADD COLUMN non-idempotency) to also recognise this "already exists" case for migration006, and — specifically for that case — dropping the stray empty `AuditEntries` duplicate (`Sql.SystemAudit.DropStrayLegacyAuditEntriesTable`) before recording the version as applied.
+
+---
+
+## Spec requirements (as amended)
+
+1. `System_AuditEntries` survives a full `Reset` — table-level protection via `Sql.Schema.GetUserTables`'s generic, escaped `System\_%` pattern match (no hardcoded names)
+2. `System_SchemaVersion` continues to be cleared and replayed on `Reset` **by default** — no change to documented behaviour
+3. A new opt-in parameter (`ResetAsync(bool preserveSchemaVersion = false)`) lets a caller skip the `System_SchemaVersion` clear + migration replay, preserving existing version history instead
 4. `POST /api/v1/admin/database/reset` exposes the new option via a `preserveSchemaVersion` query parameter, default `false`
-5. `Reseed` is unaffected — `TruncateDataAsync` already leaves both tables untouched; no code change needed there, but the behaviour gets an explicit regression test since it was previously implicit
-6. `README.md`, `addon/DOCS.md`, and the endpoint's `WithDescription` text updated to reflect the new behaviour and parameter (per `CLAUDE.md`'s "Keeping API documentation in sync")
+5. `Reseed` is unaffected — `TruncateDataAsync` already leaves both tables untouched
+6. `README.md`, `addon/DOCS.md`, and the endpoint's `WithDescription` text updated to reflect the new behaviour and parameter
+7. Any table a consuming project names with a literal `System_` prefix is automatically protected from the `Reset` table wipe, with zero changes required in `Quotinator.Data`
+8. A pre-existing database with the legacy `SchemaVersion`/`AuditEntries` names is upgraded transparently — no manual migration step, no data loss, no orphaned tables left behind
+9. A fresh database creates `System_SchemaVersion`/`System_AuditEntries` directly — never created under the legacy name and then renamed
 
 ---
 
 ## Step status
 
-- [x] `Sql.Schema.GetUserTables` excludes `AuditEntries` in addition to `SchemaVersion`
+- [x] `Sql.Schema.GetUserTables` excludes `AuditEntries` in addition to `SchemaVersion` *(superseded — see below)*
 - [x] `IDatabaseInitializer.ResetAsync` gains `bool preserveSchemaVersion = false` parameter
 - [x] `DatabaseInitializer.DropAndRebuildAsync` accepts and honours `preserveSchemaVersion`
 - [x] `QuotinatorDatabaseInitializer.OnResetAsync` threads the parameter through
@@ -43,6 +78,18 @@ A comment documenting this scope narrowing will be posted on #141 before work st
 - [x] Unit tests added and green
 - [x] Scope-narrowing comment posted on #141
 - [x] Unreleased changelog entry added
+- [x] `Sql.Schema.GetUserTables` generalised to an escaped `System\_%` pattern match (no hardcoded names)
+- [x] `SchemaVersion`/`AuditEntries` renamed to `System_SchemaVersion`/`System_AuditEntries` at the SQL level
+- [x] `AuditEntry`, `IAuditReader`/`AuditReader`, `IAuditWriter`/`AuditWriter`, `AuditPageResult`, `NoOpAuditReader`/`NoOpAuditWriter`, `Sql.Audit` renamed to their `System*` equivalents
+- [x] Conditional bootstrap rename for legacy `SchemaVersion` added to `DatabaseInitializer.ApplyMigrationsAsync`
+- [x] Migration006 added (`AuditMigrations.RenameAuditEntriesToSystemAuditEntries`), registered in `QuotinatorMigrations.All`
+- [x] `IsKnownMigrationError` extended for migration006's two recoverable failure modes; stray-table cleanup added
+- [x] New unit tests: generic `System_` exclusion (positive + negative/escape-clause proof), fresh-database no-detour, legacy rename path, migration006 row/index preservation
+- [x] All existing tests updated to new table/type names; full suite green, 0 warnings
+- [x] T1 (VS/local, real running app with existing legacy-named database) — verified 2026-07-02, including live confirmation of the Reset collision fix
+- [ ] T2 (Docker) — not yet re-verified for this amendment
+- [ ] Amendment comment posted on #141
+- [ ] Unreleased changelog entry updated to describe final shipped behaviour
 
 ---
 
@@ -65,6 +112,20 @@ A comment documenting this scope narrowing will be posted on #141 before work st
 | 13 | ✅ | T1: `preserveSchemaVersion=true` against the same real running app leaves `SchemaVersion` untouched while still fully rebuilding all data tables | Live | Same run, immediately after row 12: called reset again with `?preserveSchemaVersion=true`. `SchemaVersion` timestamps stayed exactly `13:34:02` (unchanged from the prior reset — proving preservation), `AuditEntries` kept growing (13 → 20), 788 quotes rebuilt again, `/api/v1/health`/`/api/v1/version`/`/api/v1/quotes/random` all returned correct data. Verified 2026-07-02. |
 | 14 | ⚠️ | T2: fresh Docker container builds and reset behaves identically to T1 | Live | **Blocked in this session** — the Docker daemon cannot start in this sandboxed cloud environment (`sudo service docker start` fails: `ulimit: error setting limit (Operation not permitted)`, confirmed even with the sandbox override). `docker build -f docker/Dockerfile -t quotinator:local .` could not be attempted. This is an environment limitation, not a code gap — T1 already exercises the exact same `DropAndRebuildAsync`/`Sql.Schema.GetUserTables` code path that runs in the container. T2 must be completed in an environment with a working Docker daemon (local developer machine or CI) before this issue can close — do not treat T1 alone as satisfying the T2 requirement. |
 
+### Rows 15–21: amendment (System_-prefix naming convention)
+
+| # | Status | Requirement | Method | Verification |
+|---|--------|-------------|--------|--------------|
+| 15 | ✅ | `GetUserTables` excludes any `System_`-prefixed table, not just the two known names | Unit test | `DatabaseInitializerTests.GetUserTables_SystemPrefixedTable_IsExcluded` (creates a throwaway `System_FooBar` table and confirms exclusion) |
+| 16 | ✅ | A table starting with "System" but no underscore (e.g. `SystemInventory`) is NOT treated as protected — proves the `ESCAPE` clause works | Unit test | `DatabaseInitializerTests.GetUserTables_SystemPrefixWithoutUnderscore_IsNotExcluded` |
+| 17 | ✅ | A fresh database creates `System_SchemaVersion` directly, never under the legacy name | Unit test | `DatabaseInitializerTests.InitialiseAsync_FreshDatabase_CreatesSystemSchemaVersionDirectly` |
+| 18 | ✅ | A pre-existing legacy `SchemaVersion` table is renamed to `System_SchemaVersion` with all version history rows preserved | Unit test | `DatabaseInitializerTests.InitialiseAsync_LegacySchemaVersionTable_IsRenamedWithRowsPreserved` |
+| 19 | ✅ | Migration006 renames `AuditEntries` to `System_AuditEntries`, preserving existing rows and both indexes under their new names | Unit test | `DatabaseInitializerTests.InitialiseAsync_LegacyAuditEntriesTable_MigratesToSystemAuditEntriesWithRowsPreserved` |
+| 20 | ✅ | A default `Reset` (which wipes and replays `System_SchemaVersion` while `System_AuditEntries` survives, by design) does not crash on the resulting migration004/migration006 collision | Unit test | `DatabaseInitializerTests.ResetAsync_AfterInitialise_RebuildsSchemaAndReseeds`, `ResetAsync_AfterInitialise_PreservesExistingAuditEntries`, `ResetAsync_DefaultParameter_StillReplaysSchemaVersion`, `ResetAsync_PreserveSchemaVersionTrue_KeepsExistingRows` — all previously crashed with `SQLite Error 1: 'there is already another table or index with this name: System_AuditEntries'` until `IsKnownMigrationError`/stray-table cleanup was added; all now green |
+| 21 | ✅ | Build clean and full test suite green after the amendment | Live | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s); `dotnet test --configuration Release --verbosity normal` — 617/617 passed across all 6 test projects, 0 warnings. Confirmed 2026-07-02 |
+| 22 | ✅ | T1 (amendment): real running app in Visual Studio, existing database with legacy `SchemaVersion`/`AuditEntries` names, confirms transparent upgrade AND the Reset collision fix | Live | Verified 2026-07-02 by the user. Run 1 (`dotnet run`, existing v5 database): log showed `applying 1 pending migration(s) (version 5 → 6)`, `schema updated at version 6`, stats unchanged (788 quotes/478 sources/2 characters). DB inspection confirmed exactly 12 tables — `System_AuditEntries`/`System_SchemaVersion` present, no `AuditEntries`/`SchemaVersion` remaining, indexes correctly renamed to `IX_System_AuditEntries_TableName_RecordId`/`IX_System_AuditEntries_PerformedAt`; `System_SchemaVersion` had all 6 version rows. `GET /api/v1/admin/audit` → 200, `DELETE /api/v1/admin/audit` (no key) → 401 (auth gate unaffected). Run 2 (fresh start, `schema is up to date at version 6`): `POST /api/v1/admin/database/reseed` → 200 (788 quotes rebuilt). `POST /api/v1/admin/database/reset` (default) → **exercised the exact migration004/migration006 collision the fix targets** — log showed the recovery path firing (`SqliteException` caught, recorded version, continued) and `reset complete` → 200, 788 quotes rebuilt correctly. `POST /api/v1/admin/database/reset?preserveSchemaVersion=true` → same successful recovery path, 200. **Follow-up fix from this run:** the recovery log message was misleadingly worded ("migration 6 was previously partially applied... use Reset Database" — confusing when it fires *during* a Reset, and it is not actually rare, it is the expected path on every default Reset). Split into a distinct, accurate `LogInformation` message for this specific case; the true partial-apply case (migration003, and a genuinely interrupted migration006) still logs the original `LogWarning`. Full suite re-verified green (617/617) after the message fix. |
+| 23 | ⬜ | T2 (amendment): fresh Docker container, confirms identical behaviour | Not yet run | — |
+
 ---
 
 ## Notes
@@ -75,3 +136,8 @@ A comment documenting this scope narrowing will be posted on #141 before work st
 **Bug found and fixed during this work:** the first implementation of `preserveSchemaVersion:true` simply skipped `Sql.Schema.DeleteAll` before `DropAllTablesAsync`/`ApplyMigrationsAsync`. `ResetAsync_PreserveSchemaVersionTrue_KeepsExistingRows` immediately caught the consequence: `DropAllTablesAsync` still drops every data table unconditionally, but with `SchemaVersion`'s rows untouched, `ApplyMigrationsAsync` saw `current >= _migrations.Count` and took its "already up to date" early return — skipping the `CREATE TABLE` DDL replay entirely and leaving the database with no `Quotes` table at all (`SQLite Error 1: 'no such table: Quotes'` on the immediate reseed attempt). Fixed by decoupling the two concerns: `DropAndRebuildAsync` now always runs the full, already-tested clear+rebuild path unconditionally (so every table always comes back), and only when `preserveSchemaVersion` is `true` does it snapshot `SchemaVersion`'s rows beforehand and restore that exact snapshot afterward — the rebuild itself is untouched, only the final `SchemaVersion` row content is swapped back. This avoids touching `ApplyMigrationsAsync`/`ApplyPendingMigrationsAsync` at all, keeping the well-tested migration-replay logic frozen.
 
 **Message-accuracy drift found, not fixed here (out of scope):** the shared `BadRequestExceptionHandler` returns `localizer[ApiMessages.NumericParameterInvalid]` for *any* unparsable primitive query parameter, including this new boolean one. Its English text reads "Numeric parameters (yearFrom, yearTo, year, decade, page, pageSize, n) must be whole numbers." — accurate for the year params it was written for, slightly misleading for a malformed `preserveSchemaVersion` value (it *is* a structurally correct 422 `Problem`, just with wording that doesn't mention booleans). Not fixed as part of #141 since it is a pre-existing, shared message used well beyond this endpoint; worth a small follow-up if it comes up again.
+
+**Amendment notes (2026-07-02, naming-convention pass):**
+- The migration004/migration006 collision described in "Scope amendment" above was only discoverable once `System_AuditEntries` became protected by the generic `System_%` pattern — the original hardcoded-exclusion-list version of #141 never hit it, because `AuditEntries` (old name) itself was the excluded/protected table, and migration004's `CREATE TABLE IF NOT EXISTS AuditEntries` is naturally idempotent against its own already-existing table (no rename step existed). The bug is specific to introducing a *rename* migration whose target becomes newly protected.
+- `SqlQueryGuardTests.AggregateQueries_MatchDocumentedInventory` required updating: `Sql.Audit.CountPagedBase` → `Sql.SystemAudit.CountPagedBase`, and the new `Schema.LegacySchemaVersionExists` constant (`COUNT(*)`, no GROUP BY/HAVING) added to the documented aggregate-query inventory.
+- `RepositorySqlGuardTests.cs` (in `Quotinator.Data.Tests`) also referenced `Sql.Audit.*` by name and required the same rename.

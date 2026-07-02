@@ -20,12 +20,12 @@ public class AdminAuditEndpointTests
     private const string TestKey = "test-admin-key";
 
     private static WebApplicationFactory<Program> CreateFactory(
-        IAuditReader?  auditReader  = null,
-        IAuditWriter?  auditWriter  = null,
+        ISystemAuditReader?  auditReader  = null,
+        ISystemAuditWriter?  auditWriter  = null,
         string?        adminApiKey  = TestKey)
     {
-        var reader = auditReader ?? new NoOpAuditReader();
-        var writer = auditWriter ?? new NoOpAuditWriter();
+        var reader = auditReader ?? new NoOpSystemAuditReader();
+        var writer = auditWriter ?? new NoOpSystemAuditWriter();
 
         return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -33,8 +33,8 @@ public class AdminAuditEndpointTests
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
-                services.AddSingleton<IAuditWriter>(writer);
-                services.AddSingleton<IAuditReader>(reader);
+                services.AddSingleton<ISystemAuditWriter>(writer);
+                services.AddSingleton<ISystemAuditReader>(reader);
                 services.AddSingleton<ICallerContext>(new NoOpCallerContext());
             });
             builder.ConfigureAppConfiguration((_, config) =>
@@ -88,7 +88,7 @@ public class AdminAuditEndpointTests
     [TestMethod]
     public async Task GetAudit_WithItems_ReturnsItems()
     {
-        var entry = new AuditEntry
+        var entry = new SystemAuditEntry
         {
             Id          = 1,
             TableName   = "Quotes",
@@ -98,7 +98,7 @@ public class AdminAuditEndpointTests
             PerformedAt = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
         };
 
-        var stubReader = new StubAuditReader(new AuditPageResult([entry], 1, 50, 1));
+        var stubReader = new StubAuditReader(new SystemAuditPageResult([entry], 1, 50, 1));
         using var factory = CreateFactory(stubReader);
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
@@ -192,28 +192,28 @@ public class AdminAuditEndpointTests
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private sealed class StubAuditReader(AuditPageResult result) : IAuditReader
+    private sealed class StubAuditReader(SystemAuditPageResult result) : ISystemAuditReader
     {
-        public Task<AuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
+        public Task<SystemAuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
             => Task.FromResult(result);
     }
 
-    private sealed class CapturingAuditReader(Action<int> onCall) : IAuditReader
+    private sealed class CapturingAuditReader(Action<int> onCall) : ISystemAuditReader
     {
-        public Task<AuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
+        public Task<SystemAuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
         {
             onCall(pageSize);
-            return Task.FromResult(new AuditPageResult([], page, pageSize, 0));
+            return Task.FromResult(new SystemAuditPageResult([], page, pageSize, 0));
         }
     }
 
-    private sealed class CapturingAuditWriter(Action<string?> onClear) : IAuditWriter
+    private sealed class CapturingAuditWriter(Action<string?> onClear) : ISystemAuditWriter
     {
-        public Task WriteAsync(AuditEntry entry, IDbConnection connection, IDbTransaction? transaction = null)
+        public Task WriteAsync(SystemAuditEntry entry, IDbConnection connection, IDbTransaction? transaction = null)
             => Task.CompletedTask;
-        public Task WriteAsync(IReadOnlyList<AuditEntry> entries, IDbConnection connection, IDbTransaction? transaction = null)
+        public Task WriteAsync(IReadOnlyList<SystemAuditEntry> entries, IDbConnection connection, IDbTransaction? transaction = null)
             => Task.CompletedTask;
-        public Task WriteAsync(AuditEntry entry)
+        public Task WriteAsync(SystemAuditEntry entry)
             => Task.CompletedTask;
         public Task ClearAsync(string? table = null)
         {

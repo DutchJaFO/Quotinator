@@ -9,7 +9,7 @@ namespace Quotinator.Data.Repositories;
 /// Extends <see cref="SqliteRepository{T}"/> with soft-delete management:
 /// retrieving deleted records, undoing a soft-delete, hard-deleting a single record,
 /// and purging all soft-deleted records from the table.
-/// All write methods write an <see cref="AuditEntry"/> in the same connection and transaction.
+/// All write methods write a <see cref="SystemAuditEntry"/> in the same connection and transaction.
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
 public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRepository<T>
@@ -19,7 +19,7 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
     /// <param name="factory">Opens connections to the SQLite database.</param>
     /// <param name="auditWriter">Writes an audit entry alongside every write operation.</param>
     /// <param name="callerContext">Provides the current caller's identity for audit entries.</param>
-    public SqliteRestorableRepository(IDbConnectionFactory factory, IAuditWriter auditWriter, ICallerContext callerContext)
+    public SqliteRestorableRepository(IDbConnectionFactory factory, ISystemAuditWriter auditWriter, ICallerContext callerContext)
         : base(factory, auditWriter, callerContext) { }
 
     /// <inheritdoc/>

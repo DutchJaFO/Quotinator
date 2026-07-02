@@ -16,30 +16,43 @@ namespace Quotinator.Data.Queries;
 /// </remarks>
 internal static class Sql
 {
-    /// <summary>SchemaVersion table — version tracking for schema migrations.</summary>
+    /// <summary>System_SchemaVersion table — version tracking for schema migrations.</summary>
     internal static class Schema
     {
-        internal const string CreateTable       = "CREATE TABLE IF NOT EXISTS SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);";
-        internal const string GetCurrentVersion = "SELECT COALESCE(MAX(Version), 0) FROM SchemaVersion;";
-        internal const string InsertVersion     = "INSERT INTO SchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
-        internal const string DeleteAll         = "DELETE FROM SchemaVersion;";
+        // Bootstrap-only, one-time legacy detection — not part of the numbered migration list.
+        // Runs before the current version is even known, since SchemaVersion itself is what the
+        // numbered migration system depends on to know what to apply. Idempotent by construction:
+        // once the rename below has happened, sqlite_master no longer contains a table literally
+        // named SchemaVersion, so this check is a no-op on every subsequent startup.
+        internal const string LegacySchemaVersionExists =
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SchemaVersion';";
+        internal const string RenameLegacySchemaVersionTable =
+            "ALTER TABLE SchemaVersion RENAME TO System_SchemaVersion;";
+
+        internal const string CreateTable       = "CREATE TABLE IF NOT EXISTS System_SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);";
+        internal const string GetCurrentVersion = "SELECT COALESCE(MAX(Version), 0) FROM System_SchemaVersion;";
+        internal const string InsertVersion     = "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
+        internal const string DeleteAll         = "DELETE FROM System_SchemaVersion;";
 
         // Used by DropAndRebuildAsync to snapshot existing rows before a rebuild when the caller
         // asked to preserve schema version history, so they can be restored afterward.
-        internal const string GetAllVersions    = "SELECT Version, AppliedAt FROM SchemaVersion;";
+        internal const string GetAllVersions    = "SELECT Version, AppliedAt FROM System_SchemaVersion;";
 
         // Returns all user-created table names, excluding SQLite internals and any table
         // designated as protected system infrastructure. Used by ResetAsync to discover tables
         // dynamically so that new tables added in future migrations are dropped without requiring
         // a manual update here. FK checks must be off before dropping the results
         // (PRAGMA foreign_keys = OFF).
-        // SchemaVersion is always excluded — its own row-level clearing is handled separately
-        // (see DropAndRebuildAsync's preserveSchemaVersion parameter). AuditEntries is excluded
-        // because the audit trail is deliberately whole-table "system" data: it must survive a
-        // full Reset, and is cleared only via the dedicated DELETE /api/v1/admin/audit endpoint.
+        // A "system table" is any table whose name starts with a literal System_ prefix — this
+        // query never needs to know specific names, so a consuming project can add its own
+        // protected tables (e.g. a DB-backed enum-like lookup) with zero changes here. The
+        // underscore must be escaped: SQL LIKE treats '_' as a single-character wildcard, so an
+        // unescaped 'System_%' would also match an unrelated table like SystemInventory. The
+        // ESCAPE clause makes '\_' match a literal underscore only, so SystemInventory (no
+        // underscore) is correctly NOT treated as protected.
         internal const string GetUserTables =
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' " +
-            "AND name NOT IN ('SchemaVersion', 'AuditEntries');";
+            "AND name NOT LIKE 'System\\_%' ESCAPE '\\';";
     }
 
     /// <summary>Quotes table — fixed queries and dynamic-query factory methods.</summary>
@@ -244,21 +257,29 @@ internal static class Sql
             """;
     }
 
-    /// <summary>AuditEntries table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.AuditWriter"/>.</summary>
-    internal static class Audit
+    /// <summary>System_AuditEntries table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.SystemAuditWriter"/>.</summary>
+    internal static class SystemAudit
     {
         /// <summary>Removes all audit entries.</summary>
-        internal const string DeleteAll     = "DELETE FROM AuditEntries;";
+        internal const string DeleteAll     = "DELETE FROM System_AuditEntries;";
+
+        // Used only by the migration006 recovery path in DatabaseInitializer: on a full
+        // migration replay (SchemaVersion wiped, System_AuditEntries protected/preserved from
+        // the table drop), migration004's CREATE TABLE IF NOT EXISTS AuditEntries recreates a
+        // stray empty legacy-named table before migration006's rename fails because the
+        // destination already exists. This drops that stray duplicate — never the protected
+        // System_AuditEntries table itself.
+        internal const string DropStrayLegacyAuditEntriesTable = "DROP TABLE IF EXISTS AuditEntries;";
 
         /// <summary>Removes audit entries for a specific table name.</summary>
-        internal const string DeleteByTable = "DELETE FROM AuditEntries WHERE TableName = @table;";
+        internal const string DeleteByTable = "DELETE FROM System_AuditEntries WHERE TableName = @table;";
 
         // COUNT base — shared by CountPaged factory method below.
-        private const string CountPagedBase = "SELECT COUNT(*) FROM AuditEntries";
+        private const string CountPagedBase = "SELECT COUNT(*) FROM System_AuditEntries";
 
         /// <summary>Paginated audit entry listing, newest first, with optional filters.</summary>
         internal static string SelectPaged(bool filterTable, bool filterRecordId)
-            => "SELECT Id, TableName, RecordId, Operation, Agent, PerformedAt FROM AuditEntries" +
+            => "SELECT Id, TableName, RecordId, Operation, Agent, PerformedAt FROM System_AuditEntries" +
                BuildWhere(filterTable, filterRecordId) +
                " ORDER BY PerformedAt DESC LIMIT @pageSize OFFSET @offset;";
 

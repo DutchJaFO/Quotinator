@@ -14,7 +14,7 @@ public class InsertManyAsyncTests
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private IDbConnectionFactory _factory  = null!;
-    private AuditWriter _auditWriter = null!;
+    private SystemAuditWriter _auditWriter = null!;
     private CallerContext _callerContext = null!;
     private SqliteRepository<Widget> _repository = null!;
 
@@ -35,7 +35,7 @@ public class InsertManyAsyncTests
                 DateDeleted  TEXT,
                 IsDeleted    INTEGER NOT NULL DEFAULT 0
             );
-            CREATE TABLE AuditEntries (
+            CREATE TABLE System_AuditEntries (
                 Id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 TableName   TEXT    NOT NULL,
                 RecordId    TEXT,
@@ -47,7 +47,7 @@ public class InsertManyAsyncTests
 
         _factory      = new SqliteConnectionFactory(_dbPath);
         _callerContext = new CallerContext();
-        _auditWriter  = new AuditWriter(_factory, _callerContext);
+        _auditWriter  = new SystemAuditWriter(_factory, _callerContext);
         _repository   = new SqliteRepository<Widget>(_factory, _auditWriter, _callerContext);
     }
 
@@ -70,7 +70,7 @@ public class InsertManyAsyncTests
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        return conn.ExecuteScalar<int>("SELECT COUNT(*) FROM AuditEntries;");
+        return conn.ExecuteScalar<int>("SELECT COUNT(*) FROM System_AuditEntries;");
     }
 
     private static List<Widget> MakeWidgets(int count)
@@ -113,7 +113,7 @@ public class InsertManyAsyncTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var operations = conn.Query<string>("SELECT Operation FROM AuditEntries;").ToList();
+        var operations = conn.Query<string>("SELECT Operation FROM System_AuditEntries;").ToList();
 
         Assert.IsTrue(operations.All(op => op == AuditOperation.Insert));
     }
@@ -191,7 +191,7 @@ public class InsertManyAsyncTests
         conn.Open();
         using var tx = conn.BeginTransaction();
 
-        var entries = Enumerable.Range(1, 5).Select(_ => new AuditEntry
+        var entries = Enumerable.Range(1, 5).Select(_ => new SystemAuditEntry
         {
             TableName   = "Widgets",
             RecordId    = Guid.NewGuid().ToString("D").ToUpperInvariant(),

@@ -16,7 +16,7 @@ public class AggregateRepositoryTests
 
     private sealed class WidgetWithLinesRepository(
         IDbConnectionFactory factory,
-        IAuditWriter auditWriter,
+        ISystemAuditWriter auditWriter,
         ICallerContext callerContext,
         SqliteRepository<WidgetLine> lineRepo,
         Func<Widget, IReadOnlyList<WidgetLine>> getLines,
@@ -33,7 +33,7 @@ public class AggregateRepositoryTests
     private string _tempDir       = null!;
     private string _dbPath        = null!;
     private IDbConnectionFactory _factory = null!;
-    private AuditWriter _auditWriter     = null!;
+    private SystemAuditWriter _auditWriter = null!;
     private CallerContext _callerContext = null!;
     private SqliteRepository<WidgetLine> _lineRepo = null!;
 
@@ -63,7 +63,7 @@ public class AggregateRepositoryTests
                 DateDeleted  TEXT,
                 IsDeleted    INTEGER NOT NULL DEFAULT 0
             );
-            CREATE TABLE AuditEntries (
+            CREATE TABLE System_AuditEntries (
                 Id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 TableName   TEXT    NOT NULL,
                 RecordId    TEXT,
@@ -75,7 +75,7 @@ public class AggregateRepositoryTests
 
         _factory       = new SqliteConnectionFactory(_dbPath);
         _callerContext = new CallerContext();
-        _auditWriter   = new AuditWriter(_factory, _callerContext);
+        _auditWriter   = new SystemAuditWriter(_factory, _callerContext);
         _lineRepo      = new SqliteRepository<WidgetLine>(_factory, _auditWriter, _callerContext);
     }
 
@@ -104,7 +104,7 @@ public class AggregateRepositoryTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         return conn.ExecuteScalar<int>(
-            "SELECT COUNT(*) FROM AuditEntries WHERE TableName = @t;", new { t = tableName });
+            "SELECT COUNT(*) FROM System_AuditEntries WHERE TableName = @t;", new { t = tableName });
     }
 
     // ── AggregateRepository compiles ──────────────────────────────────────────

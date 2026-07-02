@@ -8,7 +8,7 @@ namespace Quotinator.Data.Repositories;
 /// Infrastructure base for all SQLite repositories in Quotinator.Data.
 /// Provides the connection factory and the table name resolved from the <c>[Table]</c> attribute.
 /// Does not write audit entries — derive from <see cref="SqliteRepository{T}"/> for auditing,
-/// or from this class directly when audit recursion must be avoided (e.g. <see cref="AuditWriter"/>).
+/// or from this class directly when audit recursion must be avoided (e.g. <see cref="SystemAuditWriter"/>).
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
 public abstract class SqliteRepositoryBase<T> where T : class

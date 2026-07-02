@@ -9,8 +9,8 @@ namespace Quotinator.Data.Entities;
 /// <c>[Key]</c> on a <c>long</c> property tells Dapper.Contrib to treat it as a server-generated
 /// identity column: it is excluded from INSERT and read back after the statement executes.
 /// </remarks>
-[Table("AuditEntries")]
-public sealed class AuditEntry
+[Table("System_AuditEntries")]
+public sealed class SystemAuditEntry
 {
     /// <summary>Auto-increment surrogate key assigned by SQLite.</summary>
     [Key]

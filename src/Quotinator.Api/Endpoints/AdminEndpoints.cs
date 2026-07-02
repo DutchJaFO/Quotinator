@@ -55,7 +55,7 @@ internal static class AdminEndpoints
             string? recordId,
             int page     = 1,
             int pageSize = 50,
-            IAuditReader auditReader = null!) =>
+            ISystemAuditReader auditReader = null!) =>
         {
             if (page < 1)       page     = 1;
             if (pageSize < 1)   pageSize = 1;
@@ -120,13 +120,13 @@ internal static class AdminEndpoints
             "Clears all data, reapplies all migrations from scratch, " +
             "then reimports every quote from the configured source files. " +
             "Equivalent to deleting the database file and restarting. " +
-            "The audit log (`AuditEntries`) always survives a reset — clear it separately via `DELETE /api/v1/admin/audit` if needed. " +
+            "The audit log (`System_AuditEntries`) always survives a reset — clear it separately via `DELETE /api/v1/admin/audit` if needed. " +
             "By default, schema migration history is also cleared and replayed; pass `preserveSchemaVersion=true` to keep the existing migration history instead. " +
             "Returns the row counts and duplicate count after the operation completes. " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapDelete("/audit", async (string? table, IAuditWriter auditWriter) =>
+        adminGroup.MapDelete("/audit", async (string? table, ISystemAuditWriter auditWriter) =>
         {
             await auditWriter.ClearAsync(table);
             return Results.NoContent();

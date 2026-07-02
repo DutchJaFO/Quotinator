@@ -20,6 +20,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
         new SchemaMigration { Version = 4, Sql = AuditMigrations.CreateAuditEntriesTable },
         new SchemaMigration { Version = 5, Sql = Migration005_ImportBatchTypeUserSeed },
+        new SchemaMigration { Version = 6, Sql = AuditMigrations.RenameAuditEntriesToSystemAuditEntries },
     ];
 
     // All tables use RecordBase columns (Id, DateCreated, DateModified, DateDeleted, IsDeleted).

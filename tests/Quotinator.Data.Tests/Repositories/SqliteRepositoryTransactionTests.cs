@@ -35,7 +35,7 @@ public class SqliteRepositoryTransactionTests
             );
             """);
 
-        _repository = new SqliteRepository<Widget>(new SqliteConnectionFactory(_dbPath), NoOpAuditWriter.Instance, NoOpCallerContext.Instance);
+        _repository = new SqliteRepository<Widget>(new SqliteConnectionFactory(_dbPath), NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
     }
 
     [TestCleanup]

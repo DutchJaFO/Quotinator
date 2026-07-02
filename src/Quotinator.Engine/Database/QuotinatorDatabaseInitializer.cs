@@ -53,7 +53,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         IReadOnlyList<SchemaMigration> migrations,
         IReadOnlyList<SeedBatch>       batches,
         IImportBatchRepository         importBatches,
-        IAuditWriter                   auditWriter,
+        ISystemAuditWriter             auditWriter,
         ICallerContext                 callerContext,
         ILogger<DatabaseInitializer>   logger)
         : base(factory, options, migrations, auditWriter, callerContext, logger)
@@ -88,7 +88,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         }
 
         await LogDatabaseStatsAsync(connection);
-        await AuditWriter.WriteAsync(new AuditEntry
+        await AuditWriter.WriteAsync(new SystemAuditEntry
         {
             TableName   = "Database",
             Operation   = AuditOperation.Reseed,
@@ -116,7 +116,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         }
 
         await LogDatabaseStatsAsync(connection);
-        await AuditWriter.WriteAsync(new AuditEntry
+        await AuditWriter.WriteAsync(new SystemAuditEntry
         {
             TableName   = "Database",
             Operation   = AuditOperation.Reset,
@@ -292,7 +292,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
                 await _importBatches.UpdateRecordCountAsync(importBatch.Id, fileQuoteCount);
 
-                await AuditWriter.WriteAsync(new AuditEntry
+                await AuditWriter.WriteAsync(new SystemAuditEntry
                 {
                     TableName   = "Quotes",
                     RecordId    = importBatch.Id.ToString("D").ToUpperInvariant(),
@@ -413,7 +413,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
     private async Task<ImportBatch> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile)
     {
-        var type = DetermineType(seedBatch.Origin, seedFile.Url);
+        var type = DetermineType(seedBatch.Origin);
         var batch = new ImportBatch
         {
             Name       = Path.GetFileName(seedFile.FilePath),
@@ -425,13 +425,17 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         return batch;
     }
 
-    // Origin always wins over URL presence — a user-imports-folder file that happens to declare
-    // its own url/github manifest entry is still UserSeed, never Seed, so provenance always
-    // reflects which folder the file was actually scanned from.
-    private static ImportBatchType DetermineType(SeedBatchOrigin origin, string? url) =>
+    // Origin decides the type, not URL presence — a user-imports-folder file that happens to
+    // declare its own url/github manifest entry is still UserSeed, never Seed, so provenance
+    // always reflects which folder the file was actually scanned from. A bundled file is always
+    // Seed regardless of whether it has a URL — "System" is reserved for the database's own
+    // System_-prefixed infrastructure tables (see Sql.Schema.GetUserTables), not for quote
+    // content provenance; internally-authored bundled content (e.g. quotinator-curated.json) is
+    // still replaceable, re-seeded content, just like externally-sourced bundled content.
+    private static ImportBatchType DetermineType(SeedBatchOrigin origin) =>
         origin == SeedBatchOrigin.UserImports
             ? ImportBatchType.UserSeed
-            : string.IsNullOrEmpty(url) ? ImportBatchType.System : ImportBatchType.Seed;
+            : ImportBatchType.Seed;
 
     private static async Task<Guid> GetOrCreateSourceAsync(
         SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId)

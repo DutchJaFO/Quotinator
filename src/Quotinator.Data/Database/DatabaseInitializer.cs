@@ -25,7 +25,7 @@ public class DatabaseInitializer : IDatabaseInitializer
     protected readonly ILogger Logger;
 
     /// <summary>Audit writer available to subclasses for recording reseed and reset operations.</summary>
-    protected readonly IAuditWriter AuditWriter;
+    protected readonly ISystemAuditWriter AuditWriter;
 
     /// <summary>Caller context available to subclasses for populating audit entries.</summary>
     protected readonly ICallerContext CallerContext;
@@ -70,7 +70,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         IDbConnectionFactory           factory,
         DatabaseOptions                options,
         IReadOnlyList<SchemaMigration> migrations,
-        IAuditWriter                   auditWriter,
+        ISystemAuditWriter             auditWriter,
         ICallerContext                 callerContext,
         ILogger<DatabaseInitializer>   logger)
     {
@@ -154,16 +154,17 @@ public class DatabaseInitializer : IDatabaseInitializer
 
     /// <summary>
     /// Drops and recreates all tables by reapplying migrations. Subclasses call this during reset.
-    /// <c>AuditEntries</c> is never dropped (see <see cref="Sql.Schema.GetUserTables"/>). The rebuild
-    /// always clears and replays <c>SchemaVersion</c> exactly as before — this is what makes every
-    /// data table come back — but when <paramref name="preserveSchemaVersion"/> is <c>true</c>, the
-    /// rows that existed before the rebuild are snapshotted first and restored afterward, so the
-    /// caller observes no change to schema version history even though the rebuild ran underneath.
+    /// <c>System_AuditEntries</c> is never dropped (see <see cref="Sql.Schema.GetUserTables"/>). The
+    /// rebuild always clears and replays <c>System_SchemaVersion</c> exactly as before — this is
+    /// what makes every data table come back — but when <paramref name="preserveSchemaVersion"/> is
+    /// <c>true</c>, the rows that existed before the rebuild are snapshotted first and restored
+    /// afterward, so the caller observes no change to schema version history even though the
+    /// rebuild ran underneath.
     /// </summary>
     protected async Task DropAndRebuildAsync(SqliteConnection connection, bool preserveSchemaVersion = false)
     {
         var savedVersions = preserveSchemaVersion
-            ? (await connection.QueryAsync<SchemaVersionRow>(Sql.Schema.GetAllVersions)).ToList()
+            ? (await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllVersions)).ToList()
             : [];
 
         await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
@@ -179,7 +180,7 @@ public class DatabaseInitializer : IDatabaseInitializer
             await connection.ExecuteAsync(Sql.Schema.InsertVersion, new { v = row.Version, at = row.AppliedAt });
     }
 
-    private sealed record SchemaVersionRow(long Version, string AppliedAt);
+    private sealed record SystemSchemaVersionRow(long Version, string AppliedAt);
 
     /// <summary>Opens a new SQLite connection for use by subclasses.</summary>
     protected SqliteConnection CreateConnection() => (SqliteConnection)_factory.CreateConnection();
@@ -229,8 +230,22 @@ public class DatabaseInitializer : IDatabaseInitializer
     private static void EnableWal(SqliteConnection connection)
         => connection.Execute("PRAGMA journal_mode=WAL;");
 
+    // One-time bootstrap step, run before System_SchemaVersion's own CREATE TABLE IF NOT EXISTS and
+    // before the current migration version is known — SchemaVersion predates the numbered migration
+    // list entirely, so its rename can't be a numbered migration. A fresh database has no table
+    // literally named SchemaVersion, so this is a no-op and CreateTable proceeds straight to the
+    // final table name — a new database is never created under the old name and then renamed.
+    private static async Task RenameLegacySchemaVersionTableIfPresentAsync(SqliteConnection connection)
+    {
+        var legacyExists = await connection.ExecuteScalarAsync<int>(Sql.Schema.LegacySchemaVersionExists);
+        if (legacyExists == 0) return;
+
+        await connection.ExecuteAsync(Sql.Schema.RenameLegacySchemaVersionTable);
+    }
+
     private async Task ApplyMigrationsAsync(SqliteConnection connection)
     {
+        await RenameLegacySchemaVersionTableIfPresentAsync(connection);
         await connection.ExecuteAsync(Sql.Schema.CreateTable);
 
         var current = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetCurrentVersion);
@@ -286,10 +301,28 @@ public class DatabaseInitializer : IDatabaseInitializer
             catch (SqliteException ex) when (IsKnownMigrationError(ex, i + 1))
             {
                 await tx.RollbackAsync();
-                Logger.LogWarning(
-                    "[Database - Init] migration {Version} was previously partially applied — " +
-                    "recording version and continuing. If data appears missing, use Reset Database.",
-                    i + 1);
+
+                var isSystemAuditEntriesCollision =
+                    i + 1 == 6 && ex.Message.Contains("already another table", StringComparison.OrdinalIgnoreCase);
+
+                if (isSystemAuditEntriesCollision)
+                {
+                    // Expected on every default Reset, not a sign of a broken database: System_AuditEntries
+                    // survives the table wipe by design (Sql.Schema.GetUserTables), so replaying migration004
+                    // recreates a stray empty AuditEntries that collides with migration006's rename target.
+                    Logger.LogInformation(
+                        "[Database - Init] migration 6 rename target already exists — System_AuditEntries is " +
+                        "protected from Reset by design. Recording version and continuing.");
+                    await connection.ExecuteAsync(Sql.SystemAudit.DropStrayLegacyAuditEntriesTable);
+                }
+                else
+                {
+                    Logger.LogWarning(
+                        "[Database - Init] migration {Version} was previously partially applied — " +
+                        "recording version and continuing. If data appears missing, use Reset Database.",
+                        i + 1);
+                }
+
                 await connection.ExecuteAsync(
                     Sql.Schema.InsertVersion,
                     new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) });
@@ -323,6 +356,17 @@ public class DatabaseInitializer : IDatabaseInitializer
             // the version, leaving the columns present but SchemaVersion stuck at 2. On the
             // next startup the ALTER TABLE fails because the column already exists.
             3 => ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase),
+            // Migration006 renames AuditEntries to System_AuditEntries via ALTER TABLE ... RENAME
+            // TO, which has no IF EXISTS guard in SQLite. Two known-recoverable cases:
+            // (a) a prior partial application already completed the rename but failed before
+            //     recording the version — retrying the ALTER TABLE fails because AuditEntries no
+            //     longer exists.
+            // (b) System_AuditEntries is protected from the Reset table wipe (Sql.Schema.GetUserTables),
+            //     so on a full migration replay migration004's CREATE TABLE IF NOT EXISTS recreates
+            //     a stray empty AuditEntries, and the rename then fails because the destination —
+            //     the real, preserved System_AuditEntries — already exists.
+            6 => ex.Message.Contains("no such table: AuditEntries", StringComparison.OrdinalIgnoreCase)
+                 || ex.Message.Contains("already another table or index with this name: System_AuditEntries", StringComparison.OrdinalIgnoreCase),
             _ => false
         };
 

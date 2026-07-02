@@ -37,14 +37,14 @@ public class RepositorySqlGuardTests
             ["SelectByIds",          RepositorySql.SelectByIds(t)],
 
             // Audit factory methods — all four filter-flag combinations.
-            ["Audit.SelectPaged(false,false)", Sql.Audit.SelectPaged(false, false)],
-            ["Audit.SelectPaged(true,false)",  Sql.Audit.SelectPaged(true,  false)],
-            ["Audit.SelectPaged(false,true)",  Sql.Audit.SelectPaged(false, true)],
-            ["Audit.SelectPaged(true,true)",   Sql.Audit.SelectPaged(true,  true)],
-            ["Audit.CountPaged(false,false)",  Sql.Audit.CountPaged(false,  false)],
-            ["Audit.CountPaged(true,false)",   Sql.Audit.CountPaged(true,   false)],
-            ["Audit.CountPaged(false,true)",   Sql.Audit.CountPaged(false,  true)],
-            ["Audit.CountPaged(true,true)",    Sql.Audit.CountPaged(true,   true)],
+            ["SystemAudit.SelectPaged(false,false)", Sql.SystemAudit.SelectPaged(false, false)],
+            ["SystemAudit.SelectPaged(true,false)",  Sql.SystemAudit.SelectPaged(true,  false)],
+            ["SystemAudit.SelectPaged(false,true)",  Sql.SystemAudit.SelectPaged(false, true)],
+            ["SystemAudit.SelectPaged(true,true)",   Sql.SystemAudit.SelectPaged(true,  true)],
+            ["SystemAudit.CountPaged(false,false)",  Sql.SystemAudit.CountPaged(false,  false)],
+            ["SystemAudit.CountPaged(true,false)",   Sql.SystemAudit.CountPaged(true,   false)],
+            ["SystemAudit.CountPaged(false,true)",   Sql.SystemAudit.CountPaged(false,  true)],
+            ["SystemAudit.CountPaged(true,true)",    Sql.SystemAudit.CountPaged(true,   true)],
         ];
     }
 }

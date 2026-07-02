@@ -28,7 +28,7 @@
       "Das Seeding stürzt nicht mehr bei einer leeren oder ungültigen JSON-Quelldatei ab — die Datei wird jetzt mit einer protokollierten Warnung übersprungen, anstatt den Start zu stoppen",
       "Eine Datei im Benutzer-Importordner ohne URL wurde bisher genauso eingestuft wie intern kuratierte Daten; die ImportBatch-Herkunft hat jetzt einen eigenen `UserSeed`-Typ für Dateien aus dem Importordner, getrennt von `System` (gebündelt) und `Seed` (unsere eigenen gebündelten externen Datensätze)",
       "CVE-2026-49451: `Microsoft.OpenApi` (transitiv über `Microsoft.AspNetCore.OpenApi`) hatte eine Stack-Overflow-Schwachstelle beim Parsen von OpenAPI-Dokumenten mit zirkulären Schemaverweisen; Quotinator generiert nur sein eigenes OpenAPI-Dokument und parst niemals nicht vertrauenswürdige Dokumente, daher war der verwundbare Pfad unerreichbar — trotzdem auf 2.7.5 gepatcht über eine direkte Paket-Überschreibung",
-      "Ein vollständiges Datenbank-Reset (`POST /api/v1/admin/database/reset`) löschte bisher das Audit-Protokoll; `AuditEntries` bleibt jetzt bei einem Reset immer erhalten, so wie es bei einem normalen Reseed bereits der Fall war"
+      "Ein vollständiges Datenbank-Reset (`POST /api/v1/admin/database/reset`) löschte bisher das Audit-Protokoll; die Audit-Tabelle (jetzt `System_AuditEntries` genannt) bleibt bei einem Reset immer erhalten, so wie es bei einem normalen Reseed bereits der Fall war. Interne Tabellen, die für die App essenziell sind, verwenden jetzt ein `System_`-Namenspräfix, sodass sie automatisch vor einem Reset geschützt sind, anstatt dass die App jede geschützte Tabelle namentlich kennen muss"
     ]
   },
   "releases": [

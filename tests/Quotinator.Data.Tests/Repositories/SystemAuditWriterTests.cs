@@ -9,13 +9,13 @@ using Quotinator.Data.Tests.Helpers;
 namespace Quotinator.Data.Tests.Repositories;
 
 [TestClass]
-public class AuditWriterTests
+public class SystemAuditWriterTests
 {
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private IDbConnectionFactory _factory = null!;
     private CallerContext _caller = null!;
-    private AuditWriter   _writer = null!;
+    private SystemAuditWriter _writer = null!;
 
     [TestInitialize]
     public void TestInitialize()
@@ -26,7 +26,7 @@ public class AuditWriterTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         conn.Execute("""
-            CREATE TABLE AuditEntries (
+            CREATE TABLE System_AuditEntries (
                 Id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 TableName   TEXT    NOT NULL,
                 RecordId    TEXT,
@@ -38,7 +38,7 @@ public class AuditWriterTests
 
         _factory = new SqliteConnectionFactory(_dbPath);
         _caller  = new CallerContext();
-        _writer  = new AuditWriter(_factory, _caller);
+        _writer  = new SystemAuditWriter(_factory, _caller);
     }
 
     [TestCleanup]
@@ -49,7 +49,7 @@ public class AuditWriterTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private static AuditEntry BuildEntry(string op, Guid? id = null, string? agent = null) => new()
+    private static SystemAuditEntry BuildEntry(string op, Guid? id = null, string? agent = null) => new()
     {
         TableName   = "Widgets",
         RecordId    = id?.ToString("D").ToUpperInvariant(),
@@ -70,7 +70,7 @@ public class AuditWriterTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var count = conn.ExecuteScalar<int>("SELECT COUNT(*) FROM AuditEntries;");
+        var count = conn.ExecuteScalar<int>("SELECT COUNT(*) FROM System_AuditEntries;");
         Assert.AreEqual(1, count);
     }
 
@@ -84,7 +84,7 @@ public class AuditWriterTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var row = conn.QuerySingle<AuditEntry>("SELECT * FROM AuditEntries;");
+        var row = conn.QuerySingle<SystemAuditEntry>("SELECT * FROM System_AuditEntries;");
 
         Assert.AreEqual("Widgets",                         row.TableName);
         Assert.AreEqual(id.ToString("D").ToUpperInvariant(), row.RecordId);
@@ -99,7 +99,7 @@ public class AuditWriterTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var row = conn.QuerySingle<AuditEntry>("SELECT * FROM AuditEntries;");
+        var row = conn.QuerySingle<SystemAuditEntry>("SELECT * FROM System_AuditEntries;");
         Assert.IsNull(row.Agent);
         Assert.IsNull(row.RecordId);
     }
@@ -119,12 +119,12 @@ public class AuditWriterTests
         // Not committed yet — should not be visible on a separate connection.
         using var conn2  = new SqliteConnection($"Data Source={_dbPath}");
         conn2.Open();
-        var countBefore = conn2.ExecuteScalar<int>("SELECT COUNT(*) FROM AuditEntries;");
+        var countBefore = conn2.ExecuteScalar<int>("SELECT COUNT(*) FROM System_AuditEntries;");
         Assert.AreEqual(0, countBefore, "Entry must not be visible before commit");
 
         tx.Commit();
 
-        var countAfter = conn2.ExecuteScalar<int>("SELECT COUNT(*) FROM AuditEntries;");
+        var countAfter = conn2.ExecuteScalar<int>("SELECT COUNT(*) FROM System_AuditEntries;");
         Assert.AreEqual(1, countAfter, "Entry must be visible after commit");
     }
 
@@ -154,7 +154,7 @@ public class AuditWriterTests
     {
         // Seed two entries for different tables.
         await _writer.WriteAsync(BuildEntry(AuditOperation.Insert));
-        await _writer.WriteAsync(new AuditEntry { TableName = "Sources", Operation = AuditOperation.Insert, PerformedAt = DateTime.UtcNow });
+        await _writer.WriteAsync(new SystemAuditEntry { TableName = "Sources", Operation = AuditOperation.Insert, PerformedAt = DateTime.UtcNow });
 
         _caller.Agent = "Cleaner/1.0";
         await _writer.ClearAsync();
@@ -162,9 +162,9 @@ public class AuditWriterTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         // Exactly one entry should remain — the purge record itself.
-        var remaining = conn.Query<AuditEntry>("SELECT * FROM AuditEntries;").ToList();
+        var remaining = conn.Query<SystemAuditEntry>("SELECT * FROM System_AuditEntries;").ToList();
         Assert.AreEqual(1, remaining.Count, "Only the purge sentinel entry should remain");
-        Assert.AreEqual("AuditEntries",    remaining[0].TableName);
+        Assert.AreEqual("System_AuditEntries", remaining[0].TableName);
         Assert.AreEqual(AuditOperation.Purge, remaining[0].Operation);
         Assert.AreEqual("Cleaner/1.0",     remaining[0].Agent);
     }
@@ -173,13 +173,13 @@ public class AuditWriterTests
     public async Task ClearAsync_WithTable_DeletesOnlyMatchingTableEntriesAndWritesPurgeEntry()
     {
         await _writer.WriteAsync(BuildEntry(AuditOperation.Insert));
-        await _writer.WriteAsync(new AuditEntry { TableName = "Sources", Operation = AuditOperation.Insert, PerformedAt = DateTime.UtcNow });
+        await _writer.WriteAsync(new SystemAuditEntry { TableName = "Sources", Operation = AuditOperation.Insert, PerformedAt = DateTime.UtcNow });
 
         await _writer.ClearAsync("Widgets");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var remaining = conn.Query<AuditEntry>("SELECT * FROM AuditEntries ORDER BY Id;").ToList();
+        var remaining = conn.Query<SystemAuditEntry>("SELECT * FROM System_AuditEntries ORDER BY Id;").ToList();
 
         // The Sources entry must be untouched; the Widgets entry deleted; purge sentinel added.
         Assert.AreEqual(2,           remaining.Count);
@@ -193,7 +193,7 @@ public class AuditWriterTests
     [TestMethod]
     public async Task SqliteRepository_Insert_WritesAuditEntry()
     {
-        // Set up a Widgets table and wire up the real AuditWriter.
+        // Set up a Widgets table and wire up the real SystemAuditWriter.
         using var setup = new SqliteConnection($"Data Source={_dbPath}");
         setup.Open();
         setup.Execute("""
@@ -213,7 +213,7 @@ public class AuditWriterTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var entry = conn.QuerySingle<AuditEntry>("SELECT * FROM AuditEntries;");
+        var entry = conn.QuerySingle<SystemAuditEntry>("SELECT * FROM System_AuditEntries;");
 
         Assert.AreEqual("Widgets",          entry.TableName);
         Assert.AreEqual(AuditOperation.Insert, entry.Operation);

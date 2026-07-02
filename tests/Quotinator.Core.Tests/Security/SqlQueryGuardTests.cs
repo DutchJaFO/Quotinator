@@ -55,6 +55,7 @@ public class SqlQueryGuardTests
         var documented = new HashSet<string>
         {
             "Schema.GetCurrentVersion",           // COALESCE(MAX(...))
+            "Schema.LegacySchemaVersionExists",   // COUNT(*) — one-time bootstrap legacy-table detection (#141 amendment)
             "Quotes.CountAll",                    // COUNT(*)
             "Quotes.CountActive",                 // COUNT(*)
             "Quotes.CountForRandomBase",          // COUNT(*) — private base for CountRandom factory
@@ -64,7 +65,7 @@ public class SqlQueryGuardTests
             "Characters.CountActive",             // COUNT(*)
             "People.CountActive",                 // COUNT(*)
             "Sources.CountActive",                // COUNT(*)
-            "Audit.CountPagedBase",               // COUNT(*) — private base for CountPaged factory
+            "SystemAudit.CountPagedBase",         // COUNT(*) — private base for CountPaged factory
         };
 
         var actual = EnumerateSqlConstants()

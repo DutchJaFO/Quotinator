@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-02 13:17 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-02 20:05 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -26,7 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Seeding no longer crashes on an empty or otherwise invalid JSON source file — the file is now skipped with a logged warning instead of stopping startup
 - A file placed in the user imports folder with no URL was previously misclassified the same as internally-curated data; ImportBatch provenance now has a distinct `UserSeed` type for imports-folder files, separate from `System` (bundled) and `Seed` (our own bundled external datasets)
 - CVE-2026-49451: `Microsoft.OpenApi` (transitive via `Microsoft.AspNetCore.OpenApi`) had a stack-overflow vulnerability when parsing OpenAPI documents with circular schema references; Quotinator only generates its own OpenAPI document and never parses untrusted ones, so the vulnerable path was unreachable — patched to 2.7.5 via a direct package override regardless
-- A full database reset (`POST /api/v1/admin/database/reset`) no longer wipes the audit log; `AuditEntries` now always survives a reset, matching the behaviour a normal reseed already had
+- A full database reset (`POST /api/v1/admin/database/reset`) no longer wipes the audit log; the audit table (now named `System_AuditEntries`) always survives a reset, matching the behaviour a normal reseed already had. Internal tables essential to the app now use a `System_` name prefix so they are automatically protected from a reset, rather than the app needing to know each protected table by name
 
 ---
 

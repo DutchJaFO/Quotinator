@@ -11,7 +11,7 @@ namespace Quotinator.Engine.Repositories;
 public sealed class SqliteImportBatchRepository : SqliteRepository<ImportBatch>, IImportBatchRepository
 {
     /// <inheritdoc/>
-    public SqliteImportBatchRepository(IDbConnectionFactory factory, IAuditWriter auditWriter, ICallerContext callerContext)
+    public SqliteImportBatchRepository(IDbConnectionFactory factory, ISystemAuditWriter auditWriter, ICallerContext callerContext)
         : base(factory, auditWriter, callerContext) { }
 
     /// <inheritdoc/>

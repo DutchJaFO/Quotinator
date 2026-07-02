@@ -23,7 +23,7 @@ namespace Quotinator.Data.Repositories;
 /// <typeparam name="TDetail">The detail entity type.</typeparam>
 public abstract class SqliteOneToOneRepository<TParent, TDetail>(
     IDbConnectionFactory factory,
-    IAuditWriter auditWriter,
+    ISystemAuditWriter auditWriter,
     ICallerContext callerContext)
     : AggregateRepository<TParent, TDetail>(factory, auditWriter, callerContext),
       IOneToOneRepository<TParent, TDetail>
