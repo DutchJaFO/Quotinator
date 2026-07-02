@@ -1,6 +1,6 @@
 # #62 — Folder-based seeder
 
-**Status:** All spec requirements resolved in code, T1+T2 verified — pending release (issue cannot close until then)
+**Status:** All spec requirements resolved in code, T1+T2 verified — pending release (issue cannot close until then). Amended 2026-07-02: `ImportBatchType.System` no longer classifies bundled quote content, but is kept in the enum as a reserved value for future `System_`-table content imports (see "Correction 2026-07-02" below) — not yet re-verified live for this specific correction.
 **GitHub issue:** #62
 **Tiers required:** T1, T2 — this issue touches `Program.cs` startup config reading, same reasoning as #63.
 **Depends on:** #63 (manifest) — done; #58 (ImportBatch rows) — done
@@ -58,6 +58,16 @@ Scope-change comment posted on #62 documenting this, per `process.md`'s deferral
 
 **T2 verified 2026-07-01** — `docker build` succeeded; fresh container built schema straight to v5 with no errors; `/api/v1/health`, `/api/v1/version` (`schemaVersion: 5`), `/api/v1/quotes/random` all correct. Confirmed `UserSeed` classification inside the container too: mounted a host volume (`-v` with `MSYS_NO_PATHCONV=1` and a Windows-style path — Git Bash's `/tmp` doesn't map to a real path Docker Desktop on Windows can bind-mount, which is what caused an initial false negative) with a file already present in `imports/` before container start (seed batches are scanned once at startup — a file added via `docker exec` after the container is running has no effect on reseed, since `IDatabaseInitializer` is a singleton and its batch list is captured once). After reseed, queried the container's `quotinatordata.db` file directly from the host (via a throwaway, now-reusable `Quotinator.Tools.DbInspector` tool, read-only-mode SQLite connection) and confirmed `container-dummy.json → UserSeed`.
 
+### Correction 2026-07-02: `System` type no longer produced for bundled quote content
+
+While live-testing #141's `System_`-prefix table naming convention, the user spotted `quotinator-curated.json` still classified `Type=System` in `ImportBatches` and flagged it as wrong: "System is for seeding system tables only." This session had just established that exact meaning for "System" at the database-table level (`System_SchemaVersion`, `System_AuditEntries` — infrastructure tables that survive Reset). Reusing the same word for "internally-authored bundled quote content" (as opposed to "externally-sourced bundled quote content") was a naming collision between two unrelated concepts, made worse by this session's own naming-convention work.
+
+`DetermineType(SeedBatchOrigin origin)` (`QuotinatorDatabaseInitializer.cs`) now returns `Seed` for any bundled file regardless of URL presence — the `Url` column (null vs set) already carries the externally-sourced-vs-internally-authored distinction, so a separate `Type` value for it was redundant. Only `SeedBatchOrigin.UserImports` still produces a distinct type (`UserSeed`).
+
+**`ImportBatchType.System` itself is kept in the enum** — the user explicitly corrected an earlier, overly-broad first pass at this fix that removed it entirely: "We never said that 'System' was to be removed as an option completely... We should have the option to designate specific imports as 'System' when they are used to update tables that are `System_[tablename]`. We currently don't have tables that need that kind of content." So `ImportBatchType.System` is reserved for a future import batch that populates a `System_`-prefixed table specifically — nothing today seeds a `System_` table via the import batch mechanism, so nothing produces this value yet. The `ImportBatches.Type` CHECK constraint (migration 3, frozen) already permits the string `'System'` as a legal value — no schema change needed for this reservation.
+
+Every place documenting the value list (`Seed`/`Import`/`UserSeed`/`System`) should note `System` is reserved/unused today — see #58's plan doc for the schema-level correction.
+
 ## Three config keys — resolved 2026-07-01
 
 `BuildSeedBatches` (a `Program.cs` local static function, previously untestable — the same shape and reason `ManifestSeedPlanner` was extracted for #63) was extracted into `Quotinator.Data.Import.SeedBatchesBuilder.Build(...)`, adding an `includeDefaultSources` gate directly. A small new `Quotinator.Data.Import.LegacyConfigWarnings.WarnIfDataPathStillSet(...)` class covers the deprecation warning. `ImportsPath`'s override is a plain one-line `??`-style resolution in `Program.cs`, mirroring the already-established, untested-individually `Quotinator:BackupPath` pattern in the same file — no `appsettings.json` entries were needed for any of the three, matching how `Quotinator:DataDir`, `Quotinator:BackupPath`, and `Quotinator:CreateMissingManifest` are already handled (code-defaulted, not declared in `appsettings.json`).
@@ -80,6 +90,8 @@ Scope-change comment posted on #62 documenting this, per `process.md`'s deferral
 | 10 | ✅ | Schema migration version bumped to 5 | Unit test | `ImportBatchesTests.Schema_MigrationVersion_IsBumped` |
 | 11 | ✅ | App starts cleanly in VS; migration 4→5 applies against a live non-empty database; `IncludeDefaultSources=false` skips bundled sources on a fresh DB; custom `ImportsPath` scanned instead of default; `DataPath` deprecation warning logged | Live | Delete DB, start app with each env var set in turn; observe startup log for each scenario. Confirmed 2026-07-01 — see notes above for exact output per scenario |
 | 12 | ✅ | Fresh container builds schema to v5; all three config keys behave identically to T1 via `-e` env vars | Live | `docker build -f docker/Dockerfile -t quotinator:local .`; run with each `-e Quotinator__*` override in turn; confirm matching behavior. Confirmed 2026-07-01 |
+| 13 | ✅ | `ImportBatchType.System` no longer produced for bundled quote content (kept in enum, reserved for future `System_`-table imports); any bundled file classified `Seed` regardless of URL | Unit test | `ImportBatchesTests.Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes` (updated 2026-07-02) |
+| 14 | ⬜ | `quotinator-curated.json` classified `Seed`/`NULL` (not `System`) in a real running app | Not yet re-verified | The 2026-07-02 screenshot that prompted this fix predates the code change — see #58's plan doc row 11 |
 
 ---
 

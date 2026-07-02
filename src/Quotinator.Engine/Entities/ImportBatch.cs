@@ -13,13 +13,13 @@ public sealed class ImportBatch : RecordBase
     /// <summary>Batch category stored as the <see cref="ImportBatchType"/> enum name.</summary>
     public string Type { get; init; } = string.Empty;
 
-    /// <summary>Source URL for <c>Seed</c>-type batches. Null for <c>System</c> and <c>Import</c> batches.</summary>
+    /// <summary>Source URL for externally-sourced <c>Seed</c>-type batches. Null for internally-authored <c>Seed</c> batches, <c>UserSeed</c>, and <c>Import</c> batches.</summary>
     public string? Url { get; init; }
 
     /// <summary>UTC timestamp when the batch was imported, in <c>yyyy-MM-dd HH:mm:ss</c> format.</summary>
     public string ImportedAt { get; init; } = string.Empty;
 
-    /// <summary>UUID of the user who triggered the import. Null for seeded and system batches.</summary>
+    /// <summary>UUID of the user who triggered the import. Null for seeded batches.</summary>
     public string? ImportedBy { get; init; }
 
     /// <summary>Number of records written in this batch. Updated after seeding completes.</summary>

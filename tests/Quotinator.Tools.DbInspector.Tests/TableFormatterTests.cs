@@ -16,7 +16,7 @@ public class TableFormatterTests
     [TestMethod]
     public void Format_SingleRow_IncludesHeaderAndValueLine()
     {
-        IDictionary<string, object> row = new Dictionary<string, object> { ["Name"] = "curated.json", ["Type"] = "System" };
+        IDictionary<string, object> row = new Dictionary<string, object> { ["Name"] = "curated.json", ["Type"] = "Seed" };
 
         var result = TableFormatter.Format([row]);
         var lines  = result.Split(Environment.NewLine);
@@ -25,7 +25,7 @@ public class TableFormatterTests
         StringAssert.Contains(lines[0], "Name");
         StringAssert.Contains(lines[0], "Type");
         StringAssert.Contains(lines[1], "curated.json");
-        StringAssert.Contains(lines[1], "System");
+        StringAssert.Contains(lines[1], "Seed");
     }
 
     [TestMethod]
