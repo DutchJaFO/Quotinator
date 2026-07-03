@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-02 20:05 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-03 21:34 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Highlights
 - Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.
+- Setting up Quotinator for the first time is now faster — a brand-new database is created directly, instead of stepping through years of internal upgrade history.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -21,12 +22,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A startup warning is now logged when the legacy `Quotinator__DataPath` environment variable is still set, pointing users to `Quotinator__DataDir` instead
 - `POST /api/v1/admin/database/reset` now accepts a `preserveSchemaVersion` query parameter (default `false`) to keep existing schema migration history instead of clearing and replaying it
 
+### Changed
+- A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
+
 ### Fixed
-- ImportBatch rows created during seeding now record the correct `Type` (`Seed` for externally-sourced files with a manifest URL, `System` for internally-curated files) and persist the source URL; previously every seeded batch was recorded as `System` with no URL
+- ImportBatch rows created during seeding now record the correct `Type` (`Seed` for any bundled file, whether externally sourced with a manifest URL or internally authored) and persist the source URL; previously every seeded batch was recorded incorrectly
 - Seeding no longer crashes on an empty or otherwise invalid JSON source file — the file is now skipped with a logged warning instead of stopping startup
-- A file placed in the user imports folder with no URL was previously misclassified the same as internally-curated data; ImportBatch provenance now has a distinct `UserSeed` type for imports-folder files, separate from `System` (bundled) and `Seed` (our own bundled external datasets)
+- A file placed in the user imports folder with no URL was previously misclassified the same as internally-curated data; ImportBatch provenance now has a distinct `UserSeed` type for imports-folder files, separate from `Seed` (any bundled dataset, our own or internally authored)
 - CVE-2026-49451: `Microsoft.OpenApi` (transitive via `Microsoft.AspNetCore.OpenApi`) had a stack-overflow vulnerability when parsing OpenAPI documents with circular schema references; Quotinator only generates its own OpenAPI document and never parses untrusted ones, so the vulnerable path was unreachable — patched to 2.7.5 via a direct package override regardless
 - A full database reset (`POST /api/v1/admin/database/reset`) no longer wipes the audit log; the audit table (now named `System_AuditEntries`) always survives a reset, matching the behaviour a normal reseed already had. Internal tables essential to the app now use a `System_` name prefix so they are automatically protected from a reset, rather than the app needing to know each protected table by name
+- Resetting the database now takes a safety backup first and automatically restores it if the reset fails partway through, instead of potentially leaving the database in a broken, half-rebuilt state
 
 ---
 

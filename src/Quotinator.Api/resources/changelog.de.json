@@ -10,10 +10,11 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [57, 58, 62, 63, 141],
+    "issues": [57, 58, 62, 63, 141, 143],
     "cves": ["CVE-2026-49451"],
     "highlights": [
-      "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen."
+      "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
+      "Die Ersteinrichtung von Quotinator ist jetzt schneller — eine brandneue Datenbank wird direkt erstellt, anstatt jahrelange interne Upgrade-Historie zu durchlaufen."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -23,12 +24,16 @@
       "Beim Start wird nun eine Warnung protokolliert, wenn die veraltete Umgebungsvariable `Quotinator__DataPath` noch gesetzt ist, mit Verweis auf `Quotinator__DataDir`",
       "`POST /api/v1/admin/database/reset` akzeptiert nun einen Query-Parameter `preserveSchemaVersion` (Standard `false`), um den bestehenden Schema-Migrationsverlauf beizubehalten, anstatt ihn zu löschen und neu anzuwenden"
     ],
+    "changed": [
+      "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert"
+    ],
     "fixed": [
-      "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für extern bezogene Dateien mit einer Manifest-URL, `System` für intern kuratierte Dateien) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch als `System` ohne URL erfasst",
+      "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für jede gebündelte Datei, ob extern über eine Manifest-URL bezogen oder intern kuratiert) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch falsch erfasst",
       "Das Seeding stürzt nicht mehr bei einer leeren oder ungültigen JSON-Quelldatei ab — die Datei wird jetzt mit einer protokollierten Warnung übersprungen, anstatt den Start zu stoppen",
-      "Eine Datei im Benutzer-Importordner ohne URL wurde bisher genauso eingestuft wie intern kuratierte Daten; die ImportBatch-Herkunft hat jetzt einen eigenen `UserSeed`-Typ für Dateien aus dem Importordner, getrennt von `System` (gebündelt) und `Seed` (unsere eigenen gebündelten externen Datensätze)",
+      "Eine Datei im Benutzer-Importordner ohne URL wurde bisher genauso eingestuft wie intern kuratierte Daten; die ImportBatch-Herkunft hat jetzt einen eigenen `UserSeed`-Typ für Dateien aus dem Importordner, getrennt von `Seed` (jeder gebündelte Datensatz, ob eigener oder intern kuratierter)",
       "CVE-2026-49451: `Microsoft.OpenApi` (transitiv über `Microsoft.AspNetCore.OpenApi`) hatte eine Stack-Overflow-Schwachstelle beim Parsen von OpenAPI-Dokumenten mit zirkulären Schemaverweisen; Quotinator generiert nur sein eigenes OpenAPI-Dokument und parst niemals nicht vertrauenswürdige Dokumente, daher war der verwundbare Pfad unerreichbar — trotzdem auf 2.7.5 gepatcht über eine direkte Paket-Überschreibung",
-      "Ein vollständiges Datenbank-Reset (`POST /api/v1/admin/database/reset`) löschte bisher das Audit-Protokoll; die Audit-Tabelle (jetzt `System_AuditEntries` genannt) bleibt bei einem Reset immer erhalten, so wie es bei einem normalen Reseed bereits der Fall war. Interne Tabellen, die für die App essenziell sind, verwenden jetzt ein `System_`-Namenspräfix, sodass sie automatisch vor einem Reset geschützt sind, anstatt dass die App jede geschützte Tabelle namentlich kennen muss"
+      "Ein vollständiges Datenbank-Reset (`POST /api/v1/admin/database/reset`) löschte bisher das Audit-Protokoll; die Audit-Tabelle (jetzt `System_AuditEntries` genannt) bleibt bei einem Reset immer erhalten, so wie es bei einem normalen Reseed bereits der Fall war. Interne Tabellen, die für die App essenziell sind, verwenden jetzt ein `System_`-Namenspräfix, sodass sie automatisch vor einem Reset geschützt sind, anstatt dass die App jede geschützte Tabelle namentlich kennen muss",
+      "Ein Datenbank-Reset erstellt jetzt zuerst eine Sicherheitskopie und stellt diese automatisch wieder her, falls der Reset mittendrin fehlschlägt, anstatt die Datenbank möglicherweise in einem defekten, halb wiederhergestellten Zustand zu belassen"
     ]
   },
   "releases": [
