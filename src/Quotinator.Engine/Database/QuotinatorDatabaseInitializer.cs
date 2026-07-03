@@ -55,8 +55,9 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         IImportBatchRepository         importBatches,
         ISystemAuditWriter             auditWriter,
         ICallerContext                 callerContext,
-        ILogger<DatabaseInitializer>   logger)
-        : base(factory, options, migrations, auditWriter, callerContext, logger)
+        ILogger<DatabaseInitializer>   logger,
+        SchemaBaseline?                baseline = null)
+        : base(factory, options, migrations, auditWriter, callerContext, logger, baseline)
     {
         _batches       = batches;
         _importBatches = importBatches;

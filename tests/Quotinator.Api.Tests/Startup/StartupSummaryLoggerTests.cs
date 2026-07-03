@@ -44,6 +44,7 @@ public class StartupSummaryLoggerTests
     private sealed class StubDbInitializer(string? migrationApplied) : IDatabaseInitializer
     {
         public int    SchemaVersion    => 3;
+        public int    DataSchemaVersion => 2;
         public int    QuoteCount       => 780;
         public int    SourceCount      => 3;
         public int    CharacterCount   => 42;

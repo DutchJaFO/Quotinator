@@ -17,9 +17,36 @@ namespace Quotinator.Data.Database;
 /// </summary>
 public class DatabaseInitializer : IDatabaseInitializer
 {
+    // Quotinator.Data's own migrations, for its own tables (System_AuditEntries currently; any
+    // future System_-prefixed table Quotinator.Data itself defines). Never passed through the
+    // constructor — Quotinator.Data owns and maintains these scripts itself, and they always
+    // apply before any consumer-supplied migration, tracked in their own System_SchemaVersion
+    // table, independent of the consumer's own System_ConsumerSchemaVersion count.
+    private static readonly IReadOnlyList<SchemaMigration> DataOwnedMigrations =
+    [
+        new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
+        new SchemaMigration { Version = 2, Sql = AuditMigrations.RenameAuditEntriesToSystemAuditEntries },
+    ];
+
+    // Data's own baseline fragment — creates System_AuditEntries directly under its final name for
+    // a genuinely fresh database, skipping the historical create-then-rename dance entirely.
+    private const string DataBaselineSql = """
+        CREATE TABLE IF NOT EXISTS System_AuditEntries (
+            Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            TableName   TEXT    NOT NULL,
+            RecordId    TEXT,
+            Operation   TEXT    NOT NULL,
+            Agent       TEXT,
+            PerformedAt TEXT    NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS IX_System_AuditEntries_TableName_RecordId ON System_AuditEntries (TableName, RecordId);
+        CREATE INDEX IF NOT EXISTS IX_System_AuditEntries_PerformedAt ON System_AuditEntries (PerformedAt);
+        """;
+
     private readonly IDbConnectionFactory           _factory;
     private readonly DatabaseOptions                _options;
-    private readonly IReadOnlyList<SchemaMigration> _migrations;
+    private readonly IReadOnlyList<SchemaMigration> _consumerMigrations;
+    private readonly SchemaBaseline?                _consumerBaseline;
 
     /// <summary>Logger available to this class and subclasses.</summary>
     protected readonly ILogger Logger;
@@ -32,6 +59,9 @@ public class DatabaseInitializer : IDatabaseInitializer
 
     /// <inheritdoc/>
     public int SchemaVersion { get; protected set; }
+
+    /// <inheritdoc/>
+    public int DataSchemaVersion { get; protected set; }
 
     /// <inheritdoc/>
     public int QuoteCount { get; protected set; }
@@ -62,24 +92,27 @@ public class DatabaseInitializer : IDatabaseInitializer
     /// <summary>Initialises the instance with connection factory, options, and ordered schema migrations.</summary>
     /// <param name="factory">Factory used to open SQLite connections.</param>
     /// <param name="options">Database file paths and settings.</param>
-    /// <param name="migrations">Ordered, append-only list of schema migrations to apply.</param>
+    /// <param name="migrations">Ordered, append-only list of the consuming project's own schema migrations to apply. Always applied after Quotinator.Data's own migrations.</param>
     /// <param name="auditWriter">Writes audit entries for reseed and reset operations.</param>
     /// <param name="callerContext">Provides the agent identifier for audit entries.</param>
     /// <param name="logger">Logger for startup diagnostics.</param>
+    /// <param name="baseline">Optional consolidated DDL for the consuming project's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
     public DatabaseInitializer(
         IDbConnectionFactory           factory,
         DatabaseOptions                options,
         IReadOnlyList<SchemaMigration> migrations,
         ISystemAuditWriter             auditWriter,
         ICallerContext                 callerContext,
-        ILogger<DatabaseInitializer>   logger)
+        ILogger<DatabaseInitializer>   logger,
+        SchemaBaseline?                baseline = null)
     {
-        _factory      = factory;
-        _options      = options;
-        _migrations   = migrations;
-        AuditWriter   = auditWriter;
-        CallerContext = callerContext;
-        Logger        = logger;
+        _factory            = factory;
+        _options            = options;
+        _consumerMigrations = migrations;
+        _consumerBaseline   = baseline;
+        AuditWriter         = auditWriter;
+        CallerContext       = callerContext;
+        Logger              = logger;
     }
 
     /// <inheritdoc/>
@@ -92,6 +125,23 @@ public class DatabaseInitializer : IDatabaseInitializer
 
         EnableWal(connection);
         await ApplyMigrationsAsync(connection);
+        await OnInitialisedAsync(connection);
+    }
+
+    /// <summary>
+    /// Test-only entry point that mirrors <see cref="InitialiseAsync"/> but can force the
+    /// incremental migration path even on an empty database, bypassing the baseline short-circuit.
+    /// Used by schema-drift tests to produce a "pure incremental" comparison database.
+    /// </summary>
+    internal async Task InitialiseForTestingAsync(bool forceIncremental)
+    {
+        MigrateFilenameIfNeeded();
+
+        using var connection = (SqliteConnection)_factory.CreateConnection();
+        await connection.OpenAsync();
+
+        EnableWal(connection);
+        await ApplyMigrationsAsync(connection, forceIncremental);
         await OnInitialisedAsync(connection);
     }
 
@@ -153,31 +203,46 @@ public class DatabaseInitializer : IDatabaseInitializer
     }
 
     /// <summary>
-    /// Drops and recreates all tables by reapplying migrations. Subclasses call this during reset.
-    /// <c>System_AuditEntries</c> is never dropped (see <see cref="Sql.Schema.GetUserTables"/>). The
-    /// rebuild always clears and replays <c>System_SchemaVersion</c> exactly as before — this is
-    /// what makes every data table come back — but when <paramref name="preserveSchemaVersion"/> is
-    /// <c>true</c>, the rows that existed before the rebuild are snapshotted first and restored
-    /// afterward, so the caller observes no change to schema version history even though the
-    /// rebuild ran underneath.
+    /// Drops and recreates the consumer's own domain tables by reapplying its migrations.
+    /// Subclasses call this during reset. <c>System_AuditEntries</c> is never dropped (see
+    /// <see cref="Sql.Schema.GetUserTables"/>), and — because Quotinator.Data's own migrations
+    /// concern only <c>System_</c>-prefixed tables that a Reset never touches — Quotinator.Data's
+    /// own migration history (<c>System_SchemaVersion</c>) is never wiped or replayed here either,
+    /// regardless of <paramref name="preserveSchemaVersion"/>. Only <c>System_ConsumerSchemaVersion</c>
+    /// is cleared and replayed; when <paramref name="preserveSchemaVersion"/> is <c>true</c>, its
+    /// rows are snapshotted first and restored afterward. A full backup is always taken before any
+    /// destructive step; any failure anywhere in the rebuild restores it and rethrows, without
+    /// attempting to interpret what went wrong.
     /// </summary>
     protected async Task DropAndRebuildAsync(SqliteConnection connection, bool preserveSchemaVersion = false)
     {
-        var savedVersions = preserveSchemaVersion
-            ? (await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllVersions)).ToList()
+        var savedConsumerVersions = preserveSchemaVersion
+            ? (await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllConsumerVersions)).ToList()
             : [];
 
-        await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
-        await connection.ExecuteAsync(Sql.Schema.DeleteAll);
-        await DropAllTablesAsync(connection);
-        await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
-        await ApplyMigrationsAsync(connection);
+        var backupPath = CreateBackup(connection, SchemaVersion);
 
-        if (!preserveSchemaVersion) return;
+        try
+        {
+            await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+            await connection.ExecuteAsync(Sql.Schema.DeleteAllConsumerVersions);
+            await DropAllTablesAsync(connection);
+            await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
+            await ApplyMigrationsAsync(connection, skipOwnBackup: true);
 
-        await connection.ExecuteAsync(Sql.Schema.DeleteAll);
-        foreach (var row in savedVersions)
-            await connection.ExecuteAsync(Sql.Schema.InsertVersion, new { v = row.Version, at = row.AppliedAt });
+            if (!preserveSchemaVersion) return;
+
+            await connection.ExecuteAsync(Sql.Schema.DeleteAllConsumerVersions);
+            foreach (var row in savedConsumerVersions)
+                await connection.ExecuteAsync(Sql.Schema.InsertConsumerVersion, new { v = row.Version, at = row.AppliedAt });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "[Database - Init] reset failed — restoring pre-reset backup, database left unchanged...");
+            RestoreBackup(connection, backupPath);
+            Logger.LogInformation("[Database - Init] pre-reset backup restored.");
+            throw;
+        }
     }
 
     private sealed record SystemSchemaVersionRow(long Version, string AppliedAt);
@@ -208,7 +273,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         Logger.LogInformation("[Database - Init] filename migration complete → {Path}", _options.DbPath);
     }
 
-    private void CreateBackup(SqliteConnection connection, int fromVersion)
+    private string CreateBackup(SqliteConnection connection, int fromVersion)
     {
         Directory.CreateDirectory(_options.BackupsPath);
         var timestamp  = DateTime.UtcNow.ToString("yyyyMMddTHHmmss");
@@ -220,6 +285,18 @@ public class DatabaseInitializer : IDatabaseInitializer
         dest.Open();
         connection.BackupDatabase(dest);
         Logger.LogInformation("[Database - Backup] backup complete");
+        return backupPath;
+    }
+
+    // Restores a backup file created by CreateBackup back into the live connection — the reverse
+    // direction of the same SQLite online-backup API. Used when a migration attempt fails partway
+    // through, so the caller is left with the database exactly as it was before the attempt started
+    // rather than a partially-migrated or partially-rebuilt one.
+    private static void RestoreBackup(SqliteConnection connection, string backupPath)
+    {
+        using var source = new SqliteConnection($"Data Source={backupPath}");
+        source.Open();
+        source.BackupDatabase(connection);
     }
 
     #endregion
@@ -230,11 +307,12 @@ public class DatabaseInitializer : IDatabaseInitializer
     private static void EnableWal(SqliteConnection connection)
         => connection.Execute("PRAGMA journal_mode=WAL;");
 
-    // One-time bootstrap step, run before System_SchemaVersion's own CREATE TABLE IF NOT EXISTS and
-    // before the current migration version is known — SchemaVersion predates the numbered migration
-    // list entirely, so its rename can't be a numbered migration. A fresh database has no table
-    // literally named SchemaVersion, so this is a no-op and CreateTable proceeds straight to the
-    // final table name — a new database is never created under the old name and then renamed.
+    // One-time bootstrap step, run before either version table's own CREATE TABLE IF NOT EXISTS and
+    // before either current migration version is known — SchemaVersion predates the numbered
+    // migration list entirely, so its rename can't be a numbered migration. A fresh database has no
+    // table literally named SchemaVersion, so this is a no-op — a new database is never created
+    // under the old name and then renamed. Only concerns Data's own table; System_ConsumerSchemaVersion
+    // is a brand-new table with no legacy name to migrate from.
     private static async Task RenameLegacySchemaVersionTableIfPresentAsync(SqliteConnection connection)
     {
         var legacyExists = await connection.ExecuteScalarAsync<int>(Sql.Schema.LegacySchemaVersionExists);
@@ -243,31 +321,46 @@ public class DatabaseInitializer : IDatabaseInitializer
         await connection.ExecuteAsync(Sql.Schema.RenameLegacySchemaVersionTable);
     }
 
-    private async Task ApplyMigrationsAsync(SqliteConnection connection)
+    private async Task ApplyMigrationsAsync(SqliteConnection connection, bool forceIncremental = false, bool skipOwnBackup = false)
     {
         await RenameLegacySchemaVersionTableIfPresentAsync(connection);
-        await connection.ExecuteAsync(Sql.Schema.CreateTable);
 
-        var current = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetCurrentVersion);
+        // Must run before either CreateXVersionTable call below — those would otherwise make every
+        // fresh database register as "not empty" on the very next line, permanently disabling the
+        // baseline path.
+        var isEmptyDatabase = await connection.ExecuteScalarAsync<int>(Sql.Schema.AnyTableExists) == 0;
 
-        if (current >= _migrations.Count)
+        await connection.ExecuteAsync(Sql.Schema.CreateDataVersionTable);
+        await connection.ExecuteAsync(Sql.Schema.CreateConsumerVersionTable);
+
+        if (isEmptyDatabase && !forceIncremental && _consumerBaseline is not null)
         {
-            SchemaVersion = current;
-            Logger.LogInformation("[Database - Init] schema is up to date at version {Version}", current);
+            await ApplyBaselineAsync(connection);
             return;
         }
 
-        if (current == 0)
+        var dataCurrent     = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetDataCurrentVersion);
+        var consumerCurrent = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetConsumerCurrentVersion);
+
+        var dataPending     = dataCurrent     < DataOwnedMigrations.Count;
+        var consumerPending = consumerCurrent < _consumerMigrations.Count;
+
+        if (!dataPending && !consumerPending)
         {
-            Logger.LogInformation("[Database - Init] creating schema...");
-        }
-        else
-        {
+            DataSchemaVersion = dataCurrent;
+            SchemaVersion     = consumerCurrent;
             Logger.LogInformation(
-                "[Database - Init] applying {Count} pending migration(s) (version {Current} → {Target})...",
-                _migrations.Count - current, current, _migrations.Count);
-            CreateBackup(connection, current);
+                "[Database - Init] schema is up to date (data v{DataVersion}, app v{AppVersion})",
+                dataCurrent, consumerCurrent);
+            return;
         }
+
+        // skipOwnBackup: DropAndRebuildAsync (Reset) already took its own backup before this call —
+        // Data's counter is never wiped by Reset, so this condition would otherwise fire pointlessly
+        // (a redundant second backup) on every Reset.
+        string? backupPath = !skipOwnBackup && (dataCurrent > 0 || consumerCurrent > 0)
+            ? CreateBackup(connection, Math.Max(dataCurrent, consumerCurrent))
+            : null;
 
         // Some migrations recreate a table (SQLite has no ALTER ... CHECK) to widen a constraint,
         // which requires dropping a table that other tables still hold live foreign-key references
@@ -276,98 +369,111 @@ public class DatabaseInitializer : IDatabaseInitializer
         await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
         try
         {
-            await ApplyPendingMigrationsAsync(connection, current);
+            var dataApplied = await ApplyMigrationPhaseAsync(
+                connection, "Data", DataOwnedMigrations, dataCurrent, Sql.Schema.InsertDataVersion);
+            DataSchemaVersion = DataOwnedMigrations.Count;
+
+            var consumerApplied = await ApplyMigrationPhaseAsync(
+                connection, "App", _consumerMigrations, consumerCurrent, Sql.Schema.InsertConsumerVersion);
+            SchemaVersion = _consumerMigrations.Count;
+
+            MigrationApplied = CombineMigrationApplied(dataApplied, consumerApplied);
+        }
+        catch (Exception ex) when (backupPath is not null)
+        {
+            Logger.LogError(ex, "[Database - Init] migration failed — restoring pre-migration backup, database left unchanged...");
+            RestoreBackup(connection, backupPath);
+            Logger.LogInformation("[Database - Init] pre-migration backup restored.");
+            throw;
         }
         finally
         {
             await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
         }
+
+        Logger.LogInformation(
+            "[Database - Init] schema updated (data v{DataVersion}, app v{AppVersion})",
+            DataSchemaVersion, SchemaVersion);
     }
 
-    private async Task ApplyPendingMigrationsAsync(SqliteConnection connection, int current)
+    private async Task ApplyBaselineAsync(SqliteConnection connection)
     {
-        for (var i = current; i < _migrations.Count; i++)
+        Logger.LogInformation(
+            "[Database - Init] fresh database detected — creating schema directly at baseline " +
+            "(data v{DataVersion}, app v{AppVersion})...",
+            DataOwnedMigrations.Count, _consumerMigrations.Count);
+
+        await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+        try
         {
             using var tx = connection.BeginTransaction();
-            try
-            {
-                await connection.ExecuteAsync(_migrations[i].Sql, transaction: tx);
-                await connection.ExecuteAsync(
-                    Sql.Schema.InsertVersion,
-                    new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) },
-                    transaction: tx);
-                await tx.CommitAsync();
-            }
-            catch (SqliteException ex) when (IsKnownMigrationError(ex, i + 1))
-            {
-                await tx.RollbackAsync();
-
-                var isSystemAuditEntriesCollision =
-                    i + 1 == 6 && ex.Message.Contains("already another table", StringComparison.OrdinalIgnoreCase);
-
-                if (isSystemAuditEntriesCollision)
-                {
-                    // Expected on every default Reset, not a sign of a broken database: System_AuditEntries
-                    // survives the table wipe by design (Sql.Schema.GetUserTables), so replaying migration004
-                    // recreates a stray empty AuditEntries that collides with migration006's rename target.
-                    Logger.LogInformation(
-                        "[Database - Init] migration 6 rename target already exists — System_AuditEntries is " +
-                        "protected from Reset by design. Recording version and continuing.");
-                    await connection.ExecuteAsync(Sql.SystemAudit.DropStrayLegacyAuditEntriesTable);
-                }
-                else
-                {
-                    Logger.LogWarning(
-                        "[Database - Init] migration {Version} was previously partially applied — " +
-                        "recording version and continuing. If data appears missing, use Reset Database.",
-                        i + 1);
-                }
-
-                await connection.ExecuteAsync(
-                    Sql.Schema.InsertVersion,
-                    new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) });
-            }
-            catch (Exception ex)
-            {
-                await tx.RollbackAsync();
-                Logger.LogError(
-                    ex,
-                    "[Database - Init] migration {Version} failed — rolled back to version {Current}. " +
-                    "Resolve the issue and restart the application.",
-                    i + 1, i);
-                throw;
-            }
+            await connection.ExecuteAsync(DataBaselineSql, transaction: tx);
+            await connection.ExecuteAsync(
+                Sql.Schema.InsertDataVersion,
+                new { v = DataOwnedMigrations.Count, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) },
+                transaction: tx);
+            await connection.ExecuteAsync(_consumerBaseline!.Sql, transaction: tx);
+            await connection.ExecuteAsync(
+                Sql.Schema.InsertConsumerVersion,
+                new { v = _consumerMigrations.Count, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) },
+                transaction: tx);
+            await tx.CommitAsync();
+        }
+        finally
+        {
+            await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
         }
 
-        SchemaVersion = _migrations.Count;
-        if (current > 0)
-            MigrationApplied = $"v{current} → v{_migrations.Count}";
+        DataSchemaVersion = DataOwnedMigrations.Count;
+        SchemaVersion     = _consumerMigrations.Count;
         Logger.LogInformation(
-            "[Database - Init] schema {Action} at version {Version}",
-            current == 0 ? "created" : "updated", _migrations.Count);
+            "[Database - Init] schema created at baseline (data v{DataVersion}, app v{AppVersion})",
+            DataSchemaVersion, SchemaVersion);
     }
 
-    // Returns true only for explicitly documented per-version known errors.
-    private static bool IsKnownMigrationError(SqliteException ex, int migrationVersion)
-        => migrationVersion switch
+    /// <summary>
+    /// Applies one migration phase (either Quotinator.Data's own list or the consumer's own list)
+    /// against its own version table, starting from <paramref name="current"/>. Returns a
+    /// human-readable <c>"{Phase} vX → vY"</c> description if any migration in this phase actually
+    /// ran, or <c>null</c> if the phase was already up to date. No exception handling here — if a
+    /// migration's SQL throws, <c>using var tx</c> rolls back on unwind and the exception propagates
+    /// untouched to the caller, which is responsible for the broader roll-back-to-previous-state
+    /// (see <see cref="ApplyMigrationsAsync"/> and <see cref="DropAndRebuildAsync"/>).
+    /// </summary>
+    private async Task<string?> ApplyMigrationPhaseAsync(
+        SqliteConnection connection,
+        string phaseName,
+        IReadOnlyList<SchemaMigration> migrations,
+        int current,
+        string insertVersionSql)
+    {
+        if (current >= migrations.Count) return null;
+
+        Logger.LogInformation(
+            "[Database - Init] applying {Count} pending {Phase} migration(s) (version {Current} → {Target})...",
+            migrations.Count - current, phaseName, current, migrations.Count);
+
+        for (var i = current; i < migrations.Count; i++)
         {
-            // Migration003 added ImportBatchId columns via ALTER TABLE ADD COLUMN. The broken
-            // ResetAsync in v1.5.x–v1.6.1 could apply this migration's DDL without recording
-            // the version, leaving the columns present but SchemaVersion stuck at 2. On the
-            // next startup the ALTER TABLE fails because the column already exists.
-            3 => ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase),
-            // Migration006 renames AuditEntries to System_AuditEntries via ALTER TABLE ... RENAME
-            // TO, which has no IF EXISTS guard in SQLite. Two known-recoverable cases:
-            // (a) a prior partial application already completed the rename but failed before
-            //     recording the version — retrying the ALTER TABLE fails because AuditEntries no
-            //     longer exists.
-            // (b) System_AuditEntries is protected from the Reset table wipe (Sql.Schema.GetUserTables),
-            //     so on a full migration replay migration004's CREATE TABLE IF NOT EXISTS recreates
-            //     a stray empty AuditEntries, and the rename then fails because the destination —
-            //     the real, preserved System_AuditEntries — already exists.
-            6 => ex.Message.Contains("no such table: AuditEntries", StringComparison.OrdinalIgnoreCase)
-                 || ex.Message.Contains("already another table or index with this name: System_AuditEntries", StringComparison.OrdinalIgnoreCase),
-            _ => false
+            using var tx = connection.BeginTransaction();
+            await connection.ExecuteAsync(migrations[i].Sql, transaction: tx);
+            await connection.ExecuteAsync(
+                insertVersionSql,
+                new { v = i + 1, at = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat) },
+                transaction: tx);
+            await tx.CommitAsync();
+        }
+
+        return $"{phaseName} v{current} → v{migrations.Count}";
+    }
+
+    private static string? CombineMigrationApplied(string? dataApplied, string? consumerApplied)
+        => (dataApplied, consumerApplied) switch
+        {
+            (null, null)     => null,
+            (_, null)        => dataApplied,
+            (null, _)        => consumerApplied,
+            _                => $"{dataApplied}, {consumerApplied}"
         };
 
     // Discovers all user tables at runtime and drops them.

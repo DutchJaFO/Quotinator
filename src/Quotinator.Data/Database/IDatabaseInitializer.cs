@@ -5,8 +5,19 @@ namespace Quotinator.Data.Database;
 /// <summary>Initialises the database schema and seed data at application startup.</summary>
 public interface IDatabaseInitializer
 {
-    /// <summary>Schema version applied at startup. Available after <see cref="InitialiseAsync"/> completes.</summary>
+    /// <summary>
+    /// The consuming project's own schema version applied at startup — what operators track
+    /// release-over-release. Available after <see cref="InitialiseAsync"/> completes.
+    /// </summary>
     int SchemaVersion { get; }
+
+    /// <summary>
+    /// Quotinator.Data's own internal schema version (its own infrastructure tables, e.g.
+    /// <c>System_AuditEntries</c>) — tracked independently of <see cref="SchemaVersion"/> so the
+    /// consuming project's version numbering stays stable regardless of Data's own migration
+    /// count. Available after <see cref="InitialiseAsync"/> completes.
+    /// </summary>
+    int DataSchemaVersion { get; }
 
     /// <summary>Total non-deleted quote rows. Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
     int QuoteCount { get; }

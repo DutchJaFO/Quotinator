@@ -13,6 +13,9 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public int SchemaVersion => 0;
 
     /// <inheritdoc/>
+    public int DataSchemaVersion => 0;
+
+    /// <inheritdoc/>
     public int QuoteCount => 0;
 
     /// <inheritdoc/>

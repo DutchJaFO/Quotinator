@@ -83,7 +83,7 @@ internal sealed class StartupSummaryLogger
             Version:        {_version.Version}
             Data:           {_dataDir}
             Database:       {_dbPath}
-                            schema v{_db.SchemaVersion} - {_db.QuoteCount} quotes  {_db.SourceCount} sources  {_db.CharacterCount} characters  {_db.PeopleCount} people{migLine}
+                            schema v{_db.SchemaVersion} (data v{_db.DataSchemaVersion}) - {_db.QuoteCount} quotes  {_db.SourceCount} sources  {_db.CharacterCount} characters  {_db.PeopleCount} people{migLine}
             Backups:        {_backupsDir}
             DataProtection: {_keysDir}
             ------------------------------

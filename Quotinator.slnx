@@ -26,6 +26,7 @@
   </Folder>
   <Folder Name="/.claude/">
     <File Path=".claude/settings.json" />
+    <File Path=".claude/launch.json" />
   </Folder>
   <Folder Name="/.claude/hooks/">
     <File Path=".claude/hooks/session-start.sh" />

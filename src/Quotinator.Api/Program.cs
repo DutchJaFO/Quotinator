@@ -283,7 +283,8 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
         sp.GetRequiredService<ISystemAuditWriter>(),
         sp.GetRequiredService<ICallerContext>(),
-        sp.GetRequiredService<ILogger<DatabaseInitializer>>());
+        sp.GetRequiredService<ILogger<DatabaseInitializer>>(),
+        QuotinatorMigrations.Baseline);
 });
 builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Engine.Services.SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();

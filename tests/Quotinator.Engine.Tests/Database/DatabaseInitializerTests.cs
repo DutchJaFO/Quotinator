@@ -44,14 +44,15 @@ public class DatabaseInitializerTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches)
+    private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches, bool useBaseline = true)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger);
+            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
+            useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 
     private static SeedBatch AllFilesBatch() => new(
@@ -162,34 +163,56 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, await CountAuditMarkerRowsAsync(), "Full Reset must preserve existing System_AuditEntries rows");
     }
 
-    /// <summary>With the default parameter, Reset still clears and replays SchemaVersion — unchanged historical behaviour.</summary>
+    /// <summary>
+    /// Quotinator.Data's own migrations concern only System_-prefixed tables (System_AuditEntries),
+    /// which a Reset never drops — so System_SchemaVersion must never be wiped or replayed by a
+    /// Reset, regardless of preserveSchemaVersion. This is stronger than "preserved": it's simply
+    /// never touched.
+    /// </summary>
     [TestMethod]
-    public async Task ResetAsync_DefaultParameter_StillReplaysSchemaVersion()
+    public async Task ResetAsync_AnyParameter_NeverTouchesDataSchemaVersion()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        await InsertSchemaVersionMarkerAsync();
+
+        await db.ResetAsync(preserveSchemaVersion: false);
+        Assert.AreEqual(1, await CountSchemaVersionMarkerRowsAsync(),
+            "System_SchemaVersion must survive a default Reset — it was never wiped in the first place");
+
+        await db.ResetAsync(preserveSchemaVersion: true);
+        Assert.AreEqual(1, await CountSchemaVersionMarkerRowsAsync(),
+            "System_SchemaVersion must survive a preserveSchemaVersion:true Reset too — same reason");
+    }
+
+    /// <summary>With the default parameter, Reset still clears and replays System_ConsumerSchemaVersion — unchanged historical behaviour for the consumer's own migrations.</summary>
+    [TestMethod]
+    public async Task ResetAsync_DefaultParameter_StillReplaysConsumerSchemaVersion()
     {
         var db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        await InsertSchemaVersionMarkerAsync();
+        await InsertConsumerSchemaVersionMarkerAsync();
 
         await db.ResetAsync();
 
-        Assert.AreEqual(0, await CountSchemaVersionMarkerRowsAsync(),
-            "Default Reset should clear and replay SchemaVersion, removing the pre-existing marker row");
+        Assert.AreEqual(0, await CountConsumerSchemaVersionMarkerRowsAsync(),
+            "Default Reset should clear and replay System_ConsumerSchemaVersion, removing the pre-existing marker row");
     }
 
-    /// <summary>With preserveSchemaVersion:true, Reset leaves existing SchemaVersion rows untouched.</summary>
+    /// <summary>With preserveSchemaVersion:true, Reset leaves existing System_ConsumerSchemaVersion rows untouched.</summary>
     [TestMethod]
-    public async Task ResetAsync_PreserveSchemaVersionTrue_KeepsExistingRows()
+    public async Task ResetAsync_PreserveSchemaVersionTrue_KeepsExistingConsumerVersionRows()
     {
         var db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        await InsertSchemaVersionMarkerAsync();
+        await InsertConsumerSchemaVersionMarkerAsync();
 
         await db.ResetAsync(preserveSchemaVersion: true);
 
-        Assert.AreEqual(1, await CountSchemaVersionMarkerRowsAsync(),
-            "preserveSchemaVersion:true should leave existing SchemaVersion rows untouched");
+        Assert.AreEqual(1, await CountConsumerSchemaVersionMarkerRowsAsync(),
+            "preserveSchemaVersion:true should leave existing System_ConsumerSchemaVersion rows untouched");
     }
 
     /// <summary>Reseed (not Reset) has always left System_AuditEntries and System_SchemaVersion alone — this makes that behaviour explicit.</summary>
@@ -240,6 +263,22 @@ public class DatabaseInitializerTests
         await conn.OpenAsync();
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_SchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
+    }
+
+    private async Task InsertConsumerSchemaVersionMarkerAsync()
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await conn.ExecuteAsync(
+            "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
+    }
+
+    private async Task<int> CountConsumerSchemaVersionMarkerRowsAsync()
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        return await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM System_ConsumerSchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
     }
 
     // ── System-prefix naming convention (#141 amendment) ───────────────────────
@@ -301,16 +340,18 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// Builds a fully up-to-date database, then downgrades it back to the pre-amendment table
-    /// names (SchemaVersion, AuditEntries with the original IX_AuditEntries_* index names) and
-    /// removes migration006's recorded version — simulating a real database that predates this
-    /// amendment, without hand-rolling the full legacy schema by hand.
+    /// Builds a fully up-to-date database, then downgrades it back to the pre-#141 table names
+    /// (SchemaVersion, AuditEntries with the original IX_AuditEntries_* index names) and rolls
+    /// Data's own version counter back to v1 (create-only, rename not yet applied) — simulating a
+    /// real database that predates the #141 amendment, without hand-rolling the full legacy schema.
     /// </summary>
     private async Task DowngradeToLegacyNamesAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
-        await conn.ExecuteAsync("DELETE FROM System_SchemaVersion WHERE Version = 6;");
+        await conn.ExecuteAsync("DELETE FROM System_SchemaVersion;");
+        await conn.ExecuteAsync(
+            "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
         await conn.ExecuteAsync("ALTER TABLE System_SchemaVersion RENAME TO SchemaVersion;");
         await conn.ExecuteAsync("ALTER TABLE System_AuditEntries RENAME TO AuditEntries;");
         await conn.ExecuteAsync("DROP INDEX IF EXISTS IX_System_AuditEntries_TableName_RecordId;");
@@ -321,8 +362,8 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// A database with a pre-existing legacy SchemaVersion table (simulating an upgrade from
-    /// before this amendment) gets it renamed to System_SchemaVersion, with existing version
-    /// history rows preserved.
+    /// before the #141 amendment) gets it renamed to System_SchemaVersion, with the existing
+    /// version-history row preserved rather than wiped.
     /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_LegacySchemaVersionTable_IsRenamedWithRowsPreserved()
@@ -338,15 +379,15 @@ public class DatabaseInitializerTests
         await conn.OpenAsync();
         var legacyCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SchemaVersion';");
-        var preservedRows = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM System_SchemaVersion WHERE Version IN (1, 2, 3, 4, 5);");
+        var preservedRow = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM System_SchemaVersion WHERE Version = 1 AND AppliedAt = @marker;", new { marker = MarkerValue });
 
         Assert.AreEqual(0, legacyCount, "The legacy SchemaVersion table must no longer exist after the rename");
-        Assert.AreEqual(5, preservedRows, "The five pre-existing version history rows must survive the rename");
-        Assert.AreEqual(6, db2.SchemaVersion, "Only migration006 should have replayed, bringing the schema back to v6");
+        Assert.AreEqual(1, preservedRow, "The pre-existing version-history row must survive the rename, not be wiped");
+        Assert.AreEqual(2, db2.DataSchemaVersion, "Data migration 2 (the rename) should have replayed after the legacy rename");
     }
 
-    /// <summary>Migration006 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
+    /// <summary>Data migration 2 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
     [TestMethod]
     public async Task InitialiseAsync_LegacyAuditEntriesTable_MigratesToSystemAuditEntriesWithRowsPreserved()
     {
@@ -375,7 +416,7 @@ public class DatabaseInitializerTests
         var indexNames = (await verifyConn.QueryAsync<string>(
             "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'System_AuditEntries';")).ToList();
 
-        Assert.AreEqual(0, legacyCount, "The legacy AuditEntries table must no longer exist after migration006");
+        Assert.AreEqual(0, legacyCount, "The legacy AuditEntries table must no longer exist after Data migration 2");
         Assert.AreEqual(1, preservedRow, "The pre-existing audit row must survive the rename");
         Assert.IsTrue(indexNames.Contains("IX_System_AuditEntries_TableName_RecordId"), "TableName/RecordId index must exist under the new name");
         Assert.IsTrue(indexNames.Contains("IX_System_AuditEntries_PerformedAt"), "PerformedAt index must exist under the new name");
@@ -384,26 +425,245 @@ public class DatabaseInitializerTests
     // ── Regression ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Regression test for issue #106: if SchemaVersion is rolled back to v2 while the
-    /// underlying tables already have v3 columns (ImportBatchId), InitialiseAsync must
-    /// self-heal — record the version and reseed — rather than crash-looping on every startup.
+    /// Regression test for issue #106: if the App schema version is rolled back to v2 while the
+    /// underlying tables already have v3 columns (ImportBatchId), the recorded version no longer
+    /// matches the actual schema — a genuine anomaly, not something InitialiseAsync should ever
+    /// silently guess its way through. It must fail loudly (no structural check, no message-matching
+    /// recovery), leave the database exactly as it was before the attempt (backup restored), and
+    /// require an explicit Reset to resolve. Uses the forced-incremental path so App migrations are
+    /// recorded one row per version (the baseline path records a single row, leaving nothing to roll
+    /// back to "v2" from).
     /// </summary>
     [TestMethod]
-    public async Task InitialiseAsync_PartialMigrationState_SelfHealsAndReseeds()
+    public async Task InitialiseAsync_PartialMigrationState_FailsSafelyAndRequiresExplicitReset()
     {
         var db = CreateInitializer([AllFilesBatch()]);
-        await db.InitialiseAsync();
+        await db.InitialiseForTestingAsync(forceIncremental: true);
 
         var countAfterInit = db.QuoteCount;
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
-        await conn.ExecuteAsync("DELETE FROM System_SchemaVersion WHERE Version IN (3, 4, 5, 6);");
-        await conn.CloseAsync();
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion WHERE Version IN (3, 4);");
+        }
 
+        var db2 = CreateInitializer([AllFilesBatch()]);
+        await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.InitialiseAsync());
+
+        using (var verifyConn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await verifyConn.OpenAsync();
+            var quoteCountAfterFailedAttempt = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes;");
+            Assert.AreEqual(countAfterInit, quoteCountAfterFailedAttempt,
+                "Database must be restored to its pre-attempt state after a failed migration, not left partially migrated");
+        }
+
+        var db3 = CreateInitializer([AllFilesBatch()]);
+        await db3.ResetAsync();
+        Assert.AreEqual(4, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+    }
+
+    // ── #143 — migration ownership split + baseline schema ─────────────────────
+
+    private (QuotinatorDatabaseInitializer Db, string DbPath) CreateForcedIncrementalInitializer()
+    {
+        var dbPath        = Path.Combine(_tempDir, $"test_incremental_{Guid.NewGuid():N}.db");
+        var factory       = new SqliteConnectionFactory(dbPath);
+        var options       = new DatabaseOptions { DbPath = dbPath, BackupsPath = _backups };
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
+            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
+            QuotinatorMigrations.Baseline);
+        return (db, dbPath);
+    }
+
+    private static async Task<List<string>> DumpTableSchemaAsync(SqliteConnection conn, string table)
+    {
+        var lines = new List<string>();
+
+        var columns = await conn.QueryAsync<(int cid, string name, string type, int notnull, string? dflt_value, int pk)>(
+            $"SELECT cid, name, type, [notnull], dflt_value, pk FROM pragma_table_info('{table}');");
+        foreach (var c in columns.OrderBy(c => c.cid))
+            lines.Add($"COL {c.cid} {c.name} {c.type} notnull={c.notnull} default={c.dflt_value} pk={c.pk}");
+
+        var indexes = await conn.QueryAsync<(string name, int unique)>(
+            $"SELECT name, [unique] FROM pragma_index_list('{table}');");
+        foreach (var idx in indexes.OrderBy(i => i.name))
+        {
+            var idxCols = await conn.QueryAsync<(int seqno, string? name)>(
+                $"SELECT seqno, name FROM pragma_index_info('{idx.name}');");
+            var colList = string.Join(",", idxCols.OrderBy(c => c.seqno).Select(c => c.name));
+            lines.Add($"IDX {idx.name} unique={idx.unique} cols=({colList})");
+        }
+
+        return lines;
+    }
+
+    private static readonly string[] EngineDomainTables =
+        ["ImportBatches", "Sources", "SourceTranslations", "Characters", "CharacterTranslations",
+         "People", "Quotes", "QuoteTranslations", "QuoteGenres"];
+
+    /// <summary>
+    /// QuotinatorMigrations.Baseline must produce the exact same schema, table by table, as
+    /// replaying QuotinatorMigrations.All incrementally. Comparison uses PRAGMA table_info/
+    /// index_list/index_info rather than raw sqlite_master text, since hand-formatted baseline SQL
+    /// and migration-assembled SQL (e.g. Sources' ImportBatchId appended via ALTER TABLE) would
+    /// differ textually even when semantically identical.
+    /// </summary>
+    [TestMethod]
+    public async Task Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema()
+    {
+        var dbA = CreateInitializer([]);
+        await dbA.InitialiseAsync();
+
+        var (dbB, dbPathB) = CreateForcedIncrementalInitializer();
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={_dbPath}");
+        await connA.OpenAsync();
+        using var connB = new SqliteConnection($"Data Source={dbPathB}");
+        await connB.OpenAsync();
+
+        foreach (var table in EngineDomainTables)
+        {
+            var schemaA = await DumpTableSchemaAsync(connA, table);
+            var schemaB = await DumpTableSchemaAsync(connB, table);
+            CollectionAssert.AreEqual(schemaB, schemaA,
+                $"Table '{table}' schema differs between the baseline and incremental paths — " +
+                "update QuotinatorMigrations.Baseline to match QuotinatorMigrations.All's final result.");
+        }
+    }
+
+    /// <summary>
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text, so a baseline that
+    /// silently dropped 'UserSeed' from ImportBatches.Type's constraint (or introduced a typo)
+    /// would pass the structural schema comparison above undetected. This behavioural round-trip
+    /// closes that gap for all three CHECK-constrained columns.
+    /// </summary>
+    [TestMethod]
+    public async Task Baseline_And_IncrementalReplay_AcceptSameCheckConstraintValues()
+    {
+        var dbA = CreateInitializer([]);
+        await dbA.InitialiseAsync();
+
+        var (dbB, dbPathB) = CreateForcedIncrementalInitializer();
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={_dbPath}");
+        await connA.OpenAsync();
+        using var connB = new SqliteConnection($"Data Source={dbPathB}");
+        await connB.OpenAsync();
+
+        foreach (var conn in new[] { connA, connB })
+        {
+            // QuoteGenres.QuoteId is a FK to Quotes(Id) — irrelevant to the CHECK constraint being
+            // tested here, so disable enforcement rather than seed a matching Quotes row.
+            await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+
+            await conn.ExecuteAsync(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) " +
+                "VALUES (@id, 'check-test.json', 'UserSeed', @now, 0, @now, 0);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) " +
+                "VALUES (@id, 'bad.json', 'NotARealType', @now, 0, @now, 0);",
+                new { id = Guid.NewGuid().ToString(), now }));
+
+            await conn.ExecuteAsync(
+                "INSERT INTO Sources (Id, Title, Type, DateCreated, IsDeleted) VALUES (@id, 'CheckTest', 'Person', @now, 0);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await conn.ExecuteAsync(
+                "INSERT INTO QuoteGenres (Id, QuoteId, Genre, DateCreated, IsDeleted) " +
+                "VALUES (@id, @quoteId, 'SciFi', @now, 0);",
+                new { id = Guid.NewGuid().ToString(), quoteId = Guid.NewGuid().ToString(), now });
+        }
+    }
+
+    /// <summary>A fresh (zero-table) database takes the baseline path — both version tables end up with exactly one row each, at the final version.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_TrulyEmptyDatabase_TakesBaselinePathNotIncremental()
+    {
+        var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(6,              db.SchemaVersion, "Schema must be recorded at v6 after self-heal");
-        Assert.AreEqual(countAfterInit, db.QuoteCount,    "Quote count must be unchanged after self-heal");
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var dataRows     = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
+        var consumerRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ConsumerSchemaVersion;");
+
+        Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
+        Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
+        Assert.AreEqual(2, db.DataSchemaVersion);
+        Assert.AreEqual(4, db.SchemaVersion);
     }
+
+    /// <summary>An existing database with only App migrations pending still replays incrementally — the baseline path and the two migration phases never cross.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_ExistingDatabaseAtVersion3_StillReplaysRemainingConsumerMigrationsIncrementally()
+    {
+        var db = CreateInitializer([]);
+        await db.InitialiseForTestingAsync(forceIncremental: true);
+
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion WHERE Version = 4;");
+        }
+
+        var db2 = CreateInitializer([]);
+        await db2.InitialiseAsync();
+
+        Assert.AreEqual(4, db2.SchemaVersion,     "Only the remaining App migration (4) should have replayed");
+        Assert.AreEqual(2, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
+    }
+
+    /// <summary>
+    /// A database created before the #143 migration-ownership split has a single System_SchemaVersion
+    /// table holding the old combined history (one row per migration, spanning both Data's and the
+    /// consumer's migrations together — 6 rows for the schema this test targets), with no
+    /// System_ConsumerSchemaVersion table at all yet. This recorded state doesn't match the actual
+    /// on-disk schema (which already has the consumer's columns), so ordinary startup must fail
+    /// loudly — no structural check, no message-matching recovery — leaving the database exactly as
+    /// it was before the attempt (backup restored). An explicit Reset is the only sanctioned way to
+    /// resolve it.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_PreSplitCombinedCounterDatabase_FailsSafelyAndRequiresExplicitReset()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        var quoteCountBefore = db.QuoteCount;
+
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("DROP TABLE System_ConsumerSchemaVersion;");
+            await conn.ExecuteAsync("DELETE FROM System_SchemaVersion;");
+            for (var v = 1; v <= 6; v++)
+                await conn.ExecuteAsync(
+                    "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (@v, @at);",
+                    new { v, at = $"2026-01-01T00:00:0{v}Z" });
+        }
+
+        var db2 = CreateInitializer([AllFilesBatch()]);
+        await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.InitialiseAsync());
+
+        using (var verifyConn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await verifyConn.OpenAsync();
+            var quoteCountAfterFailedAttempt = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes;");
+            Assert.AreEqual(quoteCountBefore, quoteCountAfterFailedAttempt,
+                "Database must be restored to its pre-attempt state after the failed startup, not left partially migrated");
+        }
+
+        var db3 = CreateInitializer([AllFilesBatch()]);
+        await db3.ResetAsync();
+        Assert.AreEqual(4, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+    }
+
 }

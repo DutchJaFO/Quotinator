@@ -43,23 +43,29 @@ public class ImportBatchesTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches)
+    private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches, bool useBaseline = true)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger);
+            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
+            useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 
+    // Simulates a pre-existing database at App (consumer) migration v2 — Sources/Quotes/etc.
+    // created, genres reseeded, but ImportBatches (App migration 3) not yet applied. Writes
+    // directly to System_ConsumerSchemaVersion (never had a legacy name — it's new in #143) rather
+    // than the legacy "SchemaVersion" name, since these two rows represent App's own migration
+    // history specifically, not Quotinator.Data's.
     private async Task CreateV2DatabaseAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        await conn.ExecuteAsync("CREATE TABLE SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL)");
-        await conn.ExecuteAsync("INSERT INTO SchemaVersion VALUES (1, '2025-01-01 00:00:00')");
-        await conn.ExecuteAsync("INSERT INTO SchemaVersion VALUES (2, '2025-01-01 00:00:00')");
+        await conn.ExecuteAsync("CREATE TABLE System_ConsumerSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL)");
+        await conn.ExecuteAsync("INSERT INTO System_ConsumerSchemaVersion VALUES (1, '2025-01-01 00:00:00')");
+        await conn.ExecuteAsync("INSERT INTO System_ConsumerSchemaVersion VALUES (2, '2025-01-01 00:00:00')");
         await conn.ExecuteAsync("CREATE TABLE Quotes (Id TEXT PRIMARY KEY, QuoteText TEXT NOT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0)");
         await conn.ExecuteAsync("CREATE TABLE Sources (Id TEXT PRIMARY KEY, IsDeleted INTEGER NOT NULL DEFAULT 0)");
         await conn.ExecuteAsync("CREATE TABLE Characters (Id TEXT PRIMARY KEY, IsDeleted INTEGER NOT NULL DEFAULT 0)");
@@ -107,14 +113,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>Schema migration version is bumped to 6 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>App schema migration version is bumped to 4 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(6, db.SchemaVersion, "SchemaVersion should be 6 after Migration006");
+        Assert.AreEqual(4, db.SchemaVersion, "SchemaVersion should be 4 after Migration004");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────
@@ -240,9 +246,9 @@ public class ImportBatchesTests
 
     // ── Migration (upgrade path) ───────────────────────────────────────────────
 
-    /// <summary>Migration 5 widens the ImportBatches.Type CHECK constraint to allow 'UserSeed' without losing existing rows.</summary>
+    /// <summary>ImportBatches.Type accepts 'UserSeed' without disturbing an existing 'Seed' row's Type.</summary>
     [TestMethod]
-    public async Task Migration005_WideningTypeCheckConstraint_PreservesExistingRows()
+    public async Task ImportBatches_TypeCheckConstraint_AcceptsUserSeedAlongsideExistingSeedRow()
     {
         var seedBatch = new SeedBatch([new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes")],
             ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.Bundled);
@@ -254,7 +260,7 @@ public class ImportBatchesTests
         var existingRow = await conn.QuerySingleAsync<(string Id, string Type)>(
             "SELECT Id, Type FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
 
-        Assert.AreEqual("Seed", existingRow.Type, "Pre-existing row must survive migration 5 with its original Type intact");
+        Assert.AreEqual("Seed", existingRow.Type, "Pre-existing row must retain its original Type");
 
         var newId = Guid.NewGuid().ToString();
         var now   = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");

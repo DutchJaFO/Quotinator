@@ -16,27 +16,47 @@ namespace Quotinator.Data.Queries;
 /// </remarks>
 internal static class Sql
 {
-    /// <summary>System_SchemaVersion table — version tracking for schema migrations.</summary>
+    /// <summary>
+    /// System_SchemaVersion (Quotinator.Data's own migrations) and System_ConsumerSchemaVersion
+    /// (the consuming project's migrations) — two independent version-tracking tables, each with
+    /// its own stable, locally-numbered history. Kept separate so "version N" always means the
+    /// same specific migration for whichever side owns it, unaffected by the other side's
+    /// migration count changing over time.
+    /// </summary>
     internal static class Schema
     {
         // Bootstrap-only, one-time legacy detection — not part of the numbered migration list.
         // Runs before the current version is even known, since SchemaVersion itself is what the
         // numbered migration system depends on to know what to apply. Idempotent by construction:
         // once the rename below has happened, sqlite_master no longer contains a table literally
-        // named SchemaVersion, so this check is a no-op on every subsequent startup.
+        // named SchemaVersion, so this check is a no-op on every subsequent startup. Only concerns
+        // Data's own table — System_ConsumerSchemaVersion is a brand-new table with no legacy name.
         internal const string LegacySchemaVersionExists =
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SchemaVersion';";
         internal const string RenameLegacySchemaVersionTable =
             "ALTER TABLE SchemaVersion RENAME TO System_SchemaVersion;";
 
-        internal const string CreateTable       = "CREATE TABLE IF NOT EXISTS System_SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);";
-        internal const string GetCurrentVersion = "SELECT COALESCE(MAX(Version), 0) FROM System_SchemaVersion;";
-        internal const string InsertVersion     = "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
-        internal const string DeleteAll         = "DELETE FROM System_SchemaVersion;";
+        // Detects a completely empty database — zero tables of any kind, including the version
+        // tables themselves. Used to decide whether a fresh database can take the one-step baseline
+        // path instead of replaying migration history. Deliberately not GetUserTables (below),
+        // which excludes System_-prefixed tables by design — a database containing only an empty
+        // version table is not "empty" for baseline purposes.
+        internal const string AnyTableExists =
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
 
-        // Used by DropAndRebuildAsync to snapshot existing rows before a rebuild when the caller
-        // asked to preserve schema version history, so they can be restored afterward.
-        internal const string GetAllVersions    = "SELECT Version, AppliedAt FROM System_SchemaVersion;";
+        internal const string CreateDataVersionTable = "CREATE TABLE IF NOT EXISTS System_SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);";
+        internal const string GetDataCurrentVersion  = "SELECT COALESCE(MAX(Version), 0) FROM System_SchemaVersion;";
+        internal const string InsertDataVersion      = "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
+
+        // No DeleteAllDataVersions/GetAllDataVersions — Quotinator.Data's own migration history is
+        // never wiped or replayed by a Reset (see DropAndRebuildAsync), so nothing ever needs to
+        // snapshot or clear this table's rows.
+
+        internal const string CreateConsumerVersionTable = "CREATE TABLE IF NOT EXISTS System_ConsumerSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);";
+        internal const string GetConsumerCurrentVersion  = "SELECT COALESCE(MAX(Version), 0) FROM System_ConsumerSchemaVersion;";
+        internal const string InsertConsumerVersion      = "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
+        internal const string DeleteAllConsumerVersions  = "DELETE FROM System_ConsumerSchemaVersion;";
+        internal const string GetAllConsumerVersions     = "SELECT Version, AppliedAt FROM System_ConsumerSchemaVersion;";
 
         // Returns all user-created table names, excluding SQLite internals and any table
         // designated as protected system infrastructure. Used by ResetAsync to discover tables
@@ -262,14 +282,6 @@ internal static class Sql
     {
         /// <summary>Removes all audit entries.</summary>
         internal const string DeleteAll     = "DELETE FROM System_AuditEntries;";
-
-        // Used only by the migration006 recovery path in DatabaseInitializer: on a full
-        // migration replay (SchemaVersion wiped, System_AuditEntries protected/preserved from
-        // the table drop), migration004's CREATE TABLE IF NOT EXISTS AuditEntries recreates a
-        // stray empty legacy-named table before migration006's rename fails because the
-        // destination already exists. This drops that stray duplicate — never the protected
-        // System_AuditEntries table itself.
-        internal const string DropStrayLegacyAuditEntriesTable = "DROP TABLE IF EXISTS AuditEntries;";
 
         /// <summary>Removes audit entries for a specific table name.</summary>
         internal const string DeleteByTable = "DELETE FROM System_AuditEntries WHERE TableName = @table;";

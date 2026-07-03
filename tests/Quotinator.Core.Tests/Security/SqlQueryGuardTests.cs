@@ -54,8 +54,10 @@ public class SqlQueryGuardTests
         // None use GROUP BY or HAVING, so none trigger the vulnerability.
         var documented = new HashSet<string>
         {
-            "Schema.GetCurrentVersion",           // COALESCE(MAX(...))
+            "Schema.GetDataCurrentVersion",       // COALESCE(MAX(...))
+            "Schema.GetConsumerCurrentVersion",   // COALESCE(MAX(...))
             "Schema.LegacySchemaVersionExists",   // COUNT(*) — one-time bootstrap legacy-table detection (#141 amendment)
+            "Schema.AnyTableExists",              // COUNT(*) — fresh-database detection for the baseline path (#143)
             "Quotes.CountAll",                    // COUNT(*)
             "Quotes.CountActive",                 // COUNT(*)
             "Quotes.CountForRandomBase",          // COUNT(*) — private base for CountRandom factory

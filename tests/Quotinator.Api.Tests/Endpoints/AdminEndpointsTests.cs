@@ -196,6 +196,7 @@ public class AdminEndpointsTests
         public bool? LastPreserveSchemaVersion { get; private set; }
 
         public int    SchemaVersion    => 5;
+        public int    DataSchemaVersion => 2;
         public int    QuoteCount       => 0;
         public int    SourceCount      => 0;
         public int    CharacterCount   => 0;
