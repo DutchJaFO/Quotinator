@@ -159,7 +159,8 @@ The web UI includes a language selector in the navbar. It overrides the browser'
 ```bash
 docker run -d \
   -p 8080:8080 \
-  -v ./data:/app/data \
+  -v ./data:/data \
+  -e Quotinator__DataDir=/data \
   ghcr.io/dutchjafo/quotinator:latest
 ```
 
@@ -167,7 +168,9 @@ A `docker-compose.yml` example is included in the `docker/` directory.
 
 ### Data directory
 
-The volume at `/app/data` contains everything Quotinator persists across restarts:
+**Always mount the persistent volume at `/data` and set `Quotinator__DataDir=/data`** — never mount it at `/app/data`. Bundled quote sources are baked into the image at `/app/data/sources/`, and standalone Docker's data-directory default (when `Quotinator__DataDir` is unset) is that same `/app/data` path. Mounting a volume there hides the bundled sources under whatever is on the host (usually nothing on a first run), so the app starts with no quotes at all. See [`docs/docker.md`](docs/docker.md#data-directory-and-volume-mounts) for details.
+
+The volume at `/data` contains everything Quotinator persists across restarts:
 
 | Path | Purpose | Safe to delete? |
 |---|---|---|
@@ -184,7 +187,8 @@ SSL is disabled by default. To enable HTTPS on port 8080, mount a certificate an
 ```bash
 docker run -d \
   -p 8080:8080 \
-  -v ./data:/app/data \
+  -v ./data:/data \
+  -e Quotinator__DataDir=/data \
   -v ./certs:/ssl:ro \
   -e Quotinator__Ssl=true \
   -e Quotinator__SslCertFile=/ssl/fullchain.pem \

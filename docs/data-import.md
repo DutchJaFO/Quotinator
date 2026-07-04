@@ -11,7 +11,7 @@ Quotinator separates **source files** (the canonical data on disk) from the **SQ
 ```
 data/sources/          ←  committed to git, baked into the Docker image
       ↓  startup seeder
-quotinatordata.db      ←  live data store; persisted on Docker volume at /app/data
+quotinatordata.db      ←  live data store; persisted on Docker volume at /data (never /app/data — see docs/docker.md)
       ↓  REST API
 consumers (MagicMirror², HA automations, etc.)
 ```

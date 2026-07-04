@@ -8,7 +8,7 @@ Quotinator ships as a **single container** hosting both the REST API and the Bla
 - **Base image:** `mcr.microsoft.com/dotnet/aspnet:10.0`
 - **Platforms:** `linux/amd64`, `linux/arm64`
 - **Ports:** `8080` (direct access — HTTP or HTTPS), `8099` (Home Assistant ingress — always HTTP)
-- **Data:** SQLite database and source files persisted via Docker volume at `/app/data`
+- **Data:** SQLite database, DataProtection keys, and user imports persisted via Docker volume at `/data` (see [Data directory and volume mounts](#data-directory-and-volume-mounts) — do not mount over `/app/data`)
 
 ---
 
@@ -95,7 +95,7 @@ Once running, the application is available at `http://localhost:8080`.
 
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
-docker run -d -p 8080:8080 -v ./data:/app/data quotinator:local
+docker run -d -p 8080:8080 -v ./data:/data -e Quotinator__DataDir=/data quotinator:local
 ```
 
 ---
@@ -105,7 +105,8 @@ docker run -d -p 8080:8080 -v ./data:/app/data quotinator:local
 ```bash
 docker run -d \
   -p 8080:8080 \
-  -v /path/to/data:/app/data \
+  -v /path/to/data:/data \
+  -e Quotinator__DataDir=/data \
   ghcr.io/dutchjafo/quotinator:latest
 ```
 
@@ -114,7 +115,8 @@ docker run -d \
 ```bash
 docker run -d \
   -p 8080:8080 \
-  -v /path/to/data:/app/data \
+  -v /path/to/data:/data \
+  -e Quotinator__DataDir=/data \
   -v /path/to/certs:/ssl:ro \
   -e Quotinator__Ssl=true \
   -e Quotinator__SslCertFile=/ssl/fullchain.pem \
@@ -126,13 +128,27 @@ See [`home-assistant.md`](home-assistant.md) for the Home Assistant add-on deplo
 
 ---
 
+## Data directory and volume mounts
+
+**Never mount a persistent volume at `/app/data`.** Bundled source files are baked into the image at build time at `/app/data/sources/` (`AppContext.BaseDirectory/data/sources`). Standalone Docker's own data-directory fallback (when `Quotinator__DataDir` is unset) is `AppContext.BaseDirectory/data` — **the same `/app/data` path, one level up from `sources/`**. Mounting a host volume there shadows the image's baked-in `sources/` folder with whatever is on the host (usually nothing, on a first run), so the app starts with zero bundled quotes and no way to fall back to them.
+
+**Always mount at `/data` and set `Quotinator__DataDir=/data` explicitly**, exactly as the Home Assistant add-on does (HA's supervisor volume is mounted at `/data` for the same reason). This keeps the persistent volume (database, DataProtection `keys/`, optional `imports/`) completely separate from the image's read-only bundled sources, which are always read from `/app/data/sources/` regardless of where `DataDir` points.
+
+This does **not** apply to `docker/docker-compose.yml`, which intentionally bind-mounts the repo's own `../data:/app/data` for local development — that host directory already contains the checked-in `data/sources/` files, so nothing is hidden. The trap only bites when a *fresh, empty* host directory is mounted at `/app/data`, which is exactly what a new production/homelab deployment does.
+
+### Windows: use PowerShell, not Git Bash, for `docker run` with path-valued env vars
+
+If you pass `-e Quotinator__DataDir=/data` (or any `-e VAR=/path`-style argument) to `docker run` from Git Bash (MSYS), MSYS's automatic POSIX-to-Windows path translation silently rewrites `/data` into a Windows path string before Docker ever sees it — the container ends up with a nonsense nested directory instead of `/data`, and the failure is confusing to diagnose because `docker run` itself reports no error. Run these commands from PowerShell instead, which does not perform this translation.
+
+---
+
 ## Environment variables
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `ASPNETCORE_ENVIRONMENT` | `Production` | Controls environment name shown in `/api/v1/version` |
 | `ASPNETCORE_HTTP_PORTS` | _(empty)_ | Cleared in the Dockerfile — port binding is owned by Kestrel configuration in `Program.cs` |
-| `Quotinator__DataDir` | `/app/data` | Directory for the database, DataProtection keys, and optional user imports |
+| `Quotinator__DataDir` | `/app/data` (see [Data directory and volume mounts](#data-directory-and-volume-mounts) — always set this explicitly to `/data`) | Directory for the database, DataProtection keys, and optional user imports |
 | `Quotinator__Ssl` | `false` | Enable HTTPS on port 8080 |
 | `Quotinator__SslCertFile` | _(empty)_ | Path to PEM certificate file |
 | `Quotinator__SslKeyFile` | _(empty)_ | Path to PEM private key file |
