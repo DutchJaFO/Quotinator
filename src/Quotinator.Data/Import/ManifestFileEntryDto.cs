@@ -33,4 +33,15 @@ internal sealed class ManifestFileEntryDto
     /// <summary>GitHub coordinates this source is fetched from, if hosted there. <see cref="Url"/>/<see cref="DownloadUrl"/> are computed from these, not set directly.</summary>
     [JsonPropertyName("github")]
     public ManifestGithubDto? Github { get; init; }
+
+    /// <summary>
+    /// Name of a compiled <c>IQuoteSourceConverter</c> plugin (matched by its <c>Name</c> property) that
+    /// converts this source's raw upstream format to Quotinator's canonical schema before it is cached.
+    /// Only meaningful alongside <see cref="DownloadUrl"/>/<see cref="Github"/>. Both bundled and
+    /// user-imports manifests may declare this field — an unrecognised name simply fails closed (falls
+    /// back like a network failure) rather than executing anything, since only names matching a plugin
+    /// actually compiled into the running image are ever looked up.
+    /// </summary>
+    [JsonPropertyName("converter")]
+    public string? Converter { get; init; }
 }

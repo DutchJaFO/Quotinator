@@ -50,6 +50,8 @@
   "ErrorYearRangeInvalid": "yearFrom must not be greater than yearTo.",
   "ErrorNumericParameterInvalid": "One or more query parameters contain an invalid value. Numeric parameters (yearFrom, yearTo, year, decade, page, pageSize, n) must be whole numbers.",
   "ErrorYearParamNotInteger": "{0} must be a whole number.",
+  "ErrorSeedFileMissing": "This source file no longer exists on disk.",
+  "ErrorSeedFileInvalidJson": "This source file is empty or its content is not valid JSON.",
   "AdminEndpointsHeading": "Admin endpoints",
   "AdminEndpointsDescription": "These endpoints require an X-Api-Key header matching the admin_api_key configured in the add-on options. They are unavailable when no key is configured.",
   "AdminPreviewSeedLabel": "Preview seed import",

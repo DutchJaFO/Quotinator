@@ -1,7 +1,9 @@
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Core.Services;
 using Quotinator.Data.Database;
+using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Endpoints;
@@ -24,12 +26,25 @@ internal static class AdminEndpoints
 
         // ── Public ────────────────────────────────────────────────────────────
 
-        publicGroup.MapGet("/database/seed/preview", async (IDatabaseInitializer db) =>
+        publicGroup.MapGet("/database/seed/preview", async (IDatabaseInitializer db, IApiLocalizer localizer) =>
         {
             var preview = await db.PreviewSeedAsync();
             return Results.Ok(new
             {
-                files              = preview.Files.Select(f => new { f.FileName, f.QuoteCount }),
+                files = preview.Files.Select(f => new
+                {
+                    f.FileName,
+                    f.QuoteCount,
+                    refreshOutcome     = f.RefreshOutcome?.ToString().ToLowerInvariant(),
+                    lastRefreshedAtUtc = f.LastRefreshedAtUtc,
+                    issue              = f.Issue?.ToString().ToLowerInvariant(),
+                    message            = f.Issue switch
+                    {
+                        SeedFileIssue.Missing     => localizer[ApiMessages.SeedFileMissing],
+                        SeedFileIssue.InvalidJson => localizer[ApiMessages.SeedFileInvalidJson],
+                        _                         => null
+                    }
+                }),
                 totalQuotes        = preview.TotalQuotes,
                 uniqueQuotes       = preview.UniqueQuotes,
                 crossFileDuplicates = preview.CrossFileDuplicates.Select(d => new
@@ -48,6 +63,12 @@ internal static class AdminEndpoints
         .WithDescription(
             "Scans all configured source files without touching the database. " +
             "Returns the quote count per file, total and unique quote counts, and any cross-file duplicate IDs with the policy that would be applied. " +
+            "For a file with a `downloadUrl`, also returns `refreshOutcome` (`updated`, `uptodate`, `failed`, or `skippedcollision`) and " +
+            "`lastRefreshedAtUtc` (the cached copy's own last-write time, not \"now\") — both omitted for a file with no `downloadUrl`. " +
+            "`issue` (`missing` or `invalidjson`) and a localised `message` (following `Accept-Language`, like all other API error text) are present " +
+            "when the file could not be parsed at all — the only way to tell a `quoteCount` of `0` caused by a genuine parse error apart from a file " +
+            "that is simply, validly empty. Applies to every file, not only those with a `downloadUrl`. A `quoteCount` of `0` alongside a " +
+            "`failed`/`skippedcollision` `refreshOutcome` means the cache is currently degraded and fell back to the original file. " +
             "Use this before calling `reseed` to understand what will be imported.");
 
         publicGroup.MapGet("/audit", async (
@@ -140,7 +161,8 @@ internal static class AdminEndpoints
                     r.Name,
                     r.Url,
                     outcome = r.Outcome.ToString().ToLowerInvariant(),
-                    r.Detail
+                    r.Detail,
+                    lastRefreshedAtUtc = r.LastRefreshedAtUtc
                 })
             });
         })
@@ -151,6 +173,8 @@ internal static class AdminEndpoints
             "without touching the database — the reimport itself only happens on the next reseed/reset/startup. " +
             "Stale or missing entries are downloaded; fresh entries are left as-is unless `force=true`. " +
             "Has no effect when `Quotinator:AutoUpdateSources` is `false`. " +
+            "Each result includes `lastRefreshedAtUtc` — the effective cache file's own last-write time, so an `uptodate` outcome " +
+            "still shows exactly how old the cached copy is rather than only that it was within the TTL window. `null` when no trusted cache file exists (e.g. a collision). " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
         adminGroup.MapDelete("/audit", async (string? table, ISystemAuditWriter auditWriter) =>

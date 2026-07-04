@@ -73,6 +73,36 @@ public class SourceCacheUpdaterTests
         Assert.AreEqual(cachedPath, result.EffectiveBatches[0].Files[0].FilePath);
     }
 
+    // LastRefreshedAtUtc reports the actual cache file mtime, not "now" — an UpToDate outcome must
+    // still let an operator tell how old the data really is.
+    [TestMethod]
+    public async Task ResolveAsync_FreshCache_LastRefreshedAtUtcReflectsActualFileAge()
+    {
+        var writeTime = DateTime.UtcNow.AddHours(-2);
+        WriteCachedFile(_internalDir, "a.json", "cached", writeTime);
+        var file  = new SeedFile("/bundled/a.json", null, "https://example.com/a.json");
+        var batch = Batch(SeedBatchOrigin.Bundled, file);
+        var updater = CreateUpdater(NeverCallNetwork());
+
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+
+        var lastRefreshedAtUtc = result.Results.Single().LastRefreshedAtUtc;
+        Assert.IsNotNull(lastRefreshedAtUtc);
+        Assert.IsTrue((lastRefreshedAtUtc.Value - writeTime).Duration() < TimeSpan.FromSeconds(1));
+    }
+
+    [TestMethod]
+    public async Task ResolveAsync_NoCacheAndNetworkDisallowed_LastRefreshedAtUtcIsNull()
+    {
+        var file  = new SeedFile("/bundled/a.json", null, "https://example.com/a.json");
+        var batch = Batch(SeedBatchOrigin.Bundled, file);
+        var updater = CreateUpdater(NeverCallNetwork());
+
+        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: false);
+
+        Assert.IsNull(result.Results.Single().LastRefreshedAtUtc);
+    }
+
     // Row 3: stale cached copy (past TTL) triggers a GET; success overwrites the cache and logs Information.
     [TestMethod]
     public async Task ResolveAsync_StaleCache_DownloadsAndOverwritesCache()
@@ -222,11 +252,138 @@ public class SourceCacheUpdaterTests
         Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Error));
     }
 
+    // Converter feature: a registered converter transforms downloaded content before it's cached.
+    [TestMethod]
+    public async Task ResolveAsync_ConverterRegistered_ConvertsBeforeCaching()
+    {
+        var file  = new SeedFile("/bundled/a.json", null, "https://example.com/a.json", Converter: "upper");
+        var batch = Batch(SeedBatchOrigin.Bundled, file);
+        var converters = new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["upper"] = new FakeConverter("upper", s => s.ToUpperInvariant())
+        };
+        var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters);
+
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+
+        Assert.AreEqual(SourceRefreshOutcome.Updated, result.Results.Single().Outcome);
+        Assert.AreEqual("RAW CONTENT", await File.ReadAllTextAsync(Path.Combine(_internalDir, "a.json")));
+    }
+
+    // An unregistered converter name fails closed rather than executing anything.
+    [TestMethod]
+    public async Task ResolveAsync_UnregisteredConverterName_FailsClosedAndLogsWarning()
+    {
+        var file  = new SeedFile("/bundled/a.json", null, "https://example.com/a.json", Converter: "missing");
+        var batch = Batch(SeedBatchOrigin.Bundled, file);
+        var logger  = new RecordingLogger();
+        var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters: null, logger: logger);
+
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+
+        Assert.AreEqual(SourceRefreshOutcome.Failed, result.Results.Single().Outcome);
+        Assert.AreEqual("/bundled/a.json", result.EffectiveBatches[0].Files[0].FilePath);
+        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning && e.Message.Contains("missing")));
+    }
+
+    // A converter that throws SourceConversionException falls back exactly like a network failure.
+    [TestMethod]
+    public async Task ResolveAsync_ConverterThrows_FallsBackLikeNetworkFailure()
+    {
+        var cachedPath = WriteCachedFile(_internalDir, "a.json", "stale but valid", DateTime.UtcNow.AddHours(-48));
+        var file  = new SeedFile("/bundled/a.json", null, "https://example.com/a.json", Converter: "broken");
+        var batch = Batch(SeedBatchOrigin.Bundled, file);
+        var converters = new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["broken"] = new FakeConverter("broken", throwException: new SourceConversionException("boom"))
+        };
+        var logger  = new RecordingLogger();
+        var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters, validate: _ => true, logger: logger);
+
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+
+        Assert.AreEqual(SourceRefreshOutcome.Failed, result.Results.Single().Outcome);
+        Assert.AreEqual(cachedPath, result.EffectiveBatches[0].Files[0].FilePath);
+        Assert.AreEqual("stale but valid", await File.ReadAllTextAsync(cachedPath));
+        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning));
+    }
+
+    // The actual production bug, reproduced and fixed: no converter declared, upstream content is not
+    // canonical-schema — must never overwrite the working cached copy.
+    [TestMethod]
+    public async Task ResolveAsync_NoConverterButValidationFails_FallsBackWithoutCorruptingCache()
+    {
+        var cachedPath = WriteCachedFile(_internalDir, "a.json", "working canonical content", DateTime.UtcNow.AddHours(-48));
+        var file  = new SeedFile("/bundled/a.json", null, "https://example.com/a.json");
+        var batch = Batch(SeedBatchOrigin.Bundled, file);
+        var logger  = new RecordingLogger();
+        var updater = CreateUpdaterWithOptions(RespondWith("raw non-canonical content"), converters: null,
+            validate: json => json == "working canonical content", logger: logger);
+
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+
+        Assert.AreEqual(SourceRefreshOutcome.Failed, result.Results.Single().Outcome);
+        Assert.AreEqual(cachedPath, result.EffectiveBatches[0].Files[0].FilePath);
+        Assert.AreEqual("working canonical content", await File.ReadAllTextAsync(cachedPath));
+        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning && e.Message.Contains("validation")));
+    }
+
+    // An already-corrupted cache file must not be trusted just because it's within the TTL window —
+    // proves the cache is self-healing rather than requiring a manual forced refresh.
+    [TestMethod]
+    public async Task ResolveAsync_ExistingCacheFailsValidation_NetworkAllowed_TriggersFreshDownloadEvenIfFresh()
+    {
+        var cachedPath = WriteCachedFile(_internalDir, "a.json", "corrupted", DateTime.UtcNow); // fresh by mtime
+        var file  = new SeedFile("/bundled/a.json", null, "https://example.com/a.json");
+        var batch = Batch(SeedBatchOrigin.Bundled, file);
+        var updater = CreateUpdaterWithOptions(RespondWith("good content"), converters: null,
+            validate: json => json == "good content");
+
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+
+        Assert.AreEqual(SourceRefreshOutcome.Updated, result.Results.Single().Outcome);
+        Assert.AreEqual("good content", await File.ReadAllTextAsync(cachedPath));
+    }
+
+    [TestMethod]
+    public async Task ResolveAsync_ExistingCacheFailsValidation_NetworkDisallowed_FallsBackToOriginalFile()
+    {
+        WriteCachedFile(_internalDir, "a.json", "corrupted", DateTime.UtcNow);
+        var file  = new SeedFile("/bundled/a.json", null, "https://example.com/a.json");
+        var batch = Batch(SeedBatchOrigin.Bundled, file);
+        var updater = CreateUpdaterWithOptions(NeverCallNetwork(), converters: null, validate: json => json == "good content");
+
+        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: false);
+
+        Assert.AreEqual("/bundled/a.json", result.EffectiveBatches[0].Files[0].FilePath);
+    }
+
     // -------------------------------------------------------------------------
     #region Helpers
 
     private SourceCacheUpdater CreateUpdater(IHttpClientFactory factory, RecordingLogger? logger = null, int defaultTtlHours = 24)
         => new(factory, new SourceCacheOptions(_internalDir, _externalDir, defaultTtlHours), logger ?? new RecordingLogger());
+
+    private SourceCacheUpdater CreateUpdaterWithOptions(
+        IHttpClientFactory factory,
+        IReadOnlyDictionary<string, IQuoteSourceConverter>? converters,
+        Func<string, bool>? validate = null,
+        RecordingLogger? logger = null,
+        int defaultTtlHours = 24)
+        => new(factory, new SourceCacheOptions(_internalDir, _externalDir, defaultTtlHours, converters, validate), logger ?? new RecordingLogger());
+
+    private sealed class FakeConverter(string name, Func<string, string>? transform = null, Exception? throwException = null) : IQuoteSourceConverter
+    {
+        public string Name => name;
+
+        public Task ConvertAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+        {
+            if (throwException is not null) throw throwException;
+            var input = File.ReadAllText(inputPath);
+            File.WriteAllText(outputPath, transform?.Invoke(input) ?? input);
+            return Task.CompletedTask;
+        }
+    }
 
     private static SeedBatch Batch(SeedBatchOrigin origin, params SeedFile[] files)
         => new(files, ManifestPolicy.HardcodedDefault, origin.ToString(), origin);

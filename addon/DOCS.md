@@ -29,10 +29,10 @@ The REST API is accessible in two ways:
 | `GET /api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/version` | Running version |
-| `GET /api/v1/admin/database/seed/preview` | Preview what a reseed would import — no data is changed. Reflects any already-downloaded source cache, but never triggers a network call itself (requires `X-Api-Key`) |
+| `GET /api/v1/admin/database/seed/preview` | Preview what a reseed would import — no data is changed. Reflects any already-downloaded source cache, but never triggers a network call itself. Each file includes `isValidJson` (whether it parsed at all) and, when it has a `downloadUrl`, `refreshOutcome`/`lastRefreshedAtUtc` (requires `X-Api-Key`) |
 | `POST /api/v1/admin/database/reseed` | Clear all data and reimport from the bundled source files. Pass `?forceSourceRefresh=true` to bypass the download cache's freshness check for this call (requires `X-Api-Key`) |
 | `POST /api/v1/admin/database/reset` | Full reset: clear data, reapply migrations, reimport (requires `X-Api-Key`). Audit log always survives. Schema version history is cleared and replayed by default; pass `?preserveSchemaVersion=true` to keep it. Pass `?forceSourceRefresh=true` to bypass the download cache's freshness check for this call |
-| `POST /api/v1/admin/sources/refresh` | Refresh the download cache for any source with a `downloadUrl`/`github` manifest entry, without touching the database. Pass `?force=true` to bypass the freshness check (requires `X-Api-Key`) |
+| `POST /api/v1/admin/sources/refresh` | Refresh the download cache for any source with a `downloadUrl`/`github` manifest entry, without touching the database. Pass `?force=true` to bypass the freshness check. Each result includes `lastRefreshedAtUtc` — the cached copy's own last-write time, so an `uptodate` outcome still shows how old the data actually is (requires `X-Api-Key`) |
 
 Admin endpoints require the `X-Api-Key: <key>` request header matching the `admin_api_key` set in the add-on configuration. Requests without the header, or with an incorrect key, receive `401 Unauthorized`.
 

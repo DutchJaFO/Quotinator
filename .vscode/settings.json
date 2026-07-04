@@ -13,15 +13,11 @@
       "url": "./schemas/source-flat.schema.json"
     },
     {
-      "fileMatch": ["scripts/sources.json"],
-      "url": "./schemas/seed-sources.schema.json"
-    },
-    {
-      "fileMatch": ["scripts/cache/vilaboim_*.json"],
+      "fileMatch": ["tests/Quotinator.Api.Tests/Solution/Fixtures/vilaboim_raw.json"],
       "url": "./schemas/upstream-quoted-string.schema.json"
     },
     {
-      "fileMatch": ["scripts/cache/NikhilNamal17_*.json"],
+      "fileMatch": ["tests/Quotinator.Api.Tests/Solution/Fixtures/nikhilnamal17_raw.json"],
       "url": "./schemas/upstream-object-array.schema.json"
     }
   ]

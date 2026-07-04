@@ -169,18 +169,15 @@
     <File Path="schemas/manifest.schema.json" />
     <File Path="schemas/source-flat.schema.json" />
     <File Path="schemas/source-extended.schema.json" />
-    <File Path="schemas/seed-sources.schema.json" />
     <File Path="schemas/upstream-quoted-string.schema.json" />
     <File Path="schemas/upstream-object-array.schema.json" />
     <File Path="schemas/changelog.schema.json" />
   </Folder>
   <Folder Name="/scripts/">
     <File Path="scripts/README.md" />
-    <File Path="scripts/seed.csx" />
     <File Path="scripts/changelog.csx" />
     <File Path="scripts/changelog-import.csx" />
     <File Path="scripts/changelog-upgrade.csx" />
-    <File Path="scripts/sources.json" />
     <File Path="scripts/SOURCES.md" />
   </Folder>
   <Folder Name="/scripts/changelog-reference/">
@@ -198,16 +195,19 @@
     <File Path="scripts/hooks/README.md" />
     <File Path="scripts/hooks/commit-msg" />
   </Folder>
-  <Folder Name="/scripts/cache/">
-    <File Path="scripts/cache/README.md" />
-  </Folder>
   <Folder Name="/Solution/">
     <File Path="tests/Quotinator.Api.Tests/Solution/RepositoryStructureTests.cs" />
+  </Folder>
+  <Folder Name="/Solution/Fixtures/">
+    <File Path="tests/Quotinator.Api.Tests/Solution/Fixtures/vilaboim_raw.json" />
+    <File Path="tests/Quotinator.Api.Tests/Solution/Fixtures/nikhilnamal17_raw.json" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Quotinator.Api/Quotinator.Api.csproj" />
     <Project Path="src/Quotinator.Changelog/Quotinator.Changelog.csproj" />
     <Project Path="src/Quotinator.Constants/Quotinator.Constants.csproj" />
+    <Project Path="src/Quotinator.Converters.NikhilNamal17/Quotinator.Converters.NikhilNamal17.csproj" />
+    <Project Path="src/Quotinator.Converters.Vilaboim/Quotinator.Converters.Vilaboim.csproj" />
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
     <Project Path="src/Quotinator.Data/Quotinator.Data.csproj" />
     <Project Path="src/Quotinator.Engine/Quotinator.Engine.csproj" />
@@ -223,6 +223,8 @@
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
     <Project Path="tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" />
     <Project Path="tests/Quotinator.Constants.Tests/Quotinator.Constants.Tests.csproj" />
+    <Project Path="tests/Quotinator.Converters.NikhilNamal17.Tests/Quotinator.Converters.NikhilNamal17.Tests.csproj" />
+    <Project Path="tests/Quotinator.Converters.Vilaboim.Tests/Quotinator.Converters.Vilaboim.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
     <Project Path="tests/Quotinator.Data.Example/Quotinator.Data.Example.csproj" />
     <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
@@ -251,6 +253,18 @@
   </Folder>
   <Folder Name="/CVE/Quotinator.Constants.Tests/">
     <File Path="tests/Quotinator.Constants.Tests/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.NikhilNamal17/">
+    <File Path="src/Quotinator.Converters.NikhilNamal17/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.NikhilNamal17.Tests/">
+    <File Path="tests/Quotinator.Converters.NikhilNamal17.Tests/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.Vilaboim/">
+    <File Path="src/Quotinator.Converters.Vilaboim/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.Vilaboim.Tests/">
+    <File Path="tests/Quotinator.Converters.Vilaboim.Tests/CVE/.gitkeep" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Core/">
     <File Path="src/Quotinator.Core/CVE/CVE-2025-6965.md" />

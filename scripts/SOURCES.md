@@ -1,44 +1,32 @@
 # Adding a new quote source
 
-This document explains how to add a new external dataset to Quotinator's seed pipeline.
+This document explains how to add a new external dataset to Quotinator via the converter plugin
+mechanism. It replaces the historical `scripts/seed.csx`/`scripts/sources.json` workflow — that
+standalone script downloaded and normalised sources offline, but its download step operated on the
+same raw upstream URLs the live auto-update mechanism (`Quotinator__AutoUpdateSources`) also needs,
+so their responsibilities have merged: conversion is now a first-party, compiled plugin the running
+app itself can invoke, live or locally, via `POST /api/v1/admin/sources/refresh`.
 
 ---
 
 ## How the pipeline works
 
-`scripts/seed.csx` reads `scripts/sources.json`, downloads each source (or uses a local cache), normalises every entry to the [canonical quote schema](../CLAUDE.md#quote-schema-canonical), and writes one JSON file per source to `data/sources/`. IDs are deterministically derived from quote text and source name via SHA-256 so they are stable across re-seeds.
+A manifest entry (`data/sources/manifest.json` or a user's `imports/manifest.json`) that declares a
+`downloadUrl`/`github` may also declare a `converter` — the `Name` of a compiled
+`IQuoteSourceConverter` plugin. When the auto-update mechanism (`ISourceCacheUpdater`) downloads that
+source, it looks up the named converter and runs it before caching the result: **download to a temp
+file → convert (if a converter is named) → validate the result is canonical-schema → move into the
+persistent cache**. A source with no `converter` is expected to already be canonical-schema at its
+`downloadUrl` — validation still runs either way, so non-canonical content is rejected and the
+existing cached/local copy is kept, rather than corrupting it.
 
-There is no merge step and no deduplication. Each source file is independent. Conflict resolution (same quote appearing in multiple sources) is handled at import time by the startup seeder, and eventually by a review UI in the import milestone.
+IDs are deterministically derived from quote text and source name via SHA-256
+(`Quotinator.Core.Import.QuoteIdentity.StableId`) so they are stable across every re-conversion —
+this must never change once a source ships, or existing rows would be silently duplicated/orphaned.
 
-`data/sources/manifest.json` lists files in the preferred import order. The manifest is created automatically if it does not exist; if it already exists, `seed.csx` does not overwrite it.
-
----
-
-## Running the seed script
-
-**Prerequisites:** `dotnet-script` global tool
-
-```bash
-dotnet tool install -g dotnet-script
-```
-
-**Seed (downloads fresh copies of all sources):**
-
-```bash
-dotnet-script scripts/seed.csx
-```
-
-**Dry run (prints stats, does not write any files):**
-
-```bash
-dotnet-script scripts/seed.csx -- --dry-run
-```
-
-**Use local cache (skips download, uses `scripts/cache/`):**
-
-```bash
-dotnet-script scripts/seed.csx -- --no-fetch
-```
+`data/sources/manifest.json` lists files in the preferred import order and is not auto-created for
+the bundled sources directory (it always exists — see `Quotinator__CreateMissingManifest` for the
+user-imports directory's own auto-create behaviour).
 
 ---
 
@@ -46,95 +34,89 @@ dotnet-script scripts/seed.csx -- --no-fetch
 
 ### 1. Check the license
 
-Only add sources with a permissive license (MIT, CC0, CC-BY, or equivalent). Note the SPDX identifier — you will need it for `sources.json`.
+Only add sources with a permissive license (MIT, CC0, CC-BY, or equivalent). Note the SPDX identifier
+— you will need it for `SOURCES.md`.
 
-### 2. Identify the data format
+### 2. Write a converter plugin
 
-The seed script supports two built-in formats. Check which one matches your source:
+Create a new project under `src/`, e.g. `src/Quotinator.Converters.<Name>/`, referencing
+`Quotinator.Core` (for `SourceQuote`) and `Quotinator.Data` (for `IQuoteSourceConverter`). Implement:
 
-| Format | Description | Example |
-|---|---|---|
-| `quoted-string` | JSON array of `"\"Quote text.\" Source Title"` strings | vilaboim/movie-quotes |
-| `object-array` | JSON array of objects with named fields | NikhilNamal17/popular-movie-quotes |
-
-If your source uses a different layout, add a new adapter function in `seed.csx` (see **Custom adapters** below).
-
-### 3. Add an entry to `sources.json`
-
-**For `quoted-string` sources:**
-
-```json
+```csharp
+public sealed class MySourceConverter : IQuoteSourceConverter
 {
-  "name": "author/repo-name",
-  "url": "https://raw.githubusercontent.com/author/repo/main/quotes.json",
-  "format": "quoted-string",
-  "defaultType": "movie",
-  "license": "MIT",
-  "attribution": "https://github.com/author/repo-name"
+    public string Name => "my-source";
+
+    public async Task ConvertAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+    {
+        // Parse the raw format at inputPath, build a List<SourceQuote> using
+        // Quotinator.Core.Import.QuoteIdentity/YearParsing/QuoteTypeNormalisation where applicable,
+        // and write it (JsonSerializer.Serialize) to outputPath. Throw SourceConversionException on
+        // unrecoverable input (top-level parse failure, zero entries converted) — never write a
+        // near-empty output file silently.
+    }
 }
 ```
 
-**For `object-array` sources:**
+See `src/Quotinator.Converters.Vilaboim/` (a bare-string-array format, regex-parsed) and
+`src/Quotinator.Converters.NikhilNamal17/` (a JSON object-array format, field-mapped) for the two
+existing patterns. Write a corresponding test project with, at minimum, an **ID-stability regression
+test**: read a known quote/source pair from the source's already-committed `data/sources/*.json` (if
+any prior version exists) or from your own fixture, and assert the converter reproduces the exact
+same id.
+
+### 3. Register the plugin
+
+Add the new converter instance to the dictionary built in `src/Quotinator.Api/Program.cs` (search for
+`quoteSourceConverters`), and add a `ProjectReference` from `Quotinator.Api.csproj` to the new plugin
+project. Add the project to `Quotinator.slnx` and `docker/Dockerfile`'s restore-layer `COPY` block.
+
+### 4. Add a manifest entry
 
 ```json
 {
+  "file": "author_repo-name.json",
   "name": "author/repo-name",
-  "url": "https://raw.githubusercontent.com/author/repo/main/data.json",
-  "format": "object-array",
-  "defaultType": "movie",
-  "fieldMap": {
-    "quote":  "quote",
-    "source": "movie",
-    "type":   "type",
-    "year":   "year"
+  "github": {
+    "owner": "author",
+    "repo": "repo-name",
+    "path": "quotes.json",
+    "branch": "main"
   },
-  "license": "MIT",
-  "attribution": "https://github.com/author/repo-name"
+  "converter": "my-source"
 }
 ```
 
-`fieldMap` maps Quotinator's internal field names to the keys used in the source JSON:
+Use `url`/`downloadUrl` directly instead of `github` for a non-GitHub-hosted source. Omit `converter`
+entirely if the source already serves canonical-schema JSON at its `downloadUrl`.
 
-| Quotinator field | Description |
-|---|---|
-| `quote` | The verbatim quote text |
-| `source` | Film/show/book title or speech occasion |
-| `type` | `movie`, `tv`, `anime`, `book`, or `person` — unknown values fall back to `defaultType` |
-| `year` | Release or publication year (integer); values outside 1900–2100 are discarded |
+### 5. Generate the initial file
 
-### 4. Run the seed script
+Run the app locally (`dotnet run --project src/Quotinator.Api`) with
+`Quotinator__AutoUpdateSources=true`, then call:
 
 ```bash
-dotnet-script scripts/seed.csx -- --dry-run   # verify counts
-dotnet-script scripts/seed.csx                # write data/sources/<name>.json
+curl -X POST -H "X-Api-Key: <your admin key>" "http://localhost:5000/api/v1/admin/sources/refresh?force=true"
 ```
 
-The output file is named after the `name` field with `/` replaced by `_` (e.g. `author/repo-name` → `author_repo-name.json`).
+This downloads and converts every source with a `downloadUrl`, including the new one, into
+`{dataDir}/sources/download/` (or `imports/download/` for a user-imports entry). Copy the resulting
+file into `data/sources/`, verify it against `schemas/source-flat.schema.json`, and commit it.
 
-### 5. Add attribution to `SOURCES.md`
+### 6. Add attribution to `SOURCES.md`
 
-Add an entry to the **Quote datasets** section in [`SOURCES.md`](../SOURCES.md) at the repo root. Include the file path, schema reference, repository URL, author, license, and contents.
-
-### 6. Update `manifest.json`
-
-Add the new file to `data/sources/manifest.json` in the desired import position. External sources should come after `quotinator-curated.json`.
-
----
-
-## Custom adapters
-
-If your source uses a format that doesn't fit `quoted-string` or `object-array`, add a new adapter in `seed.csx`:
-
-1. Add a new `ParseXxx` static function that returns `List<(string Quote, string Source, string? Date, string Type)>`
-2. Add a case to the `format switch` block in the main loop
-3. Use a new `"format"` value in `sources.json`
-
-Keep adapters pure functions — they receive a `JsonNode` and return a list. Network access and file I/O belong in the main loop.
+Add an entry to the **Quote datasets** section in [`SOURCES.md`](../SOURCES.md) at the repo root.
+Include the file path, schema reference, repository URL, author, license, and contents.
 
 ---
 
 ## Manually curated entries
 
-Entries that are not in any external dataset (specific book quotes, speeches, conversations, etc.) belong in `data/sources/quotinator-curated.json`. This file uses the **extended format** (`schemas/source-extended.schema.json`) which supports `quotes`, `stageDirections`, `soundCues`, and `conversations` sections.
+Entries that are not in any external dataset (specific book quotes, speeches, conversations, etc.)
+belong in `data/sources/quotinator-curated.json`. This file uses the **extended format**
+(`schemas/source-extended.schema.json`) which supports `quotes`, `stageDirections`, `soundCues`, and
+`conversations` sections.
 
-Do **not** run `seed.csx` for curated entries — add them directly to `quotinator-curated.json` with a manually assigned UUID and verify them before committing. The `SourceDataIntegrityTests` will validate the file against the schema automatically on the next build.
+Do **not** write a converter plugin for curated entries — add them directly to
+`quotinator-curated.json` with a manually assigned UUID and verify them before committing.
+`SourceDataIntegrityTests` validates the file against the schema automatically on the next build.

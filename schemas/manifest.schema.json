@@ -66,6 +66,11 @@
             "enum": ["internal", "external"],
             "description": "Overrides which cache folder the auto-update mechanism writes a downloaded copy of this source to — internal ({dataDir}/sources/download/) or external ({dataDir}/imports/download/). When omitted, defaults to internal for entries in the bundled sources manifest and external for entries in a user imports manifest. Only meaningful alongside downloadUrl/github."
           },
+          "converter": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Name of a compiled converter plugin (an IQuoteSourceConverter implementation's Name) that transforms this source's raw upstream format into Quotinator's canonical quote schema before it is cached. Only meaningful alongside downloadUrl/github. The referenced converter must be one of the plugins compiled into the running image — an unrecognised name causes the download to fail closed (falls back like a network failure, never crashes startup)."
+          },
           "github": {
             "type": "object",
             "additionalProperties": false,

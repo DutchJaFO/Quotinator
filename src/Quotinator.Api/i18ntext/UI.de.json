@@ -50,6 +50,8 @@
   "ErrorYearRangeInvalid": "yearFrom darf nicht größer als yearTo sein.",
   "ErrorNumericParameterInvalid": "Ein oder mehrere Abfrageparameter enthalten einen ungültigen Wert. Numerische Parameter (yearFrom, yearTo, year, decade, page, pageSize, n) müssen ganze Zahlen sein.",
   "ErrorYearParamNotInteger": "{0} muss eine ganze Zahl sein.",
+  "ErrorSeedFileMissing": "Diese Quelldatei existiert nicht mehr auf der Festplatte.",
+  "ErrorSeedFileInvalidJson": "Diese Quelldatei ist leer oder ihr Inhalt ist kein gültiges JSON.",
   "AdminEndpointsHeading": "Admin-Endpunkte",
   "AdminEndpointsDescription": "Diese Endpunkte erfordern einen X-Api-Key-Header, der mit dem in den Add-on-Optionen konfigurierten admin_api_key übereinstimmt. Sie sind nicht verfügbar, wenn kein Schlüssel konfiguriert ist.",
   "AdminPreviewSeedLabel": "Importvorschau anzeigen",

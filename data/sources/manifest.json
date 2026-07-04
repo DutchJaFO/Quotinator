@@ -16,7 +16,8 @@
         "repo": "movie-quotes",
         "path": "movie-quotes.json",
         "branch": "master"
-      }
+      },
+      "converter": "vilaboim"
     },
     {
       "file": "NikhilNamal17_popular-movie-quotes.json",
@@ -26,7 +27,8 @@
         "repo": "popular-movie-quotes",
         "path": "data/data.json",
         "branch": "master"
-      }
+      },
+      "converter": "nikhilnamal17"
     }
   ]
 }

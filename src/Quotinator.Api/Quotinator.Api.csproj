@@ -36,6 +36,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Quotinator.Changelog\Quotinator.Changelog.csproj" />
     <ProjectReference Include="..\Quotinator.Constants\Quotinator.Constants.csproj" />
+    <ProjectReference Include="..\Quotinator.Converters.NikhilNamal17\Quotinator.Converters.NikhilNamal17.csproj" />
+    <ProjectReference Include="..\Quotinator.Converters.Vilaboim\Quotinator.Converters.Vilaboim.csproj" />
     <ProjectReference Include="..\Quotinator.Core\Quotinator.Core.csproj" />
     <ProjectReference Include="..\Quotinator.Data\Quotinator.Data.csproj" />
     <ProjectReference Include="..\Quotinator.Engine\Quotinator.Engine.csproj" />

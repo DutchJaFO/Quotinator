@@ -51,7 +51,7 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
                 {
                     var path               = Path.Combine(dir, e.File);
                     var (url, downloadUrl) = ResolveUrls(e);
-                    return new SeedFile(path, url, downloadUrl, e.RefreshIntervalHours, e.DownloadTarget);
+                    return new SeedFile(path, url, downloadUrl, e.RefreshIntervalHours, e.DownloadTarget, e.Converter);
                 })
                 .Where(f => File.Exists(f.FilePath))
                 .ToList();

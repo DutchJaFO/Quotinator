@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Dapper;
 using Dapper.Contrib.Extensions;
 using Microsoft.Data.Sqlite;
@@ -72,7 +70,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     /// <inheritdoc/>
     protected override async Task OnInitialisedAsync(SqliteConnection connection)
     {
-        var effectiveBatches = await ResolveEffectiveBatchesAsync(forceRefresh: false);
+        var effectiveBatches = (await ResolveEffectiveBatchesAsync(forceRefresh: false)).EffectiveBatches;
         await SeedIfEmptyAsync(connection, effectiveBatches);
         await ReSeedGenresIfEmptyAsync(connection, effectiveBatches);
         await LogDatabaseStatsAsync(connection);
@@ -81,7 +79,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     /// <inheritdoc/>
     protected override async Task OnReseedAsync(SqliteConnection connection, bool forceSourceRefresh)
     {
-        var effectiveBatches = await ResolveEffectiveBatchesAsync(forceSourceRefresh);
+        var effectiveBatches = (await ResolveEffectiveBatchesAsync(forceSourceRefresh)).EffectiveBatches;
         var totalFiles = effectiveBatches.Sum(b => b.Files.Count);
         Logger.LogInformation("[Database - Seed] reseed requested — clearing all data and reimporting from {Count} source file(s)...", totalFiles);
 
@@ -110,7 +108,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     /// <inheritdoc/>
     protected override async Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
     {
-        var effectiveBatches = await ResolveEffectiveBatchesAsync(forceSourceRefresh);
+        var effectiveBatches = (await ResolveEffectiveBatchesAsync(forceSourceRefresh)).EffectiveBatches;
         var totalFiles = effectiveBatches.Sum(b => b.Files.Count);
         Logger.LogInformation("[Database - Init] reset requested — rebuilding schema and reimporting from {Count} source file(s)...", totalFiles);
 
@@ -141,7 +139,9 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     {
         // Preview reflects whatever is already cached on disk — it never triggers a network call,
         // even when Quotinator__AutoUpdateSources is true, so calling it has no side effects.
-        var effectiveBatches = await ResolveEffectiveBatchesAsync(forceRefresh: false, allowNetworkOverride: false);
+        var resolution       = await ResolveEffectiveBatchesAsync(forceRefresh: false, allowNetworkOverride: false);
+        var effectiveBatches = resolution.EffectiveBatches;
+        var resultsByName    = resolution.Results.ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
 
         var filePreviews = new List<SeedFilePreview>();
         var duplicates   = new List<SeedDuplicateRecord>();
@@ -153,8 +153,9 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             foreach (var seedFile in batch.Files)
             {
                 var fileName = Path.GetFileName(seedFile.FilePath);
-                var quotes   = LoadQuotesFromFile(seedFile.FilePath);
-                filePreviews.Add(new SeedFilePreview(fileName, quotes.Count));
+                var (quotes, issue) = LoadQuotesFromFile(seedFile.FilePath);
+                var refreshResult = resultsByName.GetValueOrDefault(fileName);
+                filePreviews.Add(new SeedFilePreview(fileName, quotes.Count, refreshResult?.Outcome, refreshResult?.LastRefreshedAtUtc, issue));
                 totalQuotes += quotes.Count;
 
                 foreach (var q in quotes)
@@ -196,11 +197,10 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     /// Overrides <see cref="_autoUpdateSources"/> for this call. Used by <see cref="PreviewSeedAsync"/>
     /// to guarantee it never makes a network call regardless of configuration.
     /// </param>
-    private async Task<IReadOnlyList<SeedBatch>> ResolveEffectiveBatchesAsync(bool forceRefresh, bool? allowNetworkOverride = null)
+    private async Task<SourceCacheResolution> ResolveEffectiveBatchesAsync(bool forceRefresh, bool? allowNetworkOverride = null)
     {
         var allowNetwork = allowNetworkOverride ?? _autoUpdateSources;
-        var resolution   = await _sourceCacheUpdater.ResolveAsync(_batches, allowNetwork, forceRefresh);
-        return resolution.EffectiveBatches;
+        return await _sourceCacheUpdater.ResolveAsync(_batches, allowNetwork, forceRefresh);
     }
 
     private async Task SeedIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
@@ -242,7 +242,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             foreach (var seedFile in batch.Files)
             {
                 var fileName    = Path.GetFileName(seedFile.FilePath);
-                var quotes      = LoadQuotesFromFile(seedFile.FilePath);
+                var (quotes, _) = LoadQuotesFromFile(seedFile.FilePath);
                 var importBatch = await CreateImportBatchAsync(batch, seedFile);
 
                 Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
@@ -370,7 +370,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         {
             foreach (var seedFile in batch.Files)
             {
-                var quotes = LoadQuotesFromFile(seedFile.FilePath);
+                var (quotes, _) = LoadQuotesFromFile(seedFile.FilePath);
                 foreach (var q in quotes)
                 {
                     foreach (var genre in q.Genres)
@@ -548,29 +548,15 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         return false;
     }
 
-    private List<SourceQuote> LoadQuotesFromFile(string filePath)
+    private (List<SourceQuote> Quotes, SeedFileIssue? Issue) LoadQuotesFromFile(string filePath)
     {
-        if (!File.Exists(filePath)) return [];
+        if (!File.Exists(filePath)) return ([], SeedFileIssue.Missing);
 
-        var json    = File.ReadAllText(filePath);
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var json = File.ReadAllText(filePath);
+        if (SourceQuoteFileReader.TryParse(json, out var quotes)) return (quotes!, null);
 
-        try
-        {
-            var root = JsonNode.Parse(json);
-
-            if (root is JsonArray)
-                return JsonSerializer.Deserialize<List<SourceQuote>>(json, options) ?? [];
-
-            var quotesNode = root?["quotes"];
-            if (quotesNode is null) return [];
-            return quotesNode.Deserialize<List<SourceQuote>>(options) ?? [];
-        }
-        catch (JsonException ex)
-        {
-            Logger.LogWarning(ex, "[Database - Seed] {File} is empty or not valid JSON — skipping", Path.GetFileName(filePath));
-            return [];
-        }
+        Logger.LogWarning("[Database - Seed] {File} is empty or not valid JSON — skipping", Path.GetFileName(filePath));
+        return ([], SeedFileIssue.InvalidJson);
     }
 
     private static string TruncateLabel(string text, int maxLen = 60)

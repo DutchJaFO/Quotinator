@@ -45,9 +45,8 @@ Three schemas in `schemas/` define and validate the import file formats. They ar
 | `schemas/manifest.schema.json` | `data/sources/manifest.json` and `data/imports/manifest.json` — ordered list of source files |
 | `schemas/source-flat.schema.json` | External source files in `data/sources/` — flat JSON array of canonical quote objects |
 | `schemas/source-extended.schema.json` | `data/sources/quotinator-curated.json` and user import files — object with `quotes`, `stageDirections`, `soundCues`, `conversations` |
-| `schemas/seed-sources.schema.json` | `scripts/sources.json` — seed pipeline configuration (external source URLs, formats, field mappings) |
-| `schemas/upstream-quoted-string.schema.json` | `scripts/cache/vilaboim_*.json` — raw upstream format used by [vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes) |
-| `schemas/upstream-object-array.schema.json` | `scripts/cache/NikhilNamal17_*.json` — raw upstream format used by [NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes) |
+| `schemas/upstream-quoted-string.schema.json` | `tests/Quotinator.Api.Tests/Solution/Fixtures/vilaboim_raw.json` — raw upstream format used by [vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes) |
+| `schemas/upstream-object-array.schema.json` | `tests/Quotinator.Api.Tests/Solution/Fixtures/nikhilnamal17_raw.json` — raw upstream format used by [NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes) |
 
 The schemas implement [JSON Schema Draft 2020-12](https://json-schema.org/draft/2020-12/schema).
 

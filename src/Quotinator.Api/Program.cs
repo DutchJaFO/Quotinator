@@ -25,6 +25,9 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Changelog.Services;
+using Quotinator.Converters.NikhilNamal17;
+using Quotinator.Converters.Vilaboim;
+using Quotinator.Core.Import;
 using Quotinator.Core.Services;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
@@ -254,6 +257,13 @@ if (isContainer)
     });
 }
 
+// Omit null properties from all JSON responses — verified against System.Text.Json docs:
+// JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull skips any
+// property whose value is null at serialization time, application-wide (not merely a formatting
+// choice for one endpoint).
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull);
+
 builder.Services.AddExceptionHandler<BadRequestExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
@@ -285,9 +295,25 @@ builder.Services.AddSingleton<Quotinator.Engine.Repositories.IImportBatchReposit
 // 5 s timeout: a slow/unreachable upstream must never block startup, reseed, or reset for longer
 // than a brief, bounded check — the updater always falls back to the existing cached/local file.
 builder.Services.AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
+
+// Converters are stateless, hardcoded per source — no DI registration needed for the individual
+// plugin instances themselves (CLAUDE.md's DI policy: bare `new` is permitted for a computed value
+// assembled before a factory closure, same shape already used for SourceCacheOptions itself).
+var quoteSourceConverters = new IQuoteSourceConverter[]
+{
+    new VilaboimMovieQuotesConverter(),
+    new NikhilNamal17PopularMovieQuotesConverter(),
+}.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+
+// Real canonical-schema validation needs Quotinator.Core's SourceQuote, but Quotinator.Data (home of
+// SourceCacheUpdater) must not depend on Quotinator.Core — so the validator is built here, at the
+// composition root, and injected as a plain delegate.
+Func<string, bool> validateCanonicalSchema = json => SourceQuoteFileReader.TryParse(json, out _);
+
 builder.Services.AddSingleton<ISourceCacheUpdater>(sp => new SourceCacheUpdater(
     sp.GetRequiredService<IHttpClientFactory>(),
-    new SourceCacheOptions(internalDownloadDir, externalDownloadDir, sourceUpdateIntervalHours),
+    new SourceCacheOptions(internalDownloadDir, externalDownloadDir, sourceUpdateIntervalHours,
+        quoteSourceConverters, validateCanonicalSchema),
     sp.GetRequiredService<ILogger<SourceCacheUpdater>>()));
 
 builder.Services.AddSingleton<IDatabaseInitializer>(sp =>

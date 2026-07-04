@@ -32,7 +32,7 @@ data/sources/
 
 | Format | Schema | Used by |
 |---|---|---|
-| **Flat** — top-level JSON array | `schemas/source-flat.schema.json` | External seed sources produced by `seed.csx` |
+| **Flat** — top-level JSON array | `schemas/source-flat.schema.json` | External seed sources produced by a converter plugin (see `scripts/SOURCES.md`) |
 | **Extended** — top-level object with `quotes`, `stageDirections`, `soundCues`, `conversations` | `schemas/source-extended.schema.json` | Curated file and future user imports |
 
 Both formats share the same canonical quote object schema. The extended format is a superset.
@@ -101,7 +101,7 @@ See the [Data Import & Sources milestone](https://github.com/DutchJaFO/Quotinato
 
 ### External datasets
 
-Use `seed.csx` to add a new external source. See [`scripts/SOURCES.md`](../scripts/SOURCES.md) for the full workflow.
+Write an `IQuoteSourceConverter` plugin to add a new external source. See [`scripts/SOURCES.md`](../scripts/SOURCES.md) for the full workflow.
 
 ### Curated entries
 

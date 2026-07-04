@@ -24,10 +24,10 @@ dotnet test tests/Quotinator.Core.Tests --configuration Release
 # Run the API locally
 dotnet run --project src/Quotinator.Api
 
-# Re-seed data/sources/ from the configured sources (run from repo root)
-dotnet-script scripts/seed.csx
-dotnet-script scripts/seed.csx -- --dry-run    # preview what would be written without creating files
-dotnet-script scripts/seed.csx -- --no-fetch   # use scripts/cache/ instead of downloading
+# Regenerate a data/sources/ file locally (run the app, then force-refresh via the admin endpoint —
+# see scripts/SOURCES.md for the full converter-plugin workflow)
+dotnet run --project src/Quotinator.Api
+curl -X POST -H "X-Api-Key: <your admin key>" "http://localhost:5000/api/v1/admin/sources/refresh?force=true"
 
 # Build the Docker image locally (required before tagging a release)
 docker build -f docker/Dockerfile -t quotinator:local .
@@ -116,11 +116,15 @@ src/
   Quotinator.Data.Testing/     # Test helper library — stubs, fakes, disposable SQLite DB (reference from test projects only)
   Quotinator.Engine/           # SQLite-backed Quotinator domain implementation — bridges Core + Data
   Quotinator.Changelog/        # Changelog schema, models, and generator logic
+  Quotinator.Converters.Vilaboim/      # IQuoteSourceConverter plugin: vilaboim/movie-quotes raw format
+  Quotinator.Converters.NikhilNamal17/ # IQuoteSourceConverter plugin: NikhilNamal17/popular-movie-quotes raw format
   Quotinator.Api/              # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
 tests/
   Quotinator.Api.Tests/             # Endpoint integration tests (WebApplicationFactory)
   Quotinator.Changelog.Tests/       # Changelog schema and generation tests
   Quotinator.Constants.Tests/       # Tests for route and constant definitions
+  Quotinator.Converters.Vilaboim.Tests/      # Tests for the Vilaboim converter plugin
+  Quotinator.Converters.NikhilNamal17.Tests/ # Tests for the NikhilNamal17 converter plugin
   Quotinator.Core.Tests/            # Unit tests for domain logic and in-memory service
   Quotinator.Data.Example/          # Concrete example implementations of Data patterns (not a test runner)
   Quotinator.Data.Testing.Tests/    # Tests for the Data.Testing helper library
@@ -132,7 +136,6 @@ tools/
 data/sources/             # Bundled source files (one JSON per dataset) + manifest
 docs/                     # Workflow guides, testing policy, CVE docs, milestone plans
 scripts/
-  seed.csx                # Per-source seed script (dotnet-script)
   changelog.csx           # Changelog markdown generator
 docker/Dockerfile         # Multi-stage build, targets linux/amd64 + linux/arm64
 addon/                    # Home Assistant add-on manifest and assets
@@ -443,7 +446,7 @@ Each source produces one file in `data/sources/`. Two MIT-licensed external sour
 | [vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes) | `vilaboim_movie-quotes.json` | MIT | `{ quote, movie }` |
 | [NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes) | `NikhilNamal17_popular-movie-quotes.json` | MIT | `{ quote, movie, type, year }` |
 
-Both are attributed in `SOURCES.md`. The seed script lives at `scripts/seed.csx` — run it to regenerate the source files from upstream; it writes `manifest.json` only when it does not already exist.
+Both are attributed in `SOURCES.md`. Each source's raw upstream format is converted to Quotinator's canonical schema by a first-party `IQuoteSourceConverter` plugin (`Quotinator.Converters.Vilaboim`, `Quotinator.Converters.NikhilNamal17`), invoked automatically by the live auto-update mechanism (`Quotinator__AutoUpdateSources`) and manually via `POST /api/v1/admin/sources/refresh` to regenerate a `data/sources/*.json` file locally. See `scripts/SOURCES.md` for the full workflow to add a new source.
 
 Manually curated and verified entries live in `data/sources/quotinator-curated.json`. All entries must be accurately attributed and verified before adding.
 
@@ -493,8 +496,10 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `data/sources/quotinator-curated.json` | Manually verified curated entries |
 | `schemas/source-flat.schema.json` | Machine-readable quote schema |
 | `schemas/changelog.schema.json` | Machine-readable changelog schema — read before writing changelog entries |
-| `scripts/seed.csx` | Per-source seed script — writes one file per source, manifest only when missing |
+| `scripts/SOURCES.md` | Workflow for adding a new quote source via a converter plugin |
 | `scripts/changelog.csx` | Changelog markdown generator — run after editing `changelog.en.json` |
+| `src/Quotinator.Data/Import/ISourceCacheUpdater.cs` | Live auto-update download/convert/validate pipeline for manifest-declared sources |
+| `src/Quotinator.Data/Import/IQuoteSourceConverter.cs` | Converter plugin contract — implement one per raw upstream source format |
 | `src/Quotinator.Api/Program.cs` | API entry point |
 | `src/Quotinator.Api/resources/changelog.en.json` | Changelog source of truth — edit this, never the generated `.md` files |
 | `src/Quotinator.Api/resources/changelog.nl.json` | Dutch changelog (lockstep with `en.json`) |
@@ -555,7 +560,7 @@ Current folders and their contents:
 - `/addon/` — all Home Assistant add-on files (`config.yaml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `icon.png`, `logo.png`)
 - `/data/sources/` — `manifest.json`, `quotinator-curated.json`, `vilaboim_movie-quotes.json`, `NikhilNamal17_popular-movie-quotes.json`
 - `/docker/` — `Dockerfile`, `docker-compose.yml`
-- `/scripts/` — `seed.csx`, `sources.json`, `SOURCES.md`
+- `/scripts/` — `SOURCES.md` and changelog scripts
 - `/src/` — C# projects
 - `/tests/` — test projects
 

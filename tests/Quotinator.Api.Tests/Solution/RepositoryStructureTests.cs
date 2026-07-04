@@ -1,8 +1,9 @@
-using System.Diagnostics;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Json.Schema;
+using Quotinator.Converters.NikhilNamal17;
+using Quotinator.Converters.Vilaboim;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Api.Tests.Solution;
 
@@ -122,50 +123,41 @@ public class RepositoryStructureTests
     }
 
     /// <summary>
-    /// Seed script with --no-fetch produces schema-valid files whose entry IDs exactly
-    /// match the current baseline in data/sources/.
+    /// Each bundled source's converter plugin, run against a committed copy of its raw upstream
+    /// format, produces schema-valid output whose entry IDs exactly match the current baseline in
+    /// data/sources/. Replaces the historical seed.csx-based version of this test (removed alongside
+    /// scripts/seed.csx/sources.json) — runs the converter in-process instead of shelling out to
+    /// dotnet-script, so it no longer needs that tool installed to run in CI.
     /// </summary>
     [TestMethod]
-    [TestCategory("Live")]
-    public void SeedScript_WithNoFetch_ProducesFilesMatchingBaseline()
+    public async Task ConverterPlugins_AgainstRawFixtures_ProduceFilesMatchingBaseline()
     {
         var schema = JsonSchema.FromText(
             File.ReadAllText(Path.Combine(RepoRoot, "schemas", "source-flat.schema.json")));
 
-        var sources = JsonNode.Parse(
-            File.ReadAllText(Path.Combine(RepoRoot, "scripts", "sources.json")))!.AsArray();
+        var cases = new (IQuoteSourceConverter Converter, string RawFixtureFile, string BaselineFile)[]
+        {
+            (new VilaboimMovieQuotesConverter(), "vilaboim_raw.json", "vilaboim_movie-quotes.json"),
+            (new NikhilNamal17PopularMovieQuotesConverter(), "nikhilnamal17_raw.json", "NikhilNamal17_popular-movie-quotes.json"),
+        };
 
         var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(tempDir);
         try
         {
-            var process = Process.Start(new ProcessStartInfo
-            {
-                FileName               = "dotnet-script",
-                Arguments              = $"scripts/seed.csx -- --no-fetch --output-dir \"{tempDir}\"",
-                WorkingDirectory       = RepoRoot,
-                RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                UseShellExecute        = false
-            })!;
-            process.WaitForExit();
-
-            Assert.AreEqual(0, process.ExitCode,
-                $"Seed script failed:\n{process.StandardError.ReadToEnd()}");
-
             var failures = new List<string>();
 
-            foreach (var src in sources)
+            foreach (var (converter, rawFixtureFile, baselineFile) in cases)
             {
-                var name     = src!["name"]!.GetValue<string>();
-                var fileName = name.Replace("/", "_") + ".json";
+                var rawPath      = Path.Combine(RepoRoot, "tests", "Quotinator.Api.Tests", "Solution", "Fixtures", rawFixtureFile);
+                var outputPath   = Path.Combine(tempDir, baselineFile);
+                var baselinePath = Path.Combine(RepoRoot, "data", "sources", baselineFile);
 
-                var outputPath   = Path.Combine(tempDir, fileName);
-                var baselinePath = Path.Combine(RepoRoot, "data", "sources", fileName);
+                await converter.ConvertAsync(rawPath, outputPath);
 
                 if (!File.Exists(outputPath))
                 {
-                    failures.Add($"{fileName}: output file not found");
+                    failures.Add($"{baselineFile}: output file not found");
                     continue;
                 }
 
@@ -179,7 +171,7 @@ public class RepositoryStructureTests
                     var errors = (result.Details ?? [])
                         .Where(d => !d.IsValid && d.Errors is not null)
                         .SelectMany(d => d.Errors!.Select(e => $"  {d.InstanceLocation}: {e.Value}"));
-                    failures.Add($"{fileName}: schema validation failed:\n{string.Join("\n", errors)}");
+                    failures.Add($"{baselineFile}: schema validation failed:\n{string.Join("\n", errors)}");
                 }
 
                 // ID set must exactly match baseline
@@ -196,13 +188,13 @@ public class RepositoryStructureTests
                 var extra   = outputIds.Except(baselineIds).ToList();
 
                 if (missing.Count > 0)
-                    failures.Add($"{fileName}: {missing.Count} IDs present in baseline are missing from output");
+                    failures.Add($"{baselineFile}: {missing.Count} IDs present in baseline are missing from output");
                 if (extra.Count > 0)
-                    failures.Add($"{fileName}: {extra.Count} IDs in output are not in baseline");
+                    failures.Add($"{baselineFile}: {extra.Count} IDs in output are not in baseline");
             }
 
             Assert.IsEmpty(failures,
-                $"Seed script output does not match baseline:\n{string.Join("\n", failures)}");
+                $"Converter plugin output does not match baseline:\n{string.Join("\n", failures)}");
         }
         finally
         {

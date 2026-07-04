@@ -22,4 +22,6 @@ public static class ApiMessages
     public const string YearRangeInvalid           = "ErrorYearRangeInvalid";
     public const string NumericParameterInvalid    = "ErrorNumericParameterInvalid";
     public const string YearParamNotInteger        = "ErrorYearParamNotInteger";
+    public const string SeedFileMissing            = "ErrorSeedFileMissing";
+    public const string SeedFileInvalidJson        = "ErrorSeedFileInvalidJson";
 }

@@ -50,6 +50,8 @@
   "ErrorYearRangeInvalid": "yearFrom mag niet groter zijn dan yearTo.",
   "ErrorNumericParameterInvalid": "Een of meer queryparameters bevatten een ongeldige waarde. Numerieke parameters (yearFrom, yearTo, year, decade, page, pageSize, n) moeten gehele getallen zijn.",
   "ErrorYearParamNotInteger": "{0} moet een geheel getal zijn.",
+  "ErrorSeedFileMissing": "Dit bronbestand bestaat niet meer op de schijf.",
+  "ErrorSeedFileInvalidJson": "Dit bronbestand is leeg of de inhoud is geen geldige JSON.",
   "AdminEndpointsHeading": "Beheereindpunten",
   "AdminEndpointsDescription": "Deze eindpunten vereisen een X-Api-Key-header die overeenkomt met de admin_api_key in de add-on-opties. Ze zijn niet beschikbaar als er geen sleutel is ingesteld.",
   "AdminPreviewSeedLabel": "Importvoorbeeld bekijken",

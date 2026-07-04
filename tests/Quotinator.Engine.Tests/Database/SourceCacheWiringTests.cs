@@ -123,6 +123,50 @@ public class SourceCacheWiringTests
         Assert.IsFalse(spy.Calls[0].ForceRefresh);
     }
 
+    // A malformed source file must be distinguishable, via the preview response, from a genuinely
+    // empty-but-valid one — both would otherwise show quoteCount: 0 with no way to tell them apart.
+    [TestMethod]
+    public async Task PreviewSeedAsync_MalformedFile_ReportsInvalidJsonIssue()
+    {
+        var malformedPath = Path.Combine(_tempDir, "malformed.json");
+        File.WriteAllText(malformedPath, "{ this is not valid json");
+
+        var factory       = new SqliteConnectionFactory(_dbPath);
+        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var batch = new SeedBatch(
+            [new SeedFile(CuratedFile, null), new SeedFile(malformedPath, null)],
+            ManifestPolicy.HardcodedDefault, "bundled sources");
+        var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
+            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
+            new SpySourceCacheUpdater(), autoUpdateSources: false, QuotinatorMigrations.Baseline);
+        await db.InitialiseAsync();
+
+        var preview = await db.PreviewSeedAsync();
+
+        Assert.IsNull(preview.Files.Single(f => f.FileName == "quotinator-curated.json").Issue);
+        Assert.AreEqual(SeedFileIssue.InvalidJson, preview.Files.Single(f => f.FileName == "malformed.json").Issue);
+    }
+
+    [TestMethod]
+    public async Task PreviewSeedAsync_MissingFile_ReportsMissingIssue()
+    {
+        var missingPath = Path.Combine(_tempDir, "does-not-exist.json");
+
+        var factory       = new SqliteConnectionFactory(_dbPath);
+        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var batch = new SeedBatch([new SeedFile(missingPath, null)], ManifestPolicy.HardcodedDefault, "bundled sources");
+        var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
+            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
+            new SpySourceCacheUpdater(), autoUpdateSources: false, QuotinatorMigrations.Baseline);
+        await db.InitialiseAsync();
+
+        var preview = await db.PreviewSeedAsync();
+
+        Assert.AreEqual(SeedFileIssue.Missing, preview.Files.Single(f => f.FileName == "does-not-exist.json").Issue);
+    }
+
     // Row 8: POST /api/v1/admin/sources/refresh (IDatabaseInitializer.RefreshSourcesAsync) updates
     // caches without touching the database — row counts must be unaffected by the call.
     [TestMethod]
@@ -143,9 +187,32 @@ public class SourceCacheWiringTests
         Assert.IsNotNull(resolution);
     }
 
+    // PreviewSeedAsync must surface each file's refresh outcome/last-refreshed timestamp from the
+    // updater's own resolution — not just the raw quote count — so an operator can tell a source
+    // that's currently falling back due to a validation failure apart from one that's genuinely empty.
+    [TestMethod]
+    public async Task PreviewSeedAsync_AttachesRefreshOutcomeAndTimestampFromResolution()
+    {
+        var lastRefreshedAtUtc = DateTime.UtcNow.AddHours(-3);
+        var spy = new SpySourceCacheUpdater
+        {
+            ResultsToReturn = [new SourceRefreshResult("quotinator-curated.json", "https://example.com/x", SourceRefreshOutcome.Failed, "boom", lastRefreshedAtUtc)]
+        };
+        var db = CreateInitializer(spy, autoUpdateSources: true);
+        await db.InitialiseAsync();
+
+        var preview = await db.PreviewSeedAsync();
+
+        var filePreview = preview.Files.Single(f => f.FileName == "quotinator-curated.json");
+        Assert.AreEqual(SourceRefreshOutcome.Failed, filePreview.RefreshOutcome);
+        Assert.AreEqual(lastRefreshedAtUtc, filePreview.LastRefreshedAtUtc);
+    }
+
     private sealed class SpySourceCacheUpdater : ISourceCacheUpdater
     {
         public List<(bool AllowNetwork, bool ForceRefresh)> Calls { get; } = [];
+
+        public IReadOnlyList<SourceRefreshResult> ResultsToReturn { get; set; } = [];
 
         public Task<SourceCacheResolution> ResolveAsync(
             IReadOnlyList<SeedBatch> candidateBatches,
@@ -154,7 +221,7 @@ public class SourceCacheWiringTests
             CancellationToken cancellationToken = default)
         {
             Calls.Add((allowNetwork, forceRefresh));
-            return Task.FromResult(new SourceCacheResolution(candidateBatches, []));
+            return Task.FromResult(new SourceCacheResolution(candidateBatches, ResultsToReturn));
         }
     }
 }
