@@ -51,53 +51,75 @@ A comment recording all four points must be posted on #140 before implementation
 
 ---
 
-## Architecture
+## Steps
 
-### New component: `IBundledSourceUpdater` / `BundledSourceUpdater` (`Quotinator.Data`, DI-registered per `CLAUDE.md`'s DI policy)
+### 1. Post scope-expansion comment on #140
+**Status:** ✅ Done — [comment posted](https://github.com/DutchJaFO/Quotinator/issues/140#issuecomment-4881368528) 2026-07-04, recording the write-path, refresh timing, TTL/override, and force-mechanism decisions from "Scope expansion" above.
 
-Given the candidate `SeedFile`s from a bundled `SeedBatch` (unchanged — still built once by `SeedBatchesBuilder.Build` at DI-construction time, since that part is pure directory/manifest parsing with no network involved) plus a `forceRefresh` flag, returns an **effective** list of `SeedFile`s with `FilePath` resolved to the downloaded-cache copy where one exists and is being used, leaving the original bundled path untouched otherwise. Performs the actual downloads. Must be `async` (uses `IHttpClientFactory`, registered via `builder.Services.AddHttpClient()` — the standard .NET pattern, since there is no existing precedent in this codebase to follow instead).
+### 2. Add `refreshIntervalHours` to `schemas/manifest.schema.json`
+**Status:** ⬜ Not started
 
-This runs at the **start** of `QuotinatorDatabaseInitializer.OnInitialisedAsync`, `OnReseedAsync`, and `OnResetAsync` (all three, already `async Task`) — never inside the synchronous DI factory in `Program.cs`. The constructor-time `_batches` field stays as the fixed *candidate* list; a per-call resolution pass produces the actual files read for that specific operation, so the second and every subsequent `POST /reseed` call can see a different effective path than the first.
+Optional per-entry integer property (hours) on each `files[]` entry — overrides `Quotinator__SourceUpdateIntervalHours` (step 6) for that specific source. Only meaningful alongside `downloadUrl`/`github`.
 
-### Staleness tracking
+### 3. Add `RefreshIntervalHours` to `SeedFile` and read it in `ManifestSeedPlanner`
+**Status:** ⬜ Not started
 
-The cached copy's own filesystem `LastWriteTimeUtc` is the staleness signal — no separate metadata sidecar file. Simpler, and avoids inventing a new on-disk format for a single timestamp. (Flagging this as a deliberate simplification, not obviously non-negotiable — revisit if it proves fragile, e.g. if a restored/copied persistent volume doesn't preserve mtimes.)
+`SeedFile` record gains a `RefreshIntervalHours` (nullable int) property. `ManifestSeedPlanner.ResolveUrls` reads the new manifest field (step 2) into it, alongside the existing `Url`/`DownloadUrl` resolution.
 
-### New directory constant
+### 4. Add `DataPaths.DownloadedSourcesFolder` constant
+**Status:** ⬜ Not started
 
-`DataPaths.cs` gains `DownloadedSourcesFolder = "download"` — combined as `Path.Combine(dataDir, DataPaths.SourcesFolder, DataPaths.DownloadedSourcesFolder)` (reuses the existing `SourcesFolder = "sources"` name, consistent with how `ImportsFolder` is combined with `dataDir` elsewhere; the bundled-image path already uses the same `SourcesFolder` constant combined with `AppContext.BaseDirectory` instead).
+`DataPaths.cs` gains `DownloadedSourcesFolder = "download"`, combined as `Path.Combine(dataDir, DataPaths.SourcesFolder, DataPaths.DownloadedSourcesFolder)` → `{dataDir}/sources/download/`. Reuses the existing `SourcesFolder = "sources"` name (the bundled-image path already combines the same constant with `AppContext.BaseDirectory` instead of `dataDir`). This directory is always writable and persistent in every deployment shape (standalone Docker bind mount, HA supervisor's `/data` mount) — it never touches the read-only bundled image path (`/app/data/sources/`), so no HA-specific branching is needed anywhere else in this implementation.
 
-### Endpoints
+### 5. Wire `Quotinator__AutoUpdateSources` config key
+**Status:** ⬜ Not started
 
-- `POST /api/v1/admin/database/reseed?forceSourceRefresh=true` and `POST /api/v1/admin/database/reset?forceSourceRefresh=true` — new optional query parameter, threaded through to `OnReseedAsync`/`OnResetAsync` → `BundledSourceUpdater`
-- `POST /api/v1/admin/sources/refresh?force=true` — new endpoint in `AdminEndpoints.cs`; calls `BundledSourceUpdater` directly, no database interaction at all
+Bool, default `true`. Read once in `Program.cs` alongside the existing `IncludeDefaultSources`/`ImportsPath` keys from #62, passed to `BundledSourceUpdater` (step 7).
 
----
+### 6. Wire `Quotinator__SourceUpdateIntervalHours` config key
+**Status:** ⬜ Not started
 
-## Notes
+Int, default `24`. Global fallback TTL used when a manifest entry has no `refreshIntervalHours` override (step 2).
 
-- **Force does not override `AutoUpdateSources=false`, and this must be logged explicitly, not silent.** An operator who has explicitly disabled all network checks has made a deliberate no-network declaration (air-gapped install, metered connection, etc.) — a `force` flag on a single call should not silently punch through that. Confirmed with the user: when a force-refresh is requested but blocked by `AutoUpdateSources=false`, log a distinct `Information`/`Warning` line saying so (e.g. `forceSourceRefresh requested but Quotinator__AutoUpdateSources is false — skipping network check`) — this must be visibly different from the "attempted the download and it failed" log line, so an operator reading logs can tell "blocked by config" apart from "tried and couldn't reach it" at a glance. Applies to both the query-parameter force path and the dedicated refresh endpoint's own `force` parameter.
-- **`scripts/sources.json` retirement is explicitly out of scope for this issue** — the GitHub issue's own Notes section calls it a separate follow-up; do not fold it in here.
-- **HA read-only constraint is fully resolved by the persistent-directory design**: `{dataDir}` is always the writable, persistent volume in every deployment shape (standalone Docker bind mount, HA supervisor's `/data` mount) — `{dataDir}/sources/download/` never touches the read-only bundled image path (`/app/data/sources/`), so no HA-specific branching is needed anywhere in the implementation.
+### 7. Implement `IBundledSourceUpdater`/`BundledSourceUpdater`
+**Status:** ⬜ Not started
 
----
+New `Quotinator.Data` component, DI-registered per `CLAUDE.md`'s DI policy. Given the candidate `SeedFile`s from a bundled `SeedBatch` (unchanged — still built once by `SeedBatchesBuilder.Build` at DI-construction time, since that part is pure directory/manifest parsing with no network involved) plus a `forceRefresh` flag, returns an **effective** list of `SeedFile`s with `FilePath` resolved to the downloaded-cache copy where one exists and is being used, leaving the original bundled path untouched otherwise. Performs the actual downloads. Must be `async` (uses `IHttpClientFactory`, registered via `builder.Services.AddHttpClient()` — the standard .NET pattern, since there is no existing precedent in this codebase to follow instead).
 
-## Step status
+Staleness signal is the cached copy's own filesystem `LastWriteTimeUtc` — no separate metadata sidecar file. Simpler, and avoids inventing a new on-disk format for a single timestamp. (Flagging this as a deliberate simplification, not obviously non-negotiable — revisit if it proves fragile, e.g. if a restored/copied persistent volume doesn't preserve mtimes.)
 
-1. [x] Post scope-expansion comment on #140 (write-path, refresh timing, TTL/override, force mechanism — see "Scope expansion" above)
-2. [ ] `schemas/manifest.schema.json` — add optional `refreshIntervalHours` integer property
-3. [ ] `SeedFile` record — add `RefreshIntervalHours` property; `ManifestSeedPlanner.ResolveUrls` reads it from the manifest entry
-4. [ ] `DataPaths.DownloadedSourcesFolder` constant added
-5. [ ] `Quotinator__AutoUpdateSources` config key (default `true`) wired into `Program.cs`
-6. [ ] `Quotinator__SourceUpdateIntervalHours` config key (default `24`) wired into `Program.cs`
-7. [ ] `IBundledSourceUpdater`/`BundledSourceUpdater` implemented, DI-registered, `IHttpClientFactory` registered via `AddHttpClient()`
-8. [ ] `QuotinatorDatabaseInitializer.OnInitialisedAsync`/`OnReseedAsync`/`OnResetAsync` call the updater at the start of each, before reading any bundled file
-9. [ ] `POST /api/v1/admin/database/reseed` and `/reset` gain `forceSourceRefresh` query parameter
-10. [ ] New `POST /api/v1/admin/sources/refresh` endpoint (admin key required, own `force` parameter, per-source summary response)
-11. [ ] Failure path never fails startup/reseed/reset — falls back to cached-then-stale, then bundled
-12. [ ] `README.md`, `addon/DOCS.md`, endpoint `[Description]` attributes updated
-13. [ ] `addon/config.yaml` + `addon/translations/{en,nl,de}.yaml` updated for both new config keys
-14. [ ] Unit tests for all of the above (see Verification)
+### 8. Call the updater from `OnInitialisedAsync`/`OnReseedAsync`/`OnResetAsync`
+**Status:** ⬜ Not started
+
+Runs at the **start** of all three (already `async Task`) — never inside the synchronous DI factory in `Program.cs`. The constructor-time `_batches` field stays as the fixed *candidate* list; a per-call resolution pass produces the actual files read for that specific operation, so the second and every subsequent `POST /reseed` call can see a different effective path than the first.
+
+### 9. `forceSourceRefresh` query parameter on reseed/reset
+**Status:** ⬜ Not started
+
+`POST /api/v1/admin/database/reseed?forceSourceRefresh=true` and the same on `/reset` — bypasses the TTL check for that call only, threaded through to `OnReseedAsync`/`OnResetAsync` → `BundledSourceUpdater`. Does **not** bypass `Quotinator__AutoUpdateSources=false` — an explicit no-network declaration wins over a per-call force flag. When a force is requested but blocked by the config switch, log a distinct `Information`/`Warning` line saying so (e.g. `forceSourceRefresh requested but Quotinator__AutoUpdateSources is false — skipping network check`) — visibly different from "attempted the download and it failed," so operators can tell "blocked by config" apart from "tried and couldn't reach it."
+
+### 10. New `POST /api/v1/admin/sources/refresh` endpoint
+**Status:** ⬜ Not started
+
+New endpoint in `AdminEndpoints.cs` — calls `BundledSourceUpdater` directly, no database interaction at all. Accepts its own `force` query parameter (same not-overriding-`AutoUpdateSources`-false and distinct-logging rule as step 9). Requires the admin API key. Returns a per-source summary (updated / skipped-fresh / failed).
+
+### 11. Failure path never fails startup/reseed/reset
+**Status:** ⬜ Not started
+
+Any network failure (unreachable, timeout, non-200) logs a `Warning` and falls back to whatever already exists — stale cached copy if present, else the bundled path.
+
+### 12. Update `README.md`, `addon/DOCS.md`, endpoint `[Description]` attributes
+**Status:** ⬜ Not started
+
+### 13. Update `addon/config.yaml` and `addon/translations/{en,nl,de}.yaml`
+**Status:** ⬜ Not started
+
+For both new config keys, per the #62 precedent.
+
+### 14. Unit tests
+**Status:** ⬜ Not started
+
+See Verification table below for the full list.
 
 ---
 
