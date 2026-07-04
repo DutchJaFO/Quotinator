@@ -1,6 +1,6 @@
 # #143 — Fresh-database baseline schema + Data/Engine migration ownership split
 
-**Status:** Fully verified (T1+T2), pending release (as of 2026-07-03). See "Exception-free migrations" for the amendment.
+**Status:** Waiting for release
 **GitHub issue:** #143
 **Tiers required:** T1, T2 — this changes the actual migration/table-creation logic behind `InitialiseAsync`/`Reset`, the same class of change `docs/release-verification.md` already flags as a T1/T2 trigger for #141.
 **Depends on:** #141 (`System_`-prefix naming convention) — done, this issue builds directly on it

@@ -1,6 +1,6 @@
 # #55 — Record completeness flag
 
-**Status:** Not started  
+**Status:** Planning
 **GitHub issue:** #55  
 **Connects to:** #56 (audit log entries), #19 (enrichment, different milestone)
 

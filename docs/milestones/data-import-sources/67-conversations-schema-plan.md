@@ -1,6 +1,6 @@
 # #67 — Conversations schema
 
-**Status:** Not started  
+**Status:** Planning
 **GitHub issue:** #67  
 **Depends on:** #58 (ImportBatch FK on new tables)  
 **Unblocks:** #68, #69

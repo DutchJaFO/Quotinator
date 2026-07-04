@@ -8,10 +8,21 @@ This document defines how we plan, execute, and close milestones. All workflow t
 
 Two rules prevent the same fact from being written in two places, drifting out of sync the moment one of them is updated and not the other:
 
-- **`overview.md` carries status only, never detail.** For any given issue, `overview.md` states its current status (e.g. `✅ Closed`, `🟡 Code complete — pending release`, `⬜ Not started`) and links to its plan doc. It never explains *what* was done, *why*, *when a tier was verified*, or *what a session found* — that is the plan doc's job. If updating `overview.md` requires writing more than a short status phrase, that content belongs in the plan doc instead.
+- **`overview.md` carries status only, never detail.** For any given issue, `overview.md` states its current status and links to its plan doc. It never explains *what* was done, *why*, *when a tier was verified*, or *what a session found* — that is the plan doc's job.
 - **A plan doc's numbered step sections and Verification table carry the detail, and their own status.** There is no separate "Step status" checklist — each step is its own subsection (`### N. Title`) with `**Status:**` as its first line, followed by the step's actual detail in that same place. Do not add prose sections (`Notes`, `Implementation notes`, session narratives) that restate what a step or verification row already documents — that is duplication, not a record of anything new. The one legitimate exception is a **Scope changes** section (see below): it records a *decision* — what moved, why, which issue now owns it — not a re-explanation of work already captured by a step or verification row.
 
-Every `**Status:**` line (`overview.md`'s header, and each plan doc's own header) is a single short sentence: current state + as-of date + a pointer to the section that has the real detail (e.g. `See "Scope changes" for detail`). If a Status-line edit is growing past one sentence, stop — that content belongs in a section, not the header.
+**`overview.md`'s header `**Status:**` line and every plan doc's own header `**Status:**` line are exactly one of these, nothing added:**
+
+| Status | Means |
+|--------|-------|
+| `Planning` | Scope/design still being worked out; no implementation started |
+| `In progress` (plan docs with numbered steps: `In progress (step N)`, naming the step currently being worked) | Implementation under way; not yet fully verified |
+| `Waiting for release` | Fully implemented and verified; not yet shipped in a tagged release |
+| `Released` | Shipped in a tagged release |
+
+No dates, no "See X for detail" pointers, no extra clauses of any kind. If something beyond the bare status word feels necessary, that need is itself the signal it belongs in a section of the doc, not the Status line — the reader is already looking at the document.
+
+This does not apply to an individual step section's own `**Status:**` line (e.g. `✅ Done`, `⬜ Not started`) — that is a separate, per-step concept already covered above, not the document-level header.
 
 ## Folder and file naming
 

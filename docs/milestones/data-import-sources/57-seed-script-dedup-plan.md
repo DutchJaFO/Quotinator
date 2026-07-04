@@ -1,6 +1,6 @@
 # #57 — Seed script: dedup inconsistent
 
-**Status:** All problems resolved in code — pending release
+**Status:** Waiting for release
 **GitHub issue:** #57
 **Closed by:** #61
 **Tiers required:** None — Problem 4's fix lives entirely in `QuotinatorDatabaseInitializer` (engine layer); it never touches `.razor`/Blazor/pre-Blazor middleware (T1), the Dockerfile/publish output/`Program.cs` startup/SSL config (T2), or any T3 surface. Fully covered by unit tests; no live verification gate applies.

@@ -2,7 +2,7 @@
 
 **GitHub milestone:** [#10](https://github.com/DutchJaFO/Quotinator/milestone/10)
 **Branch:** `feature/data-import-sources`
-**Status:** In progress, as of 2026-07-04 — see Issue List below for per-issue status and plan doc links.
+**Status:** In progress
 
 ---
 
@@ -33,25 +33,25 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
-| [#61](https://github.com/DutchJaFO/Quotinator/issues/61) | Seed script: one file per source | ✅ Closed | — (pre-dates tier system) | [61-seed-script-per-source-plan.md](61-seed-script-per-source-plan.md) |
-| [#71](https://github.com/DutchJaFO/Quotinator/issues/71) | Generic repository pattern | ✅ Closed | — (pre-dates tier system) | [71-generic-repository-plan.md](71-generic-repository-plan.md) |
-| [#78](https://github.com/DutchJaFO/Quotinator/issues/78) | Repository: transaction and shared connection support | ✅ Closed | — (pre-dates tier system) | [78-repository-transaction-plan.md](78-repository-transaction-plan.md) |
-| [#58](https://github.com/DutchJaFO/Quotinator/issues/58) | ImportBatches schema | ✅ Closed — post-closure regression fixed, pending release | T1 ✅ T2 ✅ (regression fix, 2026-06-30) | [58-import-batches-schema-plan.md](58-import-batches-schema-plan.md) |
-| [#57](https://github.com/DutchJaFO/Quotinator/issues/57) | Seed script: dedup inconsistent | 🟡 Code complete — pending release | None required | [57-seed-script-dedup-plan.md](57-seed-script-dedup-plan.md) |
-| [#63](https://github.com/DutchJaFO/Quotinator/issues/63) | Import manifest | 🟡 Code complete — pending release | T1 ✅ T2 ✅ (2026-06-30) | [63-import-manifest-plan.md](63-import-manifest-plan.md) |
-| [#62](https://github.com/DutchJaFO/Quotinator/issues/62) | Folder-based seeder | 🟡 Code complete — pending release | T1 ✅ T2 ✅ (2026-07-01) | [62-folder-based-seeder-plan.md](62-folder-based-seeder-plan.md) |
-| [#141](https://github.com/DutchJaFO/Quotinator/issues/141) | Reseed/reset must preserve System-classified data | 🟡 Fully verified — pending release | T1 ✅ T2 ✅ | [141-system-table-preservation-plan.md](141-system-table-preservation-plan.md) |
-| [#143](https://github.com/DutchJaFO/Quotinator/issues/143) | Fresh-database baseline schema + Data/Engine migration ownership split | 🟡 Fully verified — pending release | T1 ✅ T2 ✅ | [143-migration-ownership-baseline-plan.md](143-migration-ownership-baseline-plan.md) |
-| [#140](https://github.com/DutchJaFO/Quotinator/issues/140) | Auto-update bundled sources from manifest URL | 🟡 Re-planned — not yet implemented | Not yet assessed | [140-auto-update-sources-plan.md](140-auto-update-sources-plan.md) |
-| [#64](https://github.com/DutchJaFO/Quotinator/issues/64) | Conflict resolution policy | 🟡 Partially done | Not yet assessed | [64-conflict-resolution-plan.md](64-conflict-resolution-plan.md) |
-| [#45](https://github.com/DutchJaFO/Quotinator/issues/45) | Import endpoint | ⬜ Not started | Not yet assessed | [45-import-endpoint-plan.md](45-import-endpoint-plan.md) |
-| [#65](https://github.com/DutchJaFO/Quotinator/issues/65) | Import endpoint: preview/dry-run | 🟡 Partially done | Not yet assessed | [65-preview-dry-run-plan.md](65-preview-dry-run-plan.md) |
-| [#55](https://github.com/DutchJaFO/Quotinator/issues/55) | Record completeness flag | ⬜ Not started | Not yet assessed | [55-record-completeness-plan.md](55-record-completeness-plan.md) |
-| [#56](https://github.com/DutchJaFO/Quotinator/issues/56) | Audit log | ⬜ Not started | Not yet assessed | [56-audit-log-plan.md](56-audit-log-plan.md) |
-| [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: soft-reset by batch | ⬜ Not started | Not yet assessed | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
-| [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | ⬜ Not started | Not yet assessed | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
-| [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | ⬜ Not started | Not yet assessed | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
-| [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | ⬜ Not started | Not yet assessed | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
+| [#61](https://github.com/DutchJaFO/Quotinator/issues/61) | Seed script: one file per source | Released | — (pre-dates tier system) | [61-seed-script-per-source-plan.md](61-seed-script-per-source-plan.md) |
+| [#71](https://github.com/DutchJaFO/Quotinator/issues/71) | Generic repository pattern | Released | — (pre-dates tier system) | [71-generic-repository-plan.md](71-generic-repository-plan.md) |
+| [#78](https://github.com/DutchJaFO/Quotinator/issues/78) | Repository: transaction and shared connection support | Released | — (pre-dates tier system) | [78-repository-transaction-plan.md](78-repository-transaction-plan.md) |
+| [#58](https://github.com/DutchJaFO/Quotinator/issues/58) | ImportBatches schema | Waiting for release | T1 ✅ T2 ✅ (regression fix, 2026-06-30) | [58-import-batches-schema-plan.md](58-import-batches-schema-plan.md) |
+| [#57](https://github.com/DutchJaFO/Quotinator/issues/57) | Seed script: dedup inconsistent | Waiting for release | None required | [57-seed-script-dedup-plan.md](57-seed-script-dedup-plan.md) |
+| [#63](https://github.com/DutchJaFO/Quotinator/issues/63) | Import manifest | Waiting for release | T1 ✅ T2 ✅ (2026-06-30) | [63-import-manifest-plan.md](63-import-manifest-plan.md) |
+| [#62](https://github.com/DutchJaFO/Quotinator/issues/62) | Folder-based seeder | Waiting for release | T1 ✅ T2 ✅ (2026-07-01) | [62-folder-based-seeder-plan.md](62-folder-based-seeder-plan.md) |
+| [#141](https://github.com/DutchJaFO/Quotinator/issues/141) | Reseed/reset must preserve System-classified data | Waiting for release | T1 ✅ T2 ✅ | [141-system-table-preservation-plan.md](141-system-table-preservation-plan.md) |
+| [#143](https://github.com/DutchJaFO/Quotinator/issues/143) | Fresh-database baseline schema + Data/Engine migration ownership split | Waiting for release | T1 ✅ T2 ✅ | [143-migration-ownership-baseline-plan.md](143-migration-ownership-baseline-plan.md) |
+| [#140](https://github.com/DutchJaFO/Quotinator/issues/140) | Auto-update bundled sources from manifest URL | Planning | Not yet assessed | [140-auto-update-sources-plan.md](140-auto-update-sources-plan.md) |
+| [#64](https://github.com/DutchJaFO/Quotinator/issues/64) | Conflict resolution policy | In progress | Not yet assessed | [64-conflict-resolution-plan.md](64-conflict-resolution-plan.md) |
+| [#45](https://github.com/DutchJaFO/Quotinator/issues/45) | Import endpoint | Planning | Not yet assessed | [45-import-endpoint-plan.md](45-import-endpoint-plan.md) |
+| [#65](https://github.com/DutchJaFO/Quotinator/issues/65) | Import endpoint: preview/dry-run | In progress | Not yet assessed | [65-preview-dry-run-plan.md](65-preview-dry-run-plan.md) |
+| [#55](https://github.com/DutchJaFO/Quotinator/issues/55) | Record completeness flag | Planning | Not yet assessed | [55-record-completeness-plan.md](55-record-completeness-plan.md) |
+| [#56](https://github.com/DutchJaFO/Quotinator/issues/56) | Audit log | Planning | Not yet assessed | [56-audit-log-plan.md](56-audit-log-plan.md) |
+| [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: soft-reset by batch | Planning | Not yet assessed | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
+| [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Planning | Not yet assessed | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
+| [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Planning | Not yet assessed | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
+| [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | Planning | Not yet assessed | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
 
 ---
 
@@ -85,25 +85,25 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 
 | #  | Issue | Title | Status |
 |----|-------|-------|--------|
-| 1  | #61 | Seed script: one file per source | Closed ✅ |
-| 2  | #71 | Generic repository pattern | Closed ✅ |
-| 3  | #78 | Repository: transaction and shared connection support | Closed ✅ |
-| 4  | #58 | ImportBatches schema | Closed ✅ — pending release |
-| 5  | #57 | Seed script: dedup inconsistent | Code complete — pending release |
-| 6  | #63 | Import manifest | Code complete — pending release |
-| 7  | #62 | Folder-based seeder | Code complete — pending release |
-| 8  | #141 | Reseed/reset must preserve System-classified data | Fully verified — pending release |
-| 9  | #140 | Auto-update bundled sources from manifest URL | Re-planned — not yet implemented |
-| 10 | #143 | Fresh-database baseline schema + Data/Engine migration ownership split | Fully verified — pending release |
-| 11 | #64 | Conflict resolution policy | Partially done |
-| 12 | #45 | Import endpoint | Not started |
-| 13 | #65 | Import endpoint: preview/dry-run | Partially done |
-| 14 | #55 | Record completeness flag | Not started |
-| 15 | #56 | Audit log | Not started |
-| 16 | #59 | Admin: soft-reset by batch | Not started |
-| 17 | #67 | Conversations schema | Not started |
-| 18 | #68 | Curated JSON conversations | Not started |
-| 19 | #69 | API conversations | Not started |
+| 1  | #61 | Seed script: one file per source | Released |
+| 2  | #71 | Generic repository pattern | Released |
+| 3  | #78 | Repository: transaction and shared connection support | Released |
+| 4  | #58 | ImportBatches schema | Waiting for release |
+| 5  | #57 | Seed script: dedup inconsistent | Waiting for release |
+| 6  | #63 | Import manifest | Waiting for release |
+| 7  | #62 | Folder-based seeder | Waiting for release |
+| 8  | #141 | Reseed/reset must preserve System-classified data | Waiting for release |
+| 9  | #140 | Auto-update bundled sources from manifest URL | Planning |
+| 10 | #143 | Fresh-database baseline schema + Data/Engine migration ownership split | Waiting for release |
+| 11 | #64 | Conflict resolution policy | In progress |
+| 12 | #45 | Import endpoint | Planning |
+| 13 | #65 | Import endpoint: preview/dry-run | In progress |
+| 14 | #55 | Record completeness flag | Planning |
+| 15 | #56 | Audit log | Planning |
+| 16 | #59 | Admin: soft-reset by batch | Planning |
+| 17 | #67 | Conversations schema | Planning |
+| 18 | #68 | Curated JSON conversations | Planning |
+| 19 | #69 | API conversations | Planning |
 
 ---
 

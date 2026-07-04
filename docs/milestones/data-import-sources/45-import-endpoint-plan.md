@@ -1,6 +1,6 @@
 # #45 — Import endpoint
 
-**Status:** Not started  
+**Status:** Planning
 **GitHub issue:** #45  
 **Depends on:** #58 (ImportBatch row), auth design (v3)  
 **Unblocks:** #64 (per-import override), #65 (preview shape), #56 (audit log entries)

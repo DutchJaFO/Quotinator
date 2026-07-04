@@ -1,6 +1,6 @@
 # #71 — Generic repository pattern for database entities
 
-**Status:** Complete  
+**Status:** Released
 **GitHub issue:** #71  
 **Unblocks:** #58 (ImportBatches), all future entity repositories
 

@@ -1,6 +1,6 @@
 # #68 — Curated JSON: conversations format
 
-**Status:** Not started  
+**Status:** Planning
 **GitHub issue:** #68  
 **Depends on:** #67 (schema), #61 (per-source file format)
 

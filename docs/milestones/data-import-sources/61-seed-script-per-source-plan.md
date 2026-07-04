@@ -1,6 +1,6 @@
 # #61 — Seed script: one file per source
 
-**Status:** Complete  
+**Status:** Released
 **GitHub issue:** #61
 
 ---

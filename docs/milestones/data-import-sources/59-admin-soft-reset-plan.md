@@ -1,6 +1,6 @@
 # #59 — Admin: soft-reset by batch
 
-**Status:** Not started  
+**Status:** Planning
 **GitHub issue:** #59  
 **Depends on:** #58 (ImportBatches), #56 (audit log)
 

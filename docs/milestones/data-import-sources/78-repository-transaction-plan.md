@@ -1,6 +1,6 @@
 # #78 — Repository: transaction and shared connection support
 
-**Status:** Complete  
+**Status:** Released
 **GitHub issue:** #78  
 **Depends on:** #71 (generic repository pattern)  
 **Unblocks:** #58 (ImportBatches schema), #45 (import endpoint)

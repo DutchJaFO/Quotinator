@@ -1,6 +1,6 @@
 # #58 — ImportBatches schema
 
-**Status:** Issue closed ✅ — post-closure regression fix pending release  
+**Status:** Waiting for release
 **GitHub issue:** #58  
 **Tiers required:** T1, T2  
 **Depends on:** #71 (generic repository pattern)  

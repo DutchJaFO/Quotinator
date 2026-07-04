@@ -1,6 +1,6 @@
 # #56 — Audit log
 
-**Status:** Not started  
+**Status:** Planning
 **GitHub issue:** #56  
 **Depends on:** #58 (ImportBatch actor field)  
 **Connects to:** #45, #55, #59

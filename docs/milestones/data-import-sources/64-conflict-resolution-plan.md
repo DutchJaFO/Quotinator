@@ -1,6 +1,6 @@
 # #64 — Conflict resolution policy
 
-**Status:** Partially done  
+**Status:** In progress
 **GitHub issue:** #64  
 **Depends on:** #63 (manifest field), #45 (per-import override), #58 (batch recording)
 

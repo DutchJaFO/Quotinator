@@ -1,6 +1,6 @@
 # #69 — API: conversations
 
-**Status:** Not started  
+**Status:** Planning
 **GitHub issue:** #69  
 **Depends on:** #67 (schema), #68 (curated data)
 

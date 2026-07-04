@@ -1,6 +1,6 @@
 # #140 — Auto-update bundled source files from manifest URL on startup
 
-**Status:** Re-planned a second time, not yet implemented (as of 2026-07-04). See "Scope expansion (round 2)" for detail.
+**Status:** Planning
 **GitHub issue:** #140
 **Depends on:** #58 fix (manifest `url` field) — done; #62 (`AutoUpdateSources` follows the same config pattern) — done; #63 (`downloadUrl`/`github` manifest groundwork) — done
 **Unblocks:** retirement of `scripts/sources.json` (separate follow-up, not part of this issue)

@@ -1,6 +1,6 @@
 # #65 — Import endpoint: preview / dry-run
 
-**Status:** Partially done  
+**Status:** In progress
 **GitHub issue:** #65  
 **Depends on:** #45 (import endpoint)
 
