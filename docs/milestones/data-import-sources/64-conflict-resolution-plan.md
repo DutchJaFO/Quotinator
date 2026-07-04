@@ -1,9 +1,15 @@
 # #64 — Conflict resolution policy
 
 **Status:** In progress (step 1)
+
 **Tiers required:** T1, T2
+
 **GitHub issue:** #64
-**Depends on:** #63 (manifest field — done), #45 (per-import override — not started), #58 (batch recording — waiting for release)
+
+**Depends on:** 
+- #63 (manifest field — done)
+- #45 (per-import override — not started)
+- #58 (batch recording — waiting for release)
 
 ---
 
