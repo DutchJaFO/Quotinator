@@ -24,6 +24,8 @@ No dates, no "See X for detail" pointers, no extra clauses of any kind. If somet
 
 This does not apply to an individual step section's own `**Status:**` line (e.g. `✅ Done`, `⬜ Not started`) — that is a separate, per-step concept already covered above, not the document-level header.
 
+**`In progress` requires actual outstanding code/doc work.** Before setting or leaving an issue at `In progress`, check whether every step section and every verification row in its plan doc is already ✅. If they are, the issue is `Waiting for release` even if its Tiers column still shows an unverified tier (e.g. `T3 ⬜`) — Tiers and Status are separate axes. This matters specifically for T3: T3 verification (live HA supervisor) can only happen after a beta tag exists, so a T3-only gap is never something more code work can close right now. Calling that `In progress` implies work that doesn't exist. Re-check this whenever you review or update a plan doc's header status, not just when you first set it.
+
 ## Folder and file naming
 
 Milestone slugs and plan file names use only lowercase letters, numbers, and hyphens — no spaces or special characters. Derived from the milestone title: replace spaces with hyphens, strip punctuation, lowercase everything.

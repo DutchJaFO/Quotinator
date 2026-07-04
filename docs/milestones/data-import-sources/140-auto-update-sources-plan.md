@@ -1,6 +1,6 @@
 # #140 — Auto-update bundled source files from manifest URL on startup
 
-**Status:** In progress (step 29)
+**Status:** Waiting for release
 **Tiers required:** T1, T2, T3 (touches `DatabaseInitializer`/`QuotinatorDatabaseInitializer` → T1+T2; touches `addon/config.yaml` and `addon/translations/{en,nl,de}.yaml` → T3)
 **GitHub issue:** #140
 **Depends on:** #58 fix (manifest `url` field) — done; #62 (`AutoUpdateSources` follows the same config pattern) — done; #63 (`downloadUrl`/`github` manifest groundwork) — done
@@ -64,7 +64,7 @@ A comment recording all four of these points must be posted on #140 before imple
 
 **Correctness constraint (verified, not assumed):** the ported `QuoteIdentity.StableId` algorithm (`Quotinator.Core.Import`) was checked against the real, already-shipped production ID for a known quote/source pair and matches exactly — both converter plugins also have a dedicated ID-stability regression test doing the same against their respective committed baseline files (see Verification rows 20 below). Also confirmed empirically: `SourceQuoteFileReader.TryParse` correctly rejects the actual corrupted cache file this incident produced on the developer's own machine (`bin/Debug/net10.0/data/sources/download/vilaboim_movie-quotes.json`).
 
-**Follow-up work explicitly deferred, not part of this plan:** a new GitHub issue is needed to redesign/rename the two converter plugins with more generic names (their current names are tied to the specific upstream repo, not to what they do) and to consider reserving some plugin slots for internal-only use. Tracked in project memory, not yet filed.
+**Follow-up work explicitly deferred, not part of this plan:** redesigning/renaming the two converter plugins with more generic names (their current names are tied to the specific upstream repo, not to what they do), considering reserving some plugin slots for internal-only use, and defining a plugin configuration model. Filed as [#144](https://github.com/DutchJaFO/Quotinator/issues/144) — see [144-converter-plugin-review-plan.md](144-converter-plugin-review-plan.md).
 
 **Observability improvements found necessary during manual review of the fix (same session, same scope):**
 - `GET /database/seed/preview` and `POST /sources/refresh` previously gave no way to tell a degraded/fallback source apart from a healthy one, or to know how stale a cached copy actually was. Both now return, per file: `refreshOutcome` (`updated`/`uptodate`/`failed`/`skippedcollision`) and `lastRefreshedAtUtc` (the cache file's real last-write time, not "now") when the file has a `downloadUrl`.
