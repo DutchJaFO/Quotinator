@@ -44,7 +44,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#143](https://github.com/DutchJaFO/Quotinator/issues/143) | Fresh-database baseline schema + Data/Engine migration ownership split | Waiting for release | T1 ✅ T2 ✅ | [143-migration-ownership-baseline-plan.md](143-migration-ownership-baseline-plan.md) |
 | [#140](https://github.com/DutchJaFO/Quotinator/issues/140) | Auto-update bundled sources from manifest URL | Waiting for release | T1 ✅ T2 ✅ T3 ⬜ | [140-auto-update-sources-plan.md](140-auto-update-sources-plan.md) |
 | [#144](https://github.com/DutchJaFO/Quotinator/issues/144) | Converter plugins: generic naming, internal-only slots, configuration options | Planning | Not yet assessed | [144-converter-plugin-review-plan.md](144-converter-plugin-review-plan.md) |
-| [#64](https://github.com/DutchJaFO/Quotinator/issues/64) | Conflict resolution policy | In progress | Not yet assessed | [64-conflict-resolution-plan.md](64-conflict-resolution-plan.md) |
+| [#64](https://github.com/DutchJaFO/Quotinator/issues/64) | Conflict resolution policy | In progress | T1 ⬜ T2 ⬜ | [64-conflict-resolution-plan.md](64-conflict-resolution-plan.md) |
 | [#45](https://github.com/DutchJaFO/Quotinator/issues/45) | Import endpoint | Planning | Not yet assessed | [45-import-endpoint-plan.md](45-import-endpoint-plan.md) |
 | [#65](https://github.com/DutchJaFO/Quotinator/issues/65) | Import endpoint: preview/dry-run | In progress | Not yet assessed | [65-preview-dry-run-plan.md](65-preview-dry-run-plan.md) |
 | [#55](https://github.com/DutchJaFO/Quotinator/issues/55) | Record completeness flag | Planning | Not yet assessed | [55-record-completeness-plan.md](55-record-completeness-plan.md) |

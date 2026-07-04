@@ -9,17 +9,6 @@
       "name": "quotinator/curated"
     },
     {
-      "file": "vilaboim_movie-quotes.json",
-      "name": "vilaboim/movie-quotes",
-      "github": {
-        "owner": "vilaboim",
-        "repo": "movie-quotes",
-        "path": "movie-quotes.json",
-        "branch": "master"
-      },
-      "converter": "vilaboim"
-    },
-    {
       "file": "NikhilNamal17_popular-movie-quotes.json",
       "name": "NikhilNamal17/popular-movie-quotes",
       "github": {
@@ -29,6 +18,17 @@
         "branch": "master"
       },
       "converter": "nikhilnamal17"
+    },
+    {
+      "file": "vilaboim_movie-quotes.json",
+      "name": "vilaboim/movie-quotes",
+      "github": {
+        "owner": "vilaboim",
+        "repo": "movie-quotes",
+        "path": "movie-quotes.json",
+        "branch": "master"
+      },
+      "converter": "vilaboim"
     }
   ]
 }
