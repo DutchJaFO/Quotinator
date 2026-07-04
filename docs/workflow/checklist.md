@@ -21,14 +21,15 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 
 Every `overview.md` must contain these sections, in this order. `docs/milestones/v1-7-0/overview.md` is the canonical example — copy its structure for new milestones rather than inventing a new layout.
 
-1. **Header** — milestone name, GitHub milestone link, branch name, one-line status (what's done, what's pending release, as of what date)
+Per `process.md → Where information lives`: this document carries **status only**. Every requirement, date, tier-verification detail, and "what was found/changed" narrative belongs in the issue's own plan doc — `overview.md` never restates it.
+
+1. **Header** — milestone name, GitHub milestone link, branch name, one-sentence status (current state + as-of date), pointing elsewhere for detail (e.g. "see Issue List below")
 2. **Description** — one paragraph on what the milestone delivers and why
 3. **Verification tier definitions** — the T1/T2/T3 summary table (copy from `docs/release-verification.md`) plus the 3-step close rule: (1) included in a published release, (2) every required tier confirmed green, (3) explicit user confirmation before `gh issue close`
-4. **Issue List** — one master table covering every issue in the milestone, columns: `#` (issue link), `Title`, `Status` (✅ Closed / 🟡 Code complete — pending release / not started, etc.), `Tiers` (inline per-issue, e.g. `T1 ✅ T2 ✅` or `T3 ⬜` — blank/`—` only after the issue has actually been assessed against `docs/release-verification.md`'s criteria, never guessed), `Plan doc` (link)
-5. **Pending verification before close** — one subsection per issue that is code-complete but not yet released. Each subsection states what shipped/will ship in which version, which tiers are ✅ with the exact date and what was checked, and which tiers remain outstanding with how to verify them. This is the section that makes "pending release" status auditable months later — terse status alone is not enough.
-6. **Dependency map** — the `#X → requires #Y; unblocks #Z` text block
-7. **Order of operations** — numbered table; update whenever a completed issue changes the correct remaining sequence
-8. **PR merge plan** — required by `process.md`, see below
+4. **Issue List** — one master table covering every issue in the milestone, columns: `#` (issue link), `Title`, `Status` (✅ Closed / 🟡 Code complete — pending release / not started, etc.), `Tiers` (inline per-issue, e.g. `T1 ✅ T2 ✅` or `T3 ⬜` — blank/`—` only after the issue has actually been assessed against `docs/release-verification.md`'s criteria, never guessed), `Plan doc` (link). This table, plus each linked plan doc, is the entire source of truth for "what's done and what's pending" — no separate detail section follows it.
+5. **Dependency map** — the `#X → requires #Y; unblocks #Z` text block
+6. **Order of operations** — numbered table; always plain sequential integers (`1, 2, 3, ...`) — never lettered sub-steps (`7a`, `7b`). Inserting an issue between two existing rows means renumbering everything below it, not appending a letter. Update whenever a completed issue changes the correct remaining sequence
+7. **PR merge plan** — required by `process.md`, see below
 
 A short flat per-issue index list of plan-doc links at the end is optional but encouraged.
 

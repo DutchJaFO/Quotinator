@@ -4,6 +4,15 @@
 
 This document defines how we plan, execute, and close milestones. All workflow templates live in `docs/workflow/`. Per-milestone documents live in `docs/milestones/{milestone-slug}/`.
 
+## Where information lives
+
+Two rules prevent the same fact from being written in two places, drifting out of sync the moment one of them is updated and not the other:
+
+- **`overview.md` carries status only, never detail.** For any given issue, `overview.md` states its current status (e.g. `✅ Closed`, `🟡 Code complete — pending release`, `⬜ Not started`) and links to its plan doc. It never explains *what* was done, *why*, *when a tier was verified*, or *what a session found* — that is the plan doc's job. If updating `overview.md` requires writing more than a short status phrase, that content belongs in the plan doc instead.
+- **A plan doc's Step status checklist and Verification table carry the detail, and their own status.** Do not add prose sections (`Notes`, `Implementation notes`, session narratives) that restate what a step or verification row already documents — that is duplication, not a record of anything new. The one legitimate exception is a **Scope changes** section (see below): it records a *decision* — what moved, why, which issue now owns it — not a re-explanation of work already captured by a step or verification row.
+
+Every `**Status:**` line (`overview.md`'s header, and each plan doc's own header) is a single short sentence: current state + as-of date + a pointer to the section that has the real detail (e.g. `See "Scope changes" for detail`). If a Status-line edit is growing past one sentence, stop — that content belongs in a section, not the header.
+
 ## Folder and file naming
 
 Milestone slugs and plan file names use only lowercase letters, numbers, and hyphens — no spaces or special characters. Derived from the milestone title: replace spaces with hyphens, strip punctuation, lowercase everything.
@@ -120,7 +129,7 @@ At the start of every session working on a milestone:
    |---|--------|-------------|--------|--------------|
    | 1 | ❌ / ✅ | Description | Unit test / Live | Test class.Method or exact command + expected output |
 
-   `Status` is a standalone column between `#` and `Requirement` — never embed ✅ or ❌ inside the Verification column.
+   `Status` is a standalone column between `#` and `Requirement` — never embed ✅ or ❌ inside the Verification column. The `#` column is always plain sequential integers, in row order top to bottom — never lettered (`7a`, `7b`) and never numbered out of sequence with the row's actual position. A requirement discovered after the table already exists gets appended at the next integer (or the whole table renumbered if it belongs earlier), not a lettered insert. This applies equally to `overview.md`'s Order of operations table (see `checklist.md`).
 
    **Bug fixes:** before writing any fix, first confirm the bug is reproducible. Write a
    failing unit test that demonstrates the bug, or document the exact steps and observed

@@ -110,6 +110,7 @@
     <File Path="docs/milestones/data-import-sources/71-generic-repository-plan.md" />
     <File Path="docs/milestones/data-import-sources/72-cve-sql-audit-plan.md" />
     <File Path="docs/milestones/data-import-sources/78-repository-transaction-plan.md" />
+    <File Path="docs/milestones/data-import-sources/140-auto-update-sources-plan.md" />
     <File Path="docs/milestones/data-import-sources/141-system-table-preservation-plan.md" />
     <File Path="docs/milestones/data-import-sources/143-migration-ownership-baseline-plan.md" />
   </Folder>

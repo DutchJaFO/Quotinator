@@ -1,6 +1,6 @@
 # #62 — Folder-based seeder
 
-**Status:** All spec requirements resolved in code, T1+T2 verified — pending release (issue cannot close until then). Amended 2026-07-02: `ImportBatchType.System` no longer classifies bundled quote content, but is kept in the enum as a reserved value for future `System_`-table content imports (see "Correction 2026-07-02" below) — not yet re-verified live for this specific correction.
+**Status:** Code-complete, T1+T2 verified, pending release (as of 2026-07-02). See "Correction 2026-07-02" for the `ImportBatchType.System` amendment.
 **GitHub issue:** #62
 **Tiers required:** T1, T2 — this issue touches `Program.cs` startup config reading, same reasoning as #63.
 **Depends on:** #63 (manifest) — done; #58 (ImportBatch rows) — done
