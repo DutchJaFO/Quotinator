@@ -37,12 +37,16 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public Task InitialiseAsync() => Task.CompletedTask;
 
     /// <inheritdoc/>
-    public Task ReseedAsync() => Task.CompletedTask;
+    public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
 
     /// <inheritdoc/>
-    public Task ResetAsync(bool preserveSchemaVersion = false) => Task.CompletedTask;
+    public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false) => Task.CompletedTask;
 
     /// <inheritdoc/>
     public Task<SeedPreviewResult> PreviewSeedAsync()
         => Task.FromResult(new SeedPreviewResult([], [], 0, 0));
+
+    /// <inheritdoc/>
+    public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false)
+        => Task.FromResult(new SourceCacheResolution([], []));
 }

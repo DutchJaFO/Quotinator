@@ -29,11 +29,14 @@ The REST API is accessible in two ways:
 | `GET /api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/version` | Running version |
-| `GET /api/v1/admin/database/seed/preview` | Preview what a reseed would import — no data is changed (requires `X-Api-Key`) |
-| `POST /api/v1/admin/database/reseed` | Clear all data and reimport from the bundled source files (requires `X-Api-Key`) |
-| `POST /api/v1/admin/database/reset` | Full reset: clear data, reapply migrations, reimport (requires `X-Api-Key`). Audit log always survives. Schema version history is cleared and replayed by default; pass `?preserveSchemaVersion=true` to keep it |
+| `GET /api/v1/admin/database/seed/preview` | Preview what a reseed would import — no data is changed. Reflects any already-downloaded source cache, but never triggers a network call itself (requires `X-Api-Key`) |
+| `POST /api/v1/admin/database/reseed` | Clear all data and reimport from the bundled source files. Pass `?forceSourceRefresh=true` to bypass the download cache's freshness check for this call (requires `X-Api-Key`) |
+| `POST /api/v1/admin/database/reset` | Full reset: clear data, reapply migrations, reimport (requires `X-Api-Key`). Audit log always survives. Schema version history is cleared and replayed by default; pass `?preserveSchemaVersion=true` to keep it. Pass `?forceSourceRefresh=true` to bypass the download cache's freshness check for this call |
+| `POST /api/v1/admin/sources/refresh` | Refresh the download cache for any source with a `downloadUrl`/`github` manifest entry, without touching the database. Pass `?force=true` to bypass the freshness check (requires `X-Api-Key`) |
 
 Admin endpoints require the `X-Api-Key: <key>` request header matching the `admin_api_key` set in the add-on configuration. Requests without the header, or with an incorrect key, receive `401 Unauthorized`.
+
+Sources declaring a `downloadUrl` or `github` manifest entry are automatically refreshed from the network before seeding — controlled by the **Auto-update sources** and **Source update interval (hours)** add-on options (see add-on configuration). A network failure never blocks startup, reseed, or reset — the app falls back to whatever copy is already on disk.
 
 All endpoints accept an optional `lang` query parameter (ISO 639-1 code, e.g. `nl`, `de`) to request a translated quote response. Falls back to the original language if no translation exists. Error message language is controlled separately by the `Accept-Language` request header.
 

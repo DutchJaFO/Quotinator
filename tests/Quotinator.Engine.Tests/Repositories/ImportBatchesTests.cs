@@ -51,6 +51,7 @@ public class ImportBatchesTests
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
+            NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 

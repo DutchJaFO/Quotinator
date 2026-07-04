@@ -152,36 +152,40 @@ public class DatabaseInitializer : IDatabaseInitializer
     protected virtual Task OnInitialisedAsync(SqliteConnection connection) => Task.CompletedTask;
 
     /// <inheritdoc/>
-    public async Task ReseedAsync()
+    public async Task ReseedAsync(bool forceSourceRefresh = false)
     {
         using var connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
-        await OnReseedAsync(connection);
+        await OnReseedAsync(connection, forceSourceRefresh);
     }
 
     /// <summary>
     /// Called by <see cref="ReseedAsync"/>. Override to replace the default no-op with a
     /// domain-specific reseed implementation. Base implementation does nothing.
     /// </summary>
-    protected virtual Task OnReseedAsync(SqliteConnection connection) => Task.CompletedTask;
+    protected virtual Task OnReseedAsync(SqliteConnection connection, bool forceSourceRefresh) => Task.CompletedTask;
 
     /// <inheritdoc/>
-    public async Task ResetAsync(bool preserveSchemaVersion = false)
+    public async Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false)
     {
         using var connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
-        await OnResetAsync(connection, preserveSchemaVersion);
+        await OnResetAsync(connection, preserveSchemaVersion, forceSourceRefresh);
     }
 
     /// <summary>
     /// Called by <see cref="ResetAsync"/>. Override to replace the default no-op with a
     /// domain-specific reset implementation. Base implementation does nothing.
     /// </summary>
-    protected virtual Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion) => Task.CompletedTask;
+    protected virtual Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh) => Task.CompletedTask;
 
     /// <inheritdoc/>
     public virtual Task<SeedPreviewResult> PreviewSeedAsync()
         => Task.FromResult(new SeedPreviewResult([], [], 0, 0));
+
+    /// <inheritdoc/>
+    public virtual Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false)
+        => Task.FromResult(new SourceCacheResolution([], []));
 
     // -------------------------------------------------------------------------
     #region Protected utilities for subclasses

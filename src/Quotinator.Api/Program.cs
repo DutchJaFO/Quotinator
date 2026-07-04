@@ -189,6 +189,12 @@ var configPolicy = new ManifestPolicy(
 var createMissingManifest  = builder.Configuration.GetValue("Quotinator:CreateMissingManifest", true);
 var includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeDefaultSources", true);
 
+// Auto-update: whether the app checks manifest downloadUrl/github entries for a fresher copy at
+// all (master switch — false means pure offline mode, no network calls ever), and how long a
+// downloaded copy is considered fresh before the next check re-verifies it.
+var autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoUpdateSources", true);
+var sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
+
 // Bundled sources are always read from the Docker image (AppContext.BaseDirectory/data/sources/).
 // No file copy to the persistent volume is needed — only the database and DataProtection keys
 // need to be on a writable, persistent path.
@@ -199,6 +205,12 @@ var bundledSourcesDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths
 var importsDir = builder.Configuration["Quotinator:ImportsPath"] is { Length: > 0 } customImportsPath
     ? customImportsPath
     : Path.Combine(dataDir, DataPaths.ImportsFolder);
+
+// Auto-update download caches — always under the persistent data volume, never the read-only
+// bundled image path, so both are writable in every deployment shape including the HA add-on.
+// "Internal" is the default cache for bundled-manifest entries; "external" for user-imports entries.
+var internalDownloadDir = Path.Combine(dataDir, DataPaths.SourcesFolder, DataPaths.DownloadedSourcesFolder);
+var externalDownloadDir = Path.Combine(dataDir, DataPaths.ImportsFolder, DataPaths.DownloadedSourcesFolder);
 
 // Persist DataProtection keys to a subdirectory of the data volume so antiforgery tokens
 // and Blazor circuit descriptors survive container restarts and add-on updates.
@@ -269,6 +281,15 @@ builder.Services.AddSingleton<ISystemAuditReader, SystemAuditReader>();
 // separate bootstrap console logger that runs before the "Quotinator starting" banner.
 builder.Services.AddSingleton<IManifestSeedPlanner, ManifestSeedPlanner>();
 builder.Services.AddSingleton<Quotinator.Engine.Repositories.IImportBatchRepository, SqliteImportBatchRepository>();
+
+// 5 s timeout: a slow/unreachable upstream must never block startup, reseed, or reset for longer
+// than a brief, bounded check — the updater always falls back to the existing cached/local file.
+builder.Services.AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
+builder.Services.AddSingleton<ISourceCacheUpdater>(sp => new SourceCacheUpdater(
+    sp.GetRequiredService<IHttpClientFactory>(),
+    new SourceCacheOptions(internalDownloadDir, externalDownloadDir, sourceUpdateIntervalHours),
+    sp.GetRequiredService<ILogger<SourceCacheUpdater>>()));
+
 builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
@@ -284,6 +305,8 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<ISystemAuditWriter>(),
         sp.GetRequiredService<ICallerContext>(),
         sp.GetRequiredService<ILogger<DatabaseInitializer>>(),
+        sp.GetRequiredService<ISourceCacheUpdater>(),
+        autoUpdateSources,
         QuotinatorMigrations.Baseline);
 });
 builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Engine.Services.SqliteQuoteService(connectionFactory));

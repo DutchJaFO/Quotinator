@@ -48,7 +48,13 @@ public interface IDatabaseInitializer
     Task InitialiseAsync();
 
     /// <summary>Clears all data tables and reimports from all configured source files. Schema migration history is preserved. Updates the row-count properties when done.</summary>
-    Task ReseedAsync();
+    /// <param name="forceSourceRefresh">
+    /// When <c>true</c>, bypasses the auto-update TTL check for every manifest entry with a
+    /// <c>downloadUrl</c>, refreshing all of them from the network regardless of freshness. Has no
+    /// effect when <c>Quotinator__AutoUpdateSources</c> is <c>false</c> — an explicit no-network
+    /// declaration is never overridden by a force flag. Defaults to <c>false</c>.
+    /// </param>
+    Task ReseedAsync(bool forceSourceRefresh = false);
 
     /// <summary>
     /// Clears all data tables, reapplies all migrations, then reimports from all configured source files.
@@ -59,11 +65,21 @@ public interface IDatabaseInitializer
     /// When <c>true</c>, existing schema migration history is left untouched instead of being cleared
     /// and replayed from scratch. Defaults to <c>false</c>, matching the historical behaviour.
     /// </param>
-    Task ResetAsync(bool preserveSchemaVersion = false);
+    /// <param name="forceSourceRefresh">Same meaning as <see cref="ReseedAsync"/>'s parameter of the same name.</param>
+    Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false);
 
     /// <summary>
     /// Scans all configured source files without touching the database and returns a preview of what a
     /// full import would do — file quote counts and any cross-file duplicate quote IDs.
     /// </summary>
     Task<SeedPreviewResult> PreviewSeedAsync();
+
+    /// <summary>
+    /// Refreshes the download cache for every configured source that declares a
+    /// <c>downloadUrl</c>/<c>github</c>, without touching the database or reimporting any data —
+    /// the reimport itself only happens on the next reseed/reset/startup. Has no effect when the
+    /// auto-update mechanism is disabled entirely.
+    /// </summary>
+    /// <param name="force">When <c>true</c>, bypasses the TTL check for every entry, refreshing all of them regardless of freshness.</param>
+    Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false);
 }

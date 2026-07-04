@@ -31,6 +31,7 @@ and follow standard C# documentation conventions.
 | MCP | Model Context Protocol | The protocol used to expose Quotinator as a tool to AI assistants. |
 | NVD | National Vulnerability Database | The US government repository of standards-based vulnerability management data. |
 | PK | Primary Key | The unique identifier column on a database table. In this project always a UUID. |
+| POCO | Plain Old CLR Object | A simple class with no framework base class or attributes required by its runtime behaviour — used here for JSON DTOs deserialized via `JsonSerializer`. |
 | PR | Pull Request | A GitHub pull request proposing changes from one branch into another. |
 | REST | Representational State Transfer | The architectural style used by the Quotinator HTTP API. |
 | SMO | SQL Server Management Objects | Microsoft's .NET library for SQL Server administration. Mentioned in `docs/sql-safety.md` when explaining why the T-SQL parser was rejected. |

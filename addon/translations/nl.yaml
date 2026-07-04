@@ -35,5 +35,15 @@ configuration:
     description: >-
       Map waar back-ups van de database vóór migraties worden opgeslagen.
       Laat leeg voor de standaardwaarde: een backups/-submap in de gegevensmap.
+  auto_update_sources:
+    name: Bronnen automatisch bijwerken
+    description: >-
+      Controleert manifestvermeldingen met een download-URL op een nieuwere versie vóór het seeden.
+      Schakel uit voor volledig offline/geïsoleerde installaties — er worden dan nooit netwerkverzoeken gedaan.
+  source_update_interval_hours:
+    name: Bijwerkinterval bronnen (uren)
+    description: >-
+      Hoe lang een gedownload bronbestand als actueel wordt beschouwd voordat het opnieuw wordt gecontroleerd.
+      Individuele bronnen kunnen dit overschrijven in hun eigen manifestvermelding.
 network:
   8080/tcp: Directe webtoegang — HTTP (SSL uitgeschakeld) of HTTPS (SSL ingeschakeld)

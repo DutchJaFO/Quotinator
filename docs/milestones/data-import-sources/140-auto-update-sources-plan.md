@@ -1,6 +1,6 @@
 # #140 — Auto-update bundled source files from manifest URL on startup
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 17)
 **GitHub issue:** #140
 **Depends on:** #58 fix (manifest `url` field) — done; #62 (`AutoUpdateSources` follows the same config pattern) — done; #63 (`downloadUrl`/`github` manifest groundwork) — done
 **Unblocks:** retirement of `scripts/sources.json` (separate follow-up, not part of this issue)
@@ -80,87 +80,49 @@ A comment recording all four of these points must be posted on #140 before imple
 **Status:** ✅ Done — [comment posted](https://github.com/DutchJaFO/Quotinator/issues/140#issuecomment-4881512146) 2026-07-04, recording all four points from "Scope expansion (round 2)" above.
 
 ### 3. Add `refreshIntervalHours` and `downloadTarget` to `schemas/manifest.schema.json`
-**Status:** ⬜ Not started
-
-Both optional, on any `files[]` entry with a `downloadUrl`/`github`. `refreshIntervalHours` (integer, hours) overrides `Quotinator__SourceUpdateIntervalHours` (step 7) for that source. `downloadTarget` (string enum `"internal"` | `"external"`) overrides which cache folder (step 5) that source uses, regardless of which manifest it's declared in.
+**Status:** ✅ Done — both fields added to `files.items.properties` as optional (`refreshIntervalHours`: integer, `downloadTarget`: string enum `internal`/`external`).
 
 ### 4. Add `RefreshIntervalHours`/`DownloadTarget` to `SeedFile` and read them in `ManifestSeedPlanner`
-**Status:** ⬜ Not started
-
-`SeedFile` record gains `RefreshIntervalHours` (nullable int) and `DownloadTarget` (nullable enum) properties. `ManifestSeedPlanner.ResolveUrls` reads both new manifest fields (step 3) into them, alongside the existing `Url`/`DownloadUrl` resolution. `PlanSeed` already runs once per directory (bundled sources, user imports) — `SeedBatch`'s existing `Origin` (`SeedBatchOrigin.Bundled`/`UserImports`) is what a later step uses to pick the *default* target when an entry has no explicit `DownloadTarget`.
+**Status:** ✅ Done — `SeedFile` gained both properties; `ManifestSeedPlanner`'s `listed` selector reads `refreshIntervalHours`/`downloadTarget` via a new `ParseDownloadTarget` helper. Covered by `ManifestSeedPlannerTests.PlanSeed_ManifestEntryHasRefreshIntervalHoursAndDownloadTarget_ParsedIntoSeedFile` and `...OmitsRefreshIntervalHoursAndDownloadTarget_BothNull`.
 
 ### 5. `DataPaths` — internal and external download folders
-**Status:** ⬜ Not started
-
-Adds a new `DownloadedSourcesFolder = "download"` constant (verified against the current `DataPaths.cs` while reviewing this plan before implementation — it does not exist yet; nothing for #140 has been implemented) combined with either parent folder:
-- Internal: `Path.Combine(dataDir, DataPaths.SourcesFolder, DataPaths.DownloadedSourcesFolder)` → `{dataDir}/sources/download/` — default for entries from the bundled sources manifest
-- External: `Path.Combine(dataDir, DataPaths.ImportsFolder, DataPaths.DownloadedSourcesFolder)` → `{dataDir}/imports/download/` — default for entries from the user imports manifest
-
-Both are always writable and persistent in every deployment shape (standalone Docker bind mount, HA supervisor's `/data` mount) — neither touches the read-only bundled image path (`/app/data/sources/`), so no HA-specific branching is needed anywhere else in this implementation.
+**Status:** ✅ Done — added `DataPaths.DownloadedSourcesFolder = "download"`, combined in `Program.cs` as `internalDownloadDir`/`externalDownloadDir`.
 
 ### 6. Wire `Quotinator__AutoUpdateSources` config key
-**Status:** ⬜ Not started
-
-Bool, default `true`. Read once in `Program.cs` alongside the existing `IncludeDefaultSources`/`ImportsPath` keys from #62, passed to `SourceCacheUpdater` (step 8).
+**Status:** ✅ Done — read in `Program.cs` as `autoUpdateSources` (default `true`), passed into the `QuotinatorDatabaseInitializer` DI factory.
 
 ### 7. Wire `Quotinator__SourceUpdateIntervalHours` config key
-**Status:** ⬜ Not started
-
-Int, default `24`. Global fallback TTL used when a manifest entry has no `refreshIntervalHours` override (step 3).
+**Status:** ✅ Done — read in `Program.cs` as `sourceUpdateIntervalHours` (default `24`), passed into `SourceCacheOptions`.
 
 ### 8. Implement `ISourceCacheUpdater`/`SourceCacheUpdater`
-**Status:** ⬜ Not started
-
-New `Quotinator.Data` component, DI-registered per `CLAUDE.md`'s DI policy — renamed from the earlier `BundledSourceUpdater` concept since it's no longer bundled-only (round 2, point 1). Given the candidate `SeedFile`s from *both* the bundled and user-imports `SeedBatch`es (unchanged — still built once by `SeedBatchesBuilder.Build` at DI-construction time, since that part is pure directory/manifest parsing with no network involved) plus a `forceRefresh` flag, returns an **effective** list of `SeedFile`s with `FilePath` resolved to the downloaded-cache copy where one exists and is being used, leaving the original bundled/local path untouched otherwise. Performs the actual downloads. Must be `async` (uses `IHttpClientFactory`, registered via `builder.Services.AddHttpClient()` — the standard .NET pattern, since there is no existing precedent in this codebase to follow instead).
-
-Staleness signal is the cached copy's own filesystem `LastWriteTimeUtc` — no separate metadata sidecar file. Simpler, and avoids inventing a new on-disk format for a single timestamp. (Flagging this as a deliberate simplification, not obviously non-negotiable — revisit if it proves fragile, e.g. if a restored/copied persistent volume doesn't preserve mtimes.)
+**Status:** ✅ Done — `Quotinator.Data.Import.ISourceCacheUpdater`/`SourceCacheUpdater` implemented, DI-registered via `AddHttpClient(SourceCacheUpdater.HttpClientName, ...)` (5 s timeout) and `AddSingleton<ISourceCacheUpdater>` in `Program.cs`. Covered by `SourceCacheUpdaterTests` (Verification rows 1-12).
 
 ### 9. Collision detection across resolved download targets
-**Status:** ⬜ Not started
-
-Part of `SourceCacheUpdater`'s resolution pass (step 8), run before any downloads: group every candidate entry (bundled and imports together) by its resolved target path (folder + filename). Any group with more than one distinct source (different URL, or the same URL declared in two places — either counts as distinct entries) is a collision.
-
-For every entry in a colliding group: do not download, and do not trust any file already sitting at the shared path either (there's no way to know which source last wrote it) — fall back directly to that entry's own original bundled/local file instead. Log one `Error` naming every colliding source (name + URL) and the shared path, so the operator can fix their manifest (rename the conflicting `file`, or set an explicit `downloadTarget` to separate them). This re-runs on every seed operation, since manifests can change between calls — never a startup, reseed, or reset failure, same as a network failure.
+**Status:** ✅ Done — implemented inside `SourceCacheUpdater.ResolveAsync`. Covered by `SourceCacheUpdaterTests.ResolveAsync_CollidingTargetPaths_SkipsBothAndLogsError` (row 12).
 
 ### 10. Call the updater from `OnInitialisedAsync`/`OnReseedAsync`/`OnResetAsync`
-**Status:** ⬜ Not started
-
-Runs at the **start** of all three (already `async Task`), before any data truncation/rebuild — never inside the synchronous DI factory in `Program.cs`. `QuotinatorDatabaseInitializer` is a DI singleton and `PreviewSeedAsync` (step 11) reads `_batches` with no lock, so `_batches` must stay genuinely immutable — the resolved *effective* batch list is a per-call local variable, never a field reassignment. This requires widening the existing private `SeedIfEmptyInternalAsync(SqliteConnection connection)` to `SeedIfEmptyInternalAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)`, with each caller (`SeedIfEmptyAsync`, `OnReseedAsync`, `OnResetAsync`) computing its own effective list via `SourceCacheUpdater` first and passing it through — so the second and every subsequent `POST /reseed` call re-resolves independently and can see a different effective path than the first.
-
-**Also requires widening `IDatabaseInitializer.ReseedAsync()` → `ReseedAsync(bool forceSourceRefresh = false)` and `ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false)`** (verified against the current interface and `AdminEndpoints.cs` while reviewing this plan — today's methods have no room for a new flag), which ripples into the base `DatabaseInitializer` class (`Quotinator.Data`) and its virtual `OnReseedAsync`/`OnResetAsync` hook signatures, and into `NoOpDatabaseInitializer` (`Quotinator.Data.Testing`, the test double) — same shape as the existing `preserveSchemaVersion` precedent. `InitialiseAsync()`/`OnInitialisedAsync` are unaffected — there is no HTTP-triggered variant of plain startup to pass a force flag through, so startup always respects the TTL only.
+**Status:** ✅ Done — `QuotinatorDatabaseInitializer` gained `ISourceCacheUpdater`/`autoUpdateSources` constructor params and a `ResolveEffectiveBatchesAsync` helper; `_batches` itself is never mutated. `SeedIfEmptyAsync`/`SeedIfEmptyInternalAsync`/`ReSeedGenresIfEmptyAsync` widened to take an `effectiveBatches` parameter. `IDatabaseInitializer.ReseedAsync(bool forceSourceRefresh = false)`/`ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false)` widened, rippling into the base `DatabaseInitializer` class and `NoOpDatabaseInitializer`. Covered by `SourceCacheWiringTests.ReseedAsync_CalledTwice_InvokesUpdaterIndependentlyEachTime` (row 13) and `...ThreadsThroughToUpdater` tests (row 14).
 
 ### 11. `PreviewSeedAsync` reflects the cache, without ever downloading
-**Status:** ⬜ Not started
-
-Confirmed with the user: `GET /api/v1/admin/database/seed/preview` must resolve to an existing cached copy when one is already on disk (same effective-path resolution as `AutoUpdateSources=false` — no TTL check, no network call, no staleness update), so preview accurately reflects what an actual seed operation would import. `PreviewSeedAsync` gets the same treatment as step 10 — computes its own effective batches via `SourceCacheUpdater` (passing a flag/mode that skips the network entirely) before iterating, rather than reading `_batches` directly.
+**Status:** ✅ Done — `PreviewSeedAsync` calls `ResolveEffectiveBatchesAsync(forceRefresh: false, allowNetworkOverride: false)`, always forcing `allowNetwork=false` regardless of `_autoUpdateSources`. Covered by `SourceCacheWiringTests.PreviewSeedAsync_AutoUpdateSourcesTrue_NeverAllowsNetwork` (row 15).
 
 ### 12. `forceSourceRefresh` query parameter on reseed/reset
-**Status:** ⬜ Not started
-
-`POST /api/v1/admin/database/reseed?forceSourceRefresh=true` and the same on `/reset` — bypasses the TTL check for that call only, threaded through to `OnReseedAsync`/`OnResetAsync` → `SourceCacheUpdater`. Does **not** bypass `Quotinator__AutoUpdateSources=false` — an explicit no-network declaration wins over a per-call force flag. When a force is requested but blocked by the config switch, log a distinct `Information`/`Warning` line saying so (e.g. `forceSourceRefresh requested but Quotinator__AutoUpdateSources is false — skipping network check`) — visibly different from "attempted the download and it failed," so operators can tell "blocked by config" apart from "tried and couldn't reach it."
+**Status:** ✅ Done — `POST /database/reseed` and `POST /database/reset` both gained a `forceSourceRefresh` query parameter, threaded through to `SourceCacheUpdater`. The distinct "blocked by config" log line is implemented in `SourceCacheUpdater.ResolveAsync`. Covered by `SourceCacheUpdaterTests.ResolveAsync_ForceRefreshTrueButAllowNetworkFalse_DoesNotBypassConfigAndLogsDistinctMessage` (row 7).
 
 ### 13. New `POST /api/v1/admin/sources/refresh` endpoint
-**Status:** ⬜ Not started
-
-New endpoint in `AdminEndpoints.cs` — calls `SourceCacheUpdater` directly (both internal and external caches), no database interaction at all. Accepts its own `force` query parameter (same not-overriding-`AutoUpdateSources`-false and distinct-logging rule as step 12). Requires the admin API key. Returns a per-source summary (updated / skipped-fresh / failed / skipped-collision).
+**Status:** ✅ Done — added to `AdminEndpoints.cs`, calling a new `IDatabaseInitializer.RefreshSourcesAsync(bool force = false)` method (added to the interface, base `DatabaseInitializer`, `NoOpDatabaseInitializer`, and overridden in `QuotinatorDatabaseInitializer` to delegate to `ISourceCacheUpdater` directly — no database interaction). Requires the admin API key (routed through `adminGroup`). Covered by `SourceCacheWiringTests.RefreshSourcesAsync_DoesNotAffectRowCountsOrTouchDatabase` (row 8).
 
 ### 14. Failure path never fails startup/reseed/reset
-**Status:** ⬜ Not started
-
-Any network failure (unreachable, timeout, non-200) logs a `Warning` and falls back to whatever already exists — stale cached copy if present, else the original bundled/local path. Same guarantee for a collision (step 9): never a hard failure, always a safe fallback.
+**Status:** ✅ Done — `SourceCacheUpdater.TryDownloadAsync` catches all exceptions and non-success status codes, logging a `Warning` and returning `false`; callers always fall back to the best available file. Covered by `SourceCacheUpdaterTests.ResolveAsync_NetworkFailure_FallsBackToStaleCacheAndLogsWarning` (row 5).
 
 ### 15. Update `README.md`, `addon/DOCS.md`, endpoint `[Description]` attributes
-**Status:** ⬜ Not started
+**Status:** ✅ Done — REST API Endpoints tables in both files updated (reseed/reset `forceSourceRefresh`, new `sources/refresh` row, auto-update behaviour note); `[Description]`/`WithDescription` text on the endpoints in `AdminEndpoints.cs` updated accordingly.
 
 ### 16. Update `addon/config.yaml` and `addon/translations/{en,nl,de}.yaml`
-**Status:** ⬜ Not started
-
-For both new config keys, per the #62 precedent.
+**Status:** ✅ Done — added `auto_update_sources` (bool, default `true`) and `source_update_interval_hours` (int, default `24`) to `options`/`schema`/`env_vars` in `config.yaml`, and matching `configuration` entries to `en.yaml`, `nl.yaml`, `de.yaml`.
 
 ### 17. Unit tests
-**Status:** ⬜ Not started
-
-See Verification table below for the full list.
+**Status:** In progress — `SourceCacheUpdaterTests` (12 tests, rows 1-7 and 9-12) and `SourceCacheWiringTests` (5 tests, rows 8 and 13-15) added and passing; `ManifestSeedPlannerTests` gained 2 tests for the new manifest fields. Full solution build is 0 Warning(s)/0 Error(s) and the full test suite passes (rows 16-17). Rows 18-19 (T1/T2) remain live/manual steps, not part of this coding session.
 
 ---
 
@@ -168,23 +130,23 @@ See Verification table below for the full list.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `AutoUpdateSources=false` skips all network checks; seeds from cached-if-present else the original bundled/local file | Unit test | To be named |
-| 2 | ❌ | Fresh cached copy (within TTL) is used without a network call | Unit test | To be named |
-| 3 | ❌ | Stale cached copy (past TTL) triggers a `GET`; success overwrites the cache and logs `Information` | Unit test | To be named |
-| 4 | ❌ | Per-entry `refreshIntervalHours` overrides the global default | Unit test | To be named |
-| 5 | ❌ | Network failure logs a `Warning` and falls back to the most recent available copy; the seed operation still succeeds | Unit test | To be named |
-| 6 | ❌ | `forceSourceRefresh=true` bypasses the TTL check | Unit test | To be named |
-| 7 | ❌ | `forceSourceRefresh=true` does **not** bypass `AutoUpdateSources=false`, and logs a distinct message explaining the force was blocked by config (not a network failure) | Unit test | To be named |
-| 8 | ❌ | `POST /api/v1/admin/sources/refresh` updates both caches without touching the database | Unit test | To be named |
-| 9 | ❌ | A user-imports manifest entry with a `downloadUrl` is downloaded and cached, same as a bundled entry (reverses the old bundled-only scope) | Unit test | To be named |
-| 10 | ❌ | A bundled entry with no `downloadTarget` override defaults to the internal folder; a user-imports entry with no override defaults to the external folder | Unit test | To be named |
-| 11 | ❌ | An explicit per-entry `downloadTarget` routes that entry to the named folder regardless of which manifest it came from | Unit test | To be named |
-| 12 | ❌ | Two entries whose resolved target paths collide are both skipped (no download, no read from the shared path), a distinct `Error` names both sources and the shared path, and no silent overwrite occurs | Unit test | To be named |
-| 13 | ❌ | A second `POST /reseed` call re-evaluates staleness independently of the first (proves the fixed-batch-list problem is actually solved) | Unit test | To be named |
-| 14 | ❌ | `Reset` also triggers the same refresh-check and collision-detection logic as Reseed | Unit test | To be named |
-| 15 | ❌ | `GET /api/v1/admin/database/seed/preview` reflects an existing cached copy when present, but never triggers a network call or updates staleness state | Unit test | To be named |
-| 16 | ❌ | Build clean | Live | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 17 | ❌ | All tests pass | Live | `dotnet test --configuration Release --verbosity normal` |
+| 1 | ✅ | `AutoUpdateSources=false` skips all network checks; seeds from cached-if-present else the original bundled/local file | Unit test | `SourceCacheUpdaterTests.ResolveAsync_AllowNetworkFalse_NoCacheYet_UsesOriginalFile`, `...AllowNetworkFalse_CacheExists_UsesCachedCopy` |
+| 2 | ✅ | Fresh cached copy (within TTL) is used without a network call | Unit test | `SourceCacheUpdaterTests.ResolveAsync_FreshCache_DoesNotCallNetwork` |
+| 3 | ✅ | Stale cached copy (past TTL) triggers a `GET`; success overwrites the cache and logs `Information` | Unit test | `SourceCacheUpdaterTests.ResolveAsync_StaleCache_DownloadsAndOverwritesCache` |
+| 4 | ✅ | Per-entry `refreshIntervalHours` overrides the global default | Unit test | `SourceCacheUpdaterTests.ResolveAsync_PerEntryRefreshIntervalOverridesGlobalDefault` |
+| 5 | ✅ | Network failure logs a `Warning` and falls back to the most recent available copy; the seed operation still succeeds | Unit test | `SourceCacheUpdaterTests.ResolveAsync_NetworkFailure_FallsBackToStaleCacheAndLogsWarning` |
+| 6 | ✅ | `forceSourceRefresh=true` bypasses the TTL check | Unit test | `SourceCacheUpdaterTests.ResolveAsync_ForceRefreshTrue_BypassesFreshTtlCheck` |
+| 7 | ✅ | `forceSourceRefresh=true` does **not** bypass `AutoUpdateSources=false`, and logs a distinct message explaining the force was blocked by config (not a network failure) | Unit test | `SourceCacheUpdaterTests.ResolveAsync_ForceRefreshTrueButAllowNetworkFalse_DoesNotBypassConfigAndLogsDistinctMessage` |
+| 8 | ✅ | `POST /api/v1/admin/sources/refresh` updates both caches without touching the database | Unit test | `SourceCacheWiringTests.RefreshSourcesAsync_DoesNotAffectRowCountsOrTouchDatabase` |
+| 9 | ✅ | A user-imports manifest entry with a `downloadUrl` is downloaded and cached, same as a bundled entry (reverses the old bundled-only scope) | Unit test | `SourceCacheUpdaterTests.ResolveAsync_UserImportsEntryWithDownloadUrl_DownloadedAndCachedSameAsBundled` |
+| 10 | ✅ | A bundled entry with no `downloadTarget` override defaults to the internal folder; a user-imports entry with no override defaults to the external folder | Unit test | `SourceCacheUpdaterTests.ResolveAsync_NoDownloadTargetOverride_DefaultsByOrigin` |
+| 11 | ✅ | An explicit per-entry `downloadTarget` routes that entry to the named folder regardless of which manifest it came from | Unit test | `SourceCacheUpdaterTests.ResolveAsync_ExplicitDownloadTargetOverride_RoutesRegardlessOfOrigin` |
+| 12 | ✅ | Two entries whose resolved target paths collide are both skipped (no download, no read from the shared path), a distinct `Error` names both sources and the shared path, and no silent overwrite occurs | Unit test | `SourceCacheUpdaterTests.ResolveAsync_CollidingTargetPaths_SkipsBothAndLogsError` |
+| 13 | ✅ | A second `POST /reseed` call re-evaluates staleness independently of the first (proves the fixed-batch-list problem is actually solved) | Unit test | `SourceCacheWiringTests.ReseedAsync_CalledTwice_InvokesUpdaterIndependentlyEachTime` |
+| 14 | ✅ | `Reset` also triggers the same refresh-check and collision-detection logic as Reseed | Unit test | `SourceCacheWiringTests.ResetAsync_ForceSourceRefreshTrue_ThreadsThroughToUpdaterSameAsReseed`, `ReseedAsync_ForceSourceRefreshTrue_ThreadsThroughToUpdater` |
+| 15 | ✅ | `GET /api/v1/admin/database/seed/preview` reflects an existing cached copy when present, but never triggers a network call or updates staleness state | Unit test | `SourceCacheWiringTests.PreviewSeedAsync_AutoUpdateSourcesTrue_NeverAllowsNetwork` |
+| 16 | ✅ | Build clean | Live | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 17 | ✅ | All tests pass | Live | `dotnet test --configuration Release --verbosity normal` — all 6 test projects green |
 | 18 | ❌ | T1: real app, first startup performs a download, second startup within the TTL does not | Live | To be run |
 | 19 | ❌ | T2: Docker container — both `{dataDir}/sources/download/` and `{dataDir}/imports/download/` persist across container restart when the volume is retained | Live | To be run |
 

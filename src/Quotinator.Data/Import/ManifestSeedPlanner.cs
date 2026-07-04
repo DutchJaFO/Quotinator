@@ -1,5 +1,5 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace Quotinator.Data.Import;
@@ -8,6 +8,14 @@ namespace Quotinator.Data.Import;
 public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : IManifestSeedPlanner
 {
     private const string ManifestFileName = "manifest.json";
+
+    private static readonly JsonSerializerOptions ReadOptions = new() { PropertyNameCaseInsensitive = true };
+
+    private static readonly JsonSerializerOptions WriteOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     /// <inheritdoc/>
     public (IReadOnlyList<SeedFile> Files, ManifestPolicy Policy) PlanSeed(
@@ -32,17 +40,18 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
 
         try
         {
-            var root                = JsonNode.Parse(File.ReadAllText(manifestPath));
-            var manifestPolicyNode  = root?["duplicateResolution"];
-            var fromManifest        = manifestPolicyNode is null ? null : ParseManifestPolicyNode(manifestPolicyNode);
-            var resolvedPolicy      = ManifestPolicy.Resolve(fromManifest, configPolicy);
+            var manifest = JsonSerializer.Deserialize<ManifestDto>(File.ReadAllText(manifestPath), ReadOptions)
+                ?? throw new JsonException($"{manifestPath} deserialized to null");
 
-            var listed = (root?["files"]?.AsArray() ?? [])
+            var fromManifest   = manifest.DuplicateResolution is null ? null : ToManifestPolicy(manifest.DuplicateResolution);
+            var resolvedPolicy = ManifestPolicy.Resolve(fromManifest, configPolicy);
+
+            var listed = manifest.Files
                 .Select(e =>
                 {
-                    var path = Path.Combine(dir, e!["file"]!.GetValue<string>());
+                    var path               = Path.Combine(dir, e.File);
                     var (url, downloadUrl) = ResolveUrls(e);
-                    return new SeedFile(path, url, downloadUrl);
+                    return new SeedFile(path, url, downloadUrl, e.RefreshIntervalHours, e.DownloadTarget);
                 })
                 .Where(f => File.Exists(f.FilePath))
                 .ToList();
@@ -62,42 +71,42 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
         }
     }
 
-    private static (string? Url, string? DownloadUrl) ResolveUrls(JsonNode entry)
+    private static (string? Url, string? DownloadUrl) ResolveUrls(ManifestFileEntryDto entry)
     {
-        var githubNode = entry["github"];
-        if (githubNode is not null)
+        if (entry.Github is not null)
         {
-            var owner  = githubNode["owner"]!.GetValue<string>();
-            var repo   = githubNode["repo"]!.GetValue<string>();
-            var path   = githubNode["path"]!.GetValue<string>();
-            var branch = githubNode["branch"]?.GetValue<string>() ?? "main";
-
             return (
-                $"https://github.com/{owner}/{repo}",
-                $"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}");
+                $"https://github.com/{entry.Github.Owner}/{entry.Github.Repo}",
+                $"https://raw.githubusercontent.com/{entry.Github.Owner}/{entry.Github.Repo}/{entry.Github.Branch}/{entry.Github.Path}");
         }
 
-        var url         = entry["url"]?.GetValue<string>();
-        var downloadUrl = entry["downloadUrl"]?.GetValue<string>();
-        return (url, downloadUrl);
+        return (entry.Url, entry.DownloadUrl);
     }
+
+    private static ManifestPolicy ToManifestPolicy(ManifestPolicyDto dto) => new(
+        Default:      dto.Default,
+        Quotes:       dto.Quotes,
+        Sources:      dto.Sources,
+        Characters:   dto.Characters,
+        People:       dto.People,
+        Translations: dto.Translations);
 
     private void TryWriteAutoManifest(string manifestPath, IReadOnlyList<SeedFile> files)
     {
         try
         {
-            var manifest = new JsonObject
+            var manifest = new ManifestDto
             {
-                ["files"] = new JsonArray(files
-                    .Select(f => (JsonNode)new JsonObject
+                Files = files
+                    .Select(f => new ManifestFileEntryDto
                     {
-                        ["file"] = Path.GetFileName(f.FilePath),
-                        ["name"] = Path.GetFileName(f.FilePath)
+                        File = Path.GetFileName(f.FilePath),
+                        Name = Path.GetFileName(f.FilePath)
                     })
-                    .ToArray())
+                    .ToList()
             };
 
-            File.WriteAllText(manifestPath, manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, WriteOptions));
             logger.LogWarning("[Database - Init] no manifest found in {Dir} — auto-created manifest.json listing {Count} file(s) alphabetically",
                 Path.GetDirectoryName(manifestPath), files.Count);
         }
@@ -105,29 +114,5 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
         {
             logger.LogWarning(ex, "[Database - Init] failed to auto-create manifest at {Path} — continuing without one", manifestPath);
         }
-    }
-
-    private static ManifestPolicy ParseManifestPolicyNode(JsonNode node)
-    {
-        static DuplicateResolutionPolicy ParsePol(JsonNode? n) =>
-            n?.GetValue<string>().ToLowerInvariant() == "overwrite"
-                ? DuplicateResolutionPolicy.Overwrite
-                : DuplicateResolutionPolicy.Skip;
-
-        static DuplicateResolutionPolicy? ParseNullPol(JsonNode? n) =>
-            n?.GetValue<string>().ToLowerInvariant() switch
-            {
-                "overwrite" => DuplicateResolutionPolicy.Overwrite,
-                "skip"      => DuplicateResolutionPolicy.Skip,
-                _           => null
-            };
-
-        return new ManifestPolicy(
-            Default:      ParsePol(node["default"]),
-            Quotes:       ParseNullPol(node["quotes"]),
-            Sources:      ParseNullPol(node["sources"]),
-            Characters:   ParseNullPol(node["characters"]),
-            People:       ParseNullPol(node["people"]),
-            Translations: ParseNullPol(node["translations"]));
     }
 }

@@ -52,6 +52,7 @@ public class DatabaseInitializerTests
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
+            NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 
@@ -474,6 +475,7 @@ public class DatabaseInitializerTests
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
+            NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             QuotinatorMigrations.Baseline);
         return (db, dbPath);
     }

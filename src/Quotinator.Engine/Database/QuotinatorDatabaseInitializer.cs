@@ -26,6 +26,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 {
     private readonly IReadOnlyList<SeedBatch>    _batches;
     private readonly IImportBatchRepository      _importBatches;
+    private readonly ISourceCacheUpdater         _sourceCacheUpdater;
+    private readonly bool                        _autoUpdateSources;
 
     // API genre tag → database enum name (matches Genre enum values).
     private static readonly IReadOnlyDictionary<string, string> GenreApiToDb =
@@ -56,32 +58,38 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         ISystemAuditWriter             auditWriter,
         ICallerContext                 callerContext,
         ILogger<DatabaseInitializer>   logger,
+        ISourceCacheUpdater            sourceCacheUpdater,
+        bool                           autoUpdateSources,
         SchemaBaseline?                baseline = null)
         : base(factory, options, migrations, auditWriter, callerContext, logger, baseline)
     {
-        _batches       = batches;
-        _importBatches = importBatches;
+        _batches            = batches;
+        _importBatches      = importBatches;
+        _sourceCacheUpdater = sourceCacheUpdater;
+        _autoUpdateSources  = autoUpdateSources;
     }
 
     /// <inheritdoc/>
     protected override async Task OnInitialisedAsync(SqliteConnection connection)
     {
-        await SeedIfEmptyAsync(connection);
-        await ReSeedGenresIfEmptyAsync(connection);
+        var effectiveBatches = await ResolveEffectiveBatchesAsync(forceRefresh: false);
+        await SeedIfEmptyAsync(connection, effectiveBatches);
+        await ReSeedGenresIfEmptyAsync(connection, effectiveBatches);
         await LogDatabaseStatsAsync(connection);
     }
 
     /// <inheritdoc/>
-    protected override async Task OnReseedAsync(SqliteConnection connection)
+    protected override async Task OnReseedAsync(SqliteConnection connection, bool forceSourceRefresh)
     {
-        var totalFiles = _batches.Sum(b => b.Files.Count);
+        var effectiveBatches = await ResolveEffectiveBatchesAsync(forceSourceRefresh);
+        var totalFiles = effectiveBatches.Sum(b => b.Files.Count);
         Logger.LogInformation("[Database - Seed] reseed requested — clearing all data and reimporting from {Count} source file(s)...", totalFiles);
 
         await SharedSeedLock.WaitAsync();
         try
         {
             await TruncateDataAsync(connection);
-            await SeedIfEmptyInternalAsync(connection);
+            await SeedIfEmptyInternalAsync(connection, effectiveBatches);
         }
         finally
         {
@@ -100,16 +108,17 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     }
 
     /// <inheritdoc/>
-    protected override async Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion)
+    protected override async Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
     {
-        var totalFiles = _batches.Sum(b => b.Files.Count);
+        var effectiveBatches = await ResolveEffectiveBatchesAsync(forceSourceRefresh);
+        var totalFiles = effectiveBatches.Sum(b => b.Files.Count);
         Logger.LogInformation("[Database - Init] reset requested — rebuilding schema and reimporting from {Count} source file(s)...", totalFiles);
 
         await SharedSeedLock.WaitAsync();
         try
         {
             await DropAndRebuildAsync(connection, preserveSchemaVersion);
-            await SeedIfEmptyInternalAsync(connection);
+            await SeedIfEmptyInternalAsync(connection, effectiveBatches);
         }
         finally
         {
@@ -128,14 +137,18 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     }
 
     /// <inheritdoc/>
-    public override Task<SeedPreviewResult> PreviewSeedAsync()
+    public override async Task<SeedPreviewResult> PreviewSeedAsync()
     {
+        // Preview reflects whatever is already cached on disk — it never triggers a network call,
+        // even when Quotinator__AutoUpdateSources is true, so calling it has no side effects.
+        var effectiveBatches = await ResolveEffectiveBatchesAsync(forceRefresh: false, allowNetworkOverride: false);
+
         var filePreviews = new List<SeedFilePreview>();
         var duplicates   = new List<SeedDuplicateRecord>();
         var seenIds      = new Dictionary<string, string>(StringComparer.Ordinal);
         var totalQuotes  = 0;
 
-        foreach (var batch in _batches)
+        foreach (var batch in effectiveBatches)
         {
             foreach (var seedFile in batch.Files)
             {
@@ -161,19 +174,41 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             }
         }
 
-        return Task.FromResult(new SeedPreviewResult(
+        return new SeedPreviewResult(
             filePreviews,
             duplicates,
             totalQuotes,
-            seenIds.Count));
+            seenIds.Count);
     }
 
-    private async Task SeedIfEmptyAsync(SqliteConnection connection)
+    /// <inheritdoc/>
+    public override async Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false)
+        => await _sourceCacheUpdater.ResolveAsync(_batches, _autoUpdateSources, force);
+
+    /// <summary>
+    /// Resolves <see cref="_batches"/> to their effective form for this call via
+    /// <see cref="_sourceCacheUpdater"/>. <see cref="_batches"/> itself is never mutated — this
+    /// singleton is shared across concurrent Preview/Reseed/Reset calls, so each caller gets its
+    /// own local effective list instead of a shared field that could race.
+    /// </summary>
+    /// <param name="forceRefresh">Bypasses the TTL check for every candidate entry; ignored when network access is not allowed.</param>
+    /// <param name="allowNetworkOverride">
+    /// Overrides <see cref="_autoUpdateSources"/> for this call. Used by <see cref="PreviewSeedAsync"/>
+    /// to guarantee it never makes a network call regardless of configuration.
+    /// </param>
+    private async Task<IReadOnlyList<SeedBatch>> ResolveEffectiveBatchesAsync(bool forceRefresh, bool? allowNetworkOverride = null)
+    {
+        var allowNetwork = allowNetworkOverride ?? _autoUpdateSources;
+        var resolution   = await _sourceCacheUpdater.ResolveAsync(_batches, allowNetwork, forceRefresh);
+        return resolution.EffectiveBatches;
+    }
+
+    private async Task SeedIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
     {
         await SharedSeedLock.WaitAsync();
         try
         {
-            await SeedIfEmptyInternalAsync(connection);
+            await SeedIfEmptyInternalAsync(connection, effectiveBatches);
         }
         finally
         {
@@ -181,12 +216,12 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         }
     }
 
-    private async Task SeedIfEmptyInternalAsync(SqliteConnection connection)
+    private async Task SeedIfEmptyInternalAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
     {
         var count = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
         if (count > 0) return;
 
-        if (_batches.Count == 0)
+        if (effectiveBatches.Count == 0)
         {
             Logger.LogWarning("[Database - Seed] no source files configured — database will be empty");
             return;
@@ -202,7 +237,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         var now = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
 
-        foreach (var batch in _batches)
+        foreach (var batch in effectiveBatches)
         {
             foreach (var seedFile in batch.Files)
             {
@@ -312,7 +347,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             seenIds.Count, seenIds.Count + dupCount, dupCount, dupCount == 1 ? "" : "s");
     }
 
-    private async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection)
+    private async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
     {
         var genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
         if (genreCount > 0) return;
@@ -320,7 +355,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         var quoteCount = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
         if (quoteCount == 0) return;
 
-        if (_batches.Count == 0)
+        if (effectiveBatches.Count == 0)
         {
             Logger.LogWarning("[Database - Seed] cannot re-seed genres — no source files configured");
             return;
@@ -331,7 +366,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         var now      = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
         var inserted = 0;
 
-        foreach (var batch in _batches)
+        foreach (var batch in effectiveBatches)
         {
             foreach (var seedFile in batch.Files)
             {

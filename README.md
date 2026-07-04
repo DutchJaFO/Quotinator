@@ -135,11 +135,14 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/version` | Running version and environment |
-| GET | `/api/v1/admin/database/seed/preview` | Preview what a reseed would import — no data is changed (requires `X-Api-Key`) |
-| POST | `/api/v1/admin/database/reseed` | Clear all data and reimport from `data/sources/` — schema history preserved (requires `X-Api-Key`) |
-| POST | `/api/v1/admin/database/reset` | Full reset: clear data, reapply migrations, reimport (requires `X-Api-Key`). Audit log always survives. Schema version history is cleared and replayed by default; pass `?preserveSchemaVersion=true` to keep it |
+| GET | `/api/v1/admin/database/seed/preview` | Preview what a reseed would import — no data is changed. Reflects any already-downloaded source cache, but never triggers a network call itself (requires `X-Api-Key`) |
+| POST | `/api/v1/admin/database/reseed` | Clear all data and reimport from `data/sources/` — schema history preserved. Pass `?forceSourceRefresh=true` to bypass the download cache's freshness check for this call (requires `X-Api-Key`) |
+| POST | `/api/v1/admin/database/reset` | Full reset: clear data, reapply migrations, reimport (requires `X-Api-Key`). Audit log always survives. Schema version history is cleared and replayed by default; pass `?preserveSchemaVersion=true` to keep it. Pass `?forceSourceRefresh=true` to bypass the download cache's freshness check for this call |
+| POST | `/api/v1/admin/sources/refresh` | Refresh the download cache for any source with a `downloadUrl`/`github` manifest entry, without touching the database. Pass `?force=true` to bypass the freshness check (requires `X-Api-Key`) |
 
 Admin endpoints require the `X-Api-Key: <key>` request header matching the `admin_api_key` set in the add-on configuration. Requests without the header, or with an incorrect key, receive `401 Unauthorized`. The endpoints return `401` if no key is configured.
+
+Sources declaring a `downloadUrl` or `github` manifest entry are automatically refreshed from the network before seeding — controlled by `Quotinator__AutoUpdateSources` (default `true`; set `false` for fully offline/air-gapped installs) and `Quotinator__SourceUpdateIntervalHours` (default `24`, overridable per-entry via the manifest's `refreshIntervalHours` field). A network failure never blocks startup, reseed, or reset — the app falls back to whatever copy is already on disk.
 
 **`/random` and `/search` filter parameters:** `type` and `genre` are repeatable (OR logic within each, AND between them). `yearFrom` / `yearTo` are inclusive year bounds; `year` is shorthand for a single year; `decade` (must be divisible by 10) is shorthand for a 10-year range. All filter combinations are ANDed. Both endpoints return a result envelope with `status` (`Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`), `items`, `totalMatching`, and an optional `message` (set when status is not `Ok`). `/random` additionally supports `character`, `author`, and `source` as case-insensitive contains filters on the random pool; `/search` uses `field` (`quote`, `source`, `character`, `author`) to restrict which field the search term is matched against.
 

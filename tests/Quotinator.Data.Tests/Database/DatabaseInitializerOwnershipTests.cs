@@ -155,7 +155,7 @@ public class DatabaseInitializerOwnershipTests
         {
         }
 
-        protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion)
+        protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
             => DropAndRebuildAsync(connection, preserveSchemaVersion);
     }
 

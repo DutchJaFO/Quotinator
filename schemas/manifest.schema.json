@@ -56,6 +56,16 @@
             "format": "uri",
             "description": "Direct, fetchable URL to the raw source file — used by the auto-update mechanism (Quotinator__AutoUpdateSources) to refresh this file. Only meaningful alongside url (external source) or github (where it is computed, not set directly)."
           },
+          "refreshIntervalHours": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Overrides the global Quotinator__SourceUpdateIntervalHours default for this specific source — how long a downloaded copy is considered fresh before the auto-update mechanism checks again. Only meaningful alongside downloadUrl/github."
+          },
+          "downloadTarget": {
+            "type": "string",
+            "enum": ["internal", "external"],
+            "description": "Overrides which cache folder the auto-update mechanism writes a downloaded copy of this source to — internal ({dataDir}/sources/download/) or external ({dataDir}/imports/download/). When omitted, defaults to internal for entries in the bundled sources manifest and external for entries in a user imports manifest. Only meaningful alongside downloadUrl/github."
+          },
           "github": {
             "type": "object",
             "additionalProperties": false,

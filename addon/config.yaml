@@ -24,6 +24,8 @@ options:
   ssl: false
   certfile: fullchain.pem
   keyfile: privkey.pem
+  auto_update_sources: true
+  source_update_interval_hours: 24
 schema:
   log_level: list(trace|debug|info|notice|warning|error|fatal)
   log_requests: bool
@@ -32,6 +34,8 @@ schema:
   keyfile: str
   admin_api_key: str?
   backup_path: str?
+  auto_update_sources: bool
+  source_update_interval_hours: int(1,)
 
 # Map add-on options and HA paths to environment variables consumed by ASP.NET Core.
 # Quotinator__DataPath points to the supervisor-mounted persistent volume (/data), not the
@@ -54,6 +58,10 @@ env_vars:
     value: "{{ admin_api_key }}"
   - name: Quotinator__BackupPath
     value: "{{ backup_path }}"
+  - name: Quotinator__AutoUpdateSources
+    value: "{{ auto_update_sources }}"
+  - name: Quotinator__SourceUpdateIntervalHours
+    value: "{{ source_update_interval_hours }}"
 
 # Direct access port — disabled by default; enable for MagicMirror, curl, or other
 # tools that need to reach the API outside of HA ingress.

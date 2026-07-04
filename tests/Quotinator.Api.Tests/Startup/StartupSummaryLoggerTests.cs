@@ -52,10 +52,12 @@ public class StartupSummaryLoggerTests
         public string? MigrationApplied => migrationApplied;
         public IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates => [];
         public Task InitialiseAsync()                    => Task.CompletedTask;
-        public Task ReseedAsync()                        => Task.CompletedTask;
-        public Task ResetAsync(bool preserveSchemaVersion = false) => Task.CompletedTask;
+        public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
+        public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false) => Task.CompletedTask;
         public Task<SeedPreviewResult> PreviewSeedAsync() =>
             Task.FromResult(new SeedPreviewResult([], [], 0, 0));
+        public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false) =>
+            Task.FromResult(new SourceCacheResolution([], []));
     }
 
     private static string AllMessages(CapturingLogger<StartupSummaryLogger> logger)

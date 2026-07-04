@@ -35,5 +35,15 @@ configuration:
     description: >-
       Verzeichnis, in dem Datenbanksicherungen vor Migrationen gespeichert werden.
       Leer lassen für den Standardwert: ein backups/-Unterordner im Datenverzeichnis.
+  auto_update_sources:
+    name: Quellen automatisch aktualisieren
+    description: >-
+      Prüft Manifest-Einträge mit einer Download-URL vor dem Seeding auf eine neuere Version.
+      Deaktivieren für vollständig Offline-/Air-Gapped-Installationen — es werden dann nie Netzwerkanfragen gestellt.
+  source_update_interval_hours:
+    name: Aktualisierungsintervall Quellen (Stunden)
+    description: >-
+      Wie lange eine heruntergeladene Quelldatei als aktuell gilt, bevor sie erneut geprüft wird.
+      Einzelne Quellen können dies in ihrem eigenen Manifest-Eintrag überschreiben.
 network:
   8080/tcp: Direkter Webzugriff — HTTP (SSL deaktiviert) oder HTTPS (SSL aktiviert)

@@ -105,6 +105,33 @@ public class ManifestSeedPlannerTests
         Assert.AreEqual(ManifestPolicy.HardcodedDefault, policy);
     }
 
+    // Behavior change from the pre-POCO manual-parsing version: an unrecognised policy string used
+    // to be silently coerced to Skip per-field while the rest of the manifest was still trusted.
+    // Deserializing into a typed DTO makes this a hard failure for the whole manifest instead —
+    // more correct (the mistake surfaces via the warning log) and consistent with any other malformed
+    // manifest content.
+    [TestMethod]
+    public void PlanSeed_ManifestHasInvalidPolicyValue_FallsBackToAlphabeticalOrderAndLogsWarning()
+    {
+        WriteFile("b.json", "[]");
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["duplicateResolution"] = new JsonObject { ["default"] = "notarealpolicy" },
+            ["files"] = new JsonArray(new JsonObject { ["file"] = "b.json", ["name"] = "b" })
+        });
+        var logger  = new RecordingLogger<ManifestSeedPlanner>();
+        var planner = new ManifestSeedPlanner(logger);
+
+        var (files, policy) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        CollectionAssert.AreEqual(
+            new[] { "a.json", "b.json" },
+            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+        Assert.AreEqual(ManifestPolicy.HardcodedDefault, policy);
+        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning));
+    }
+
     [TestMethod]
     public void PlanSeed_EmptyDirectory_ReturnsEmptyListNoManifestWritten()
     {
@@ -188,6 +215,52 @@ public class ManifestSeedPlannerTests
         var seedFile = files.Single();
         Assert.AreEqual("https://example.com/a", seedFile.Url);
         Assert.AreEqual("https://example.com/raw/a.json", seedFile.DownloadUrl);
+    }
+
+    [TestMethod]
+    public void PlanSeed_ManifestEntryHasRefreshIntervalHoursAndDownloadTarget_ParsedIntoSeedFile()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]                 = "a.json",
+                ["name"]                 = "a",
+                ["downloadUrl"]          = "https://example.com/raw/a.json",
+                ["refreshIntervalHours"] = 6,
+                ["downloadTarget"]       = "external"
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        var seedFile = files.Single();
+        Assert.AreEqual(6, seedFile.RefreshIntervalHours);
+        Assert.AreEqual(DownloadTarget.External, seedFile.DownloadTarget);
+    }
+
+    [TestMethod]
+    public void PlanSeed_ManifestEntryOmitsRefreshIntervalHoursAndDownloadTarget_BothNull()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]        = "a.json",
+                ["name"]        = "a",
+                ["downloadUrl"] = "https://example.com/raw/a.json"
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        var seedFile = files.Single();
+        Assert.IsNull(seedFile.RefreshIntervalHours);
+        Assert.IsNull(seedFile.DownloadTarget);
     }
 
     [TestMethod]

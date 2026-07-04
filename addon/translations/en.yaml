@@ -35,5 +35,15 @@ configuration:
     description: >-
       Directory where pre-migration database backups are stored.
       Leave empty to use the default: a backups/ subfolder inside the data directory.
+  auto_update_sources:
+    name: Auto-update sources
+    description: >-
+      Check manifest entries that declare a download URL for a fresher copy before seeding.
+      Disable for fully offline/air-gapped installs — no network calls are ever made when off.
+  source_update_interval_hours:
+    name: Source update interval (hours)
+    description: >-
+      How long a downloaded source file is considered fresh before it is checked again.
+      Individual sources may override this in their own manifest entry.
 network:
   8080/tcp: Direct web access — HTTP (ssl disabled) or HTTPS (ssl enabled)

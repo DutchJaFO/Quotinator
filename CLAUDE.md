@@ -169,6 +169,16 @@ Routes/        → Quotinator.Constants.Routes     (ApiRoutes, RouteExtensions)
 
 Any use of bare `new` for a type that could reasonably be registered must have a comment explaining why DI was not used.
 
+### JSON parsing policy
+
+**Always deserialize JSON into POCOs via `JsonSerializer.Deserialize<T>` — never walk a parsed document by hand (`JsonNode`/`JsonDocument` indexers, `["field"]`, `GetValue<T>()`) to extract data.** Define a DTO class per JSON shape (e.g. `SourceQuote` for quote files, `ChangelogRoot` for the changelog, `ManifestDto`/`ManifestFileEntryDto`/`ManifestGithubDto`/`ManifestPolicyDto` for `manifest.json`), with `[JsonPropertyName("...")]` on each property mapping the wire name to a PascalCase C# name. If a schema exists (`schemas/*.json`), every field it defines must be representable as a DTO property — a schema field with no corresponding POCO property is a policy violation. The same applies to writing JSON: build a DTO and call `JsonSerializer.Serialize`, never hand-assemble a `JsonObject`/`JsonArray`.
+
+**Enum-valued string fields** (e.g. `"skip"`/`"overwrite"`, `"internal"`/`"external"`) should be typed directly as the C# enum on the DTO property with `[JsonConverter(typeof(JsonStringEnumConverter))]` — `System.Text.Json`'s built-in converter matches enum member names case-insensitively on read, so no manual string-switch mapping is needed for these.
+
+**The only permitted exception:** sniffing which of several top-level shapes a document uses, when the shapes are different enough that a single DTO can't represent both (e.g. `LoadQuotesFromFile` in `QuotinatorDatabaseInitializer.cs` uses one `JsonNode.Parse` call only to check whether the root is a bare array or a `{ "quotes": [...] }` wrapper) — the actual field extraction for whichever shape is chosen must still go through `JsonSerializer.Deserialize<T>` into a POCO, not further manual node walking.
+
+**Why:** manual node walking (`e!["field"]!.GetValue<string>()`) loses compile-time member names, gives worse error messages on type mismatches, and tends to accumulate ad hoc parsing logic (URL resolution, enum coercion, nullability handling) that a typed DTO expresses more clearly. It also invites silent divergence between the JSON schema and what the code actually reads, since nothing forces every schema field to have a corresponding read path. This was found and corrected in `ManifestSeedPlanner.cs`, which had grown into full manual `JsonNode` parsing while the rest of the codebase (`SourceQuote`, `ChangelogRoot`) already used POCOs — see the `Manifest*Dto` classes in `Quotinator.Data/Import/` for the corrected pattern.
+
 ### Serilog — programmatic configuration
 
 Serilog is configured entirely in code via `builder.Host.UseSerilog((ctx, _, config) => { ... })` in `Program.cs`. **Do not switch to `ReadFrom.Configuration`** (which reads sink names from `appsettings.json` and uses `DllScanningAssemblyFinder` to locate the corresponding DLL in the app directory).

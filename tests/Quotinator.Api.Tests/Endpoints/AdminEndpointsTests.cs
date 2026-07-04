@@ -205,9 +205,9 @@ public class AdminEndpointsTests
         public IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates => [];
 
         public Task InitialiseAsync() => Task.CompletedTask;
-        public Task ReseedAsync()     => Task.CompletedTask;
+        public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
 
-        public Task ResetAsync(bool preserveSchemaVersion = false)
+        public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false)
         {
             LastPreserveSchemaVersion = preserveSchemaVersion;
             return Task.CompletedTask;
@@ -215,5 +215,8 @@ public class AdminEndpointsTests
 
         public Task<SeedPreviewResult> PreviewSeedAsync()
             => Task.FromResult(new SeedPreviewResult([], [], 0, 0));
+
+        public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false)
+            => Task.FromResult(new SourceCacheResolution([], []));
     }
 }

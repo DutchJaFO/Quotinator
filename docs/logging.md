@@ -234,6 +234,7 @@ Format: `[Subsystem - Phase] message text`
 | `[Database - Seed]` | Quote import, genre seed, duplicate handling |
 | `[Database - Stats]` | Final quote / source / character / people counts |
 | `[Database - Backup]` | Backup operations |
+| `[Database - SourceRefresh]` | Auto-update source cache: download attempts, staleness/collision resolution |
 | `[Config]` | Config / env-var diagnostic lines |
 | `[SSL]` | TLS cert load, Kestrel HTTPS bind |
 | `[DataProtection]` | Key persistence setup |
