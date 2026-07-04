@@ -1,6 +1,6 @@
 # #140 — Auto-update bundled source files from manifest URL on startup
 
-**Status:** Planning
+**Status:** In progress (step 3)
 **GitHub issue:** #140
 **Depends on:** #58 fix (manifest `url` field) — done; #62 (`AutoUpdateSources` follows the same config pattern) — done; #63 (`downloadUrl`/`github` manifest groundwork) — done
 **Unblocks:** retirement of `scripts/sources.json` (separate follow-up, not part of this issue)
@@ -37,7 +37,7 @@ A comment recording all four points must be posted on #140 before implementation
 A second round of discussion expanded the design further, past round 1:
 
 1. **Applies to user-imports manifest entries too, not bundled sources only.** `ManifestSeedPlanner.PlanSeed` already scans `{dataDir}/imports/manifest.json` the same way it scans the bundled manifest, so a user can equally declare a `downloadUrl`/`github` entry there. Round 1 explicitly excluded this ("Scoped to bundled sources only"); that exclusion is now reversed — the same download/cache/TTL/collision mechanism applies uniformly to any manifest entry with a `downloadUrl`, regardless of which manifest it came from. Only the *default* cache location differs by origin (next point).
-2. **Two default cache locations, not one.** The existing `{dataDir}/sources/download/` (the "internal" folder) remains the default for entries in the bundled sources manifest. A new `{dataDir}/imports/download/` ("external" folder) is the default for entries in the user imports manifest — same structure, mirrored under `imports/` instead of `sources/`. Both reuse the same `DataPaths.DownloadedSourcesFolder = "download"` subfolder-name constant already planned in step 5 (formerly step 4), combined with `SourcesFolder` or `ImportsFolder` respectively — no new constant needed.
+2. **Two default cache locations, not one.** `{dataDir}/sources/download/` (the "internal" folder) is the default for entries in the bundled sources manifest. A new `{dataDir}/imports/download/` ("external" folder) is the default for entries in the user imports manifest — same structure, mirrored under `imports/` instead of `sources/`. Both use the same new `DataPaths.DownloadedSourcesFolder = "download"` subfolder-name constant (step 5), combined with `SourcesFolder` or `ImportsFolder` respectively.
 3. **Per-entry override of which folder a specific entry uses.** A new optional manifest field, `downloadTarget`, accepts the literal string `"internal"` or `"external"` on any `files[]` entry (bundled or imports) with a `downloadUrl`/`github`. When omitted, the default is whichever folder matches the manifest the entry lives in (point 2). This lets, for example, a user-imports entry explicitly cache into the internal folder if that's ever genuinely wanted, without forcing every entry to accept the origin-based default.
 4. **Collision detection is now a hard requirement, not an assumption.** Two different sources (different URLs, potentially from different manifests) can resolve to the same on-disk cache filename (e.g. both literally named `quotefile.json`) — silently overwriting one with the other's content would corrupt whichever source lost the race, with no indication anything went wrong. Every seed operation must build the full set of resolved target paths (folder + filename) across *all* candidate entries — bundled and imports together — before performing any downloads, and treat any path claimed by more than one distinct source as a collision (see step 9 for the exact handling).
 
@@ -92,7 +92,7 @@ Both optional, on any `files[]` entry with a `downloadUrl`/`github`. `refreshInt
 ### 5. `DataPaths` — internal and external download folders
 **Status:** ⬜ Not started
 
-Reuses the existing `DownloadedSourcesFolder = "download"` constant (no new constant needed) combined with either parent folder:
+Adds a new `DownloadedSourcesFolder = "download"` constant (verified against the current `DataPaths.cs` while reviewing this plan before implementation — it does not exist yet; nothing for #140 has been implemented) combined with either parent folder:
 - Internal: `Path.Combine(dataDir, DataPaths.SourcesFolder, DataPaths.DownloadedSourcesFolder)` → `{dataDir}/sources/download/` — default for entries from the bundled sources manifest
 - External: `Path.Combine(dataDir, DataPaths.ImportsFolder, DataPaths.DownloadedSourcesFolder)` → `{dataDir}/imports/download/` — default for entries from the user imports manifest
 
@@ -125,32 +125,39 @@ For every entry in a colliding group: do not download, and do not trust any file
 ### 10. Call the updater from `OnInitialisedAsync`/`OnReseedAsync`/`OnResetAsync`
 **Status:** ⬜ Not started
 
-Runs at the **start** of all three (already `async Task`) — never inside the synchronous DI factory in `Program.cs`. The constructor-time `_batches` field (both bundled and imports) stays as the fixed *candidate* list; a per-call resolution pass produces the actual files read for that specific operation, so the second and every subsequent `POST /reseed` call can see a different effective path than the first.
+Runs at the **start** of all three (already `async Task`), before any data truncation/rebuild — never inside the synchronous DI factory in `Program.cs`. `QuotinatorDatabaseInitializer` is a DI singleton and `PreviewSeedAsync` (step 11) reads `_batches` with no lock, so `_batches` must stay genuinely immutable — the resolved *effective* batch list is a per-call local variable, never a field reassignment. This requires widening the existing private `SeedIfEmptyInternalAsync(SqliteConnection connection)` to `SeedIfEmptyInternalAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)`, with each caller (`SeedIfEmptyAsync`, `OnReseedAsync`, `OnResetAsync`) computing its own effective list via `SourceCacheUpdater` first and passing it through — so the second and every subsequent `POST /reseed` call re-resolves independently and can see a different effective path than the first.
 
-### 11. `forceSourceRefresh` query parameter on reseed/reset
+**Also requires widening `IDatabaseInitializer.ReseedAsync()` → `ReseedAsync(bool forceSourceRefresh = false)` and `ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false)`** (verified against the current interface and `AdminEndpoints.cs` while reviewing this plan — today's methods have no room for a new flag), which ripples into the base `DatabaseInitializer` class (`Quotinator.Data`) and its virtual `OnReseedAsync`/`OnResetAsync` hook signatures, and into `NoOpDatabaseInitializer` (`Quotinator.Data.Testing`, the test double) — same shape as the existing `preserveSchemaVersion` precedent. `InitialiseAsync()`/`OnInitialisedAsync` are unaffected — there is no HTTP-triggered variant of plain startup to pass a force flag through, so startup always respects the TTL only.
+
+### 11. `PreviewSeedAsync` reflects the cache, without ever downloading
+**Status:** ⬜ Not started
+
+Confirmed with the user: `GET /api/v1/admin/database/seed/preview` must resolve to an existing cached copy when one is already on disk (same effective-path resolution as `AutoUpdateSources=false` — no TTL check, no network call, no staleness update), so preview accurately reflects what an actual seed operation would import. `PreviewSeedAsync` gets the same treatment as step 10 — computes its own effective batches via `SourceCacheUpdater` (passing a flag/mode that skips the network entirely) before iterating, rather than reading `_batches` directly.
+
+### 12. `forceSourceRefresh` query parameter on reseed/reset
 **Status:** ⬜ Not started
 
 `POST /api/v1/admin/database/reseed?forceSourceRefresh=true` and the same on `/reset` — bypasses the TTL check for that call only, threaded through to `OnReseedAsync`/`OnResetAsync` → `SourceCacheUpdater`. Does **not** bypass `Quotinator__AutoUpdateSources=false` — an explicit no-network declaration wins over a per-call force flag. When a force is requested but blocked by the config switch, log a distinct `Information`/`Warning` line saying so (e.g. `forceSourceRefresh requested but Quotinator__AutoUpdateSources is false — skipping network check`) — visibly different from "attempted the download and it failed," so operators can tell "blocked by config" apart from "tried and couldn't reach it."
 
-### 12. New `POST /api/v1/admin/sources/refresh` endpoint
+### 13. New `POST /api/v1/admin/sources/refresh` endpoint
 **Status:** ⬜ Not started
 
-New endpoint in `AdminEndpoints.cs` — calls `SourceCacheUpdater` directly (both internal and external caches), no database interaction at all. Accepts its own `force` query parameter (same not-overriding-`AutoUpdateSources`-false and distinct-logging rule as step 11). Requires the admin API key. Returns a per-source summary (updated / skipped-fresh / failed / skipped-collision).
+New endpoint in `AdminEndpoints.cs` — calls `SourceCacheUpdater` directly (both internal and external caches), no database interaction at all. Accepts its own `force` query parameter (same not-overriding-`AutoUpdateSources`-false and distinct-logging rule as step 12). Requires the admin API key. Returns a per-source summary (updated / skipped-fresh / failed / skipped-collision).
 
-### 13. Failure path never fails startup/reseed/reset
+### 14. Failure path never fails startup/reseed/reset
 **Status:** ⬜ Not started
 
 Any network failure (unreachable, timeout, non-200) logs a `Warning` and falls back to whatever already exists — stale cached copy if present, else the original bundled/local path. Same guarantee for a collision (step 9): never a hard failure, always a safe fallback.
 
-### 14. Update `README.md`, `addon/DOCS.md`, endpoint `[Description]` attributes
+### 15. Update `README.md`, `addon/DOCS.md`, endpoint `[Description]` attributes
 **Status:** ⬜ Not started
 
-### 15. Update `addon/config.yaml` and `addon/translations/{en,nl,de}.yaml`
+### 16. Update `addon/config.yaml` and `addon/translations/{en,nl,de}.yaml`
 **Status:** ⬜ Not started
 
 For both new config keys, per the #62 precedent.
 
-### 16. Unit tests
+### 17. Unit tests
 **Status:** ⬜ Not started
 
 See Verification table below for the full list.
@@ -175,10 +182,11 @@ See Verification table below for the full list.
 | 12 | ❌ | Two entries whose resolved target paths collide are both skipped (no download, no read from the shared path), a distinct `Error` names both sources and the shared path, and no silent overwrite occurs | Unit test | To be named |
 | 13 | ❌ | A second `POST /reseed` call re-evaluates staleness independently of the first (proves the fixed-batch-list problem is actually solved) | Unit test | To be named |
 | 14 | ❌ | `Reset` also triggers the same refresh-check and collision-detection logic as Reseed | Unit test | To be named |
-| 15 | ❌ | Build clean | Live | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 16 | ❌ | All tests pass | Live | `dotnet test --configuration Release --verbosity normal` |
-| 17 | ❌ | T1: real app, first startup performs a download, second startup within the TTL does not | Live | To be run |
-| 18 | ❌ | T2: Docker container — both `{dataDir}/sources/download/` and `{dataDir}/imports/download/` persist across container restart when the volume is retained | Live | To be run |
+| 15 | ❌ | `GET /api/v1/admin/database/seed/preview` reflects an existing cached copy when present, but never triggers a network call or updates staleness state | Unit test | To be named |
+| 16 | ❌ | Build clean | Live | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 17 | ❌ | All tests pass | Live | `dotnet test --configuration Release --verbosity normal` |
+| 18 | ❌ | T1: real app, first startup performs a download, second startup within the TTL does not | Live | To be run |
+| 19 | ❌ | T2: Docker container — both `{dataDir}/sources/download/` and `{dataDir}/imports/download/` persist across container restart when the volume is retained | Live | To be run |
 
 ---
 
