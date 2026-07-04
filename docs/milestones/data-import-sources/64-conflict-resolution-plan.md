@@ -1,7 +1,7 @@
 # #64 — Conflict resolution policy
 
 **Status:** In progress (step 1)
-**Tiers required:** T1, T2 — touches `QuotinatorDatabaseInitializer`, adds migration SQL (`Migration005`, new `System_ImportConflicts` table), and updates `BaselineSchema`/`DataBaselineSql`. No ingress, SSL, addon-config, or log-format surface touched, so T3 does not apply.
+**Tiers required:** T1, T2
 **GitHub issue:** #64
 **Depends on:** #63 (manifest field — done), #45 (per-import override — not started), #58 (batch recording — waiting for release)
 
