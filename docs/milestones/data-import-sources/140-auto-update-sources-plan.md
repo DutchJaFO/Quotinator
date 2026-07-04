@@ -84,20 +84,20 @@ The cached copy's own filesystem `LastWriteTimeUtc` is the staleness signal — 
 
 ## Step status
 
-- [x] Post scope-expansion comment on #140 (write-path, refresh timing, TTL/override, force mechanism — see "Scope expansion" above)
-- [ ] `schemas/manifest.schema.json` — add optional `refreshIntervalHours` integer property
-- [ ] `SeedFile` record — add `RefreshIntervalHours` property; `ManifestSeedPlanner.ResolveUrls` reads it from the manifest entry
-- [ ] `DataPaths.DownloadedSourcesFolder` constant added
-- [ ] `Quotinator__AutoUpdateSources` config key (default `true`) wired into `Program.cs`
-- [ ] `Quotinator__SourceUpdateIntervalHours` config key (default `24`) wired into `Program.cs`
-- [ ] `IBundledSourceUpdater`/`BundledSourceUpdater` implemented, DI-registered, `IHttpClientFactory` registered via `AddHttpClient()`
-- [ ] `QuotinatorDatabaseInitializer.OnInitialisedAsync`/`OnReseedAsync`/`OnResetAsync` call the updater at the start of each, before reading any bundled file
-- [ ] `POST /api/v1/admin/database/reseed` and `/reset` gain `forceSourceRefresh` query parameter
-- [ ] New `POST /api/v1/admin/sources/refresh` endpoint (admin key required, own `force` parameter, per-source summary response)
-- [ ] Failure path never fails startup/reseed/reset — falls back to cached-then-stale, then bundled
-- [ ] `README.md`, `addon/DOCS.md`, endpoint `[Description]` attributes updated
-- [ ] `addon/config.yaml` + `addon/translations/{en,nl,de}.yaml` updated for both new config keys
-- [ ] Unit tests for all of the above (see Verification)
+1. [x] Post scope-expansion comment on #140 (write-path, refresh timing, TTL/override, force mechanism — see "Scope expansion" above)
+2. [ ] `schemas/manifest.schema.json` — add optional `refreshIntervalHours` integer property
+3. [ ] `SeedFile` record — add `RefreshIntervalHours` property; `ManifestSeedPlanner.ResolveUrls` reads it from the manifest entry
+4. [ ] `DataPaths.DownloadedSourcesFolder` constant added
+5. [ ] `Quotinator__AutoUpdateSources` config key (default `true`) wired into `Program.cs`
+6. [ ] `Quotinator__SourceUpdateIntervalHours` config key (default `24`) wired into `Program.cs`
+7. [ ] `IBundledSourceUpdater`/`BundledSourceUpdater` implemented, DI-registered, `IHttpClientFactory` registered via `AddHttpClient()`
+8. [ ] `QuotinatorDatabaseInitializer.OnInitialisedAsync`/`OnReseedAsync`/`OnResetAsync` call the updater at the start of each, before reading any bundled file
+9. [ ] `POST /api/v1/admin/database/reseed` and `/reset` gain `forceSourceRefresh` query parameter
+10. [ ] New `POST /api/v1/admin/sources/refresh` endpoint (admin key required, own `force` parameter, per-source summary response)
+11. [ ] Failure path never fails startup/reseed/reset — falls back to cached-then-stale, then bundled
+12. [ ] `README.md`, `addon/DOCS.md`, endpoint `[Description]` attributes updated
+13. [ ] `addon/config.yaml` + `addon/translations/{en,nl,de}.yaml` updated for both new config keys
+14. [ ] Unit tests for all of the above (see Verification)
 
 ---
 

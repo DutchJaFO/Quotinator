@@ -47,17 +47,17 @@
 
 ## Implementation steps
 
-- [ ] Update `QuoteResponse` to include optional `conversations` array
-- [ ] Update `SqliteQuoteService` to populate `conversations` when present
-- [ ] Register `GET /api/v1/conversations/{id}` in `QuoteEndpoints.cs`
-- [ ] Implement conversation query: lines + stage directions + sound cues, ordered correctly
-- [ ] Apply `?lang=` to `ConversationLines.Text` and `StageDirectionTranslations.Text`
-- [ ] Update `GetRandom` / `GetRandomN` for conversation-aware dedup
-- [ ] Update `?n=` response shape (breaking change)
-- [ ] Update `README.md`, `addon/DOCS.md` endpoint tables
-- [ ] Add OpenAPI `[Description]` on new endpoint and parameters
-- [ ] `CHANGELOG.md`: document the `?n=` breaking change prominently
-- [ ] Tests: conversation endpoint returns ordered lines, lang fallback works, random dedup works, n= shape change
+1. [ ] Update `QuoteResponse` to include optional `conversations` array
+2. [ ] Update `SqliteQuoteService` to populate `conversations` when present
+3. [ ] Register `GET /api/v1/conversations/{id}` in `QuoteEndpoints.cs`
+4. [ ] Implement conversation query: lines + stage directions + sound cues, ordered correctly
+5. [ ] Apply `?lang=` to `ConversationLines.Text` and `StageDirectionTranslations.Text`
+6. [ ] Update `GetRandom` / `GetRandomN` for conversation-aware dedup
+7. [ ] Update `?n=` response shape (breaking change)
+8. [ ] Update `README.md`, `addon/DOCS.md` endpoint tables
+9. [ ] Add OpenAPI `[Description]` on new endpoint and parameters
+10. [ ] `CHANGELOG.md`: document the `?n=` breaking change prominently
+11. [ ] Tests: conversation endpoint returns ordered lines, lang fallback works, random dedup works, n= shape change
 
 ---
 

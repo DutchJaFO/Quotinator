@@ -22,10 +22,10 @@ The seed script accumulated duplicates because the old `data/quotes.json` was re
 
 ## Step status
 
-- [x] One file per source (no combined output) — #61
-- [x] Cross-source duplicate detection and resolution via conflict-resolution policy — #61
-- [x] Deterministic, order-independent duplicate handling — #61
-- [x] One `ImportBatch` row per source, all records linked via `ImportBatchId`, `RecordCount` accurate — #58 + this session
+1. [x] One file per source (no combined output) — #61
+2. [x] Cross-source duplicate detection and resolution via conflict-resolution policy — #61
+3. [x] Deterministic, order-independent duplicate handling — #61
+4. [x] One `ImportBatch` row per source, all records linked via `ImportBatchId`, `RecordCount` accurate — #58 + this session
 
 ---
 

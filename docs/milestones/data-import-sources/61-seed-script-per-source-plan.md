@@ -20,14 +20,14 @@
 
 ## Step status
 
-- [x] `seed.csx` writes one file per source to `data/sources/`
-- [x] File names use `{owner}_{repo}.json` convention
-- [x] `data/quotes.json` deleted from repo and `.gitignore`
-- [x] `--dry-run` works
-- [x] `--no-fetch` works
-- [x] `Quotinator.slnx` updated with new source files
-- [x] CI smoke-test path updated from `data/quotes.json` to `data/sources/`
-- [x] `--output-dir DIR` flag added to seed script
+1. [x] `seed.csx` writes one file per source to `data/sources/`
+2. [x] File names use `{owner}_{repo}.json` convention
+3. [x] `data/quotes.json` deleted from repo and `.gitignore`
+4. [x] `--dry-run` works
+5. [x] `--no-fetch` works
+6. [x] `Quotinator.slnx` updated with new source files
+7. [x] CI smoke-test path updated from `data/quotes.json` to `data/sources/`
+8. [x] `--output-dir DIR` flag added to seed script
 
 ---
 

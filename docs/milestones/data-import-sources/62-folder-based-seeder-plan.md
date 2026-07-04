@@ -21,18 +21,18 @@
 
 ## Step status
 
-- [x] `Quotinator__DataDir` replaces `Quotinator__DataPath` across config, `Program.cs`, and `addon/config.yaml`
-- [x] `HaFallbackDir()` updated to use `DataDir` semantics
-- [x] Bundled sources folder scanned at startup
-- [x] `{DataDir}/imports/` scanned at startup when it exists
-- [x] `addon/config.yaml` updated
-- [x] `docs/docker.md` updated
-- [x] `CLAUDE.md` updated
-- [x] CI's publish-output check verifies `data/sources/` presence (already correct — not previously tracked here)
-- [x] One `ImportBatch` row per source file, typed accurately by both origin and URL presence (`System`/`Seed`/`UserSeed`/`Import`) — fixed 2026-07-01
-- [x] `Quotinator__IncludeDefaultSources` config key — fixed 2026-07-01
-- [x] `Quotinator__ImportsPath` config key — fixed 2026-07-01
-- [x] Startup warning when `Quotinator__DataPath` is still set in the environment — fixed 2026-07-01
+1. [x] `Quotinator__DataDir` replaces `Quotinator__DataPath` across config, `Program.cs`, and `addon/config.yaml`
+2. [x] `HaFallbackDir()` updated to use `DataDir` semantics
+3. [x] Bundled sources folder scanned at startup
+4. [x] `{DataDir}/imports/` scanned at startup when it exists
+5. [x] `addon/config.yaml` updated
+6. [x] `docs/docker.md` updated
+7. [x] `CLAUDE.md` updated
+8. [x] CI's publish-output check verifies `data/sources/` presence (already correct — not previously tracked here)
+9. [x] One `ImportBatch` row per source file, typed accurately by both origin and URL presence (`System`/`Seed`/`UserSeed`/`Import`) — fixed 2026-07-01
+10. [x] `Quotinator__IncludeDefaultSources` config key — fixed 2026-07-01
+11. [x] `Quotinator__ImportsPath` config key — fixed 2026-07-01
+12. [x] Startup warning when `Quotinator__DataPath` is still set in the environment — fixed 2026-07-01
 
 ---
 

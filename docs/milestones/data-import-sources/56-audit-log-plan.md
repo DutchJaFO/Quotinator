@@ -29,19 +29,19 @@
 
 ## Implementation steps
 
-- [ ] Schema migration: create `AuditLog` table with index on `(EntityId, Timestamp DESC)`
-- [ ] `AuditEntry` C# record in `Quotinator.Core`
-- [ ] `IAuditLogger` interface in `Quotinator.Core`
-- [ ] `SqliteAuditLogger` in `Quotinator.Data`
-- [ ] Register `IAuditLogger` in DI as scoped
-- [ ] Wire into import endpoint (#45): log `imported` per record on success
-- [ ] Wire into write endpoints (when #16 is implemented): log `created`, `updated`, `deleted`
-- [ ] Wire into enrichment (when #19 is implemented): log `enriched` per field
-- [ ] Wire into completeness actions (#55): log `completed`, `verified_absent`
-- [ ] Wire into soft-reset (#59): log `batch_reset`, `batch_restore`
-- [ ] Register `GET /api/v1/quotes/{id}/history` endpoint in `QuoteEndpoints.cs`
-- [ ] Update `README.md` and `addon/DOCS.md` with history endpoint
-- [ ] Tests: audit entries written on create/update/import, history endpoint returns correct entries
+1. [ ] Schema migration: create `AuditLog` table with index on `(EntityId, Timestamp DESC)`
+2. [ ] `AuditEntry` C# record in `Quotinator.Core`
+3. [ ] `IAuditLogger` interface in `Quotinator.Core`
+4. [ ] `SqliteAuditLogger` in `Quotinator.Data`
+5. [ ] Register `IAuditLogger` in DI as scoped
+6. [ ] Wire into import endpoint (#45): log `imported` per record on success
+7. [ ] Wire into write endpoints (when #16 is implemented): log `created`, `updated`, `deleted`
+8. [ ] Wire into enrichment (when #19 is implemented): log `enriched` per field
+9. [ ] Wire into completeness actions (#55): log `completed`, `verified_absent`
+10. [ ] Wire into soft-reset (#59): log `batch_reset`, `batch_restore`
+11. [ ] Register `GET /api/v1/quotes/{id}/history` endpoint in `QuoteEndpoints.cs`
+12. [ ] Update `README.md` and `addon/DOCS.md` with history endpoint
+13. [ ] Tests: audit entries written on create/update/import, history endpoint returns correct entries
 
 ---
 

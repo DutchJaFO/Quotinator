@@ -35,15 +35,15 @@
 
 ## Implementation steps
 
-- [ ] Update `SeedBatch` / source file parser to detect flat array vs extended object format
-- [ ] Parse `conversations`, `stageDirections`, `soundCues` sections from extended format
-- [ ] Update `DatabaseInitializer` to seed conversation tables when extended format is present
-- [ ] Migrate `data/sources/quotinator-curated.json` from flat array to extended object format
-- [ ] Add the Airplane! conversation to `quotinator-curated.json`
-- [ ] Update `schemas/source-extended.schema.json` with new sections
-- [ ] Update `seed.csx` to validate source files against the schema
-- [ ] Update `SeedScriptIntegrityTests` to cover the extended format
-- [ ] Tests: extended-format file seeds conversation tables correctly; flat array still seeds correctly
+1. [ ] Update `SeedBatch` / source file parser to detect flat array vs extended object format
+2. [ ] Parse `conversations`, `stageDirections`, `soundCues` sections from extended format
+3. [ ] Update `DatabaseInitializer` to seed conversation tables when extended format is present
+4. [ ] Migrate `data/sources/quotinator-curated.json` from flat array to extended object format
+5. [ ] Add the Airplane! conversation to `quotinator-curated.json`
+6. [ ] Update `schemas/source-extended.schema.json` with new sections
+7. [ ] Update `seed.csx` to validate source files against the schema
+8. [ ] Update `SeedScriptIntegrityTests` to cover the extended format
+9. [ ] Tests: extended-format file seeds conversation tables correctly; flat array still seeds correctly
 
 ---
 

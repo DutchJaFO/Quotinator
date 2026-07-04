@@ -31,23 +31,23 @@
 
 ## Step status
 
-- [x] `DataOwnedMigrations`, `DataBaselineSql` added to `DatabaseInitializer`
-- [x] `Sql.Schema` duplicated per-table constants (Data/Consumer variants) + `AnyTableExists`
-- [x] `SchemaBaseline` record simplified (`Sql` only, no manually-declared version)
-- [x] `ApplyMigrationPhaseAsync` extracted; two-phase `ApplyMigrationsAsync` (Data phase, then Consumer phase)
-- [x] `ApplyBaselineAsync` implemented; `forceIncremental` test seam added (`InitialiseForTestingAsync`)
-- [x] `DataSchemaVersion` property added (`IDatabaseInitializer`, `DatabaseInitializer`, all no-op/stub implementers updated)
-- [x] ~~`IsKnownMigrationError` split into `IsKnownDataMigrationError`/`IsKnownConsumerMigrationError`~~ — superseded, both removed entirely; see "Exception-free migrations" below
-- [x] `DropAndRebuildAsync` generalized to both version tables — superseded, now only touches `System_ConsumerSchemaVersion`; see "Exception-free migrations" below
-- [x] `QuotinatorMigrations.All` shrunk to 4 entries; `Migration005_ImportBatchTypeUserSeed` renamed to `Migration004_ImportBatchTypeUserSeed`
-- [x] `QuotinatorMigrations.Baseline` added (Engine domain tables only)
-- [x] `QuotinatorDatabaseInitializer`/`Program.cs` thread the simplified `SchemaBaseline` parameter
-- [x] Data-side and Engine-side drift-detection tests (+ CHECK-constraint behavioral assertions)
-- [x] New tests: fresh-DB-takes-baseline, existing-DB-still-incremental, no-baseline-fallback, ordering-proof, preserveSchemaVersion-two-tables
-- [x] Existing tests fixed: `InitialiseAsync_PartialMigrationState_SelfHealsAndReseeds` (now uses `forceIncremental` seam), `InitialiseAsync_LegacySchemaVersionTable_IsRenamedWithRowsPreserved`/`InitialiseAsync_LegacyAuditEntriesTable_MigratesToSystemAuditEntriesWithRowsPreserved` (reworked `DowngradeToLegacyNamesAsync` for the two-table shape), `Schema_MigrationVersion_IsBumped`/`CreateV2DatabaseAsync` in `ImportBatchesTests.cs` (targets `System_ConsumerSchemaVersion` directly), `SqlQueryGuardTests.AggregateQueries_MatchDocumentedInventory` (renamed/new `Schema.*` constants)
-- [x] `CLAUDE.md` migration-policy addendum
-- [x] Build clean, full suite green
-- [x] **Amendment:** exception-based recovery removed entirely; root-cause fix for Reset/Data collision; fail-loud-and-restore for the consumer anomaly case; mandatory Reset backup added — see "Exception-free migrations" below
+1. [x] `DataOwnedMigrations`, `DataBaselineSql` added to `DatabaseInitializer`
+2. [x] `Sql.Schema` duplicated per-table constants (Data/Consumer variants) + `AnyTableExists`
+3. [x] `SchemaBaseline` record simplified (`Sql` only, no manually-declared version)
+4. [x] `ApplyMigrationPhaseAsync` extracted; two-phase `ApplyMigrationsAsync` (Data phase, then Consumer phase)
+5. [x] `ApplyBaselineAsync` implemented; `forceIncremental` test seam added (`InitialiseForTestingAsync`)
+6. [x] `DataSchemaVersion` property added (`IDatabaseInitializer`, `DatabaseInitializer`, all no-op/stub implementers updated)
+7. [x] ~~`IsKnownMigrationError` split into `IsKnownDataMigrationError`/`IsKnownConsumerMigrationError`~~ — superseded, both removed entirely; see "Exception-free migrations" below
+8. [x] `DropAndRebuildAsync` generalized to both version tables — superseded, now only touches `System_ConsumerSchemaVersion`; see "Exception-free migrations" below
+9. [x] `QuotinatorMigrations.All` shrunk to 4 entries; `Migration005_ImportBatchTypeUserSeed` renamed to `Migration004_ImportBatchTypeUserSeed`
+10. [x] `QuotinatorMigrations.Baseline` added (Engine domain tables only)
+11. [x] `QuotinatorDatabaseInitializer`/`Program.cs` thread the simplified `SchemaBaseline` parameter
+12. [x] Data-side and Engine-side drift-detection tests (+ CHECK-constraint behavioral assertions)
+13. [x] New tests: fresh-DB-takes-baseline, existing-DB-still-incremental, no-baseline-fallback, ordering-proof, preserveSchemaVersion-two-tables
+14. [x] Existing tests fixed: `InitialiseAsync_PartialMigrationState_SelfHealsAndReseeds` (now uses `forceIncremental` seam), `InitialiseAsync_LegacySchemaVersionTable_IsRenamedWithRowsPreserved`/`InitialiseAsync_LegacyAuditEntriesTable_MigratesToSystemAuditEntriesWithRowsPreserved` (reworked `DowngradeToLegacyNamesAsync` for the two-table shape), `Schema_MigrationVersion_IsBumped`/`CreateV2DatabaseAsync` in `ImportBatchesTests.cs` (targets `System_ConsumerSchemaVersion` directly), `SqlQueryGuardTests.AggregateQueries_MatchDocumentedInventory` (renamed/new `Schema.*` constants)
+15. [x] `CLAUDE.md` migration-policy addendum
+16. [x] Build clean, full suite green
+17. [x] **Amendment:** exception-based recovery removed entirely; root-cause fix for Reset/Data collision; fail-loud-and-restore for the consumer anomaly case; mandatory Reset backup added — see "Exception-free migrations" below
 
 ---
 

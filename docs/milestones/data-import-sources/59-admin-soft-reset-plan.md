@@ -23,24 +23,24 @@
 
 ## Implementation steps
 
-- [ ] Add `DeletedAt TEXT` (nullable) column to `Quotes`, `Characters`, `Sources`, `People` via schema migration — this is the soft-delete flag
-- [ ] Update all read queries to filter `WHERE DeletedAt IS NULL`
-- [ ] `POST /api/v1/admin/import-batches/{id}/reset` endpoint
+1. [ ] Add `DeletedAt TEXT` (nullable) column to `Quotes`, `Characters`, `Sources`, `People` via schema migration — this is the soft-delete flag
+2. [ ] Update all read queries to filter `WHERE DeletedAt IS NULL`
+3. [ ] `POST /api/v1/admin/import-batches/{id}/reset` endpoint
   - [ ] Validate batch exists
   - [ ] Find all records where `ImportBatchId = {id}` AND not referenced by any other batch AND `DeletedAt IS NULL`
   - [ ] Detect `modifiedAfterImport` via audit log (`Action IN ('updated','enriched')` after batch `ImportedAt`)
   - [ ] Set `DeletedAt = NOW()` on eligible records
   - [ ] Write `batch_reset` audit entries (#56)
   - [ ] Return summary
-- [ ] `?preview=true` path: transaction rollback, return count without committing
-- [ ] `POST /api/v1/admin/import-batches/{id}/restore` endpoint
+4. [ ] `?preview=true` path: transaction rollback, return count without committing
+5. [ ] `POST /api/v1/admin/import-batches/{id}/restore` endpoint
   - [ ] Set `DeletedAt = NULL` on records from that batch
   - [ ] Write `batch_restore` audit entries
   - [ ] Return summary
-- [ ] `Authorization: Bearer` check against `Quotinator__AdminApiKey`
-- [ ] Rate limiting under admin policy
-- [ ] Update `README.md`, `addon/DOCS.md`, OpenAPI descriptions
-- [ ] Tests: reset skips shared/manual records, preview returns counts, restore works, audit entries written
+6. [ ] `Authorization: Bearer` check against `Quotinator__AdminApiKey`
+7. [ ] Rate limiting under admin policy
+8. [ ] Update `README.md`, `addon/DOCS.md`, OpenAPI descriptions
+9. [ ] Tests: reset skips shared/manual records, preview returns counts, restore works, audit entries written
 
 ---
 

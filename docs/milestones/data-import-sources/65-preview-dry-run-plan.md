@@ -29,8 +29,8 @@ The current implementation does not conflict with #65 — it can coexist. But it
 
 ## Step status
 
-- [x] `GET /api/v1/admin/database/seed/preview` — startup source preview (different feature, keep it)
-- [ ] `POST /api/v1/quotes/import?preview=true` — transaction-rollback preview on import payload (needs #45)
+1. [x] `GET /api/v1/admin/database/seed/preview` — startup source preview (different feature, keep it)
+2. [ ] `POST /api/v1/quotes/import?preview=true` — transaction-rollback preview on import payload (needs #45)
 
 ---
 

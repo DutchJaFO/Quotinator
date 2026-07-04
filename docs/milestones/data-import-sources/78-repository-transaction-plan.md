@@ -42,18 +42,18 @@ Summary:
 
 ## Implementation steps
 
-- [x] Evaluate options and record decision
-- [x] Write ADR 003
-- [x] Write `SqliteRepositoryTransactionTests` with all expected tests (confirm red before implementing)
-- [x] Run full test suite to establish baseline (confirmed 300 green, 0 failures)
-- [x] Add `IUnitOfWork` interface to `Quotinator.Data`
-- [x] Add `SqliteUnitOfWork` to `Quotinator.Data`
-- [x] Update `IRepository<T>` methods to accept optional `IUnitOfWork?`
-- [x] Update `SqliteRepository<T>` to use supplied `IUnitOfWork` when provided
-- [x] Update `IRestorableRepository<T>` methods to accept optional `IUnitOfWork?`
-- [x] Update `SqliteRestorableRepository<T>` accordingly
-- [x] Register `IUnitOfWork` / `SqliteUnitOfWork` in DI
-- [x] Confirm all existing tests still pass (306 green, 0 failures)
+1. [x] Evaluate options and record decision
+2. [x] Write ADR 003
+3. [x] Write `SqliteRepositoryTransactionTests` with all expected tests (confirm red before implementing)
+4. [x] Run full test suite to establish baseline (confirmed 300 green, 0 failures)
+5. [x] Add `IUnitOfWork` interface to `Quotinator.Data`
+6. [x] Add `SqliteUnitOfWork` to `Quotinator.Data`
+7. [x] Update `IRepository<T>` methods to accept optional `IUnitOfWork?`
+8. [x] Update `SqliteRepository<T>` to use supplied `IUnitOfWork` when provided
+9. [x] Update `IRestorableRepository<T>` methods to accept optional `IUnitOfWork?`
+10. [x] Update `SqliteRestorableRepository<T>` accordingly
+11. [x] Register `IUnitOfWork` / `SqliteUnitOfWork` in DI
+12. [x] Confirm all existing tests still pass (306 green, 0 failures)
 
 ---
 

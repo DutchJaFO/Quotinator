@@ -20,15 +20,15 @@
 
 ## Implementation steps
 
-- [ ] Schema migration: add `IsComplete BIT NOT NULL DEFAULT 0` and `NoValueKnown TEXT NOT NULL DEFAULT '[]'` to all four tables
-- [ ] Update C# entity models in `Quotinator.Core` to include `IsComplete` (bool) and `NoValueKnown` (string[], deserialized from JSON)
-- [ ] Update all `INSERT` paths to write `IsComplete = 0` and `NoValueKnown = '[]'` explicitly (or rely on DEFAULT)
-- [ ] Type handler or JSON serialisation for `NoValueKnown` string[] ↔ TEXT
-- [ ] `IQuoteService.GetStatsAsync()` (or equivalent) — add `CompleteCount` / `IncompleteCount` to the stats response
-- [ ] Update `GET /api/v1/version` stats block if it exposes record counts
-- [ ] Enrichment hooks (deferred to #19): skip `isComplete=true`; skip fields in `noValueKnown`
-- [ ] Blazor UI hooks (deferred to v3): "Mark complete" and "Mark field no-value" actions
-- [ ] Tests: schema migration, DEFAULT values on insert, stats counts
+1. [ ] Schema migration: add `IsComplete BIT NOT NULL DEFAULT 0` and `NoValueKnown TEXT NOT NULL DEFAULT '[]'` to all four tables
+2. [ ] Update C# entity models in `Quotinator.Core` to include `IsComplete` (bool) and `NoValueKnown` (string[], deserialized from JSON)
+3. [ ] Update all `INSERT` paths to write `IsComplete = 0` and `NoValueKnown = '[]'` explicitly (or rely on DEFAULT)
+4. [ ] Type handler or JSON serialisation for `NoValueKnown` string[] ↔ TEXT
+5. [ ] `IQuoteService.GetStatsAsync()` (or equivalent) — add `CompleteCount` / `IncompleteCount` to the stats response
+6. [ ] Update `GET /api/v1/version` stats block if it exposes record counts
+7. [ ] Enrichment hooks (deferred to #19): skip `isComplete=true`; skip fields in `noValueKnown`
+8. [ ] Blazor UI hooks (deferred to v3): "Mark complete" and "Mark field no-value" actions
+9. [ ] Tests: schema migration, DEFAULT values on insert, stats counts
 
 ---
 

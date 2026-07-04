@@ -69,27 +69,27 @@ Renamed at both the SQL and C# level:
 
 ## Step status
 
-- [x] `Sql.Schema.GetUserTables` excludes `AuditEntries` in addition to `SchemaVersion` *(superseded — see below)*
-- [x] `IDatabaseInitializer.ResetAsync` gains `bool preserveSchemaVersion = false` parameter
-- [x] `DatabaseInitializer.DropAndRebuildAsync` accepts and honours `preserveSchemaVersion`
-- [x] `QuotinatorDatabaseInitializer.OnResetAsync` threads the parameter through
-- [x] `POST /api/v1/admin/database/reset` accepts `?preserveSchemaVersion=true`
-- [x] `README.md`, `addon/DOCS.md`, and endpoint `WithDescription` text updated
-- [x] Unit tests added and green
-- [x] Scope-narrowing comment posted on #141
-- [x] Unreleased changelog entry added
-- [x] `Sql.Schema.GetUserTables` generalised to an escaped `System\_%` pattern match (no hardcoded names)
-- [x] `SchemaVersion`/`AuditEntries` renamed to `System_SchemaVersion`/`System_AuditEntries` at the SQL level
-- [x] `AuditEntry`, `IAuditReader`/`AuditReader`, `IAuditWriter`/`AuditWriter`, `AuditPageResult`, `NoOpAuditReader`/`NoOpAuditWriter`, `Sql.Audit` renamed to their `System*` equivalents
-- [x] Conditional bootstrap rename for legacy `SchemaVersion` added to `DatabaseInitializer.ApplyMigrationsAsync`
-- [x] Migration006 added (`AuditMigrations.RenameAuditEntriesToSystemAuditEntries`), registered in `QuotinatorMigrations.All`
-- [x] `IsKnownMigrationError` extended for migration006's two recoverable failure modes; stray-table cleanup added
-- [x] New unit tests: generic `System_` exclusion (positive + negative/escape-clause proof), fresh-database no-detour, legacy rename path, migration006 row/index preservation
-- [x] All existing tests updated to new table/type names; full suite green, 0 warnings
-- [x] T1 (VS/local, real running app with existing legacy-named database) — verified 2026-07-02, including live confirmation of the Reset collision fix
-- [x] T2 (Docker) — verified 2026-07-03, see row 23
-- [x] Amendment comment posted on #141
-- [x] Unreleased changelog entry updated to describe final shipped behaviour
+1. [x] `Sql.Schema.GetUserTables` excludes `AuditEntries` in addition to `SchemaVersion` *(superseded — see below)*
+2. [x] `IDatabaseInitializer.ResetAsync` gains `bool preserveSchemaVersion = false` parameter
+3. [x] `DatabaseInitializer.DropAndRebuildAsync` accepts and honours `preserveSchemaVersion`
+4. [x] `QuotinatorDatabaseInitializer.OnResetAsync` threads the parameter through
+5. [x] `POST /api/v1/admin/database/reset` accepts `?preserveSchemaVersion=true`
+6. [x] `README.md`, `addon/DOCS.md`, and endpoint `WithDescription` text updated
+7. [x] Unit tests added and green
+8. [x] Scope-narrowing comment posted on #141
+9. [x] Unreleased changelog entry added
+10. [x] `Sql.Schema.GetUserTables` generalised to an escaped `System\_%` pattern match (no hardcoded names)
+11. [x] `SchemaVersion`/`AuditEntries` renamed to `System_SchemaVersion`/`System_AuditEntries` at the SQL level
+12. [x] `AuditEntry`, `IAuditReader`/`AuditReader`, `IAuditWriter`/`AuditWriter`, `AuditPageResult`, `NoOpAuditReader`/`NoOpAuditWriter`, `Sql.Audit` renamed to their `System*` equivalents
+13. [x] Conditional bootstrap rename for legacy `SchemaVersion` added to `DatabaseInitializer.ApplyMigrationsAsync`
+14. [x] Migration006 added (`AuditMigrations.RenameAuditEntriesToSystemAuditEntries`), registered in `QuotinatorMigrations.All`
+15. [x] `IsKnownMigrationError` extended for migration006's two recoverable failure modes; stray-table cleanup added
+16. [x] New unit tests: generic `System_` exclusion (positive + negative/escape-clause proof), fresh-database no-detour, legacy rename path, migration006 row/index preservation
+17. [x] All existing tests updated to new table/type names; full suite green, 0 warnings
+18. [x] T1 (VS/local, real running app with existing legacy-named database) — verified 2026-07-02, including live confirmation of the Reset collision fix
+19. [x] T2 (Docker) — verified 2026-07-03, see row 23
+20. [x] Amendment comment posted on #141
+21. [x] Unreleased changelog entry updated to describe final shipped behaviour
 
 ---
 

@@ -131,6 +131,8 @@ At the start of every session working on a milestone:
 
    `Status` is a standalone column between `#` and `Requirement` — never embed ✅ or ❌ inside the Verification column. The `#` column is always plain sequential integers, in row order top to bottom — never lettered (`7a`, `7b`) and never numbered out of sequence with the row's actual position. A requirement discovered after the table already exists gets appended at the next integer (or the whole table renumbered if it belongs earlier), not a lettered insert. This applies equally to `overview.md`'s Order of operations table (see `checklist.md`).
 
+   **The plan doc's Step status checklist follows the same rule.** Use numbered task-list syntax (`1. [ ] ...`, `2. [x] ...`), not plain bullets (`- [ ] ...`) — always plain sequential integers, never lettered, never appended out of order. The list order is the actual execution order: step 1 is done before step 2. A step discovered mid-implementation is inserted at its real position in the sequence (renumbering everything after it), not tacked onto the end out of order.
+
    **Bug fixes:** before writing any fix, first confirm the bug is reproducible. Write a
    failing unit test that demonstrates the bug, or document the exact steps and observed
    output that prove it exists. The fix is complete only when that test passes or those

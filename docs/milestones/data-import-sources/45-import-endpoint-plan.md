@@ -37,23 +37,23 @@
 
 ## Implementation steps
 
-- [ ] Define `ImportQuoteDto` and `ImportResultDto` in `Quotinator.Core`
-- [ ] Implement `IQuoteImportService` and `SqliteQuoteImportService`
-- [ ] Register in DI
-- [ ] Register `POST /api/v1/quotes/import` in `QuoteEndpoints.cs`
-- [ ] JSON array input parsing (canonical schema)
-- [ ] CSV input parsing (column mapping TBD — match canonical field names)
-- [ ] Multipart file upload handling
-- [ ] Conflict detection: same-ID and same-text matching
-- [ ] Apply conflict policy per record
-- [ ] `preview=true` path: wrap in a transaction, roll back after computing the result
-- [ ] Create `ImportBatch` row per run (needs #58)
-- [ ] Write `ImportBatchId` on all inserted records (needs #58)
-- [ ] `Authorization: Bearer` check against `Quotinator__AdminApiKey`
-- [ ] Rate limiting under admin policy
-- [ ] OpenAPI `[Description]` attributes on endpoint and parameters
-- [ ] Update `README.md` and `addon/DOCS.md` endpoint tables
-- [ ] Tests: happy path, conflict scenarios, preview mode, auth failure
+1. [ ] Define `ImportQuoteDto` and `ImportResultDto` in `Quotinator.Core`
+2. [ ] Implement `IQuoteImportService` and `SqliteQuoteImportService`
+3. [ ] Register in DI
+4. [ ] Register `POST /api/v1/quotes/import` in `QuoteEndpoints.cs`
+5. [ ] JSON array input parsing (canonical schema)
+6. [ ] CSV input parsing (column mapping TBD — match canonical field names)
+7. [ ] Multipart file upload handling
+8. [ ] Conflict detection: same-ID and same-text matching
+9. [ ] Apply conflict policy per record
+10. [ ] `preview=true` path: wrap in a transaction, roll back after computing the result
+11. [ ] Create `ImportBatch` row per run (needs #58)
+12. [ ] Write `ImportBatchId` on all inserted records (needs #58)
+13. [ ] `Authorization: Bearer` check against `Quotinator__AdminApiKey`
+14. [ ] Rate limiting under admin policy
+15. [ ] OpenAPI `[Description]` attributes on endpoint and parameters
+16. [ ] Update `README.md` and `addon/DOCS.md` endpoint tables
+17. [ ] Tests: happy path, conflict scenarios, preview mode, auth failure
 
 ---
 

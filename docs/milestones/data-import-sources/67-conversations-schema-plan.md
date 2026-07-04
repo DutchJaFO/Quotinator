@@ -36,11 +36,11 @@ Indexes on all FK columns.
 
 ## Implementation steps
 
-- [ ] Schema migration: create all six tables with FK constraints and indexes (version bump)
-- [ ] `Conversation`, `ConversationLine`, `StageDirection`, `StageDirectionTranslation`, `SoundCue`, `SoundCueTranslation` C# records in `Quotinator.Core`
-- [ ] CHECK constraint on `ConversationLines.Position >= 1`
-- [ ] Repository interfaces and Dapper implementations in `Quotinator.Data`
-- [ ] Tests: schema created correctly, FK constraints enforced, CHECK constraint enforced, indexes present
+1. [ ] Schema migration: create all six tables with FK constraints and indexes (version bump)
+2. [ ] `Conversation`, `ConversationLine`, `StageDirection`, `StageDirectionTranslation`, `SoundCue`, `SoundCueTranslation` C# records in `Quotinator.Core`
+3. [ ] CHECK constraint on `ConversationLines.Position >= 1`
+4. [ ] Repository interfaces and Dapper implementations in `Quotinator.Data`
+5. [ ] Tests: schema created correctly, FK constraints enforced, CHECK constraint enforced, indexes present
 
 ---
 

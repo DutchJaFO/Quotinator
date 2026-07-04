@@ -20,16 +20,16 @@
 
 ## Step status
 
-- [x] `skip` policy implemented — existing record wins, new record discarded
-- [x] `overwrite` policy implemented — new record wins (≈ spec's `newest-wins`)
-- [x] Per-manifest policy via `duplicateResolution` field in `manifest.json`
-- [x] Per-source config overrides via `Quotinator:DuplicateResolution:*`
-- [ ] **Rename `overwrite` → `newest-wins`** — the spec uses `newest-wins` throughout
-- [ ] **Default is currently `skip`** — spec default is `newest-wins`; change the default
-- [ ] `Quotinator__DefaultConflictPolicy` config key — current key naming differs from spec (`Quotinator:DuplicateResolution:Default`)
-- [ ] `review` policy — queues conflict to `ConflictQueue`; Blazor UI resolves or rolls back (deferred to v3)
-- [ ] Per-import override via query parameter — needs #45
-- [ ] Record applied policy in `ImportBatch` — needs #58
+1. [x] `skip` policy implemented — existing record wins, new record discarded
+2. [x] `overwrite` policy implemented — new record wins (≈ spec's `newest-wins`)
+3. [x] Per-manifest policy via `duplicateResolution` field in `manifest.json`
+4. [x] Per-source config overrides via `Quotinator:DuplicateResolution:*`
+5. [ ] **Rename `overwrite` → `newest-wins`** — the spec uses `newest-wins` throughout
+6. [ ] **Default is currently `skip`** — spec default is `newest-wins`; change the default
+7. [ ] `Quotinator__DefaultConflictPolicy` config key — current key naming differs from spec (`Quotinator:DuplicateResolution:Default`)
+8. [ ] `review` policy — queues conflict to `ConflictQueue`; Blazor UI resolves or rolls back (deferred to v3)
+9. [ ] Per-import override via query parameter — needs #45
+10. [ ] Record applied policy in `ImportBatch` — needs #58
 
 ---
 

@@ -58,15 +58,15 @@ See [`docs/architecture-decisions/001-cve-2025-6965-sql-aggregate-guard.md`](../
 
 ## Implementation steps
 
-- [x] Add `IRepository<T>` interface to `Quotinator.Data/Repositories/`
-- [x] Add `SqliteRepository<T>` base class to `Quotinator.Data/Repositories/`
-- [x] Add `SqlAggregateGuard` to `Quotinator.Data/Diagnostics/`
-- [x] Create `tests/Quotinator.Data.Tests` project
-- [x] Add `SqliteRepositoryTests` — CRUD round-trip against file-based SQLite
-- [x] Add `SqlAggregateGuardTests` — detector unit tests (known-dangerous and known-safe cases)
-- [x] Add `SqlSourceScanTests` to `Quotinator.Core.Tests` — scans `src/` for vulnerable patterns
-- [x] Add new test project to `Quotinator.slnx`
-- [x] Update `docs/README.md`, `docs/sql-safety.md`, `docs/architecture-decisions/001-...`
+1. [x] Add `IRepository<T>` interface to `Quotinator.Data/Repositories/`
+2. [x] Add `SqliteRepository<T>` base class to `Quotinator.Data/Repositories/`
+3. [x] Add `SqlAggregateGuard` to `Quotinator.Data/Diagnostics/`
+4. [x] Create `tests/Quotinator.Data.Tests` project
+5. [x] Add `SqliteRepositoryTests` — CRUD round-trip against file-based SQLite
+6. [x] Add `SqlAggregateGuardTests` — detector unit tests (known-dangerous and known-safe cases)
+7. [x] Add `SqlSourceScanTests` to `Quotinator.Core.Tests` — scans `src/` for vulnerable patterns
+8. [x] Add new test project to `Quotinator.slnx`
+9. [x] Update `docs/README.md`, `docs/sql-safety.md`, `docs/architecture-decisions/001-...`
 
 ---
 

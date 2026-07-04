@@ -25,16 +25,16 @@
 
 ## Implementation steps
 
-- [x] Bump schema version in `DatabaseInitializer`
-- [x] Add `ImportBatches` table to schema DDL
-- [x] Add nullable `ImportBatchId TEXT REFERENCES ImportBatches(Id)` column to `Quotes`, `Characters`, `Sources`, `People`
-- [x] Add `ImportBatch` C# record in `Quotinator.Core`
-- [x] Add `IImportBatchRepository` (extends `IRepository<ImportBatch>`) in `Quotinator.Core`
-- [x] Add `SqliteImportBatchRepository` (extends `SqliteRepository<ImportBatch>`) in `Quotinator.Core`
-- [x] Register `IImportBatchRepository` → `SqliteImportBatchRepository` in DI (switch `DatabaseInitializer` to DI-managed registration so the repository can be injected)
-- [x] Update seeder to create one `ImportBatch` row per source file and pass `ImportBatchId` to all insert calls
-- [x] Insert pre-seed rows for vilaboim and NikhilNamal17 on migration (existing records stay `NULL`)
-- [x] Integration tests (see verification table)
+1. [x] Bump schema version in `DatabaseInitializer`
+2. [x] Add `ImportBatches` table to schema DDL
+3. [x] Add nullable `ImportBatchId TEXT REFERENCES ImportBatches(Id)` column to `Quotes`, `Characters`, `Sources`, `People`
+4. [x] Add `ImportBatch` C# record in `Quotinator.Core`
+5. [x] Add `IImportBatchRepository` (extends `IRepository<ImportBatch>`) in `Quotinator.Core`
+6. [x] Add `SqliteImportBatchRepository` (extends `SqliteRepository<ImportBatch>`) in `Quotinator.Core`
+7. [x] Register `IImportBatchRepository` → `SqliteImportBatchRepository` in DI (switch `DatabaseInitializer` to DI-managed registration so the repository can be injected)
+8. [x] Update seeder to create one `ImportBatch` row per source file and pass `ImportBatchId` to all insert calls
+9. [x] Insert pre-seed rows for vilaboim and NikhilNamal17 on migration (existing records stay `NULL`)
+10. [x] Integration tests (see verification table)
 
 ---
 

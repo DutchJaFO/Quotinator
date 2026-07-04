@@ -21,14 +21,14 @@
 
 ## Step status
 
-- [x] `data/sources/manifest.json` exists with ordered file list
-- [x] `manifest.schema.json` exists with `duplicateResolution` property
-- [x] Seeder reads manifest and follows the declared order
-- [x] Schema validated in tests
-- [x] Unlisted files are **appended alphabetically** after listed ones
-- [x] User imports folder: auto-create `manifest.json` when missing
-- [x] `Quotinator__CreateMissingManifest` config key
-- [x] Warning log on auto-creation
+1. [x] `data/sources/manifest.json` exists with ordered file list
+2. [x] `manifest.schema.json` exists with `duplicateResolution` property
+3. [x] Seeder reads manifest and follows the declared order
+4. [x] Schema validated in tests
+5. [x] Unlisted files are **appended alphabetically** after listed ones
+6. [x] User imports folder: auto-create `manifest.json` when missing
+7. [x] `Quotinator__CreateMissingManifest` config key
+8. [x] Warning log on auto-creation
 
 ---
 
