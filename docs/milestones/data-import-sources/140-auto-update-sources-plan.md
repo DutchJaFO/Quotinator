@@ -43,6 +43,10 @@ A second round of discussion expanded the design further, past round 1:
 
 A comment recording all four of these points must be posted on #140 before implementation begins (step 2) — same requirement as round 1, since this changes the design again past what round 1's own comment described.
 
+**Confirmed with the user, 2026-07-04 (kept here to prevent re-deriving or drifting from it later):**
+- **Bundled vs. imports is a provenance/location distinction only, never a content-classification one.** `ImportBatchType.System` (reserved per #62's correction) can only ever come from bundled sources — there is no current user-imports use case for it, and this download mechanism doesn't change that. The internal/external split governs *where a downloaded copy is cached*, nothing about what `ImportBatchType` a seeded row ends up with.
+- **Bundled and user-imports entries are mechanically identical in every respect except two: how they're provided (which manifest they're declared in) and where they're cached (internal vs. external, subject to the `downloadTarget` override).** TTL/staleness, `AutoUpdateSources`, `forceSourceRefresh`, collision detection, and the network GET/timeout/fallback behavior all apply uniformly regardless of origin — there is no other branch anywhere in this design based on bundled-vs-imports.
+
 ---
 
 ## Spec requirements (final, supersedes the original plan's list)
