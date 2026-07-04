@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-04 17:26 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-04 23:42 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.
 - Setting up Quotinator for the first time is now faster — a brand-new database is created directly, instead of stepping through years of internal upgrade history.
 - Quotinator can now automatically refresh its bundled and imported quote sources from their original locations, keeping data up to date without needing a new release.
+- Duplicate quotes found during import can now be merged field by field instead of only being kept or replaced outright, and every duplicate encountered is now recorded for future review.
+- The default behaviour for duplicate quotes changed from keeping the first version seen to keeping the newest version — matching what most people would expect when a source file is corrected or updated.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -27,10 +29,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New `POST /api/v1/admin/sources/refresh` endpoint refreshes downloaded source caches on disk without touching the database
 - `POST /api/v1/admin/database/reseed` and `.../reset` now accept a `forceSourceRefresh` query parameter to bypass the refresh interval for that call
 - `GET /api/v1/admin/database/seed/preview` and `POST /api/v1/admin/sources/refresh` now report each source's refresh outcome, last-refreshed time, and — for a file that failed to parse — a localised reason
+- Five configurable duplicate-resolution policies — `skip`, `newest-wins`, `merge-ours`, `merge-theirs`, `review` — set via `Quotinator__DefaultConflictPolicy`, with per-entity-type overrides and a per-source manifest override
+- New `System_ImportConflicts` table records every duplicate detected during seeding — which policy was applied, and (for the two merge policies) which side each field's value came from
+- `ImportBatches` now records which conflict-resolution policy was active for each import batch
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
 - API responses no longer include properties with a `null` value, reducing response payload size
+- The default duplicate-resolution policy changed from `skip` (keep the first version seen) to `newest-wins` (keep the latest version) when nothing overrides it
 
 ### Fixed
 - ImportBatch rows created during seeding now record the correct `Type` (`Seed` for any bundled file, whether externally sourced with a manifest URL or internally authored) and persist the source URL; previously every seeded batch was recorded incorrectly

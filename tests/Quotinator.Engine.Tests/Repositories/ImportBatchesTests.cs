@@ -50,6 +50,7 @@ public class ImportBatchesTests
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
+            NoOpSystemImportConflictWriter.Instance,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             useBaseline ? QuotinatorMigrations.Baseline : null);
@@ -90,9 +91,25 @@ public class ImportBatchesTests
             "SELECT name FROM pragma_table_info('ImportBatches')")).ToHashSet();
 
         var expected = new[] { "Id", "Name", "Type", "Url", "ImportedAt", "ImportedBy", "RecordCount",
-                                "DateCreated", "DateModified", "DateDeleted", "IsDeleted" };
+                                "DateCreated", "DateModified", "DateDeleted", "IsDeleted", "ConflictPolicy" };
         foreach (var col in expected)
             Assert.IsTrue(columns.Contains(col), $"Column '{col}' missing from ImportBatches");
+    }
+
+    /// <summary>The batch's actual applied conflict-resolution policy (for quotes) is persisted, not just backfilled for pre-existing rows.</summary>
+    [TestMethod]
+    public async Task Schema_ImportBatchesConflictPolicy_PersistsAppliedPolicy()
+    {
+        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], new ManifestPolicy(DuplicateResolutionPolicy.MergeTheirs), "test");
+        var db    = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var conflictPolicy = await conn.ExecuteScalarAsync<string>(
+            "SELECT ConflictPolicy FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
+
+        Assert.AreEqual(nameof(DuplicateResolutionPolicy.MergeTheirs), conflictPolicy);
     }
 
     /// <summary>Nullable <c>ImportBatchId</c> FK column is present on all four entity tables.</summary>
@@ -114,14 +131,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>App schema migration version is bumped to 4 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>App schema migration version is bumped to 5 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(4, db.SchemaVersion, "SchemaVersion should be 4 after Migration004");
+        Assert.AreEqual(5, db.SchemaVersion, "SchemaVersion should be 5 after Migration005");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────

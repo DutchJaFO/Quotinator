@@ -1,4 +1,5 @@
 using Dapper.Contrib.Extensions;
+using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Engine.Entities;
@@ -24,4 +25,7 @@ public sealed class ImportBatch : RecordBase
 
     /// <summary>Number of records written in this batch. Updated after seeding completes.</summary>
     public int RecordCount { get; set; }
+
+    /// <summary>The conflict-resolution policy that was active for this batch (the effective policy for quotes, since a batch may span multiple entity types).</summary>
+    public SafeValue<DuplicateResolutionPolicy?> ConflictPolicy { get; init; } = SafeValue<DuplicateResolutionPolicy?>.Empty;
 }

@@ -167,27 +167,18 @@ var dataDir = builder.Configuration["Quotinator:DataDir"]
 Directory.CreateDirectory(dataDir);
 
 // Duplicate-resolution policy from config — lowest-priority tier; a manifest's own
-// duplicateResolution section overrides this when present.
-static DuplicateResolutionPolicy ParseResolutionPolicy(string? value) =>
-    value?.ToLowerInvariant() == "overwrite"
-        ? DuplicateResolutionPolicy.Overwrite
-        : DuplicateResolutionPolicy.Skip;
-
-static DuplicateResolutionPolicy? ParseNullableResolutionPolicy(string? value) =>
-    value?.ToLowerInvariant() switch
-    {
-        "overwrite" => DuplicateResolutionPolicy.Overwrite,
-        "skip"      => DuplicateResolutionPolicy.Skip,
-        _           => null
-    };
-
+// duplicateResolution section overrides this when present. Quotinator:DefaultConflictPolicy is a
+// flat key (env Quotinator__DefaultConflictPolicy) — the 5 nested per-type keys below keep their
+// existing paths, minus the now-redundant "Default" sibling that used to live under
+// Quotinator:DuplicateResolution. Parsing itself lives in ConflictPolicyParser (Quotinator.Data)
+// so it's unit-testable outside these top-level statements.
 var configPolicy = new ManifestPolicy(
-    Default:      ParseResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Default"]),
-    Quotes:       ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Quotes"]),
-    Sources:      ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Sources"]),
-    Characters:   ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Characters"]),
-    People:       ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:People"]),
-    Translations: ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Translations"]));
+    Default:      ConflictPolicyParser.Parse(builder.Configuration["Quotinator:DefaultConflictPolicy"]),
+    Quotes:       ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Quotes"]),
+    Sources:      ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Sources"]),
+    Characters:   ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Characters"]),
+    People:       ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:People"]),
+    Translations: ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Translations"]));
 
 var createMissingManifest  = builder.Configuration.GetValue("Quotinator:CreateMissingManifest", true);
 var includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeDefaultSources", true);
@@ -284,6 +275,8 @@ builder.Services.AddTransient<IUnitOfWork>(sp =>
 builder.Services.AddSingleton<ICallerContext, CallerContext>();
 builder.Services.AddSingleton<ISystemAuditWriter, SystemAuditWriter>();
 builder.Services.AddSingleton<ISystemAuditReader, SystemAuditReader>();
+builder.Services.AddSingleton<ISystemImportConflictWriter, SystemImportConflictWriter>();
+builder.Services.AddSingleton<ISystemImportConflictReader, SystemImportConflictReader>();
 
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
@@ -328,6 +321,7 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
     return new QuotinatorDatabaseInitializer(
         connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
         sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
+        sp.GetRequiredService<ISystemImportConflictWriter>(),
         sp.GetRequiredService<ISystemAuditWriter>(),
         sp.GetRequiredService<ICallerContext>(),
         sp.GetRequiredService<ILogger<DatabaseInitializer>>(),

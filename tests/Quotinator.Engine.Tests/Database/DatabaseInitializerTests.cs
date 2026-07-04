@@ -51,6 +51,7 @@ public class DatabaseInitializerTests
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
+            NoOpSystemImportConflictWriter.Instance,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             useBaseline ? QuotinatorMigrations.Baseline : null);
@@ -75,12 +76,12 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         Assert.AreEqual(788, db.QuoteCount,     "Unique quotes");
-        Assert.AreEqual(478, db.SourceCount,    "Sources");
+        Assert.AreEqual(479, db.SourceCount,    "Sources");
         Assert.AreEqual(2,   db.CharacterCount, "Characters");
         Assert.AreEqual(0,   db.PeopleCount,    "People");
     }
 
-    /// <summary>Cross-file duplicates between vilaboim and NikhilNamal17 are recorded with Skip policy.</summary>
+    /// <summary>Cross-file duplicates between vilaboim and NikhilNamal17 are recorded with NewestWins policy (AllFilesBatch() uses ManifestPolicy.HardcodedDefault directly, bypassing the bundled manifest.json's own "skip" override).</summary>
     [TestMethod]
     public async Task InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates()
     {
@@ -89,8 +90,8 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(45, db.LastSeedDuplicates.Count, "Cross-file duplicates");
         Assert.IsTrue(
-            db.LastSeedDuplicates.All(d => d.AppliedPolicy == DuplicateResolutionPolicy.Skip),
-            "All duplicates should use Skip policy (manifest default)");
+            db.LastSeedDuplicates.All(d => d.AppliedPolicy == DuplicateResolutionPolicy.NewestWins),
+            "All duplicates should use NewestWins policy (HardcodedDefault)");
     }
 
     /// <summary>Seeding only the curated file correctly wires up the FK chain: Source → Character → Quote.</summary>
@@ -385,7 +386,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(0, legacyCount, "The legacy SchemaVersion table must no longer exist after the rename");
         Assert.AreEqual(1, preservedRow, "The pre-existing version-history row must survive the rename, not be wiped");
-        Assert.AreEqual(2, db2.DataSchemaVersion, "Data migration 2 (the rename) should have replayed after the legacy rename");
+        Assert.AreEqual(3, db2.DataSchemaVersion, "Data migration 2 (the rename) and migration 3 (System_ImportConflicts) should both have replayed after the legacy rename");
     }
 
     /// <summary>Data migration 2 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
@@ -435,6 +436,13 @@ public class DatabaseInitializerTests
     /// recorded one row per version (the baseline path records a single row, leaving nothing to roll
     /// back to "v2" from).
     /// </summary>
+    /// <remarks>
+    /// Deletes every version row from 3 upward, not just "the last two" — <c>GetConsumerCurrentVersion</c>
+    /// computes <c>MAX(Version)</c>, not row count, so leaving migration 5's row in place (e.g. deleting
+    /// only 3 and 4) would leave the computed version at 5 and InitialiseAsync would see nothing pending
+    /// to replay, defeating the whole scenario. Deleting 3 upward drops MAX back to 2, reproducing the
+    /// original #106 scenario regardless of how many migrations now exist above it.
+    /// </remarks>
     [TestMethod]
     public async Task InitialiseAsync_PartialMigrationState_FailsSafelyAndRequiresExplicitReset()
     {
@@ -446,7 +454,7 @@ public class DatabaseInitializerTests
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion WHERE Version IN (3, 4);");
+            await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion WHERE Version >= 3;");
         }
 
         var db2 = CreateInitializer([AllFilesBatch()]);
@@ -462,7 +470,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(4, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+        Assert.AreEqual(5, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
     }
 
     // ── #143 — migration ownership split + baseline schema ─────────────────────
@@ -474,6 +482,7 @@ public class DatabaseInitializerTests
         var options       = new DatabaseOptions { DbPath = dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
+            NoOpSystemImportConflictWriter.Instance,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             QuotinatorMigrations.Baseline);
@@ -600,11 +609,19 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(2, db.DataSchemaVersion);
-        Assert.AreEqual(4, db.SchemaVersion);
+        Assert.AreEqual(3, db.DataSchemaVersion);
+        Assert.AreEqual(5, db.SchemaVersion);
     }
 
-    /// <summary>An existing database with only App migrations pending still replays incrementally — the baseline path and the two migration phases never cross.</summary>
+    /// <summary>
+    /// An existing database with only App migrations pending still replays incrementally — the
+    /// baseline path and the two migration phases never cross.
+    /// </summary>
+    /// <remarks>
+    /// Deletes version 4 and everything above it, not just 4 — <c>GetConsumerCurrentVersion</c>
+    /// computes <c>MAX(Version)</c>, not row count, so leaving migration 5's row in place would
+    /// leave the computed version at 5 (already fully migrated) and nothing would replay.
+    /// </remarks>
     [TestMethod]
     public async Task InitialiseAsync_ExistingDatabaseAtVersion3_StillReplaysRemainingConsumerMigrationsIncrementally()
     {
@@ -614,22 +631,22 @@ public class DatabaseInitializerTests
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion WHERE Version = 4;");
+            await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion WHERE Version >= 4;");
         }
 
         var db2 = CreateInitializer([]);
         await db2.InitialiseAsync();
 
-        Assert.AreEqual(4, db2.SchemaVersion,     "Only the remaining App migration (4) should have replayed");
-        Assert.AreEqual(2, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
+        Assert.AreEqual(5, db2.SchemaVersion,     "Both remaining App migrations (4 and 5) should have replayed");
+        Assert.AreEqual(3, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
     }
 
     /// <summary>
     /// A database created before the #143 migration-ownership split has a single System_SchemaVersion
     /// table holding the old combined history (one row per migration, spanning both Data's and the
-    /// consumer's migrations together — 6 rows for the schema this test targets), with no
-    /// System_ConsumerSchemaVersion table at all yet. This recorded state doesn't match the actual
-    /// on-disk schema (which already has the consumer's columns), so ordinary startup must fail
+    /// consumer's migrations together — 8 rows for the schema this test targets: 3 Data + 5 consumer),
+    /// with no System_ConsumerSchemaVersion table at all yet. This recorded state doesn't match the
+    /// actual on-disk schema (which already has the consumer's columns), so ordinary startup must fail
     /// loudly — no structural check, no message-matching recovery — leaving the database exactly as
     /// it was before the attempt (backup restored). An explicit Reset is the only sanctioned way to
     /// resolve it.
@@ -646,7 +663,7 @@ public class DatabaseInitializerTests
             await conn.OpenAsync();
             await conn.ExecuteAsync("DROP TABLE System_ConsumerSchemaVersion;");
             await conn.ExecuteAsync("DELETE FROM System_SchemaVersion;");
-            for (var v = 1; v <= 6; v++)
+            for (var v = 1; v <= 8; v++)
                 await conn.ExecuteAsync(
                     "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (@v, @at);",
                     new { v, at = $"2026-01-01T00:00:0{v}Z" });
@@ -665,7 +682,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(4, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+        Assert.AreEqual(5, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
 }

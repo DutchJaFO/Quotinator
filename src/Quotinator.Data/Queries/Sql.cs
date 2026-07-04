@@ -87,7 +87,7 @@ internal static class Sql
             "(Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
             "VALUES (@Id, @QuoteText, @OriginalLanguage, @SourceId, @CharacterId, @PersonId, @ImportBatchId, @DateCreated, NULL, NULL, 0);";
 
-        internal const string UpdateOnOverwrite =
+        internal const string UpdateOnNewestWins =
             "UPDATE Quotes SET QuoteText=@text, OriginalLanguage=@lang, SourceId=@sid, " +
             "CharacterId=@cid, PersonId=@pid, ImportBatchId=@batchId, DateModified=@mod WHERE Id=@id;";
 
@@ -304,6 +304,35 @@ internal static class Sql
             var parts = new List<string>(2);
             if (filterTable)    parts.Add("TableName = @table");
             if (filterRecordId) parts.Add("RecordId = @recordId");
+            return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
+        }
+    }
+
+    /// <summary>System_ImportConflicts table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.SystemImportConflictWriter"/>.</summary>
+    internal static class SystemImportConflicts
+    {
+        /// <summary>Removes all import-conflict rows.</summary>
+        internal const string DeleteAll = "DELETE FROM System_ImportConflicts;";
+
+        // COUNT base — shared by CountPaged factory method below.
+        private const string CountPagedBase = "SELECT COUNT(*) FROM System_ImportConflicts";
+
+        /// <summary>Paginated conflict listing, newest first, with optional filters.</summary>
+        internal static string SelectPaged(bool filterBatchId, bool filterStatus)
+            => "SELECT Id, BatchId, EntityType, EntityId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, ResolvedAt " +
+               "FROM System_ImportConflicts" +
+               BuildWhere(filterBatchId, filterStatus) +
+               " ORDER BY DetectedAt DESC LIMIT @pageSize OFFSET @offset;";
+
+        /// <summary>Total matching count for the conflict list endpoint.</summary>
+        internal static string CountPaged(bool filterBatchId, bool filterStatus)
+            => CountPagedBase + BuildWhere(filterBatchId, filterStatus) + ";";
+
+        private static string BuildWhere(bool filterBatchId, bool filterStatus)
+        {
+            var parts = new List<string>(2);
+            if (filterBatchId) parts.Add("BatchId = @batchId");
+            if (filterStatus)  parts.Add("Status = @status");
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
     }

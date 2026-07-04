@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dapper;
 using Dapper.Contrib.Extensions;
 using Microsoft.Data.Sqlite;
@@ -22,10 +23,11 @@ namespace Quotinator.Engine.Database;
 /// </summary>
 public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 {
-    private readonly IReadOnlyList<SeedBatch>    _batches;
-    private readonly IImportBatchRepository      _importBatches;
-    private readonly ISourceCacheUpdater         _sourceCacheUpdater;
-    private readonly bool                        _autoUpdateSources;
+    private readonly IReadOnlyList<SeedBatch>       _batches;
+    private readonly IImportBatchRepository         _importBatches;
+    private readonly ISystemImportConflictWriter    _conflictWriter;
+    private readonly ISourceCacheUpdater            _sourceCacheUpdater;
+    private readonly bool                           _autoUpdateSources;
 
     // API genre tag → database enum name (matches Genre enum values).
     private static readonly IReadOnlyDictionary<string, string> GenreApiToDb =
@@ -53,6 +55,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         IReadOnlyList<SchemaMigration> migrations,
         IReadOnlyList<SeedBatch>       batches,
         IImportBatchRepository         importBatches,
+        ISystemImportConflictWriter    conflictWriter,
         ISystemAuditWriter             auditWriter,
         ICallerContext                 callerContext,
         ILogger<DatabaseInitializer>   logger,
@@ -63,6 +66,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     {
         _batches            = batches;
         _importBatches      = importBatches;
+        _conflictWriter     = conflictWriter;
         _sourceCacheUpdater = sourceCacheUpdater;
         _autoUpdateSources  = autoUpdateSources;
     }
@@ -229,7 +233,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         LastSeedDuplicates = [];
 
-        var seenIds        = new Dictionary<string, string>(StringComparer.Ordinal);
+        var seenIds        = new Dictionary<string, (string FilePath, SourceQuote Quote)>(StringComparer.Ordinal);
         var sourceIndex    = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         var characterIndex = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         var personIndex    = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
@@ -252,38 +256,48 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
                 foreach (var q in quotes)
                 {
-                    if (seenIds.TryGetValue(q.Id, out var firstFile))
+                    if (seenIds.TryGetValue(q.Id, out var first))
                     {
+                        var policy = batch.Policy.ForQuotes;
+
                         duplicates.Add(new SeedDuplicateRecord(
                             "quote", q.Id, TruncateLabel(q.QuoteText),
-                            Path.GetFileName(firstFile), fileName,
-                            batch.Policy.ForQuotes));
+                            Path.GetFileName(first.FilePath), fileName,
+                            policy));
 
-                        if (batch.Policy.ForQuotes == DuplicateResolutionPolicy.Skip)
+                        var isMerge  = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                        var existingFields = QuoteFieldMerge.ToFieldMap(first.Quote);
+                        var incomingFields = QuoteFieldMerge.ToFieldMap(q);
+                        var mergeResult    = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                        var resolved       = mergeResult is not null ? QuoteFieldMerge.ApplyMergedFields(mergeResult.MergedFields, q) : q;
+
+                        await LogImportConflictAsync(importBatch.Id, q.Id, policy, existingFields, incomingFields, mergeResult, connection);
+
+                        if (policy is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review)
                         {
                             Logger.LogDebug(
                                 "[Database - Seed] skipping duplicate quote {Id} in {File} (first seen in {First})",
-                                q.Id, fileName, Path.GetFileName(firstFile));
+                                q.Id, fileName, Path.GetFileName(first.FilePath));
                             continue;
                         }
 
                         Logger.LogDebug(
-                            "[Database - Seed] overwriting duplicate quote {Id} in {File} (was {First})",
-                            q.Id, fileName, Path.GetFileName(firstFile));
+                            "[Database - Seed] resolving duplicate quote {Id} in {File} (was {First}) via {Policy}",
+                            q.Id, fileName, Path.GetFileName(first.FilePath), policy);
 
                         await connection.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote,      new { id = q.Id });
                         await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteForQuote, new { id = q.Id });
 
-                        var owSourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex, importBatch.Id);
-                        var owCharacterId = await GetOrCreateCharacterAsync(connection, q, owSourceId, characterIndex, importBatch.Id);
-                        var owPersonId    = await GetOrCreatePersonAsync(connection, q, personIndex, importBatch.Id);
+                        var owSourceId    = await GetOrCreateSourceAsync(connection, resolved, sourceIndex, importBatch.Id);
+                        var owCharacterId = await GetOrCreateCharacterAsync(connection, resolved, owSourceId, characterIndex, importBatch.Id);
+                        var owPersonId    = await GetOrCreatePersonAsync(connection, resolved, personIndex, importBatch.Id);
 
                         await connection.ExecuteAsync(
-                            Sql.Quotes.UpdateOnOverwrite,
+                            Sql.Quotes.UpdateOnNewestWins,
                             new
                             {
-                                text    = q.QuoteText,
-                                lang    = q.OriginalLanguage,
+                                text    = resolved.QuoteText,
+                                lang    = resolved.OriginalLanguage,
                                 sid     = owSourceId,
                                 cid     = owCharacterId,
                                 pid     = owPersonId,
@@ -292,15 +306,15 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                                 id      = q.Id
                             });
 
-                        seenIds[q.Id] = seedFile.FilePath;
+                        seenIds[q.Id] = (seedFile.FilePath, resolved);
 
                         var owQuoteId = Guid.Parse(q.Id);
-                        await InsertTranslationsAsync(connection, q, owQuoteId, owSourceId, now);
-                        await InsertGenresAsync(connection, q, owQuoteId, now);
+                        await InsertTranslationsAsync(connection, resolved, owQuoteId, owSourceId, now);
+                        await InsertGenresAsync(connection, resolved, owQuoteId, now);
                         continue;
                     }
 
-                    seenIds[q.Id] = seedFile.FilePath;
+                    seenIds[q.Id] = (seedFile.FilePath, q);
 
                     var sourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex, importBatch.Id);
                     var characterId = await GetOrCreateCharacterAsync(connection, q, sourceId, characterIndex, importBatch.Id);
@@ -449,13 +463,15 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
     private async Task<ImportBatch> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile)
     {
-        var type = DetermineType(seedBatch.Origin);
+        var type   = DetermineType(seedBatch.Origin);
+        var policy = seedBatch.Policy.ForQuotes;
         var batch = new ImportBatch
         {
-            Name       = Path.GetFileName(seedFile.FilePath),
-            Type       = type.ToString(),
-            Url        = seedFile.Url,
-            ImportedAt = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat)
+            Name           = Path.GetFileName(seedFile.FilePath),
+            Type           = type.ToString(),
+            Url            = seedFile.Url,
+            ImportedAt     = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat),
+            ConflictPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy)
         };
         await _importBatches.InsertAsync(batch);
         return batch;
@@ -532,6 +548,41 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         index[q.Author] = id;
         return id;
+    }
+
+    // Logs every detected duplicate as a System_ImportConflicts row, regardless of policy — Review
+    // is the only one left "pending"; every other policy is "resolved" at detection time, per #64's
+    // spec (the table is a full conflict log, not only a review queue).
+    private async Task LogImportConflictAsync(
+        Guid batchId, string quoteId, DuplicateResolutionPolicy policy,
+        IReadOnlyDictionary<string, object?> existingFields, IReadOnlyDictionary<string, object?> incomingFields,
+        FieldMergeResult? mergeResult, SqliteConnection connection)
+    {
+        var isPending = policy == DuplicateResolutionPolicy.Review;
+        var now       = DateTime.UtcNow;
+
+        string? mergedFieldsJson = null;
+        if (mergeResult is not null)
+        {
+            var perField = existingFields.Keys.ToDictionary(
+                field => field,
+                field => mergeResult.FieldsFromIncoming.Contains(field) ? "theirs" : "ours");
+            mergedFieldsJson = JsonSerializer.Serialize(perField);
+        }
+
+        await _conflictWriter.WriteAsync(new SystemImportConflict
+        {
+            BatchId       = batchId.ToString("D").ToUpperInvariant(),
+            EntityType    = "Quote",
+            EntityId      = quoteId,
+            ExistingValue = JsonSerializer.Serialize(existingFields),
+            IncomingValue = JsonSerializer.Serialize(incomingFields),
+            AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+            Status        = isPending ? ImportConflictStatus.Pending : ImportConflictStatus.Resolved,
+            MergedFields  = mergedFieldsJson,
+            DetectedAt    = now,
+            ResolvedAt    = isPending ? null : now,
+        }, connection);
     }
 
     private static string NormaliseType(string raw) => ParseQuoteType(raw).ToString();

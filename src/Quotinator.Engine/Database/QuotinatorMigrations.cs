@@ -21,6 +21,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 2, Sql = Migration002_ReseedGenres },
         new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
         new SchemaMigration { Version = 4, Sql = Migration004_ImportBatchTypeUserSeed },
+        new SchemaMigration { Version = 5, Sql = Migration005_ImportBatchConflictPolicy },
     ];
 
     /// <summary>
@@ -204,13 +205,23 @@ public static class QuotinatorMigrations
         ALTER TABLE ImportBatches_New RENAME TO ImportBatches;
         """;
 
-    // Consolidated schema for a genuinely fresh database — the union of migrations 1-4's final
+    // Adds ImportBatches.ConflictPolicy, recording the conflict-resolution policy that was active
+    // for each batch. Pre-existing rows backfill to 'skip' — the HardcodedDefault in effect before
+    // #64 flipped it to NewestWins — since that's what those rows were actually seeded under; new
+    // rows populate their real applied policy at insert time via CreateImportBatchAsync.
+    private const string Migration005_ImportBatchConflictPolicy = """
+        ALTER TABLE ImportBatches ADD COLUMN ConflictPolicy TEXT NOT NULL DEFAULT 'skip';
+        """;
+
+    // Consolidated schema for a genuinely fresh database — the union of migrations 1-5's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
-    // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order) and
-    // ImportBatches using the final widened CHECK constraint (migration004). Deliberately omits
+    // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
+    // ImportBatches using the final widened CHECK constraint (migration004), and ImportBatches.
+    // ConflictPolicy (migration005's ALTER TABLE ADD COLUMN, also always appends, so it's listed
+    // last too) present with the same 'skip' default backfill value. Deliberately omits
     // migration002's DELETE FROM QuoteGenres (data-repair for pre-existing bad data — nothing to
     // repair on a fresh database) and migration003's pre-seed INSERTs (WHERE EXISTS-guarded,
-    // always a no-op before any quote has been seeded). Kept in sync with migrations 1-4 by
+    // always a no-op before any quote has been seeded). Kept in sync with migrations 1-5 by
     // QuotinatorMigrationsBaselineTests' schema-drift comparison.
     private const string BaselineSchema = """
         CREATE TABLE IF NOT EXISTS ImportBatches (
@@ -224,7 +235,8 @@ public static class QuotinatorMigrations
             DateCreated  TEXT    NOT NULL,
             DateModified TEXT,
             DateDeleted  TEXT,
-            IsDeleted    INTEGER NOT NULL DEFAULT 0
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            ConflictPolicy TEXT  NOT NULL DEFAULT 'skip'
         );
 
         CREATE TABLE IF NOT EXISTS Sources (

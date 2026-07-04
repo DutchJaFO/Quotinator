@@ -55,6 +55,7 @@ public class SourceCacheWiringTests
         var batch         = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "bundled sources");
 
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
+            NoOpSystemImportConflictWriter.Instance,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
             spy, autoUpdateSources, QuotinatorMigrations.Baseline);
     }
@@ -138,6 +139,7 @@ public class SourceCacheWiringTests
             [new SeedFile(CuratedFile, null), new SeedFile(malformedPath, null)],
             ManifestPolicy.HardcodedDefault, "bundled sources");
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
+            NoOpSystemImportConflictWriter.Instance,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             new SpySourceCacheUpdater(), autoUpdateSources: false, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
@@ -158,6 +160,7 @@ public class SourceCacheWiringTests
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var batch = new SeedBatch([new SeedFile(missingPath, null)], ManifestPolicy.HardcodedDefault, "bundled sources");
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
+            NoOpSystemImportConflictWriter.Instance,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             new SpySourceCacheUpdater(), autoUpdateSources: false, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();

@@ -10,12 +10,14 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [57, 58, 62, 63, 140, 141, 143],
+    "issues": [57, 58, 62, 63, 64, 140, 141, 143],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
       "Quotinator voor het eerst instellen is nu sneller — een gloednieuwe database wordt direct aangemaakt, in plaats van jarenlange interne upgradegeschiedenis te doorlopen.",
-      "Quotinator kan nu automatisch zijn gebundelde en geïmporteerde citaatbronnen verversen vanaf hun oorspronkelijke locatie, zodat de gegevens up-to-date blijven zonder een nieuwe release."
+      "Quotinator kan nu automatisch zijn gebundelde en geïmporteerde citaatbronnen verversen vanaf hun oorspronkelijke locatie, zodat de gegevens up-to-date blijven zonder een nieuwe release.",
+      "Dubbele citaten die tijdens het importeren worden gevonden, kunnen nu veld voor veld worden samengevoegd in plaats van alleen volledig behouden of vervangen te worden, en elk aangetroffen duplicaat wordt nu vastgelegd voor latere controle.",
+      "Het standaardgedrag bij dubbele citaten is gewijzigd van het behouden van de eerst geziene versie naar het behouden van de nieuwste versie — wat aansluit bij wat de meeste mensen zouden verwachten wanneer een bronbestand wordt gecorrigeerd of bijgewerkt."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -28,11 +30,15 @@
       "Manifestvermeldingen kunnen nu `refreshIntervalHours` en `downloadTarget` opgeven om het algemene ververinterval en de cachelocatie per bron te overschrijven",
       "Nieuw eindpunt `POST /api/v1/admin/sources/refresh` ververst gedownloade broncaches op schijf zonder de database aan te raken",
       "`POST /api/v1/admin/database/reseed` en `.../reset` accepteren nu een queryparameter `forceSourceRefresh` om het ververinterval voor die aanroep te omzeilen",
-      "`GET /api/v1/admin/database/seed/preview` en `POST /api/v1/admin/sources/refresh` rapporteren nu per bron het ververresultaat, het tijdstip van laatste verversing en — voor een bestand dat niet kon worden verwerkt — een gelokaliseerde reden"
+      "`GET /api/v1/admin/database/seed/preview` en `POST /api/v1/admin/sources/refresh` rapporteren nu per bron het ververresultaat, het tijdstip van laatste verversing en — voor een bestand dat niet kon worden verwerkt — een gelokaliseerde reden",
+      "Vijf configureerbare beleidsregels voor het oplossen van duplicaten — `skip`, `newest-wins`, `merge-ours`, `merge-theirs`, `review` — in te stellen via `Quotinator__DefaultConflictPolicy`, met overschrijvingen per entiteitstype en een overschrijving per bron via het manifest",
+      "Nieuwe tabel `System_ImportConflicts` legt elk duplicaat vast dat tijdens het seeden wordt aangetroffen — welk beleid is toegepast, en (voor de twee samenvoegbeleidsregels) van welke kant de waarde van elk veld afkomstig is",
+      "`ImportBatches` registreert nu welk beleid voor het oplossen van duplicaten actief was voor elke importbatch"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
-      "API-antwoorden bevatten niet langer eigenschappen met een `null`-waarde, wat de omvang van de respons verkleint"
+      "API-antwoorden bevatten niet langer eigenschappen met een `null`-waarde, wat de omvang van de respons verkleint",
+      "Het standaardbeleid voor het oplossen van duplicaten is gewijzigd van `skip` (de eerst geziene versie behouden) naar `newest-wins` (de nieuwste versie behouden) wanneer niets dit overschrijft"
     ],
     "fixed": [
       "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor elk gebundeld bestand, of het nu extern is aangeleverd met een manifest-URL of intern is samengesteld) en bewaren de bron-URL; voorheen werd elke geseede batch onjuist geregistreerd",

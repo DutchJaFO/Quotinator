@@ -34,7 +34,7 @@ public record ManifestPolicy(
     public DuplicateResolutionPolicy ForTranslations => Translations ?? Default;
 
     /// <summary>Fallback used when neither the manifest nor application configuration specifies a policy.</summary>
-    public static ManifestPolicy HardcodedDefault => new(DuplicateResolutionPolicy.Skip);
+    public static ManifestPolicy HardcodedDefault => new(DuplicateResolutionPolicy.NewestWins);
 
     /// <summary>
     /// Returns the manifest's own policy when present; otherwise returns the configuration-level policy.

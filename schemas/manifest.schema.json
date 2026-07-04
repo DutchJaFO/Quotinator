@@ -13,7 +13,7 @@
     },
     "duplicateResolution": {
       "type": "object",
-      "description": "How the seeder handles duplicate records when the same primary key appears in more than one file. Omit to inherit the policy from application configuration (Quotinator:DuplicateResolution). When present, this section overrides all configuration-level settings for this directory.",
+      "description": "How the seeder handles duplicate records when the same primary key appears in more than one file. Omit to inherit the policy from application configuration (Quotinator:DefaultConflictPolicy, with per-entity-type overrides under Quotinator:DuplicateResolution:*). When present, this section overrides all configuration-level settings for this directory.",
       "additionalProperties": false,
       "properties": {
         "default": {
@@ -99,8 +99,8 @@
   "$defs": {
     "policy": {
       "type": "string",
-      "enum": ["skip", "overwrite"],
-      "description": "skip — keep the first occurrence and ignore later files with the same ID. overwrite — replace the existing record with the version from the later file."
+      "enum": ["skip", "newest-wins", "merge-ours", "merge-theirs", "review"],
+      "description": "skip — keep the first occurrence and ignore later files with the same ID. newest-wins — replace the existing record with the version from the later file. merge-ours — auto-fill blank fields from either side; keep the existing value on a true conflict. merge-theirs — auto-fill blank fields from either side; take the incoming value on a true conflict. review — do not auto-resolve; behaves like skip today, reserved for a future manual review workflow."
     }
   }
 }

@@ -10,12 +10,14 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [57, 58, 62, 63, 140, 141, 143],
+    "issues": [57, 58, 62, 63, 64, 140, 141, 143],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
       "Die Ersteinrichtung von Quotinator ist jetzt schneller — eine brandneue Datenbank wird direkt erstellt, anstatt jahrelange interne Upgrade-Historie zu durchlaufen.",
-      "Quotinator kann seine gebündelten und importierten Zitatquellen jetzt automatisch von ihrem ursprünglichen Ort aktualisieren und die Daten so ohne ein neues Release aktuell halten."
+      "Quotinator kann seine gebündelten und importierten Zitatquellen jetzt automatisch von ihrem ursprünglichen Ort aktualisieren und die Daten so ohne ein neues Release aktuell halten.",
+      "Doppelte Zitate, die beim Import gefunden werden, können jetzt Feld für Feld zusammengeführt werden, statt nur vollständig behalten oder ersetzt zu werden, und jedes gefundene Duplikat wird nun zur späteren Überprüfung festgehalten.",
+      "Das Standardverhalten bei doppelten Zitaten wurde geändert: statt die zuerst gesehene Version zu behalten, wird jetzt die neueste Version behalten — das entspricht dem, was die meisten Menschen erwarten würden, wenn eine Quelldatei korrigiert oder aktualisiert wird."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -28,11 +30,15 @@
       "Manifest-Einträge können nun `refreshIntervalHours` und `downloadTarget` angeben, um das globale Aktualisierungsintervall und den Cache-Speicherort pro Quelle zu überschreiben",
       "Neuer Endpunkt `POST /api/v1/admin/sources/refresh` aktualisiert heruntergeladene Quell-Caches auf der Festplatte, ohne die Datenbank zu berühren",
       "`POST /api/v1/admin/database/reseed` und `.../reset` akzeptieren nun einen Query-Parameter `forceSourceRefresh`, um das Aktualisierungsintervall für diesen Aufruf zu umgehen",
-      "`GET /api/v1/admin/database/seed/preview` und `POST /api/v1/admin/sources/refresh` melden nun pro Quelle das Aktualisierungsergebnis, den Zeitpunkt der letzten Aktualisierung und — bei einer Datei, die nicht verarbeitet werden konnte — einen lokalisierten Grund"
+      "`GET /api/v1/admin/database/seed/preview` und `POST /api/v1/admin/sources/refresh` melden nun pro Quelle das Aktualisierungsergebnis, den Zeitpunkt der letzten Aktualisierung und — bei einer Datei, die nicht verarbeitet werden konnte — einen lokalisierten Grund",
+      "Fünf konfigurierbare Richtlinien zur Konfliktlösung bei Duplikaten — `skip`, `newest-wins`, `merge-ours`, `merge-theirs`, `review` — einstellbar über `Quotinator__DefaultConflictPolicy`, mit Überschreibungen pro Entitätstyp und einer Überschreibung pro Quelle über das Manifest",
+      "Neue Tabelle `System_ImportConflicts` erfasst jedes beim Seeding gefundene Duplikat — welche Richtlinie angewendet wurde und (bei den beiden Zusammenführungsrichtlinien) von welcher Seite der Wert jedes Feldes stammt",
+      "`ImportBatches` erfasst nun, welche Konfliktlösungsrichtlinie für jeden Import-Batch aktiv war"
     ],
     "changed": [
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",
-      "API-Antworten enthalten keine Eigenschaften mehr mit einem `null`-Wert, was die Größe der Antwort verringert"
+      "API-Antworten enthalten keine Eigenschaften mehr mit einem `null`-Wert, was die Größe der Antwort verringert",
+      "Die standardmäßige Konfliktlösungsrichtlinie wurde von `skip` (die zuerst gesehene Version behalten) auf `newest-wins` (die neueste Version behalten) geändert, wenn nichts anderes konfiguriert ist"
     ],
     "fixed": [
       "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für jede gebündelte Datei, ob extern über eine Manifest-URL bezogen oder intern kuratiert) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch falsch erfasst",

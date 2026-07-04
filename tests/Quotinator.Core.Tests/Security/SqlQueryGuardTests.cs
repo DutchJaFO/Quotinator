@@ -68,6 +68,7 @@ public class SqlQueryGuardTests
             "People.CountActive",                 // COUNT(*)
             "Sources.CountActive",                // COUNT(*)
             "SystemAudit.CountPagedBase",         // COUNT(*) — private base for CountPaged factory
+            "SystemImportConflicts.CountPagedBase", // COUNT(*) — private base for CountPaged factory
         };
 
         var actual = EnumerateSqlConstants()

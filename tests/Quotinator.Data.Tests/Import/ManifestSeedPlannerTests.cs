@@ -81,7 +81,7 @@ public class ManifestSeedPlannerTests
     public void PlanSeed_AutoCreatedManifestPolicy_DefersToConfigPolicy()
     {
         WriteFile("a.json", "[]");
-        var configPolicy = new ManifestPolicy(DuplicateResolutionPolicy.Overwrite);
+        var configPolicy = new ManifestPolicy(DuplicateResolutionPolicy.NewestWins);
 
         var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
         var (_, policy) = planner.PlanSeed(_tempDir, configPolicy, allowAutoCreate: true);

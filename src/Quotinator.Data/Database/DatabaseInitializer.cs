@@ -26,10 +26,13 @@ public class DatabaseInitializer : IDatabaseInitializer
     [
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
         new SchemaMigration { Version = 2, Sql = AuditMigrations.RenameAuditEntriesToSystemAuditEntries },
+        new SchemaMigration { Version = 3, Sql = ImportConflictMigrations.CreateImportConflictsTable },
     ];
 
-    // Data's own baseline fragment — creates System_AuditEntries directly under its final name for
-    // a genuinely fresh database, skipping the historical create-then-rename dance entirely.
+    // Data's own baseline fragment — creates System_AuditEntries and System_ImportConflicts
+    // directly under their final names for a genuinely fresh database, skipping System_AuditEntries'
+    // historical create-then-rename dance entirely (System_ImportConflicts never had a legacy name
+    // to begin with). Kept in sync with DataOwnedMigrations by this project's own schema-drift test.
     private const string DataBaselineSql = """
         CREATE TABLE IF NOT EXISTS System_AuditEntries (
             Id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,6 +44,22 @@ public class DatabaseInitializer : IDatabaseInitializer
         );
         CREATE INDEX IF NOT EXISTS IX_System_AuditEntries_TableName_RecordId ON System_AuditEntries (TableName, RecordId);
         CREATE INDEX IF NOT EXISTS IX_System_AuditEntries_PerformedAt ON System_AuditEntries (PerformedAt);
+
+        CREATE TABLE IF NOT EXISTS System_ImportConflicts (
+            Id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            BatchId       TEXT    NOT NULL,
+            EntityType    TEXT    NOT NULL,
+            EntityId      TEXT,
+            ExistingValue TEXT,
+            IncomingValue TEXT,
+            AppliedPolicy TEXT,
+            Status        TEXT    NOT NULL,
+            MergedFields  TEXT,
+            DetectedAt    TEXT    NOT NULL,
+            ResolvedAt    TEXT
+        );
+        CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
+        CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
         """;
 
     private readonly IDbConnectionFactory           _factory;
