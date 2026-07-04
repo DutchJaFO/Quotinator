@@ -10,11 +10,12 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [57, 58, 62, 63, 141, 143],
+    "issues": [57, 58, 62, 63, 140, 141, 143],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
-      "Quotinator voor het eerst instellen is nu sneller — een gloednieuwe database wordt direct aangemaakt, in plaats van jarenlange interne upgradegeschiedenis te doorlopen."
+      "Quotinator voor het eerst instellen is nu sneller — een gloednieuwe database wordt direct aangemaakt, in plaats van jarenlange interne upgradegeschiedenis te doorlopen.",
+      "Quotinator kan nu automatisch zijn gebundelde en geïmporteerde citaatbronnen verversen vanaf hun oorspronkelijke locatie, zodat de gegevens up-to-date blijven zonder een nieuwe release."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -22,10 +23,16 @@
       "Configuratiesleutel `Quotinator__IncludeDefaultSources` (standaard `true`) — indien ingesteld op `false` worden de gebundelde bronnen volledig overgeslagen, handig voor een volledig aangepaste gegevensopstelling",
       "Configuratiesleutel `Quotinator__ImportsPath` (standaard `{DataDir}/imports`) — bepaalt vanuit welke map de gebruikersimportmap wordt gescand",
       "Bij het opstarten wordt nu een waarschuwing gelogd als de verouderde omgevingsvariabele `Quotinator__DataPath` nog is ingesteld, met verwijzing naar `Quotinator__DataDir`",
-      "`POST /api/v1/admin/database/reset` accepteert nu een queryparameter `preserveSchemaVersion` (standaard `false`) om de bestaande schema-migratiegeschiedenis te behouden in plaats van te wissen en opnieuw toe te passen"
+      "`POST /api/v1/admin/database/reset` accepteert nu een queryparameter `preserveSchemaVersion` (standaard `false`) om de bestaande schema-migratiegeschiedenis te behouden in plaats van te wissen en opnieuw toe te passen",
+      "Nieuwe configuratiesleutels `Quotinator__AutoUpdateSources` (standaard `true`) en `Quotinator__SourceUpdateIntervalHours` (standaard `24`) regelen het automatisch verversen van manifestbronnen met een `downloadUrl`",
+      "Manifestvermeldingen kunnen nu `refreshIntervalHours` en `downloadTarget` opgeven om het algemene ververinterval en de cachelocatie per bron te overschrijven",
+      "Nieuw eindpunt `POST /api/v1/admin/sources/refresh` ververst gedownloade broncaches op schijf zonder de database aan te raken",
+      "`POST /api/v1/admin/database/reseed` en `.../reset` accepteren nu een queryparameter `forceSourceRefresh` om het ververinterval voor die aanroep te omzeilen",
+      "`GET /api/v1/admin/database/seed/preview` en `POST /api/v1/admin/sources/refresh` rapporteren nu per bron het ververresultaat, het tijdstip van laatste verversing en — voor een bestand dat niet kon worden verwerkt — een gelokaliseerde reden"
     ],
     "changed": [
-      "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt"
+      "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
+      "API-antwoorden bevatten niet langer eigenschappen met een `null`-waarde, wat de omvang van de respons verkleint"
     ],
     "fixed": [
       "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor elk gebundeld bestand, of het nu extern is aangeleverd met een manifest-URL of intern is samengesteld) en bewaren de bron-URL; voorheen werd elke geseede batch onjuist geregistreerd",

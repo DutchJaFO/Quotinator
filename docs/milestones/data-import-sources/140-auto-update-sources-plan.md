@@ -1,9 +1,9 @@
 # #140 — Auto-update bundled source files from manifest URL on startup
 
-**Status:** In progress (step 17)
+**Status:** In progress (step 29)
 **GitHub issue:** #140
 **Depends on:** #58 fix (manifest `url` field) — done; #62 (`AutoUpdateSources` follows the same config pattern) — done; #63 (`downloadUrl`/`github` manifest groundwork) — done
-**Unblocks:** retirement of `scripts/sources.json` (separate follow-up, not part of this issue)
+**Unblocks:** retirement of `scripts/sources.json` — done (see "Scope expansion round 3" below)
 
 ---
 
@@ -46,6 +46,29 @@ A comment recording all four of these points must be posted on #140 before imple
 **Confirmed with the user, 2026-07-04 (kept here to prevent re-deriving or drifting from it later):**
 - **Bundled vs. imports is a provenance/location distinction only, never a content-classification one.** `ImportBatchType.System` (reserved per #62's correction) can only ever come from bundled sources — there is no current user-imports use case for it, and this download mechanism doesn't change that. The internal/external split governs *where a downloaded copy is cached*, nothing about what `ImportBatchType` a seeded row ends up with.
 - **Bundled and user-imports entries are mechanically identical in every respect except two: how they're provided (which manifest they're declared in) and where they're cached (internal vs. external, subject to the `downloadTarget` override).** TTL/staleness, `AutoUpdateSources`, `forceSourceRefresh`, collision detection, and the network GET/timeout/fallback behavior all apply uniformly regardless of origin — there is no other branch anywhere in this design based on bundled-vs-imports.
+
+---
+
+## Scope expansion (round 3 — T1 corruption bug found and fixed, resolved with the user 2026-07-04)
+
+**What T1 live testing found:** the first real reseed against a running app dropped the quote count from 788 to 2. Root cause: `data/sources/vilaboim_movie-quotes.json` and `data/sources/NikhilNamal17_popular-movie-quotes.json` are not raw copies of their upstream repos — they are *converted*. The historical `scripts/seed.csx` (a standalone `dotnet-script` tool, never referenced by the running app) downloaded each source's raw upstream format and transformed it into Quotinator's canonical schema, critically generating a **stable UUID `id`** via SHA-256 of normalised quote+source text (upstream has no `id` field at all). But this plan's own `github` manifest object computes `downloadUrl` from that same raw upstream URL — so `SourceCacheUpdater` was downloading raw, unconverted JSON and overwriting the working canonical cache with it, which then failed to deserialize at seed time.
+
+**The fix, agreed with the user across several rounds of discussion:**
+1. **First-party "converter plugins"** — compiled .NET class library projects (`Quotinator.Converters.Vilaboim`, `Quotinator.Converters.NikhilNamal17`), **not** external processes/scripts (an explicit security decision to avoid arbitrary command execution from JSON-declared commands). One plugin per source, since the two raw formats aren't even shaped alike (`vilaboim` is a regex-parsed array of bare strings; `NikhilNamal17` is a field-mapped JSON object array).
+2. Plugins run **live, inside the already-shipped container** — ordinary compiled project references added to `Quotinator.Api.csproj`, no new runtime/SDK bundling in `docker/Dockerfile`.
+3. A new manifest field, `converter` (string, matches a plugin's `Name`), on any `files[]` entry with a `downloadUrl`/`github`. Both bundled and user-imports manifests may declare one — safe specifically because only names matching a plugin actually compiled into the image are ever looked up; an unrecognised name fails closed.
+4. The download pipeline becomes **download to temp → optional conversion (named plugin) → validate the result is canonical-schema → atomic move into the persistent cache path**. Validation was already a hard requirement independent of conversion — even a source with no `converter` declared is now rejected if its content doesn't deserialize as canonical `SourceQuote` schema, which is what actually closes the corruption hole.
+5. **Validation also applies to existing cache-hit reads**, not only freshly-downloaded files — an already-corrupted cache file (e.g. from before this fix shipped) is rejected on next access and falls back / re-downloads automatically, self-healing without a manual forced refresh.
+6. `scripts/seed.csx`/`scripts/sources.json` are retired. The running app itself, via the existing `POST /api/v1/admin/sources/refresh?force=true` endpoint, is now the tool a maintainer uses locally to regenerate `data/sources/*.json` before a commit. `scripts/SOURCES.md` was rewritten to describe the new plugin-based workflow.
+
+**Correctness constraint (verified, not assumed):** the ported `QuoteIdentity.StableId` algorithm (`Quotinator.Core.Import`) was checked against the real, already-shipped production ID for a known quote/source pair and matches exactly — both converter plugins also have a dedicated ID-stability regression test doing the same against their respective committed baseline files (see Verification rows 20 below). Also confirmed empirically: `SourceQuoteFileReader.TryParse` correctly rejects the actual corrupted cache file this incident produced on the developer's own machine (`bin/Debug/net10.0/data/sources/download/vilaboim_movie-quotes.json`).
+
+**Follow-up work explicitly deferred, not part of this plan:** a new GitHub issue is needed to redesign/rename the two converter plugins with more generic names (their current names are tied to the specific upstream repo, not to what they do) and to consider reserving some plugin slots for internal-only use. Tracked in project memory, not yet filed.
+
+**Observability improvements found necessary during manual review of the fix (same session, same scope):**
+- `GET /database/seed/preview` and `POST /sources/refresh` previously gave no way to tell a degraded/fallback source apart from a healthy one, or to know how stale a cached copy actually was. Both now return, per file: `refreshOutcome` (`updated`/`uptodate`/`failed`/`skippedcollision`) and `lastRefreshedAtUtc` (the cache file's real last-write time, not "now") when the file has a `downloadUrl`.
+- Preview also could not distinguish a genuinely empty file from one that failed to parse at all (both looked identical: `quoteCount: 0`). Added `issue` (`missing`/`invalidjson`, machine-readable) and a `message` field localised via the existing `IApiLocalizer`/`ApiMessages` mechanism (same pattern already used by the search/random-quote endpoints) — two new keys, `ErrorSeedFileMissing`/`ErrorSeedFileInvalidJson`, added to all three `UI.*.json` locale files.
+- Null JSON properties are now omitted from every API response, application-wide (`ConfigureHttpJsonOptions` + `JsonIgnoreCondition.WhenWritingNull`) — verified against `System.Text.Json` docs, not assumed.
 
 ---
 
@@ -122,7 +145,43 @@ A comment recording all four of these points must be posted on #140 before imple
 **Status:** ✅ Done — added `auto_update_sources` (bool, default `true`) and `source_update_interval_hours` (int, default `24`) to `options`/`schema`/`env_vars` in `config.yaml`, and matching `configuration` entries to `en.yaml`, `nl.yaml`, `de.yaml`.
 
 ### 17. Unit tests
-**Status:** In progress — `SourceCacheUpdaterTests` (12 tests, rows 1-7 and 9-12) and `SourceCacheWiringTests` (5 tests, rows 8 and 13-15) added and passing; `ManifestSeedPlannerTests` gained 2 tests for the new manifest fields. Full solution build is 0 Warning(s)/0 Error(s) and the full test suite passes (rows 16-17). Rows 18-19 (T1/T2) remain live/manual steps, not part of this coding session.
+**Status:** ✅ Done — `SourceCacheUpdaterTests` (12 tests, rows 1-7 and 9-12) and `SourceCacheWiringTests` (5 tests, rows 8 and 13-15) added and passing; `ManifestSeedPlannerTests` gained 2 tests for the new manifest fields. Full solution build is 0 Warning(s)/0 Error(s) and the full test suite passes (rows 16-17).
+
+### 18. Extract `SourceQuoteFileReader` into `Quotinator.Core.Import`
+**Status:** ✅ Done — pure refactor, no behaviour change. `QuotinatorDatabaseInitializer.LoadQuotesFromFile` becomes a thin wrapper. The one `JsonNode.Parse` shape-sniffing call (bare array vs. `{"quotes":[...]}` wrapper) is CLAUDE.md's own documented JSON-parsing-policy exception, relocated not newly introduced. Covered by `SourceQuoteFileReaderTests` (6 tests).
+
+### 19. Add `QuoteIdentity`/`YearParsing`/`QuoteTypeNormalisation` shared helpers
+**Status:** ✅ Done — ported verbatim from `scripts/seed.csx` into `Quotinator.Core.Import` (not a separate `Quotinator.Converters.Common` project — both plugins already reference `Quotinator.Core` for `SourceQuote`, so a separate project would buy no dependency-isolation benefit, only solution sprawl). `QuoteIdentity.StableId` is pinned against the real, already-shipped production ID for a known quote/source pair. Covered by `QuoteIdentityTests`, `YearParsingTests`, `QuoteTypeNormalisationTests` (22 tests).
+
+### 20. Build `Quotinator.Converters.Vilaboim` plugin
+**Status:** ✅ Done — implements `IQuoteSourceConverter`, `Name = "vilaboim"`. Parses the regex-based quoted-string raw format. Covered by `VilaboimMovieQuotesConverterTests` (6 tests), including the ID-stability regression test against the real committed `data/sources/vilaboim_movie-quotes.json`.
+
+### 21. Build `Quotinator.Converters.NikhilNamal17` plugin
+**Status:** ✅ Done — implements `IQuoteSourceConverter`, `Name = "nikhilnamal17"`. Parses the field-mapped JSON object-array raw format, with a custom `YearJsonConverter` handling the upstream's inconsistently-typed (number or string) year field. Covered by `NikhilNamal17PopularMovieQuotesConverterTests` (8 tests), including the ID-stability regression test against the real committed baseline file.
+
+### 22. Add `IQuoteSourceConverter`/`SourceConversionException`; widen manifest plumbing
+**Status:** ✅ Done — new interface + exception in `Quotinator.Data.Import` (schema-agnostic — file paths only, no `SourceQuote` reference, so no new `Quotinator.Core` dependency for `Quotinator.Data`). `SeedFile`, `ManifestFileEntryDto`, `ManifestSeedPlanner`, and `schemas/manifest.schema.json` all gained an optional `converter`/`Converter` field. `SourceCacheOptions` gained `Converters` (registry) and `ValidateCanonicalSchema` (delegate) — both nullable/optional so every existing call site and test kept compiling unchanged.
+
+### 23. Modify `SourceCacheUpdater` pipeline: conversion + validation
+**Status:** ✅ Done — `TryDownloadAndPrepareAsync` now does download-to-temp → optional conversion (named plugin, into a second temp file) → canonical-schema validation → atomic move. Validation also runs on existing cache-hit reads (both the `!allowNetwork` and fresh-within-TTL paths), not only freshly-downloaded files, so an already-corrupted cache self-heals. The real Core/Data dependency-direction problem (validation needs `SourceQuote`, which `Quotinator.Data` must not depend on) is resolved by injecting the validator as a `Func<string, bool>` delegate built at the composition root (`Program.cs`), not a new project reference. Covered by 8 new `SourceCacheUpdaterTests` cases, including `ResolveAsync_NoConverterButValidationFails_FallsBackWithoutCorruptingCache` — the direct regression test for the actual production bug.
+
+### 24. Wire `Program.cs`/`Quotinator.Api.csproj`/`docker/Dockerfile`/`Quotinator.slnx`
+**Status:** ✅ Done — converter registry (`Dictionary<string, IQuoteSourceConverter>`) and the validation delegate built in `Program.cs`; two new `ProjectReference`s on `Quotinator.Api.csproj`; two new `COPY` lines in the Dockerfile's restore layer (ordinary compiled project references — no new runtime/SDK bundling, resolving the earlier image-size concern); both new `src/`+`tests/` project pairs and their CVE folders registered in `Quotinator.slnx`.
+
+### 25. Add `"converter"` entries to `data/sources/manifest.json`
+**Status:** ✅ Done — the actual bug-fix data change: `"converter": "vilaboim"` / `"converter": "nikhilnamal17"` added to the two affected bundled entries.
+
+### 26. Replace the seed.csx-shelling test; retire `scripts/seed.csx`/`sources.json`
+**Status:** ✅ Done — `RepositoryStructureTests.SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` (which shelled out to `dotnet-script scripts/seed.csx`) replaced with `ConverterPlugins_AgainstRawFixtures_ProduceFilesMatchingBaseline`, an in-process equivalent using two new committed raw-format fixtures (`tests/Quotinator.Api.Tests/Solution/Fixtures/`, copied from the previously-gitignored `scripts/cache/`) — full 788-quote ID-set diffing against the real baseline files, no `dotnet-script` dependency. `scripts/seed.csx`, `scripts/sources.json`, `schemas/seed-sources.schema.json`, and `scripts/cache/` deleted. `scripts/SOURCES.md` rewritten for the new plugin-based workflow. `SeedScriptIntegrityTests.cs` renamed to `RawSourceFixtureIntegrityTests.cs`, adapted to validate the new fixtures against the (still-relevant) upstream format schemas instead of the deleted `scripts/cache/`.
+
+### 27. Update `CLAUDE.md`/`README.md`/`docs/data-import.md` references
+**Status:** ✅ Done — project structure trees, Data Sources section, Commands section, Key Files table, and the two remaining `seed.csx` mentions in `docs/data-import.md` all updated to describe the converter-plugin workflow instead.
+
+### 28. Observability: `refreshOutcome`/`lastRefreshedAtUtc`/`issue`/`message`
+**Status:** ✅ Done — `SourceRefreshResult` gained `LastRefreshedAtUtc`; `SeedFilePreview` gained `RefreshOutcome`, `LastRefreshedAtUtc`, and `Issue` (a new `SeedFileIssue` enum: `Missing`/`InvalidJson`). `LoadQuotesFromFile` now reports *why* a file contributed zero quotes, not just that it did. The preview/refresh endpoints surface these, with `issue` mapped to a localised `message` via `IApiLocalizer`/two new `ApiMessages` keys (`SeedFileMissing`, `SeedFileInvalidJson`) in all three `UI.*.json` locale files. Covered by 4 new tests across `SourceCacheUpdaterTests`/`SourceCacheWiringTests`.
+
+### 29. Omit null JSON properties from all API responses
+**Status:** ✅ Done — `builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)` in `Program.cs`, verified against `System.Text.Json` documentation rather than assumed. Applies application-wide; checked existing tests for any assertion on a null property's *presence* before applying — none found.
 
 ---
 
@@ -147,8 +206,21 @@ A comment recording all four of these points must be posted on #140 before imple
 | 15 | ✅ | `GET /api/v1/admin/database/seed/preview` reflects an existing cached copy when present, but never triggers a network call or updates staleness state | Unit test | `SourceCacheWiringTests.PreviewSeedAsync_AutoUpdateSourcesTrue_NeverAllowsNetwork` |
 | 16 | ✅ | Build clean | Live | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 17 | ✅ | All tests pass | Live | `dotnet test --configuration Release --verbosity normal` — all 6 test projects green |
-| 18 | ❌ | T1: real app, first startup performs a download, second startup within the TTL does not | Live | To be run |
+| 18 | ✅ | T1: real app, first startup/reseed performs a download, a subsequent `force=false` refresh does not re-download (fast no-op) | Live | Confirmed 2026-07-04 against a real running instance — see round 3 scope expansion above for the corruption found and fixed along the way |
 | 19 | ❌ | T2: Docker container — both `{dataDir}/sources/download/` and `{dataDir}/imports/download/` persist across container restart when the volume is retained | Live | To be run |
+| 20 | ✅ | Both converter plugins reproduce the exact committed production ID for a known quote/source pair (id-stability regression) | Unit test | `VilaboimMovieQuotesConverterTests.ConvertAsync_KnownQuoteSourcePair_MatchesCommittedBaselineId`, `NikhilNamal17PopularMovieQuotesConverterTests.ConvertAsync_KnownQuoteSourcePair_MatchesCommittedBaselineId`, `QuoteIdentityTests.StableId_KnownQuoteSourcePair_MatchesCommittedProductionId` |
+| 21 | ✅ | A source with a registered converter is converted, then validated, then moved into place | Unit test | `SourceCacheUpdaterTests.ResolveAsync_ConverterRegistered_ConvertsBeforeCaching` |
+| 22 | ✅ | An unregistered converter name fails closed (falls back like a network failure, logs a `Warning` naming it) | Unit test | `SourceCacheUpdaterTests.ResolveAsync_UnregisteredConverterName_FailsClosedAndLogsWarning` |
+| 23 | ✅ | A converter that throws `SourceConversionException` falls back exactly like a network failure | Unit test | `SourceCacheUpdaterTests.ResolveAsync_ConverterThrows_FallsBackLikeNetworkFailure` |
+| 24 | ✅ | No converter declared + downloaded content fails canonical-schema validation → falls back without corrupting the cache (the actual production bug, reproduced and fixed) | Unit test | `SourceCacheUpdaterTests.ResolveAsync_NoConverterButValidationFails_FallsBackWithoutCorruptingCache` |
+| 25 | ✅ | An already-corrupted cache file (no new download involved) is rejected on next access and self-heals, both when network is allowed and when it isn't | Unit test | `SourceCacheUpdaterTests.ResolveAsync_ExistingCacheFailsValidation_NetworkAllowed_TriggersFreshDownloadEvenIfFresh`, `...NetworkDisallowed_FallsBackToOriginalFile` |
+| 26 | ✅ | The real corrupted cache file from the production incident fails validation under the shipped fix | Live (temporary test, removed after verification) | Confirmed 2026-07-04 against `bin/Debug/net10.0/data/sources/download/vilaboim_movie-quotes.json` |
+| 27 | ✅ | `GET /database/seed/preview` surfaces per-file `refreshOutcome`/`lastRefreshedAtUtc` from the cache resolution | Unit test | `SourceCacheWiringTests.PreviewSeedAsync_AttachesRefreshOutcomeAndTimestampFromResolution` |
+| 28 | ✅ | `GET /database/seed/preview` distinguishes a genuine parse failure (`issue`: `missing`/`invalidjson`) from a validly empty file | Unit test | `SourceCacheWiringTests.PreviewSeedAsync_MalformedFile_ReportsInvalidJsonIssue`, `...MissingFile_ReportsMissingIssue` |
+| 29 | ✅ | `POST /sources/refresh` result's `lastRefreshedAtUtc` reflects the cache file's actual mtime, not "now" | Unit test | `SourceCacheUpdaterTests.ResolveAsync_FreshCache_LastRefreshedAtUtcReflectsActualFileAge`, `...NoCacheAndNetworkDisallowed_LastRefreshedAtUtcIsNull` |
+| 30 | ✅ | Build clean after the full round-3 change set | Live | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 31 | ✅ | All tests pass after the full round-3 change set | Live | `dotnet test --configuration Release --verbosity normal` — 8 test projects, 700 tests, all green |
+| 32 | ✅ | New/changed UI translation keys (`ErrorSeedFileMissing`, `ErrorSeedFileInvalidJson`) are complete and non-empty in every locale | Unit test | `TranslationCompletenessTests.AllLanguageFiles_HaveExactlyTheSameKeysAsBaseline`, `...HaveNoEmptyValues` |
 
 ---
 
