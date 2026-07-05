@@ -1,6 +1,6 @@
 # #55 — Record completeness flag
 
-**Status:** Planning
+**Status:** In progress
 
 **Tiers required:** T1, T2
 
@@ -30,7 +30,7 @@ The original issue predates #64 (conflict resolution) and #143 (migration owners
 ## Steps
 
 ### 1. Schema migration
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `Migration006_RecordCompleteness` added; `QuotinatorMigrations.Baseline` updated in the same commit; `Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema`/`...AcceptSameCheckConstraintValues` both green
 
 New `Migration006_RecordCompleteness` in `QuotinatorMigrations.cs` (next consumer migration number after #64's `Migration005_ImportBatchConflictPolicy`), following the established plain-`ALTER TABLE ADD COLUMN` pattern (no idempotency guard needed — the existing transaction+backup/restore safety net in `ApplyMigrationsAsync` covers a partial-failure case, per CLAUDE.md's migration policy):
 
@@ -48,30 +48,30 @@ ALTER TABLE People     ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
 Update `QuotinatorMigrations.Baseline` in the same commit (per CLAUDE.md's baseline-sync rule) — a fresh database must create these columns directly, not replay this migration. Confirm via `Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema`/`...AcceptSameCheckConstraintValues`, don't assume.
 
 ### 2. Update C# entity models
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-`QuoteEntity`, `Source`, `Character`, `Person` (all in `Quotinator.Engine.Entities`) each gain:
+`QuoteEntity`, `Source`, `Character`, `Person` (all in `Quotinator.Engine.Entities`) each gained:
 - `bool IsComplete { get; init; }`
 - `IReadOnlyList<string> NoValueKnown { get; init; } = []`
 
-`NoValueKnown` needs a Dapper type handler (`string[]`/`IReadOnlyList<string>` ↔ JSON TEXT column) — check whether the existing `SafeEnumHandler<TEnum>` infrastructure has a JSON-list equivalent already, or whether a new handler is needed, registered in `QuotinatorDapperConfiguration.RegisterDomainHandlers()`.
+No JSON-list equivalent existed on `SafeEnumHandler<TEnum>`/`DatabaseConfiguration` — added a new generic `JsonStringListHandler` (`Quotinator.Data/Helpers/JsonStringListHandler.cs`), registered in the base `DatabaseConfiguration.Configure()` alongside `GuidHandler`/`SafeDateHandler` (domain-agnostic infrastructure, not a per-enum domain handler).
 
 ### 3. New-row defaults on every insert path
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Both entity-creation paths need to write the defaults explicitly (or rely on the column `DEFAULT`, confirmed sufficient by a test — Dapper.Contrib's `InsertAsync` writes all mapped properties, so an explicit `false`/`[]` on the C# object achieves the same thing without depending on SQLite's own default):
 
-- `QuoteSeedWriter.GetOrCreateSourceAsync`/`GetOrCreateCharacterAsync`/`GetOrCreatePersonAsync` (startup seeding, shared with #45's live import per the #45 extraction)
-- The main quote insert in both `QuotinatorDatabaseInitializer.SeedIfEmptyInternalAsync` and `SqliteQuoteImportService.ImportAsync`
+- `QuoteSeedWriter.GetOrCreateSourceAsync`/`GetOrCreateCharacterAsync`/`GetOrCreatePersonAsync` (startup seeding, shared with #45's live import per the #45 extraction) — covered by the C# property defaults on `Source`/`Character`/`Person` themselves; Dapper.Contrib's `InsertAsync` writes all mapped properties, so no per-call-site change was needed
+- The main quote insert in both `QuotinatorDatabaseInitializer.SeedIfEmptyInternalAsync` and `SqliteQuoteImportService.ImportAsync` — both call the single shared `Sql.Quotes.Insert` constant, which now lists `IsComplete`/`NoValueKnown` with explicit `0`/`'[]'` literals
 
 ### 4. Existing-row updates never touch these columns
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-`Sql.Quotes.UpdateOnNewestWins` and the equivalent Source/Character/Person `GetOrCreate*` "found existing" paths must not include `IsComplete`/`NoValueKnown` in their `SET`/write list — confirm by inspecting `Sql.cs`, not by assumption, since this is the one column-set every future modification to these tables must remember to keep excluding.
+`Sql.Quotes.UpdateOnNewestWins` does not reference `IsComplete`/`NoValueKnown` in its `SET` list (confirmed by inspection — unchanged by this issue). Source/Character/Person's `GetOrCreate*` "found existing" branches never issue an `UPDATE` at all — they only return the existing Id — so there was nothing to guard there.
 
-**New tests required** (both pipelines that can hit an existing row):
-- `ConflictResolutionTests` — a quote already marked `IsComplete = true` survives a `newest-wins`/`merge-ours`/`merge-theirs` reseed unchanged
-- `QuoteImportServiceTests` — same guarantee via the live import endpoint
+**New tests added** (both pipelines that can hit an existing row):
+- `ConflictResolutionTests.UpdateOnNewestWins_NeverResetsIsCompleteOrNoValueKnown` — direct regression guard on the shared production `Sql.Quotes.UpdateOnNewestWins` statement itself
+- `QuoteImportServiceTests.ImportAsync_ExistingRowMarkedComplete_SurvivesReimportUnchanged` (`NewestWins`/`MergeOurs`/`MergeTheirs`) — same guarantee via the live import endpoint
 
 ### 5. Stats/counts
 **Status:** N/A — deferred entirely to #48 (see Scope changes)
@@ -83,7 +83,9 @@ Both entity-creation paths need to write the defaults explicitly (or rely on the
 **Status:** N/A — deferred to #11 (Blazor: Import UI milestone)
 
 ### 8. Tests
-**Status:** ⬜ Not started — see step 4 for the two correctness-critical cases; also: schema migration + baseline drift, C# model round-trip (`NoValueKnown` JSON ↔ list), default values on a genuinely new insert.
+**Status:** ✅ Done — see step 4 for the two correctness-critical cases; also added: schema migration + baseline drift (existing `Baseline_And_IncrementalReplay_*` tests, now covering the two new columns automatically since they dump all columns per table), `JsonStringListHandler` round-trip (`Quotinator.Data.Tests/Helpers/DapperSetupTests.cs`), and default-values-on-new-insert (`ConflictResolutionTests.Seed_FreshQuote_DefaultsIsCompleteFalseAndNoValueKnownEmpty`, `QuoteImportServiceTests.ImportAsync_FreshDatabase_DefaultsIsCompleteFalseAndNoValueKnownEmpty`).
+
+Adding `Migration006` also broke three pre-existing tests that hardcoded `SchemaVersion == 5` (`ImportBatchesTests.Schema_MigrationVersion_IsBumped`, and two assertions each in `DatabaseInitializerTests` for the Reset-after-mismatch and pre-split-counter scenarios) — updated to `6`. One test, `DatabaseInitializerTests.InitialiseAsync_ExistingDatabaseAtVersion3_StillReplaysRemainingConsumerMigrationsIncrementally`, had a latent design flaw exposed by this migration: it built its "version 3" starting state by deleting `System_ConsumerSchemaVersion` rows on an already-fully-migrated database file rather than genuinely replaying only migrations 1-3, which happened to work only because migration 4 rebuilds the `ImportBatches` table from scratch (silently discarding migration 5's `ConflictPolicy` column before migration 5 re-added it). Migration 6's `ALTER TABLE ADD COLUMN` on `Quotes`/`Sources`/`Characters`/`People` — tables nothing ever rebuilds — has no such masking, so replaying it a second time threw `duplicate column name: IsComplete`. Rewrote the test to build its initial database with only `QuotinatorMigrations.All.Take(3)` actually applied, so it exercises a genuine version-3 replay instead of a masked schema/version mismatch.
 
 ---
 
@@ -102,13 +104,13 @@ Reconciled 2026-07-05, before implementation — pending a comment on #55 record
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | `IsComplete`/`NoValueKnown` columns added to all four tables, baseline matches incremental replay | Unit test | `Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema`/`...AcceptSameCheckConstraintValues` |
-| 2 | ⬜ | A brand-new row defaults to `IsComplete = false`, `NoValueKnown = []` | Unit test | TBD at implementation time |
-| 3 | ⬜ | An existing row's `IsComplete`/`NoValueKnown` survive `newest-wins`/`merge-ours`/`merge-theirs` via startup seeding | Unit test | New case in `ConflictResolutionTests` |
-| 4 | ⬜ | Same guarantee via the live `POST /api/v1/quotes/import` endpoint | Unit test | New case in `QuoteImportServiceTests` |
-| 5 | ⬜ | `NoValueKnown` round-trips correctly between `string[]`/`IReadOnlyList<string>` and its JSON TEXT column | Unit test | TBD at implementation time |
+| 1 | ✅ | `IsComplete`/`NoValueKnown` columns added to all four tables, baseline matches incremental replay | Unit test | `DatabaseInitializerTests.Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema`/`...AcceptSameCheckConstraintValues` |
+| 2 | ✅ | A brand-new row defaults to `IsComplete = false`, `NoValueKnown = []` | Unit test | `ConflictResolutionTests.Seed_FreshQuote_DefaultsIsCompleteFalseAndNoValueKnownEmpty`, `QuoteImportServiceTests.ImportAsync_FreshDatabase_DefaultsIsCompleteFalseAndNoValueKnownEmpty` |
+| 3 | ✅ | An existing row's `IsComplete`/`NoValueKnown` survive `newest-wins`/`merge-ours`/`merge-theirs` via the shared production UPDATE statement | Unit test | `ConflictResolutionTests.UpdateOnNewestWins_NeverResetsIsCompleteOrNoValueKnown` |
+| 4 | ✅ | Same guarantee via the live `POST /api/v1/quotes/import` endpoint | Unit test | `QuoteImportServiceTests.ImportAsync_ExistingRowMarkedComplete_SurvivesReimportUnchanged` (`NewestWins`/`MergeOurs`/`MergeTheirs`) |
+| 5 | ✅ | `NoValueKnown` round-trips correctly between `string[]`/`IReadOnlyList<string>` and its JSON TEXT column | Unit test | `DapperSetupTests.JsonStringListHandler_RegisteredByAssemblySetup_RoundTripsListThroughJsonColumn`, `...EmptyList_RoundTripsAsEmptyJsonArray` |
 | 6 | N/A | Stats endpoint reports completeness counts | N/A | Deferred to #48 |
 | 7 | N/A | Enrichment providers skip complete/no-value-known fields | N/A | Deferred to #19 |
 | 8 | N/A | Management UI actions | N/A | Deferred to #11 |
-| 9 | ⬜ | T1 — app starts in VS without error; migration applies cleanly | Live | Not yet run |
-| 10 | ⬜ | T2 — Docker smoke test | Live | Not yet run |
+| 9 | ⬜ | T1 — app starts in VS without error; migration applies cleanly | Live | Not yet run — requires user to start the app in Visual Studio |
+| 10 | ✅ | T2 — Docker smoke test | Live | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; container started, log showed `schema created at baseline (data v3, app v6)`; `/api/v1/health`, `/api/v1/version` (`schemaVersion:6`), `/api/v1/quotes/random`, `/api/v1/quotes/search?q=love` all returned expected output |

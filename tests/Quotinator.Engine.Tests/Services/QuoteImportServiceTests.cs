@@ -168,6 +168,54 @@ public class QuoteImportServiceTests
         Assert.AreEqual("merge-theirs", result.Conflicts.Single().AppliedPolicy, "Response-facing wire value must be kebab-case, matching every other DuplicateResolutionPolicy JSON value in this API");
     }
 
+    // ── #55: IsComplete / NoValueKnown ──────────────────────────────────────
+
+    [TestMethod]
+    public async Task ImportAsync_FreshDatabase_DefaultsIsCompleteFalseAndNoValueKnownEmpty()
+    {
+        var service = CreateService();
+        await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: false);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (isComplete, noValueKnown) = await conn.QuerySingleAsync<(long IsComplete, string NoValueKnown)>(
+            "SELECT IsComplete, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+
+        Assert.AreEqual(0L, isComplete, "A brand-new row must default IsComplete to false");
+        Assert.AreEqual("[]", noValueKnown, "A brand-new row must default NoValueKnown to an empty JSON array");
+    }
+
+    [TestMethod]
+    [DataRow(DuplicateResolutionPolicy.NewestWins)]
+    [DataRow(DuplicateResolutionPolicy.MergeOurs)]
+    [DataRow(DuplicateResolutionPolicy.MergeTheirs)]
+    public async Task ImportAsync_ExistingRowMarkedComplete_SurvivesReimportUnchanged(DuplicateResolutionPolicy policy)
+    {
+        var service = CreateService();
+        await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false);
+
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            conn.Open();
+            await conn.ExecuteAsync(
+                "UPDATE Quotes SET IsComplete = 1, NoValueKnown = '[\"date\"]' WHERE Id = @id",
+                new { id = SharedId });
+        }
+
+        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = policy } };
+        var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false);
+
+        Assert.AreEqual(1, result.Summary.Updated, "The duplicate must still be resolved (row rewritten), not skipped");
+
+        using var conn2 = new SqliteConnection($"Data Source={_dbPath}");
+        conn2.Open();
+        var (isComplete, noValueKnown) = await conn2.QuerySingleAsync<(long IsComplete, string NoValueKnown)>(
+            "SELECT IsComplete, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+
+        Assert.AreEqual(1L, isComplete, "A human's completed review must survive a re-import that rewrites the row");
+        Assert.AreEqual("[\"date\"]", noValueKnown, "Confirmed no-value-known markers must survive a re-import that rewrites the row");
+    }
+
     [TestMethod]
     public async Task ImportAsync_Review_BehavesLikeSkip()
     {

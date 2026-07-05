@@ -18,4 +18,10 @@ public sealed class Person : RecordBase
 
     /// <summary>The import batch that introduced this record. Null for records predating provenance tracking.</summary>
     public Guid? ImportBatchId { get; init; }
+
+    /// <summary>Human-set flag meaning the record has been reviewed and is satisfactory. Never set automatically by enrichment or import.</summary>
+    public bool IsComplete { get; init; }
+
+    /// <summary>Field names confirmed to have no findable value — enrichment must not attempt these.</summary>
+    public IReadOnlyList<string> NoValueKnown { get; init; } = [];
 }

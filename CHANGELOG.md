@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-05 09:52 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-05 14:17 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New `POST /api/v1/quotes/import` endpoint imports a single source file (JSON, or CSV via a new converter plugin), reusing the same duplicate-detection engine as startup seeding — supports a per-request `duplicateResolution` override and an optional `converter` selection
 - New `POST /api/v1/quotes/import/preview` endpoint runs the identical import pipeline but rolls back every write, so conflicts and errors can be reviewed before committing
 - Manifest file entries (`data/sources/manifest.json` and user import manifests) can now declare their own `duplicateResolution` override, taking priority over the manifest-wide and configured defaults
+- Quotes, sources, characters, and people now have an `IsComplete` flag and a `NoValueKnown` list of confirmed-empty fields in the database, laying the groundwork for future data-quality tooling; not yet exposed via the API or management UI, and never reset when an existing record is rewritten by a duplicate-resolution policy
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before

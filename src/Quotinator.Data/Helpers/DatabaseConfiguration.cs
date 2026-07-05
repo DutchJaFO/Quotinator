@@ -18,6 +18,7 @@ public abstract class DatabaseConfiguration
     {
         SqlMapper.AddTypeHandler(new GuidHandler());
         SqlMapper.AddTypeHandler(new SafeDateHandler());
+        SqlMapper.AddTypeHandler(new JsonStringListHandler());
         RegisterDomainHandlers();
     }
 

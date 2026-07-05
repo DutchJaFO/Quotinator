@@ -84,9 +84,12 @@ internal static class Sql
 
         internal const string Insert =
             "INSERT OR IGNORE INTO Quotes " +
-            "(Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
-            "VALUES (@Id, @QuoteText, @OriginalLanguage, @SourceId, @CharacterId, @PersonId, @ImportBatchId, @DateCreated, NULL, NULL, 0);";
+            "(Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, IsComplete, NoValueKnown) " +
+            "VALUES (@Id, @QuoteText, @OriginalLanguage, @SourceId, @CharacterId, @PersonId, @ImportBatchId, @DateCreated, NULL, NULL, 0, 0, '[]');";
 
+        // Deliberately excludes IsComplete/NoValueKnown from the SET list (per #55) — an existing row
+        // being rewritten by newest-wins must never reset a human's completed review or confirmed
+        // "no value known" markers. Only a genuinely new row (see Insert above) gets the false/[] defaults.
         internal const string UpdateOnNewestWins =
             "UPDATE Quotes SET QuoteText=@text, OriginalLanguage=@lang, SourceId=@sid, " +
             "CharacterId=@cid, PersonId=@pid, ImportBatchId=@batchId, DateModified=@mod WHERE Id=@id;";

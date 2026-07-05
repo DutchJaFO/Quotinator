@@ -5,6 +5,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
+using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Engine.Database;
@@ -144,6 +145,64 @@ public class ConflictResolutionTests
         Assert.AreEqual("Original quote text", quoteText, "Review does not auto-resolve — behaves exactly like Skip today");
         Assert.IsNull(character);
         CollectionAssert.AreEquivalent(new[] { "Drama" }, genres);
+    }
+
+    // ── #55: IsComplete / NoValueKnown ──────────────────────────────────────
+
+    [TestMethod]
+    public async Task Seed_FreshQuote_DefaultsIsCompleteFalseAndNoValueKnownEmpty()
+    {
+        var batch = new SeedBatch([new SeedFile(WriteFirstFile(), null)], new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
+        await CreateInitializer([batch]).InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (isComplete, noValueKnown) = await conn.QuerySingleAsync<(long IsComplete, string NoValueKnown)>(
+            "SELECT IsComplete, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+
+        Assert.AreEqual(0L, isComplete, "A brand-new row must default IsComplete to false");
+        Assert.AreEqual("[]", noValueKnown, "A brand-new row must default NoValueKnown to an empty JSON array");
+    }
+
+    /// <summary>
+    /// Regression guard for the exact production statement #64's conflict engine (and the live
+    /// import service) uses to rewrite an existing row on newest-wins/merge-ours/merge-theirs — it
+    /// must never include IsComplete/NoValueKnown in its SET list, or a human's completed review
+    /// would be silently reset on every reseed/reimport that happens to touch that quote again.
+    /// </summary>
+    [TestMethod]
+    public async Task UpdateOnNewestWins_NeverResetsIsCompleteOrNoValueKnown()
+    {
+        var batch = new SeedBatch([new SeedFile(WriteFirstFile(), null)], new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
+        await CreateInitializer([batch]).InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+
+        await conn.ExecuteAsync(
+            "UPDATE Quotes SET IsComplete = 1, NoValueKnown = '[\"date\"]' WHERE Id = @id",
+            new { id = SharedId });
+
+        var sourceId = await conn.ExecuteScalarAsync<string>("SELECT SourceId FROM Quotes WHERE Id = @id", new { id = SharedId });
+
+        await conn.ExecuteAsync(Sql.Quotes.UpdateOnNewestWins, new
+        {
+            text    = "Rewritten by a later reseed",
+            lang    = "en",
+            sid     = sourceId,
+            cid     = (string?)null,
+            pid     = (string?)null,
+            batchId = (string?)null,
+            mod     = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+            id      = SharedId
+        });
+
+        var (quoteText, isComplete, noValueKnown) = await conn.QuerySingleAsync<(string QuoteText, long IsComplete, string NoValueKnown)>(
+            "SELECT QuoteText, IsComplete, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+
+        Assert.AreEqual("Rewritten by a later reseed", quoteText, "The statement must still update the fields it's meant to");
+        Assert.AreEqual(1L, isComplete, "IsComplete must survive an UpdateOnNewestWins rewrite unchanged");
+        Assert.AreEqual("[\"date\"]", noValueKnown, "NoValueKnown must survive an UpdateOnNewestWins rewrite unchanged");
     }
 
     [TestMethod]

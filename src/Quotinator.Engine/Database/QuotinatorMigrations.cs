@@ -22,6 +22,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
         new SchemaMigration { Version = 4, Sql = Migration004_ImportBatchTypeUserSeed },
         new SchemaMigration { Version = 5, Sql = Migration005_ImportBatchConflictPolicy },
+        new SchemaMigration { Version = 6, Sql = Migration006_RecordCompleteness },
     ];
 
     /// <summary>
@@ -213,16 +214,34 @@ public static class QuotinatorMigrations
         ALTER TABLE ImportBatches ADD COLUMN ConflictPolicy TEXT NOT NULL DEFAULT 'skip';
         """;
 
-    // Consolidated schema for a genuinely fresh database — the union of migrations 1-5's final
+    // Adds IsComplete (human-set "reviewed and satisfied" flag) and NoValueKnown (JSON array of
+    // field names confirmed to have no findable value) to all four entity tables, per #55. Both
+    // columns default false/'[]' for pre-existing rows on upgrade — correct, since no row predating
+    // this migration has ever been reviewed. #64's UPDATE paths (Sql.Quotes.UpdateOnNewestWins and
+    // the GetOrCreate* "found existing" paths) deliberately never reference these columns, so an
+    // existing row's values survive every reseed/reimport untouched.
+    private const string Migration006_RecordCompleteness = """
+        ALTER TABLE Quotes     ADD COLUMN IsComplete BIT NOT NULL DEFAULT 0;
+        ALTER TABLE Quotes     ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE Sources    ADD COLUMN IsComplete BIT NOT NULL DEFAULT 0;
+        ALTER TABLE Sources    ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE Characters ADD COLUMN IsComplete BIT NOT NULL DEFAULT 0;
+        ALTER TABLE Characters ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE People     ADD COLUMN IsComplete BIT NOT NULL DEFAULT 0;
+        ALTER TABLE People     ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
+        """;
+
+    // Consolidated schema for a genuinely fresh database — the union of migrations 1-6's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
-    // ImportBatches using the final widened CHECK constraint (migration004), and ImportBatches.
+    // ImportBatches using the final widened CHECK constraint (migration004), ImportBatches.
     // ConflictPolicy (migration005's ALTER TABLE ADD COLUMN, also always appends, so it's listed
-    // last too) present with the same 'skip' default backfill value. Deliberately omits
-    // migration002's DELETE FROM QuoteGenres (data-repair for pre-existing bad data — nothing to
-    // repair on a fresh database) and migration003's pre-seed INSERTs (WHERE EXISTS-guarded,
-    // always a no-op before any quote has been seeded). Kept in sync with migrations 1-5 by
-    // QuotinatorMigrationsBaselineTests' schema-drift comparison.
+    // last too) present with the same 'skip' default backfill value, and IsComplete/NoValueKnown
+    // (migration006's ALTER TABLE ADD COLUMN, appended last again) on the four entity tables.
+    // Deliberately omits migration002's DELETE FROM QuoteGenres (data-repair for pre-existing bad
+    // data — nothing to repair on a fresh database) and migration003's pre-seed INSERTs (WHERE
+    // EXISTS-guarded, always a no-op before any quote has been seeded). Kept in sync with
+    // migrations 1-6 by DatabaseInitializerTests' schema-drift comparison.
     private const string BaselineSchema = """
         CREATE TABLE IF NOT EXISTS ImportBatches (
             Id           TEXT    PRIMARY KEY,
@@ -250,6 +269,8 @@ public static class QuotinatorMigrations
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
             ImportBatchId TEXT   REFERENCES ImportBatches(Id),
+            IsComplete   BIT     NOT NULL DEFAULT 0,
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]',
             UNIQUE (Title, Type)
         );
 
@@ -274,6 +295,8 @@ public static class QuotinatorMigrations
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
             ImportBatchId TEXT   REFERENCES ImportBatches(Id),
+            IsComplete   BIT     NOT NULL DEFAULT 0,
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]',
             UNIQUE (SourceId, Name)
         );
 
@@ -298,7 +321,9 @@ public static class QuotinatorMigrations
             DateModified TEXT,
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ImportBatchId TEXT   REFERENCES ImportBatches(Id)
+            ImportBatchId TEXT   REFERENCES ImportBatches(Id),
+            IsComplete   BIT     NOT NULL DEFAULT 0,
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]'
         );
 
         CREATE TABLE IF NOT EXISTS Quotes (
@@ -312,7 +337,9 @@ public static class QuotinatorMigrations
             DateModified     TEXT,
             DateDeleted      TEXT,
             IsDeleted        INTEGER NOT NULL DEFAULT 0,
-            ImportBatchId    TEXT    REFERENCES ImportBatches(Id)
+            ImportBatchId    TEXT    REFERENCES ImportBatches(Id),
+            IsComplete       BIT     NOT NULL DEFAULT 0,
+            NoValueKnown     TEXT    NOT NULL DEFAULT '[]'
         );
 
         CREATE TABLE IF NOT EXISTS QuoteTranslations (

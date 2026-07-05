@@ -47,7 +47,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#64](https://github.com/DutchJaFO/Quotinator/issues/64) | Conflict resolution policy | Waiting for release | T1 ✅ T2 ✅ | [64-conflict-resolution-plan.md](64-conflict-resolution-plan.md) |
 | [#45](https://github.com/DutchJaFO/Quotinator/issues/45) | Import endpoint | Waiting for release | T1 ✅ T2 ✅ | [45-import-endpoint-plan.md](45-import-endpoint-plan.md) |
 | [#65](https://github.com/DutchJaFO/Quotinator/issues/65) | Import endpoint: preview/dry-run | Waiting for release | T1 ✅ T2 ✅ | [65-preview-dry-run-plan.md](65-preview-dry-run-plan.md) |
-| [#55](https://github.com/DutchJaFO/Quotinator/issues/55) | Record completeness flag | Planning | Not yet assessed | [55-record-completeness-plan.md](55-record-completeness-plan.md) |
+| [#55](https://github.com/DutchJaFO/Quotinator/issues/55) | Record completeness flag | In progress | T1 ⬜ T2 ✅ | [55-record-completeness-plan.md](55-record-completeness-plan.md) |
 | [#56](https://github.com/DutchJaFO/Quotinator/issues/56) | Audit log | Planning | Not yet assessed | [56-audit-log-plan.md](56-audit-log-plan.md) |
 | [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: soft-reset by batch | Planning | Not yet assessed | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
 | [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Planning | Not yet assessed | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
@@ -102,7 +102,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 11 | #64 | Conflict resolution policy | Waiting for release |
 | 12 | #45 | Import endpoint | Waiting for release |
 | 13 | #65 | Import endpoint: preview/dry-run | Waiting for release |
-| 14 | #55 | Record completeness flag | Planning |
+| 14 | #55 | Record completeness flag | In progress |
 | 15 | #56 | Audit log | Planning |
 | 16 | #149 | Import endpoint: manual conflict-review workflow (POST /resolve) | Planning |
 | 17 | #59 | Admin: soft-reset by batch | Planning |
