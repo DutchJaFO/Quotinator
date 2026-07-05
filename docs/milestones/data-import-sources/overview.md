@@ -125,7 +125,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 
 ### Evaluation of remaining issues
 
-All remaining issues are either partially done or not started. Evaluate each for early merge when complete — the default is to merge the full milestone together.
+| Issue | Ready for early merge? | Notes |
+|-------|------------------------|-------|
+| #45, #65 | Not evaluated for early merge — held for the full milestone | Fully done (T1 ✅ T2 ✅), but their own output is only reachable through the write path they introduce (`POST /api/v1/quotes/import`) — nothing else in the milestone calls them, and no existing behaviour depends on them being present, so there is no forcing reason to break from the default "merge the full milestone together" assumption. Revisit only if a later issue in this milestone (e.g. #59, #56) would otherwise sit blocked waiting on a merge. |
+
+All other remaining issues (#55, #56, #59, #67, #68, #69, #144) are still in `Planning` — not started. Evaluate each for early merge when complete — the default is to merge the full milestone together.
 
 ---
 
