@@ -72,7 +72,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #65 (preview) → requires #45 for the correct endpoint shape
 #58 (ImportBatches) → requires #71 and #78; unblocks #56, #57 (Problem 4 — done), #59, #45 (batch row), #64, #67, #68, #69
 #45 (import endpoint) → unblocks remaining #64 requirements and #65 final shape
-#55 (completeness flag) → independent; connects to #56 (no-value-known)
+#55 (completeness flag) → requires #64 (merge engine must never reset IsComplete/NoValueKnown on an update); connects to #56 (no-value-known)
 #56 (audit log) → requires #58 for batch actor; connects to #45, #55, #59
 #59 (soft-reset by batch) → requires #58 and #56
 #67 (conversations schema) → requires #58 for batch FK; unblocks #68, #69
