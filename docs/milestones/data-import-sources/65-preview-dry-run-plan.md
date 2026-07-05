@@ -49,7 +49,7 @@ There is no `conflicts.sameId`/`conflicts.sameText` split — #45's matching is 
 | 4 | N/A | `sameText` conflicts have no `fieldDiffs` — superseded, `sameText` never applies | N/A | Superseded |
 | 5 | ✅ | Active conflict policy (#64) applied during preview; policy-skipped records counted in `skipped` | Unit test | `QuoteImportServiceTests.ImportAsync_Skip_KeepsExistingRowUnchanged`, `ImportAsync_Review_BehavesLikeSkip` (both run with `preview` covered by the same code path as `ImportAsync_PreviewWithConflict_NoConflictRowsPersisted`) |
 | 6 | ✅ | No `ImportBatch` row created for a preview run | Unit test | `QuoteImportServiceTests.ImportAsync_Preview_LeavesZeroTrace` (asserts `ImportBatches` count is 0 and `BatchId` is null) |
-| 7 | ⬜ | T1 — app starts in VS without error; `/import/preview` usable | Live | Not yet run — requires a user-run VS session |
+| 7 | ✅ | T1 — app starts in VS without error; `/import/preview` usable | Live | VS run: `POST /api/v1/quotes/import/preview` (×2, `quotinator-curated.json`) returned `200` in 26ms/6ms. Confirmed 2026-07-05 — see `45-import-endpoint-plan.md` for the full T1 log |
 | 8 | ✅ | T2 — Docker smoke test | Live | `POST /api/v1/quotes/import/preview` against the built image (CSV file, `converter: "csv"`, `duplicateResolution.default: "merge-theirs"`) returned `200` with `preview: true`, correct summary, and correctly kebab-cased `conflictPolicy: "merge-theirs"`. Confirmed 2026-07-05 — see `45-import-endpoint-plan.md` for the full T2 log |
 
 **Full solution `dotnet test --configuration Release`: 814 tests, 0 warnings, 0 errors.**
