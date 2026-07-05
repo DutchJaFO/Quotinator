@@ -368,4 +368,16 @@ internal static class Sql
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
     }
+
+    /// <summary>System_ChangeLog table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.SystemChangeLogWriter"/>.</summary>
+    internal static class SystemChangeLog
+    {
+        /// <summary>Removes all change-log rows.</summary>
+        internal const string DeleteAll = "DELETE FROM System_ChangeLog;";
+
+        /// <summary>Every change-log entry for a single entity, newest first.</summary>
+        internal const string SelectByEntity =
+            "SELECT Id, EntityType, EntityId, InitiatedByType, InitiatedById, Action, Field, OldValue, NewValue, OccurredAt " +
+            "FROM System_ChangeLog WHERE EntityType = @entityType AND EntityId = @entityId ORDER BY OccurredAt DESC;";
+    }
 }

@@ -20,6 +20,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
     private readonly IDbConnectionFactory _factory;
     private readonly IImportBatchRepository _importBatches;
     private readonly ISystemImportConflictWriter _conflictWriter;
+    private readonly ISystemChangeLogWriter _changeLogWriter;
     private readonly IReadOnlyDictionary<string, IQuoteSourceConverter> _converters;
     private readonly ManifestPolicy _configPolicy;
 
@@ -28,14 +29,16 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         IDbConnectionFactory factory,
         IImportBatchRepository importBatches,
         ISystemImportConflictWriter conflictWriter,
+        ISystemChangeLogWriter changeLogWriter,
         IReadOnlyDictionary<string, IQuoteSourceConverter> converters,
         ManifestPolicy configPolicy)
     {
-        _factory        = factory;
-        _importBatches  = importBatches;
-        _conflictWriter = conflictWriter;
-        _converters     = converters;
-        _configPolicy   = configPolicy;
+        _factory         = factory;
+        _importBatches   = importBatches;
+        _conflictWriter  = conflictWriter;
+        _changeLogWriter = changeLogWriter;
+        _converters      = converters;
+        _configPolicy    = configPolicy;
     }
 
     /// <inheritdoc/>
@@ -61,6 +64,8 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             ConflictPolicy = new SafeValue<DuplicateResolutionPolicy?>(effectivePolicy.ToString(), effectivePolicy)
         };
         await _importBatches.InsertAsync(batch, uow);
+
+        var changeLog = new QuoteSeedWriter.ChangeLogContext(_changeLogWriter, InitiatorType.Import, batch.Id.ToString("D").ToUpperInvariant());
 
         var seenIds        = new Dictionary<string, SourceQuote>(StringComparer.Ordinal);
         var sourceIndex     = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
@@ -98,9 +103,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             {
                 seenIds[q.Id] = q;
 
-                var sourceId    = await QuoteSeedWriter.GetOrCreateSourceAsync(connection, q, sourceIndex, batch.Id, transaction);
-                var characterId = await QuoteSeedWriter.GetOrCreateCharacterAsync(connection, q, sourceId, characterIndex, batch.Id, transaction);
-                var personId    = await QuoteSeedWriter.GetOrCreatePersonAsync(connection, q, personIndex, batch.Id, transaction);
+                var sourceId    = await QuoteSeedWriter.GetOrCreateSourceAsync(connection, q, sourceIndex, batch.Id, changeLog, transaction);
+                var characterId = await QuoteSeedWriter.GetOrCreateCharacterAsync(connection, q, sourceId, characterIndex, batch.Id, changeLog, transaction);
+                var personId    = await QuoteSeedWriter.GetOrCreatePersonAsync(connection, q, personIndex, batch.Id, changeLog, transaction);
                 var quoteId     = Guid.Parse(q.Id);
 
                 await connection.ExecuteAsync(
@@ -116,6 +121,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                         ImportBatchId    = batch.Id,
                         DateCreated      = now
                     }, transaction);
+
+                await QuoteSeedWriter.LogChangeAsync(changeLog, "quote", q.Id, ChangeAction.Created,
+                    oldValue: null, newValue: QuoteFieldMerge.ToFieldMap(q), connection, transaction);
 
                 await QuoteSeedWriter.InsertTranslationsAsync(connection, q, quoteId, sourceId, now, transaction);
                 await QuoteSeedWriter.InsertGenresAsync(connection, q, quoteId, now, transaction);
@@ -151,9 +159,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             await connection.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote,      new { id = q.Id }, transaction);
             await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteForQuote, new { id = q.Id }, transaction);
 
-            var owSourceId    = await QuoteSeedWriter.GetOrCreateSourceAsync(connection, resolved, sourceIndex, batch.Id, transaction);
-            var owCharacterId = await QuoteSeedWriter.GetOrCreateCharacterAsync(connection, resolved, owSourceId, characterIndex, batch.Id, transaction);
-            var owPersonId    = await QuoteSeedWriter.GetOrCreatePersonAsync(connection, resolved, personIndex, batch.Id, transaction);
+            var owSourceId    = await QuoteSeedWriter.GetOrCreateSourceAsync(connection, resolved, sourceIndex, batch.Id, changeLog, transaction);
+            var owCharacterId = await QuoteSeedWriter.GetOrCreateCharacterAsync(connection, resolved, owSourceId, characterIndex, batch.Id, changeLog, transaction);
+            var owPersonId    = await QuoteSeedWriter.GetOrCreatePersonAsync(connection, resolved, personIndex, batch.Id, changeLog, transaction);
 
             await connection.ExecuteAsync(
                 Sql.Quotes.UpdateOnNewestWins,
@@ -168,6 +176,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                     mod     = now,
                     id      = q.Id
                 }, transaction);
+
+            await QuoteSeedWriter.LogChangeAsync(changeLog, "quote", q.Id, ChangeAction.Modified,
+                oldValue: existingFields, newValue: QuoteFieldMerge.ToFieldMap(resolved), connection, transaction);
 
             seenIds[q.Id] = resolved;
 

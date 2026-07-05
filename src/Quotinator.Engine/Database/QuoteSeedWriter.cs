@@ -27,6 +27,32 @@ internal static class QuoteSeedWriter
     private static readonly IReadOnlyDictionary<string, string> GenreDbToApi =
         InputValidation.GenreApiToDb.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Bundles the change-log writer and initiator identity shared across every Source/Character/Person/Quote write within one seeding run or one import call (#56).</summary>
+    internal readonly record struct ChangeLogContext(ISystemChangeLogWriter Writer, InitiatorType InitiatedByType, string? InitiatedById);
+
+    /// <summary>
+    /// Writes one <see cref="SystemChangeLog"/> for a Created/Modified operation on a domain entity.
+    /// <paramref name="oldValue"/>/<paramref name="newValue"/> are serialised as whole-record JSON
+    /// snapshots (per #56's Scope changes — one row per operation, not one per field); pass <c>null</c>
+    /// for whichever side doesn't apply (e.g. <paramref name="oldValue"/> for a brand-new row).
+    /// </summary>
+    internal static async Task LogChangeAsync(
+        ChangeLogContext changeLog, string entityType, string entityId, ChangeAction action,
+        object? oldValue, object? newValue, SqliteConnection connection, SqliteTransaction? transaction = null)
+    {
+        await changeLog.Writer.LogAsync(new SystemChangeLog
+        {
+            EntityType      = entityType,
+            EntityId        = entityId,
+            InitiatedByType = new SafeValue<InitiatorType?>(changeLog.InitiatedByType.ToString(), changeLog.InitiatedByType),
+            InitiatedById   = changeLog.InitiatedById,
+            Action          = new SafeValue<ChangeAction?>(action.ToString(), action),
+            OldValue        = oldValue is null ? null : JsonSerializer.Serialize(oldValue),
+            NewValue        = newValue is null ? null : JsonSerializer.Serialize(newValue),
+            OccurredAt      = DateTime.UtcNow,
+        }, connection, transaction);
+    }
+
     /// <summary>
     /// Gets the existing Source row for <paramref name="q"/>'s title+type, or inserts a new one.
     /// Checks the database itself (not only <paramref name="index"/>) on a cache miss — <paramref name="index"/>
@@ -37,7 +63,7 @@ internal static class QuoteSeedWriter
     /// </summary>
     internal static async Task<Guid> GetOrCreateSourceAsync(
         SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId,
-        SqliteTransaction? transaction = null)
+        ChangeLogContext changeLog, SqliteTransaction? transaction = null)
     {
         var typeStr = NormaliseType(q.Type);
         var key     = $"{q.Source}|{typeStr}";
@@ -61,6 +87,9 @@ internal static class QuoteSeedWriter
             ImportBatchId = importBatchId
         }, transaction);
 
+        await LogChangeAsync(changeLog, "source", id.ToString(), ChangeAction.Created,
+            oldValue: null, newValue: new { title = q.Source, type = typeStr, date = q.Date }, connection, transaction);
+
         index[key] = id;
         return id;
     }
@@ -72,7 +101,7 @@ internal static class QuoteSeedWriter
     /// </summary>
     internal static async Task<Guid?> GetOrCreateCharacterAsync(
         SqliteConnection connection, SourceQuote q, Guid sourceId, Dictionary<string, Guid> index, Guid importBatchId,
-        SqliteTransaction? transaction = null)
+        ChangeLogContext changeLog, SqliteTransaction? transaction = null)
     {
         if (string.IsNullOrWhiteSpace(q.Character)) return null;
 
@@ -96,6 +125,9 @@ internal static class QuoteSeedWriter
             ImportBatchId = importBatchId
         }, transaction);
 
+        await LogChangeAsync(changeLog, "character", id.ToString(), ChangeAction.Created,
+            oldValue: null, newValue: new { name = q.Character }, connection, transaction);
+
         index[key] = id;
         return id;
     }
@@ -107,7 +139,7 @@ internal static class QuoteSeedWriter
     /// </summary>
     internal static async Task<Guid?> GetOrCreatePersonAsync(
         SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId,
-        SqliteTransaction? transaction = null)
+        ChangeLogContext changeLog, SqliteTransaction? transaction = null)
     {
         if (string.IsNullOrWhiteSpace(q.Author)) return null;
 
@@ -128,6 +160,9 @@ internal static class QuoteSeedWriter
             Name          = q.Author,
             ImportBatchId = importBatchId
         }, transaction);
+
+        await LogChangeAsync(changeLog, "person", id.ToString(), ChangeAction.Created,
+            oldValue: null, newValue: new { name = q.Author }, connection, transaction);
 
         index[q.Author] = id;
         return id;

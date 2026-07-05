@@ -11,8 +11,9 @@ namespace Quotinator.Data.Repositories;
 /// SQLite implementation of <see cref="ISystemAuditWriter"/>.
 /// Extends <see cref="SqliteRepositoryBase{T}"/> directly — NOT <see cref="SqliteRepository{T}"/> —
 /// so that the INSERT does not trigger another audit write (infinite recursion).
-/// Dapper.Contrib generates the INSERT statement from the <c>[Table]</c> and <c>[Key]</c>
-/// attributes on <see cref="SystemAuditEntry"/>; no SQL string is required for writes.
+/// Dapper.Contrib generates the INSERT statement from the <c>[Table]</c> attribute on
+/// <see cref="SystemAuditEntry"/> and the <c>[ExplicitKey]</c> it inherits from
+/// <see cref="Models.RecordBase"/>; no SQL string is required for writes.
 /// </summary>
 public sealed class SystemAuditWriter : SqliteRepositoryBase<SystemAuditEntry>, ISystemAuditWriter
 {

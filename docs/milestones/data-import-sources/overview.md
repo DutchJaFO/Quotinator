@@ -48,7 +48,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#45](https://github.com/DutchJaFO/Quotinator/issues/45) | Import endpoint | Waiting for release | T1 ✅ T2 ✅ | [45-import-endpoint-plan.md](45-import-endpoint-plan.md) |
 | [#65](https://github.com/DutchJaFO/Quotinator/issues/65) | Import endpoint: preview/dry-run | Waiting for release | T1 ✅ T2 ✅ | [65-preview-dry-run-plan.md](65-preview-dry-run-plan.md) |
 | [#55](https://github.com/DutchJaFO/Quotinator/issues/55) | Record completeness flag | Waiting for release | T1 ✅ T2 ✅ | [55-record-completeness-plan.md](55-record-completeness-plan.md) |
-| [#56](https://github.com/DutchJaFO/Quotinator/issues/56) | Audit log | Planning | Not yet assessed | [56-audit-log-plan.md](56-audit-log-plan.md) |
+| [#56](https://github.com/DutchJaFO/Quotinator/issues/56) | Audit log (System_ChangeLog) | In progress | T1 ⬜ T2 ✅ | [56-audit-log-plan.md](56-audit-log-plan.md) |
 | [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: soft-reset by batch | Planning | Not yet assessed | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
 | [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Planning | Not yet assessed | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
 | [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Planning | Not yet assessed | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
@@ -103,7 +103,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 12 | #45 | Import endpoint | Waiting for release |
 | 13 | #65 | Import endpoint: preview/dry-run | Waiting for release |
 | 14 | #55 | Record completeness flag | Waiting for release |
-| 15 | #56 | Audit log | Planning |
+| 15 | #56 | Audit log (System_ChangeLog) | In progress |
 | 16 | #149 | Import endpoint: manual conflict-review workflow (POST /resolve) | Planning |
 | 17 | #59 | Admin: soft-reset by batch | Planning |
 | 18 | #67 | Conversations schema | Planning |
@@ -132,7 +132,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 |-------|------------------------|-------|
 | #45, #65 | Not evaluated for early merge — held for the full milestone | Fully done (T1 ✅ T2 ✅), but their own output is only reachable through the write path they introduce (`POST /api/v1/quotes/import`) — nothing else in the milestone calls them, and no existing behaviour depends on them being present, so there is no forcing reason to break from the default "merge the full milestone together" assumption. Revisit only if a later issue in this milestone (e.g. #59, #56) would otherwise sit blocked waiting on a merge. |
 
-All other remaining issues (#55, #56, #59, #67, #68, #69, #144, #149) are still in `Planning` — not started. Evaluate each for early merge when complete — the default is to merge the full milestone together.
+All other remaining issues (#59, #67, #68, #69, #144, #149) are still in `Planning` — not started. Evaluate each for early merge when complete — the default is to merge the full milestone together.
 
 ---
 

@@ -43,13 +43,14 @@ public class ConflictResolutionTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches, ISystemImportConflictWriter? conflictWriter = null)
+    private QuotinatorDatabaseInitializer CreateInitializer(
+        IReadOnlyList<SeedBatch> batches, ISystemImportConflictWriter? conflictWriter = null, ISystemChangeLogWriter? changeLogWriter = null)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
-            conflictWriter ?? NoOpSystemImportConflictWriter.Instance,
+            conflictWriter ?? NoOpSystemImportConflictWriter.Instance, changeLogWriter ?? NoOpSystemChangeLogWriter.Instance,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false, QuotinatorMigrations.Baseline);
     }
@@ -298,5 +299,99 @@ public class ConflictResolutionTests
         // The point of this test is that the row from *before* the Reset survives at all (Reset never
         // drops System_-prefixed tables) — not that seeding is idempotent across a Reset.
         Assert.AreEqual(2, count, "The pre-Reset conflict row must survive Reset, plus one new row from the re-seed pass detecting the same duplicate again");
+    }
+
+    // ── #56: System_ChangeLog ────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task Seed_FreshQuote_WritesCreatedChangeLogRowsWithSeedInitiator()
+    {
+        var factory    = new SqliteConnectionFactory(_dbPath);
+        var writer     = new SystemChangeLogWriter(factory);
+        var batch      = new SeedBatch([new SeedFile(WriteFirstFile(), null)], new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
+        await CreateInitializer([batch], changeLogWriter: writer).InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var rows = (await conn.QueryAsync<(string EntityType, string EntityId, string InitiatedByType, string Action)>(
+            "SELECT EntityType, EntityId, InitiatedByType, Action FROM System_ChangeLog")).ToList();
+
+        var quoteRow = rows.Single(r => r.EntityType == "quote");
+        Assert.AreEqual(SharedId, quoteRow.EntityId);
+        Assert.AreEqual("Seed", quoteRow.InitiatedByType);
+        Assert.AreEqual("Created", quoteRow.Action);
+
+        var sourceRow = rows.Single(r => r.EntityType == "source");
+        Assert.AreEqual("Seed", sourceRow.InitiatedByType);
+        Assert.AreEqual("Created", sourceRow.Action);
+    }
+
+    [TestMethod]
+    public async Task NewestWins_CrossFileDuplicate_WritesModifiedChangeLogRowForQuote()
+    {
+        var factory = new SqliteConnectionFactory(_dbPath);
+        var writer  = new SystemChangeLogWriter(factory);
+        var batch   = new SeedBatch(
+            [new SeedFile(WriteFirstFile(), null), new SeedFile(WriteSecondFile(), null)],
+            new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
+        await CreateInitializer([batch], changeLogWriter: writer).InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var quoteActions = (await conn.QueryAsync<string>(
+            "SELECT Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id ORDER BY OccurredAt",
+            new { id = SharedId })).ToList();
+
+        CollectionAssert.AreEqual(new[] { "Created", "Modified" }, quoteActions,
+            "The first file's insert logs Created; the second file's newest-wins rewrite logs Modified");
+    }
+
+    [TestMethod]
+    [DataRow(DuplicateResolutionPolicy.Skip)]
+    [DataRow(DuplicateResolutionPolicy.Review)]
+    public async Task SkipOrReview_CrossFileDuplicate_WritesNoModifiedChangeLogRow(DuplicateResolutionPolicy policy)
+    {
+        var factory = new SqliteConnectionFactory(_dbPath);
+        var writer  = new SystemChangeLogWriter(factory);
+        var batch   = new SeedBatch(
+            [new SeedFile(WriteFirstFile(), null), new SeedFile(WriteSecondFile(), null)],
+            new ManifestPolicy(policy), "test");
+        await CreateInitializer([batch], changeLogWriter: writer).InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var quoteActions = (await conn.QueryAsync<string>(
+            "SELECT Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id",
+            new { id = SharedId })).ToList();
+
+        CollectionAssert.AreEqual(new[] { "Created" }, quoteActions,
+            $"{policy} never executes the UPDATE, so no Modified row should exist — only the first file's Created row");
+    }
+
+    /// <summary>System_ChangeLog is System_-prefixed protected infrastructure — a Reset must never drop or replay it, same as System_AuditEntries/System_ImportConflicts.</summary>
+    [TestMethod]
+    public async Task ResetAsync_PreservesExistingChangeLogRows()
+    {
+        var factory = new SqliteConnectionFactory(_dbPath);
+        var writer  = new SystemChangeLogWriter(factory);
+        var batch   = new SeedBatch([new SeedFile(WriteFirstFile(), null)], new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
+        var db      = CreateInitializer([batch], changeLogWriter: writer);
+        await db.InitialiseAsync();
+
+        int countBeforeReset;
+        using (var preConn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            preConn.Open();
+            countBeforeReset = await preConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ChangeLog;");
+        }
+
+        await db.ResetAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var countAfterReset = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ChangeLog;");
+
+        Assert.IsTrue(countAfterReset >= countBeforeReset * 2,
+            "The pre-Reset rows must survive Reset, plus at least as many new rows from the re-seed pass");
     }
 }

@@ -1,4 +1,5 @@
 using Dapper;
+using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Helpers;
 
@@ -19,6 +20,8 @@ public abstract class DatabaseConfiguration
         SqlMapper.AddTypeHandler(new GuidHandler());
         SqlMapper.AddTypeHandler(new SafeDateHandler());
         RegisterJsonHandler<IReadOnlyList<string>>();
+        RegisterEnumHandler<ChangeAction>();
+        RegisterEnumHandler<InitiatorType>();
         RegisterDomainHandlers();
     }
 

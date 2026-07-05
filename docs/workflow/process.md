@@ -99,10 +99,11 @@ At the start of every session working on a milestone:
    Issues are written at a point in time. Prior issues in the same milestone may have introduced schemas, models, or design decisions that change what this issue should cover. Before accepting the spec as written:
 
    **Check sources in this order:**
-   1. **JSON schemas** (`schemas/`) — the machine-readable contract for any data file the issue touches. A feature not defined in the schema does not officially exist yet, regardless of what the code does.
-   2. **Script / generator behaviour** — if the issue touches a generator (e.g. `changelog.csx`), read the script. The generator defines what the schema promises to consumers; its parameters and helper functions reveal the full intended scope.
-   3. **C# models** — cross-reference the models against the schema. Gaps between them are bugs: a model property not in the schema is undocumented; a schema field not in the model is unimplemented.
-   4. **Documentation** — any project-level README or design doc that describes the format to consumers.
+   1. **`docs/architecture-decisions/`** — formal, numbered ADRs. An ADR can govern a design decision (e.g. entity/table shape) that the current issue never mentions. Copying an existing entity's shape is not a substitute for checking this — the existing entity may itself violate an ADR (see CLAUDE.md's "Authoritative sources" section for how this went wrong once already).
+   2. **JSON schemas** (`schemas/`) — the machine-readable contract for any data file the issue touches. A feature not defined in the schema does not officially exist yet, regardless of what the code does.
+   3. **Script / generator behaviour** — if the issue touches a generator (e.g. `changelog.csx`), read the script. The generator defines what the schema promises to consumers; its parameters and helper functions reveal the full intended scope.
+   4. **C# models** — cross-reference the models against the schema. Gaps between them are bugs: a model property not in the schema is undocumented; a schema field not in the model is unimplemented.
+   5. **Documentation** — any project-level README or design doc that describes the format to consumers.
 
    For each source, explicitly ask:
    - Does the issue reference every field or concept that now exists in the authoritative source?

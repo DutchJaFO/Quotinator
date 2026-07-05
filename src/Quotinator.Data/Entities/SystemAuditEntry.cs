@@ -1,21 +1,24 @@
 using Dapper.Contrib.Extensions;
+using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Entities;
 
 /// <summary>Immutable append-only record of a write operation or admin action.</summary>
 /// <remarks>
-/// Does not extend <see cref="Models.RecordBase"/> — audit entries are never soft-deleted
-/// or modified. The primary key is an auto-increment long, not a Guid.
-/// <c>[Key]</c> on a <c>long</c> property tells Dapper.Contrib to treat it as a server-generated
-/// identity column: it is excluded from INSERT and read back after the statement executes.
+/// Extends <see cref="RecordBase"/> per ADR 002 ("RecordBase applies to all tables without
+/// exception") — <see cref="RecordBase.DateModified"/>/<see cref="RecordBase.DateDeleted"/>/
+/// <see cref="RecordBase.IsDeleted"/> are never meaningfully used here (an audit entry is never
+/// modified or soft-deleted after being written), and <see cref="RecordBase.DateCreated"/>
+/// duplicates <see cref="PerformedAt"/> — this redundancy is the ADR's own accepted trade-off
+/// in exchange for every table being a full <c>IRepository&lt;T&gt;</c>/<c>IRestorableRepository&lt;T&gt;</c>
+/// citizen, not a special case. This was originally built without <see cref="RecordBase"/> (an
+/// auto-increment <c>long Id</c> via <c>[Key]</c>) despite the ADR predating that implementation by
+/// a week — corrected retroactively via a new migration (<c>AuditMigrations.MigrateToRecordBase</c>)
+/// since this table already shipped in v1.7.2, so the column-type change can't be made in place.
 /// </remarks>
 [Table("System_AuditEntries")]
-public sealed class SystemAuditEntry
+public sealed class SystemAuditEntry : RecordBase
 {
-    /// <summary>Auto-increment surrogate key assigned by SQLite.</summary>
-    [Key]
-    public long Id { get; init; }
-
     /// <summary>Name of the table the operation touched, or <c>"Database"</c> for admin-level actions.</summary>
     public string TableName { get; init; } = string.Empty;
 

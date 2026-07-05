@@ -115,6 +115,77 @@ public class DatabaseInitializerOwnershipTests
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
+    /// <summary>
+    /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
+    /// for <c>System_ChangeLog</c> (added by #56's Data-owned migration 4).
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemChangeLogSchema()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync();
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync();
+
+        var schemaA = await DumpTableSchemaAsync(connA, "System_ChangeLog");
+        var schemaB = await DumpTableSchemaAsync(connB, "System_ChangeLog");
+
+        CollectionAssert.AreEqual(schemaB, schemaA,
+            "System_ChangeLog schema differs between Data's baseline and incremental paths — " +
+            "update DataBaselineSql to match DataOwnedMigrations' final result.");
+    }
+
+    /// <summary>
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text, so a baseline that silently
+    /// dropped a value from <c>InitiatedByType</c>'s or <c>Action</c>'s constraint (or introduced a
+    /// typo) would pass the structural schema comparison above undetected. This behavioural round-trip
+    /// closes that gap, for both the baseline and incremental paths.
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameChangeLogCheckConstraintValues()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync();
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync();
+
+        foreach (var conn in new[] { connA, connB })
+        {
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+
+            await conn.ExecuteAsync(
+                "INSERT INTO System_ChangeLog (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
+                "VALUES (@id, 'quote', @id, 'Seed', 'Created', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_ChangeLog (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
+                "VALUES (@id, 'quote', @id, 'NotARealInitiator', 'Created', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_ChangeLog (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
+                "VALUES (@id, 'quote', @id, 'Seed', 'NotARealAction', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+        }
+    }
+
     /// <summary>A fresh database with no consumer baseline defined always falls through to the full incremental path, even though it is empty.</summary>
     [TestMethod]
     public async Task ApplyBaselineAsync_NoConsumerBaselineDefined_FallsThroughToIncremental()
@@ -128,9 +199,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync();
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(3, dataRows,
+        Assert.AreEqual(5, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(3, db.DataSchemaVersion);
+        Assert.AreEqual(5, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────
@@ -150,8 +221,8 @@ public class DatabaseInitializerOwnershipTests
             new SchemaMigration
             {
                 Version = 1,
-                Sql = "INSERT INTO System_AuditEntries (TableName, Operation, PerformedAt) " +
-                      "VALUES ('Probe', 'Inserted', '2026-01-01 00:00:00');",
+                Sql = "INSERT INTO System_AuditEntries (Id, TableName, Operation, PerformedAt, DateCreated) " +
+                      "VALUES (lower(hex(randomblob(16))), 'Probe', 'Inserted', '2026-01-01 00:00:00', '2026-01-01 00:00:00');",
             },
         ];
         var db = CreateBareInitializer(temp.DbPath, consumerMigrations);

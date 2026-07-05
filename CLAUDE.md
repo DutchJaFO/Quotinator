@@ -84,6 +84,20 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 
 ---
 
+## Authoritative sources
+
+**Code is never authoritative on its own — only evidence of what was actually done, which may itself be wrong.** Before making a design or scope decision, check sources in this order:
+
+1. **Official documentation** for the language, framework, or library involved (e.g. SQLite's own docs for what `ALTER TABLE` can and can't do).
+2. **This project's own documentation** — `docs/architecture-decisions/` (ADRs — formal, numbered, permanent decisions) first, then `docs/decisions/` (informal/in-progress notes), then the relevant milestone plan doc, then this file.
+3. **If neither has an answer, ask the user.** Never silently pick an option and proceed as if it were settled.
+
+**Existing code that looks like a pattern is not the same as a validated decision.** Copying what an earlier entity/class/table already does is not a substitute for checking whether that earlier code actually complied with a governing ADR — it may itself be the mistake propagating. This is exactly how `SystemAuditEntry` (#73) shipped without `RecordBase` despite ADR 002 mandating it "without exception": the ADR existed a week before the implementation, nobody checked it, and the next two entities (`SystemImportConflict`, then `ChangeLogEntry`) each copied the previous one's shape instead of checking the ADR independently, compounding the same deviation three times before it was caught (see ADR 002 for the full incident).
+
+**Always check `docs/architecture-decisions/` before designing a new entity, table, or repository pattern** — not just the milestone's own plan docs. An ADR can govern a decision the current GitHub issue never mentions.
+
+---
+
 ## Architecture Decisions
 
 ### Flat-file JSON for v1, SQLite for v2

@@ -27,12 +27,16 @@ public class SystemAuditWriterTests
         conn.Open();
         conn.Execute("""
             CREATE TABLE System_AuditEntries (
-                Id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                TableName   TEXT    NOT NULL,
-                RecordId    TEXT,
-                Operation   TEXT    NOT NULL,
-                Agent       TEXT,
-                PerformedAt TEXT    NOT NULL
+                Id           TEXT    NOT NULL PRIMARY KEY,
+                TableName    TEXT    NOT NULL,
+                RecordId     TEXT,
+                Operation    TEXT    NOT NULL,
+                Agent        TEXT,
+                PerformedAt  TEXT    NOT NULL,
+                DateCreated  TEXT    NOT NULL,
+                DateModified TEXT,
+                DateDeleted  TEXT,
+                IsDeleted    INTEGER NOT NULL DEFAULT 0
             );
             """);
 
@@ -179,13 +183,16 @@ public class SystemAuditWriterTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var remaining = conn.Query<SystemAuditEntry>("SELECT * FROM System_AuditEntries ORDER BY Id;").ToList();
+        var remaining = conn.Query<SystemAuditEntry>("SELECT * FROM System_AuditEntries;").ToList();
 
         // The Sources entry must be untouched; the Widgets entry deleted; purge sentinel added.
-        Assert.AreEqual(2,           remaining.Count);
-        Assert.AreEqual("Sources",   remaining[0].TableName);
-        Assert.AreEqual("Widgets",   remaining[1].TableName, "Purge entry TableName must be the cleared table");
-        Assert.AreEqual(AuditOperation.Purge, remaining[1].Operation);
+        // Looked up by TableName rather than insertion order — Id is now a random Guid (RecordBase),
+        // not an auto-increment integer, so it no longer reflects write order.
+        Assert.AreEqual(2, remaining.Count);
+        var sourcesEntry = remaining.Single(r => r.TableName == "Sources");
+        var widgetsEntry = remaining.Single(r => r.TableName == "Widgets");
+        Assert.AreEqual(AuditOperation.Insert, sourcesEntry.Operation, "Sources entry must be untouched");
+        Assert.AreEqual(AuditOperation.Purge, widgetsEntry.Operation, "Purge entry TableName must be the cleared table");
     }
 
     // ── Repository audit writes ──────────────────────────────────────────────

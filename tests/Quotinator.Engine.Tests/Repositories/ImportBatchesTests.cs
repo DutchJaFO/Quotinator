@@ -50,7 +50,7 @@ public class ImportBatchesTests
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
-            NoOpSystemImportConflictWriter.Instance,
+            NoOpSystemImportConflictWriter.Instance, NoOpSystemChangeLogWriter.Instance,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             useBaseline ? QuotinatorMigrations.Baseline : null);

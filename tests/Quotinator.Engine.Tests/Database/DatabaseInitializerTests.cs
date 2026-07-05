@@ -54,7 +54,7 @@ public class DatabaseInitializerTests
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
-            NoOpSystemImportConflictWriter.Instance,
+            NoOpSystemImportConflictWriter.Instance, NoOpSystemChangeLogWriter.Instance,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             useBaseline ? QuotinatorMigrations.Baseline : null);
@@ -241,8 +241,8 @@ public class DatabaseInitializerTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
         await conn.ExecuteAsync(
-            "INSERT INTO System_AuditEntries (TableName, RecordId, Operation, Agent, PerformedAt) " +
-            "VALUES ('Quotes', 'test-id', 'Insert', @marker, '2026-01-01 00:00:00');",
+            "INSERT INTO System_AuditEntries (Id, TableName, RecordId, Operation, Agent, PerformedAt, DateCreated) " +
+            "VALUES (lower(hex(randomblob(16))), 'Quotes', 'test-id', 'Insert', @marker, '2026-01-01 00:00:00', '2026-01-01 00:00:00');",
             new { marker = MarkerValue });
     }
 
@@ -358,9 +358,25 @@ public class DatabaseInitializerTests
         await conn.ExecuteAsync(
             "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
         await conn.ExecuteAsync("ALTER TABLE System_SchemaVersion RENAME TO SchemaVersion;");
-        await conn.ExecuteAsync("ALTER TABLE System_AuditEntries RENAME TO AuditEntries;");
-        await conn.ExecuteAsync("DROP INDEX IF EXISTS IX_System_AuditEntries_TableName_RecordId;");
-        await conn.ExecuteAsync("DROP INDEX IF EXISTS IX_System_AuditEntries_PerformedAt;");
+
+        // Rebuild AuditEntries under its true migration-1 legacy shape (auto-increment long Id, no
+        // RecordBase columns) rather than a bare rename — a bare rename would carry over migration
+        // 5's RecordBase columns (added after this test's InitialiseAsync() call already ran the
+        // full migration chain), which didn't exist in a genuinely pre-migration-2 database.
+        await conn.ExecuteAsync("""
+            CREATE TABLE AuditEntries (
+                Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                TableName   TEXT    NOT NULL,
+                RecordId    TEXT,
+                Operation   TEXT    NOT NULL,
+                Agent       TEXT,
+                PerformedAt TEXT    NOT NULL
+            );
+            """);
+        await conn.ExecuteAsync(
+            "INSERT INTO AuditEntries (TableName, RecordId, Operation, Agent, PerformedAt) " +
+            "SELECT TableName, RecordId, Operation, Agent, PerformedAt FROM System_AuditEntries;");
+        await conn.ExecuteAsync("DROP TABLE System_AuditEntries;");
         await conn.ExecuteAsync("CREATE INDEX IX_AuditEntries_TableName_RecordId ON AuditEntries (TableName, RecordId);");
         await conn.ExecuteAsync("CREATE INDEX IX_AuditEntries_PerformedAt ON AuditEntries (PerformedAt);");
     }
@@ -389,7 +405,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(0, legacyCount, "The legacy SchemaVersion table must no longer exist after the rename");
         Assert.AreEqual(1, preservedRow, "The pre-existing version-history row must survive the rename, not be wiped");
-        Assert.AreEqual(3, db2.DataSchemaVersion, "Data migration 2 (the rename) and migration 3 (System_ImportConflicts) should both have replayed after the legacy rename");
+        Assert.AreEqual(5, db2.DataSchemaVersion, "Data migrations 2-5 (the rename, System_ImportConflicts, System_ChangeLog, RecordBase retrofit) should all have replayed after the legacy rename");
     }
 
     /// <summary>Data migration 2 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
@@ -485,7 +501,7 @@ public class DatabaseInitializerTests
         var options       = new DatabaseOptions { DbPath = dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
-            NoOpSystemImportConflictWriter.Instance,
+            NoOpSystemImportConflictWriter.Instance, NoOpSystemChangeLogWriter.Instance,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             QuotinatorMigrations.Baseline);
@@ -612,7 +628,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(3, db.DataSchemaVersion);
+        Assert.AreEqual(5, db.DataSchemaVersion);
         Assert.AreEqual(6, db.SchemaVersion);
     }
 
@@ -641,13 +657,13 @@ public class DatabaseInitializerTests
         await db2.InitialiseAsync();
 
         Assert.AreEqual(6, db2.SchemaVersion,     "All three remaining App migrations (4, 5, and 6) should have replayed");
-        Assert.AreEqual(3, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
+        Assert.AreEqual(5, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
     }
 
     /// <summary>
     /// A database created before the #143 migration-ownership split has a single System_SchemaVersion
     /// table holding the old combined history (one row per migration, spanning both Data's and the
-    /// consumer's migrations together — 9 rows for the schema this test targets: 3 Data + 6 consumer),
+    /// consumer's migrations together — 11 rows for the schema this test targets: 5 Data + 6 consumer),
     /// with no System_ConsumerSchemaVersion table at all yet. This recorded state doesn't match the
     /// actual on-disk schema (which already has the consumer's columns), so ordinary startup must fail
     /// loudly — no structural check, no message-matching recovery — leaving the database exactly as
@@ -666,10 +682,10 @@ public class DatabaseInitializerTests
             await conn.OpenAsync();
             await conn.ExecuteAsync("DROP TABLE System_ConsumerSchemaVersion;");
             await conn.ExecuteAsync("DELETE FROM System_SchemaVersion;");
-            for (var v = 1; v <= 9; v++)
+            for (var v = 1; v <= 11; v++)
                 await conn.ExecuteAsync(
                     "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (@v, @at);",
-                    new { v, at = $"2026-01-01T00:00:0{v}Z" });
+                    new { v, at = $"2026-01-01T00:00:{v:D2}Z" });
         }
 
         var db2 = CreateInitializer([AllFilesBatch()]);

@@ -274,11 +274,19 @@ var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
-builder.Services.AddSingleton<ICallerContext, CallerContext>();
+// InitiatorContext implements both interfaces over the same AsyncLocal-backed instance, so
+// SqliteRepository<T>'s existing ICallerContext.Agent reads are unaffected by IInitiatorContext's
+// introduction — same singleton, same per-async-context isolation, just a richer surface for callers
+// that need InitiatedByType/InitiatedById too.
+builder.Services.AddSingleton<InitiatorContext>();
+builder.Services.AddSingleton<ICallerContext>(sp => sp.GetRequiredService<InitiatorContext>());
+builder.Services.AddSingleton<IInitiatorContext>(sp => sp.GetRequiredService<InitiatorContext>());
 builder.Services.AddSingleton<ISystemAuditWriter, SystemAuditWriter>();
 builder.Services.AddSingleton<ISystemAuditReader, SystemAuditReader>();
 builder.Services.AddSingleton<ISystemImportConflictWriter, SystemImportConflictWriter>();
 builder.Services.AddSingleton<ISystemImportConflictReader, SystemImportConflictReader>();
+builder.Services.AddSingleton<ISystemChangeLogWriter, SystemChangeLogWriter>();
+builder.Services.AddSingleton<ISystemChangeLogReader, SystemChangeLogReader>();
 
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
@@ -325,6 +333,7 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
         sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
         sp.GetRequiredService<ISystemImportConflictWriter>(),
+        sp.GetRequiredService<ISystemChangeLogWriter>(),
         sp.GetRequiredService<ISystemAuditWriter>(),
         sp.GetRequiredService<ICallerContext>(),
         sp.GetRequiredService<ILogger<DatabaseInitializer>>(),
@@ -337,6 +346,7 @@ builder.Services.AddSingleton<Quotinator.Engine.Services.IQuoteImportService>(sp
     connectionFactory,
     sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
     sp.GetRequiredService<ISystemImportConflictWriter>(),
+    sp.GetRequiredService<ISystemChangeLogWriter>(),
     quoteSourceConverters,
     configPolicy));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();

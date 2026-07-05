@@ -43,7 +43,8 @@ public class QuoteImportServiceTests
         var importBatches = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var db = new QuotinatorDatabaseInitializer(
             _factory, options, QuotinatorMigrations.All, [], importBatches,
-            NoOpSystemImportConflictWriter.Instance, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance,
+            NoOpSystemImportConflictWriter.Instance, NoOpSystemChangeLogWriter.Instance,
+            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance,
             NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
@@ -59,6 +60,7 @@ public class QuoteImportServiceTests
 
     private SqliteQuoteImportService CreateService(
         ISystemImportConflictWriter? conflictWriter = null,
+        ISystemChangeLogWriter? changeLogWriter = null,
         IReadOnlyDictionary<string, IQuoteSourceConverter>? converters = null,
         ManifestPolicy? configPolicy = null)
     {
@@ -66,6 +68,7 @@ public class QuoteImportServiceTests
         return new SqliteQuoteImportService(
             _factory, importBatches,
             conflictWriter ?? NoOpSystemImportConflictWriter.Instance,
+            changeLogWriter ?? NoOpSystemChangeLogWriter.Instance,
             converters ?? new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase),
             configPolicy ?? new ManifestPolicy(DuplicateResolutionPolicy.NewestWins));
     }
@@ -228,6 +231,80 @@ public class QuoteImportServiceTests
         Assert.AreEqual(1, result.Summary.Skipped);
         Assert.AreEqual("Original.", await ReadQuoteTextAsync());
         Assert.AreEqual("pending", result.Conflicts.Single().Status);
+    }
+
+    // ── #56: System_ChangeLog ────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task ImportAsync_FreshDatabase_WritesCreatedChangeLogRowWithImportInitiator()
+    {
+        var changeLogWriter = new SystemChangeLogWriter(_factory);
+        var service = CreateService(changeLogWriter: changeLogWriter);
+
+        var result = await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: false);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var row = await conn.QuerySingleAsync<(string InitiatedByType, string InitiatedById, string Action)>(
+            "SELECT InitiatedByType, InitiatedById, Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id",
+            new { id = SharedId });
+
+        Assert.AreEqual("Import", row.InitiatedByType);
+        Assert.AreEqual(result.BatchId!.Value.ToString("D").ToUpperInvariant(), row.InitiatedById);
+        Assert.AreEqual("Created", row.Action);
+    }
+
+    [TestMethod]
+    public async Task ImportAsync_NewestWins_WritesModifiedChangeLogRowWithSameImportBatchId()
+    {
+        var changeLogWriter = new SystemChangeLogWriter(_factory);
+        var service = CreateService(changeLogWriter: changeLogWriter);
+        await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false);
+
+        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.NewestWins } };
+        var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var rows = (await conn.QueryAsync<(string InitiatedById, string Action)>(
+            "SELECT InitiatedById, Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id ORDER BY OccurredAt",
+            new { id = SharedId })).ToList();
+
+        Assert.AreEqual(2, rows.Count, "One Created row from the first import, one Modified row from the newest-wins rewrite");
+        Assert.AreEqual("Created", rows[0].Action);
+        Assert.AreEqual("Modified", rows[1].Action);
+        Assert.AreEqual(result.BatchId!.Value.ToString("D").ToUpperInvariant(), rows[1].InitiatedById,
+            "The Modified row's InitiatedById must be the second import's own batch, not the first");
+    }
+
+    [TestMethod]
+    public async Task ImportAsync_Skip_WritesNoModifiedChangeLogRow()
+    {
+        var changeLogWriter = new SystemChangeLogWriter(_factory);
+        var service = CreateService(changeLogWriter: changeLogWriter);
+        await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false);
+
+        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Skip } };
+        await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var actions = (await conn.QueryAsync<string>(
+            "SELECT Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id",
+            new { id = SharedId })).ToList();
+
+        CollectionAssert.AreEqual(new[] { "Created" }, actions, "Skip never executes the UPDATE, so no Modified row should exist");
+    }
+
+    [TestMethod]
+    public async Task ImportAsync_PreviewWithNewRow_NoChangeLogRowPersisted()
+    {
+        var changeLogWriter = new SystemChangeLogWriter(_factory);
+        var service = CreateService(changeLogWriter: changeLogWriter);
+
+        await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: true);
+
+        Assert.AreEqual(0, await CountAsync("System_ChangeLog"), "Rolled back — no change-log row persisted for a preview run");
     }
 
     // ── Preview ──────────────────────────────────────────────────────────────

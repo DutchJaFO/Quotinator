@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 57, 58, 62, 63, 64, 65, 140, 141, 143],
+    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -38,12 +38,14 @@
       "Neuer Endpunkt `POST /api/v1/quotes/import` importiert eine einzelne Quelldatei (JSON oder, über ein neues Konverter-Plugin, CSV) und verwendet dabei dieselbe Duplikaterkennung wie beim Seeding zum Start — unterstützt eine Überschreibung von `duplicateResolution` pro Anfrage und eine optionale `converter`-Auswahl",
       "Neuer Endpunkt `POST /api/v1/quotes/import/preview` führt dieselbe Importpipeline aus, macht aber jede Schreiboperation rückgängig, sodass Konflikte und Fehler vor dem eigentlichen Übernehmen geprüft werden können",
       "Manifest-Dateieinträge (`data/sources/manifest.json` und Benutzer-Import-Manifeste) können nun eine eigene `duplicateResolution`-Überschreibung angeben, die Vorrang vor den manifestweiten und konfigurierten Standardwerten hat",
-      "Zitate, Quellen, Charaktere und Personen haben jetzt ein `IsComplete`-Kennzeichen und eine `NoValueKnown`-Liste bestätigt leerer Felder in der Datenbank, als Grundlage für künftige Datenqualitäts-Werkzeuge; noch nicht über die API oder die Verwaltungsoberfläche zugänglich, und wird nie zurückgesetzt, wenn ein bestehender Datensatz durch eine Konfliktlösungsrichtlinie überschrieben wird"
+      "Zitate, Quellen, Charaktere und Personen haben jetzt ein `IsComplete`-Kennzeichen und eine `NoValueKnown`-Liste bestätigt leerer Felder in der Datenbank, als Grundlage für künftige Datenqualitäts-Werkzeuge; noch nicht über die API oder die Verwaltungsoberfläche zugänglich, und wird nie zurückgesetzt, wenn ein bestehender Datensatz durch eine Konfliktlösungsrichtlinie überschrieben wird",
+      "Ein neues internes Änderungsprotokoll erfasst jedes Zitat, jede Quelle und jeden Charakter, der beim Seeding oder Import erstellt oder geändert wurde, einschließlich des Import-Batches, der es eingeführt hat — als Grundlage für eine zukünftige Änderungsverlaufsansicht; noch nicht über die API oder die Verwaltungsoberfläche zugänglich"
     ],
     "changed": [
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",
       "API-Antworten enthalten keine Eigenschaften mehr mit einem `null`-Wert, was die Größe der Antwort verringert",
-      "Die standardmäßige Konfliktlösungsrichtlinie wurde von `skip` (die zuerst gesehene Version behalten) auf `newest-wins` (die neueste Version behalten) geändert, wenn nichts anderes konfiguriert ist"
+      "Die standardmäßige Konfliktlösungsrichtlinie wurde von `skip` (die zuerst gesehene Version behalten) auf `newest-wins` (die neueste Version behalten) geändert, wenn nichts anderes konfiguriert ist",
+      "Interne Audit- und Duplikatkonflikt-Datensätze verfügen jetzt über dieselbe Erstellungs-/Änderungsverfolgung wie jeder andere Datenbankeintrag, aus Konsistenzgründen; bestehende Installationen werden beim nächsten Start automatisch aktualisiert, ohne dass eine Aktion erforderlich ist"
     ],
     "fixed": [
       "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für jede gebündelte Datei, ob extern über eine Manifest-URL bezogen oder intern kuratiert) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch falsch erfasst",

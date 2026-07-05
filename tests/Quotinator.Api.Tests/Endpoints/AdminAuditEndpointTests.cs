@@ -90,7 +90,6 @@ public class AdminAuditEndpointTests
     {
         var entry = new SystemAuditEntry
         {
-            Id          = 1,
             TableName   = "Quotes",
             RecordId    = Guid.Empty.ToString("D").ToUpperInvariant(),
             Operation   = AuditOperation.Insert,

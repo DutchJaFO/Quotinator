@@ -27,26 +27,34 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
         new SchemaMigration { Version = 2, Sql = AuditMigrations.RenameAuditEntriesToSystemAuditEntries },
         new SchemaMigration { Version = 3, Sql = ImportConflictMigrations.CreateImportConflictsTable },
+        new SchemaMigration { Version = 4, Sql = ChangeLogMigrations.CreateChangeLogTable },
+        new SchemaMigration { Version = 5, Sql = AuditMigrations.MigrateToRecordBase },
     ];
 
-    // Data's own baseline fragment — creates System_AuditEntries and System_ImportConflicts
-    // directly under their final names for a genuinely fresh database, skipping System_AuditEntries'
-    // historical create-then-rename dance entirely (System_ImportConflicts never had a legacy name
-    // to begin with). Kept in sync with DataOwnedMigrations by this project's own schema-drift test.
+    // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and
+    // System_ChangeLog directly under their final names for a genuinely fresh database, skipping
+    // System_AuditEntries' historical create-then-rename-then-RecordBase-migrate dance entirely (the
+    // other two never had a legacy name to begin with, and were never shipped pre-RecordBase). All
+    // three carry RecordBase's DateCreated/DateModified/DateDeleted/IsDeleted per ADR 002. Kept in
+    // sync with DataOwnedMigrations by this project's own schema-drift test.
     private const string DataBaselineSql = """
         CREATE TABLE IF NOT EXISTS System_AuditEntries (
-            Id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            TableName   TEXT    NOT NULL,
-            RecordId    TEXT,
-            Operation   TEXT    NOT NULL,
-            Agent       TEXT,
-            PerformedAt TEXT    NOT NULL
+            Id           TEXT    NOT NULL PRIMARY KEY,
+            TableName    TEXT    NOT NULL,
+            RecordId     TEXT,
+            Operation    TEXT    NOT NULL,
+            Agent        TEXT,
+            PerformedAt  TEXT    NOT NULL,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS IX_System_AuditEntries_TableName_RecordId ON System_AuditEntries (TableName, RecordId);
         CREATE INDEX IF NOT EXISTS IX_System_AuditEntries_PerformedAt ON System_AuditEntries (PerformedAt);
 
         CREATE TABLE IF NOT EXISTS System_ImportConflicts (
-            Id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            Id            TEXT    NOT NULL PRIMARY KEY,
             BatchId       TEXT    NOT NULL,
             EntityType    TEXT    NOT NULL,
             EntityId      TEXT,
@@ -56,10 +64,34 @@ public class DatabaseInitializer : IDatabaseInitializer
             Status        TEXT    NOT NULL,
             MergedFields  TEXT,
             DetectedAt    TEXT    NOT NULL,
-            ResolvedAt    TEXT
+            ResolvedAt    TEXT,
+            DateCreated   TEXT    NOT NULL,
+            DateModified  TEXT,
+            DateDeleted   TEXT,
+            IsDeleted     INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
+
+        CREATE TABLE IF NOT EXISTS System_ChangeLog (
+            Id               TEXT NOT NULL PRIMARY KEY,
+            EntityType       TEXT NOT NULL,
+            EntityId         TEXT NOT NULL,
+            InitiatedByType  TEXT NOT NULL
+                             CHECK (InitiatedByType IN ('Seed','Import','WriteEndpoint','Enrichment')),
+            InitiatedById    TEXT,
+            Action           TEXT NOT NULL
+                             CHECK (Action IN ('Created','Modified','SoftDelete','HardDelete')),
+            Field            TEXT,
+            OldValue         TEXT,
+            NewValue         TEXT,
+            OccurredAt       TEXT NOT NULL,
+            DateCreated      TEXT NOT NULL,
+            DateModified     TEXT,
+            DateDeleted      TEXT,
+            IsDeleted        INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS IX_System_ChangeLog_Entity ON System_ChangeLog (EntityType, EntityId, OccurredAt DESC);
         """;
 
     private readonly IDbConnectionFactory           _factory;

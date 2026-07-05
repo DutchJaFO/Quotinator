@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-05 14:17 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-05 20:34 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -37,11 +37,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New `POST /api/v1/quotes/import/preview` endpoint runs the identical import pipeline but rolls back every write, so conflicts and errors can be reviewed before committing
 - Manifest file entries (`data/sources/manifest.json` and user import manifests) can now declare their own `duplicateResolution` override, taking priority over the manifest-wide and configured defaults
 - Quotes, sources, characters, and people now have an `IsComplete` flag and a `NoValueKnown` list of confirmed-empty fields in the database, laying the groundwork for future data-quality tooling; not yet exposed via the API or management UI, and never reset when an existing record is rewritten by a duplicate-resolution policy
+- A new internal change log records every quote, source, and character created or modified during seeding and import, including which import batch introduced it — laying the groundwork for a future change-history view; not yet exposed via the API or management UI
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
 - API responses no longer include properties with a `null` value, reducing response payload size
 - The default duplicate-resolution policy changed from `skip` (keep the first version seen) to `newest-wins` (keep the latest version) when nothing overrides it
+- Internal audit and duplicate-conflict records now carry the same creation/modification tracking as every other database record, for consistency; existing installations upgrade automatically on next startup with no action needed
 
 ### Fixed
 - ImportBatch rows created during seeding now record the correct `Type` (`Seed` for any bundled file, whether externally sourced with a manifest URL or internally authored) and persist the source URL; previously every seeded batch was recorded incorrectly

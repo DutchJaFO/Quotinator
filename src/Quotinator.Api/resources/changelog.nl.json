@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 57, 58, 62, 63, 64, 65, 140, 141, 143],
+    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -38,12 +38,14 @@
       "Nieuw eindpunt `POST /api/v1/quotes/import` importeert één bronbestand (JSON, of CSV via een nieuwe convertorplug-in), waarbij dezelfde duplicaatdetectie wordt gebruikt als bij het seeden bij het opstarten — ondersteunt een overschrijving van `duplicateResolution` per aanvraag en een optionele `converter`-keuze",
       "Nieuw eindpunt `POST /api/v1/quotes/import/preview` voert dezelfde importpijplijn uit, maar maakt alle wijzigingen ongedaan, zodat conflicten en fouten kunnen worden beoordeeld voordat er iets wordt vastgelegd",
       "Manifestbestandsvermeldingen (`data/sources/manifest.json` en gebruikersimportmanifesten) kunnen nu hun eigen `duplicateResolution`-overschrijving opgeven, die voorrang heeft op de manifestbrede en geconfigureerde standaardwaarden",
-      "Citaten, bronnen, personages en personen hebben nu een `IsComplete`-markering en een `NoValueKnown`-lijst van bevestigd lege velden in de database, als basis voor toekomstige datakwaliteitstools; nog niet beschikbaar via de API of het beheerpaneel, en wordt nooit teruggezet wanneer een bestaand record wordt overschreven door een duplicaatoplossingsbeleid"
+      "Citaten, bronnen, personages en personen hebben nu een `IsComplete`-markering en een `NoValueKnown`-lijst van bevestigd lege velden in de database, als basis voor toekomstige datakwaliteitstools; nog niet beschikbaar via de API of het beheerpaneel, en wordt nooit teruggezet wanneer een bestaand record wordt overschreven door een duplicaatoplossingsbeleid",
+      "Een nieuw intern wijzigingslogboek registreert elk citaat, elke bron en elk personage dat tijdens het seeden of importeren is aangemaakt of gewijzigd, inclusief welke importbatch het heeft geïntroduceerd — als basis voor een toekomstig wijzigingsoverzicht; nog niet beschikbaar via de API of het beheerpaneel"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
       "API-antwoorden bevatten niet langer eigenschappen met een `null`-waarde, wat de omvang van de respons verkleint",
-      "Het standaardbeleid voor het oplossen van duplicaten is gewijzigd van `skip` (de eerst geziene versie behouden) naar `newest-wins` (de nieuwste versie behouden) wanneer niets dit overschrijft"
+      "Het standaardbeleid voor het oplossen van duplicaten is gewijzigd van `skip` (de eerst geziene versie behouden) naar `newest-wins` (de nieuwste versie behouden) wanneer niets dit overschrijft",
+      "Interne audit- en duplicaatconflictgegevens hebben nu dezelfde aanmaak-/wijzigingsregistratie als elk ander databaserecord, voor consistentie; bestaande installaties worden bij de volgende opstart automatisch bijgewerkt, zonder dat actie nodig is"
     ],
     "fixed": [
       "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor elk gebundeld bestand, of het nu extern is aangeleverd met een manifest-URL of intern is samengesteld) en bewaren de bron-URL; voorheen werd elke geseede batch onjuist geregistreerd",

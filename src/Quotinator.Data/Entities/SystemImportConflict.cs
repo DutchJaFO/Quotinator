@@ -10,9 +10,16 @@ namespace Quotinator.Data.Entities;
 /// left pending for manual review.
 /// </summary>
 /// <remarks>
-/// Does not extend <see cref="RecordBase"/> — like <see cref="SystemAuditEntry"/>, these rows
-/// are append-only (a resolved conflict is never deleted, only its <see cref="Status"/>/<see cref="ResolvedAt"/>
-/// updated). <c>ExistingValue</c>/<c>IncomingValue</c>/<c>MergedFields</c> are opaque JSON blobs — this
+/// Extends <see cref="RecordBase"/> per ADR 002 ("RecordBase applies to all tables without
+/// exception") — <see cref="RecordBase.DateModified"/>/<see cref="RecordBase.DateDeleted"/>/
+/// <see cref="RecordBase.IsDeleted"/> are never meaningfully used here (a resolved conflict's own
+/// <see cref="Status"/>/<see cref="ResolvedAt"/> already capture its one real state transition, and
+/// rows are never soft-deleted), and <see cref="RecordBase.DateCreated"/> duplicates
+/// <see cref="DetectedAt"/> — this redundancy is the ADR's own accepted trade-off. Unreleased at the
+/// time of this change, so the column-type change (auto-increment <c>long</c> -&gt; Guid) was made by
+/// editing <c>ImportConflictMigrations.CreateImportConflictsTable</c> directly rather than a new
+/// migration (contrast <see cref="SystemAuditEntry"/>, already shipped in v1.7.2, which needed one).
+/// <c>ExistingValue</c>/<c>IncomingValue</c>/<c>MergedFields</c> are opaque JSON blobs — this
 /// project never deserializes them; the consuming project (e.g. Quotinator.Engine) produces and later
 /// diffs that content, since this project has no dependency on any specific domain schema.
 /// <para>
@@ -26,12 +33,8 @@ namespace Quotinator.Data.Entities;
 /// </para>
 /// </remarks>
 [Table("System_ImportConflicts")]
-public sealed class SystemImportConflict
+public sealed class SystemImportConflict : RecordBase
 {
-    /// <summary>Auto-increment surrogate key assigned by SQLite.</summary>
-    [Key]
-    public long Id { get; init; }
-
     /// <summary>Loose reference to the import batch this conflict was detected during. No FK — this project doesn't know the consumer's batch table name.</summary>
     public string BatchId { get; init; } = string.Empty;
 

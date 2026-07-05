@@ -56,12 +56,16 @@ public class LinkRepositoryTests
                 UNIQUE (WidgetId, TagId)
             );
             CREATE TABLE System_AuditEntries (
-                Id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                TableName   TEXT    NOT NULL,
-                RecordId    TEXT,
-                Operation   TEXT    NOT NULL,
-                Agent       TEXT,
-                PerformedAt TEXT    NOT NULL
+                Id           TEXT    NOT NULL PRIMARY KEY,
+                TableName    TEXT    NOT NULL,
+                RecordId     TEXT,
+                Operation    TEXT    NOT NULL,
+                Agent        TEXT,
+                PerformedAt  TEXT    NOT NULL,
+                DateCreated  TEXT    NOT NULL,
+                DateModified TEXT,
+                DateDeleted  TEXT,
+                IsDeleted    INTEGER NOT NULL DEFAULT 0
             );
             """);
 
