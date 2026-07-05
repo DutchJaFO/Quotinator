@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-04 23:42 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-05 09:52 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Quotinator can now automatically refresh its bundled and imported quote sources from their original locations, keeping data up to date without needing a new release.
 - Duplicate quotes found during import can now be merged field by field instead of only being kept or replaced outright, and every duplicate encountered is now recorded for future review.
 - The default behaviour for duplicate quotes changed from keeping the first version seen to keeping the newest version — matching what most people would expect when a source file is corrected or updated.
+- Quotes can now be imported one file at a time (JSON or CSV) through a new API endpoint, with a preview mode that shows exactly what would happen before anything is written.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -32,6 +33,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Five configurable duplicate-resolution policies — `skip`, `newest-wins`, `merge-ours`, `merge-theirs`, `review` — set via `Quotinator__DefaultConflictPolicy`, with per-entity-type overrides and a per-source manifest override
 - New `System_ImportConflicts` table records every duplicate detected during seeding — which policy was applied, and (for the two merge policies) which side each field's value came from
 - `ImportBatches` now records which conflict-resolution policy was active for each import batch
+- New `POST /api/v1/quotes/import` endpoint imports a single source file (JSON, or CSV via a new converter plugin), reusing the same duplicate-detection engine as startup seeding — supports a per-request `duplicateResolution` override and an optional `converter` selection
+- New `POST /api/v1/quotes/import/preview` endpoint runs the identical import pipeline but rolls back every write, so conflicts and errors can be reviewed before committing
+- Manifest file entries (`data/sources/manifest.json` and user import manifests) can now declare their own `duplicateResolution` override, taking priority over the manifest-wide and configured defaults
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before

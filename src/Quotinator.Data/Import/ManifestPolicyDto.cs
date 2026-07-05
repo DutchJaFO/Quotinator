@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Quotinator.Data.Import;
 
 /// <summary>Wire model for the <c>duplicateResolution</c> section of <c>manifest.json</c>. See <see cref="ManifestDto"/>.</summary>
-internal sealed class ManifestPolicyDto
+public sealed class ManifestPolicyDto
 {
     /// <summary>Policy applied to all entity types that do not have a type-specific override. Defaults to <see cref="DuplicateResolutionPolicy.NewestWins"/> when omitted.</summary>
     [JsonPropertyName("default")]

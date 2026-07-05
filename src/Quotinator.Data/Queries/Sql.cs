@@ -133,6 +133,30 @@ internal static class Sql
         internal static string SelectById()
             => $"{SelectBase} WHERE q.Id = @id AND q.IsDeleted = 0";
 
+        /// <summary>
+        /// Raw (untranslated) single-quote lookup by Id — no translation JOINs, no <c>@lang</c> parameter.
+        /// Used by merge/conflict-resolution logic that needs the original stored field values to compare
+        /// against an incoming record, never a translated view. Unlike <see cref="SelectById()"/>, this
+        /// also returns <c>Type</c> (needed to rebuild a full field map for merging).
+        /// </summary>
+        internal static string SelectRawById()
+            => """
+               SELECT
+                   q.Id,
+                   q.QuoteText,
+                   q.OriginalLanguage,
+                   s.Title AS Source,
+                   s.Date,
+                   s.Type,
+                   c.Name  AS Character,
+                   p.Name  AS Author
+               FROM   Quotes          q
+               JOIN   Sources         s ON s.Id = q.SourceId    AND s.IsDeleted = 0
+               LEFT JOIN Characters   c ON c.Id = q.CharacterId AND c.IsDeleted = 0
+               LEFT JOIN People       p ON p.Id = q.PersonId    AND p.IsDeleted = 0
+               WHERE q.Id = @id AND q.IsDeleted = 0
+               """;
+
         /// <summary>Random selection with dynamic filter and row count.</summary>
         internal static string SelectRandom(string whereClause)
             => $"{SelectBase} {whereClause} ORDER BY RANDOM() LIMIT @count";
@@ -217,6 +241,8 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Characters WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Characters;";
+        internal const string SelectIdBySourceAndName =
+            "SELECT Id FROM Characters WHERE SourceId = @sourceId AND Name = @name AND IsDeleted = 0;";
     }
 
     /// <summary>People table.</summary>
@@ -224,6 +250,7 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM People WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM People;";
+        internal const string SelectIdByName = "SELECT Id FROM People WHERE Name = @name AND IsDeleted = 0;";
     }
 
     /// <summary>Sources table.</summary>
@@ -231,6 +258,8 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Sources WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Sources;";
+        internal const string SelectIdByTitleAndType =
+            "SELECT Id FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
     }
 
     /// <summary>ImportBatches table.</summary>

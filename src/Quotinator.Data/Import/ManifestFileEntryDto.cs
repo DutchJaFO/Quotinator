@@ -2,8 +2,13 @@ using System.Text.Json.Serialization;
 
 namespace Quotinator.Data.Import;
 
-/// <summary>Wire model for a single entry in <c>manifest.json</c>'s <c>files</c> array. See <see cref="ManifestDto"/>.</summary>
-internal sealed class ManifestFileEntryDto
+/// <summary>
+/// Wire model for a single entry in <c>manifest.json</c>'s <c>files</c> array. See <see cref="ManifestDto"/>.
+/// Inherits <see cref="SourceImportSettingsDto.Converter"/> and <see cref="SourceImportSettingsDto.DuplicateResolution"/>
+/// (the latter overriding the manifest's own top-level <c>duplicateResolution</c> for this file specifically) —
+/// both serialize as flat sibling properties on this type, not nested.
+/// </summary>
+internal sealed class ManifestFileEntryDto : SourceImportSettingsDto
 {
     /// <summary>Filename relative to this manifest's directory.</summary>
     [JsonPropertyName("file")]
@@ -33,15 +38,4 @@ internal sealed class ManifestFileEntryDto
     /// <summary>GitHub coordinates this source is fetched from, if hosted there. <see cref="Url"/>/<see cref="DownloadUrl"/> are computed from these, not set directly.</summary>
     [JsonPropertyName("github")]
     public ManifestGithubDto? Github { get; init; }
-
-    /// <summary>
-    /// Name of a compiled <c>IQuoteSourceConverter</c> plugin (matched by its <c>Name</c> property) that
-    /// converts this source's raw upstream format to Quotinator's canonical schema before it is cached.
-    /// Only meaningful alongside <see cref="DownloadUrl"/>/<see cref="Github"/>. Both bundled and
-    /// user-imports manifests may declare this field — an unrecognised name simply fails closed (falls
-    /// back like a network failure) rather than executing anything, since only names matching a plugin
-    /// actually compiled into the running image are ever looked up.
-    /// </summary>
-    [JsonPropertyName("converter")]
-    public string? Converter { get; init; }
 }

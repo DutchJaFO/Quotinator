@@ -7,10 +7,12 @@ namespace Quotinator.Data.Import;
 /// <param name="RefreshIntervalHours">Optional per-source override of <c>Quotinator__SourceUpdateIntervalHours</c> — how long a downloaded copy of this file is considered fresh. Only meaningful alongside <paramref name="DownloadUrl"/>.</param>
 /// <param name="DownloadTarget">Optional per-source override of which cache folder (internal or external) a downloaded copy of this file is written to. When <c>null</c>, the default is derived from the owning <see cref="SeedBatch"/>'s <see cref="SeedBatchOrigin"/>.</param>
 /// <param name="Converter">Optional name of an <see cref="IQuoteSourceConverter"/> plugin that transforms this source's raw upstream format into Quotinator's canonical schema before it is cached. Only meaningful alongside <paramref name="DownloadUrl"/>.</param>
+/// <param name="Policy">Optional per-file duplicate-resolution policy override, taking priority over the owning <see cref="SeedBatch"/>'s <see cref="SeedBatch.Policy"/> when present.</param>
 public record SeedFile(
     string FilePath,
     string? Url,
     string? DownloadUrl = null,
     int? RefreshIntervalHours = null,
     DownloadTarget? DownloadTarget = null,
-    string? Converter = null);
+    string? Converter = null,
+    ManifestPolicy? Policy = null);

@@ -12,20 +12,8 @@
       "description": "JSON Schema reference — used by editors for validation and IntelliSense."
     },
     "duplicateResolution": {
-      "type": "object",
-      "description": "How the seeder handles duplicate records when the same primary key appears in more than one file. Omit to inherit the policy from application configuration (Quotinator:DefaultConflictPolicy, with per-entity-type overrides under Quotinator:DuplicateResolution:*). When present, this section overrides all configuration-level settings for this directory.",
-      "additionalProperties": false,
-      "properties": {
-        "default": {
-          "$ref": "#/$defs/policy",
-          "description": "Policy applied to all entity types that do not have a type-specific override."
-        },
-        "quotes":       { "$ref": "#/$defs/policy" },
-        "sources":      { "$ref": "#/$defs/policy" },
-        "characters":   { "$ref": "#/$defs/policy" },
-        "people":       { "$ref": "#/$defs/policy" },
-        "translations": { "$ref": "#/$defs/policy" }
-      }
+      "$ref": "#/$defs/policySet",
+      "description": "How the seeder handles duplicate records when the same primary key appears in more than one file. Omit to inherit the policy from application configuration (Quotinator:DefaultConflictPolicy, with per-entity-type overrides under Quotinator:DuplicateResolution:*). When present, this section overrides all configuration-level settings for this directory, unless a listed file entry sets its own duplicateResolution — that wins over this manifest-level section for that file specifically."
     },
     "files": {
       "type": "array",
@@ -71,6 +59,10 @@
             "minLength": 1,
             "description": "Name of a compiled converter plugin (an IQuoteSourceConverter implementation's Name) that transforms this source's raw upstream format into Quotinator's canonical quote schema before it is cached. Only meaningful alongside downloadUrl/github. The referenced converter must be one of the plugins compiled into the running image — an unrecognised name causes the download to fail closed (falls back like a network failure, never crashes startup)."
           },
+          "duplicateResolution": {
+            "$ref": "#/$defs/policySet",
+            "description": "Duplicate-resolution policy overriding this manifest's own top-level duplicateResolution for this file specifically. Omit to inherit the manifest-level policy (which itself falls back to application configuration when absent). This is the highest-priority tier — file, then manifest, then configuration."
+          },
           "github": {
             "type": "object",
             "additionalProperties": false,
@@ -101,6 +93,21 @@
       "type": "string",
       "enum": ["skip", "newest-wins", "merge-ours", "merge-theirs", "review"],
       "description": "skip — keep the first occurrence and ignore later files with the same ID. newest-wins — replace the existing record with the version from the later file. merge-ours — auto-fill blank fields from either side; keep the existing value on a true conflict. merge-theirs — auto-fill blank fields from either side; take the incoming value on a true conflict. review — do not auto-resolve; behaves like skip today, reserved for a future manual review workflow."
+    },
+    "policySet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "$ref": "#/$defs/policy",
+          "description": "Policy applied to all entity types that do not have a type-specific override."
+        },
+        "quotes":       { "$ref": "#/$defs/policy" },
+        "sources":      { "$ref": "#/$defs/policy" },
+        "characters":   { "$ref": "#/$defs/policy" },
+        "people":       { "$ref": "#/$defs/policy" },
+        "translations": { "$ref": "#/$defs/policy" }
+      }
     }
   }
 }

@@ -25,6 +25,7 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Changelog.Services;
+using Quotinator.Converters.Csv;
 using Quotinator.Converters.NikhilNamal17;
 using Quotinator.Converters.Vilaboim;
 using Quotinator.Core.Import;
@@ -296,6 +297,7 @@ var quoteSourceConverters = new IQuoteSourceConverter[]
 {
     new VilaboimMovieQuotesConverter(),
     new NikhilNamal17PopularMovieQuotesConverter(),
+    new CsvQuoteConverter(),
 }.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
 
 // Real canonical-schema validation needs Quotinator.Core's SourceQuote, but Quotinator.Data (home of
@@ -330,6 +332,12 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         QuotinatorMigrations.Baseline);
 });
 builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Engine.Services.SqliteQuoteService(connectionFactory));
+builder.Services.AddSingleton<Quotinator.Engine.Services.IQuoteImportService>(sp => new Quotinator.Engine.Services.SqliteQuoteImportService(
+    connectionFactory,
+    sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
+    sp.GetRequiredService<ISystemImportConflictWriter>(),
+    quoteSourceConverters,
+    configPolicy));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));

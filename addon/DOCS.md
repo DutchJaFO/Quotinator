@@ -27,6 +27,8 @@ The REST API is accessible in two ways:
 | `GET /api/v1/quotes` | All quotes, paginated; `type`, `genre`, `yearFrom`, `yearTo`, `year`, `decade` all supported |
 | `GET /api/v1/quotes/{id}` | Quote by UUID |
 | `GET /api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
+| `POST /api/v1/quotes/import` | Import one source file (JSON or, via `converter: "csv"` in `settings`, CSV) — same duplicate-detection engine as startup seeding. Multipart fields: `file` (required), `settings` (optional JSON: `converter`, `duplicateResolution`, `enrich`). Returns a summary/conflicts/errors envelope (requires `X-Api-Key`) |
+| `POST /api/v1/quotes/import/preview` | Same as `/import` but rolls back every write — nothing is persisted. Iterate here until the response looks right, then call `/import` with the same payload (requires `X-Api-Key`) |
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/version` | Running version |
 | `GET /api/v1/admin/database/seed/preview` | Preview what a reseed would import — no data is changed. Reflects any already-downloaded source cache, but never triggers a network call itself. Each file includes `isValidJson` (whether it parsed at all) and, when it has a `downloadUrl`, `refreshOutcome`/`lastRefreshedAtUtc` (requires `X-Api-Key`) |

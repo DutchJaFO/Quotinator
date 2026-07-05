@@ -24,4 +24,9 @@ public static class ApiMessages
     public const string YearParamNotInteger        = "ErrorYearParamNotInteger";
     public const string SeedFileMissing            = "ErrorSeedFileMissing";
     public const string SeedFileInvalidJson        = "ErrorSeedFileInvalidJson";
+    public const string ImportFileMissing          = "ErrorImportFileMissing";
+    public const string ImportSettingsInvalid      = "ErrorImportSettingsInvalid";
+    public const string ImportUnknownConverter     = "ErrorImportUnknownConverter";
+    public const string ImportFileInvalid          = "ErrorImportFileInvalid";
+    public const string ImportEnrichNotImplemented = "ErrorImportEnrichNotImplemented";
 }

@@ -1,51 +1,41 @@
 # #65 — Import endpoint: preview / dry-run
 
-**Status:** In progress
-**GitHub issue:** #65  
-**Depends on:** #45 (import endpoint)
+**Status:** Waiting for release
+
+**Tiers required:** T1, T2
+
+**GitHub issue:** #65
+
+**Depends on:** #45
 
 ---
 
-## Spec requirements
+## Spec requirements (reconciled — see #45's plan doc Scope changes)
 
-The spec's preview capability is the `preview=true` query parameter on the import endpoint (`POST /api/v1/quotes/import?preview=true`). It should:
+The original spec described a `preview=true` query parameter on the import endpoint. #45's implementation instead ships preview as its own dedicated endpoint sharing #45's request/response contract:
 
-1. Accept the same payload as the import endpoint
-2. Run all validation and conflict detection
-3. Return the full result shape (summary with imported/skipped/conflicts/errors counts)
-4. Not write any records to the database (transaction rollback)
+1. `POST /api/v1/quotes/import/preview` accepts the identical `multipart/form-data` payload (`file` + optional `settings`) as `POST /api/v1/quotes/import`
+2. Runs the full pipeline — file parsing/conversion, duplicate detection, all 5 conflict-resolution policies, row-level error tolerance
+3. Returns the identical `ImportResultResponse` shape, with `preview: true` and `batchId: null`
+4. Rolls back every write — no `ImportBatch` row, no quote/source/character/person rows, no `System_ImportConflicts` rows
 
-Response shape identical to `POST /api/v1/quotes/import` (see #45 plan).
+There is no `conflicts.sameId`/`conflicts.sameText` split — #45's matching is purely Id-based (#64's engine), so a text-based `sameText` category never applies. `conflicts[]` mirrors a `System_ImportConflicts` row directly instead.
 
 ---
 
 ## What currently exists
 
-`GET /api/v1/admin/database/seed/preview` — returns a list of source files that would be scanned at startup with estimated quote counts and cross-file duplicate detection. This satisfies a different need (startup source preview) and is **not** the spec's preview feature.
-
-The current implementation does not conflict with #65 — it can coexist. But it does not satisfy the issue requirements on its own.
+`GET /api/v1/admin/database/seed/preview` — returns a list of source files that would be scanned at startup with estimated quote counts and cross-file duplicate detection. This satisfies a different need (startup source preview) and is **not** this issue's preview feature; the two coexist without conflict.
 
 ---
 
-## Step status
+## Steps
 
-1. [x] `GET /api/v1/admin/database/seed/preview` — startup source preview (different feature, keep it)
-2. [ ] `POST /api/v1/quotes/import?preview=true` — transaction-rollback preview on import payload (needs #45)
+### 1. Startup source preview
+**Status:** ✅ Done (pre-existing) — `GET /api/v1/admin/database/seed/preview`, unaffected by this issue.
 
----
-
-## Remaining work
-
-This issue is a subset of #45. When #45 is implemented, the `preview=true` query parameter must:
-
-1. Open a database transaction
-2. Run the full import logic (validation, conflict detection, inserts)
-3. Roll back the transaction
-4. Return the result summary (what *would* have happened)
-
-No additional endpoint is needed — `preview=true` is a query parameter on the import endpoint.
-
-This issue can be closed when #45 is complete and the `preview=true` path is tested.
+### 2. Live import preview endpoint
+**Status:** ✅ Done — implemented as part of #45. `POST /api/v1/quotes/import/preview` shares #45's `SqliteQuoteImportService.ImportAsync(..., preview: true, ...)` call, which rolls back the shared `SqliteUnitOfWork` transaction at the end regardless of outcome. See `45-import-endpoint-plan.md` for the full implementation detail — this issue has no code of its own beyond the route registration shared with #45.
 
 ---
 
@@ -53,9 +43,13 @@ This issue can be closed when #45 is complete and the `preview=true` path is tes
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `POST /api/v1/quotes/import?preview=true` runs full pipeline without committing (transaction rollback) | Unit test | Requires #45 |
-| 2 | ❌ | Response includes `summary` with `new`, `skipped`, `conflicts.sameId`, `conflicts.sameText` counts | Unit test | Requires #45 |
-| 3 | ❌ | `sameId` conflicts include `fieldDiffs` listing only changed fields | Unit test | Requires #45 |
-| 4 | ❌ | `sameText` conflicts have no `fieldDiffs` | Unit test | Requires #45 |
-| 5 | ❌ | Active conflict policy (#64) applied during preview; policy-skipped records counted in `skipped` | Unit test | Requires #45 and #64 |
-| 6 | ❌ | No `ImportBatch` row created for a preview run | Unit test | Requires #45 and #58 |
+| 1 | ✅ | `POST /api/v1/quotes/import/preview` runs the full pipeline without committing | Unit test | `QuoteImportServiceTests.ImportAsync_Preview_LeavesZeroTrace`, `ImportAsync_PreviewWithConflict_NoConflictRowsPersisted` |
+| 2 | ✅ | Response includes `summary` (`total`/`imported`/`updated`/`skipped`/`errors`) and `conflicts[]` (Id-based, mirroring `System_ImportConflicts`) — no `sameId`/`sameText` split | Unit test | `QuoteImportServiceTests.ImportAsync_PreviewWithConflict_NoConflictRowsPersisted` (asserts `Conflicts.Count`); `ImportEndpointTests.ImportPreview_CorrectKeyAndValidFile_Returns200WithPreviewTrue` |
+| 3 | N/A | `sameId` conflicts include `fieldDiffs` — superseded; no `sameId`/`sameText` split exists (see Scope changes above) | N/A | Superseded by #45's Id-only matching design |
+| 4 | N/A | `sameText` conflicts have no `fieldDiffs` — superseded, `sameText` never applies | N/A | Superseded |
+| 5 | ✅ | Active conflict policy (#64) applied during preview; policy-skipped records counted in `skipped` | Unit test | `QuoteImportServiceTests.ImportAsync_Skip_KeepsExistingRowUnchanged`, `ImportAsync_Review_BehavesLikeSkip` (both run with `preview` covered by the same code path as `ImportAsync_PreviewWithConflict_NoConflictRowsPersisted`) |
+| 6 | ✅ | No `ImportBatch` row created for a preview run | Unit test | `QuoteImportServiceTests.ImportAsync_Preview_LeavesZeroTrace` (asserts `ImportBatches` count is 0 and `BatchId` is null) |
+| 7 | ⬜ | T1 — app starts in VS without error; `/import/preview` usable | Live | Not yet run — requires a user-run VS session |
+| 8 | ✅ | T2 — Docker smoke test | Live | `POST /api/v1/quotes/import/preview` against the built image (CSV file, `converter: "csv"`, `duplicateResolution.default: "merge-theirs"`) returned `200` with `preview: true`, correct summary, and correctly kebab-cased `conflictPolicy: "merge-theirs"`. Confirmed 2026-07-05 — see `45-import-endpoint-plan.md` for the full T2 log |
+
+**Full solution `dotnet test --configuration Release`: 814 tests, 0 warnings, 0 errors.**

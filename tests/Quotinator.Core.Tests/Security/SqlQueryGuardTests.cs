@@ -120,6 +120,9 @@ public class SqlQueryGuardTests
         // SelectById has no dynamic clauses — one case covers it.
         yield return ["SelectById()", Sql.Quotes.SelectById()];
 
+        // SelectRawById has no dynamic clauses — one case covers it.
+        yield return ["SelectRawById()", Sql.Quotes.SelectRawById()];
+
         // SelectSearch: one case per field-filter constant × a representative where clause.
         var (baseWhere, _) = SqliteQuoteService.BuildFilterWhere(["movie"], ["drama"], null, null, null, null, null, null);
         foreach (var (fieldName, fieldFilter) in new[]

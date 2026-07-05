@@ -333,6 +333,43 @@ public class ManifestSeedPlannerTests
         Assert.IsNull(seedFile.DownloadUrl);
     }
 
+    // ── Per-file duplicateResolution override (bonus, #45) ──────────────────────
+
+    [TestMethod]
+    public void PlanSeed_FileEntryHasDuplicateResolution_SeedFilePolicyIsSet()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "a.json",
+                ["name"] = "a",
+                ["duplicateResolution"] = new JsonObject { ["default"] = "merge-theirs" }
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.AreEqual(DuplicateResolutionPolicy.MergeTheirs, files.Single().Policy?.Default);
+    }
+
+    [TestMethod]
+    public void PlanSeed_FileEntryOmitsDuplicateResolution_SeedFilePolicyIsNull()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject { ["file"] = "a.json", ["name"] = "a" })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.IsNull(files.Single().Policy, "No per-file override — falls through to the manifest/config tiers instead");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void WriteFile(string name, string content)

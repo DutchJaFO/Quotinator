@@ -206,6 +206,7 @@
     <Project Path="src/Quotinator.Api/Quotinator.Api.csproj" />
     <Project Path="src/Quotinator.Changelog/Quotinator.Changelog.csproj" />
     <Project Path="src/Quotinator.Constants/Quotinator.Constants.csproj" />
+    <Project Path="src/Quotinator.Converters.Csv/Quotinator.Converters.Csv.csproj" />
     <Project Path="src/Quotinator.Converters.NikhilNamal17/Quotinator.Converters.NikhilNamal17.csproj" />
     <Project Path="src/Quotinator.Converters.Vilaboim/Quotinator.Converters.Vilaboim.csproj" />
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
@@ -223,6 +224,7 @@
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
     <Project Path="tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" />
     <Project Path="tests/Quotinator.Constants.Tests/Quotinator.Constants.Tests.csproj" />
+    <Project Path="tests/Quotinator.Converters.Csv.Tests/Quotinator.Converters.Csv.Tests.csproj" />
     <Project Path="tests/Quotinator.Converters.NikhilNamal17.Tests/Quotinator.Converters.NikhilNamal17.Tests.csproj" />
     <Project Path="tests/Quotinator.Converters.Vilaboim.Tests/Quotinator.Converters.Vilaboim.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
@@ -253,6 +255,12 @@
   </Folder>
   <Folder Name="/CVE/Quotinator.Constants.Tests/">
     <File Path="tests/Quotinator.Constants.Tests/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.Csv/">
+    <File Path="src/Quotinator.Converters.Csv/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.Csv.Tests/">
+    <File Path="tests/Quotinator.Converters.Csv.Tests/CVE/.gitkeep" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Converters.NikhilNamal17/">
     <File Path="src/Quotinator.Converters.NikhilNamal17/CVE/.gitkeep" />

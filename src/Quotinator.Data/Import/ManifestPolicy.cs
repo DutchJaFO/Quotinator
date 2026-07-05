@@ -37,9 +37,12 @@ public record ManifestPolicy(
     public static ManifestPolicy HardcodedDefault => new(DuplicateResolutionPolicy.NewestWins);
 
     /// <summary>
-    /// Returns the manifest's own policy when present; otherwise returns the configuration-level policy.
-    /// The manifest is the highest-priority tier — if it has a <c>duplicateResolution</c> section it wins entirely.
+    /// Returns <paramref name="fromHigherTier"/> when present; otherwise returns <paramref name="fromLowerTier"/>.
+    /// The higher tier wins entirely — no partial merge of policy sets. Used both to resolve a
+    /// manifest's own policy against application configuration, and a file entry's own policy
+    /// override against its owning manifest's already-resolved policy (i.e. called twice to
+    /// cascade through all three tiers: file, then manifest, then configuration).
     /// </summary>
-    public static ManifestPolicy Resolve(ManifestPolicy? fromManifest, ManifestPolicy fromConfig)
-        => fromManifest ?? fromConfig;
+    public static ManifestPolicy Resolve(ManifestPolicy? fromHigherTier, ManifestPolicy fromLowerTier)
+        => fromHigherTier ?? fromLowerTier;
 }
