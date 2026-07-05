@@ -1,6 +1,6 @@
 # #55 — Record completeness flag
 
-**Status:** In progress
+**Status:** Waiting for release
 
 **Tiers required:** T1, T2
 
@@ -112,5 +112,5 @@ Reconciled 2026-07-05, before implementation — pending a comment on #55 record
 | 6 | N/A | Stats endpoint reports completeness counts | N/A | Deferred to #48 |
 | 7 | N/A | Enrichment providers skip complete/no-value-known fields | N/A | Deferred to #19 |
 | 8 | N/A | Management UI actions | N/A | Deferred to #11 |
-| 9 | ⬜ | T1 — app starts in VS without error; migration applies cleanly | Live | Not yet run — requires user to start the app in Visual Studio |
+| 9 | ✅ | T1 — app starts in VS without error; migration applies cleanly | Live | User ran the app in Visual Studio 2026-07-05: log shows `applying 1 pending App migration(s) (version 5 → 6)` → `schema updated (data v3, app v6)`, backup taken first, Blazor UI loaded (`[UI] home page ready`), app reached `Quotinator ready` with no errors |
 | 10 | ✅ | T2 — Docker smoke test | Live | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; container started, log showed `schema created at baseline (data v3, app v6)`; `/api/v1/health`, `/api/v1/version` (`schemaVersion:6`), `/api/v1/quotes/random`, `/api/v1/quotes/search?q=love` all returned expected output |
