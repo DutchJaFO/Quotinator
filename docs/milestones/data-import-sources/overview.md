@@ -53,6 +53,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Planning | Not yet assessed | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
 | [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Planning | Not yet assessed | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
 | [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | Planning | Not yet assessed | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
+| [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow (POST /resolve) | Planning | Not yet assessed | No plan doc yet — blocked on #56, deferred until #56 starts |
 
 ---
 
@@ -79,6 +80,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #69 (API conversations) → requires #67, #68
 #140 (auto-update sources) → requires #58 fix + #63; unblocks #144
 #144 (converter plugin review) → requires #140 (done)
+#149 (manual conflict-review /resolve) → deferred out of #45; requires #56 (audit log)
 ```
 
 ---

@@ -101,7 +101,7 @@ Reconciled before implementation — see the existing GitHub comment on #45 (fro
 - **No `sameId`/`sameText` split in the response.** Since matching is purely Id-based, `sameText` never applies; the response's `conflicts[]` mirrors a `System_ImportConflicts` row directly instead.
 - **Two endpoints instead of a `preview=true` flag.** `POST /import` and `POST /import/preview` share one handler; #65's plan doc is updated to match (see that document).
 - **Auth is `X-Api-Key`, not `Authorization: Bearer`.** Every other admin-tier endpoint in this codebase (`AdminApiKeyFilter`) already uses `X-Api-Key`; the stale issue text and #15 (not yet implemented) described a mechanism this codebase doesn't actually use anywhere.
-- **The `/resolve` endpoint and manual-review workflow are deferred to a new follow-up issue** — it depends on #56 (audit log), which hasn't started. #45 ships detection + automatic policy application only.
+- **The `/resolve` endpoint and manual-review workflow are deferred to #149** — it depends on #56 (audit log), which hasn't started. #45 ships detection + automatic policy application only.
 - **Per-file `duplicateResolution` override for `manifest.json`** is a bonus, additive side effect of reusing `SourceImportSettingsDto` as `ManifestFileEntryDto`'s base class — not originally requested by #45 or #63, but free once the shared DTO existed.
 - **`enrich=true` stays out of scope**, deferred to #19 — already the pre-reconciliation plan's position, restated here.
 
