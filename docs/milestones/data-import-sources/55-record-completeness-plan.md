@@ -54,7 +54,7 @@ Update `QuotinatorMigrations.Baseline` in the same commit (per CLAUDE.md's basel
 - `bool IsComplete { get; init; }`
 - `IReadOnlyList<string> NoValueKnown { get; init; } = []`
 
-No JSON-list equivalent existed on `SafeEnumHandler<TEnum>`/`DatabaseConfiguration` — added a new generic `JsonStringListHandler` (`Quotinator.Data/Helpers/JsonStringListHandler.cs`), registered in the base `DatabaseConfiguration.Configure()` alongside `GuidHandler`/`SafeDateHandler` (domain-agnostic infrastructure, not a per-enum domain handler).
+No JSON equivalent existed on `SafeEnumHandler<TEnum>`/`DatabaseConfiguration` — added an open-generic `JsonHandler<T>` (`Quotinator.Data/Helpers/JsonHandler.cs`), registered for `IReadOnlyList<string>` via a new `DatabaseConfiguration.RegisterJsonHandler<T>()` helper (mirroring `RegisterEnumHandler<TEnum>`). Generalised (not left as a one-off list handler) at the user's request, so the same handler is ready to register for other JSON shapes later — e.g. a typed read of `System_ImportConflicts.MergedFields`/`ExistingValue`/`IncomingValue`, documented directly on `SystemImportConflict` for when #149 (manual conflict-review workflow) starts.
 
 ### 3. New-row defaults on every insert path
 **Status:** ✅ Done
@@ -108,7 +108,7 @@ Reconciled 2026-07-05, before implementation — pending a comment on #55 record
 | 2 | ✅ | A brand-new row defaults to `IsComplete = false`, `NoValueKnown = []` | Unit test | `ConflictResolutionTests.Seed_FreshQuote_DefaultsIsCompleteFalseAndNoValueKnownEmpty`, `QuoteImportServiceTests.ImportAsync_FreshDatabase_DefaultsIsCompleteFalseAndNoValueKnownEmpty` |
 | 3 | ✅ | An existing row's `IsComplete`/`NoValueKnown` survive `newest-wins`/`merge-ours`/`merge-theirs` via the shared production UPDATE statement | Unit test | `ConflictResolutionTests.UpdateOnNewestWins_NeverResetsIsCompleteOrNoValueKnown` |
 | 4 | ✅ | Same guarantee via the live `POST /api/v1/quotes/import` endpoint | Unit test | `QuoteImportServiceTests.ImportAsync_ExistingRowMarkedComplete_SurvivesReimportUnchanged` (`NewestWins`/`MergeOurs`/`MergeTheirs`) |
-| 5 | ✅ | `NoValueKnown` round-trips correctly between `string[]`/`IReadOnlyList<string>` and its JSON TEXT column | Unit test | `DapperSetupTests.JsonStringListHandler_RegisteredByAssemblySetup_RoundTripsListThroughJsonColumn`, `...EmptyList_RoundTripsAsEmptyJsonArray` |
+| 5 | ✅ | `NoValueKnown` round-trips correctly between `string[]`/`IReadOnlyList<string>` and its JSON TEXT column | Unit test | `DapperSetupTests.JsonHandler_RegisteredByAssemblySetup_RoundTripsListThroughJsonColumn`, `...EmptyList_RoundTripsAsEmptyJsonArray`, `...RegisteredForDictionaryShape_RoundTripsThroughJsonColumn`, `...NullColumnValue_RoundTripsAsNull` |
 | 6 | N/A | Stats endpoint reports completeness counts | N/A | Deferred to #48 |
 | 7 | N/A | Enrichment providers skip complete/no-value-known fields | N/A | Deferred to #19 |
 | 8 | N/A | Management UI actions | N/A | Deferred to #11 |

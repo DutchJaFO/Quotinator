@@ -15,6 +15,15 @@ namespace Quotinator.Data.Entities;
 /// updated). <c>ExistingValue</c>/<c>IncomingValue</c>/<c>MergedFields</c> are opaque JSON blobs — this
 /// project never deserializes them; the consuming project (e.g. Quotinator.Engine) produces and later
 /// diffs that content, since this project has no dependency on any specific domain schema.
+/// <para>
+/// <b>When #149 (manual conflict-review workflow) starts:</b> if it needs to read these fields back as
+/// structured data rather than a raw string, use <see cref="Quotinator.Data.Helpers.JsonHandler{T}"/> via
+/// <see cref="Quotinator.Data.Helpers.DatabaseConfiguration.RegisterJsonHandler{T}"/> (e.g. registering it for
+/// <c>IReadOnlyDictionary&lt;string, string&gt;</c> to type <see cref="MergedFields"/>, or
+/// <c>IReadOnlyDictionary&lt;string, object?&gt;</c> for <see cref="ExistingValue"/>/<see cref="IncomingValue"/>)
+/// from <c>QuotinatorDapperConfiguration.RegisterDomainHandlers()</c> — not by changing these properties'
+/// types here, which would break the domain-agnostic design this class deliberately keeps.
+/// </para>
 /// </remarks>
 [Table("System_ImportConflicts")]
 public sealed class SystemImportConflict

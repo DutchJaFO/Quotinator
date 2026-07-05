@@ -18,14 +18,14 @@ public abstract class DatabaseConfiguration
     {
         SqlMapper.AddTypeHandler(new GuidHandler());
         SqlMapper.AddTypeHandler(new SafeDateHandler());
-        SqlMapper.AddTypeHandler(new JsonStringListHandler());
+        RegisterJsonHandler<IReadOnlyList<string>>();
         RegisterDomainHandlers();
     }
 
     /// <summary>
     /// Override to register domain-specific type handlers. Called by <see cref="Configure"/> after
-    /// the generic handlers are registered. Use <see cref="RegisterEnumHandler{TEnum}"/> rather than
-    /// calling <see cref="SqlMapper"/> directly.
+    /// the generic handlers are registered. Use <see cref="RegisterEnumHandler{TEnum}"/> or
+    /// <see cref="RegisterJsonHandler{T}"/> rather than calling <see cref="SqlMapper"/> directly.
     /// </summary>
     protected virtual void RegisterDomainHandlers() { }
 
@@ -35,4 +35,15 @@ public abstract class DatabaseConfiguration
     /// </summary>
     protected void RegisterEnumHandler<TEnum>() where TEnum : struct, Enum
         => SqlMapper.AddTypeHandler(new SafeEnumHandler<TEnum>());
+
+    /// <summary>
+    /// Registers a <see cref="JsonHandler{T}"/> for <typeparamref name="T"/> with Dapper, so any
+    /// column typed as <typeparamref name="T"/> round-trips through JSON text automatically. Call
+    /// once per concrete <typeparamref name="T"/> needed — e.g. from <see cref="RegisterDomainHandlers"/>
+    /// when a consuming project needs to read a JSON column (such as a future typed read of
+    /// <c>System_ImportConflicts.MergedFields</c> as <c>IReadOnlyDictionary&lt;string, string&gt;</c>)
+    /// as something other than the raw string it's stored as today.
+    /// </summary>
+    protected static void RegisterJsonHandler<T>()
+        => SqlMapper.AddTypeHandler(new JsonHandler<T>());
 }
