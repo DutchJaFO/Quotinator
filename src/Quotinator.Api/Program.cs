@@ -110,6 +110,7 @@ builder.Services.AddOpenApi(options =>
     });
 
     options.AddOperationTransformer<YearParameterSchemaTransformer>();
+    options.AddSchemaTransformer<ImportModelSchemaTransformer>();
 });
 
 builder.Services.AddRateLimiter(options =>
