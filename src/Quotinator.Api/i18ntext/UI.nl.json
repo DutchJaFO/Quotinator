@@ -63,5 +63,9 @@
   "AdminReseedLabel": "Database opnieuw seeden",
   "AdminResetLabel": "Database resetten",
   "AdminAuditLogLabel": "Auditlog bekijken",
-  "AdminClearAuditLogLabel": "Auditlog wissen"
+  "AdminClearAuditLogLabel": "Auditlog wissen",
+  "QuotesImportEndpointsHeading": "Beveiligde citaateindpunten",
+  "QuotesImportEndpointsDescription": "Deze eindpunten vereisen dezelfde X-Api-Key-header als de beheereindpunten hierboven, maar vallen onder /api/v1/quotes in plaats van /api/v1/admin.",
+  "QuotesImportLabel": "Citaten importeren",
+  "QuotesImportPreviewLabel": "Voorbeeld van citaatimport"
 }

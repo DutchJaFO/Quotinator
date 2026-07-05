@@ -63,5 +63,9 @@
   "AdminReseedLabel": "Datenbank neu befüllen",
   "AdminResetLabel": "Datenbank zurücksetzen",
   "AdminAuditLogLabel": "Auditprotokoll anzeigen",
-  "AdminClearAuditLogLabel": "Auditprotokoll löschen"
+  "AdminClearAuditLogLabel": "Auditprotokoll löschen",
+  "QuotesImportEndpointsHeading": "Geschützte Zitat-Endpunkte",
+  "QuotesImportEndpointsDescription": "Diese Endpunkte erfordern denselben X-Api-Key-Header wie die Admin-Endpunkte oben, liegen aber unter /api/v1/quotes statt /api/v1/admin.",
+  "QuotesImportLabel": "Zitate importieren",
+  "QuotesImportPreviewLabel": "Zitatimport-Vorschau"
 }

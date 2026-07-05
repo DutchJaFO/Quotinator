@@ -89,7 +89,7 @@ public class QuoteImportServiceTests
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        return await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id", new { id = SharedId });
+        return (await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id", new { id = SharedId }))!;
     }
 
     // ── Fresh insert ─────────────────────────────────────────────────────────

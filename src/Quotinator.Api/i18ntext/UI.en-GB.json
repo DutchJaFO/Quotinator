@@ -63,5 +63,9 @@
   "AdminReseedLabel": "Reseed database",
   "AdminResetLabel": "Reset database",
   "AdminAuditLogLabel": "View audit log",
-  "AdminClearAuditLogLabel": "Clear audit log"
+  "AdminClearAuditLogLabel": "Clear audit log",
+  "QuotesImportEndpointsHeading": "Protected quote endpoints",
+  "QuotesImportEndpointsDescription": "These endpoints require the same X-Api-Key header as the admin endpoints above, but live under /api/v1/quotes rather than /api/v1/admin.",
+  "QuotesImportLabel": "Import quotes",
+  "QuotesImportPreviewLabel": "Preview a quote import"
 }

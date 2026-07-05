@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Filters;
@@ -17,8 +16,6 @@ namespace Quotinator.Api.Endpoints;
 internal static class QuoteEndpoints
 {
     private const int MaxQueryLength = 200;
-
-    private static readonly JsonSerializerOptions ImportSettingsJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
@@ -89,6 +86,10 @@ internal static class QuoteEndpoints
              .RequireRateLimiting(RateLimitPolicies.Admin)
              .AddEndpointFilter<AdminApiKeyFilter>()
              .DisableAntiforgery()
+             .Produces<ImportResultResponse>(StatusCodes.Status200OK)
+             .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
+             .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
+             .Produces<ProblemDetails>(StatusCodes.Status501NotImplemented)
              .WithName("PreviewImportQuotes")
              .WithSummary("Preview a quote import")
              .WithDescription(
@@ -107,6 +108,10 @@ internal static class QuoteEndpoints
              .RequireRateLimiting(RateLimitPolicies.Admin)
              .AddEndpointFilter<AdminApiKeyFilter>()
              .DisableAntiforgery()
+             .Produces<ImportResultResponse>(StatusCodes.Status200OK)
+             .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
+             .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
+             .Produces<ProblemDetails>(StatusCodes.Status501NotImplemented)
              .WithName("ImportQuotes")
              .WithSummary("Import quotes")
              .WithDescription(ImportDescription);
@@ -121,17 +126,8 @@ internal static class QuoteEndpoints
         if (file is null || file.Length == 0)
             return Results.Problem(detail: localizer[ApiMessages.ImportFileMissing], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        ImportRequestSettingsDto? settings;
-        try
-        {
-            settings = string.IsNullOrWhiteSpace(settingsJson)
-                ? null
-                : JsonSerializer.Deserialize<ImportRequestSettingsDto>(settingsJson, ImportSettingsJsonOptions);
-        }
-        catch (JsonException)
-        {
+        if (!ImportRequestSettingsParser.TryParse(settingsJson, out var settings))
             return Results.Problem(detail: localizer[ApiMessages.ImportSettingsInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
-        }
 
         if (settings?.Enrich == true)
             return Results.Problem(detail: localizer[ApiMessages.ImportEnrichNotImplemented], statusCode: StatusCodes.Status501NotImplemented);
