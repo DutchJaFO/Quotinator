@@ -95,11 +95,11 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                 continue;
             }
 
-            var existingFields = seenIds.TryGetValue(q.Id, out var firstInFile)
-                ? QuoteFieldMerge.ToFieldMap(firstInFile)
+            var existing = seenIds.TryGetValue(q.Id, out var firstInFile)
+                ? new QuoteSeedWriter.ExistingQuoteFields(QuoteFieldMerge.ToFieldMap(firstInFile), batch.Id.ToString("D").ToUpperInvariant())
                 : await QuoteSeedWriter.TryGetExistingFieldsAsync(connection, q.Id, transaction);
 
-            if (existingFields is null)
+            if (existing is null)
             {
                 seenIds[q.Id] = q;
 
@@ -131,13 +131,17 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                 continue;
             }
 
+            var existingFields  = existing.Value.Fields;
+            var existingBatchId = existing.Value.ImportBatchId;
+
             var incomingFields = QuoteFieldMerge.ToFieldMap(q);
             var isMerge      = effectivePolicy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
             var mergeResult  = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, effectivePolicy) : null;
             var resolved     = mergeResult is not null ? QuoteFieldMerge.ApplyMergedFields(mergeResult.MergedFields, q) : q;
 
             await QuoteSeedWriter.LogImportConflictAsync(
-                _conflictWriter, batch.Id, q.Id, effectivePolicy, existingFields, incomingFields, mergeResult, connection, transaction);
+                _conflictWriter, batch.Id, q.Id, effectivePolicy, existingFields, incomingFields, mergeResult, connection, transaction,
+                existingBatchId: existingBatchId);
 
             conflicts.Add(new ImportConflictEntry
             {

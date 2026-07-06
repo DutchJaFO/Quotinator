@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-05 20:34 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-06 21:07 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Duplicate quotes found during import can now be merged field by field instead of only being kept or replaced outright, and every duplicate encountered is now recorded for future review.
 - The default behaviour for duplicate quotes changed from keeping the first version seen to keeping the newest version — matching what most people would expect when a source file is corrected or updated.
 - Quotes can now be imported one file at a time (JSON or CSV) through a new API endpoint, with a preview mode that shows exactly what would happen before anything is written.
+- Duplicate quotes flagged for manual review can now be resolved field by field, choosing which side wins or supplying your own value — changes only take effect once every conflict from the same import file has been decided.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -38,6 +39,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Manifest file entries (`data/sources/manifest.json` and user import manifests) can now declare their own `duplicateResolution` override, taking priority over the manifest-wide and configured defaults
 - Quotes, sources, characters, and people now have an `IsComplete` flag and a `NoValueKnown` list of confirmed-empty fields in the database, laying the groundwork for future data-quality tooling; not yet exposed via the API or management UI, and never reset when an existing record is rewritten by a duplicate-resolution policy
 - A new internal change log records every quote, source, and character created or modified during seeding and import, including which import batch introduced it — laying the groundwork for a future change-history view; not yet exposed via the API or management UI
+- New `GET /api/v1/import/conflicts` endpoint lists import conflicts, paginated, filterable by status and import batch, showing both sides' field values and which fields genuinely need a decision
+- New `POST /api/v1/import/conflicts/{id}/decide` endpoint stages a per-field keep/replace/custom-value decision for one conflict without writing anything yet
+- New `POST /api/v1/import/conflicts/{id}/undo` endpoint reverts a staged decision back to pending
+- New `POST /api/v1/import/conflicts/apply` endpoint applies every conflict from one import file at once, atomically, once every one of them has a decision recorded
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before

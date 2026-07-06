@@ -228,7 +228,8 @@ internal static class QuoteSeedWriter
         ISystemImportConflictWriter conflictWriter,
         Guid batchId, string quoteId, DuplicateResolutionPolicy policy,
         IReadOnlyDictionary<string, object?> existingFields, IReadOnlyDictionary<string, object?> incomingFields,
-        FieldMergeResult? mergeResult, SqliteConnection connection, SqliteTransaction? transaction = null)
+        FieldMergeResult? mergeResult, SqliteConnection connection, SqliteTransaction? transaction = null,
+        string? existingBatchId = null)
     {
         var isPending = policy == DuplicateResolutionPolicy.Review;
         var now       = DateTime.UtcNow;
@@ -244,26 +245,31 @@ internal static class QuoteSeedWriter
 
         await conflictWriter.WriteAsync(new SystemImportConflict
         {
-            BatchId       = batchId.ToString("D").ToUpperInvariant(),
-            EntityType    = "Quote",
-            EntityId      = quoteId,
-            ExistingValue = JsonSerializer.Serialize(existingFields),
-            IncomingValue = JsonSerializer.Serialize(incomingFields),
-            AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-            Status        = isPending ? ImportConflictStatus.Pending : ImportConflictStatus.Resolved,
-            MergedFields  = mergedFieldsJson,
-            DetectedAt    = now,
-            ResolvedAt    = isPending ? null : now,
+            BatchId         = batchId.ToString("D").ToUpperInvariant(),
+            ExistingBatchId = existingBatchId,
+            EntityType      = "Quote",
+            EntityId        = quoteId,
+            ExistingValue   = JsonSerializer.Serialize(existingFields),
+            IncomingValue   = JsonSerializer.Serialize(incomingFields),
+            AppliedPolicy   = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+            Status          = isPending ? ImportConflictStatus.Pending : ImportConflictStatus.Resolved,
+            MergedFields    = mergedFieldsJson,
+            DetectedAt      = now,
+            ResolvedAt      = isPending ? null : now,
         }, connection, transaction);
     }
 
+    /// <summary>Result of <see cref="TryGetExistingFieldsAsync"/> — the existing quote's field map plus the batch that originally created it (#149's <c>ExistingBatchId</c>).</summary>
+    internal readonly record struct ExistingQuoteFields(IReadOnlyDictionary<string, object?> Fields, string? ImportBatchId);
+
     /// <summary>
     /// Looks up an existing quote by Id and returns its current field values as a
-    /// <c>QuoteFieldMerge</c>-compatible map (raw, untranslated — never a translated view), or
-    /// <c>null</c> when no such quote exists. Backed by <see cref="Sql.Quotes.SelectRawById()"/>
-    /// (not <see cref="Sql.Quotes.SelectById()"/>, which COALESCEs in translated content).
+    /// <c>QuoteFieldMerge</c>-compatible map (raw, untranslated — never a translated view), plus the
+    /// batch that originally created it, or <c>null</c> when no such quote exists. Backed by
+    /// <see cref="Sql.Quotes.SelectRawById()"/> (not <see cref="Sql.Quotes.SelectById()"/>, which
+    /// COALESCEs in translated content).
     /// </summary>
-    internal static async Task<IReadOnlyDictionary<string, object?>?> TryGetExistingFieldsAsync(
+    internal static async Task<ExistingQuoteFields?> TryGetExistingFieldsAsync(
         SqliteConnection connection, string id, SqliteTransaction? transaction = null)
     {
         var row = await connection.QueryFirstOrDefaultAsync<RawQuoteRow>(
@@ -273,7 +279,7 @@ internal static class QuoteSeedWriter
         var genreRows = await connection.QueryAsync<string>(Sql.QuoteGenres.LoadForQuote, new { id }, transaction);
         var genres    = genreRows.Select(g => GenreDbToApi.TryGetValue(g, out var tag) ? tag : g.ToLowerInvariant()).ToList();
 
-        return new Dictionary<string, object?>
+        var fields = new Dictionary<string, object?>
         {
             ["quoteText"]        = row.QuoteText,
             ["originalLanguage"] = row.OriginalLanguage,
@@ -284,6 +290,8 @@ internal static class QuoteSeedWriter
             ["type"]             = row.Type.Parsed?.ToString().ToLowerInvariant() ?? row.Type.Raw.ToLowerInvariant(),
             ["genres"]           = genres,
         };
+
+        return new ExistingQuoteFields(fields, row.ImportBatchId);
     }
 
     /// <summary>Maps a raw upstream <c>type</c> value to the DB enum's string name (e.g. <c>"Movie"</c>), used as part of the source dedup index key.</summary>
@@ -313,5 +321,6 @@ internal static class QuoteSeedWriter
         public SafeValue<QuoteType?> Type { get; init; } = SafeValue<QuoteType?>.Empty;
         public string? Character { get; init; }
         public string? Author { get; init; }
+        public string? ImportBatchId { get; init; }
     }
 }

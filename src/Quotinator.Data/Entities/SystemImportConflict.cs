@@ -35,8 +35,11 @@ namespace Quotinator.Data.Entities;
 [Table("System_ImportConflicts")]
 public sealed class SystemImportConflict : RecordBase
 {
-    /// <summary>Loose reference to the import batch this conflict was detected during. No FK — this project doesn't know the consumer's batch table name.</summary>
+    /// <summary>Loose reference to the import batch during which this conflict was detected (the <i>incoming</i> side). No FK — this project doesn't know the consumer's batch table name.</summary>
     public string BatchId { get; init; } = string.Empty;
+
+    /// <summary>Loose reference to the import batch that originally created the <i>existing</i> side of this conflict. Null when unknown. Equal to <see cref="BatchId"/> when both sides of the conflict came from the same imported file/batch.</summary>
+    public string? ExistingBatchId { get; init; }
 
     /// <summary>Free-text entity type the conflict occurred on (e.g. <c>"Quote"</c>).</summary>
     public string EntityType { get; init; } = string.Empty;
@@ -74,4 +77,7 @@ public static class ImportConflictStatus
 
     /// <summary>The conflict is awaiting manual review (<see cref="DuplicateResolutionPolicy.Review"/> today).</summary>
     public const string Pending = "pending";
+
+    /// <summary>A per-field decision has been recorded (#149) but the owning batch hasn't been applied yet — nothing has been written to any domain table.</summary>
+    public const string Decided = "decided";
 }

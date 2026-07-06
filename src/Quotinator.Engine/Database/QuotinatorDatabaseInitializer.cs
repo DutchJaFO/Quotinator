@@ -216,7 +216,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         LastSeedDuplicates = [];
 
-        var seenIds        = new Dictionary<string, (string FilePath, SourceQuote Quote)>(StringComparer.Ordinal);
+        var seenIds        = new Dictionary<string, (string FilePath, SourceQuote Quote, Guid BatchId)>(StringComparer.Ordinal);
         var sourceIndex    = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         var characterIndex = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         var personIndex    = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
@@ -256,7 +256,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                         var mergeResult    = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
                         var resolved       = mergeResult is not null ? QuoteFieldMerge.ApplyMergedFields(mergeResult.MergedFields, q) : q;
 
-                        await QuoteSeedWriter.LogImportConflictAsync(_conflictWriter, importBatch.Id, q.Id, policy, existingFields, incomingFields, mergeResult, connection);
+                        await QuoteSeedWriter.LogImportConflictAsync(_conflictWriter, importBatch.Id, q.Id, policy, existingFields, incomingFields, mergeResult, connection,
+                            existingBatchId: first.BatchId.ToString("D").ToUpperInvariant());
 
                         if (policy is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review)
                         {
@@ -294,7 +295,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                         await QuoteSeedWriter.LogChangeAsync(changeLog, "quote", q.Id, ChangeAction.Modified,
                             oldValue: existingFields, newValue: QuoteFieldMerge.ToFieldMap(resolved), connection);
 
-                        seenIds[q.Id] = (seedFile.FilePath, resolved);
+                        seenIds[q.Id] = (seedFile.FilePath, resolved, importBatch.Id);
 
                         var owQuoteId = Guid.Parse(q.Id);
                         await QuoteSeedWriter.InsertTranslationsAsync(connection, resolved, owQuoteId, owSourceId, now);
@@ -302,7 +303,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                         continue;
                     }
 
-                    seenIds[q.Id] = (seedFile.FilePath, q);
+                    seenIds[q.Id] = (seedFile.FilePath, q, importBatch.Id);
 
                     var sourceId    = await QuoteSeedWriter.GetOrCreateSourceAsync(connection, q, sourceIndex, importBatch.Id, changeLog);
                     var characterId = await QuoteSeedWriter.GetOrCreateCharacterAsync(connection, q, sourceId, characterIndex, importBatch.Id, changeLog);

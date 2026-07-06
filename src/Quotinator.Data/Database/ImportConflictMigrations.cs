@@ -82,4 +82,17 @@ public static class ImportConflictMigrations
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
         """;
+
+    /// <summary>
+    /// Adds <c>ExistingBatchId</c> — the batch that originally created the <i>existing</i> side of a
+    /// conflict, distinct from <c>BatchId</c> (which has always meant the batch during which the
+    /// conflict was <i>detected</i>, i.e. the incoming side). Needed for #149's manual conflict-review
+    /// workflow to label which side is which, and to detect a conflict between two entries in the same
+    /// imported file (<c>ExistingBatchId == BatchId</c>). A plain <c>ALTER TABLE ... ADD COLUMN</c> is
+    /// sufficient here — no rebuild needed, since this only adds a new nullable column to a table
+    /// already in its final <c>RecordBase</c> shape (see <see cref="MigrateToRecordBase"/>).
+    /// </summary>
+    public const string AddExistingBatchId = """
+        ALTER TABLE System_ImportConflicts ADD COLUMN ExistingBatchId TEXT;
+        """;
 }

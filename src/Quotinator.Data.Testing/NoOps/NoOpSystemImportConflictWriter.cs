@@ -17,4 +17,16 @@ public sealed class NoOpSystemImportConflictWriter : ISystemImportConflictWriter
     /// <inheritdoc/>
     public Task WriteAsync(SystemImportConflict entry)
         => Task.CompletedTask;
+
+    /// <inheritdoc/>
+    public Task MarkDecidedAsync(Guid id, string decisionsJson, IDbConnection connection, IDbTransaction? transaction = null)
+        => Task.CompletedTask;
+
+    /// <inheritdoc/>
+    public Task ClearDecisionAsync(Guid id, IDbConnection connection, IDbTransaction? transaction = null)
+        => Task.CompletedTask;
+
+    /// <inheritdoc/>
+    public Task MarkResolvedAsync(Guid id, IDbConnection connection, IDbTransaction? transaction = null)
+        => Task.CompletedTask;
 }

@@ -90,7 +90,7 @@ public class DatabaseInitializerOwnershipTests
     /// <summary>
     /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
     /// for <c>System_ImportConflicts</c> (added by #64's Data-owned migration 3, retrofitted onto
-    /// <c>RecordBase</c> by migration 6).
+    /// <c>RecordBase</c> by migration 6, and given <c>ExistingBatchId</c> by migration 7 for #149).
     /// </summary>
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemImportConflictsSchema()
@@ -200,9 +200,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync();
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(6, dataRows,
+        Assert.AreEqual(7, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(6, db.DataSchemaVersion);
+        Assert.AreEqual(7, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

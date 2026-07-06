@@ -287,6 +287,8 @@ builder.Services.AddSingleton<ISystemImportConflictWriter, SystemImportConflictW
 builder.Services.AddSingleton<ISystemImportConflictReader, SystemImportConflictReader>();
 builder.Services.AddSingleton<ISystemChangeLogWriter, SystemChangeLogWriter>();
 builder.Services.AddSingleton<ISystemChangeLogReader, SystemChangeLogReader>();
+builder.Services.AddSingleton<IConflictResolutionCoordinator, ConflictResolutionCoordinator>();
+builder.Services.AddSingleton<IConflictResolutionService, SqliteConflictResolutionService>();
 
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
@@ -514,6 +516,7 @@ app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDat
 
 app.MapQuoteEndpoints();
 app.MapAdminEndpoints();
+app.MapImportEndpoints();
 
 // Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
 // Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.

@@ -53,7 +53,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Planning | Not yet assessed | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
 | [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Planning | Not yet assessed | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
 | [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | Planning | Not yet assessed | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
-| [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow (POST /resolve) | Planning | Not yet assessed | No plan doc yet — blocked on #56, deferred until #56 starts |
+| [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow | Waiting for release | T1 ✅ T2 ✅ | [149-manual-conflict-review-plan.md](149-manual-conflict-review-plan.md) |
+| [#152](https://github.com/DutchJaFO/Quotinator/issues/152) | Review endpoint grouping: split Admin / Quote / Import | Planning | Not yet assessed | No plan doc yet |
+| [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts | Planning | Not yet assessed | No plan doc yet — deferred out of #149 |
 
 ---
 
@@ -80,7 +82,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #69 (API conversations) → requires #67, #68
 #140 (auto-update sources) → requires #58 fix + #63; unblocks #144
 #144 (converter plugin review) → requires #140 (done)
-#149 (manual conflict-review /resolve) → deferred out of #45; requires #56 (audit log)
+#149 (manual conflict-review workflow) → deferred out of #45; requires #56 (audit log) — done; unblocks #153
+#152 (endpoint grouping review) → should land before/alongside #149 so /resolve is created in the right route group rather than added to Quotes and moved later; #149 landed its own new endpoints under a fresh /api/v1/import group directly, but #152's remaining scope (moving the existing /quotes/import(/preview) endpoints there too) is untouched
+#153 (declarative conflict-resolution file) → deferred out of #149; requires #149 (decide/undo/apply machinery and FieldMergeResolver to build on)
 ```
 
 ---
@@ -104,12 +108,14 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 13 | #65 | Import endpoint: preview/dry-run | Waiting for release |
 | 14 | #55 | Record completeness flag | Waiting for release |
 | 15 | #56 | Audit log (System_ChangeLog) | Waiting for release |
-| 16 | #149 | Import endpoint: manual conflict-review workflow (POST /resolve) | Planning |
-| 17 | #59 | Admin: soft-reset by batch | Planning |
-| 18 | #67 | Conversations schema | Planning |
-| 19 | #68 | Curated JSON conversations | Planning |
-| 20 | #69 | API conversations | Planning |
-| 21 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Planning |
+| 16 | #152 | Review endpoint grouping: split Admin / Quote / Import | Planning |
+| 17 | #149 | Import endpoint: manual conflict-review workflow | Waiting for release |
+| 18 | #59 | Admin: soft-reset by batch | Planning |
+| 19 | #67 | Conversations schema | Planning |
+| 20 | #68 | Curated JSON conversations | Planning |
+| 21 | #69 | API conversations | Planning |
+| 22 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Planning |
+| 23 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts | Planning |
 
 ---
 
@@ -132,7 +138,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 |-------|------------------------|-------|
 | #45, #65 | Not evaluated for early merge — held for the full milestone | Fully done (T1 ✅ T2 ✅), but their own output is only reachable through the write path they introduce (`POST /api/v1/quotes/import`) — nothing else in the milestone calls them, and no existing behaviour depends on them being present, so there is no forcing reason to break from the default "merge the full milestone together" assumption. Revisit only if a later issue in this milestone (e.g. #59, #56) would otherwise sit blocked waiting on a merge. |
 
-All other remaining issues (#59, #67, #68, #69, #144, #149) are still in `Planning` — not started. Evaluate each for early merge when complete — the default is to merge the full milestone together.
+All other remaining issues (#59, #67, #68, #69, #144, #152, #153) are still in `Planning` — not started. #149 is `Waiting for release` (T1 ✅ T2 ✅). Evaluate each for early merge when complete — the default is to merge the full milestone together.
 
 ---
 
@@ -150,6 +156,7 @@ All other remaining issues (#59, #67, #68, #69, #144, #149) are still in `Planni
 - [#65 — Import endpoint: preview/dry-run](65-preview-dry-run-plan.md)
 - [#55 — Record completeness flag](55-record-completeness-plan.md)
 - [#56 — Audit log](56-audit-log-plan.md)
+- [#149 — Manual conflict-review workflow](149-manual-conflict-review-plan.md)
 - [#59 — Admin soft-reset by batch](59-admin-soft-reset-plan.md)
 - [#67 — Conversations schema](67-conversations-schema-plan.md)
 - [#68 — Curated JSON conversations](68-curated-json-conversations-plan.md)

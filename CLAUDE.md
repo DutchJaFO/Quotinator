@@ -642,7 +642,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    If you do not have Docker available, note this explicitly and let the reviewer know CI is the first Docker gate.
 6. **Smoke-test the image** (optional but recommended for Dockerfile changes):
    ```bash
-   docker run --rm -p 8080:8080 quotinator:local
+   docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
    curl -s http://localhost:8080/api/v1/health
    curl -s http://localhost:8080/api/v1/version
    curl -s http://localhost:8080/api/v1/quotes/random
@@ -654,6 +654,29 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    ```
    Check that `/version` returns the expected version number — a missing `Directory.Build.props` in the build context silently produces `1.0.0` while `/health` still returns healthy.
    The search queries cover: default full-text (`love` should return results), `field=source` (`Casablanca` should return results), and `field=author`, `field=character`, `type=person` — these three may return an empty `items` array with a `message` when the bundled dataset has no matching data; that is expected behaviour, not a bug.
+
+   **Import and manual conflict-review workflow** (#45, #149) — re-imports a bundled file with `review` policy forced, so the endpoint that would otherwise auto-resolve via the default policy instead produces a genuine pending conflict to exercise decide/undo/apply against:
+   ```bash
+   curl -s "http://localhost:8080/api/v1/import/conflicts"
+   curl -s -X POST -H "X-Api-Key: <your admin key>" \
+     -F "file=@data/sources/quotinator-curated.json" \
+     -F 'settings={"duplicateResolution":{"default":"review"}}' \
+     "http://localhost:8080/api/v1/quotes/import"
+   curl -s "http://localhost:8080/api/v1/import/conflicts?status=pending"
+   ```
+   From the last response, copy one conflict's `id` and its `batchId` (already uppercase), then:
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+     -d '{"quoteText":{"choice":"keep"}}' \
+     "http://localhost:8080/api/v1/import/conflicts/<id>/decide"
+   curl -s "http://localhost:8080/api/v1/import/conflicts?status=decided"
+   curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/conflicts/<id>/undo"
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+     -d '{"quoteText":{"choice":"keep"}}' \
+     "http://localhost:8080/api/v1/import/conflicts/<id>/decide"
+   curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/conflicts/apply?batchId=<batchId>"
+   ```
+   The first `GET /import/conflicts` (before any import) should return `200` with an empty or existing `items` list — proves the endpoint is reachable with no setup. After the import, `status=pending` must show exactly the conflict just created; after `decide`, `status=decided` must show it (and its `ambiguousFields` must be empty); after `undo`, it must be back under `status=pending`; after `apply`, the batch must return `200` and the quote's field should reflect the decision. A `422` from `apply` listing `pendingConflictIds` before every conflict in the batch is decided is expected, not a bug.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 

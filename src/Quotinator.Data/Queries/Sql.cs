@@ -152,7 +152,8 @@ internal static class Sql
                    s.Date,
                    s.Type,
                    c.Name  AS Character,
-                   p.Name  AS Author
+                   p.Name  AS Author,
+                   q.ImportBatchId
                FROM   Quotes          q
                JOIN   Sources         s ON s.Id = q.SourceId    AND s.IsDeleted = 0
                LEFT JOIN Characters   c ON c.Id = q.CharacterId AND c.IsDeleted = 0
@@ -349,16 +350,37 @@ internal static class Sql
         // COUNT base — shared by CountPaged factory method below.
         private const string CountPagedBase = "SELECT COUNT(*) FROM System_ImportConflicts";
 
+        // Column list shared by every SELECT below.
+        private const string SelectColumns =
+            "Id, BatchId, ExistingBatchId, EntityType, EntityId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, ResolvedAt";
+
         /// <summary>Paginated conflict listing, newest first, with optional filters.</summary>
         internal static string SelectPaged(bool filterBatchId, bool filterStatus)
-            => "SELECT Id, BatchId, EntityType, EntityId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, ResolvedAt " +
-               "FROM System_ImportConflicts" +
+            => $"SELECT {SelectColumns} FROM System_ImportConflicts" +
                BuildWhere(filterBatchId, filterStatus) +
                " ORDER BY DetectedAt DESC LIMIT @pageSize OFFSET @offset;";
 
         /// <summary>Total matching count for the conflict list endpoint.</summary>
         internal static string CountPaged(bool filterBatchId, bool filterStatus)
             => CountPagedBase + BuildWhere(filterBatchId, filterStatus) + ";";
+
+        /// <summary>Single-conflict lookup by Id (#149's decide/undo/apply flows).</summary>
+        internal static string SelectById => $"SELECT {SelectColumns} FROM System_ImportConflicts WHERE Id = @id;";
+
+        /// <summary>Every conflict sharing a BatchId, any status — #149's apply-batch readiness check needs the complete set, not a page.</summary>
+        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportConflicts WHERE BatchId = @batchId;";
+
+        /// <summary>Stages a per-field decision (#149) — Status→Decided, MergedFields holds the decision payload. Idempotent: resubmitting overwrites the prior decision.</summary>
+        internal const string MarkDecided =
+            "UPDATE System_ImportConflicts SET Status = @status, MergedFields = @mergedFields, DateModified = @dateModified WHERE Id = @id;";
+
+        /// <summary>Reverts a staged decision back to Pending (#149's undo-before-commit) — clears MergedFields.</summary>
+        internal const string ClearDecision =
+            "UPDATE System_ImportConflicts SET Status = @status, MergedFields = NULL, DateModified = @dateModified WHERE Id = @id;";
+
+        /// <summary>Marks a conflict resolved once its batch has been applied (#149) — ResolvedAt set.</summary>
+        internal const string MarkResolved =
+            "UPDATE System_ImportConflicts SET Status = @status, ResolvedAt = @resolvedAt, DateModified = @dateModified WHERE Id = @id;";
 
         private static string BuildWhere(bool filterBatchId, bool filterStatus)
         {

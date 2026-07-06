@@ -35,4 +35,23 @@ public sealed class SystemImportConflictReader : SqliteRepositoryBase<SystemImpo
 
         return new SystemImportConflictPageResult(items.ToList(), page, pageSize, total);
     }
+
+    /// <inheritdoc/>
+    public async Task<SystemImportConflict?> GetByIdAsync(Guid id)
+    {
+        using var conn = Factory.CreateConnection();
+        conn.Open();
+
+        return await conn.QueryFirstOrDefaultAsync<SystemImportConflict>(Sql.SystemImportConflicts.SelectById, new { id });
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<SystemImportConflict>> GetAllForBatchAsync(string batchId)
+    {
+        using var conn = Factory.CreateConnection();
+        conn.Open();
+
+        var items = await conn.QueryAsync<SystemImportConflict>(Sql.SystemImportConflicts.SelectAllForBatch, new { batchId });
+        return items.ToList();
+    }
 }

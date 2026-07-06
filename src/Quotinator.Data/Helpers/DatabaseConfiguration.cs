@@ -1,4 +1,5 @@
 using Dapper;
+using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Helpers;
@@ -22,6 +23,11 @@ public abstract class DatabaseConfiguration
         RegisterJsonHandler<IReadOnlyList<string>>();
         RegisterEnumHandler<ChangeAction>();
         RegisterEnumHandler<InitiatorType>();
+        // DuplicateResolutionPolicy lives in Quotinator.Data.Import (not a consumer's domain), same as
+        // ChangeAction/InitiatorType above — belongs here, not in a subclass's RegisterDomainHandlers().
+        // Previously only registered via QuotinatorDapperConfiguration, which meant Quotinator.Data.Tests
+        // (which only calls the base Configure()) could never write a SystemImportConflict row at all.
+        RegisterEnumHandler<DuplicateResolutionPolicy>();
         RegisterDomainHandlers();
     }
 

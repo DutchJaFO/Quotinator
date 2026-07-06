@@ -6,4 +6,5 @@ public static class ApiTags
     public const string System = "System";
     public const string Quotes = "Quotes";
     public const string Admin  = "Admin";
+    public const string Import = "Import";
 }

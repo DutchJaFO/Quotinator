@@ -67,6 +67,84 @@ public static class FieldMergeResolver
         return new FieldMergeResult(merged, fromIncoming);
     }
 
+    /// <summary>
+    /// Resolves every field in <paramref name="existing"/> against <paramref name="incoming"/> using an
+    /// explicit per-field <paramref name="decisions"/> map (#149's manual conflict-review workflow),
+    /// git-merge-style: a supplied decision always wins for that field, regardless of whether it was
+    /// actually ambiguous. Any field with no decision auto-resolves the same way <see cref="Resolve"/>
+    /// already does (empty-side wins, equal values keep existing). A field that is genuinely ambiguous
+    /// (both sides non-empty and differ) with no decision supplied is collected and reported via
+    /// <see cref="UnresolvedFieldConflictException"/> once every field has been examined — mirroring a
+    /// git merge refusing to complete while unresolved conflicts remain.
+    /// </summary>
+    /// <exception cref="UnresolvedFieldConflictException">
+    /// One or more fields are ambiguous and have no decision. <see cref="UnresolvedFieldConflictException.FieldNames"/>
+    /// lists every such field, not just the first one found.
+    /// </exception>
+    public static FieldMergeResult ResolveWithDecisions(
+        IReadOnlyDictionary<string, object?> existing,
+        IReadOnlyDictionary<string, object?> incoming,
+        IReadOnlyDictionary<string, FieldMergeDecision> decisions)
+    {
+        var merged       = new Dictionary<string, object?>(existing.Count);
+        var fromIncoming = new List<string>();
+        var unresolved    = new List<string>();
+
+        foreach (var (field, existingValue) in existing)
+        {
+            var incomingValue = incoming.TryGetValue(field, out var iv) ? iv : null;
+
+            if (decisions.TryGetValue(field, out var decision))
+            {
+                switch (decision.Choice)
+                {
+                    case FieldResolutionChoice.Keep:
+                        merged[field] = existingValue;
+                        break;
+                    case FieldResolutionChoice.Replace:
+                        merged[field] = incomingValue;
+                        fromIncoming.Add(field);
+                        break;
+                    case FieldResolutionChoice.Custom:
+                        merged[field] = decision.CustomValue;
+                        fromIncoming.Add(field);
+                        break;
+                }
+                continue;
+            }
+
+            var existingEmpty = IsEmpty(existingValue);
+            var incomingEmpty = IsEmpty(incomingValue);
+
+            if (!existingEmpty && incomingEmpty)
+            {
+                merged[field] = existingValue;
+            }
+            else if (existingEmpty && !incomingEmpty)
+            {
+                merged[field] = incomingValue;
+                fromIncoming.Add(field);
+            }
+            else if (existingEmpty)
+            {
+                merged[field] = existingValue;
+            }
+            else if (ValuesEqual(existingValue, incomingValue))
+            {
+                merged[field] = existingValue;
+            }
+            else
+            {
+                unresolved.Add(field);
+            }
+        }
+
+        if (unresolved.Count > 0)
+            throw new UnresolvedFieldConflictException(unresolved);
+
+        return new FieldMergeResult(merged, fromIncoming);
+    }
+
     private static bool IsEmpty(object? value) => value switch
     {
         null     => true,

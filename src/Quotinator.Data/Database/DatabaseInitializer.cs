@@ -30,6 +30,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 4, Sql = ChangeLogMigrations.CreateChangeLogTable },
         new SchemaMigration { Version = 5, Sql = AuditMigrations.MigrateToRecordBase },
         new SchemaMigration { Version = 6, Sql = ImportConflictMigrations.MigrateToRecordBase },
+        new SchemaMigration { Version = 7, Sql = ImportConflictMigrations.AddExistingBatchId },
     ];
 
     // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and
@@ -55,21 +56,22 @@ public class DatabaseInitializer : IDatabaseInitializer
         CREATE INDEX IF NOT EXISTS IX_System_AuditEntries_PerformedAt ON System_AuditEntries (PerformedAt);
 
         CREATE TABLE IF NOT EXISTS System_ImportConflicts (
-            Id            TEXT    NOT NULL PRIMARY KEY,
-            BatchId       TEXT    NOT NULL,
-            EntityType    TEXT    NOT NULL,
-            EntityId      TEXT,
-            ExistingValue TEXT,
-            IncomingValue TEXT,
-            AppliedPolicy TEXT,
-            Status        TEXT    NOT NULL,
-            MergedFields  TEXT,
-            DetectedAt    TEXT    NOT NULL,
-            ResolvedAt    TEXT,
-            DateCreated   TEXT    NOT NULL,
-            DateModified  TEXT,
-            DateDeleted   TEXT,
-            IsDeleted     INTEGER NOT NULL DEFAULT 0
+            Id              TEXT    NOT NULL PRIMARY KEY,
+            BatchId         TEXT    NOT NULL,
+            EntityType      TEXT    NOT NULL,
+            EntityId        TEXT,
+            ExistingValue   TEXT,
+            IncomingValue   TEXT,
+            AppliedPolicy   TEXT,
+            Status          TEXT    NOT NULL,
+            MergedFields    TEXT,
+            DetectedAt      TEXT    NOT NULL,
+            ResolvedAt      TEXT,
+            DateCreated     TEXT    NOT NULL,
+            DateModified    TEXT,
+            DateDeleted     TEXT,
+            IsDeleted       INTEGER NOT NULL DEFAULT 0,
+            ExistingBatchId TEXT
         );
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);

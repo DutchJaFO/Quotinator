@@ -113,6 +113,7 @@
     <File Path="docs/milestones/data-import-sources/140-auto-update-sources-plan.md" />
     <File Path="docs/milestones/data-import-sources/141-system-table-preservation-plan.md" />
     <File Path="docs/milestones/data-import-sources/143-migration-ownership-baseline-plan.md" />
+    <File Path="docs/milestones/data-import-sources/149-manual-conflict-review-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/">
     <File Path="docs/milestones/v1-7-0/overview.md" />

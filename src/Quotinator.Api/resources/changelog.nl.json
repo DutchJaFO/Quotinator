@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143],
+    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143, 149],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -18,7 +18,8 @@
       "Quotinator kan nu automatisch zijn gebundelde en geïmporteerde citaatbronnen verversen vanaf hun oorspronkelijke locatie, zodat de gegevens up-to-date blijven zonder een nieuwe release.",
       "Dubbele citaten die tijdens het importeren worden gevonden, kunnen nu veld voor veld worden samengevoegd in plaats van alleen volledig behouden of vervangen te worden, en elk aangetroffen duplicaat wordt nu vastgelegd voor latere controle.",
       "Het standaardgedrag bij dubbele citaten is gewijzigd van het behouden van de eerst geziene versie naar het behouden van de nieuwste versie — wat aansluit bij wat de meeste mensen zouden verwachten wanneer een bronbestand wordt gecorrigeerd of bijgewerkt.",
-      "Citaten kunnen nu één bestand tegelijk worden geïmporteerd (JSON of CSV) via een nieuw API-eindpunt, met een voorbeeldmodus die precies laat zien wat er zou gebeuren voordat er iets wordt weggeschreven."
+      "Citaten kunnen nu één bestand tegelijk worden geïmporteerd (JSON of CSV) via een nieuw API-eindpunt, met een voorbeeldmodus die precies laat zien wat er zou gebeuren voordat er iets wordt weggeschreven.",
+      "Dubbele citaten die zijn gemarkeerd voor handmatige controle kunnen nu veld voor veld worden opgelost, waarbij je kiest welke kant wint of je eigen waarde opgeeft — wijzigingen worden pas doorgevoerd zodra elk conflict uit hetzelfde importbestand is beslist."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -39,7 +40,11 @@
       "Nieuw eindpunt `POST /api/v1/quotes/import/preview` voert dezelfde importpijplijn uit, maar maakt alle wijzigingen ongedaan, zodat conflicten en fouten kunnen worden beoordeeld voordat er iets wordt vastgelegd",
       "Manifestbestandsvermeldingen (`data/sources/manifest.json` en gebruikersimportmanifesten) kunnen nu hun eigen `duplicateResolution`-overschrijving opgeven, die voorrang heeft op de manifestbrede en geconfigureerde standaardwaarden",
       "Citaten, bronnen, personages en personen hebben nu een `IsComplete`-markering en een `NoValueKnown`-lijst van bevestigd lege velden in de database, als basis voor toekomstige datakwaliteitstools; nog niet beschikbaar via de API of het beheerpaneel, en wordt nooit teruggezet wanneer een bestaand record wordt overschreven door een duplicaatoplossingsbeleid",
-      "Een nieuw intern wijzigingslogboek registreert elk citaat, elke bron en elk personage dat tijdens het seeden of importeren is aangemaakt of gewijzigd, inclusief welke importbatch het heeft geïntroduceerd — als basis voor een toekomstig wijzigingsoverzicht; nog niet beschikbaar via de API of het beheerpaneel"
+      "Een nieuw intern wijzigingslogboek registreert elk citaat, elke bron en elk personage dat tijdens het seeden of importeren is aangemaakt of gewijzigd, inclusief welke importbatch het heeft geïntroduceerd — als basis voor een toekomstig wijzigingsoverzicht; nog niet beschikbaar via de API of het beheerpaneel",
+      "Nieuw eindpunt `GET /api/v1/import/conflicts` toont een gepagineerde lijst van importconflicten, filterbaar op status en importbatch, met de veldwaarden van beide kanten en welke velden echt een beslissing nodig hebben",
+      "Nieuw eindpunt `POST /api/v1/import/conflicts/{id}/decide` legt een keuze per veld (behouden/vervangen/eigen waarde) vast voor één conflict, zonder nog iets weg te schrijven",
+      "Nieuw eindpunt `POST /api/v1/import/conflicts/{id}/undo` maakt een vastgelegde beslissing ongedaan en zet het conflict terug naar in behandeling",
+      "Nieuw eindpunt `POST /api/v1/import/conflicts/apply` past alle conflicten van één importbestand in één keer toe, atomisch, zodra voor elk ervan een beslissing is vastgelegd"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",

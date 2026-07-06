@@ -11,6 +11,10 @@ public static class ApiRoutes
     public const string AuditLog            = "/api/v1/admin/audit";
     public const string QuotesImport        = "/api/v1/quotes/import";
     public const string QuotesImportPreview = "/api/v1/quotes/import/preview";
+    public const string ImportConflicts       = "/api/v1/import/conflicts";
+    public const string ImportConflictsDecide = "/api/v1/import/conflicts/{id}/decide";
+    public const string ImportConflictsUndo   = "/api/v1/import/conflicts/{id}/undo";
+    public const string ImportConflictsApply  = "/api/v1/import/conflicts/apply";
     public const string CultureSet       = "/Culture/Set";
     public const string ScalarUi         = "/scalar/v1";
     public const string OpenApiSpec      = "/openapi/v1.json";

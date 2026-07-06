@@ -1,10 +1,17 @@
 using Quotinator.Core.Models;
 using Quotinator.Data.Helpers;
-using Quotinator.Data.Import;
 
 namespace Quotinator.Engine.Helpers;
 
-/// <summary>Registers all Dapper type handlers required by the Quotinator domain, including generic infrastructure handlers and domain enum handlers.</summary>
+/// <summary>
+/// Registers all Dapper type handlers required by the Quotinator domain, including generic
+/// infrastructure handlers (base <see cref="DatabaseConfiguration"/>) and domain enum handlers.
+/// </summary>
+/// <remarks>
+/// <see cref="Quotinator.Data.Import.DuplicateResolutionPolicy"/> is registered by the base class, not
+/// here — it lives in <c>Quotinator.Data.Import</c>, not this project's own domain, same as
+/// <c>ChangeAction</c>/<c>InitiatorType</c>.
+/// </remarks>
 public sealed class QuotinatorDapperConfiguration : DatabaseConfiguration
 {
     /// <inheritdoc/>
@@ -12,6 +19,5 @@ public sealed class QuotinatorDapperConfiguration : DatabaseConfiguration
     {
         RegisterEnumHandler<QuoteType>();
         RegisterEnumHandler<Genre>();
-        RegisterEnumHandler<DuplicateResolutionPolicy>();
     }
 }
