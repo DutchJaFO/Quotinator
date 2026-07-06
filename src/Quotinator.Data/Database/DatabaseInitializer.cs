@@ -29,6 +29,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 3, Sql = ImportConflictMigrations.CreateImportConflictsTable },
         new SchemaMigration { Version = 4, Sql = ChangeLogMigrations.CreateChangeLogTable },
         new SchemaMigration { Version = 5, Sql = AuditMigrations.MigrateToRecordBase },
+        new SchemaMigration { Version = 6, Sql = ImportConflictMigrations.MigrateToRecordBase },
     ];
 
     // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and

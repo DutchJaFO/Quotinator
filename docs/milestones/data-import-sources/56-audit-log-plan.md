@@ -1,6 +1,6 @@
 # #56 — System_ChangeLog (originally "Audit log")
 
-**Status:** In progress
+**Status:** Waiting for release
 
 **Tiers required:** T1, T2
 
@@ -254,8 +254,18 @@ Same `ChangeLogContext` pattern in `SqliteQuoteImportService.ImportAsync`: `Crea
 - `AuditMigrations.MigrateToRecordBase` (`DataOwnedMigrations` version 5) rebuilds the already-shipped
   `System_AuditEntries` table, preserving existing rows with a synthetic `Guid` per row and
   `DateCreated` backfilled from `PerformedAt`.
-- `ImportConflictMigrations.CreateImportConflictsTable`/`ChangeLogMigrations.CreateChangeLogTable`
-  edited in place (both unreleased) to use a `Guid` `TEXT` primary key from the start.
+- `ChangeLogMigrations.CreateChangeLogTable` edited in place (never applied to any real database yet)
+  to use a `Guid` `TEXT` primary key from the start.
+- `ImportConflictMigrations.CreateImportConflictsTable` was **initially** edited in place the same way,
+  on the mistaken belief that "unreleased" (no tagged version) meant "safe to edit." This was wrong —
+  this migration had already applied to real local development databases (from earlier `#64` work,
+  well before this issue started) — and T1 testing caught the resulting corruption live: `POST
+  /api/v1/admin/database/reseed` threw `SqliteException: table System_ImportConflicts has no column
+  named DateCreated`, because the in-place edit never actually re-ran against a database where
+  migration 3 had already recorded as applied. Reverted to its original shipped shape; the retrofit is
+  now its own separate migration 6 (`ImportConflictMigrations.MigrateToRecordBase`), using the exact
+  same rebuild-and-rename technique as `AuditMigrations.MigrateToRecordBase`. See the T1 row below for
+  how this was caught and re-verified.
 - `DataBaselineSql` updated for all three tables to their final `RecordBase`-compliant shape.
 - Five `Quotinator.Data.Tests` repository tests (`AggregateRepositoryTests`, `InsertManyAsyncTests`,
   `LinkRepositoryTests`, `OneToOneRepositoryTests`, `SystemAuditWriterTests`) had their inline
@@ -291,5 +301,6 @@ Same `ChangeLogContext` pattern in `SqliteQuoteImportService.ImportAsync`: `Crea
 | 11 | N/A | Blazor UI history panel | N/A | Deferred to v3 |
 | 12 | ✅ | `SystemAuditEntry`/`SystemImportConflict`/`SystemChangeLog` all inherit `RecordBase`, per ADR 002 | Unit test | `DataOwnedBaseline_And_IncrementalReplay_ProduceIdentical{SystemAuditEntries,SystemImportConflicts,SystemChangeLog}Schema` |
 | 13 | ✅ | The already-shipped `System_AuditEntries` table migrates safely to the new shape, preserving existing rows | Unit test | `InitialiseAsync_LegacyAuditEntriesTable_MigratesToSystemAuditEntriesWithRowsPreserved` |
-| 14 | ⬜ | T1 — app starts in VS without error; migration applies cleanly | Live | Not yet run — requires user to start the app in Visual Studio |
-| 15 | ✅ | T2 — Docker smoke test | Live | `docker build` succeeded; container log showed `schema created at baseline (data v5, app v6)`; `/api/v1/health`/`/version` returned expected output; `System_AuditEntries` schema inspected directly via `Quotinator.Tools.DbInspector` against the container's DB file — confirmed `Id TEXT PRIMARY KEY` + `DateCreated`/`DateModified`/`DateDeleted`/`IsDeleted` present |
+| 14 | ✅ | The already-applied `System_ImportConflicts` table (migration 3, applied to real local dev databases before this issue) migrates safely to the new shape via a separate migration 6, rather than an in-place edit | Unit test + Live | `DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemImportConflictsSchema`; live-reproduced against a copy of the real dev database that had migration 3 already applied in its original shape — `POST /api/v1/admin/database/reseed` (which writes `System_ImportConflicts` rows on duplicate detection) returned 200 with 45 conflicts logged, no exception, both via direct CLI run and via Docker (container log showed the true incremental path: `migration applied: Data v5 → v6`, matching the real bug scenario, not the fresh-baseline path) |
+| 15 | ✅ | T1 — app starts in VS without error; migration applies cleanly | Live | First attempt caught the `System_ImportConflicts` bug above (see item 14) via an unhandled-exception dialog that made Visual Studio appear frozen. Re-verified live in Visual Studio against the real dev database after the fix: log shows `applying 1 pending Data migration(s) (version 5 → 6)...` → `schema updated (data v6, app v6)`, followed by real usage — `GET /admin/database/seed/preview`, `GET /admin/audit`, `POST /quotes/import/preview` — all returning 200 with no errors |
+| 16 | ✅ | T2 — Docker smoke test | Live | `docker build` succeeded. Run against a bind-mounted copy of the real (pre-fix-state) dev database from **PowerShell**, per `docs/docker.md`'s documented Git-Bash-mangles-`/data`-paths caveat (an initial attempt from Git Bash silently substituted a different path and produced a misleadingly "clean" fresh-baseline run instead of exercising the real migration — corrected by rerunning from PowerShell). Confirmed via `docker exec ls /data` that the container saw the actual host file (byte-identical), then `migration applied: Data v5 → v6` in the log, then `/api/v1/health` and `POST /admin/database/reseed` both returned 200 (45 conflicts logged) with zero errors in container logs. `docker cp`'d the resulting DB out and confirmed 101 `System_ImportConflicts` rows with correct `Id`/`DateCreated`/`IsDeleted` values via `Quotinator.Tools.DbInspector` |

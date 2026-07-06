@@ -11,14 +11,46 @@ public static class ImportConflictMigrations
     /// Creates the <c>System_ImportConflicts</c> table and its covering indexes, directly under its
     /// final <c>System_</c>-prefixed name. Unlike <see cref="AuditMigrations"/>, no create-then-rename
     /// pair is needed — this table is introduced fresh, so it never existed under a legacy name.
-    /// Idempotent: uses <c>CREATE TABLE IF NOT EXISTS</c> and <c>CREATE INDEX IF NOT EXISTS</c>. Carries
-    /// <c>RecordBase</c>'s columns (<c>Guid</c> <c>TEXT</c> primary key, <c>DateCreated</c>/
-    /// <c>DateModified</c>/<c>DateDeleted</c>/<c>IsDeleted</c>) per ADR 002 — this table was still
-    /// unreleased when that ADR gap was caught, so the shape was corrected here directly rather than
-    /// via a follow-up migration.
+    /// Idempotent: uses <c>CREATE TABLE IF NOT EXISTS</c> and <c>CREATE INDEX IF NOT EXISTS</c>.
+    /// Frozen as originally shipped (<c>Id INTEGER PRIMARY KEY AUTOINCREMENT</c>, no <c>RecordBase</c>
+    /// columns) — this migration had already applied to real local databases by the time ADR 002's
+    /// gap was caught, so per this project's migration policy it can never be edited in place. The
+    /// retrofit onto <c>RecordBase</c> is a separate, later migration: <see cref="MigrateToRecordBase"/>.
     /// </summary>
     public const string CreateImportConflictsTable = """
         CREATE TABLE IF NOT EXISTS System_ImportConflicts (
+            Id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            BatchId       TEXT    NOT NULL,
+            EntityType    TEXT    NOT NULL,
+            EntityId      TEXT,
+            ExistingValue TEXT,
+            IncomingValue TEXT,
+            AppliedPolicy TEXT,
+            Status        TEXT    NOT NULL,
+            MergedFields  TEXT,
+            DetectedAt    TEXT    NOT NULL,
+            ResolvedAt    TEXT
+        );
+        CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
+        CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
+        """;
+
+    /// <summary>
+    /// Retrofits <c>System_ImportConflicts</c> onto <c>RecordBase</c>'s shape, per ADR 002
+    /// ("RecordBase applies to all tables without exception"). This table's original creation
+    /// migration (<see cref="CreateImportConflictsTable"/>) had already applied to real local
+    /// databases with an <c>INTEGER AUTOINCREMENT</c> primary key, so the column-type change
+    /// (<c>long</c> -&gt; Guid <c>TEXT</c>) can't be made in place; SQLite has no <c>ALTER TABLE</c>
+    /// form for changing a column's type or PK behaviour. Rebuilds the table under a temporary name
+    /// (same technique as <c>Migration004_ImportBatchTypeUserSeed</c> and
+    /// <see cref="AuditMigrations.MigrateToRecordBase"/>), generating a synthetic Guid per existing
+    /// row — SQLite has no native UUID function, so one is assembled from <c>randomblob</c>/<c>hex</c>
+    /// in the same 8-4-4-4-12 grouping <c>Guid.Parse</c> expects. <c>DateCreated</c> backfills from
+    /// <c>DetectedAt</c> (the closest available approximation for existing rows);
+    /// <c>DateModified</c>/<c>DateDeleted</c> stay <c>NULL</c> and <c>IsDeleted</c> defaults to 0.
+    /// </summary>
+    public const string MigrateToRecordBase = """
+        CREATE TABLE IF NOT EXISTS System_ImportConflicts_New (
             Id            TEXT    NOT NULL PRIMARY KEY,
             BatchId       TEXT    NOT NULL,
             EntityType    TEXT    NOT NULL,
@@ -35,6 +67,18 @@ public static class ImportConflictMigrations
             DateDeleted   TEXT,
             IsDeleted     INTEGER NOT NULL DEFAULT 0
         );
+
+        INSERT INTO System_ImportConflicts_New (Id, BatchId, EntityType, EntityId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, ResolvedAt, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT
+            lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(2))) || '-' ||
+                lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(6))),
+            BatchId, EntityType, EntityId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, ResolvedAt, DetectedAt, NULL, NULL, 0
+        FROM System_ImportConflicts;
+
+        DROP TABLE System_ImportConflicts;
+
+        ALTER TABLE System_ImportConflicts_New RENAME TO System_ImportConflicts;
+
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
         """;
