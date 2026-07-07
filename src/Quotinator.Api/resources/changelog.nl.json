@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143, 149],
+    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143, 149, 152],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -36,8 +36,8 @@
       "Vijf configureerbare beleidsregels voor het oplossen van duplicaten — `skip`, `newest-wins`, `merge-ours`, `merge-theirs`, `review` — in te stellen via `Quotinator__DefaultConflictPolicy`, met overschrijvingen per entiteitstype en een overschrijving per bron via het manifest",
       "Nieuwe tabel `System_ImportConflicts` legt elk duplicaat vast dat tijdens het seeden wordt aangetroffen — welk beleid is toegepast, en (voor de twee samenvoegbeleidsregels) van welke kant de waarde van elk veld afkomstig is",
       "`ImportBatches` registreert nu welk beleid voor het oplossen van duplicaten actief was voor elke importbatch",
-      "Nieuw eindpunt `POST /api/v1/quotes/import` importeert één bronbestand (JSON, of CSV via een nieuwe convertorplug-in), waarbij dezelfde duplicaatdetectie wordt gebruikt als bij het seeden bij het opstarten — ondersteunt een overschrijving van `duplicateResolution` per aanvraag en een optionele `converter`-keuze",
-      "Nieuw eindpunt `POST /api/v1/quotes/import/preview` voert dezelfde importpijplijn uit, maar maakt alle wijzigingen ongedaan, zodat conflicten en fouten kunnen worden beoordeeld voordat er iets wordt vastgelegd",
+      "Nieuw eindpunt `POST /api/v1/import` importeert één bronbestand (JSON, of CSV via een nieuwe convertorplug-in), waarbij dezelfde duplicaatdetectie wordt gebruikt als bij het seeden bij het opstarten — ondersteunt een overschrijving van `duplicateResolution` per aanvraag en een optionele `converter`-keuze",
+      "Nieuw eindpunt `POST /api/v1/import/preview` voert dezelfde importpijplijn uit, maar maakt alle wijzigingen ongedaan, zodat conflicten en fouten kunnen worden beoordeeld voordat er iets wordt vastgelegd",
       "Manifestbestandsvermeldingen (`data/sources/manifest.json` en gebruikersimportmanifesten) kunnen nu hun eigen `duplicateResolution`-overschrijving opgeven, die voorrang heeft op de manifestbrede en geconfigureerde standaardwaarden",
       "Citaten, bronnen, personages en personen hebben nu een `IsComplete`-markering en een `NoValueKnown`-lijst van bevestigd lege velden in de database, als basis voor toekomstige datakwaliteitstools; nog niet beschikbaar via de API of het beheerpaneel, en wordt nooit teruggezet wanneer een bestaand record wordt overschreven door een duplicaatoplossingsbeleid",
       "Een nieuw intern wijzigingslogboek registreert elk citaat, elke bron en elk personage dat tijdens het seeden of importeren is aangemaakt of gewijzigd, inclusief welke importbatch het heeft geïntroduceerd — als basis voor een toekomstig wijzigingsoverzicht; nog niet beschikbaar via de API of het beheerpaneel",
@@ -50,7 +50,8 @@
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
       "API-antwoorden bevatten niet langer eigenschappen met een `null`-waarde, wat de omvang van de respons verkleint",
       "Het standaardbeleid voor het oplossen van duplicaten is gewijzigd van `skip` (de eerst geziene versie behouden) naar `newest-wins` (de nieuwste versie behouden) wanneer niets dit overschrijft",
-      "Interne audit- en duplicaatconflictgegevens hebben nu dezelfde aanmaak-/wijzigingsregistratie als elk ander databaserecord, voor consistentie; bestaande installaties worden bij de volgende opstart automatisch bijgewerkt, zonder dat actie nodig is"
+      "Interne audit- en duplicaatconflictgegevens hebben nu dezelfde aanmaak-/wijzigingsregistratie als elk ander databaserecord, voor consistentie; bestaande installaties worden bij de volgende opstart automatisch bijgewerkt, zonder dat actie nodig is",
+      "Importeindpunten (`POST /api/v1/import`, `.../import/preview`) zijn verplaatst van onder `/api/v1/quotes` naar hun eigen `/api/v1/import`-routegroep, samen met de conflictbeoordelingseindpunten, allemaal onder een nieuwe `Import`-OpenAPI-tag"
     ],
     "fixed": [
       "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor elk gebundeld bestand, of het nu extern is aangeleverd met een manifest-URL of intern is samengesteld) en bewaren de bron-URL; voorheen werd elke geseede batch onjuist geregistreerd",
@@ -58,7 +59,8 @@
       "Een bestand in de gebruikersimportmap zonder URL werd voorheen op dezelfde manier geclassificeerd als intern samengestelde data; ImportBatch-herkomst heeft nu een apart `UserSeed`-type voor bestanden uit de importmap, los van `Seed` (elke gebundelde dataset, van onszelf of intern samengesteld)",
       "CVE-2026-49451: `Microsoft.OpenApi` (transitief via `Microsoft.AspNetCore.OpenApi`) had een stack-overflow-kwetsbaarheid bij het parsen van OpenAPI-documenten met circulaire schemaverwijzingen; Quotinator genereert alleen zijn eigen OpenAPI-document en parset nooit onvertrouwde documenten, dus het kwetsbare pad was onbereikbaar — desondanks gepatcht naar 2.7.5 via een directe package-override",
       "Een volledige databaseherinitialisatie (`POST /api/v1/admin/database/reset`) wist niet langer het auditlogboek; de audittabel (nu `System_AuditEntries` genoemd) blijft altijd behouden bij een reset, net als al het geval was bij een normale reseed. Interne tabellen die essentieel zijn voor de app gebruiken nu een `System_`-naamsvoorvoegsel, zodat ze automatisch beschermd zijn tegen een reset, in plaats van dat de app elke beschermde tabel bij naam moet kennen",
-      "Een databaseherinitialisatie maakt nu eerst een veiligheidsback-up en herstelt deze automatisch als de reset halverwege mislukt, in plaats van de database mogelijk in een kapotte, half-opgebouwde staat achter te laten"
+      "Een databaseherinitialisatie maakt nu eerst een veiligheidsback-up en herstelt deze automatisch als de reset halverwege mislukt, in plaats van de database mogelijk in een kapotte, half-opgebouwde staat achter te laten",
+      "De OpenAPI-specificatie markeert nu elk import- en conflictbeoordelingseindpunt dat schrijft correct als vereist `X-Api-Key`; voorheen toonden alleen `Admin`-getagde eindpunten deze vereiste, waardoor deze nooit als beveiligd verschenen in de Scalar-UI"
     ]
   },
   "releases": [

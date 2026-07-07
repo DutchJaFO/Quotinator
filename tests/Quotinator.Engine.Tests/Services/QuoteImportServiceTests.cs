@@ -16,7 +16,7 @@ namespace Quotinator.Engine.Tests.Services;
 
 /// <summary>
 /// Integration tests for <see cref="SqliteQuoteImportService"/> — the live
-/// <c>POST /api/v1/quotes/import</c>/<c>.../import/preview</c> pipeline. Unlike
+/// <c>POST /api/v1/import</c>/<c>.../import/preview</c> pipeline. Unlike
 /// <see cref="Database.ConflictResolutionTests"/> (which detects duplicates across two files in the
 /// same seeding pass), these tests exercise duplicate detection against a quote that already exists
 /// in the database from a prior, separate import call — the scenario specific to this service.

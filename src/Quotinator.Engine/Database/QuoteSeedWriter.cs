@@ -18,7 +18,7 @@ namespace Quotinator.Engine.Database;
 /// Shared insert/merge primitives for writing a <see cref="SourceQuote"/> (and its Source/Character/
 /// Person/Translation/Genre rows) into the database, plus conflict logging and existing-row lookup.
 /// Used by both <see cref="QuotinatorDatabaseInitializer"/>'s startup seeding and the
-/// <c>POST /api/v1/quotes/import</c> endpoint's live import service — one copy of this logic, not two.
+/// <c>POST /api/v1/import</c> endpoint's live import service — one copy of this logic, not two.
 /// </summary>
 internal static class QuoteSeedWriter
 {

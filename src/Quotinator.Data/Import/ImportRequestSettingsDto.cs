@@ -3,8 +3,8 @@ using System.Text.Json.Serialization;
 namespace Quotinator.Data.Import;
 
 /// <summary>
-/// Wire model for the <c>settings</c> multipart field of <c>POST /api/v1/quotes/import</c> and
-/// <c>POST /api/v1/quotes/import/preview</c>. Adds <see cref="Enrich"/> to the shared
+/// Wire model for the <c>settings</c> multipart field of <c>POST /api/v1/import</c> and
+/// <c>POST /api/v1/import/preview</c>. Adds <see cref="Enrich"/> to the shared
 /// <see cref="SourceImportSettingsDto"/> base — deliberately not added to that base itself, since
 /// <c>enrich</c> is a request-only concept with no meaning inside <c>manifest.json</c>.
 /// </summary>

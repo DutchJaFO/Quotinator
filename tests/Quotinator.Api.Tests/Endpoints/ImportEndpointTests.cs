@@ -62,8 +62,8 @@ public class ImportEndpointTests
     }
 
     [TestMethod]
-    [DataRow("/api/v1/quotes/import")]
-    [DataRow("/api/v1/quotes/import/preview")]
+    [DataRow("/api/v1/import")]
+    [DataRow("/api/v1/import/preview")]
     public async Task Import_NoKeyConfigured_Returns401(string path)
     {
         using var factory = CreateFactory(null, new FakeQuoteImportService());
@@ -72,8 +72,8 @@ public class ImportEndpointTests
     }
 
     [TestMethod]
-    [DataRow("/api/v1/quotes/import")]
-    [DataRow("/api/v1/quotes/import/preview")]
+    [DataRow("/api/v1/import")]
+    [DataRow("/api/v1/import/preview")]
     public async Task Import_MissingAuthHeader_Returns401(string path)
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
@@ -85,7 +85,7 @@ public class ImportEndpointTests
     public async Task Import_MissingFile_Returns422()
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/quotes/import", BuildForm(includeFile: false));
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm(includeFile: false));
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -94,7 +94,7 @@ public class ImportEndpointTests
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
         var response = await CreateClientWithKey(factory)
-            .PostAsync("/api/v1/quotes/import", BuildForm(settingsJson: "{ not json"));
+            .PostAsync("/api/v1/import", BuildForm(settingsJson: "{ not json"));
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -104,7 +104,7 @@ public class ImportEndpointTests
         var service = new FakeQuoteImportService();
         using var factory = CreateFactory(TestKey, service);
         var response = await CreateClientWithKey(factory)
-            .PostAsync("/api/v1/quotes/import", BuildForm(settingsJson: """{"enrich":true}"""));
+            .PostAsync("/api/v1/import", BuildForm(settingsJson: """{"enrich":true}"""));
 
         Assert.AreEqual(HttpStatusCode.NotImplemented, response.StatusCode);
         Assert.IsNull(service.LastFileName, "The service must never be called when enrich=true short-circuits first");
@@ -116,7 +116,7 @@ public class ImportEndpointTests
         var service = new FakeQuoteImportService { ThrowOnImport = new UnknownConverterException("bogus") };
         using var factory = CreateFactory(TestKey, service);
         var response = await CreateClientWithKey(factory)
-            .PostAsync("/api/v1/quotes/import", BuildForm(settingsJson: """{"converter":"bogus"}"""));
+            .PostAsync("/api/v1/import", BuildForm(settingsJson: """{"converter":"bogus"}"""));
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -126,7 +126,7 @@ public class ImportEndpointTests
     {
         var service = new FakeQuoteImportService { ThrowOnImport = new QuoteImportValidationException("File contained no quotes.") };
         using var factory = CreateFactory(TestKey, service);
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/quotes/import", BuildForm());
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm());
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -135,7 +135,7 @@ public class ImportEndpointTests
     public async Task Import_CorrectKeyAndValidFile_Returns200WithResultShape()
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/quotes/import", BuildForm());
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm());
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -149,7 +149,7 @@ public class ImportEndpointTests
     {
         var service = new FakeQuoteImportService();
         using var factory = CreateFactory(TestKey, service);
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/quotes/import/preview", BuildForm());
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import/preview", BuildForm());
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(true, service.LastPreview);
@@ -163,7 +163,7 @@ public class ImportEndpointTests
         var service = new FakeQuoteImportService();
         using var factory = CreateFactory(TestKey, service);
         var settingsJson = """{"converter":"csv","duplicateResolution":{"default":"merge-theirs"}}""";
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/quotes/import", BuildForm(settingsJson: settingsJson));
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm(settingsJson: settingsJson));
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("csv", service.LastSettings?.Converter);

@@ -69,8 +69,12 @@
   "AdminResetLabel": "Reset database",
   "AdminAuditLogLabel": "View audit log",
   "AdminClearAuditLogLabel": "Clear audit log",
-  "QuotesImportEndpointsHeading": "Protected quote endpoints",
-  "QuotesImportEndpointsDescription": "These endpoints require the same X-Api-Key header as the admin endpoints above, but live under /api/v1/quotes rather than /api/v1/admin.",
-  "QuotesImportLabel": "Import quotes",
-  "QuotesImportPreviewLabel": "Preview a quote import"
+  "ImportEndpointsHeading": "Import endpoints",
+  "ImportEndpointsDescription": "These endpoints live under /api/v1/import. Importing quotes and deciding or applying conflicts require the same X-Api-Key header as the admin endpoints above; listing conflicts does not.",
+  "ImportLabel": "Import quotes",
+  "ImportPreviewLabel": "Preview a quote import",
+  "ImportConflictsLabel": "List import conflicts",
+  "ImportConflictsDecideLabel": "Decide an import conflict",
+  "ImportConflictsUndoLabel": "Undo a conflict decision",
+  "ImportConflictsApplyLabel": "Apply a conflict batch"
 }

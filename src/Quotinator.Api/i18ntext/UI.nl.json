@@ -69,8 +69,12 @@
   "AdminResetLabel": "Database resetten",
   "AdminAuditLogLabel": "Auditlog bekijken",
   "AdminClearAuditLogLabel": "Auditlog wissen",
-  "QuotesImportEndpointsHeading": "Beveiligde citaateindpunten",
-  "QuotesImportEndpointsDescription": "Deze eindpunten vereisen dezelfde X-Api-Key-header als de beheereindpunten hierboven, maar vallen onder /api/v1/quotes in plaats van /api/v1/admin.",
-  "QuotesImportLabel": "Citaten importeren",
-  "QuotesImportPreviewLabel": "Voorbeeld van citaatimport"
+  "ImportEndpointsHeading": "Importeindpunten",
+  "ImportEndpointsDescription": "Deze eindpunten vallen onder /api/v1/import. Citaten importeren en conflicten beslissen of toepassen vereisen dezelfde X-Api-Key-header als de beheereindpunten hierboven; conflicten opvragen niet.",
+  "ImportLabel": "Citaten importeren",
+  "ImportPreviewLabel": "Voorbeeld van citaatimport",
+  "ImportConflictsLabel": "Importconflicten weergeven",
+  "ImportConflictsDecideLabel": "Importconflict beslissen",
+  "ImportConflictsUndoLabel": "Conflictbeslissing ongedaan maken",
+  "ImportConflictsApplyLabel": "Conflictbatch toepassen"
 }

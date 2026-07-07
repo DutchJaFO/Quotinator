@@ -5,7 +5,7 @@ public enum InitiatorType
 {
     /// <summary>Startup seeding from bundled or user-supplied source files.</summary>
     Seed,
-    /// <summary>The live <c>POST /api/v1/quotes/import</c> endpoint.</summary>
+    /// <summary>The live <c>POST /api/v1/import</c> endpoint.</summary>
     Import,
     /// <summary>A write endpoint (create/update/delete a single record).</summary>
     WriteEndpoint,

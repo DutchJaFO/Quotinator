@@ -7,7 +7,7 @@ namespace Quotinator.Engine.Services;
 /// <summary>
 /// Imports a single source file — reusing the same duplicate-detection/merge engine the startup
 /// seeder uses (see <see cref="Database.QuoteSeedWriter"/>) — for the live
-/// <c>POST /api/v1/quotes/import</c> and <c>.../import/preview</c> endpoints.
+/// <c>POST /api/v1/import</c> and <c>.../import/preview</c> endpoints.
 /// </summary>
 /// <remarks>
 /// Lives in <c>Quotinator.Engine</c> rather than <c>Quotinator.Core</c> (unlike <see cref="IQuoteService"/>)

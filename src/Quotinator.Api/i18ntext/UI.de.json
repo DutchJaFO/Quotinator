@@ -69,8 +69,12 @@
   "AdminResetLabel": "Datenbank zurücksetzen",
   "AdminAuditLogLabel": "Auditprotokoll anzeigen",
   "AdminClearAuditLogLabel": "Auditprotokoll löschen",
-  "QuotesImportEndpointsHeading": "Geschützte Zitat-Endpunkte",
-  "QuotesImportEndpointsDescription": "Diese Endpunkte erfordern denselben X-Api-Key-Header wie die Admin-Endpunkte oben, liegen aber unter /api/v1/quotes statt /api/v1/admin.",
-  "QuotesImportLabel": "Zitate importieren",
-  "QuotesImportPreviewLabel": "Zitatimport-Vorschau"
+  "ImportEndpointsHeading": "Import-Endpunkte",
+  "ImportEndpointsDescription": "Diese Endpunkte liegen unter /api/v1/import. Zitate importieren sowie Konflikte entscheiden oder anwenden erfordern denselben X-Api-Key-Header wie die Admin-Endpunkte oben; das Auflisten von Konflikten nicht.",
+  "ImportLabel": "Zitate importieren",
+  "ImportPreviewLabel": "Zitatimport-Vorschau",
+  "ImportConflictsLabel": "Importkonflikte auflisten",
+  "ImportConflictsDecideLabel": "Importkonflikt entscheiden",
+  "ImportConflictsUndoLabel": "Konfliktentscheidung rückgängig machen",
+  "ImportConflictsApplyLabel": "Konfliktbatch anwenden"
 }

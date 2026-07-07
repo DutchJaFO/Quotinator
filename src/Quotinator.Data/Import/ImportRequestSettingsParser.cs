@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace Quotinator.Data.Import;
 
 /// <summary>
-/// Parses the <c>settings</c> multipart text field of <c>POST /api/v1/quotes/import</c> and
+/// Parses the <c>settings</c> multipart text field of <c>POST /api/v1/import</c> and
 /// <c>.../import/preview</c> into an <see cref="ImportRequestSettingsDto"/>. Kept as a dedicated,
 /// unit-testable seam — mirroring <see cref="ConflictPolicyParser"/> — rather than an inline
 /// <c>JsonSerializer.Deserialize</c> call in the endpoint handler, even though the field itself

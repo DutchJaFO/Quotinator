@@ -655,13 +655,13 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    Check that `/version` returns the expected version number — a missing `Directory.Build.props` in the build context silently produces `1.0.0` while `/health` still returns healthy.
    The search queries cover: default full-text (`love` should return results), `field=source` (`Casablanca` should return results), and `field=author`, `field=character`, `type=person` — these three may return an empty `items` array with a `message` when the bundled dataset has no matching data; that is expected behaviour, not a bug.
 
-   **Import and manual conflict-review workflow** (#45, #149) — re-imports a bundled file with `review` policy forced, so the endpoint that would otherwise auto-resolve via the default policy instead produces a genuine pending conflict to exercise decide/undo/apply against:
+   **Import and manual conflict-review workflow** (#45, #149, #152) — re-imports a bundled file with `review` policy forced, so the endpoint that would otherwise auto-resolve via the default policy instead produces a genuine pending conflict to exercise decide/undo/apply against:
    ```bash
    curl -s "http://localhost:8080/api/v1/import/conflicts"
    curl -s -X POST -H "X-Api-Key: <your admin key>" \
      -F "file=@data/sources/quotinator-curated.json" \
      -F 'settings={"duplicateResolution":{"default":"review"}}' \
-     "http://localhost:8080/api/v1/quotes/import"
+     "http://localhost:8080/api/v1/import"
    curl -s "http://localhost:8080/api/v1/import/conflicts?status=pending"
    ```
    From the last response, copy one conflict's `id` and its `batchId` (already uppercase), then:

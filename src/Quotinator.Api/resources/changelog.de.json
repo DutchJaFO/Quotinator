@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143, 149],
+    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143, 149, 152],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -36,8 +36,8 @@
       "Fünf konfigurierbare Richtlinien zur Konfliktlösung bei Duplikaten — `skip`, `newest-wins`, `merge-ours`, `merge-theirs`, `review` — einstellbar über `Quotinator__DefaultConflictPolicy`, mit Überschreibungen pro Entitätstyp und einer Überschreibung pro Quelle über das Manifest",
       "Neue Tabelle `System_ImportConflicts` erfasst jedes beim Seeding gefundene Duplikat — welche Richtlinie angewendet wurde und (bei den beiden Zusammenführungsrichtlinien) von welcher Seite der Wert jedes Feldes stammt",
       "`ImportBatches` erfasst nun, welche Konfliktlösungsrichtlinie für jeden Import-Batch aktiv war",
-      "Neuer Endpunkt `POST /api/v1/quotes/import` importiert eine einzelne Quelldatei (JSON oder, über ein neues Konverter-Plugin, CSV) und verwendet dabei dieselbe Duplikaterkennung wie beim Seeding zum Start — unterstützt eine Überschreibung von `duplicateResolution` pro Anfrage und eine optionale `converter`-Auswahl",
-      "Neuer Endpunkt `POST /api/v1/quotes/import/preview` führt dieselbe Importpipeline aus, macht aber jede Schreiboperation rückgängig, sodass Konflikte und Fehler vor dem eigentlichen Übernehmen geprüft werden können",
+      "Neuer Endpunkt `POST /api/v1/import` importiert eine einzelne Quelldatei (JSON oder, über ein neues Konverter-Plugin, CSV) und verwendet dabei dieselbe Duplikaterkennung wie beim Seeding zum Start — unterstützt eine Überschreibung von `duplicateResolution` pro Anfrage und eine optionale `converter`-Auswahl",
+      "Neuer Endpunkt `POST /api/v1/import/preview` führt dieselbe Importpipeline aus, macht aber jede Schreiboperation rückgängig, sodass Konflikte und Fehler vor dem eigentlichen Übernehmen geprüft werden können",
       "Manifest-Dateieinträge (`data/sources/manifest.json` und Benutzer-Import-Manifeste) können nun eine eigene `duplicateResolution`-Überschreibung angeben, die Vorrang vor den manifestweiten und konfigurierten Standardwerten hat",
       "Zitate, Quellen, Charaktere und Personen haben jetzt ein `IsComplete`-Kennzeichen und eine `NoValueKnown`-Liste bestätigt leerer Felder in der Datenbank, als Grundlage für künftige Datenqualitäts-Werkzeuge; noch nicht über die API oder die Verwaltungsoberfläche zugänglich, und wird nie zurückgesetzt, wenn ein bestehender Datensatz durch eine Konfliktlösungsrichtlinie überschrieben wird",
       "Ein neues internes Änderungsprotokoll erfasst jedes Zitat, jede Quelle und jeden Charakter, der beim Seeding oder Import erstellt oder geändert wurde, einschließlich des Import-Batches, der es eingeführt hat — als Grundlage für eine zukünftige Änderungsverlaufsansicht; noch nicht über die API oder die Verwaltungsoberfläche zugänglich",
@@ -50,7 +50,8 @@
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",
       "API-Antworten enthalten keine Eigenschaften mehr mit einem `null`-Wert, was die Größe der Antwort verringert",
       "Die standardmäßige Konfliktlösungsrichtlinie wurde von `skip` (die zuerst gesehene Version behalten) auf `newest-wins` (die neueste Version behalten) geändert, wenn nichts anderes konfiguriert ist",
-      "Interne Audit- und Duplikatkonflikt-Datensätze verfügen jetzt über dieselbe Erstellungs-/Änderungsverfolgung wie jeder andere Datenbankeintrag, aus Konsistenzgründen; bestehende Installationen werden beim nächsten Start automatisch aktualisiert, ohne dass eine Aktion erforderlich ist"
+      "Interne Audit- und Duplikatkonflikt-Datensätze verfügen jetzt über dieselbe Erstellungs-/Änderungsverfolgung wie jeder andere Datenbankeintrag, aus Konsistenzgründen; bestehende Installationen werden beim nächsten Start automatisch aktualisiert, ohne dass eine Aktion erforderlich ist",
+      "Import-Endpunkte (`POST /api/v1/import`, `.../import/preview`) wurden von unter `/api/v1/quotes` in eine eigene `/api/v1/import`-Routengruppe verschoben, zusammen mit den Konfliktprüfungs-Endpunkten, alle unter einem neuen `Import`-OpenAPI-Tag"
     ],
     "fixed": [
       "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für jede gebündelte Datei, ob extern über eine Manifest-URL bezogen oder intern kuratiert) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch falsch erfasst",
@@ -58,7 +59,8 @@
       "Eine Datei im Benutzer-Importordner ohne URL wurde bisher genauso eingestuft wie intern kuratierte Daten; die ImportBatch-Herkunft hat jetzt einen eigenen `UserSeed`-Typ für Dateien aus dem Importordner, getrennt von `Seed` (jeder gebündelte Datensatz, ob eigener oder intern kuratierter)",
       "CVE-2026-49451: `Microsoft.OpenApi` (transitiv über `Microsoft.AspNetCore.OpenApi`) hatte eine Stack-Overflow-Schwachstelle beim Parsen von OpenAPI-Dokumenten mit zirkulären Schemaverweisen; Quotinator generiert nur sein eigenes OpenAPI-Dokument und parst niemals nicht vertrauenswürdige Dokumente, daher war der verwundbare Pfad unerreichbar — trotzdem auf 2.7.5 gepatcht über eine direkte Paket-Überschreibung",
       "Ein vollständiges Datenbank-Reset (`POST /api/v1/admin/database/reset`) löschte bisher das Audit-Protokoll; die Audit-Tabelle (jetzt `System_AuditEntries` genannt) bleibt bei einem Reset immer erhalten, so wie es bei einem normalen Reseed bereits der Fall war. Interne Tabellen, die für die App essenziell sind, verwenden jetzt ein `System_`-Namenspräfix, sodass sie automatisch vor einem Reset geschützt sind, anstatt dass die App jede geschützte Tabelle namentlich kennen muss",
-      "Ein Datenbank-Reset erstellt jetzt zuerst eine Sicherheitskopie und stellt diese automatisch wieder her, falls der Reset mittendrin fehlschlägt, anstatt die Datenbank möglicherweise in einem defekten, halb wiederhergestellten Zustand zu belassen"
+      "Ein Datenbank-Reset erstellt jetzt zuerst eine Sicherheitskopie und stellt diese automatisch wieder her, falls der Reset mittendrin fehlschlägt, anstatt die Datenbank möglicherweise in einem defekten, halb wiederhergestellten Zustand zu belassen",
+      "Die OpenAPI-Spezifikation kennzeichnet jetzt jeden schreibenden Import- und Konfliktprüfungs-Endpunkt korrekt als `X-Api-Key` erfordernd; zuvor zeigten nur mit `Admin` getaggte Endpunkte diese Anforderung, sodass diese in der Scalar-UI nie als geschützt erschienen"
     ]
   },
   "releases": [

@@ -21,7 +21,7 @@ and follow standard C# documentation conventions.
 | CI | Continuous Integration | |
 | CD | Continuous Delivery / Continuous Deployment | Used together as CI/CD in workflow docs. |
 | CRUD | Create, Read, Update, Delete | Standard shorthand for the four basic data operations. |
-| CSV | Comma-Separated Values | A flat, delimited text format for tabular data. Supported by the import endpoint (`POST /api/v1/quotes/import`) via the `Quotinator.Converters.Csv` plugin, in addition to Quotinator's canonical JSON schema. |
+| CSV | Comma-Separated Values | A flat, delimited text format for tabular data. Supported by the import endpoint (`POST /api/v1/import`) via the `Quotinator.Converters.Csv` plugin, in addition to Quotinator's canonical JSON schema. |
 | CVE | Common Vulnerabilities and Exposures | The identifier scheme used by the National Vulnerability Database for publicly known security issues. |
 | DI | Dependency Injection | Used throughout in the context of ASP.NET Core's built-in container. |
 | DTO | Data Transfer Object | An object used to carry data between layers without exposing the domain model directly. |

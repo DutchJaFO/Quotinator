@@ -76,8 +76,8 @@
 
     <hr />
 
-    <h2>@Text.QuotesImportEndpointsHeading</h2>
-    <p>@Text.QuotesImportEndpointsDescription</p>
+    <h2>@Text.ImportEndpointsHeading</h2>
+    <p>@Text.ImportEndpointsDescription</p>
 
     <table class="table">
         <thead>
@@ -88,12 +88,28 @@
         </thead>
         <tbody>
             <tr>
-                <td>@Text.QuotesImportLabel</td>
-                <td><code>POST @ApiRoutes.QuotesImport</code></td>
+                <td>@Text.ImportLabel</td>
+                <td><code>POST @ApiRoutes.Import</code></td>
             </tr>
             <tr>
-                <td>@Text.QuotesImportPreviewLabel</td>
-                <td><code>POST @ApiRoutes.QuotesImportPreview</code></td>
+                <td>@Text.ImportPreviewLabel</td>
+                <td><code>POST @ApiRoutes.ImportPreview</code></td>
+            </tr>
+            <tr>
+                <td>@Text.ImportConflictsLabel</td>
+                <td><code>GET @ApiRoutes.ImportConflicts</code></td>
+            </tr>
+            <tr>
+                <td>@Text.ImportConflictsDecideLabel</td>
+                <td><code>POST @ApiRoutes.ImportConflictsDecide</code></td>
+            </tr>
+            <tr>
+                <td>@Text.ImportConflictsUndoLabel</td>
+                <td><code>POST @ApiRoutes.ImportConflictsUndo</code></td>
+            </tr>
+            <tr>
+                <td>@Text.ImportConflictsApplyLabel</td>
+                <td><code>POST @ApiRoutes.ImportConflictsApply</code></td>
             </tr>
         </tbody>
     </table>

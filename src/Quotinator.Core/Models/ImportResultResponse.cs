@@ -1,7 +1,7 @@
 namespace Quotinator.Core.Models;
 
 /// <summary>
-/// Response envelope for <c>POST /api/v1/quotes/import</c> and <c>.../import/preview</c> — identical
+/// Response envelope for <c>POST /api/v1/import</c> and <c>.../import/preview</c> — identical
 /// shape for both endpoints. <see cref="Preview"/> and <see cref="BatchId"/> are the only fields that
 /// differ in practice: a preview run computes everything but rolls back, so nothing is persisted and
 /// no batch exists to reference.

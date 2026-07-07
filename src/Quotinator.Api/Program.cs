@@ -67,6 +67,7 @@ builder.Services.AddOpenApi(options =>
             new() { Name = ApiTags.System,  Description = "Endpoints for monitoring and verifying the health of the API." },
             new() { Name = ApiTags.Quotes,  Description = "Endpoints for fetching and searching quotes." },
             new() { Name = ApiTags.Admin,   Description = "Administrative endpoints for database maintenance. Require `X-Api-Key` authentication. Protected by a concurrency-1 limiter — only one operation runs at a time; any concurrent request receives `429 Too Many Requests` immediately." },
+            new() { Name = ApiTags.Import,  Description = "Endpoints for importing quote data and reviewing/resolving merge conflicts. Write operations require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter." },
         };
 
         document.Info = new()
@@ -97,18 +98,7 @@ builder.Services.AddOpenApi(options =>
         return Task.CompletedTask;
     });
 
-    options.AddOperationTransformer((operation, context, cancellationToken) =>
-    {
-        if (operation.Tags?.Any(t => t.Name == ApiTags.Admin) == true)
-        {
-            operation.Security = new List<OpenApiSecurityRequirement>
-            {
-                new() { [new OpenApiSecuritySchemeReference("ApiKey")] = new List<string>() }
-            };
-        }
-        return Task.CompletedTask;
-    });
-
+    options.AddOperationTransformer<AdminApiKeySecurityTransformer>();
     options.AddOperationTransformer<YearParameterSchemaTransformer>();
     options.AddSchemaTransformer<ImportModelSchemaTransformer>();
 });
