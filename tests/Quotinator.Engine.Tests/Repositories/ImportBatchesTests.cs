@@ -131,14 +131,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>App schema migration version is bumped to 6 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>App schema migration version is bumped to 7 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(6, db.SchemaVersion, "SchemaVersion should be 6 after Migration006");
+        Assert.AreEqual(7, db.SchemaVersion, "SchemaVersion should be 7 after Migration007");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────

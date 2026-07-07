@@ -85,6 +85,8 @@
     <File Path="docs/architecture-decisions/004-quotinator-data-project-boundaries.md" />
     <File Path="docs/architecture-decisions/005-quotinator-changelog-project-scope.md" />
     <File Path="docs/architecture-decisions/006-sequential-test-execution-by-default.md" />
+    <File Path="docs/architecture-decisions/007-cs1591-on-test-projects.md" />
+    <File Path="docs/architecture-decisions/008-enum-backed-columns-require-check-constraints.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
@@ -115,6 +117,7 @@
     <File Path="docs/milestones/data-import-sources/143-migration-ownership-baseline-plan.md" />
     <File Path="docs/milestones/data-import-sources/149-manual-conflict-review-plan.md" />
     <File Path="docs/milestones/data-import-sources/152-endpoint-grouping-plan.md" />
+    <File Path="docs/milestones/data-import-sources/154-import-staging-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/">
     <File Path="docs/milestones/v1-7-0/overview.md" />

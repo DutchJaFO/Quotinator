@@ -405,7 +405,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(0, legacyCount, "The legacy SchemaVersion table must no longer exist after the rename");
         Assert.AreEqual(1, preservedRow, "The pre-existing version-history row must survive the rename, not be wiped");
-        Assert.AreEqual(7, db2.DataSchemaVersion, "Data migrations 2-7 (the rename, System_ImportConflicts, System_ChangeLog, both RecordBase retrofits, and ExistingBatchId) should all have replayed after the legacy rename");
+        Assert.AreEqual(8, db2.DataSchemaVersion, "Data migrations 2-8 (the rename, System_ImportConflicts, System_ChangeLog, both RecordBase retrofits, ExistingBatchId, and System_ImportActions) should all have replayed after the legacy rename");
     }
 
     /// <summary>Data migration 2 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
@@ -489,7 +489,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(6, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+        Assert.AreEqual(7, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
     }
 
     // ── #143 — migration ownership split + baseline schema ─────────────────────
@@ -604,6 +604,16 @@ public class DatabaseInitializerTests
                 new { id = Guid.NewGuid().ToString(), now }));
 
             await conn.ExecuteAsync(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, Status) " +
+                "VALUES (@id, 'check-test-staged.json', 'Import', @now, 0, @now, 0, 'Staged');",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, Status) " +
+                "VALUES (@id, 'bad-status.json', 'Import', @now, 0, @now, 0, 'NotARealStatus');",
+                new { id = Guid.NewGuid().ToString(), now }));
+
+            await conn.ExecuteAsync(
                 "INSERT INTO Sources (Id, Title, Type, DateCreated, IsDeleted) VALUES (@id, 'CheckTest', 'Person', @now, 0);",
                 new { id = Guid.NewGuid().ToString(), now });
 
@@ -628,8 +638,8 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(7, db.DataSchemaVersion);
-        Assert.AreEqual(6, db.SchemaVersion);
+        Assert.AreEqual(8, db.DataSchemaVersion);
+        Assert.AreEqual(7, db.SchemaVersion);
     }
 
     /// <summary>
@@ -656,8 +666,8 @@ public class DatabaseInitializerTests
         var db2 = CreateInitializer([]);
         await db2.InitialiseAsync();
 
-        Assert.AreEqual(6, db2.SchemaVersion,     "All three remaining App migrations (4, 5, and 6) should have replayed");
-        Assert.AreEqual(7, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
+        Assert.AreEqual(7, db2.SchemaVersion,     "All four remaining App migrations (4, 5, 6, and 7) should have replayed");
+        Assert.AreEqual(8, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
     }
 
     /// <summary>
@@ -701,7 +711,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(6, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+        Assert.AreEqual(7, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
 }

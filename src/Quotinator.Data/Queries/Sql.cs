@@ -341,6 +341,60 @@ internal static class Sql
         }
     }
 
+    /// <summary>System_ImportActions table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.SystemImportActionWriter"/>.</summary>
+    internal static class SystemImportActions
+    {
+        /// <summary>Removes all import-action rows.</summary>
+        internal const string DeleteAll = "DELETE FROM System_ImportActions;";
+
+        // COUNT base — shared by CountPaged factory method below.
+        private const string CountPagedBase = "SELECT COUNT(*) FROM System_ImportActions";
+
+        // Column list shared by every SELECT below.
+        private const string SelectColumns =
+            "Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, AppliedAt, DiscardedAt";
+
+        /// <summary>Paginated action listing, newest first, with optional filters.</summary>
+        internal static string SelectPaged(bool filterBatchId, bool filterStatus)
+            => $"SELECT {SelectColumns} FROM System_ImportActions" +
+               BuildWhere(filterBatchId, filterStatus) +
+               " ORDER BY DetectedAt DESC LIMIT @pageSize OFFSET @offset;";
+
+        /// <summary>Total matching count for the action list endpoint.</summary>
+        internal static string CountPaged(bool filterBatchId, bool filterStatus)
+            => CountPagedBase + BuildWhere(filterBatchId, filterStatus) + ";";
+
+        /// <summary>Single-action lookup by Id (#154's decide/undo/apply/discard flows).</summary>
+        internal static string SelectById => $"SELECT {SelectColumns} FROM System_ImportActions WHERE Id = @id;";
+
+        /// <summary>Every action sharing a BatchId, any status — #154's apply-batch readiness check needs the complete set, not a page.</summary>
+        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportActions WHERE BatchId = @batchId;";
+
+        /// <summary>Stages a per-field decision (#154) — Status→Decided, MergedFields holds the decision payload. Idempotent: resubmitting overwrites the prior decision.</summary>
+        internal const string MarkDecided =
+            "UPDATE System_ImportActions SET Status = @status, MergedFields = @mergedFields, DateModified = @dateModified WHERE Id = @id;";
+
+        /// <summary>Reverts a staged decision back to Pending (#154's undo-before-apply) — clears MergedFields.</summary>
+        internal const string ClearDecision =
+            "UPDATE System_ImportActions SET Status = @status, MergedFields = NULL, DateModified = @dateModified WHERE Id = @id;";
+
+        /// <summary>Marks an action applied once its batch has been applied (#154) — AppliedAt set.</summary>
+        internal const string MarkApplied =
+            "UPDATE System_ImportActions SET Status = @status, AppliedAt = @appliedAt, DateModified = @dateModified WHERE Id = @id;";
+
+        /// <summary>Marks every action sharing a BatchId discarded in one statement (#154) — DiscardedAt set.</summary>
+        internal const string MarkBatchDiscarded =
+            "UPDATE System_ImportActions SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE BatchId = @batchId;";
+
+        private static string BuildWhere(bool filterBatchId, bool filterStatus)
+        {
+            var parts = new List<string>(2);
+            if (filterBatchId) parts.Add("BatchId = @batchId");
+            if (filterStatus)  parts.Add("Status = @status");
+            return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
+        }
+    }
+
     /// <summary>System_ImportConflicts table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.SystemImportConflictWriter"/>.</summary>
     internal static class SystemImportConflicts
     {

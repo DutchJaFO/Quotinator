@@ -2,7 +2,10 @@
 
 **Status:** Planning
 **GitHub issue:** #59  
-**Depends on:** #58 (ImportBatches), #56 (audit log)
+**Depends on:** #58 (ImportBatches), #56 (audit log), #154 (Unify import, preview, and seeding on
+one staging engine — #59 is now redefined to undo an already-applied batch using #154's
+`System_ImportActions` log instead of the FK-sharing-cascade approach described below; the spec
+requirements below predate that redefinition and need reworking once #154 ships)
 
 ---
 

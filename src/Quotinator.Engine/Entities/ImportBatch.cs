@@ -28,4 +28,18 @@ public sealed class ImportBatch : RecordBase
 
     /// <summary>The conflict-resolution policy that was active for this batch (the effective policy for quotes, since a batch may span multiple entity types).</summary>
     public SafeValue<DuplicateResolutionPolicy?> ConflictPolicy { get; init; } = SafeValue<DuplicateResolutionPolicy?>.Empty;
+
+    /// <summary>
+    /// Batch lifecycle state stored as the <see cref="ImportBatchStatus"/> enum name (#154).
+    /// Defaults to <see cref="ImportBatchStatus.Applied"/> — every call site that constructs an
+    /// <see cref="ImportBatch"/> without setting this explicitly (every pre-#154 code path: live
+    /// import, preview, seeding) always commits immediately, so this default matches their actual
+    /// behaviour. Dapper.Contrib's generated INSERT always supplies every property explicitly, so
+    /// the column's own SQL-level <c>DEFAULT 'Applied'</c> is never actually reached for a
+    /// freshly-constructed entity — this C# default is what really governs new rows.
+    /// </summary>
+    public string Status { get; set; } = ImportBatchStatus.Applied.ToString();
+
+    /// <summary>UTC timestamp when the batch was applied, in <c>yyyy-MM-dd HH:mm:ss</c> format. Null while <see cref="Status"/> is <see cref="ImportBatchStatus.Staged"/>.</summary>
+    public string? AppliedAt { get; set; }
 }

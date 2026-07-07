@@ -31,6 +31,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 5, Sql = AuditMigrations.MigrateToRecordBase },
         new SchemaMigration { Version = 6, Sql = ImportConflictMigrations.MigrateToRecordBase },
         new SchemaMigration { Version = 7, Sql = ImportConflictMigrations.AddExistingBatchId },
+        new SchemaMigration { Version = 8, Sql = ImportActionMigrations.CreateImportActionsTable },
     ];
 
     // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and
@@ -75,6 +76,29 @@ public class DatabaseInitializer : IDatabaseInitializer
         );
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
+
+        CREATE TABLE IF NOT EXISTS System_ImportActions (
+            Id              TEXT    NOT NULL PRIMARY KEY,
+            BatchId         TEXT    NOT NULL,
+            ActionType      TEXT    NOT NULL,
+            EntityType      TEXT    NOT NULL,
+            EntityId        TEXT    NOT NULL,
+            ExistingBatchId TEXT,
+            ExistingValue   TEXT,
+            IncomingValue   TEXT    NOT NULL,
+            AppliedPolicy   TEXT,
+            Status          TEXT    NOT NULL,
+            MergedFields    TEXT,
+            DetectedAt      TEXT    NOT NULL,
+            AppliedAt       TEXT,
+            DiscardedAt     TEXT,
+            DateCreated     TEXT    NOT NULL,
+            DateModified    TEXT,
+            DateDeleted     TEXT,
+            IsDeleted       INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS IX_System_ImportActions_BatchId ON System_ImportActions (BatchId);
+        CREATE INDEX IF NOT EXISTS IX_System_ImportActions_Status ON System_ImportActions (Status);
 
         CREATE TABLE IF NOT EXISTS System_ChangeLog (
             Id               TEXT NOT NULL PRIMARY KEY,

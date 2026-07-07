@@ -23,6 +23,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 4, Sql = Migration004_ImportBatchTypeUserSeed },
         new SchemaMigration { Version = 5, Sql = Migration005_ImportBatchConflictPolicy },
         new SchemaMigration { Version = 6, Sql = Migration006_RecordCompleteness },
+        new SchemaMigration { Version = 7, Sql = Migration007_ImportBatchStagingStatus },
     ];
 
     /// <summary>
@@ -231,17 +232,32 @@ public static class QuotinatorMigrations
         ALTER TABLE People     ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
         """;
 
-    // Consolidated schema for a genuinely fresh database — the union of migrations 1-6's final
+    // Adds ImportBatches.Status ('Staged'/'Applied'/'Discarded') and AppliedAt (#154). Every
+    // pre-existing code path (live import, preview, seeding) always committed immediately, so
+    // pre-existing rows correctly backfill to 'Applied' — nothing before this feature ever staged.
+    // Only the new staging endpoint creates 'Staged' rows. Status is backed by a real C# enum
+    // (ImportBatchStatus), so it gets a CHECK constraint per ADR 008 (enum-backed columns require
+    // a matching CHECK). Verified against the actual bundled SQLite that ALTER TABLE ADD COLUMN
+    // accepts an inline CHECK constraint on the new column.
+    private const string Migration007_ImportBatchStagingStatus = """
+        ALTER TABLE ImportBatches ADD COLUMN Status TEXT NOT NULL DEFAULT 'Applied'
+            CHECK (Status IN ('Staged', 'Applied', 'Discarded'));
+        ALTER TABLE ImportBatches ADD COLUMN AppliedAt TEXT;
+        """;
+
+    // Consolidated schema for a genuinely fresh database — the union of migrations 1-7's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
     // ImportBatches using the final widened CHECK constraint (migration004), ImportBatches.
     // ConflictPolicy (migration005's ALTER TABLE ADD COLUMN, also always appends, so it's listed
-    // last too) present with the same 'skip' default backfill value, and IsComplete/NoValueKnown
-    // (migration006's ALTER TABLE ADD COLUMN, appended last again) on the four entity tables.
+    // last too) present with the same 'skip' default backfill value, IsComplete/NoValueKnown
+    // (migration006's ALTER TABLE ADD COLUMN, appended last again) on the four entity tables, and
+    // ImportBatches.Status/AppliedAt (migration007's ALTER TABLE ADD COLUMN, appended last) with the
+    // same 'Applied' default backfill value.
     // Deliberately omits migration002's DELETE FROM QuoteGenres (data-repair for pre-existing bad
     // data — nothing to repair on a fresh database) and migration003's pre-seed INSERTs (WHERE
     // EXISTS-guarded, always a no-op before any quote has been seeded). Kept in sync with
-    // migrations 1-6 by DatabaseInitializerTests' schema-drift comparison.
+    // migrations 1-7 by DatabaseInitializerTests' schema-drift comparison.
     private const string BaselineSchema = """
         CREATE TABLE IF NOT EXISTS ImportBatches (
             Id           TEXT    PRIMARY KEY,
@@ -255,7 +271,10 @@ public static class QuotinatorMigrations
             DateModified TEXT,
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ConflictPolicy TEXT  NOT NULL DEFAULT 'skip'
+            ConflictPolicy TEXT  NOT NULL DEFAULT 'skip',
+            Status       TEXT    NOT NULL DEFAULT 'Applied'
+                         CHECK (Status IN ('Staged', 'Applied', 'Discarded')),
+            AppliedAt    TEXT
         );
 
         CREATE TABLE IF NOT EXISTS Sources (

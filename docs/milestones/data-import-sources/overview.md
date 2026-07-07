@@ -56,6 +56,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow | Waiting for release | T1 ✅ T2 ✅ | [149-manual-conflict-review-plan.md](149-manual-conflict-review-plan.md) |
 | [#152](https://github.com/DutchJaFO/Quotinator/issues/152) | Review endpoint grouping: split Admin / Quote / Import | Waiting for release | T1 ✅ T2 ✅ | [152-endpoint-grouping-plan.md](152-endpoint-grouping-plan.md) |
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts | Planning | Not yet assessed | No plan doc yet — deferred out of #149 |
+| [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Planning | Not yet assessed | [154-import-staging-plan.md](154-import-staging-plan.md) |
+| [#155](https://github.com/DutchJaFO/Quotinator/issues/155) | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning | Not yet assessed | No plan doc yet — deferred to just before milestone close |
 
 ---
 
@@ -76,7 +78,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #45 (import endpoint) → unblocks remaining #64 requirements and #65 final shape
 #55 (completeness flag) → requires #64 (merge engine must never reset IsComplete/NoValueKnown on an update); connects to #56 (no-value-known)
 #56 (audit log) → requires #58 for batch actor; connects to #45, #55, #59
-#59 (soft-reset by batch) → requires #58 and #56
+#59 (soft-reset by batch) → redefined to depend on #154 (undoes an already-applied batch using #154's System_ImportActions log instead of the originally-planned FK-sharing-cascade approach); still requires #58 and #56
 #67 (conversations schema) → requires #58 for batch FK; unblocks #68, #69
 #68 (curated format) → requires #67, #61
 #69 (API conversations) → requires #67, #68
@@ -84,7 +86,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #144 (converter plugin review) → requires #140 (done)
 #149 (manual conflict-review workflow) → deferred out of #45; requires #56 (audit log) — done; unblocks #153
 #152 (endpoint grouping review) → depended on #149's /api/v1/import group/tag existing first; moved the remaining /quotes/import(/preview) endpoints into that same group — done
-#153 (declarative conflict-resolution file) → deferred out of #149; requires #149 (decide/undo/apply machinery and FieldMergeResolver to build on)
+#153 (declarative conflict-resolution file) → deferred out of #149; requires #149 (decide/undo/apply machinery and FieldMergeResolver to build on); also builds naturally on #154's staging model once it ships
+#154 (unify import/preview/seeding on one staging engine) → emerged while planning #59; requires #149 (IConflictResolutionCoordinator, System_ImportConflicts as the template) and #56 (audit log); unblocks #59 (redefined) and #153 (natural fit, not required)
+#155 (migration review before milestone close) → independent of the others; should be done last, immediately before this milestone closes
 ```
 
 ---
@@ -110,12 +114,14 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 15 | #56 | Audit log (System_ChangeLog) | Waiting for release |
 | 16 | #152 | Review endpoint grouping: split Admin / Quote / Import | Waiting for release |
 | 17 | #149 | Import endpoint: manual conflict-review workflow | Waiting for release |
-| 18 | #59 | Admin: soft-reset by batch | Planning |
-| 19 | #67 | Conversations schema | Planning |
-| 20 | #68 | Curated JSON conversations | Planning |
-| 21 | #69 | API conversations | Planning |
-| 22 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Planning |
-| 23 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts | Planning |
+| 18 | #154 | Unify import, preview, and seeding on one staging engine | Planning |
+| 19 | #59 | Admin: soft-reset by batch | Planning |
+| 20 | #67 | Conversations schema | Planning |
+| 21 | #68 | Curated JSON conversations | Planning |
+| 22 | #69 | API conversations | Planning |
+| 23 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Planning |
+| 24 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts | Planning |
+| 25 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
 
 ---
 
@@ -138,7 +144,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 |-------|------------------------|-------|
 | #45, #65 | Not evaluated for early merge — held for the full milestone | Fully done (T1 ✅ T2 ✅), but their own output is only reachable through the write path they introduce (`POST /api/v1/import`, moved from `/api/v1/quotes/import` by #152) — nothing else in the milestone calls them, and no existing behaviour depends on them being present, so there is no forcing reason to break from the default "merge the full milestone together" assumption. Revisit only if a later issue in this milestone (e.g. #59, #56) would otherwise sit blocked waiting on a merge. |
 
-All other remaining issues (#59, #67, #68, #69, #144, #153) are still in `Planning` — not started. #149 and #152 are `Waiting for release` (both: T1 ✅ T2 ✅). Evaluate each for early merge when complete — the default is to merge the full milestone together.
+All other remaining issues (#59, #67, #68, #69, #144, #153, #154, #155) are still in `Planning` — not started. #149 and #152 are `Waiting for release` (both: T1 ✅ T2 ✅). Evaluate each for early merge when complete — the default is to merge the full milestone together.
 
 ---
 
@@ -158,6 +164,7 @@ All other remaining issues (#59, #67, #68, #69, #144, #153) are still in `Planni
 - [#56 — Audit log](56-audit-log-plan.md)
 - [#149 — Manual conflict-review workflow](149-manual-conflict-review-plan.md)
 - [#152 — Endpoint grouping review](152-endpoint-grouping-plan.md)
+- [#154 — Unify import, preview, and seeding on one staging engine](154-import-staging-plan.md)
 - [#59 — Admin soft-reset by batch](59-admin-soft-reset-plan.md)
 - [#67 — Conversations schema](67-conversations-schema-plan.md)
 - [#68 — Curated JSON conversations](68-curated-json-conversations-plan.md)
