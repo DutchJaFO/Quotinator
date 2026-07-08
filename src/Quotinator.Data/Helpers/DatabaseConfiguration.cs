@@ -1,4 +1,5 @@
 using Dapper;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 
@@ -28,6 +29,12 @@ public abstract class DatabaseConfiguration
         // Previously only registered via QuotinatorDapperConfiguration, which meant Quotinator.Data.Tests
         // (which only calls the base Configure()) could never write a SystemImportConflict row at all.
         RegisterEnumHandler<DuplicateResolutionPolicy>();
+        // ImportConflictStatus/ImportActionStatus/ImportActionKind are closed sets this project's own
+        // coordinator logic assigns and transitions between (see ADR 008) — same category as
+        // DuplicateResolutionPolicy above, registered here rather than in a consumer's RegisterDomainHandlers().
+        RegisterEnumHandler<ImportConflictStatus>();
+        RegisterEnumHandler<ImportActionStatus>();
+        RegisterEnumHandler<ImportActionKind>();
         RegisterDomainHandlers();
     }
 

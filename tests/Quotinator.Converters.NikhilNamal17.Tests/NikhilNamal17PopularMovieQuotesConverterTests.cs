@@ -1,5 +1,6 @@
 using Quotinator.Converters.NikhilNamal17;
 using Quotinator.Core.Import;
+using Quotinator.Core.Models;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Converters.NikhilNamal17.Tests;
@@ -97,7 +98,7 @@ public class NikhilNamal17PopularMovieQuotesConverterTests
         await new NikhilNamal17PopularMovieQuotesConverter().ConvertAsync(inputPath, outputPath);
 
         SourceQuoteFileReader.TryParse(await File.ReadAllTextAsync(outputPath), out var quotes);
-        Assert.AreEqual("movie", quotes!.Single().Type);
+        Assert.AreEqual(QuoteType.Movie, quotes!.Single().Type);
     }
 
     [TestMethod]

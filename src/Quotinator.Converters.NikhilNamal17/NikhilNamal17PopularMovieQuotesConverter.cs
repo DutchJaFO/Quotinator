@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Quotinator.Core.Import;
+using Quotinator.Core.Models;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Converters.NikhilNamal17;
@@ -10,7 +11,7 @@ namespace Quotinator.Converters.NikhilNamal17;
 /// </summary>
 public sealed class NikhilNamal17PopularMovieQuotesConverter : IQuoteSourceConverter
 {
-    private const string DefaultType = "movie";
+    private const QuoteType DefaultType = QuoteType.Movie;
 
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 

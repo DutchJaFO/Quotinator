@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Tests.Import;
@@ -34,14 +35,16 @@ public class ImportActionResolutionCoordinatorTests
             CREATE TABLE System_ImportActions (
                 Id              TEXT    NOT NULL PRIMARY KEY,
                 BatchId         TEXT    NOT NULL,
-                ActionType      TEXT    NOT NULL,
+                ActionType      TEXT    NOT NULL
+                                CHECK (ActionType IN ('Add', 'Modify')),
                 EntityType      TEXT    NOT NULL,
                 EntityId        TEXT    NOT NULL,
                 ExistingBatchId TEXT,
                 ExistingValue   TEXT,
                 IncomingValue   TEXT    NOT NULL,
                 AppliedPolicy   TEXT,
-                Status          TEXT    NOT NULL,
+                Status          TEXT    NOT NULL
+                                CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded')),
                 MergedFields    TEXT,
                 DetectedAt      TEXT    NOT NULL,
                 AppliedAt       TEXT,
@@ -70,23 +73,23 @@ public class ImportActionResolutionCoordinatorTests
     private static SystemImportAction BuildPendingModify(string batchId) => new()
     {
         BatchId       = batchId,
-        ActionType    = ImportActionKind.Modify,
+        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
         EntityType    = "Widget",
         EntityId      = Guid.NewGuid().ToString(),
         ExistingValue = "{}",
         IncomingValue = "{}",
-        Status        = ImportActionStatus.Pending,
+        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Pending.ToString(), ImportActionStatus.Pending),
         DetectedAt    = DateTime.UtcNow,
     };
 
     private static SystemImportAction BuildDecidedAdd(string batchId) => new()
     {
         BatchId       = batchId,
-        ActionType    = ImportActionKind.Add,
+        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
         EntityType    = "Widget",
         EntityId      = Guid.NewGuid().ToString(),
         IncomingValue = "{}",
-        Status        = ImportActionStatus.Decided,
+        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
         DetectedAt    = DateTime.UtcNow,
     };
 
@@ -130,7 +133,7 @@ public class ImportActionResolutionCoordinatorTests
         await _coordinator.DecideAsync(entry.Id, "\"my-decision\"");
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportActionStatus.Decided, found!.Status);
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
         Assert.AreEqual("\"my-decision\"", found.MergedFields);
         Assert.IsFalse(callbackInvoked, "DecideAsync must never touch any domain table.");
     }
@@ -159,7 +162,7 @@ public class ImportActionResolutionCoordinatorTests
         await _coordinator.UndoDecisionAsync(entry.Id);
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportActionStatus.Pending, found!.Status);
+        Assert.AreEqual(ImportActionStatus.Pending, found!.Status.Parsed);
         Assert.IsNull(found.MergedFields);
     }
 
@@ -194,7 +197,7 @@ public class ImportActionResolutionCoordinatorTests
         Assert.AreEqual(0, callbackInvocations, "Nothing should be applied while any action in the batch is still pending.");
 
         var stillDecided = await _reader.GetByIdAsync(decided.Id);
-        Assert.AreEqual(ImportActionStatus.Decided, stillDecided!.Status, "The already-decided action must not be applied either — all-or-nothing.");
+        Assert.AreEqual(ImportActionStatus.Decided, stillDecided!.Status.Parsed, "The already-decided action must not be applied either — all-or-nothing.");
     }
 
     [TestMethod]
@@ -220,8 +223,8 @@ public class ImportActionResolutionCoordinatorTests
 
         var firstAfter  = await _reader.GetByIdAsync(first.Id);
         var secondAfter = await _reader.GetByIdAsync(second.Id);
-        Assert.AreEqual(ImportActionStatus.Applied, firstAfter!.Status);
-        Assert.AreEqual(ImportActionStatus.Applied, secondAfter!.Status);
+        Assert.AreEqual(ImportActionStatus.Applied, firstAfter!.Status.Parsed);
+        Assert.AreEqual(ImportActionStatus.Applied, secondAfter!.Status.Parsed);
         Assert.IsNotNull(firstAfter.AppliedAt);
     }
 
@@ -235,7 +238,7 @@ public class ImportActionResolutionCoordinatorTests
             _coordinator.TryApplyBatchAsync("BATCH-1", (_, _, _) => throw new InvalidOperationException("boom")));
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportActionStatus.Decided, found!.Status, "A failed apply must not leave the action marked Applied.");
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed, "A failed apply must not leave the action marked Applied.");
     }
 
     [TestMethod]
@@ -271,8 +274,8 @@ public class ImportActionResolutionCoordinatorTests
 
         var a1After = await _reader.GetByIdAsync(a1.Id);
         var a2After = await _reader.GetByIdAsync(a2.Id);
-        Assert.AreEqual(ImportActionStatus.Discarded, a1After!.Status);
-        Assert.AreEqual(ImportActionStatus.Discarded, a2After!.Status);
+        Assert.AreEqual(ImportActionStatus.Discarded, a1After!.Status.Parsed);
+        Assert.AreEqual(ImportActionStatus.Discarded, a2After!.Status.Parsed);
     }
 
     [TestMethod]

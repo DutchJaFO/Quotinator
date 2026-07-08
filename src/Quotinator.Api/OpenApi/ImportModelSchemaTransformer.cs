@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 using Quotinator.Core.Models;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Api.OpenApi;
 
@@ -26,8 +28,16 @@ namespace Quotinator.Api.OpenApi;
 /// </remarks>
 internal sealed class ImportModelSchemaTransformer : IOpenApiSchemaTransformer
 {
-    private static readonly string[] PolicyValues = ["skip", "newest-wins", "merge-ours", "merge-theirs", "review"];
-    private static readonly string[] StatusValues  = ["resolved", "pending"];
+    // Derived from DuplicateResolutionPolicy itself (not hand-duplicated) so this can never drift out
+    // of sync with the enum — same kebab-case conversion ToWireString/DuplicateResolutionPolicyJsonConverter use.
+    private static readonly string[] PolicyValues = Enum.GetValues<DuplicateResolutionPolicy>()
+        .Select(p => JsonNamingPolicy.KebabCaseLower.ConvertName(p.ToString()))
+        .ToArray();
+
+    // Not derived from an enum: ImportConflictEntry.Status is a distinct, smaller vocabulary than
+    // ImportConflictStatus (#149) — only ever "pending"/"resolved" for this legacy synchronous
+    // response shape (SqliteQuoteImportService.cs), with a single producer and no other consumer.
+    private static readonly string[] StatusValues = ["resolved", "pending"];
 
     /// <inheritdoc/>
     public Task TransformAsync(OpenApiSchema schema, OpenApiSchemaTransformerContext context, CancellationToken cancellationToken)

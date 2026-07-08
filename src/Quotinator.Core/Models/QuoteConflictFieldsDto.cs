@@ -34,9 +34,10 @@ public sealed class QuoteConflictFieldsDto
     [JsonPropertyName("author")]
     public string? Author { get; init; }
 
-    /// <summary>Quote type (<c>movie</c>, <c>tv</c>, <c>anime</c>, <c>book</c>, <c>person</c>) — wire value.</summary>
+    /// <summary>Quote type.</summary>
     [JsonPropertyName("type")]
-    public string? Type { get; init; }
+    [JsonConverter(typeof(QuoteTypeJsonConverter))]
+    public QuoteType? Type { get; init; }
 
     /// <summary>Genre tags.</summary>
     [JsonPropertyName("genres")]

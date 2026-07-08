@@ -120,7 +120,7 @@ public sealed class SqliteConflictResolutionService : IConflictResolutionService
             Date             = (string?)merged["date"],
             Character        = (string?)merged["character"],
             Author           = (string?)merged["author"],
-            Type             = (string)merged["type"]!,
+            Type             = QuoteSeedWriter.ParseQuoteType((string)merged["type"]!),
             Genres           = (List<string>)merged["genres"]!,
         };
 
@@ -165,7 +165,7 @@ public sealed class SqliteConflictResolutionService : IConflictResolutionService
         var existingFields = JsonSerializer.Deserialize<QuoteConflictFieldsDto>(conflict.ExistingValue!) ?? new QuoteConflictFieldsDto();
         var incomingFields = JsonSerializer.Deserialize<QuoteConflictFieldsDto>(conflict.IncomingValue!) ?? new QuoteConflictFieldsDto();
 
-        var ambiguous = conflict.Status == ImportConflictStatus.Pending
+        var ambiguous = conflict.Status.Parsed == ImportConflictStatus.Pending
             ? ComputeAmbiguousFields(DeserializeFields(conflict.ExistingValue), DeserializeFields(conflict.IncomingValue))
             : [];
 
@@ -174,7 +174,7 @@ public sealed class SqliteConflictResolutionService : IConflictResolutionService
             Id                 = conflict.Id,
             EntityType         = conflict.EntityType,
             EntityId           = conflict.EntityId,
-            Status             = conflict.Status,
+            Status             = conflict.Status.Raw,
             BatchId            = conflict.BatchId,
             BatchLabel         = await ResolveBatchLabelAsync(conflict.BatchId, labelCache),
             ExistingBatchId    = conflict.ExistingBatchId,
@@ -224,7 +224,7 @@ public sealed class SqliteConflictResolutionService : IConflictResolutionService
             ["date"]             = dto.Date,
             ["character"]        = dto.Character,
             ["author"]           = dto.Author,
-            ["type"]             = dto.Type,
+            ["type"]             = dto.Type?.ToString().ToLowerInvariant(),
             ["genres"]           = dto.Genres,
         };
     }

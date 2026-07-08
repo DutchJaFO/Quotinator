@@ -24,8 +24,8 @@ public sealed class ConflictResolutionCoordinator : IConflictResolutionCoordinat
     public async Task DecideAsync(Guid conflictId, string decisionsJson, IDbConnection? connection = null, IDbTransaction? transaction = null)
     {
         var conflict = await _reader.GetByIdAsync(conflictId) ?? throw new ConflictNotFoundException(conflictId);
-        if (conflict.Status == ImportConflictStatus.Resolved)
-            throw new ConflictStateException(conflictId, conflict.Status);
+        if (conflict.Status.Parsed == ImportConflictStatus.Resolved)
+            throw new ConflictStateException(conflictId, conflict.Status.Raw);
 
         if (connection is not null)
         {
@@ -42,8 +42,8 @@ public sealed class ConflictResolutionCoordinator : IConflictResolutionCoordinat
     public async Task UndoDecisionAsync(Guid conflictId, IDbConnection? connection = null, IDbTransaction? transaction = null)
     {
         var conflict = await _reader.GetByIdAsync(conflictId) ?? throw new ConflictNotFoundException(conflictId);
-        if (conflict.Status != ImportConflictStatus.Decided)
-            throw new ConflictStateException(conflictId, conflict.Status);
+        if (conflict.Status.Parsed != ImportConflictStatus.Decided)
+            throw new ConflictStateException(conflictId, conflict.Status.Raw);
 
         if (connection is not null)
         {
@@ -64,11 +64,11 @@ public sealed class ConflictResolutionCoordinator : IConflictResolutionCoordinat
     {
         var conflicts = await _reader.GetAllForBatchAsync(batchId);
 
-        var pending = conflicts.Where(c => c.Status == ImportConflictStatus.Pending).Select(c => c.Id).ToList();
+        var pending = conflicts.Where(c => c.Status.Parsed == ImportConflictStatus.Pending).Select(c => c.Id).ToList();
         if (pending.Count > 0)
             return pending;
 
-        var decided = conflicts.Where(c => c.Status == ImportConflictStatus.Decided).ToList();
+        var decided = conflicts.Where(c => c.Status.Parsed == ImportConflictStatus.Decided).ToList();
         if (decided.Count == 0)
             return null; // Nothing left to apply — batch already fully resolved (or had no conflicts at all).
 

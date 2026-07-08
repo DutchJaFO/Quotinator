@@ -65,7 +65,7 @@ internal static class QuoteSeedWriter
         SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId,
         ChangeLogContext changeLog, SqliteTransaction? transaction = null)
     {
-        var typeStr = NormaliseType(q.Type);
+        var typeStr = q.Type.ToString();
         var key     = $"{q.Source}|{typeStr}";
         if (index.TryGetValue(key, out var existing)) return existing;
 
@@ -82,7 +82,7 @@ internal static class QuoteSeedWriter
         {
             Id            = id,
             Title         = q.Source,
-            Type          = new SafeValue<QuoteType?>(typeStr, ParseQuoteType(q.Type)),
+            Type          = new SafeValue<QuoteType?>(typeStr, q.Type),
             Date          = string.IsNullOrEmpty(q.Date) ? SafeDateValue.Empty : new SafeValue<DateTime?>(q.Date, null),
             ImportBatchId = importBatchId
         }, transaction);
@@ -243,6 +243,7 @@ internal static class QuoteSeedWriter
             mergedFieldsJson = JsonSerializer.Serialize(perField);
         }
 
+        var status = isPending ? ImportConflictStatus.Pending : ImportConflictStatus.Resolved;
         await conflictWriter.WriteAsync(new SystemImportConflict
         {
             BatchId         = batchId.ToString("D").ToUpperInvariant(),
@@ -252,7 +253,7 @@ internal static class QuoteSeedWriter
             ExistingValue   = JsonSerializer.Serialize(existingFields),
             IncomingValue   = JsonSerializer.Serialize(incomingFields),
             AppliedPolicy   = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-            Status          = isPending ? ImportConflictStatus.Pending : ImportConflictStatus.Resolved,
+            Status          = new SafeValue<ImportConflictStatus?>(status.ToString(), status),
             MergedFields    = mergedFieldsJson,
             DetectedAt      = now,
             ResolvedAt      = isPending ? null : now,

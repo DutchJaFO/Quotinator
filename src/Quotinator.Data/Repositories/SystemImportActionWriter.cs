@@ -45,7 +45,7 @@ public sealed class SystemImportActionWriter : SqliteRepositoryBase<SystemImport
             new
             {
                 id,
-                status       = ImportActionStatus.Decided,
+                status       = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 mergedFields = decisionsJson,
                 dateModified = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat),
             },
@@ -58,7 +58,7 @@ public sealed class SystemImportActionWriter : SqliteRepositoryBase<SystemImport
             new
             {
                 id,
-                status       = ImportActionStatus.Pending,
+                status       = new SafeValue<ImportActionStatus?>(ImportActionStatus.Pending.ToString(), ImportActionStatus.Pending),
                 dateModified = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat),
             },
             transaction);
@@ -72,7 +72,7 @@ public sealed class SystemImportActionWriter : SqliteRepositoryBase<SystemImport
             new
             {
                 id,
-                status       = ImportActionStatus.Applied,
+                status       = new SafeValue<ImportActionStatus?>(ImportActionStatus.Applied.ToString(), ImportActionStatus.Applied),
                 appliedAt    = now,
                 dateModified = now,
             },
@@ -88,7 +88,7 @@ public sealed class SystemImportActionWriter : SqliteRepositoryBase<SystemImport
             new
             {
                 batchId,
-                status       = ImportActionStatus.Discarded,
+                status       = new SafeValue<ImportActionStatus?>(ImportActionStatus.Discarded.ToString(), ImportActionStatus.Discarded),
                 discardedAt  = now,
                 dateModified = now,
             },

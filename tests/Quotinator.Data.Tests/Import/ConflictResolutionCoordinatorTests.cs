@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Tests.Import;
@@ -41,7 +42,7 @@ public class ConflictResolutionCoordinatorTests
                 ExistingValue   TEXT,
                 IncomingValue   TEXT,
                 AppliedPolicy   TEXT,
-                Status          TEXT    NOT NULL,
+                Status          TEXT    NOT NULL CHECK (Status IN ('Pending', 'Decided', 'Resolved')),
                 MergedFields    TEXT,
                 DetectedAt      TEXT    NOT NULL,
                 ResolvedAt      TEXT,
@@ -73,7 +74,7 @@ public class ConflictResolutionCoordinatorTests
         EntityId      = Guid.NewGuid().ToString(),
         ExistingValue = "{}",
         IncomingValue = "{}",
-        Status        = ImportConflictStatus.Pending,
+        Status        = new SafeValue<ImportConflictStatus?>(ImportConflictStatus.Pending.ToString(), ImportConflictStatus.Pending),
         DetectedAt    = DateTime.UtcNow,
     };
 
@@ -94,7 +95,7 @@ public class ConflictResolutionCoordinatorTests
         await _coordinator.DecideAsync(entry.Id, "\"my-decision\"");
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportConflictStatus.Decided, found!.Status);
+        Assert.AreEqual(ImportConflictStatus.Decided, found!.Status.Parsed);
         Assert.AreEqual("\"my-decision\"", found.MergedFields);
         Assert.IsFalse(callbackInvoked, "DecideAsync must never touch any domain table.");
     }
@@ -123,7 +124,7 @@ public class ConflictResolutionCoordinatorTests
         await _coordinator.UndoDecisionAsync(entry.Id);
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportConflictStatus.Pending, found!.Status);
+        Assert.AreEqual(ImportConflictStatus.Pending, found!.Status.Parsed);
         Assert.IsNull(found.MergedFields);
     }
 
@@ -159,7 +160,7 @@ public class ConflictResolutionCoordinatorTests
         Assert.AreEqual(0, callbackInvocations, "Nothing should be applied while any conflict in the batch is still pending.");
 
         var stillDecided = await _reader.GetByIdAsync(decided.Id);
-        Assert.AreEqual(ImportConflictStatus.Decided, stillDecided!.Status, "The already-decided conflict must not be resolved either — all-or-nothing.");
+        Assert.AreEqual(ImportConflictStatus.Decided, stillDecided!.Status.Parsed, "The already-decided conflict must not be resolved either — all-or-nothing.");
     }
 
     [TestMethod]
@@ -186,8 +187,8 @@ public class ConflictResolutionCoordinatorTests
 
         var firstAfter  = await _reader.GetByIdAsync(first.Id);
         var secondAfter = await _reader.GetByIdAsync(second.Id);
-        Assert.AreEqual(ImportConflictStatus.Resolved, firstAfter!.Status);
-        Assert.AreEqual(ImportConflictStatus.Resolved, secondAfter!.Status);
+        Assert.AreEqual(ImportConflictStatus.Resolved, firstAfter!.Status.Parsed);
+        Assert.AreEqual(ImportConflictStatus.Resolved, secondAfter!.Status.Parsed);
         Assert.IsNotNull(firstAfter.ResolvedAt);
     }
 
@@ -202,7 +203,7 @@ public class ConflictResolutionCoordinatorTests
             _coordinator.TryApplyBatchAsync("BATCH-1", (_, _, _) => throw new InvalidOperationException("boom")));
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportConflictStatus.Decided, found!.Status, "A failed apply must not leave the conflict marked Resolved.");
+        Assert.AreEqual(ImportConflictStatus.Decided, found!.Status.Parsed, "A failed apply must not leave the conflict marked Resolved.");
     }
 
     [TestMethod]

@@ -32,6 +32,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 6, Sql = ImportConflictMigrations.MigrateToRecordBase },
         new SchemaMigration { Version = 7, Sql = ImportConflictMigrations.AddExistingBatchId },
         new SchemaMigration { Version = 8, Sql = ImportActionMigrations.CreateImportActionsTable },
+        new SchemaMigration { Version = 9, Sql = ImportConflictMigrations.AddStatusCheckConstraint },
     ];
 
     // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and
@@ -64,7 +65,8 @@ public class DatabaseInitializer : IDatabaseInitializer
             ExistingValue   TEXT,
             IncomingValue   TEXT,
             AppliedPolicy   TEXT,
-            Status          TEXT    NOT NULL,
+            Status          TEXT    NOT NULL
+                            CHECK (Status IN ('Pending', 'Decided', 'Resolved')),
             MergedFields    TEXT,
             DetectedAt      TEXT    NOT NULL,
             ResolvedAt      TEXT,
@@ -80,14 +82,16 @@ public class DatabaseInitializer : IDatabaseInitializer
         CREATE TABLE IF NOT EXISTS System_ImportActions (
             Id              TEXT    NOT NULL PRIMARY KEY,
             BatchId         TEXT    NOT NULL,
-            ActionType      TEXT    NOT NULL,
+            ActionType      TEXT    NOT NULL
+                            CHECK (ActionType IN ('Add', 'Modify')),
             EntityType      TEXT    NOT NULL,
             EntityId        TEXT    NOT NULL,
             ExistingBatchId TEXT,
             ExistingValue   TEXT,
             IncomingValue   TEXT    NOT NULL,
             AppliedPolicy   TEXT,
-            Status          TEXT    NOT NULL,
+            Status          TEXT    NOT NULL
+                            CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded')),
             MergedFields    TEXT,
             DetectedAt      TEXT    NOT NULL,
             AppliedAt       TEXT,

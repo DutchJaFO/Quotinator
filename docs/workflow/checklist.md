@@ -100,6 +100,9 @@ CI enforces build and test pass. The additional check before opening a PR:
 Releases follow a two-stage model. See `docs/release-verification.md` for tier definitions (T1/T2/T3) and the full stage table.
 
 - [ ] All issues verified: `gh issue list --milestone "<Name>" --state open` returns empty
+- [ ] If the milestone added any migrations: full incremental migration path verified against a
+      database matching the *last published release's* schema, not the accumulated dev database —
+      see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md)
 - [ ] Build clean: `dotnet build --configuration Release` — 0 warnings, 0 errors
 - [ ] Tests pass: `dotnet test --configuration Release` — all tests pass, 0 warnings
 - [ ] Changelogs updated (`CHANGELOG.md` and `addon/CHANGELOG.md`)

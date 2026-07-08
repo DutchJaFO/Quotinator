@@ -1,5 +1,6 @@
 using Quotinator.Converters.Vilaboim;
 using Quotinator.Core.Import;
+using Quotinator.Core.Models;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Converters.Vilaboim.Tests;
@@ -105,7 +106,7 @@ public class VilaboimMovieQuotesConverterTests
         SourceQuoteFileReader.TryParse(text, out var quotes);
         var quote = quotes!.Single();
 
-        Assert.AreEqual("movie", quote.Type);
+        Assert.AreEqual(QuoteType.Movie, quote.Type);
         Assert.AreEqual("en", quote.OriginalLanguage);
         Assert.IsNull(quote.Date);
         Assert.IsNull(quote.Character);

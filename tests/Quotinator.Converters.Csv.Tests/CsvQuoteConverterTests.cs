@@ -1,5 +1,6 @@
 using Quotinator.Converters.Csv;
 using Quotinator.Core.Import;
+using Quotinator.Core.Models;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Converters.Csv.Tests;
@@ -32,7 +33,7 @@ public class CsvQuoteConverterTests
         Assert.AreEqual("A quote.", quote.QuoteText);
         Assert.AreEqual("A Source", quote.Source);
         Assert.AreEqual("en", quote.OriginalLanguage);
-        Assert.AreEqual("movie", quote.Type);
+        Assert.AreEqual(QuoteType.Movie, quote.Type);
         Assert.IsNull(quote.Date);
         Assert.IsNull(quote.Character);
         Assert.IsNull(quote.Author);
@@ -81,7 +82,7 @@ public class CsvQuoteConverterTests
         Assert.AreEqual("1994", quote.Date);
         Assert.AreEqual("A Character", quote.Character);
         Assert.AreEqual("An Author", quote.Author);
-        Assert.AreEqual("book", quote.Type);
+        Assert.AreEqual(QuoteType.Book, quote.Type);
         CollectionAssert.AreEqual(new[] { "drama", "sci-fi" }, quote.Genres.ToList());
     }
 

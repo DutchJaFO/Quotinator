@@ -41,8 +41,8 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
     public async Task DecideAsync(Guid actionId, string decisionsJson, IDbConnection? connection = null, IDbTransaction? transaction = null)
     {
         var action = await _reader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
-        if (action.Status is ImportActionStatus.Applied or ImportActionStatus.Discarded)
-            throw new ImportActionStateException(actionId, action.Status);
+        if (action.Status.Parsed == ImportActionStatus.Applied || action.Status.Parsed == ImportActionStatus.Discarded)
+            throw new ImportActionStateException(actionId, action.Status.Raw);
 
         if (connection is not null)
         {
@@ -59,8 +59,8 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
     public async Task UndoDecisionAsync(Guid actionId, IDbConnection? connection = null, IDbTransaction? transaction = null)
     {
         var action = await _reader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
-        if (action.Status != ImportActionStatus.Decided)
-            throw new ImportActionStateException(actionId, action.Status);
+        if (action.Status.Parsed != ImportActionStatus.Decided)
+            throw new ImportActionStateException(actionId, action.Status.Raw);
 
         if (connection is not null)
         {
@@ -81,11 +81,11 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
     {
         var actions = await _reader.GetAllForBatchAsync(batchId);
 
-        var pending = actions.Where(a => a.Status == ImportActionStatus.Pending).Select(a => a.Id).ToList();
+        var pending = actions.Where(a => a.Status.Parsed == ImportActionStatus.Pending).Select(a => a.Id).ToList();
         if (pending.Count > 0)
             return pending;
 
-        var decided = actions.Where(a => a.Status == ImportActionStatus.Decided).ToList();
+        var decided = actions.Where(a => a.Status.Parsed == ImportActionStatus.Decided).ToList();
         if (decided.Count == 0)
             return null; // Nothing left to apply — batch already fully applied/discarded, or had no actions at all.
 
@@ -111,10 +111,10 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
         if (actions.Count == 0)
             throw new ImportBatchStateException(batchId, "has no staged actions to discard.");
 
-        if (actions.Any(a => a.Status == ImportActionStatus.Applied))
+        if (actions.Any(a => a.Status.Parsed == ImportActionStatus.Applied))
             throw new ImportBatchStateException(batchId, "has already been applied and cannot be discarded.");
 
-        if (actions.All(a => a.Status == ImportActionStatus.Discarded))
+        if (actions.All(a => a.Status.Parsed == ImportActionStatus.Discarded))
             throw new ImportBatchStateException(batchId, "has already been discarded.");
 
         using var conn = _factory.CreateConnection();

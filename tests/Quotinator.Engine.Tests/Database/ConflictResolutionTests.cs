@@ -222,7 +222,7 @@ public class ConflictResolutionTests
     [DataRow(DuplicateResolutionPolicy.MergeTheirs, ImportConflictStatus.Resolved)]
     [DataRow(DuplicateResolutionPolicy.Review,      ImportConflictStatus.Pending)]
     public async Task SystemImportConflicts_LogsOneRowPerConflict_WithCorrectStatus(
-        DuplicateResolutionPolicy policy, string expectedStatus)
+        DuplicateResolutionPolicy policy, ImportConflictStatus expectedStatus)
     {
         var factory = new SqliteConnectionFactory(_dbPath);
         var writer  = new SystemImportConflictWriter(factory);
@@ -237,7 +237,7 @@ public class ConflictResolutionTests
         Assert.AreEqual(1, rows.Count, "Exactly one conflict row for the one duplicate quote");
         Assert.AreEqual(SharedId, rows[0].EntityId);
         Assert.AreEqual(policy.ToString(), rows[0].AppliedPolicy);
-        Assert.AreEqual(expectedStatus, rows[0].Status);
+        Assert.AreEqual(expectedStatus.ToString(), rows[0].Status);
     }
 
     [TestMethod]

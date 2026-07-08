@@ -95,4 +95,64 @@ public static class ImportConflictMigrations
     public const string AddExistingBatchId = """
         ALTER TABLE System_ImportConflicts ADD COLUMN ExistingBatchId TEXT;
         """;
+
+    /// <summary>
+    /// Adds a CHECK constraint to <c>Status</c>, per ADR 008 (<c>ImportConflictStatus</c> is a real
+    /// C# enum — a closed set defined and maintained entirely by this project's own coordinator
+    /// logic, not by any consuming project's schema) and ADR 009 (verify against what a real
+    /// database actually contains, not just fresh-database assumptions). This column's migrations
+    /// (<see cref="MigrateToRecordBase"/>, <see cref="AddExistingBatchId"/>) had already applied to
+    /// real local databases by the time the enum-conversion gap was caught, so — same as
+    /// <c>Migration004_ImportBatchTypeUserSeed</c> — the table is rebuilt under a temporary name
+    /// rather than edited in place; SQLite has no <c>ALTER TABLE ... ADD CHECK</c>.
+    /// <para>
+    /// Existing rows predate the enum conversion and store the original lowercase values
+    /// (<c>"pending"</c>/<c>"decided"</c>/<c>"resolved"</c>, from the pre-enum string constants);
+    /// new code now writes <c>ImportConflictStatus.X.ToString()</c> (PascalCase). The rebuild's
+    /// copy step normalises old lowercase values to the new PascalCase form so existing rows satisfy
+    /// the new CHECK — <c>ELSE Status</c> passes through anything already PascalCase (a fresh
+    /// database that never had the old lowercase data) or any genuinely unexpected value, which then
+    /// correctly fails the CHECK rather than being silently miscategorised.
+    /// </para>
+    /// </summary>
+    public const string AddStatusCheckConstraint = """
+        CREATE TABLE IF NOT EXISTS System_ImportConflicts_New (
+            Id              TEXT    NOT NULL PRIMARY KEY,
+            BatchId         TEXT    NOT NULL,
+            EntityType      TEXT    NOT NULL,
+            EntityId        TEXT,
+            ExistingValue   TEXT,
+            IncomingValue   TEXT,
+            AppliedPolicy   TEXT,
+            Status          TEXT    NOT NULL
+                            CHECK (Status IN ('Pending', 'Decided', 'Resolved')),
+            MergedFields    TEXT,
+            DetectedAt      TEXT    NOT NULL,
+            ResolvedAt      TEXT,
+            DateCreated     TEXT    NOT NULL,
+            DateModified    TEXT,
+            DateDeleted     TEXT,
+            IsDeleted       INTEGER NOT NULL DEFAULT 0,
+            ExistingBatchId TEXT
+        );
+
+        INSERT INTO System_ImportConflicts_New (Id, BatchId, EntityType, EntityId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, ResolvedAt, DateCreated, DateModified, DateDeleted, IsDeleted, ExistingBatchId)
+        SELECT
+            Id, BatchId, EntityType, EntityId, ExistingValue, IncomingValue, AppliedPolicy,
+            CASE Status
+                WHEN 'pending'  THEN 'Pending'
+                WHEN 'decided'  THEN 'Decided'
+                WHEN 'resolved' THEN 'Resolved'
+                ELSE Status
+            END,
+            MergedFields, DetectedAt, ResolvedAt, DateCreated, DateModified, DateDeleted, IsDeleted, ExistingBatchId
+        FROM System_ImportConflicts;
+
+        DROP TABLE System_ImportConflicts;
+
+        ALTER TABLE System_ImportConflicts_New RENAME TO System_ImportConflicts;
+
+        CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
+        CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
+        """;
 }

@@ -41,7 +41,7 @@ public sealed class SystemImportConflictWriter : SqliteRepositoryBase<SystemImpo
             new
             {
                 id,
-                status       = ImportConflictStatus.Decided,
+                status       = new SafeValue<ImportConflictStatus?>(ImportConflictStatus.Decided.ToString(), ImportConflictStatus.Decided),
                 mergedFields = decisionsJson,
                 dateModified = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat),
             },
@@ -54,7 +54,7 @@ public sealed class SystemImportConflictWriter : SqliteRepositoryBase<SystemImpo
             new
             {
                 id,
-                status       = ImportConflictStatus.Pending,
+                status       = new SafeValue<ImportConflictStatus?>(ImportConflictStatus.Pending.ToString(), ImportConflictStatus.Pending),
                 dateModified = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat),
             },
             transaction);
@@ -68,7 +68,7 @@ public sealed class SystemImportConflictWriter : SqliteRepositoryBase<SystemImpo
             new
             {
                 id,
-                status       = ImportConflictStatus.Resolved,
+                status       = new SafeValue<ImportConflictStatus?>(ImportConflictStatus.Resolved.ToString(), ImportConflictStatus.Resolved),
                 resolvedAt   = now,
                 dateModified = now,
             },

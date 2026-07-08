@@ -30,3 +30,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 006 | [006-sequential-test-execution-by-default.md](006-sequential-test-execution-by-default.md) | Sequential test execution by default |
 | 007 | [007-cs1591-on-test-projects.md](007-cs1591-on-test-projects.md) | CS1591 enforcement on test projects |
 | 008 | [008-enum-backed-columns-require-check-constraints.md](008-enum-backed-columns-require-check-constraints.md) | Enum-backed database columns require a matching CHECK constraint |
+| 009 | [009-verify-migrations-against-last-released-schema.md](009-verify-migrations-against-last-released-schema.md) | Migrations must be verified against the last published release's schema |

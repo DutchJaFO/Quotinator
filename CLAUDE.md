@@ -522,12 +522,14 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `src/Quotinator.Core/Models/Quote.cs` | Canonical Quote model |
 | `src/Quotinator.Core/Models/QuoteTranslation.cs` | Translation entry model |
 | `src/Quotinator.Core/Models/QuoteResponse.cs` | API response DTO |
-| `src/Quotinator.Core/Data/Sql.cs` | All SQL query strings — never write SQL inline outside this file |
+| `src/Quotinator.Data/Queries/Sql.cs` | All SQL query strings — never write SQL inline outside this file |
 | `src/Quotinator.Data/Database/DatabaseInitializer.cs` | SQLite schema + numbered migrations |
 | `addon/config.yaml` | HA add-on manifest — version, options, schema, port config |
 | `addon/CHANGELOG.md` | Generated HA add-on changelog — do not edit directly |
 | `docker/Dockerfile` | Container build |
 | `docs/docker.md` | Docker build notes, Blazor static web assets caveat, port configuration |
+| `docs/database-conventions.md` | Database do's and don'ts — RecordBase, enum/CHECK constraints, migrations, SQL safety, Data/Engine boundaries, DB testing conventions |
+| `docs/data-access.md` | Repository/join-query usage patterns (how to use the infrastructure `database-conventions.md` governs) |
 | `docs/testing-policy.md` | Testing standards — test project pairing, CVE folder rule, parallel execution |
 | `docs/workflow/process.md` | Milestone workflow — starting, executing, closing, living and maintenance milestones |
 | `docs/workflow/checklist.md` | Issue filing, session-start, issue-closing, and milestone-close checklists |

@@ -161,7 +161,7 @@ public class ImportConflictEndpointsTests
     [TestMethod]
     public async Task DecideConflict_AlreadyResolved_Returns422()
     {
-        var fake = new FakeConflictResolutionService { ThrowOnDecide = new ConflictStateException(Guid.NewGuid(), ImportConflictStatus.Resolved) };
+        var fake = new FakeConflictResolutionService { ThrowOnDecide = new ConflictStateException(Guid.NewGuid(), ImportConflictStatus.Resolved.ToString()) };
         using var factory = CreateFactory(fake);
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
@@ -202,7 +202,7 @@ public class ImportConflictEndpointsTests
     [TestMethod]
     public async Task UndoConflict_NotDecided_Returns422()
     {
-        var fake = new FakeConflictResolutionService { ThrowOnUndo = new ConflictStateException(Guid.NewGuid(), ImportConflictStatus.Pending) };
+        var fake = new FakeConflictResolutionService { ThrowOnUndo = new ConflictStateException(Guid.NewGuid(), ImportConflictStatus.Pending.ToString()) };
         using var factory = CreateFactory(fake);
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);

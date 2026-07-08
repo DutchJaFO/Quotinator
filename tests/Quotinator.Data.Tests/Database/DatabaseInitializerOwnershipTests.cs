@@ -200,9 +200,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync();
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(8, dataRows,
+        Assert.AreEqual(9, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(8, db.DataSchemaVersion);
+        Assert.AreEqual(9, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

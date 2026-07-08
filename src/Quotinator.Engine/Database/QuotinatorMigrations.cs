@@ -237,8 +237,10 @@ public static class QuotinatorMigrations
     // pre-existing rows correctly backfill to 'Applied' — nothing before this feature ever staged.
     // Only the new staging endpoint creates 'Staged' rows. Status is backed by a real C# enum
     // (ImportBatchStatus), so it gets a CHECK constraint per ADR 008 (enum-backed columns require
-    // a matching CHECK). Verified against the actual bundled SQLite that ALTER TABLE ADD COLUMN
-    // accepts an inline CHECK constraint on the new column.
+    // a matching CHECK). Confirmed against sqlite.org's ALTER TABLE docs, not just empirical testing
+    // — ADD COLUMN explicitly supports a CHECK constraint (existing rows are tested against it),
+    // and this column satisfies every documented restriction (no PRIMARY KEY/UNIQUE, NOT NULL has a
+    // real default, no REFERENCES clause, not a GENERATED STORED column).
     private const string Migration007_ImportBatchStagingStatus = """
         ALTER TABLE ImportBatches ADD COLUMN Status TEXT NOT NULL DEFAULT 'Applied'
             CHECK (Status IN ('Staged', 'Applied', 'Discarded'));

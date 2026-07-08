@@ -113,7 +113,7 @@ public sealed class QuoteService : IQuoteService
         IEnumerable<SourceQuote> result = quotes;
 
         if (types is { Length: > 0 })
-            result = result.Where(q => types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)));
+            result = result.Where(q => types.Any(t => q.Type.ToString().Equals(t, StringComparison.OrdinalIgnoreCase)));
 
         if (genres is { Length: > 0 })
             result = result.Where(q => q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))));
@@ -152,7 +152,7 @@ public sealed class QuoteService : IQuoteService
                 Date = q.Date,
                 Character = q.Character,
                 Author = q.Author,
-                Type = q.Type,
+                Type = q.Type.ToString().ToLowerInvariant(),
                 Genres = q.Genres
             };
         }
@@ -167,7 +167,7 @@ public sealed class QuoteService : IQuoteService
             Date = q.Date,
             Character = q.Character,
             Author = q.Author,
-            Type = q.Type,
+            Type = q.Type.ToString().ToLowerInvariant(),
             Genres = q.Genres
         };
     }

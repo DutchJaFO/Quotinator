@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Tests.Repositories;
@@ -33,7 +34,7 @@ public class SystemImportConflictWriterReaderTests
                 ExistingValue   TEXT,
                 IncomingValue   TEXT,
                 AppliedPolicy   TEXT,
-                Status          TEXT    NOT NULL,
+                Status          TEXT    NOT NULL CHECK (Status IN ('Pending', 'Decided', 'Resolved')),
                 MergedFields    TEXT,
                 DetectedAt      TEXT    NOT NULL,
                 ResolvedAt      TEXT,
@@ -65,7 +66,7 @@ public class SystemImportConflictWriterReaderTests
         EntityId        = Guid.NewGuid().ToString(),
         ExistingValue   = "{}",
         IncomingValue   = "{}",
-        Status          = ImportConflictStatus.Pending,
+        Status          = new SafeValue<ImportConflictStatus?>(ImportConflictStatus.Pending.ToString(), ImportConflictStatus.Pending),
         DetectedAt      = DateTime.UtcNow,
     };
 
@@ -86,7 +87,7 @@ public class SystemImportConflictWriterReaderTests
 
         Assert.IsNotNull(found);
         Assert.AreEqual(entry.Id, found!.Id);
-        Assert.AreEqual(ImportConflictStatus.Pending, found.Status);
+        Assert.AreEqual(ImportConflictStatus.Pending, found.Status.Parsed);
     }
 
     [TestMethod]
@@ -122,7 +123,7 @@ public class SystemImportConflictWriterReaderTests
         await _writer.MarkDecidedAsync(entry.Id, """{"date":{"choice":"Replace"}}""", conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportConflictStatus.Decided, found!.Status);
+        Assert.AreEqual(ImportConflictStatus.Decided, found!.Status.Parsed);
         Assert.AreEqual("""{"date":{"choice":"Replace"}}""", found.MergedFields);
     }
 
@@ -138,7 +139,7 @@ public class SystemImportConflictWriterReaderTests
         await _writer.MarkDecidedAsync(entry.Id, "\"second\"", conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportConflictStatus.Decided, found!.Status);
+        Assert.AreEqual(ImportConflictStatus.Decided, found!.Status.Parsed);
         Assert.AreEqual("\"second\"", found.MergedFields);
     }
 
@@ -154,7 +155,7 @@ public class SystemImportConflictWriterReaderTests
         await _writer.ClearDecisionAsync(entry.Id, conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportConflictStatus.Pending, found!.Status);
+        Assert.AreEqual(ImportConflictStatus.Pending, found!.Status.Parsed);
         Assert.IsNull(found.MergedFields);
     }
 
@@ -169,7 +170,7 @@ public class SystemImportConflictWriterReaderTests
         await _writer.MarkResolvedAsync(entry.Id, conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportConflictStatus.Resolved, found!.Status);
+        Assert.AreEqual(ImportConflictStatus.Resolved, found!.Status.Parsed);
         Assert.IsNotNull(found.ResolvedAt);
     }
 

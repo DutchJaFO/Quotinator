@@ -23,13 +23,15 @@ namespace Quotinator.Data.Entities;
 /// project never deserializes them; the consuming project (e.g. Quotinator.Engine) produces and later
 /// diffs that content, since this project has no dependency on any specific domain schema.
 /// <para>
-/// <b>When #149 (manual conflict-review workflow) starts:</b> if it needs to read these fields back as
-/// structured data rather than a raw string, use <see cref="Quotinator.Data.Helpers.JsonHandler{T}"/> via
-/// <see cref="Quotinator.Data.Helpers.DatabaseConfiguration.RegisterJsonHandler{T}"/> (e.g. registering it for
-/// <c>IReadOnlyDictionary&lt;string, string&gt;</c> to type <see cref="MergedFields"/>, or
-/// <c>IReadOnlyDictionary&lt;string, object?&gt;</c> for <see cref="ExistingValue"/>/<see cref="IncomingValue"/>)
-/// from <c>QuotinatorDapperConfiguration.RegisterDomainHandlers()</c> — not by changing these properties'
-/// types here, which would break the domain-agnostic design this class deliberately keeps.
+/// <b>Not a candidate for <see cref="Quotinator.Data.Helpers.JsonHandler{T}"/></b>, unlike
+/// <see cref="Status"/>'s <see cref="SafeValue{T}"/>/<see cref="Quotinator.Data.Helpers.SafeEnumHandler{TEnum}"/>
+/// treatment: <c>ExistingValue</c>/<c>IncomingValue</c> hold <c>QuoteConflictFieldsDto</c>-shaped JSON
+/// (<c>Quotinator.Core.Models</c>), and <c>MergedFields</c> holds either a plain field→"ours"/"theirs"
+/// dictionary (auto-resolved by merge policy, <c>QuoteSeedWriter</c>) or a serialized
+/// <c>ConflictDecisionRequest</c> (<c>Quotinator.Engine.Models</c>, #149's manual decision flow) —
+/// two incompatible shapes in the same column. Typing this property as either concrete shape would
+/// require <c>Quotinator.Data</c> to reference a type owned by <c>Quotinator.Core</c>/<c>Quotinator.Engine</c>,
+/// which ADR 004 forbids outright. See "JSON-blob columns" in <c>docs/database-conventions.md</c>.
 /// </para>
 /// </remarks>
 [Table("System_ImportConflicts")]
@@ -56,8 +58,8 @@ public sealed class SystemImportConflict : RecordBase
     /// <summary>The conflict-resolution policy that was applied to resolve this specific conflict.</summary>
     public SafeValue<DuplicateResolutionPolicy?> AppliedPolicy { get; init; } = SafeValue<DuplicateResolutionPolicy?>.Empty;
 
-    /// <summary>One of the <see cref="ImportConflictStatus"/> constants.</summary>
-    public string Status { get; init; } = string.Empty;
+    /// <summary>The conflict's current state. <see cref="SafeValue{T}.Raw"/> preserves an unrecognised stored value for diagnosis.</summary>
+    public SafeValue<ImportConflictStatus?> Status { get; init; } = SafeValue<ImportConflictStatus?>.Empty;
 
     /// <summary>Opaque JSON blob recording, per field, which side won — populated only when <see cref="AppliedPolicy"/>'s parsed value is <see cref="DuplicateResolutionPolicy.MergeOurs"/> or <see cref="DuplicateResolutionPolicy.MergeTheirs"/>.</summary>
     public string? MergedFields { get; init; }
@@ -69,15 +71,19 @@ public sealed class SystemImportConflict : RecordBase
     public DateTime? ResolvedAt { get; init; }
 }
 
-/// <summary>String constants for the two states a <see cref="SystemImportConflict"/> row can be in.</summary>
-public static class ImportConflictStatus
+/// <summary>
+/// The states a <see cref="SystemImportConflict"/> row can be in — a closed set defined and
+/// maintained entirely by this project's own coordinator logic (<see cref="Import.IConflictResolutionCoordinator"/>),
+/// not by any consuming project's schema. Per ADR 008, backed by a matching SQL CHECK constraint.
+/// </summary>
+public enum ImportConflictStatus
 {
-    /// <summary>The conflict was auto-resolved at detection time (every policy except <see cref="DuplicateResolutionPolicy.Review"/>).</summary>
-    public const string Resolved = "resolved";
-
     /// <summary>The conflict is awaiting manual review (<see cref="DuplicateResolutionPolicy.Review"/> today).</summary>
-    public const string Pending = "pending";
+    Pending,
 
     /// <summary>A per-field decision has been recorded (#149) but the owning batch hasn't been applied yet — nothing has been written to any domain table.</summary>
-    public const string Decided = "decided";
+    Decided,
+
+    /// <summary>The conflict was auto-resolved at detection time (every policy except <see cref="DuplicateResolutionPolicy.Review"/>), or its owning batch has since been applied.</summary>
+    Resolved
 }

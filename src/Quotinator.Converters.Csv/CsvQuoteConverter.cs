@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Quotinator.Core.Import;
+using Quotinator.Core.Models;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Converters.Csv;
@@ -15,7 +16,7 @@ namespace Quotinator.Converters.Csv;
 /// </summary>
 public sealed class CsvQuoteConverter : IQuoteSourceConverter
 {
-    private const string DefaultType = "movie";
+    private const QuoteType DefaultType = QuoteType.Movie;
 
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 

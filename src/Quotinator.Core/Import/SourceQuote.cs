@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Quotinator.Core.Models;
 
 namespace Quotinator.Core.Import;
 
@@ -36,12 +37,10 @@ public class SourceQuote
     [JsonPropertyName("author")]
     public string? Author { get; init; }
 
-    /// <summary>
-    /// Media or source type.
-    /// Standard values: <c>movie</c>, <c>tv</c>, <c>anime</c>, <c>book</c>, <c>person</c>.
-    /// </summary>
+    /// <summary>Media or source type.</summary>
     [JsonPropertyName("type")]
-    public string Type { get; init; } = "movie";
+    [JsonConverter(typeof(QuoteTypeJsonConverter))]
+    public QuoteType Type { get; init; } = QuoteType.Movie;
 
     /// <summary>
     /// Genre tags used for filtering.

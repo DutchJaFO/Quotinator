@@ -94,7 +94,7 @@ public class SqliteConflictResolutionServiceTests
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
-        var page = await _conflictReader.GetPagedAsync(null, ImportConflictStatus.Pending, 1, 10);
+        var page = await _conflictReader.GetPagedAsync(null, ImportConflictStatus.Pending.ToString(), 1, 10);
         Assert.HasCount(1, page.Items, "Fixture must produce exactly one pending conflict.");
         return page.Items[0].Id;
     }
@@ -128,7 +128,7 @@ public class SqliteConflictResolutionServiceTests
     {
         await SeedPendingConflictAsync();
 
-        var page = await _service.GetPagedAsync(null, ImportConflictStatus.Pending, 1, 10);
+        var page = await _service.GetPagedAsync(null, ImportConflictStatus.Pending.ToString(), 1, 10);
 
         Assert.HasCount(1, page.Items);
         CollectionAssert.AreEquivalent(new[] { "quoteText", "genres" }, page.Items[0].AmbiguousFields.ToList(),
@@ -150,7 +150,7 @@ public class SqliteConflictResolutionServiceTests
     public async Task DecideAsync_ThenApplyBatch_WritesResolvedFieldsAndOneChangeLogRow()
     {
         var conflictId = await SeedPendingConflictAsync();
-        var page = await _service.GetPagedAsync(null, ImportConflictStatus.Pending, 1, 10);
+        var page = await _service.GetPagedAsync(null, ImportConflictStatus.Pending.ToString(), 1, 10);
         var batchId = page.Items[0].BatchId;
 
         await _service.DecideAsync(conflictId, new ConflictDecisionRequest
@@ -171,14 +171,14 @@ public class SqliteConflictResolutionServiceTests
             "Applying a decided conflict must write exactly one System_ChangeLog row with InitiatedByType=WriteEndpoint");
 
         var resolved = await _conflictReader.GetByIdAsync(conflictId);
-        Assert.AreEqual(ImportConflictStatus.Resolved, resolved!.Status);
+        Assert.AreEqual(ImportConflictStatus.Resolved, resolved!.Status.Parsed);
     }
 
     [TestMethod]
     public async Task UndoDecisionAsync_BeforeApply_RevertsDecisionAndBatchStaysUnapplied()
     {
         var conflictId = await SeedPendingConflictAsync();
-        var page = await _service.GetPagedAsync(null, ImportConflictStatus.Pending, 1, 10);
+        var page = await _service.GetPagedAsync(null, ImportConflictStatus.Pending.ToString(), 1, 10);
         var batchId = page.Items[0].BatchId;
 
         await _service.DecideAsync(conflictId, new ConflictDecisionRequest
@@ -190,7 +190,7 @@ public class SqliteConflictResolutionServiceTests
         await _service.UndoDecisionAsync(conflictId);
 
         var conflict = await _conflictReader.GetByIdAsync(conflictId);
-        Assert.AreEqual(ImportConflictStatus.Pending, conflict!.Status);
+        Assert.AreEqual(ImportConflictStatus.Pending, conflict!.Status.Parsed);
 
         var stillPending = await _service.ApplyBatchAsync(batchId);
         Assert.IsNotNull(stillPending, "Apply must refuse — the conflict's decision was undone.");

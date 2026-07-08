@@ -34,7 +34,7 @@ internal static class QuoteFieldMerge
         [DateField]             = q.Date,
         [CharacterField]        = q.Character,
         [AuthorField]           = q.Author,
-        [TypeField]             = q.Type,
+        [TypeField]             = q.Type.ToString().ToLowerInvariant(),
         [GenresField]           = q.Genres.ToList(),
     };
 
@@ -48,7 +48,7 @@ internal static class QuoteFieldMerge
         Date             = (string?)merged[DateField],
         Character        = (string?)merged[CharacterField],
         Author           = (string?)merged[AuthorField],
-        Type             = (string)merged[TypeField]!,
+        Type             = QuoteSeedWriter.ParseQuoteType((string)merged[TypeField]!),
         Genres           = (List<string>)merged[GenresField]!,
         Translations     = incoming.Translations,
     };

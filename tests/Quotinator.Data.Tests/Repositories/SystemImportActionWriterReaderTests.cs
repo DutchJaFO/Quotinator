@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Tests.Repositories;
@@ -27,14 +28,16 @@ public class SystemImportActionWriterReaderTests
             CREATE TABLE System_ImportActions (
                 Id              TEXT    NOT NULL PRIMARY KEY,
                 BatchId         TEXT    NOT NULL,
-                ActionType      TEXT    NOT NULL,
+                ActionType      TEXT    NOT NULL
+                                CHECK (ActionType IN ('Add', 'Modify')),
                 EntityType      TEXT    NOT NULL,
                 EntityId        TEXT    NOT NULL,
                 ExistingBatchId TEXT,
                 ExistingValue   TEXT,
                 IncomingValue   TEXT    NOT NULL,
                 AppliedPolicy   TEXT,
-                Status          TEXT    NOT NULL,
+                Status          TEXT    NOT NULL
+                                CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded')),
                 MergedFields    TEXT,
                 DetectedAt      TEXT    NOT NULL,
                 AppliedAt       TEXT,
@@ -63,23 +66,23 @@ public class SystemImportActionWriterReaderTests
     {
         BatchId         = batchId,
         ExistingBatchId = existingBatchId,
-        ActionType      = ImportActionKind.Modify,
+        ActionType      = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
         EntityType      = "Quote",
         EntityId        = Guid.NewGuid().ToString(),
         ExistingValue   = "{}",
         IncomingValue   = "{}",
-        Status          = ImportActionStatus.Pending,
+        Status          = new SafeValue<ImportActionStatus?>(ImportActionStatus.Pending.ToString(), ImportActionStatus.Pending),
         DetectedAt      = DateTime.UtcNow,
     };
 
     private static SystemImportAction BuildDecidedAdd(string batchId) => new()
     {
         BatchId    = batchId,
-        ActionType = ImportActionKind.Add,
+        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
         EntityType = "Quote",
         EntityId   = Guid.NewGuid().ToString(),
         IncomingValue = "{}",
-        Status     = ImportActionStatus.Decided,
+        Status     = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
         DetectedAt = DateTime.UtcNow,
     };
 
@@ -100,8 +103,8 @@ public class SystemImportActionWriterReaderTests
 
         Assert.IsNotNull(found);
         Assert.AreEqual(entry.Id, found!.Id);
-        Assert.AreEqual(ImportActionStatus.Pending, found.Status);
-        Assert.AreEqual(ImportActionKind.Modify, found.ActionType);
+        Assert.AreEqual(ImportActionStatus.Pending, found.Status.Parsed);
+        Assert.AreEqual(ImportActionKind.Modify, found.ActionType.Parsed);
     }
 
     [TestMethod]
@@ -154,7 +157,7 @@ public class SystemImportActionWriterReaderTests
         await _writer.MarkDecidedAsync(entry.Id, """{"date":{"choice":"Replace"}}""", conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportActionStatus.Decided, found!.Status);
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
         Assert.AreEqual("""{"date":{"choice":"Replace"}}""", found.MergedFields);
     }
 
@@ -170,7 +173,7 @@ public class SystemImportActionWriterReaderTests
         await _writer.MarkDecidedAsync(entry.Id, "\"second\"", conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportActionStatus.Decided, found!.Status);
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
         Assert.AreEqual("\"second\"", found.MergedFields);
     }
 
@@ -186,7 +189,7 @@ public class SystemImportActionWriterReaderTests
         await _writer.ClearDecisionAsync(entry.Id, conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportActionStatus.Pending, found!.Status);
+        Assert.AreEqual(ImportActionStatus.Pending, found!.Status.Parsed);
         Assert.IsNull(found.MergedFields);
     }
 
@@ -201,7 +204,7 @@ public class SystemImportActionWriterReaderTests
         await _writer.MarkAppliedAsync(entry.Id, conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
-        Assert.AreEqual(ImportActionStatus.Applied, found!.Status);
+        Assert.AreEqual(ImportActionStatus.Applied, found!.Status.Parsed);
         Assert.IsNotNull(found.AppliedAt);
     }
 
@@ -225,10 +228,10 @@ public class SystemImportActionWriterReaderTests
         var a2After = await _reader.GetByIdAsync(a2.Id);
         var b1After = await _reader.GetByIdAsync(b1.Id);
 
-        Assert.AreEqual(ImportActionStatus.Discarded, a1After!.Status);
+        Assert.AreEqual(ImportActionStatus.Discarded, a1After!.Status.Parsed);
         Assert.IsNotNull(a1After.DiscardedAt);
-        Assert.AreEqual(ImportActionStatus.Discarded, a2After!.Status);
-        Assert.AreEqual(ImportActionStatus.Decided, b1After!.Status, "A different batch must be untouched.");
+        Assert.AreEqual(ImportActionStatus.Discarded, a2After!.Status.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, b1After!.Status.Parsed, "A different batch must be untouched.");
     }
 
     [TestMethod]

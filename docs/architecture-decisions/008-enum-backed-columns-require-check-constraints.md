@@ -25,14 +25,22 @@ without `RecordBase` because nobody checked whether ADR 002 governed it; each su
 then copied that same deviation instead of checking independently). This ADR exists so the next
 enum-backed column has an actual answer to check, not another inconsistent example to copy.
 
-A related question also needed separating out: `System_ImportConflicts.Status` (#149) and the new
-`System_ImportActions.Status`/`ActionType` (#154) are deliberately **not** backed by a real C#
-`enum` — they're open string constants (`ImportConflictStatus`, `ImportActionStatus`,
-`ImportActionKind`), specifically so `Quotinator.Data` (a domain-agnostic, reusable library per
-ADR 004) never forces a closed vocabulary onto a future consumer with different needs (e.g. a
-consumer that wants a `"Remove"` action type `Quotinator.Engine` doesn't need today). This decision
-needs to state clearly that those columns are an intentional, documented exception — not another
-unexplained inconsistency for someone to "fix" later by copying `Type`'s CHECK onto them.
+A related question also needed separating out, and was initially answered wrong in an earlier draft
+of this ADR: `System_ImportConflicts.Status` (#149) and `System_ImportActions.Status`/`ActionType`
+(#154) were first written as open string constants (`ImportConflictStatus`, `ImportActionStatus`,
+`ImportActionKind` as `static class`es), reasoning that `Quotinator.Data` (a domain-agnostic,
+reusable library per ADR 004) should never force a closed vocabulary onto a future consumer. That
+reasoning conflated two different kinds of column. `Status`/`ActionType` are **not** consumer
+vocabulary — they are states `Quotinator.Data`'s own coordinator logic (`ConflictResolutionCoordinator`,
+`ImportActionResolutionCoordinator`) exclusively assigns and transitions between; no consuming
+project ever writes or invents a new one. That makes them exactly the kind of closed, Data-owned set
+this ADR's `CHECK` rule is about, and they were converted to real `enum`s (`ImportConflictStatus`,
+`ImportActionStatus`, `ImportActionKind`) with matching `CHECK` constraints. The genuinely
+consumer-defined, open-vocabulary fields on the same rows — `EntityType` (a consumer's own entity
+type name) and the loose `BatchId`/`ExistingBatchId` string references (to a consumer's own batch
+table, which `Quotinator.Data` doesn't know the schema of) — correctly remain plain strings; the
+distinguishing question is *who defines the set of possible values*, not *which project the table
+lives in*.
 
 ---
 
@@ -40,16 +48,40 @@ unexplained inconsistency for someone to "fix" later by copying `Type`'s CHECK o
 
 **Every database column whose value is backed by a genuine, closed C# `enum` type must have a SQL
 `CHECK` constraint enumerating the same member names**, at the point the column is first created
-(in the `CREATE TABLE`, or inline on the `ALTER TABLE ADD COLUMN` that introduces it — verified
-empirically against the actual bundled SQLite runtime that `ALTER TABLE ... ADD COLUMN col TEXT ...
-CHECK (col IN (...))` is valid syntax, so a new column never needs the expensive rebuild-migration
-dance just to carry a `CHECK`).
+(in the `CREATE TABLE`, or inline on the `ALTER TABLE ADD COLUMN` that introduces it).
 
-**Columns intentionally backed by an open string-constant set — not a closed C# `enum` — are
-exempt**, and must say so in their own XML doc comment, mirroring the existing precedent in
-`SystemImportConflict.cs`/`SystemImportAction.cs`: *"this project has no dependency on any specific
-domain schema."* The tell: is there a real `enum SomeName { A, B, C }` backing the property, or a
-`static class SomeName { public const string A = "A"; ... }`? Only the former gets a `CHECK`.
+Confirmed against the official SQLite documentation
+([`lang_altertable.html`](https://www.sqlite.org/lang_altertable.html), not just empirical testing)
+— `ADD COLUMN` explicitly supports a `CHECK` constraint on the new column: *"When adding a column
+with a CHECK constraint... the added constraints are tested against all preexisting rows in the
+table and the ADD COLUMN fails if any constraint fails."* The complete, verbatim restriction list
+for a column added via `ADD COLUMN` is:
+
+- The column may not have a `PRIMARY KEY` or `UNIQUE` constraint.
+- The column may not have a default value of `CURRENT_TIME`, `CURRENT_DATE`, `CURRENT_TIMESTAMP`,
+  or an expression in parentheses.
+- If a `NOT NULL` constraint is specified, then the column must have a default value other than
+  `NULL`.
+- If foreign key constraints are enabled and a column with a `REFERENCES` clause is added, the
+  column must have a default value of `NULL`.
+- The column may not be `GENERATED ALWAYS ... STORED`, though `VIRTUAL` columns are allowed.
+
+None of these forbid a `CHECK` constraint, so a new enum-backed column never needs the expensive
+rebuild-migration dance just to carry one — as long as it also satisfies the restrictions above
+(most commonly relevant here: `NOT NULL` requires a real default, which a `CHECK (col IN (...))`
+naturally needs anyway so pre-existing rows backfill to a valid value).
+
+**Columns whose value set is genuinely open — defined and extended by a consuming project, not by
+the project that owns the table — are exempt**, and must say so in their own XML doc comment. In
+`Quotinator.Data`, this means fields like `SystemImportConflict.EntityType` or
+`SystemImportAction.BatchId`/`ExistingBatchId`: free-text values a consumer invents and
+`Quotinator.Data` never branches on. It does **not** mean every column on a domain-agnostic table —
+`Status`/`ActionType` on those same tables are a closed set `Quotinator.Data` itself defines and
+transitions between, so they get a real `enum` and a `CHECK` like any other. The tell is *who
+defines the set of possible values*: if only this project's own code ever assigns one, it's a
+closed `enum SomeName { A, B, C }` with a `CHECK`; if a future consumer could legitimately introduce
+a value this project has never seen, it's an open `string`, exempt from this rule and documented as
+such.
 
 **Widening or otherwise changing an existing enum-backed column's `CHECK`** still requires the
 create-rebuild-rename dance already established (`Migration004_ImportBatchTypeUserSeed` is the
@@ -93,8 +125,9 @@ picks it up, not settled by this ADR.
   must include a `CHECK` in the same commit that introduces the column — reviewers can check this
   ADR instead of guessing from nearby code.
 - `Quotinator.Data`'s domain-agnostic tables (`System_ImportConflicts`, `System_ImportActions`, and
-  any future one) keep their open string-constant columns unconstrained by design — this ADR does
-  not apply to them, and their entity doc comments already say why.
+  any future one) still get `CHECK`-constrained `enum` columns for their own Data-owned state
+  (`Status`, `ActionType`) — only their genuinely consumer-defined fields (`EntityType`, `BatchId`,
+  `ExistingBatchId`) stay open strings by design, and their entity doc comments say why per field.
 - `ImportBatches.ConflictPolicy` remains a known, tracked gap under this rule — not fixed by this
   ADR, and not to be treated as precedent for a future column's design.
 - The existing schema-drift tests (`Baseline_And_IncrementalReplay_AcceptSameCheckConstraintValues`

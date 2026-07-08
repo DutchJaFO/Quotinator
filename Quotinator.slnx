@@ -62,6 +62,7 @@
     <File Path="docs/ci-cd.md" />
     <File Path="docs/data-access.md" />
     <File Path="docs/data-import.md" />
+    <File Path="docs/database-conventions.md" />
     <File Path="docs/docker.md" />
     <File Path="docs/home-assistant.md" />
     <File Path="docs/localisation.md" />
@@ -87,6 +88,7 @@
     <File Path="docs/architecture-decisions/006-sequential-test-execution-by-default.md" />
     <File Path="docs/architecture-decisions/007-cs1591-on-test-projects.md" />
     <File Path="docs/architecture-decisions/008-enum-backed-columns-require-check-constraints.md" />
+    <File Path="docs/architecture-decisions/009-verify-migrations-against-last-released-schema.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />

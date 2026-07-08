@@ -15,8 +15,12 @@ namespace Quotinator.Data.Entities;
 /// <c>ExistingValue</c>/<c>IncomingValue</c>/<c>MergedFields</c> are opaque JSON blobs — this
 /// project never deserializes them; the consuming project (e.g. Quotinator.Engine) produces and
 /// later interprets that content, since this project has no dependency on any specific domain
-/// schema. <see cref="ActionType"/> and <see cref="EntityType"/> are likewise free-text, entirely
-/// caller-defined — Data never branches on their value beyond storing/filtering by it.
+/// schema. Not a candidate for <see cref="Quotinator.Data.Helpers.JsonHandler{T}"/>, for the same
+/// reason as <see cref="SystemImportConflict"/>'s identically-named fields: the concrete shape is
+/// owned by a consumer project (e.g. <c>Quotinator.Core.Models</c>/<c>Quotinator.Engine.Models</c>),
+/// and typing this property that way would require <c>Quotinator.Data</c> to reference it, which
+/// ADR 004 forbids. <see cref="EntityType"/> is likewise free-text, entirely caller-defined — Data
+/// never branches on its value beyond storing/filtering by it.
 /// </remarks>
 [Table("System_ImportActions")]
 public sealed class SystemImportAction : RecordBase
@@ -24,8 +28,8 @@ public sealed class SystemImportAction : RecordBase
     /// <summary>Loose reference to the batch this action was staged under. No FK — this project doesn't know the consumer's batch table name.</summary>
     public string BatchId { get; init; } = string.Empty;
 
-    /// <summary>Free-text kind of action — e.g. <c>"Add"</c> or <c>"Modify"</c>. Entirely caller-defined.</summary>
-    public string ActionType { get; init; } = string.Empty;
+    /// <summary>The kind of action this row represents. <see cref="SafeValue{T}.Raw"/> preserves an unrecognised stored value for diagnosis.</summary>
+    public SafeValue<ImportActionKind?> ActionType { get; init; } = SafeValue<ImportActionKind?>.Empty;
 
     /// <summary>Free-text entity type the action applies to (e.g. <c>"Quote"</c>).</summary>
     public string EntityType { get; init; } = string.Empty;
@@ -48,8 +52,8 @@ public sealed class SystemImportAction : RecordBase
     /// <summary>Opaque JSON blob recording, per field, which side won — populated at staging time for every Modify (ambiguous or not), never for an Add.</summary>
     public string? MergedFields { get; init; }
 
-    /// <summary>One of the <see cref="ImportActionStatus"/> constants.</summary>
-    public string Status { get; init; } = string.Empty;
+    /// <summary>The action's current state. <see cref="SafeValue{T}.Raw"/> preserves an unrecognised stored value for diagnosis.</summary>
+    public SafeValue<ImportActionStatus?> Status { get; init; } = SafeValue<ImportActionStatus?>.Empty;
 
     /// <summary>UTC timestamp when the action was staged.</summary>
     public DateTime DetectedAt { get; init; }
@@ -61,28 +65,37 @@ public sealed class SystemImportAction : RecordBase
     public DateTime? DiscardedAt { get; init; }
 }
 
-/// <summary>String constants for the states a <see cref="SystemImportAction"/> row can be in.</summary>
-public static class ImportActionStatus
+/// <summary>
+/// The states a <see cref="SystemImportAction"/> row can be in — a closed set defined and
+/// maintained entirely by this project's own coordinator logic (<see cref="Import.IImportActionCoordinator"/>),
+/// not by any consuming project's schema. Per ADR 008, backed by a matching SQL CHECK constraint.
+/// </summary>
+public enum ImportActionStatus
 {
     /// <summary>Genuinely ambiguous — needs an explicit decision before the owning batch can be applied.</summary>
-    public const string Pending = "pending";
+    Pending,
 
     /// <summary>Auto-resolved at staging time (every Add and unambiguous Modify), or a decision has been recorded for a Pending action. Ready to apply.</summary>
-    public const string Decided = "decided";
+    Decided,
 
     /// <summary>The owning batch was applied — this action's write landed on the consumer's own tables.</summary>
-    public const string Applied = "applied";
+    Applied,
 
     /// <summary>The owning batch was discarded — this action was never written anywhere.</summary>
-    public const string Discarded = "discarded";
+    Discarded
 }
 
-/// <summary>String constants for the free-text <see cref="SystemImportAction.ActionType"/> column.</summary>
-public static class ImportActionKind
+/// <summary>
+/// The kinds of action a <see cref="SystemImportAction"/> row can represent — a closed set defined
+/// and maintained entirely by this project's own coordinator logic, not by any consuming project's
+/// schema (a consumer decides, per row, which of these two kinds applies — it does not invent new
+/// kinds of its own). Per ADR 008, backed by a matching SQL CHECK constraint.
+/// </summary>
+public enum ImportActionKind
 {
     /// <summary>A brand-new record with no existing counterpart.</summary>
-    public const string Add = "Add";
+    Add,
 
     /// <summary>An existing record whose fields would change.</summary>
-    public const string Modify = "Modify";
+    Modify
 }

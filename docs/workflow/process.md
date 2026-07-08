@@ -274,9 +274,14 @@ Issues not yet started or still in progress stay open after a partial merge. Onl
 A milestone is closed only when all issues are resolved or explicitly closed with documented justification.
 
 1. Confirm: `gh issue list --milestone "<Milestone Name>" --state open`
-2. Run the full pre-push checklist (`CLAUDE.md`): build, tests, Docker build.
-3. Push to `main`, tag the release.
-4. Close the milestone on GitHub:
+2. **If the milestone added any migrations:** verify the full incremental migration path against a
+   database matching the *last published release's* schema, not the accumulated local dev database
+   — see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md).
+   File this as its own tracked issue in the milestone (see #155 for a worked example) rather than
+   folding it into whichever feature issue happens to touch migrations last.
+3. Run the full pre-push checklist (`CLAUDE.md`): build, tests, Docker build.
+4. Push to `main`, tag the release.
+5. Close the milestone on GitHub:
    ```
    gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed
    ```

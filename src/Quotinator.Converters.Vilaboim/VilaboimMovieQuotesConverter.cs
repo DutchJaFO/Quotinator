@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Quotinator.Core.Import;
+using Quotinator.Core.Models;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Converters.Vilaboim;
@@ -51,7 +52,7 @@ public sealed class VilaboimMovieQuotesConverter : IQuoteSourceConverter
                 Date             = null,
                 Character        = null,
                 Author           = null,
-                Type             = "movie",
+                Type             = QuoteType.Movie,
                 Genres           = [],
                 Translations     = new Dictionary<string, SourceQuoteTranslation>(),
             });

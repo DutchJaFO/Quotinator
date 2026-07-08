@@ -1,4 +1,5 @@
 using Quotinator.Core.Import;
+using Quotinator.Core.Models;
 
 namespace Quotinator.Core.Tests.Models;
 
@@ -25,7 +26,7 @@ public class QuoteTests
     [TestMethod]
     public void Quote_Type_DefaultsToMovie()
     {
-        Assert.AreEqual("movie", BuildMinimal().Type);
+        Assert.AreEqual(QuoteType.Movie, BuildMinimal().Type);
     }
 
     [TestMethod]
@@ -69,7 +70,7 @@ public class QuoteTests
             Date = "1942",
             Character = "Rick Blaine",
             Author = null,
-            Type = "movie",
+            Type = QuoteType.Movie,
             Genres = ["drama", "romance"],
             Translations = new Dictionary<string, SourceQuoteTranslation> { ["nl"] = translation }
         };
@@ -78,7 +79,7 @@ public class QuoteTests
         Assert.AreEqual("1942", quote.Date);
         Assert.AreEqual("Rick Blaine", quote.Character);
         Assert.IsNull(quote.Author);
-        Assert.AreEqual("movie", quote.Type);
+        Assert.AreEqual(QuoteType.Movie, quote.Type);
         Assert.HasCount(2, quote.Genres);
         Assert.IsTrue(quote.Genres.Contains("drama"));
         Assert.IsTrue(quote.Translations.ContainsKey("nl"));
@@ -95,13 +96,13 @@ public class QuoteTests
             Source = "House of Commons, 4 June 1940",
             Date = "1940-06-04",
             Author = "Winston Churchill",
-            Type = "person",
+            Type = QuoteType.Person,
             Genres = ["non-fiction"]
         };
 
         Assert.AreEqual("Winston Churchill", quote.Author);
         Assert.IsNull(quote.Character);
-        Assert.AreEqual("person", quote.Type);
+        Assert.AreEqual(QuoteType.Person, quote.Type);
         Assert.AreEqual("1940-06-04", quote.Date);
     }
 
@@ -117,12 +118,12 @@ public class QuoteTests
             Date = "1954",
             Character = "Bilbo Baggins",
             Author = "J.R.R. Tolkien",
-            Type = "book",
+            Type = QuoteType.Book,
             Genres = ["fantasy", "fiction"]
         };
 
         Assert.AreEqual("J.R.R. Tolkien", quote.Author);
         Assert.AreEqual("Bilbo Baggins", quote.Character);
-        Assert.AreEqual("book", quote.Type);
+        Assert.AreEqual(QuoteType.Book, quote.Type);
     }
 }
