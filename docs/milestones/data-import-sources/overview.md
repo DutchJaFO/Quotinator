@@ -56,7 +56,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow | Waiting for release | T1 ✅ T2 ✅ | [149-manual-conflict-review-plan.md](149-manual-conflict-review-plan.md) |
 | [#152](https://github.com/DutchJaFO/Quotinator/issues/152) | Review endpoint grouping: split Admin / Quote / Import | Waiting for release | T1 ✅ T2 ✅ | [152-endpoint-grouping-plan.md](152-endpoint-grouping-plan.md) |
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts | Planning | Not yet assessed | No plan doc yet — deferred out of #149 |
-| [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Planning | Not yet assessed | [154-import-staging-plan.md](154-import-staging-plan.md) |
+| [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | In progress | Not yet assessed | [154-import-staging-plan.md](154-import-staging-plan.md) |
 | [#155](https://github.com/DutchJaFO/Quotinator/issues/155) | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning | Not yet assessed | No plan doc yet — deferred to just before milestone close |
 
 ---
@@ -114,7 +114,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 15 | #56 | Audit log (System_ChangeLog) | Waiting for release |
 | 16 | #152 | Review endpoint grouping: split Admin / Quote / Import | Waiting for release |
 | 17 | #149 | Import endpoint: manual conflict-review workflow | Waiting for release |
-| 18 | #154 | Unify import, preview, and seeding on one staging engine | Planning |
+| 18 | #154 | Unify import, preview, and seeding on one staging engine | In progress |
 | 19 | #59 | Admin: soft-reset by batch | Planning |
 | 20 | #67 | Conversations schema | Planning |
 | 21 | #68 | Curated JSON conversations | Planning |
@@ -144,7 +144,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 |-------|------------------------|-------|
 | #45, #65 | Not evaluated for early merge — held for the full milestone | Fully done (T1 ✅ T2 ✅), but their own output is only reachable through the write path they introduce (`POST /api/v1/import`, moved from `/api/v1/quotes/import` by #152) — nothing else in the milestone calls them, and no existing behaviour depends on them being present, so there is no forcing reason to break from the default "merge the full milestone together" assumption. Revisit only if a later issue in this milestone (e.g. #59, #56) would otherwise sit blocked waiting on a merge. |
 
-All other remaining issues (#59, #67, #68, #69, #144, #153, #154, #155) are still in `Planning` — not started. #149 and #152 are `Waiting for release` (both: T1 ✅ T2 ✅). Evaluate each for early merge when complete — the default is to merge the full milestone together.
+#154 is `In progress` (its generic Data-layer staging primitive is done; planner/applier extraction, endpoints, and seeding integration are not). All other remaining issues (#59, #67, #68, #69, #144, #153, #155) are still in `Planning` — not started. #149 and #152 are `Waiting for release` (both: T1 ✅ T2 ✅). Evaluate each for early merge when complete — the default is to merge the full milestone together.
 
 ---
 

@@ -95,7 +95,6 @@
     <File Path="docs/milestones/open-issue-audit.md" />
   </Folder>
   <Folder Name="/docs/milestones/data-import-sources/">
-    <File Path="docs/milestones/data-import-sources/README.md" />
     <File Path="docs/milestones/data-import-sources/overview.md" />
     <File Path="docs/milestones/data-import-sources/45-import-endpoint-plan.md" />
     <File Path="docs/milestones/data-import-sources/55-record-completeness-plan.md" />

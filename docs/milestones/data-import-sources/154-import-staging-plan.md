@@ -1,6 +1,6 @@
 # #154 — Unify import, preview, and seeding on one staging engine
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #154
 **Tiers required:** T1, T2
 **Depends on:** #149 (`IConflictResolutionCoordinator`, `System_ImportConflicts` table), #56 (audit/change log)
@@ -49,7 +49,7 @@ Key decisions made during planning (not re-litigated here, just recorded):
 
 ### 1. Generic staging primitive (`Quotinator.Data`)
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 New `SystemImportAction` entity (`Quotinator.Data.Entities`), RecordBase-shaped from creation:
 `Id, BatchId` (loose string reference, no FK — mirrors `SystemImportConflict.BatchId`),
@@ -76,6 +76,15 @@ for one incoming row; (b) an *applier callback* — takes a `Decided` action, wr
 consumer's own tables. Everything else (table, status machine, decide/undo/apply/discard
 orchestration) is reusable as-is.
 
+**Post-build correction (same milestone, after ADR 008 was written):** `ActionType` and `Status`
+were initially built as open string-constant classes (`ImportActionKind`/`ImportActionStatus` as
+`static class`es), reasoning they were domain-agnostic like `EntityType`/`BatchId`. That conflated
+two different kinds of column — these two are a closed set `Quotinator.Data`'s own coordinator
+assigns and transitions between, not consumer-defined vocabulary. Converted to real C# `enum`s,
+typed as `SafeValue<TEnum?>` (matching `SystemChangeLog.InitiatedByType`/`Action`'s existing
+pattern) with a registered `SafeEnumHandler<TEnum>` and a matching SQL `CHECK` constraint per
+ADR 008. See ADR 008's "Context" section for the full correction.
+
 ### 2. Quotinator-specific plug-in (`Quotinator.Engine`)
 
 **Status:** ⬜ Not started
@@ -91,10 +100,11 @@ staging time) and writes the Quote — today's existing logic, invoked later in 
 identically by `/import/actions/apply`, `/import` (file mode, once nothing's ambiguous), and the
 seed flow's apply attempt.
 
-`ImportBatch` (Engine entity) gains `Status` (`Staged`/`Applied`/`Discarded`, plain `ADD COLUMN`, no
-CHECK — matching `ConflictPolicy`'s precedent) and `AppliedAt` (nullable, distinct from
-`ImportedAt`). `SqliteQuoteImportService.ImportAsync` becomes a thin orchestrator: stage via the
-planner, then (unless staging-only) attempt apply via the applier.
+`ImportBatch` (Engine entity) gains `Status` (`Staged`/`Applied`/`Discarded`) and `AppliedAt`
+(nullable, distinct from `ImportedAt`) — **done**, migration007, with a `CHECK` constraint per
+ADR 008 (written after this section was originally drafted; the constraint was added, not omitted
+as first planned here). `SqliteQuoteImportService.ImportAsync` becomes a thin orchestrator: stage
+via the planner, then (unless staging-only) attempt apply via the applier — **not started**.
 
 ### 3. Endpoints (`ImportEndpoints.cs`, `Import` tag)
 
@@ -127,26 +137,34 @@ otherwise.
 
 ### 5. Migrations
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-- **Quotinator.Data** (`DataOwnedMigrations`, version 8, after `ImportConflictMigrations.
-  AddExistingBatchId` at 7): new `System_ImportActions` table + indexes on `BatchId`/`Status`. Add
-  to `DataBaselineSql` in the same commit (schema-drift test requires it).
-- **Quotinator.Engine** (`QuotinatorMigrations.All`, version 7, confirmed next after
-  `Migration006_RecordCompleteness`): `ALTER TABLE ImportBatches ADD COLUMN Status TEXT NOT NULL
-  DEFAULT 'Applied'` + `ADD COLUMN AppliedAt TEXT` — existing rows backfill correctly (everything
-  before this feature always committed immediately). Update `BaselineSchema` to match.
+- **Quotinator.Data** (`DataOwnedMigrations`): version 8, `ImportActionMigrations.
+  CreateImportActionsTable` — new `System_ImportActions` table (with `ActionType`/`Status` `CHECK`
+  constraints built in from the start, since this table was unshipped when the enum correction
+  landed — no separate retrofit migration needed, unlike below) + indexes on `BatchId`/`Status`.
+  Version 9, `ImportConflictMigrations.AddStatusCheckConstraint` — a rebuild migration retrofitting
+  a `CHECK` constraint onto `System_ImportConflicts.Status`, since that table was already applied to
+  a real dev database when the enum correction landed (normalizes any lowercase legacy status
+  strings via `CASE` during the rebuild). `DataBaselineSql` updated to match both in the same commit
+  (schema-drift tests enforce this).
+- **Quotinator.Engine** (`QuotinatorMigrations.All`, version 7, `Migration007_ImportBatchStagingStatus`,
+  after `Migration006_RecordCompleteness`): `ALTER TABLE ImportBatches ADD COLUMN Status TEXT NOT NULL
+  DEFAULT 'Applied' CHECK (Status IN ('Staged', 'Applied', 'Discarded'))` + `ADD COLUMN AppliedAt
+  TEXT` — existing rows backfill correctly (everything before this feature always committed
+  immediately). `BaselineSchema` updated to match.
 
 ### 6. Tests
 
-**Status:** ⬜ Not started
+**Status:** 🟡 Partially done — `Quotinator.Data.Tests` coverage done; everything else not started
 
 - Regression proof: re-run existing `SqliteQuoteImportServiceTests` and the seeding test suite
-  **unmodified** after the planner/applier extraction.
+  **unmodified** after the planner/applier extraction. — **not started** (planner/applier extraction
+  itself hasn't happened yet).
 - `Quotinator.Data.Tests`: `SystemImportActionWriterReaderTests`, `ImportActionResolutionCoordinatorTests`
   (decide/undo, apply-refuses-with-pending, apply-commits-once, discard-marks-everything-and-
   creates-nothing) — against a fake classifier/applier callback, proving the coordinator needs no
-  real Quote/Source schema (mirrors `ConflictResolutionCoordinatorTests`).
+  real Quote/Source schema (mirrors `ConflictResolutionCoordinatorTests`). — **done**.
 - `Quotinator.Engine.Tests`: planner classification correctness; Source/Character/Person resolution
   deferred to apply time (never at stage time); `/import`'s `200`-vs-`202` split; `/import/preview`'s
   stage-only contract; seeding leaving a batch `Staged` when ambiguous with correct startup log and
@@ -172,8 +190,8 @@ generic-primitive placement rationale and the seeding-can-leave-a-batch-staged b
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | Coordinator: stage/decide/undo/apply/discard state transitions correct against a fake classifier/applier (no real schema needed) | Unit test | `ImportActionResolutionCoordinatorTests` |
-| 2 | ⬜ | Reader/writer round-trip for `System_ImportActions`, including all Status transitions | Unit test | `SystemImportActionWriterReaderTests` |
+| 1 | ✅ | Coordinator: stage/decide/undo/apply/discard state transitions correct against a fake classifier/applier (no real schema needed) | Unit test | `ImportActionResolutionCoordinatorTests` |
+| 2 | ✅ | Reader/writer round-trip for `System_ImportActions`, including all Status transitions | Unit test | `SystemImportActionWriterReaderTests` |
 | 3 | ⬜ | Planner correctly classifies Add / unambiguous-Modify / ambiguous-Modify; never creates Source/Character/Person during staging | Unit test | Engine.Tests planner test class |
 | 4 | ⬜ | Applier resolves Source/Character/Person and writes the Quote only at apply time; identical result whether reached via `/import`, `/import/actions/apply`, or seeding | Unit test | Engine.Tests applier test class |
 | 5 | ⬜ | Existing import behavior unchanged by the planner/applier extraction | Unit test | `SqliteQuoteImportServiceTests` passes **unmodified** |
