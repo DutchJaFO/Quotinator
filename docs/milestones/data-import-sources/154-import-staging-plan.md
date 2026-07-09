@@ -7,7 +7,7 @@
 
 ---
 
-## Scope history (recorded before implementation)
+## Scope changes
 
 This issue did not start as its own filed idea — it emerged while planning #59 ("Admin: targeted
 soft-reset and restore by import batch"). Designing #59's "modified after import" preview detail
