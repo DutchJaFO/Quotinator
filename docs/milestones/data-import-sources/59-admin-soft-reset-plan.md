@@ -35,8 +35,10 @@ Three decisions were confirmed with the user during planning:
 **A fourth item changes already-shipped #154 code, not just new #59 code, so it is recorded here as
 a scope decision rather than folded silently into a step.** Tracing the actual reversal path against
 `ImportActionPlanner.cs`/`QuoteSeedWriter.cs`/`Sql.cs` surfaced that #59 is the first feature to ever
-soft-delete a `Quotes`/`Sources`/`Characters`/`People` row — no soft-delete write path exists for
-these four tables today. But every existence check `#154`'s planner relies on for duplicate detection
+soft-delete a `Quotes`/`Sources`/`Characters`/`People` row. `Quotinator.Data` already has a generic,
+tested soft-delete mechanism for any `RecordBase`+`[Table]` entity (`RepositorySql.SoftDelete`/
+`HardDelete`, see step 2) — none of these four tables need new SQL for the soft-delete itself. But
+every existence check `#154`'s planner relies on for duplicate detection
 (`Sql.Sources.SelectIdByTitleAndType`, `Sql.Characters.SelectIdBySourceAndName`,
 `Sql.People.SelectIdByName`, `QuoteSeedWriter.TryGetExistingFieldsAsync` → `Sql.Quotes.SelectRawById`)
 filters `WHERE IsDeleted = 0`, and all four tables' inserts are `INSERT OR IGNORE`. Once a row is
@@ -52,11 +54,12 @@ an insert targets an id currently occupied by a soft-deleted row, that old row i
 then the insert proceeds normally. This needs no schema change (`Id` stays a plain `PRIMARY KEY`, no
 partial/filtered unique indexes, no foreign-key implications to work through — confirmed against
 SQLite's own foreign-key documentation that a plain `PRIMARY KEY` remains the simplest and most
-correctly-supported parent key). It only requires a guarded `DELETE ... WHERE Id=@id AND IsDeleted=1`
-immediately before each of the four existing insert statements, inside the shared apply-time helpers
-in `SqliteImportActionService` (`EnsureSourceExistsAsync`/`EnsureCharacterExistsAsync`/
-`EnsurePersonExistsAsync`/the Quote-Add branch) — the same code path already shared by `/import`,
-`/import/preview`, and seeding, not new #59-only code. See step 3.
+correctly-supported parent key). It only requires calling the already-existing
+`RepositorySql.HardDelete(tableName)` immediately before each of the four existing insert statements,
+inside the shared apply-time helpers in `SqliteImportActionService` (`EnsureSourceExistsAsync`/
+`EnsureCharacterExistsAsync`/`EnsurePersonExistsAsync`/the Quote-Add branch) — the same code path
+already shared by `/import`, `/import/preview`, and seeding, not new #59-only code, and no new SQL
+either. See steps 2 and 3.
 
 ---
 
@@ -65,8 +68,9 @@ in `SqliteImportActionService` (`EnsureSourceExistsAsync`/`EnsureCharacterExists
 1. An endpoint reverses every `Applied` `SystemImportAction` belonging to a batch, in one atomic
    operation: `POST /api/v1/import/actions/reverse?batchId=`.
 2. Per action, dispatch on `ActionType`:
-   - **`Add`** → soft-delete the created record (`IsDeleted = 1`, `DateDeleted = now`). No soft-delete
-     write path exists yet for `Quotes`/`Sources`/`Characters`/`People` — new SQL required.
+   - **`Add`** → soft-delete the created record (`IsDeleted = 1`, `DateDeleted = now`) via the
+     already-existing, already-tested generic `RepositorySql.SoftDelete(tableName)` — no new SQL
+     needed (see step 2).
    - **`Modify`** → write the row back to the field values captured in `ExistingValue`, with
      `SourceId`/`CharacterId`/`PersonId` re-resolved via natural-key lookup (not trusted verbatim —
      `ExistingValue`'s stored ids are the *incoming* quote's resolved ids, not the existing row's
@@ -130,27 +134,49 @@ the `CHECK` constraints and column definitions can be edited in place rather tha
 create-rebuild-rename dance. **Re-verify this immediately before implementing** — if a release is
 tagged between now and then, this step reverts to a normal ADR-008 widening migration.
 
-### 2. Soft-delete and reference-count SQL
+### 2. Reference-count SQL (soft-delete itself already exists, generically)
 
 **Status:** ⬜ Not started
 
-Add `Sql.Quotes.SoftDelete`, `Sql.Sources.SoftDelete`, `Sql.Characters.SoftDelete`,
-`Sql.People.SoftDelete` (none exist today — only inserts and `IsDeleted = 0` read filters exist for
-these four tables). Add a live-reference-count query per entity type for step 5's item-3 check.
+`Quotinator.Data` already provides a generic, tested soft-delete/hard-delete mechanism —
+`RepositorySql.SoftDelete(tableName)` / `RepositorySql.HardDelete(tableName)` — exercised through
+`SqliteRestorableRepository<T>` and covered by `RepositorySqlGuardTests`/
+`SqliteRestorableRepositoryTests`. `Character`/`Person`/`QuoteEntity`/`Source` already carry the
+`[Table(...)]` attribute and inherit `RecordBase`, so they already qualify. `Quotinator.Data` already
+grants `InternalsVisibleTo` to `Quotinator.Engine`, so these `internal` factory methods are directly
+callable from Engine code today — **no new `Sql.Quotes.SoftDelete`-style consts, and no visibility
+change, are needed.**
+
+The repository *object* (`SqliteRestorableRepository<T>`) is not a drop-in fit for this specific code
+path, though: its methods either open their own throwaway connection or take an `IUnitOfWork`, and
+`SqliteUnitOfWork.BeginTransactionAsync()` always opens a brand-new connection — there is no
+constructor for wrapping an already-open external connection/transaction, which is exactly the shape
+`IImportActionCoordinator`'s shared-batch callback provides (one connection/transaction covering the
+whole reversal, so it all commits or rolls back together). Step 5 therefore calls
+`RepositorySql.SoftDelete`/`HardDelete`'s SQL text directly via Dapper against that shared connection
+— the same raw-SQL-on-a-shared-connection style `ApplyResolvedActionAsync` already uses for its own
+writes (and, consistent with that existing code, logs only to `SystemChangeLog`, not the generic
+`SystemAuditEntry` the repository object would have written automatically).
+
+The one genuinely new query this step needs is the live-reference-count check for
+Source/Character/Person Add-reversal (spec item 3) — Quote-specific FK semantics, not something the
+generic repository layer provides for any `RecordBase` table.
 
 ### 3. Make the shared insert paths resurrection-safe
 
 **Status:** ⬜ Not started
 
 Per the Scope changes decision: before each of the four existing insert statements
-(`Sql.Quotes.Insert`, `Sql.Sources/Characters/People.InsertIfNotExists`), add a guarded
-`DELETE FROM <table> WHERE Id = @id AND IsDeleted = 1` in `SqliteImportActionService`'s
-`EnsureSourceExistsAsync`/`EnsureCharacterExistsAsync`/`EnsurePersonExistsAsync` and the Quote-Add
-branch of `ApplyResolvedActionAsync`. If the row was active, the delete affects zero rows and the
-subsequent `INSERT OR IGNORE` behaves exactly as it does today (the existing concurrent-double-Add
-protection is unaffected). If the row was soft-deleted, it is removed first, so the insert always
-succeeds fresh. This is shared apply-time code — it also fixes resurrection for ordinary `/import`
-and seeding, not just undo.
+(`Sql.Quotes.Insert`, `Sql.Sources/Characters/People.InsertIfNotExists`), call the already-existing,
+already-tested `RepositorySql.HardDelete(tableName)` (`DELETE FROM {tableName} WHERE Id = @id AND
+IsDeleted = 1` — see step 2) in `SqliteImportActionService`'s `EnsureSourceExistsAsync`/
+`EnsureCharacterExistsAsync`/`EnsurePersonExistsAsync` and the Quote-Add branch of
+`ApplyResolvedActionAsync`, immediately before the insert. If the row was active, the delete affects
+zero rows and the subsequent `INSERT OR IGNORE` behaves exactly as it does today (the existing
+concurrent-double-Add protection is unaffected). If the row was soft-deleted, it is removed first, so
+the insert always succeeds fresh. No new SQL — reuses the same generic factory method as step 5. This
+is shared apply-time code — it also fixes resurrection for ordinary `/import` and seeding, not just
+undo.
 
 ### 4. `IImportActionCoordinator.TryReverseBatchAsync` (`Quotinator.Data`)
 
@@ -176,7 +202,7 @@ a scope or behavior question, so it's settled here rather than left open.
 The domain-specific whole-batch callback, sibling to `ApplyResolvedActionAsync`. Sorts the batch's
 `Applied` actions Quote → Character → Source/Person, then per action:
 
-- `Quote`/Add → soft-delete.
+- `Quote`/Add → soft-delete via `RepositorySql.SoftDelete("Quotes")` (see step 2).
 - `Quote`/Modify (not Skip) → re-resolve `SourceId`/`CharacterId`/`PersonId` from
   `ExistingValue.Fields.Source`/`.Type`/`.Character`/`.Author` via the same natural-key lookups the
   planner uses (`Sql.Sources.SelectIdByTitleAndType`, `Sql.Characters.SelectIdBySourceAndName`,
@@ -192,8 +218,8 @@ The domain-specific whole-batch callback, sibling to `ApplyResolvedActionAsync`.
   `ExistingBatchId` (not the reversing batch's own id — `UpdateOnNewestWins` today always sets
   `ImportBatchId=@batchId` to whichever batch is writing, which is correct on apply but wrong on
   undo).
-- `Source`/`Character`/`Person`/Add → soft-delete only if step 2's live-reference-count check finds
-  zero remaining references.
+- `Source`/`Character`/`Person`/Add → soft-delete via `RepositorySql.SoftDelete(tableName)`, only if
+  step 2's live-reference-count check finds zero remaining references.
 
 Writes `SystemChangeLog` entries via the existing `QuoteSeedWriter.LogChangeAsync`/`ChangeLogContext`
 helper (`SoftDelete` for a reversed Add, `Modified` for a reversed Modify).
