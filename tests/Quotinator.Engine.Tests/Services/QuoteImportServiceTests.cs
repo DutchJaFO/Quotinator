@@ -114,6 +114,7 @@ public class QuoteImportServiceTests
         Assert.AreEqual(0, result.Summary.Updated);
         Assert.AreEqual(0, result.Summary.Errors);
         Assert.IsNotNull(result.BatchId);
+        Assert.AreEqual(0, result.Conflicts.Count, "A brand-new quote is an Add action, never surfaced as a conflict entry — this is what makes a zero-conflict import map to 200, not 202");
         Assert.AreEqual(1, await CountAsync("Quotes"));
         Assert.AreEqual(1, await CountAsync("ImportBatches"));
         Assert.AreEqual("newest-wins", result.ConflictPolicy, "Response-facing wire value must be kebab-case, matching every other DuplicateResolutionPolicy JSON value in this API");
@@ -147,6 +148,7 @@ public class QuoteImportServiceTests
 
         Assert.AreEqual(1, result.Summary.Updated);
         Assert.AreEqual("Updated.", await ReadQuoteTextAsync());
+        Assert.AreEqual("resolved", result.Conflicts.Single().Status, "NewestWins auto-resolves immediately — a real conflict can be present without leaving anything pending, so this must still map to 200, not 202");
     }
 
     [TestMethod]

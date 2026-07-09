@@ -157,6 +157,7 @@ public class ImportEndpointTests
         Assert.IsTrue(doc.RootElement.TryGetProperty("summary", out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("preview", out var preview));
         Assert.IsFalse(preview.GetBoolean());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("conflicts").GetArrayLength(), "A zero-conflict import (the FakeQuoteImportService default) must report an empty conflicts array");
     }
 
     [TestMethod]
@@ -189,6 +190,40 @@ public class ImportEndpointTests
         var response = await CreateClientWithKey(factory).PostAsync(path, BuildForm());
 
         Assert.AreEqual(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
+    [TestMethod]
+    [DataRow("/api/v1/import")]
+    [DataRow("/api/v1/import/preview")]
+    public async Task Import_ResultHasOnlyResolvedConflicts_Returns200NotAccepted(string path)
+    {
+        var service = new FakeQuoteImportService
+        {
+            ReturnResult = new Quotinator.Core.Models.ImportResultResponse
+            {
+                BatchId        = Guid.NewGuid(),
+                Preview        = path.EndsWith("preview"),
+                ConflictPolicy = "newest-wins",
+                Summary        = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 0, Updated = 1, Skipped = 0, Errors = 0 },
+                Conflicts =
+                [
+                    new Quotinator.Core.Models.ImportConflictEntry
+                    {
+                        QuoteId       = "11111111-1111-1111-1111-111111111111",
+                        AppliedPolicy = "newest-wins",
+                        Status        = "resolved",
+                        ExistingValue = new Dictionary<string, object?>(),
+                        IncomingValue = new Dictionary<string, object?>(),
+                    }
+                ],
+            }
+        };
+        using var factory = CreateFactory(TestKey, service);
+        var response = await CreateClientWithKey(factory).PostAsync(path, BuildForm());
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode,
+            "A non-empty conflicts list must NOT force a 202 by itself -- only a genuinely 'pending' entry should. " +
+            "An auto-resolved conflict (e.g. NewestWins) is reported for visibility but never blocks the import.");
     }
 
     [TestMethod]
