@@ -160,19 +160,15 @@ grep "prerelease" .github/workflows/release.yml
 
 ### Verify the Docker smoke test
 
+Build and run the image the same way the release workflow does:
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
 docker run --rm -d -p 8080:8080 --name quotinator-test quotinator:local
-
-curl -s http://localhost:8080/api/v1/health
-curl -s http://localhost:8080/api/v1/version           # must show current version, not 1.0.0
-curl -s http://localhost:8080/api/v1/quotes/random
-curl -s "http://localhost:8080/api/v1/quotes/search?q=love"
-curl -s "http://localhost:8080/api/v1/quotes/search?q=Casablanca&field=source"
-curl -s "http://localhost:8080/api/v1/quotes/search?q=Churchill&field=author"
-curl -s "http://localhost:8080/api/v1/quotes/search?q=Rick&field=character"
-curl -s "http://localhost:8080/api/v1/quotes/search?q=love&type=person"
-
+```
+Then run every command in CLAUDE.md's Pre-Push Checklist → step 6 ("Smoke-test the image") against
+it. That checklist is the single authoritative, living smoke test suite — it is not duplicated here
+so the two never drift apart; update it, not this file, whenever a new scenario needs covering.
+```bash
 docker stop quotinator-test
 ```
 

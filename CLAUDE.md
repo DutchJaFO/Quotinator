@@ -642,7 +642,14 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    docker build -f docker/Dockerfile -t quotinator:local .
    ```
    If you do not have Docker available, note this explicitly and let the reviewer know CI is the first Docker gate.
-6. **Smoke-test the image** (optional but recommended for Dockerfile changes):
+6. **Smoke-test the image** — required whenever a T2 verification pass is performed (see
+   `docs/release-verification.md`'s T2 gate), not just for Dockerfile changes. **This is a living
+   checklist**: whenever a T2 pass surfaces a new bug or edge case, add its verification command
+   here in the same commit that fixes it — the list only grows, never shrinks. This is the single
+   authoritative smoke test suite; `docs/release-verification.md`'s T2 section points here rather
+   than keeping its own copy, to avoid the two drifting apart.
+
+   **Baseline** — health/version/random/search:
    ```bash
    docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
    curl -s http://localhost:8080/api/v1/health
@@ -657,17 +664,21 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    Check that `/version` returns the expected version number — a missing `Directory.Build.props` in the build context silently produces `1.0.0` while `/health` still returns healthy.
    The search queries cover: default full-text (`love` should return results), `field=source` (`Casablanca` should return results), and `field=author`, `field=character`, `type=person` — these three may return an empty `items` array with a `message` when the bundled dataset has no matching data; that is expected behaviour, not a bug.
 
-   **Import and staged-action review workflow** (#45, #149, #152, #154) — re-imports a bundled file with `review` policy forced, so the endpoint that would otherwise auto-resolve via the default policy instead produces a genuine pending action to exercise decide/undo/apply against. `/api/v1/import/actions/*` (#154's unified staging engine) is the live mechanism — every import and seed run stages through it now. `/api/v1/import/conflicts/*` (#149) has been removed (#154 Phase B) — `/import/actions/*` is the sole review workflow.
+   **Import and staged-action review workflow** (#45, #149, #152, #154) — re-imports a bundled file with `review` policy forced, so the endpoint that would otherwise auto-resolve via the default policy instead produces a genuine pending action to exercise decide/undo/apply against. `/api/v1/import/actions/*` (#154's unified staging engine) is the live mechanism — every import and seed run stages through it now.
    ```bash
    curl -s "http://localhost:8080/api/v1/import/actions"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/conflicts"
+   ```
+   The first call should return `200` with an empty or existing `items` list — proves the endpoint is reachable with no setup. The second call **must return `404`** — `/import/conflicts` was removed entirely in #154 Phase B; if this ever returns anything else again, the legacy manual-review machinery has regressed back in.
+   ```bash
    curl -s -X POST -H "X-Api-Key: <your admin key>" \
      -F "file=@data/sources/quotinator-curated.json" \
      -F 'settings={"duplicateResolution":{"default":"review"}}' \
      -w "\n%{http_code}\n" \
      "http://localhost:8080/api/v1/import"
-   curl -s "http://localhost:8080/api/v1/import/actions?status=Pending"
+   curl -s "http://localhost:8080/api/v1/import/actions?status=pending"
    ```
-   From the last response, copy one action's `id` and its `batchId` (already uppercase), then:
+   The import itself should return `202` (not `200`) since the re-imported quotes are genuine duplicates left `Pending` under `review`. The `status=pending` filter is deliberately lowercase here, not `Pending` — proves the case-insensitive `status`/`entityType`/`batchId` query-filter fix (#154) is still in effect. After the import, this must show exactly the action(s) just created (with `ambiguousFields` populated only when the fields genuinely differ — re-importing the same file unmodified means they usually won't). From the response, copy one pending action's `id` and its `batchId`.
    ```bash
    curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
      -d '{"quoteText":{"choice":"keep"}}' \
@@ -677,9 +688,46 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
      -d '{"quoteText":{"choice":"keep"}}' \
      "http://localhost:8080/api/v1/import/actions/<id>/decide"
-   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply?batchId=<lowercase the batchId here too>"
    ```
-   The first `GET /import/actions` (before any import) should return `200` with an empty or existing `items` list — proves the endpoint is reachable with no setup. The import itself should return `202` (not `200`) since the re-imported quotes are genuine duplicates left `Pending` under `review`. After the import, `status=Pending` must show exactly the action(s) just created (with `ambiguousFields` populated only when the fields genuinely differ — re-importing the same file unmodified means they usually won't); after `decide`, `status=Decided` must show it; after `undo`, it must be back under `status=Pending`; after `apply`, the request must return `200` and the quote's field should reflect the decision. A `422` from `apply` listing `pendingActionIds` before every action in the batch is decided is expected, not a bug.
+   After `decide`, `status=Decided` must show it; after `undo`, it must be back under `status=Pending`; after `decide` again, ready to apply. **If the curated file's re-import produces more than one pending action** (it currently produces two — both `Airplane!` quotes), `apply` at this point correctly returns `422` with a `pendingActionIds` array listing the ones still undecided — this is the batch-apply-atomicity contract working as designed, not a bug. Decide each remaining id the same way, then re-run `apply` until it returns `200` and the quote's field reflects the decision. Applying with a deliberately lowercased `batchId` here also re-confirms the case-insensitive fix.
+
+   **`batchId`-mode alias** (#154) — `POST /import` can apply an already-staged batch directly, without re-uploading a file:
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" \
+     -F "file=@data/sources/quotinator-curated.json" \
+     -F 'settings={"duplicateResolution":{"default":"skip"}}' \
+     "http://localhost:8080/api/v1/import/preview"
+   ```
+   Copy the `batchId` from the response, then:
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import?batchId=<batchId>"
+   ```
+   Must return `200` (the `skip` policy leaves nothing pending) and apply the previewed batch — proves `batchId` mode is a genuine alias for `POST /import/actions/apply`, not a dead code path.
+
+   **Discard** (#154):
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" \
+     -F "file=@data/sources/quotinator-curated.json" \
+     -F 'settings={"duplicateResolution":{"default":"review"}}' \
+     "http://localhost:8080/api/v1/import/preview"
+   ```
+   Copy the `batchId`, then:
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/discard?batchId=<batchId>"
+   curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>"
+   ```
+   Discard must return `204`; every action in that batch must now show `"status":"Discarded"` — nothing was ever applied, since creation is deferred to apply time.
+
+   **Bodyless request validation** (#154) — a `POST /import` with no body, no `Content-Type`, and no `batchId` must be rejected with a clear, actionable message rather than a bare framework `400`:
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import"
+   ```
+   Must return `422` with a `detail` field ("you must provide either a file... or a batchId", paraphrased per locale) — **not** a bare `400` with no `detail` at all. This distinction matters: `WebApplicationFactory`'s in-memory TestServer handles a bodyless request differently than real Kestrel does, so the unit test suite alone cannot prove this — only this live check can. If this ever regresses to a bare `400`, `POST /import`'s handler is binding `IFormFile`/`[FromForm]` parameters automatically again instead of reading `HttpRequest` manually (see `ImportEndpoints.cs`'s `HandleImportFromRequestAsync`).
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import?batchId=00000000-0000-0000-0000-000000000000"
+   ```
+   Must return `404` (unknown batch) even with zero body/`Content-Type` — proves `batchId` mode never attempts to read the request body at all.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 

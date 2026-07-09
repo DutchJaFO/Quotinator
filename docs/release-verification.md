@@ -35,13 +35,13 @@ This document defines the three verification tiers used in the Quotinator releas
 
 **When required:** any change that touches the Dockerfile, publish output, `Program.cs` startup, port or SSL configuration, `Directory.Build.props`; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`, migration SQL, or schema/table-wipe logic (reseed, reset, backup).
 
-**Gate:** `docker build` succeeds; smoke-test commands return expected output:
-```bash
-docker run --rm -p 8080:8080 quotinator:local
-curl -s http://localhost:8080/api/v1/health
-curl -s http://localhost:8080/api/v1/version
-curl -s http://localhost:8080/api/v1/quotes/random
-```
+**Gate:** `docker build` succeeds; every command in CLAUDE.md's Pre-Push Checklist → step 6
+("Smoke-test the image") returns expected output. That checklist is the single authoritative,
+living smoke test suite — it is not duplicated here, so the two never drift apart. It already
+covers health/version/random/search plus the full import/staged-action review workflow (list,
+decide, undo, apply, discard, the `batchId`-mode alias, and case-insensitive query filters); update
+it — not this file — whenever a new scenario needs covering.
+
 When the change touches schema/reset logic, also exercise the affected admin endpoint(s) directly (e.g. `POST /api/v1/admin/database/reset`) against the running container and confirm the expected before/after state.
 
 ---
