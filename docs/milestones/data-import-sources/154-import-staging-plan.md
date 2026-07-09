@@ -1,10 +1,9 @@
 # #154 — Unify import, preview, and seeding on one staging engine
 
-**Status:** ✅ Implementation complete (Phase A + Phase B), T1 ✅ T2 ✅ — awaiting explicit developer confirmation to close
+**Status:** Waiting for release
 **GitHub issue:** #154
 **Tiers required:** T1, T2
-**Depends on:** #149 (`FieldMergeResolver`, `UnresolvedFieldConflictException` — reused, not
-`System_ImportConflicts` itself, which this issue retired in Phase B), #56 (audit/change log)
+**Depends on:** #149, #56
 
 ---
 
