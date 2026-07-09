@@ -247,6 +247,13 @@ internal static class Sql
         internal const string DeleteAll   = "DELETE FROM Characters;";
         internal const string SelectIdBySourceAndName =
             "SELECT Id FROM Characters WHERE SourceId = @sourceId AND Name = @name AND IsDeleted = 0;";
+
+        // #154's applier resolves an already-staged EntityId (a stable id or a real one from
+        // planning-time lookup) idempotently — OR IGNORE lets two concurrently-applied batches that
+        // both staged an Add for the same not-yet-existing Character land safely.
+        internal const string InsertIfNotExists =
+            "INSERT OR IGNORE INTO Characters (Id, SourceId, Name, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, IsComplete, NoValueKnown) " +
+            "VALUES (@Id, @SourceId, @Name, @ImportBatchId, @DateCreated, NULL, NULL, 0, 0, '[]');";
     }
 
     /// <summary>People table.</summary>
@@ -255,6 +262,11 @@ internal static class Sql
         internal const string CountActive = "SELECT COUNT(*) FROM People WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM People;";
         internal const string SelectIdByName = "SELECT Id FROM People WHERE Name = @name AND IsDeleted = 0;";
+
+        /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
+        internal const string InsertIfNotExists =
+            "INSERT OR IGNORE INTO People (Id, Name, DateOfBirth, DateOfDeath, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, IsComplete, NoValueKnown) " +
+            "VALUES (@Id, @Name, NULL, NULL, @ImportBatchId, @DateCreated, NULL, NULL, 0, 0, '[]');";
     }
 
     /// <summary>Sources table.</summary>
@@ -264,6 +276,11 @@ internal static class Sql
         internal const string DeleteAll   = "DELETE FROM Sources;";
         internal const string SelectIdByTitleAndType =
             "SELECT Id FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
+
+        /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
+        internal const string InsertIfNotExists =
+            "INSERT OR IGNORE INTO Sources (Id, Title, Type, Date, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, IsComplete, NoValueKnown) " +
+            "VALUES (@Id, @Title, @Type, @Date, @ImportBatchId, @DateCreated, NULL, NULL, 0, 0, '[]');";
     }
 
     /// <summary>ImportBatches table.</summary>

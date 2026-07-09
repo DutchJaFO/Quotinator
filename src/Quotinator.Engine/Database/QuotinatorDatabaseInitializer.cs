@@ -12,6 +12,7 @@ using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Engine.Entities;
 using Quotinator.Engine.Repositories;
+using Quotinator.Engine.Services;
 
 namespace Quotinator.Engine.Database;
 
@@ -23,8 +24,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 {
     private readonly IReadOnlyList<SeedBatch>       _batches;
     private readonly IImportBatchRepository         _importBatches;
-    private readonly ISystemImportConflictWriter    _conflictWriter;
-    private readonly ISystemChangeLogWriter               _changeLogWriter;
+    private readonly IImportActionCoordinator       _actionCoordinator;
+    private readonly IImportActionService           _actionService;
     private readonly ISourceCacheUpdater            _sourceCacheUpdater;
     private readonly bool                           _autoUpdateSources;
 
@@ -35,8 +36,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         IReadOnlyList<SchemaMigration> migrations,
         IReadOnlyList<SeedBatch>       batches,
         IImportBatchRepository         importBatches,
-        ISystemImportConflictWriter    conflictWriter,
-        ISystemChangeLogWriter               changeLogWriter,
+        IImportActionCoordinator       actionCoordinator,
+        IImportActionService           actionService,
         ISystemAuditWriter             auditWriter,
         ICallerContext                 callerContext,
         ILogger<DatabaseInitializer>   logger,
@@ -47,8 +48,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     {
         _batches            = batches;
         _importBatches      = importBatches;
-        _conflictWriter     = conflictWriter;
-        _changeLogWriter    = changeLogWriter;
+        _actionCoordinator  = actionCoordinator;
+        _actionService      = actionService;
         _sourceCacheUpdater = sourceCacheUpdater;
         _autoUpdateSources  = autoUpdateSources;
     }
@@ -216,13 +217,14 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         LastSeedDuplicates = [];
 
-        var seenIds        = new Dictionary<string, (string FilePath, SourceQuote Quote, Guid BatchId)>(StringComparer.Ordinal);
-        var sourceIndex    = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        var characterIndex = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        var personIndex    = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        var duplicates     = new List<SeedDuplicateRecord>();
-
-        var now = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+        // Tracks which file a quote Id was last seen in, purely for SeedDuplicateRecord's
+        // human-readable FirstSeenInFile/ConflictFile labels — actual duplicate detection is the
+        // planner's own job (in-memory within one file, a real DB lookup across files, since each
+        // file's batch is staged then applied before the next file is planned).
+        var lastFileByQuoteId = new Dictionary<string, string>(StringComparer.Ordinal);
+        var duplicates        = new List<SeedDuplicateRecord>();
+        var uniqueQuoteIds    = new HashSet<string>(StringComparer.Ordinal);
+        var stagedFiles       = new List<string>();
 
         foreach (var batch in effectiveBatches)
         {
@@ -231,117 +233,66 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 var fileName    = Path.GetFileName(seedFile.FilePath);
                 var (quotes, _) = LoadQuotesFromFile(seedFile.FilePath);
                 var filePolicy  = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
-                var importBatch = await CreateImportBatchAsync(batch, seedFile, filePolicy);
-                var changeLog   = new QuoteSeedWriter.ChangeLogContext(_changeLogWriter, InitiatorType.Seed, importBatch.Id.ToString("D").ToUpperInvariant());
+                var policy      = filePolicy.ForQuotes;
 
                 Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
                     quotes.Count, fileName, batch.Label);
 
-                var fileQuoteCount = 0;
+                var importBatch = await CreateImportBatchAsync(batch, seedFile, filePolicy);
+                var batchIdStr  = importBatch.Id.ToString("D").ToUpperInvariant();
 
-                foreach (var q in quotes)
+                IReadOnlyList<SystemImportAction> actions;
+                using (var tx = connection.BeginTransaction())
                 {
-                    if (seenIds.TryGetValue(q.Id, out var first))
-                    {
-                        var policy = filePolicy.ForQuotes;
-
-                        duplicates.Add(new SeedDuplicateRecord(
-                            "quote", q.Id, TruncateLabel(q.QuoteText),
-                            Path.GetFileName(first.FilePath), fileName,
-                            policy));
-
-                        var isMerge  = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-                        var existingFields = QuoteFieldMerge.ToFieldMap(first.Quote);
-                        var incomingFields = QuoteFieldMerge.ToFieldMap(q);
-                        var mergeResult    = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                        var resolved       = mergeResult is not null ? QuoteFieldMerge.ApplyMergedFields(mergeResult.MergedFields, q) : q;
-
-                        await QuoteSeedWriter.LogImportConflictAsync(_conflictWriter, importBatch.Id, q.Id, policy, existingFields, incomingFields, mergeResult, connection,
-                            existingBatchId: first.BatchId.ToString("D").ToUpperInvariant());
-
-                        if (policy is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review)
-                        {
-                            Logger.LogDebug(
-                                "[Database - Seed] skipping duplicate quote {Id} in {File} (first seen in {First})",
-                                q.Id, fileName, Path.GetFileName(first.FilePath));
-                            continue;
-                        }
-
-                        Logger.LogDebug(
-                            "[Database - Seed] resolving duplicate quote {Id} in {File} (was {First}) via {Policy}",
-                            q.Id, fileName, Path.GetFileName(first.FilePath), policy);
-
-                        await connection.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote,      new { id = q.Id });
-                        await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteForQuote, new { id = q.Id });
-
-                        var owSourceId    = await QuoteSeedWriter.GetOrCreateSourceAsync(connection, resolved, sourceIndex, importBatch.Id, changeLog);
-                        var owCharacterId = await QuoteSeedWriter.GetOrCreateCharacterAsync(connection, resolved, owSourceId, characterIndex, importBatch.Id, changeLog);
-                        var owPersonId    = await QuoteSeedWriter.GetOrCreatePersonAsync(connection, resolved, personIndex, importBatch.Id, changeLog);
-
-                        await connection.ExecuteAsync(
-                            Sql.Quotes.UpdateOnNewestWins,
-                            new
-                            {
-                                text    = resolved.QuoteText,
-                                lang    = resolved.OriginalLanguage,
-                                sid     = owSourceId,
-                                cid     = owCharacterId,
-                                pid     = owPersonId,
-                                batchId = importBatch.Id,
-                                mod     = now,
-                                id      = q.Id
-                            });
-
-                        await QuoteSeedWriter.LogChangeAsync(changeLog, "quote", q.Id, ChangeAction.Modified,
-                            oldValue: existingFields, newValue: QuoteFieldMerge.ToFieldMap(resolved), connection);
-
-                        seenIds[q.Id] = (seedFile.FilePath, resolved, importBatch.Id);
-
-                        var owQuoteId = Guid.Parse(q.Id);
-                        await QuoteSeedWriter.InsertTranslationsAsync(connection, resolved, owQuoteId, owSourceId, now);
-                        await QuoteSeedWriter.InsertGenresAsync(connection, resolved, owQuoteId, now);
-                        continue;
-                    }
-
-                    seenIds[q.Id] = (seedFile.FilePath, q, importBatch.Id);
-
-                    var sourceId    = await QuoteSeedWriter.GetOrCreateSourceAsync(connection, q, sourceIndex, importBatch.Id, changeLog);
-                    var characterId = await QuoteSeedWriter.GetOrCreateCharacterAsync(connection, q, sourceId, characterIndex, importBatch.Id, changeLog);
-                    var personId    = await QuoteSeedWriter.GetOrCreatePersonAsync(connection, q, personIndex, importBatch.Id, changeLog);
-                    var quoteId     = Guid.Parse(q.Id);
-
-                    await connection.ExecuteAsync(
-                        Sql.Quotes.Insert,
-                        new
-                        {
-                            Id               = q.Id,
-                            QuoteText        = q.QuoteText,
-                            OriginalLanguage = q.OriginalLanguage,
-                            SourceId         = sourceId,
-                            CharacterId      = characterId,
-                            PersonId         = personId,
-                            ImportBatchId    = importBatch.Id,
-                            DateCreated      = now
-                        });
-
-                    await QuoteSeedWriter.LogChangeAsync(changeLog, "quote", q.Id, ChangeAction.Created,
-                        oldValue: null, newValue: QuoteFieldMerge.ToFieldMap(q), connection);
-
-                    await QuoteSeedWriter.InsertTranslationsAsync(connection, q, quoteId, sourceId, now);
-                    await QuoteSeedWriter.InsertGenresAsync(connection, q, quoteId, now);
-                    fileQuoteCount++;
+                    actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx);
+                    await _actionCoordinator.StageAsync(actions, connection, tx);
+                    tx.Commit();
                 }
 
-                await _importBatches.UpdateRecordCountAsync(importBatch.Id, fileQuoteCount);
-
-                await AuditWriter.WriteAsync(new SystemAuditEntry
+                foreach (var action in actions)
                 {
-                    TableName   = "Quotes",
-                    RecordId    = importBatch.Id.ToString("D").ToUpperInvariant(),
-                    Operation   = AuditOperation.BulkInsert,
-                    Agent       = CallerContext.Agent,
-                    PerformedAt = DateTime.UtcNow,
-                }, connection);
+                    if (action.EntityType != "Quote" || action.ActionType.Parsed != ImportActionKind.Modify)
+                        continue;
+
+                    lastFileByQuoteId.TryGetValue(action.EntityId, out var firstFile);
+                    var quoteText = quotes.First(q => q.Id == action.EntityId).QuoteText;
+                    duplicates.Add(new SeedDuplicateRecord(
+                        "quote", action.EntityId, TruncateLabel(quoteText), firstFile ?? fileName, fileName, policy));
+                }
+                foreach (var q in quotes)
+                {
+                    lastFileByQuoteId[q.Id] = fileName;
+                    uniqueQuoteIds.Add(q.Id);
+                }
+
+                var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Seed);
+                if (applyResult is null)
+                {
+                    var imported = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Add);
+                    var updated  = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Modify
+                                                   && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
+
+                    importBatch.Status      = ImportBatchStatus.Applied.ToString();
+                    importBatch.AppliedAt   = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+                    importBatch.RecordCount = imported + updated;
+                    await _importBatches.UpdateAsync(importBatch);
+
+                    await AuditWriter.WriteAsync(new SystemAuditEntry
+                    {
+                        TableName   = "Quotes",
+                        RecordId    = batchIdStr,
+                        Operation   = AuditOperation.BulkInsert,
+                        Agent       = CallerContext.Agent,
+                        PerformedAt = DateTime.UtcNow,
+                    }, connection);
+                }
+                else
+                {
+                    stagedFiles.Add(fileName);
+                    Logger.LogInformation(
+                        "[Database - Seed] {File} left staged awaiting review — batch {BatchId}, {Count} action(s) pending a decision (GET /import/actions?batchId=<BatchId>)",
+                        fileName, batchIdStr, applyResult.PendingActionIds.Count);
+                }
             }
         }
 
@@ -350,7 +301,12 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         var dupCount = duplicates.Count;
         Logger.LogInformation(
             "[Database - Seed] seeding complete — {Unique} unique quotes from {Total} total ({Dups} duplicate{S})",
-            seenIds.Count, seenIds.Count + dupCount, dupCount, dupCount == 1 ? "" : "s");
+            uniqueQuoteIds.Count, uniqueQuoteIds.Count + dupCount, dupCount, dupCount == 1 ? "" : "s");
+
+        if (stagedFiles.Count > 0)
+            Logger.LogInformation(
+                "[Database - Seed] {Count} source file(s) staged awaiting review: {Files}",
+                stagedFiles.Count, string.Join(", ", stagedFiles));
     }
 
     private async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
@@ -418,7 +374,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             Type           = type.ToString(),
             Url            = seedFile.Url,
             ImportedAt     = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat),
-            ConflictPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy)
+            ConflictPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+            Status         = ImportBatchStatus.Staged.ToString(),
         };
         await _importBatches.InsertAsync(batch);
         return batch;

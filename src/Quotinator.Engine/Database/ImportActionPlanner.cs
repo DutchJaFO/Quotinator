@@ -1,0 +1,259 @@
+using System.Text.Json;
+using Dapper;
+using Microsoft.Data.Sqlite;
+using Quotinator.Core.Import;
+using Quotinator.Core.Models;
+using Quotinator.Data.Entities;
+using Quotinator.Data.Import;
+using Quotinator.Data.Models;
+using Quotinator.Data.Queries;
+
+namespace Quotinator.Engine.Database;
+
+/// <summary>
+/// Side-effect-free classifier (#154) — computes exactly what an import/seed run would do, as a
+/// list of <see cref="SystemImportAction"/> rows, without writing to any domain table. Used
+/// identically by <c>/import/preview</c>, <c>/import</c>'s staging phase, and the seed flow's own
+/// staging step. Existence-checking for Source/Character/Person is always a natural-key DB lookup
+/// (never a stable-id-based check — see <see cref="EntityIdentity"/>); a not-yet-existing entity's
+/// resolved id is its <see cref="EntityIdentity"/>-derived stable id, used both as the id a later
+/// apply step will insert with, and as the (currently unmatched, since nothing has been inserted
+/// yet) foreign-key value used when checking whether any Character/Person referencing it already
+/// exists — which correctly finds nothing, needing no special deferred-linking mechanism.
+/// </summary>
+internal static class ImportActionPlanner
+{
+    /// <summary>
+    /// Classifies every row in <paramref name="quotes"/> into <see cref="SystemImportAction"/>
+    /// rows for the Quote itself and any not-yet-existing Source/Character/Person it references.
+    /// Read-only against the database — never writes.
+    /// </summary>
+    internal static async Task<IReadOnlyList<SystemImportAction>> PlanAsync(
+        SqliteConnection connection, IReadOnlyList<SourceQuote> quotes, Guid batchId,
+        DuplicateResolutionPolicy policy, SqliteTransaction? transaction = null)
+    {
+        var actions        = new List<SystemImportAction>();
+        var sourceIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var characterIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var personIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var seenQuotes     = new Dictionary<string, SourceQuote>(StringComparer.Ordinal);
+
+        var batchIdStr = batchId.ToString("D").ToUpperInvariant();
+        var now        = DateTime.UtcNow;
+
+        foreach (var q in quotes)
+        {
+            var sourceId    = await ResolveSourceAsync(connection, q, sourceIndex, batchIdStr, actions, now, transaction);
+            var characterId = await ResolveCharacterAsync(connection, q, sourceId, characterIndex, batchIdStr, actions, now, transaction);
+            var personId    = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
+
+            var existing = seenQuotes.TryGetValue(q.Id, out var firstInFile)
+                ? new QuoteSeedWriter.ExistingQuoteFields(QuoteFieldMerge.ToFieldMap(firstInFile), batchIdStr)
+                : await QuoteSeedWriter.TryGetExistingFieldsAsync(connection, q.Id, transaction);
+
+            if (existing is null)
+            {
+                seenQuotes[q.Id] = q;
+                var payload = new QuoteActionPayload
+                {
+                    Fields    = QuoteFieldMerge.ToDto(q),
+                    SourceId  = sourceId,
+                    CharacterId = characterId,
+                    PersonId  = personId,
+                };
+
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchIdStr,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                    EntityType    = "Quote",
+                    EntityId      = q.Id,
+                    IncomingValue = JsonSerializer.Serialize(payload),
+                    AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                    Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
+
+            var existingFields  = existing.Value.Fields;
+            var existingBatchId = existing.Value.ImportBatchId;
+            var incomingFields  = QuoteFieldMerge.ToFieldMap(q);
+
+            var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+            var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+            // Skip's resolved payload is the existing row's own values (nothing changes) — not the
+            // incoming row's, which is what "resolved" would otherwise default to. The applier's Quote
+            // case checks AppliedPolicy==Skip and skips the write/changelog entirely regardless, but
+            // storing the accurate "nothing changes" payload here keeps GET /import/actions honest.
+            var resolved = policy switch
+            {
+                DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs => QuoteFieldMerge.ApplyMergedFields(mergeResult!.MergedFields, q),
+                DuplicateResolutionPolicy.Skip => QuoteFieldMerge.ApplyMergedFields(existingFields, q),
+                _ => q,
+            };
+
+            // Same policy-to-status mapping QuoteSeedWriter.LogImportConflictAsync already used for
+            // #149's conflict log — Review is the only policy left Pending; every other policy is
+            // Decided at detection time, with the final resolved values already computed so apply
+            // never needs policy logic.
+            var isPending = policy == DuplicateResolutionPolicy.Review;
+            var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+
+            actions.Add(new SystemImportAction
+            {
+                BatchId         = batchIdStr,
+                ExistingBatchId = existingBatchId,
+                ActionType      = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                EntityType      = "Quote",
+                EntityId        = q.Id,
+                ExistingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                IncomingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                MergedFields    = isPending ? null : JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(resolved), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                AppliedPolicy   = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                Status          = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                DetectedAt      = now,
+            });
+
+            if (!isPending)
+                seenQuotes[q.Id] = resolved;
+        }
+
+        return actions;
+    }
+
+    private static async Task<string> ResolveSourceAsync(
+        SqliteConnection connection, SourceQuote q, Dictionary<string, string> index,
+        string batchId, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        var typeStr = q.Type.ToString();
+        var key     = $"{q.Source}|{typeStr}";
+        if (index.TryGetValue(key, out var existing)) return existing;
+
+        var existingId = await connection.ExecuteScalarAsync<Guid?>(
+            Sql.Sources.SelectIdByTitleAndType, new { title = q.Source, type = typeStr }, transaction);
+        if (existingId is { } foundId)
+        {
+            var idStr = foundId.ToString("D").ToUpperInvariant();
+            index[key] = idStr;
+            return idStr;
+        }
+
+        var stableId = EntityIdentity.SourceId(q.Source, typeStr);
+        index[key] = stableId;
+
+        actions.Add(new SystemImportAction
+        {
+            BatchId       = batchId,
+            ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+            EntityType    = "Source",
+            EntityId      = stableId,
+            IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(q.Source, typeStr)),
+            Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+            DetectedAt    = now,
+        });
+
+        return stableId;
+    }
+
+    private static async Task<string?> ResolveCharacterAsync(
+        SqliteConnection connection, SourceQuote q, string sourceId, Dictionary<string, string> index,
+        string batchId, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        var sourceTypeStr = q.Type.ToString();
+        if (string.IsNullOrWhiteSpace(q.Character)) return null;
+
+        var key = $"{sourceId}|{q.Character}";
+        if (index.TryGetValue(key, out var existing)) return existing;
+
+        var existingId = await connection.ExecuteScalarAsync<Guid?>(
+            Sql.Characters.SelectIdBySourceAndName, new { sourceId, name = q.Character }, transaction);
+        if (existingId is { } foundId)
+        {
+            var idStr = foundId.ToString("D").ToUpperInvariant();
+            index[key] = idStr;
+            return idStr;
+        }
+
+        var stableId = EntityIdentity.CharacterId(sourceId, q.Character);
+        index[key] = stableId;
+
+        actions.Add(new SystemImportAction
+        {
+            BatchId       = batchId,
+            ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+            EntityType    = "Character",
+            EntityId      = stableId,
+            IncomingValue = JsonSerializer.Serialize(new CharacterActionPayload(sourceId, q.Character, q.Source, sourceTypeStr)),
+            Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+            DetectedAt    = now,
+        });
+
+        return stableId;
+    }
+
+    private static async Task<string?> ResolvePersonAsync(
+        SqliteConnection connection, SourceQuote q, Dictionary<string, string> index,
+        string batchId, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        if (string.IsNullOrWhiteSpace(q.Author)) return null;
+
+        if (index.TryGetValue(q.Author, out var existing)) return existing;
+
+        var existingId = await connection.ExecuteScalarAsync<Guid?>(
+            Sql.People.SelectIdByName, new { name = q.Author }, transaction);
+        if (existingId is { } foundId)
+        {
+            var idStr = foundId.ToString("D").ToUpperInvariant();
+            index[q.Author] = idStr;
+            return idStr;
+        }
+
+        var stableId = EntityIdentity.PersonId(q.Author);
+        index[q.Author] = stableId;
+
+        actions.Add(new SystemImportAction
+        {
+            BatchId       = batchId,
+            ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+            EntityType    = "Person",
+            EntityId      = stableId,
+            IncomingValue = JsonSerializer.Serialize(new PersonActionPayload(q.Author)),
+            Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+            DetectedAt    = now,
+        });
+
+        return stableId;
+    }
+}
+
+/// <summary>Staged payload for a Quote Add/Modify <see cref="SystemImportAction"/> — the 8 mergeable fields plus the resolved Source/Character/Person ids the applier needs, so it never depends on those actions having run first.</summary>
+internal sealed class QuoteActionPayload
+{
+    /// <summary>The quote's mergeable field values.</summary>
+    public QuoteConflictFieldsDto Fields { get; init; } = new();
+
+    /// <summary>Resolved Source id — either a real existing id or an <see cref="EntityIdentity"/>-derived stable id for a not-yet-created row.</summary>
+    public required string SourceId { get; init; }
+
+    /// <summary>Resolved Character id, or <c>null</c> when the quote has no character.</summary>
+    public string? CharacterId { get; init; }
+
+    /// <summary>Resolved Person id, or <c>null</c> when the quote has no author.</summary>
+    public string? PersonId { get; init; }
+}
+
+/// <summary>Staged payload for a Source Add <see cref="SystemImportAction"/>.</summary>
+internal sealed record SourceActionPayload(string Title, string Type);
+
+/// <summary>
+/// Staged payload for a Character Add <see cref="SystemImportAction"/>. Carries the owning Source's
+/// own title/type (denormalized, not just its id) so the applier can defensively ensure the Source
+/// row exists before inserting the Character — <c>System_ImportActions</c> rows apply in whatever
+/// order the coordinator returns them (no cross-entity-type ordering guarantee), and
+/// <c>Characters.SourceId</c> is a real foreign key.
+/// </summary>
+internal sealed record CharacterActionPayload(string SourceId, string Name, string SourceTitle, string SourceType);
+
+/// <summary>Staged payload for a Person Add <see cref="SystemImportAction"/>.</summary>
+internal sealed record PersonActionPayload(string Name);

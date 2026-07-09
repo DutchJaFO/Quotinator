@@ -1,13 +1,16 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
+using Quotinator.Core.Import;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Engine.Database;
+using Quotinator.Engine.Entities;
 using Quotinator.Engine.Models;
 using Quotinator.Engine.Repositories;
 using Quotinator.Engine.Services;
@@ -79,20 +82,59 @@ public class SqliteConflictResolutionServiceTests
         [{"id":"{{SharedId}}","quote":"Updated quote text","source":"Same Source","date":"1990","character":"Neo","type":"movie","genres":["comedy"]}]
         """);
 
-    /// <summary>Seeds two files under Review policy — produces exactly one pending conflict — and returns its id and detected batch id.</summary>
+    /// <summary>
+    /// Seeds the existing (first) row via the real engine, then manufactures the pending
+    /// <c>System_ImportConflicts</c> row directly for the second (incoming/duplicate) file — seeding
+    /// itself no longer writes there (#154 superseded seeding's conflict logging with
+    /// <c>System_ImportActions</c>), but <see cref="SqliteConflictResolutionService"/> (this test's
+    /// subject) is untouched and still needs a real pending row to decide/apply against.
+    /// </summary>
     private async Task<Guid> SeedPendingConflictAsync()
     {
-        var batch = new SeedBatch(
-            [new SeedFile(WriteFirstFile(), null), new SeedFile(WriteSecondFile(), null)],
-            new ManifestPolicy(DuplicateResolutionPolicy.Review), "test");
+        var firstPath  = WriteFirstFile();
+        var secondPath = WriteSecondFile();
 
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
+        var actionReader  = new SystemImportActionReader(_factory);
+        var actionWriter  = new SystemImportActionWriter(_factory);
+        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance);
+
+        var firstBatch = new SeedBatch([new SeedFile(firstPath, null)], new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
+        var options    = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var db = new QuotinatorDatabaseInitializer(
-            _factory, options, QuotinatorMigrations.All, [batch], _importBatches,
-            _conflictWriter, NoOpSystemChangeLogWriter.Instance,
+            _factory, options, QuotinatorMigrations.All, [firstBatch], _importBatches,
+            coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
+
+        SourceQuoteFileReader.TryParse(File.ReadAllText(firstPath),  out var firstQuotes);
+        SourceQuoteFileReader.TryParse(File.ReadAllText(secondPath), out var secondQuotes);
+        var existingFields = QuoteFieldMerge.ToFieldMap(firstQuotes![0]);
+        var incomingFields = QuoteFieldMerge.ToFieldMap(secondQuotes![0]);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var existingBatchId = await conn.ExecuteScalarAsync<Guid>(
+            "SELECT Id FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(firstPath) });
+
+        // A real ImportBatches row for the incoming (second) file — Characters.ImportBatchId is a
+        // genuine FK, so the conflict's incoming batch id must reference an existing row, not a bare
+        // Guid.NewGuid(), or applying the eventual decision fails with a foreign key violation when
+        // GetOrCreateCharacterAsync inserts the not-yet-existing "Neo" character.
+        var incomingBatch = new ImportBatch
+        {
+            Name           = Path.GetFileName(secondPath),
+            Type           = ImportBatchType.Import.ToString(),
+            ImportedAt     = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat),
+            ConflictPolicy = new SafeValue<DuplicateResolutionPolicy?>(DuplicateResolutionPolicy.Review.ToString(), DuplicateResolutionPolicy.Review),
+        };
+        await _importBatches.InsertAsync(incomingBatch);
+
+        await QuoteSeedWriter.LogImportConflictAsync(
+            _conflictWriter, incomingBatch.Id, SharedId, DuplicateResolutionPolicy.Review,
+            existingFields, incomingFields, mergeResult: null, conn,
+            existingBatchId: existingBatchId.ToString("D").ToUpperInvariant());
 
         var page = await _conflictReader.GetPagedAsync(null, ImportConflictStatus.Pending.ToString(), 1, 10);
         Assert.HasCount(1, page.Items, "Fixture must produce exactly one pending conflict.");

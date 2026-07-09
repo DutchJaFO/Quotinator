@@ -144,7 +144,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 |-------|------------------------|-------|
 | #45, #65 | Not evaluated for early merge — held for the full milestone | Fully done (T1 ✅ T2 ✅), but their own output is only reachable through the write path they introduce (`POST /api/v1/import`, moved from `/api/v1/quotes/import` by #152) — nothing else in the milestone calls them, and no existing behaviour depends on them being present, so there is no forcing reason to break from the default "merge the full milestone together" assumption. Revisit only if a later issue in this milestone (e.g. #59, #56) would otherwise sit blocked waiting on a merge. |
 
-#154 is `In progress` (its generic Data-layer staging primitive is done; planner/applier extraction, endpoints, and seeding integration are not). All other remaining issues (#59, #67, #68, #69, #144, #153, #155) are still in `Planning` — not started. #149 and #152 are `Waiting for release` (both: T1 ✅ T2 ✅). Evaluate each for early merge when complete — the default is to merge the full milestone together.
+#154 is `In progress` (stable ids, the generic Data-layer staging primitive, the Engine-side planner/applier + import-path rewiring, and seeding integration are done; the `ImportBatch` enum fix, new endpoints, and Phase B removal of #149's superseded machinery are not). All other remaining issues (#59, #67, #68, #69, #144, #153, #155) are still in `Planning` — not started. #149 and #152 are `Waiting for release` (both: T1 ✅ T2 ✅). Evaluate each for early merge when complete — the default is to merge the full milestone together.
 
 ---
 

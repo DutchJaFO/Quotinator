@@ -5,6 +5,7 @@ using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
+using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Repositories;
@@ -83,8 +84,12 @@ public class SqliteQuoteServiceSearchTests
         var importBatches = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         var batch         = new SeedBatch([new SeedFile(_fixture, null)], ManifestPolicy.HardcodedDefault, "search-fixture");
+        var actionReader  = new SystemImportActionReader(_factory);
+        var actionWriter  = new SystemImportActionWriter(_factory);
+        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance);
         var db            = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
-                              NoOpSystemImportConflictWriter.Instance, NoOpSystemChangeLogWriter.Instance,
+                              coordinator, actionService,
                               NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
                               NoOpSourceCacheUpdater.Instance, autoUpdateSources: false);
         await db.InitialiseAsync();

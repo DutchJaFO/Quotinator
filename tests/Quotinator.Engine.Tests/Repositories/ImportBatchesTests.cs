@@ -4,9 +4,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
+using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Repositories;
+using Quotinator.Engine.Services;
 
 namespace Quotinator.Engine.Tests.Repositories;
 
@@ -49,8 +51,12 @@ public class ImportBatchesTests
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
+        var actionReader  = new SystemImportActionReader(factory);
+        var actionWriter  = new SystemImportActionWriter(factory);
+        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance);
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
-            NoOpSystemImportConflictWriter.Instance, NoOpSystemChangeLogWriter.Instance,
+            coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             useBaseline ? QuotinatorMigrations.Baseline : null);

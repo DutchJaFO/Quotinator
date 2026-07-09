@@ -279,6 +279,10 @@ builder.Services.AddSingleton<ISystemChangeLogWriter, SystemChangeLogWriter>();
 builder.Services.AddSingleton<ISystemChangeLogReader, SystemChangeLogReader>();
 builder.Services.AddSingleton<IConflictResolutionCoordinator, ConflictResolutionCoordinator>();
 builder.Services.AddSingleton<IConflictResolutionService, SqliteConflictResolutionService>();
+builder.Services.AddSingleton<ISystemImportActionWriter, SystemImportActionWriter>();
+builder.Services.AddSingleton<ISystemImportActionReader, SystemImportActionReader>();
+builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
+builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
 
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
@@ -324,8 +328,8 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
     return new QuotinatorDatabaseInitializer(
         connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
         sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
-        sp.GetRequiredService<ISystemImportConflictWriter>(),
-        sp.GetRequiredService<ISystemChangeLogWriter>(),
+        sp.GetRequiredService<IImportActionCoordinator>(),
+        sp.GetRequiredService<IImportActionService>(),
         sp.GetRequiredService<ISystemAuditWriter>(),
         sp.GetRequiredService<ICallerContext>(),
         sp.GetRequiredService<ILogger<DatabaseInitializer>>(),
@@ -337,8 +341,8 @@ builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Engine.Services
 builder.Services.AddSingleton<Quotinator.Engine.Services.IQuoteImportService>(sp => new Quotinator.Engine.Services.SqliteQuoteImportService(
     connectionFactory,
     sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
-    sp.GetRequiredService<ISystemImportConflictWriter>(),
-    sp.GetRequiredService<ISystemChangeLogWriter>(),
+    sp.GetRequiredService<IImportActionCoordinator>(),
+    sp.GetRequiredService<IImportActionService>(),
     quoteSourceConverters,
     configPolicy));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();

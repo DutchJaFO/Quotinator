@@ -41,9 +41,13 @@ public class QuoteImportServiceTests
 
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader  = new SystemImportActionReader(_factory);
+        var actionWriter  = new SystemImportActionWriter(_factory);
+        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance);
         var db = new QuotinatorDatabaseInitializer(
             _factory, options, QuotinatorMigrations.All, [], importBatches,
-            NoOpSystemImportConflictWriter.Instance, NoOpSystemChangeLogWriter.Instance,
+            coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance,
             NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false, QuotinatorMigrations.Baseline);
@@ -59,16 +63,17 @@ public class QuoteImportServiceTests
     }
 
     private SqliteQuoteImportService CreateService(
-        ISystemImportConflictWriter? conflictWriter = null,
         ISystemChangeLogWriter? changeLogWriter = null,
         IReadOnlyDictionary<string, IQuoteSourceConverter>? converters = null,
         ManifestPolicy? configPolicy = null)
     {
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var importBatches  = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader   = new SystemImportActionReader(_factory);
+        var actionWriter   = new SystemImportActionWriter(_factory);
+        var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
+        var actionService  = new SqliteImportActionService(actionReader, coordinator, changeLogWriter ?? NoOpSystemChangeLogWriter.Instance);
         return new SqliteQuoteImportService(
-            _factory, importBatches,
-            conflictWriter ?? NoOpSystemImportConflictWriter.Instance,
-            changeLogWriter ?? NoOpSystemChangeLogWriter.Instance,
+            _factory, importBatches, coordinator, actionService,
             converters ?? new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase),
             configPolicy ?? new ManifestPolicy(DuplicateResolutionPolicy.NewestWins));
     }
@@ -309,34 +314,37 @@ public class QuoteImportServiceTests
 
     // ── Preview ──────────────────────────────────────────────────────────────
 
+    // #154 revision: preview now stages a real, inspectable batch instead of rolling everything
+    // back — "nothing persisted" is no longer the contract (see 154-import-staging-plan.md Section
+    // "Explicit behavior changes"). These two tests are updated, not left unmodified, because they
+    // directly assert the old rollback contract.
+
     [TestMethod]
-    public async Task ImportAsync_Preview_LeavesZeroTrace()
+    public async Task ImportAsync_Preview_StagesButNeverApplies()
     {
-        var conflictWriter = new SystemImportConflictWriter(_factory);
-        var service = CreateService(conflictWriter);
+        var service = CreateService();
 
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: true);
 
         Assert.IsTrue(result.Preview);
-        Assert.IsNull(result.BatchId);
+        Assert.IsNotNull(result.BatchId, "Preview now stages a real batch, unlike the old rollback contract");
         Assert.AreEqual(1, result.Summary.Imported, "Response still reports what would have happened");
-        Assert.AreEqual(0, await CountAsync("Quotes"), "No quote persisted");
-        Assert.AreEqual(0, await CountAsync("ImportBatches"), "No batch persisted");
-        Assert.AreEqual(0, await CountAsync("System_ImportConflicts"), "No conflict rows persisted");
+        Assert.AreEqual(0, await CountAsync("Quotes"), "Staging never applies — no quote written");
+        Assert.AreEqual(1, await CountAsync("ImportBatches"), "The batch itself is durably staged");
+        Assert.AreEqual(2, await CountAsync("System_ImportActions"), "The planned Quote and Source Add actions are both durably staged");
     }
 
     [TestMethod]
-    public async Task ImportAsync_PreviewWithConflict_NoConflictRowsPersisted()
+    public async Task ImportAsync_PreviewWithConflict_StagesButDoesNotApply()
     {
-        var conflictWriter = new SystemImportConflictWriter(_factory);
-        var service = CreateService(conflictWriter);
+        var service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false);
 
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", null, preview: true);
 
         Assert.AreEqual(1, result.Conflicts.Count, "Response reflects the conflict that would have been detected");
-        Assert.AreEqual(0, await CountAsync("System_ImportConflicts"), "Rolled back — nothing persisted");
-        Assert.AreEqual("Original.", await ReadQuoteTextAsync(), "Rolled back — original row untouched");
+        Assert.IsTrue(await CountAsync("System_ImportActions") > 0, "The Modify action is durably staged, not rolled back");
+        Assert.AreEqual("Original.", await ReadQuoteTextAsync(), "Never applied — original row untouched");
     }
 
     // ── Row-level error tolerance ────────────────────────────────────────────

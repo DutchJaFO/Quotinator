@@ -3,7 +3,8 @@
 **Status:** In progress
 **GitHub issue:** #154
 **Tiers required:** T1, T2
-**Depends on:** #149 (`IConflictResolutionCoordinator`, `System_ImportConflicts` table), #56 (audit/change log)
+**Depends on:** #149 (`FieldMergeResolver`, `UnresolvedFieldConflictException` — reused, not
+`System_ImportConflicts` itself, which this issue retires), #56 (audit/change log)
 
 ---
 
@@ -20,14 +21,36 @@ preview, and seeding all work. Since it materially exceeds #59's filed scope, it
 its own issue (this one) rather than silently expanding #59. **#59 is now downstream of this
 issue** — see its own plan doc's updated "Depends on" line.
 
-Key decisions made during planning (not re-litigated here, just recorded):
+**Revision (this pass):** the original design below (kept for its still-accurate framing) assumed
+`System_ImportConflicts` (#149) would keep running *alongside* the new `System_ImportActions`
+table, "untouched, separate." Reviewing the plan against the actual code and against #154 itself
+surfaced that this was never reconciled — an ambiguous Modify would produce a row in **both**
+tables, decided through two different endpoints with the same request shape. Corrected:
+**`System_ImportActions` becomes the sole mechanism.** `System_ImportConflicts`, its coordinator,
+its service, and its `/import/conflicts/*` endpoints are retired once the new table reaches feature
+parity — not kept in parallel. Since nothing in this milestone has shipped in a published release
+yet, this is safe. `FieldMergeResolver`/`UnresolvedFieldConflictException` (domain-agnostic) are
+kept and reused; the Conflict-specific entity/coordinator/service/endpoints are not.
+
+A second change this revision: instead of "look up Source/Character/Person, defer the actual
+`GetOrCreate`+random-GUID-insert to apply time" (the plan's original open inference below), give
+Source/Character/Person their own stable, deterministic ids — mirroring
+`Quotinator.Core.Import.QuoteIdentity.StableId`, which Quotes already have. A stable id lets the
+planner determine identity via a pure read-only lookup, with no special deferred-linking mechanism
+needed, and apply-time writes become simple idempotent inserts. This resolves what was previously
+listed as an unconfirmed inference — see "Key decisions" item 6 below, now confirmed via this
+replacement design instead.
+
+Key decisions made during original planning (not re-litigated here, just recorded):
 
 1. `preview` = stage (compute and durably record exactly what an import would do; write nothing to
    domain tables). `import` = execute a staged batch (apply it). A plain `POST /import` call still
    works as one convenient round-trip.
 2. `POST /import` returns a distinct HTTP status per outcome: `200 OK` when everything applied,
    `202 Accepted` when the batch is left `Staged` awaiting a decision — callers branch on status
-   code alone, no body parsing required.
+   code alone, no body parsing required. **`POST /import/preview` gets the same split** (revision —
+   see Design Section 3): nothing ever applies from `/preview`, but `202` tells the caller up front
+   that the file has unresolved conflicts it must adjust or resolve before the batch can be applied.
 3. `POST /import/preview`'s contract changes from "nothing persisted, no `ImportBatch` created" to
    "stages a real, inspectable batch." Acceptable pre-release (same precedent #152 established for
    its own route move — nothing in this milestone has shipped yet).
@@ -37,17 +60,41 @@ Key decisions made during planning (not re-litigated here, just recorded):
    the intended fine-tuning loop (edit the file, change its manifest `duplicateResolution`
    override, or later supply a #153 decisions file, then re-stage/apply).
 5. The mechanism must be a genuinely reusable, domain-agnostic primitive, maximized in
-   `Quotinator.Data` — mirroring exactly how #149 already splits `IConflictResolutionCoordinator`
-   (generic, Data) from `SqliteConflictResolutionService` (the one domain-specific piece, Engine).
-6. Source/Character/Person creation is deferred from staging time to apply time (flagged to the
-   user as an inference in the filed issue, not yet separately re-confirmed at implementation
-   start — confirm before building step 3 below if any doubt remains).
+   `Quotinator.Data`.
+6. ~~Source/Character/Person creation is deferred from staging time to apply time~~ — **superseded**
+   by the stable-id design (this revision's Design Section 1): identity is now determined via a
+   deterministic id, not via ordering of when a row happens to get created.
 
 ---
 
 ## Design
 
-### 1. Generic staging primitive (`Quotinator.Data`)
+### 1. Stable ids for Source/Character/Person (new, this revision)
+
+**Status:** ✅ Done — `EntityIdentity` built, `EntityIdentityTests` passing
+
+New `src/Quotinator.Core/Import/EntityIdentity.cs`, sibling to `QuoteIdentity.cs`, same namespace.
+**Does not modify `QuoteIdentity.cs`** — its own doc comment says its algorithm must never change.
+Reimplements the same SHA-256 → forced-UUID-v4-bits → `Guid` mechanics, reusing
+`QuoteIdentity.Normalise` per component, with a type-tag prefix so the three id spaces can never
+collide with each other or with a `QuoteIdentity.StableId` value:
+
+```csharp
+public static class EntityIdentity
+{
+    public static string SourceId(string title, string type) => StableId("source", title, type);
+    public static string CharacterId(string sourceId, string name) => StableId("character", sourceId, name);
+    public static string PersonId(string name) => StableId("person", name);
+}
+```
+
+**Critical nuance**: existence-checking stays a **natural-key DB lookup**
+(`Sql.Sources.SelectIdByTitleAndType` etc., unchanged) — not "does a row exist whose Id equals the
+computed stable id." Every pre-existing Source/Character/Person row has a random `Guid.NewGuid()`
+Id, so a stable-id-based existence check would wrongly classify them all as new. The stable id is
+only ever the id assigned **when inserting a genuinely new row**.
+
+### 2. Generic staging primitive (`Quotinator.Data`)
 
 **Status:** ✅ Done
 
@@ -62,13 +109,11 @@ Status lifecycle: `Pending` (needs an explicit decision) → `Decided` → `Appl
 Apply-readiness rule (generic, Data-owned, needs no domain knowledge): refuse if anything sharing
 the batch is still `Pending`.
 
-New `IImportActionCoordinator`/`ImportActionResolutionCoordinator` (`Quotinator.Data.Import`) — a
-**new sibling** to `IConflictResolutionCoordinator`, not a generalization of it (keeps #149's
-shipped, T1/T2-verified code untouched): `StageAsync` (writes a batch of already-classified
-actions — classification is the caller's job, not Data's), `DecideAsync`/`UndoDecisionAsync`
-(identical shape to `ConflictResolutionCoordinator`), `TryApplyBatchAsync(batchId,
-applyResolvedAction, ct)` (same refusal contract, caller-supplied per-action callback), and a new
-`DiscardBatchAsync(batchId, ct)` with no #149 analogue.
+New `IImportActionCoordinator`/`ImportActionResolutionCoordinator` (`Quotinator.Data.Import`):
+`StageAsync` (writes a batch of already-classified actions — classification is the caller's job,
+not Data's), `DecideAsync`/`UndoDecisionAsync`, `TryApplyBatchAsync(batchId, applyResolvedAction,
+ct)` (same refusal contract, caller-supplied per-action callback), and `DiscardBatchAsync(batchId,
+ct)`.
 
 A consuming project's plug-in surface stays deliberately small: (a) a *classifier* — domain schema
 knowledge lives here only — returning Add / unambiguous-Modify / ambiguous-Modify-needs-a-decision
@@ -77,57 +122,105 @@ consumer's own tables. Everything else (table, status machine, decide/undo/apply
 orchestration) is reusable as-is.
 
 **Post-build correction (same milestone, after ADR 008 was written):** `ActionType` and `Status`
-were initially built as open string-constant classes (`ImportActionKind`/`ImportActionStatus` as
-`static class`es), reasoning they were domain-agnostic like `EntityType`/`BatchId`. That conflated
-two different kinds of column — these two are a closed set `Quotinator.Data`'s own coordinator
-assigns and transitions between, not consumer-defined vocabulary. Converted to real C# `enum`s,
-typed as `SafeValue<TEnum?>` (matching `SystemChangeLog.InitiatedByType`/`Action`'s existing
-pattern) with a registered `SafeEnumHandler<TEnum>` and a matching SQL `CHECK` constraint per
-ADR 008. See ADR 008's "Context" section for the full correction.
+were initially built as open string-constant classes, reasoning they were domain-agnostic like
+`EntityType`/`BatchId`. That conflated two different kinds of column — these two are a closed set
+`Quotinator.Data`'s own coordinator assigns and transitions between, not consumer-defined
+vocabulary. Converted to real C# `enum`s, typed as `SafeValue<TEnum?>` with a registered
+`SafeEnumHandler<TEnum>` and a matching SQL `CHECK` constraint per ADR 008.
 
-### 2. Quotinator-specific plug-in (`Quotinator.Engine`)
+### 3. Planner + applier (`Quotinator.Engine`)
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `ImportActionPlanner`, `IImportActionService`/`SqliteImportActionService`, and
+the `SqliteQuoteImportService` thin-orchestrator rewiring (including `Program.cs` DI) are all built
+and tested. Note: this section's classifier/applier work is done, but the actual seeding call site
+(Section 5) has not been rewired to use them yet.
 
-New side-effect-free planner: the classifier above, specific to Quotinator's Quote/Source/
-Character/Person schema. Looks up (never creates) a matching Quote and, for Sources/Characters/
-People, whether a match already exists; computes the merge via `FieldMergeResolver`. Used
-identically by `/import/preview`, `/import`'s staging phase, and the seed flow's staging step.
+**Planner**: new `internal static Quotinator.Engine.Database.ImportActionPlanner.PlanAsync`
+— a side-effect-free classifier, callable identically from `/import/preview`, `/import`, and
+seeding. Per quote row: resolve Source/Character/Person (0–3 Add actions using `EntityIdentity`,
+always `Status=Decided` immediately — Add is never ambiguous; `GetOrCreateSourceAsync`/etc. never
+*update* an existing row, so these three entity types only ever need an Add action) → look up
+existing Quote by Id (`QuoteSeedWriter.TryGetExistingFieldsAsync`, unchanged, including same-batch
+first-wins shadowing) → stage a Quote action: no existing row → `ActionType=Add`, `Status=Decided`;
+existing row → same policy-to-status mapping `LogImportConflictAsync` already used
+(`Status=Pending` iff `policy==Review`, else `Decided`), with the final resolved field values
+**computed now** for every non-Review policy and stored as the action's payload — apply never
+needs policy logic. New envelope types: `QuoteActionPayload` (fields + resolved
+`SourceId`/`CharacterId`/`PersonId`), `SourceActionPayload`/`CharacterActionPayload`/
+`PersonActionPayload`. Carrying the FK ids inside the Quote's own payload means the applier never
+depends on Source/Character/Person actions having run first.
 
-Evolved `QuoteSeedWriter` as the shared applier: given a `Decided` action, resolves
-`GetOrCreateSourceAsync`/`GetOrCreateCharacterAsync`/`GetOrCreatePersonAsync` (moved here from
-staging time) and writes the Quote — today's existing logic, invoked later in the pipeline. Used
-identically by `/import/actions/apply`, `/import` (file mode, once nothing's ambiguous), and the
-seed flow's apply attempt.
+**Applier**: new `Quotinator.Engine.Services.IImportActionService`/`SqliteImportActionService`,
+replacing `IConflictResolutionService`/`SqliteConflictResolutionService`. `ApplyResolvedActionAsync`
+dispatches on `EntityType`: `Source`/`Character`/`Person` → idempotent insert using the precomputed
+stable id (safe even under concurrently-staged batches referencing the same new entity —
+`SystemChangeLog` Created logged only if the insert actually happened); `Quote` → deserialize the
+payload (from `IncomingValue` for Add, resolved `MergedFields` for Modify) and write — apply is now
+**uniform and policy-agnostic**, no `FieldMergeResolver` call at apply time.
+
+`DecideAsync(actionId, ConflictDecisionRequest)`: rejects (422, new
+`ImportActionNotDecidableException`) if `EntityType != "Quote"` or the action isn't `Pending`.
+Otherwise builds the decision map and calls `FieldMergeResolver.ResolveWithDecisions` immediately
+(fail at decide time, not apply time), persisting the **resolved** values into `MergedFields`.
 
 `ImportBatch` (Engine entity) gains `Status` (`Staged`/`Applied`/`Discarded`) and `AppliedAt`
 (nullable, distinct from `ImportedAt`) — **done**, migration007, with a `CHECK` constraint per
-ADR 008 (written after this section was originally drafted; the constraint was added, not omitted
-as first planned here). `SqliteQuoteImportService.ImportAsync` becomes a thin orchestrator: stage
-via the planner, then (unless staging-only) attempt apply via the applier — **not started**.
+ADR 008. `SqliteQuoteImportService.ImportAsync` becomes a thin orchestrator: create `ImportBatch`
+(`Status=Staged`) → `PlanAsync` → `StageAsync` (commit) → unless preview, attempt apply via
+`SqliteImportActionService` (commit — **two sequential commits, not one shared transaction**; a
+crash between them leaves the batch `Staged`, already a safe/recoverable state by this design's own
+rules) → build `ImportResultResponse` from the resulting action rows — **done**. Response shaping
+(`BuildConflictEntries`) still reuses the old `ImportConflictEntry` shape as a temporary bridge;
+Section 4/Task 33 replaces it with the real `/import/actions` response shape.
 
-### 3. Endpoints (`ImportEndpoints.cs`, `Import` tag)
+### 4. Endpoints (`ImportEndpoints.cs`, `Import` tag)
 
 **Status:** ⬜ Not started
 
-- `POST /api/v1/import/preview` — stages only, never applies. Returns `batchId` + a summary of
-  every planned action.
-- `POST /api/v1/import` — `file`+`settings` (stage + attempt apply) or `batchId` (apply an
-  already-staged batch — convenience alias for `/import/actions/apply`). `200 OK` when everything
-  applied; `202 Accepted` (body carries `batchId` + which actions need a decision) otherwise.
-- `GET /api/v1/import/actions` — paginated, filter by `batchId`/`status`.
+- `POST /api/v1/import/preview` — stage only, commit. **Same `200`/`202` split as `/import`**:
+  `200 OK` when nothing in the staged batch is `Pending` (the file would apply cleanly as-is);
+  `202 Accepted` with `batchId` + which actions need a decision when anything is `Pending`. Never
+  applies either way.
+- `POST /api/v1/import` — `file`+`settings` (stage + attempt apply, two sequential commits) or
+  `batchId` (apply an already-staged batch — alias for `/import/actions/apply`). `200 OK` when
+  everything applied; `202 Accepted` (body carries `batchId` + which actions need a decision)
+  otherwise.
+- `GET /api/v1/import/actions` — **the conflict-review endpoint** for staged batches; paginated,
+  filter by `batchId`/`status`/`entityType`. Polymorphic `ActionSummaryResponse` (loosely-typed
+  `ExistingFields`/`IncomingFields`, not per-entity-type DTOs) with:
+  - `RelatedActionIds` — since a Quote action's payload references other staged actions in the same
+    batch (its Source/Character/Person), the response must expose that relationship so a caller/UI
+    can show "this quote also needs to create Source 'X'."
+  - `AmbiguousFields` — computed per `Pending` Quote action the same way #149's
+    `ConflictSummaryResponse.AmbiguousFields` was (`FieldMergeResolver.ResolveWithDecisions` with an
+    empty decision map, catch `UnresolvedFieldConflictException`, its `FieldNames` is the list) —
+    without this a caller can see raw JSON but not *which* fields actually need a decision.
+  - **Deliberately not built here**: a bulk "apply one policy to every `Pending` action in a batch"
+    endpoint. Deferred to #153 (declarative conflict-resolution file), which already owns that scope
+    ("pre-fill a staged batch's ambiguous fields in bulk, using the same decide mechanism a human
+    uses one row at a time"). #154 only exposes the one-at-a-time decide primitive for #153 to
+    drive. Manual one-by-one review (this issue) and bulk-strategy application (#153) are two
+    different issues by design.
 - `POST /api/v1/import/actions/{id}/decide` / `.../undo` — reuses `ConflictDecisionRequest`/
   `FieldDecision`/`GenresFieldDecision` as-is.
 - `POST /api/v1/import/actions/apply?batchId=` — 422 if anything sharing the batch is still
-  `Pending`; otherwise commits everything in one transaction.
+  `Pending`; otherwise commits everything.
 - `POST /api/v1/import/actions/discard?batchId=` — marks everything `Discarded`; never touches
-  domain tables (per the deferred-creation design, no Source/Character/Person rows exist to clean
-  up). 422 if already applied/discarded.
-- `/api/v1/import/conflicts/*` (#149) — untouched, separate table/coordinator.
+  domain tables. 422 if already applied/discarded.
+- `/api/v1/import/conflicts/*` (#149) — stays live **only during Phase A** (below); removed in
+  Phase B once `/import/actions/*` reaches parity.
 
-### 4. Seeding integration
+### 5. Seeding integration
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `QuotinatorDatabaseInitializer` rewired to the shared planner/applier per file;
+`Program.cs` DI updated; full test suite green (953 tests, 0 failures). Found and fixed a real
+pre-existing bug along the way: `SqliteImportActionService`'s Skip short-circuit was skipping every
+`Add` action too (not just genuine duplicate `Modify` conflicts) whenever a file's effective policy
+was `Skip`, silently dropping brand-new quotes. Also fixed: `SqliteConflictResolutionServiceTests`
+and 4 tests in `ConflictResolutionTests` that constructed a pending `System_ImportConflicts` row via
+seeding — seeding no longer writes there, so `ConflictResolutionTests`' 4 tests were removed (with an
+explanatory note) and `SqliteConflictResolutionServiceTests`' fixture now manufactures its pending
+conflict row directly instead.
 
 Per source file: stage via the shared planner, then attempt apply via the shared applier — same
 per-file `ImportBatch` granularity as today. No policy override, no forced auto-resolution. A file
@@ -135,54 +228,83 @@ left with anything `Pending` simply stays `Staged` — its records don't appear 
 yet. Startup logs a clear, itemised message for every file left staged and continues normally
 otherwise.
 
-### 5. Migrations
-
-**Status:** ✅ Done
-
-- **Quotinator.Data** (`DataOwnedMigrations`): version 8, `ImportActionMigrations.
-  CreateImportActionsTable` — new `System_ImportActions` table (with `ActionType`/`Status` `CHECK`
-  constraints built in from the start, since this table was unshipped when the enum correction
-  landed — no separate retrofit migration needed, unlike below) + indexes on `BatchId`/`Status`.
-  Version 9, `ImportConflictMigrations.AddStatusCheckConstraint` — a rebuild migration retrofitting
-  a `CHECK` constraint onto `System_ImportConflicts.Status`, since that table was already applied to
-  a real dev database when the enum correction landed (normalizes any lowercase legacy status
-  strings via `CASE` during the rebuild). `DataBaselineSql` updated to match both in the same commit
-  (schema-drift tests enforce this).
-- **Quotinator.Engine** (`QuotinatorMigrations.All`, version 7, `Migration007_ImportBatchStagingStatus`,
-  after `Migration006_RecordCompleteness`): `ALTER TABLE ImportBatches ADD COLUMN Status TEXT NOT NULL
-  DEFAULT 'Applied' CHECK (Status IN ('Staged', 'Applied', 'Discarded'))` + `ADD COLUMN AppliedAt
-  TEXT` — existing rows backfill correctly (everything before this feature always committed
-  immediately). `BaselineSchema` updated to match.
-
-### 6. Tests
-
-**Status:** 🟡 Partially done — `Quotinator.Data.Tests` coverage done; everything else not started
-
-- Regression proof: re-run existing `SqliteQuoteImportServiceTests` and the seeding test suite
-  **unmodified** after the planner/applier extraction. — **not started** (planner/applier extraction
-  itself hasn't happened yet).
-- `Quotinator.Data.Tests`: `SystemImportActionWriterReaderTests`, `ImportActionResolutionCoordinatorTests`
-  (decide/undo, apply-refuses-with-pending, apply-commits-once, discard-marks-everything-and-
-  creates-nothing) — against a fake classifier/applier callback, proving the coordinator needs no
-  real Quote/Source schema (mirrors `ConflictResolutionCoordinatorTests`). — **done**.
-- `Quotinator.Engine.Tests`: planner classification correctness; Source/Character/Person resolution
-  deferred to apply time (never at stage time); `/import`'s `200`-vs-`202` split; `/import/preview`'s
-  stage-only contract; seeding leaving a batch `Staged` when ambiguous with correct startup log and
-  unaffected boot; a discarded (or never-applied) batch leaves zero rows anywhere, including no
-  orphaned Sources/Characters/People.
-- `Quotinator.Api.Tests`: new `ImportActionEndpointsTests`; updated `ImportEndpointTests` for
-  `/import`'s dual-mode + status-code split and `/import/preview`'s new stage-only contract.
-
-### 7. DTOs / i18n / documentation
+### 6. `ImportBatch.Type`/`.Status` enum fix (new, this revision)
 
 **Status:** ⬜ Not started
 
-`Quotinator.Core.Models` response DTOs (mirrors #149's Core placement — pure wire-shape POCOs).
-New `ApiMessages` + all-three-locale `i18ntext/UI.*.json` keys for not-found/already-applied/
-already-discarded/not-decided/ambiguous-fields cases. `README.md`/`addon/DOCS.md`/`RestApi.razor`
-updates (new endpoint rows, `/import`'s two status codes documented). `CLAUDE.md` — document the
-generic-primitive placement rationale and the seeding-can-leave-a-batch-staged behavior explicitly
-(real behavior change from today's always-fully-applies model).
+`ImportBatch.Type`/`.Status` are still plain `string` with manual `.ToString()` defaults, even
+though `ImportBatchType`/`ImportBatchStatus` are real closed enums in the same project — the exact
+pattern corrected everywhere else this milestone (`SystemImportConflict`/`SystemImportAction`). No
+handler was registered for either in `QuotinatorDapperConfiguration.RegisterDomainHandlers()`.
+Folded into this plan since Section 3's work touches `ImportBatch.Status` again anyway: convert to
+`SafeValue<ImportBatchType?>`/`SafeValue<ImportBatchStatus?>`, register
+`RegisterEnumHandler<ImportBatchType>()`/`<ImportBatchStatus>()`, update every call site (watch for
+the bare-enum-to-Dapper-parameter bug already found and fixed for `SystemImportConflict`/
+`SystemImportAction` this milestone).
+
+### 7. Retiring #149 — Phase A (build to parity) then Phase B (delete), not simultaneous
+
+**Status:** ⬜ Not started
+
+**Phase A** — nothing deleted yet: Sections 1–6 above, plus new `/import/actions/*` endpoints
+additive alongside still-live `/conflicts/*`, plus the parity-proving test suite (Section 8). Do
+not start Phase B until this proves `/import/actions/*` fully replaces `/import/conflicts/*`,
+including per-field Keep/Replace/Custom decide, undo, batch-apply, and (new) discard — in both unit
+tests and T1/T2.
+
+**Phase B** — one focused commit, after Phase A merges and passes T1/T2: delete
+`SystemImportConflict` entity, `ConflictResolutionCoordinator`/`IConflictResolutionCoordinator`,
+`ConflictNotFoundException`/`ConflictStateException` (keep `FieldMergeResolver`/
+`UnresolvedFieldConflictException` — reused by the new `DecideAsync`),
+`ISystemImportConflictReader`/`Writer` + implementations, `SystemImportConflictPageResult`,
+`SqliteConflictResolutionService`/`IConflictResolutionService`, `ConflictSummaryResponse`/
+`ConflictPageResponse`/`ConflictBatchStatusResponse`, the `/conflicts/*` route registrations, the
+`NoOpSystemImportConflictWriter` test double, and their test files. Leave
+`ConflictDecisionRequest`/`FieldDecision`/`GenresFieldDecision` — absorbed, not deleted. Leave the
+`System_ImportConflicts` migration/baseline entries alone — squashing them is **#155's call**, not
+this issue's (see "Not in scope" below).
+
+### 8. Tests
+
+**Status:** 🟡 Partially done — `Quotinator.Data.Tests`, `EntityIdentityTests`,
+`ImportActionPlannerTests`, `SqliteImportActionServiceTests`, and the `QuoteImportServiceTests`
+regression pass are all done; endpoint-level test coverage (Section 4/Task 33) not started.
+
+- `Quotinator.Data.Tests`: `SystemImportActionWriterReaderTests`, `ImportActionResolutionCoordinatorTests`
+  — against a fake classifier/applier callback, proving the coordinator needs no real Quote/Source
+  schema. — **done**.
+- `EntityIdentityTests` (Core.Tests) — determinism, normalization, no collision across the three id
+  spaces or with `QuoteIdentity.StableId`. — **done**, 8 tests passing.
+- `ImportActionPlannerTests` (Engine.Tests) — Add vs Modify vs Pending-Modify classification for
+  Quotes; Add-only for Source/Character/Person; same-batch dedup; never writes to any domain table;
+  stable-id reuse is idempotent across repeated runs. — **done**, 8 tests passing.
+- `SqliteImportActionServiceTests` (Engine.Tests) — decide validates via `FieldMergeResolver`,
+  rejects non-Quote/non-Pending decide targets, apply writes correctly and idempotently, discard
+  leaves zero domain rows. — **done**, 8 tests passing.
+- Regression proof: existing `QuoteImportServiceTests` — **done**, with a caveat: two tests
+  (`ImportAsync_Preview_*`) were rewritten rather than left byte-for-byte unmodified, because
+  `/preview`'s contract itself intentionally changed this revision (Key decision 3 — preview now
+  stages a real, inspectable batch instead of persisting nothing). All 21 tests in the file pass;
+  a code comment on the two rewritten tests explains why. The seeding test suite's own regression
+  pass is still pending (Section 5/Task 31 not started).
+- `ImportActionEndpointsTests` (Api.Tests, new) — mirrors `ImportConflictEndpointsTests`'s shape.
+  Updated `ImportEndpointTests` for the dual-mode/status-code split and preview's new
+  commit-not-rollback, `200`/`202`-split contract (a file with unresolved conflicts must return
+  `202` from `/preview`, not just from `/import`). — **not started**.
+- Deleted alongside Phase B (not before): `SystemImportConflictWriterReaderTests`,
+  `ConflictResolutionCoordinatorTests`, `SqliteConflictResolutionServiceTests`,
+  `ImportConflictEndpointsTests`.
+
+### 9. DTOs / i18n / documentation
+
+**Status:** ⬜ Not started
+
+`Quotinator.Core.Models` response DTOs (`ActionSummaryResponse` etc.). New `ApiMessages` +
+all-three-locale `i18ntext/UI.*.json` keys for not-found/already-applied/already-discarded/
+not-decided/ambiguous-fields cases. `README.md`/`addon/DOCS.md`/`RestApi.razor` updates (new
+endpoint rows, both `/import` and `/import/preview`'s two status codes documented). `CLAUDE.md` —
+document the generic-primitive placement rationale and the seeding-can-leave-a-batch-staged
+behavior explicitly.
 
 ---
 
@@ -192,24 +314,30 @@ generic-primitive placement rationale and the seeding-can-leave-a-batch-staged b
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | Coordinator: stage/decide/undo/apply/discard state transitions correct against a fake classifier/applier (no real schema needed) | Unit test | `ImportActionResolutionCoordinatorTests` |
 | 2 | ✅ | Reader/writer round-trip for `System_ImportActions`, including all Status transitions | Unit test | `SystemImportActionWriterReaderTests` |
-| 3 | ⬜ | Planner correctly classifies Add / unambiguous-Modify / ambiguous-Modify; never creates Source/Character/Person during staging | Unit test | Engine.Tests planner test class |
-| 4 | ⬜ | Applier resolves Source/Character/Person and writes the Quote only at apply time; identical result whether reached via `/import`, `/import/actions/apply`, or seeding | Unit test | Engine.Tests applier test class |
-| 5 | ⬜ | Existing import behavior unchanged by the planner/applier extraction | Unit test | `SqliteQuoteImportServiceTests` passes **unmodified** |
-| 6 | ⬜ | Existing seeding behavior unchanged where nothing is ambiguous | Unit test | Existing seeding test suite passes **unmodified** for the non-ambiguous case |
-| 7 | ⬜ | `POST /import` returns `200` when everything applies, `202` with a usable `batchId` when something needs review | Unit test | `ImportEndpointTests` (updated) |
-| 8 | ⬜ | `POST /import/preview` stages only, creates a real inspectable batch, never applies | Unit test | `ImportEndpointTests` (updated) |
-| 9 | ⬜ | New `/import/actions/*` endpoints: correct auth (writes require `X-Api-Key`), correct status codes | Unit test | `ImportActionEndpointsTests` |
-| 10 | ⬜ | A seed file with unresolved ambiguity leaves its batch `Staged`, doesn't block startup, and is absent from `GET /quotes` until applied | Unit test + Live | Engine.Tests + T1 manual restart |
-| 11 | ⬜ | A discarded (or never-applied) batch leaves zero domain-table rows, including no orphaned Source/Character/Person | Unit test | Engine.Tests |
-| 12 | ⬜ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0/0; `dotnet test --configuration Release` → all pass |
-| 13 | ⬜ | T1 — full stage → decide → apply cycle in Visual Studio; `/import` direct-call `200`/`202` split; ambiguous seed file staged without blocking startup | Live | Manual VS run per this doc's scope |
-| 14 | ⬜ | T2 — same cycle in Docker, including a fresh-seed startup with one intentionally ambiguous source file | Live | `docker build` + smoke test |
+| 3 | ✅ | `EntityIdentity` produces deterministic, non-colliding ids for Source/Character/Person | Unit test | `EntityIdentityTests` |
+| 4 | ✅ | Planner correctly classifies Add / unambiguous-Modify / ambiguous-Modify for Quotes, Add-only for Source/Character/Person; never writes to any domain table | Unit test | `ImportActionPlannerTests` |
+| 5 | 🟡 | Applier writes Source/Character/Person (idempotently, using the stable id) and the Quote only at apply time; identical result whether reached via `/import`, `/import/actions/apply`, or seeding | Unit test | `SqliteImportActionServiceTests` done; seeding path not yet wired (Section 5) |
+| 6 | ✅ | `DecideAsync` rejects non-Quote/non-Pending targets; validates via `FieldMergeResolver` at decide time | Unit test | `SqliteImportActionServiceTests` |
+| 7 | 🟡 | Existing import behavior preserved by the planner/applier extraction, with preview's contract intentionally changed (Key decision 3) | Unit test | `QuoteImportServiceTests` — 21/21 pass; 2 tests rewritten for the new preview contract, not left unmodified |
+| 8 | ✅ | Existing seeding behavior unchanged where nothing is ambiguous | Unit test | `DatabaseInitializerTests`, `ImportBatchesTests`, `SourceCacheWiringTests`, `ConflictResolutionTests` all pass against the rewired seeding pipeline (some seeding-integration tests were updated, not left byte-for-byte unmodified, since `System_ImportConflicts` is no longer seeding's mechanism — see Section 5) |
+| 9 | ⬜ | `POST /import` returns `200` when everything applies, `202` with a usable `batchId` when something needs review | Unit test | `ImportEndpointTests` (updated) |
+| 10 | ⬜ | `POST /import/preview` stages only, never applies, and returns the **same `200`/`202` split** based on unresolved ambiguity | Unit test | `ImportEndpointTests` (updated) |
+| 11 | ⬜ | New `/import/actions/*` endpoints: correct auth, correct status codes, `AmbiguousFields`/`RelatedActionIds` present | Unit test | `ImportActionEndpointsTests` |
+| 12 | ⬜ | A seed file with unresolved ambiguity leaves its batch `Staged`, doesn't block startup, and is absent from `GET /quotes` until applied | Unit test + Live | Engine.Tests + T1 manual restart |
+| 13 | ⬜ | A discarded (or never-applied) batch leaves zero domain-table rows, including no orphaned Source/Character/Person | Unit test | Engine.Tests |
+| 14 | ⬜ | Re-importing/re-seeding the same data twice creates no duplicate Source/Character/Person rows | Unit test + Live | Engine.Tests + T1/T2 stable-id idempotency check |
+| 15 | ⬜ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0/0; `dotnet test --configuration Release` → all pass |
+| 16 | ⬜ | T1 — full stage → decide → apply cycle in Visual Studio; `/import`/`/import/preview` `200`/`202` splits; ambiguous seed file staged without blocking startup | Live | Manual VS run per this doc's scope |
+| 17 | ⬜ | T2 — same cycle in Docker, including a fresh-seed startup with one intentionally ambiguous source file | Live | `docker build` + smoke test |
+| 18 | ⬜ | **Phase B gate**: `/import/actions/*` demonstrated full parity with `/import/conflicts/*` in both unit tests and T1/T2 before any #149 code is deleted | Live + Unit test | Manual sign-off against items 1–17 |
 
 ---
 
 ## Not in scope for this issue (deferred)
 
-- #153 (declarative conflict-resolution file) — not built here, just enabled by this design.
+- #153 (declarative conflict-resolution file) — not built here, just enabled by this design; owns
+  the future bulk-apply-a-policy-to-a-batch capability, not #154.
 - #59's own reset/restore logic — downstream of this issue, not part of it (see #59's plan doc).
-- #155 (migration review before milestone close) — separate, unrelated concern raised during this
-  issue's planning; tracked as its own issue.
+- #155 (migration review before milestone close) — separate, unrelated concern; tracked as its own
+  issue. Also now the place where `System_ImportConflicts`' migration/baseline entries get squashed
+  out once #149's code is removed in Phase B — not decided inline in this issue.

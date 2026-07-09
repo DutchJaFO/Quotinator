@@ -5,9 +5,11 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
 using Quotinator.Data.Queries;
+using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Repositories;
+using Quotinator.Engine.Services;
 
 namespace Quotinator.Engine.Tests.Database;
 
@@ -53,8 +55,12 @@ public class DatabaseInitializerTests
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
+        var actionReader   = new SystemImportActionReader(factory);
+        var actionWriter   = new SystemImportActionWriter(factory);
+        var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
+        var actionService  = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance);
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
-            NoOpSystemImportConflictWriter.Instance, NoOpSystemChangeLogWriter.Instance,
+            coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             useBaseline ? QuotinatorMigrations.Baseline : null);
@@ -500,8 +506,12 @@ public class DatabaseInitializerTests
         var factory       = new SqliteConnectionFactory(dbPath);
         var options       = new DatabaseOptions { DbPath = dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader  = new SystemImportActionReader(factory);
+        var actionWriter  = new SystemImportActionWriter(factory);
+        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
-            NoOpSystemImportConflictWriter.Instance, NoOpSystemChangeLogWriter.Instance,
+            coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             QuotinatorMigrations.Baseline);

@@ -10,6 +10,7 @@ using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Repositories;
+using Quotinator.Engine.Services;
 
 namespace Quotinator.Engine.Tests.Database;
 
@@ -44,13 +45,17 @@ public class ConflictResolutionTests
     }
 
     private QuotinatorDatabaseInitializer CreateInitializer(
-        IReadOnlyList<SeedBatch> batches, ISystemImportConflictWriter? conflictWriter = null, ISystemChangeLogWriter? changeLogWriter = null)
+        IReadOnlyList<SeedBatch> batches, ISystemChangeLogWriter? changeLogWriter = null)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader  = new SystemImportActionReader(factory);
+        var actionWriter  = new SystemImportActionWriter(factory);
+        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
+        var actionService = new SqliteImportActionService(actionReader, coordinator, changeLogWriter ?? NoOpSystemChangeLogWriter.Instance);
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
-            conflictWriter ?? NoOpSystemImportConflictWriter.Instance, changeLogWriter ?? NoOpSystemChangeLogWriter.Instance,
+            coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false, QuotinatorMigrations.Baseline);
     }
@@ -214,92 +219,16 @@ public class ConflictResolutionTests
     }
 
     // ── System_ImportConflicts ───────────────────────────────────────────────
-
-    [TestMethod]
-    [DataRow(DuplicateResolutionPolicy.Skip,        ImportConflictStatus.Resolved)]
-    [DataRow(DuplicateResolutionPolicy.NewestWins,  ImportConflictStatus.Resolved)]
-    [DataRow(DuplicateResolutionPolicy.MergeOurs,   ImportConflictStatus.Resolved)]
-    [DataRow(DuplicateResolutionPolicy.MergeTheirs, ImportConflictStatus.Resolved)]
-    [DataRow(DuplicateResolutionPolicy.Review,      ImportConflictStatus.Pending)]
-    public async Task SystemImportConflicts_LogsOneRowPerConflict_WithCorrectStatus(
-        DuplicateResolutionPolicy policy, ImportConflictStatus expectedStatus)
-    {
-        var factory = new SqliteConnectionFactory(_dbPath);
-        var writer  = new SystemImportConflictWriter(factory);
-        var batch   = new SeedBatch([new SeedFile(WriteFirstFile(), null), new SeedFile(WriteSecondFile(), null)], new ManifestPolicy(policy), "test");
-        await CreateInitializer([batch], writer).InitialiseAsync();
-
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var rows = (await conn.QueryAsync<(string EntityId, string AppliedPolicy, string Status)>(
-            "SELECT EntityId, AppliedPolicy, Status FROM System_ImportConflicts")).ToList();
-
-        Assert.AreEqual(1, rows.Count, "Exactly one conflict row for the one duplicate quote");
-        Assert.AreEqual(SharedId, rows[0].EntityId);
-        Assert.AreEqual(policy.ToString(), rows[0].AppliedPolicy);
-        Assert.AreEqual(expectedStatus.ToString(), rows[0].Status);
-    }
-
-    [TestMethod]
-    public async Task SystemImportConflicts_MergedFields_PopulatedOnlyForMergePolicies()
-    {
-        var factory = new SqliteConnectionFactory(_dbPath);
-        var writer  = new SystemImportConflictWriter(factory);
-        var batch   = new SeedBatch([new SeedFile(WriteFirstFile(), null), new SeedFile(WriteSecondFile(), null)],
-            new ManifestPolicy(DuplicateResolutionPolicy.MergeTheirs), "test");
-        await CreateInitializer([batch], writer).InitialiseAsync();
-
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var mergedFields = await conn.ExecuteScalarAsync<string>(
-            "SELECT MergedFields FROM System_ImportConflicts WHERE EntityId = @id", new { id = SharedId });
-
-        Assert.IsNotNull(mergedFields);
-        StringAssert.Contains(mergedFields, "\"quoteText\":\"theirs\"", "quoteText was a true conflict resolved via MergeTheirs");
-        StringAssert.Contains(mergedFields, "\"genres\":\"theirs\"", "genres was a true conflict resolved via MergeTheirs");
-        StringAssert.Contains(mergedFields, "\"character\":\"theirs\"", "character was auto-filled from the incoming side");
-    }
-
-    [TestMethod]
-    public async Task SystemImportConflicts_NonMergePolicy_MergedFieldsIsNull()
-    {
-        var factory = new SqliteConnectionFactory(_dbPath);
-        var writer  = new SystemImportConflictWriter(factory);
-        var batch   = new SeedBatch([new SeedFile(WriteFirstFile(), null), new SeedFile(WriteSecondFile(), null)],
-            new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
-        await CreateInitializer([batch], writer).InitialiseAsync();
-
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var mergedFields = await conn.ExecuteScalarAsync<string?>(
-            "SELECT MergedFields FROM System_ImportConflicts WHERE EntityId = @id", new { id = SharedId });
-
-        Assert.IsNull(mergedFields, "MergedFields is populated only for MergeOurs/MergeTheirs resolutions");
-    }
-
-    /// <summary>System_ImportConflicts is System_-prefixed protected infrastructure — a Reset must never drop or replay it, same as System_AuditEntries.</summary>
-    [TestMethod]
-    public async Task ResetAsync_PreservesExistingImportConflictRows()
-    {
-        var factory = new SqliteConnectionFactory(_dbPath);
-        var writer  = new SystemImportConflictWriter(factory);
-        var batch   = new SeedBatch([new SeedFile(WriteFirstFile(), null), new SeedFile(WriteSecondFile(), null)],
-            new ManifestPolicy(DuplicateResolutionPolicy.Review), "test");
-        var db      = CreateInitializer([batch], writer);
-        await db.InitialiseAsync();
-
-        await db.ResetAsync();
-
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportConflicts;");
-
-        // 2, not 1: Reset drops and rebuilds the domain schema, then re-seeds from the same source
-        // files — the seeding pass re-detects the same cross-file duplicate and logs a second row.
-        // The point of this test is that the row from *before* the Reset survives at all (Reset never
-        // drops System_-prefixed tables) — not that seeding is idempotent across a Reset.
-        Assert.AreEqual(2, count, "The pre-Reset conflict row must survive Reset, plus one new row from the re-seed pass detecting the same duplicate again");
-    }
+    //
+    // Seeding no longer writes to System_ImportConflicts — #154 replaced its per-row conflict
+    // logging with System_ImportActions (ImportActionPlanner/SqliteImportActionService), so the
+    // seeding-integration tests that used to assert on System_ImportConflicts content here were
+    // removed. The equivalent through-the-seeding-pipeline classification coverage now lives in
+    // ImportActionPlannerTests (Add/Modify/Pending-Modify classification) and
+    // SqliteImportActionServiceTests (apply/decide). System_ImportConflicts and
+    // SqliteConflictResolutionService (#149) are still live during Phase A and still have their own
+    // dedicated coverage in SqliteConflictResolutionServiceTests, which now manufactures its own
+    // pending-conflict fixture directly rather than relying on seeding to produce one.
 
     // ── #56: System_ChangeLog ────────────────────────────────────────────────
 
