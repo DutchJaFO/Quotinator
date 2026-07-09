@@ -49,7 +49,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#65](https://github.com/DutchJaFO/Quotinator/issues/65) | Import endpoint: preview/dry-run | Waiting for release | T1 ✅ T2 ✅ | [65-preview-dry-run-plan.md](65-preview-dry-run-plan.md) |
 | [#55](https://github.com/DutchJaFO/Quotinator/issues/55) | Record completeness flag | Waiting for release | T1 ✅ T2 ✅ | [55-record-completeness-plan.md](55-record-completeness-plan.md) |
 | [#56](https://github.com/DutchJaFO/Quotinator/issues/56) | Audit log (System_ChangeLog) | Waiting for release | T1 ✅ T2 ✅ | [56-audit-log-plan.md](56-audit-log-plan.md) |
-| [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: soft-reset by batch | Planning | Not yet assessed | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
+| [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: undo an applied import batch | Planning | Not yet assessed | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
 | [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Planning | Not yet assessed | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
 | [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Planning | Not yet assessed | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
 | [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | Planning | Not yet assessed | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
@@ -115,7 +115,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 16 | #152 | Review endpoint grouping: split Admin / Quote / Import | Waiting for release |
 | 17 | #149 | Import endpoint: manual conflict-review workflow | Waiting for release |
 | 18 | #154 | Unify import, preview, and seeding on one staging engine | Waiting for release |
-| 19 | #59 | Admin: soft-reset by batch | Planning |
+| 19 | #59 | Admin: undo an applied import batch | Planning |
 | 20 | #67 | Conversations schema | Planning |
 | 21 | #68 | Curated JSON conversations | Planning |
 | 22 | #69 | API conversations | Planning |
@@ -164,7 +164,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 - [#149 — Manual conflict-review workflow](149-manual-conflict-review-plan.md)
 - [#152 — Endpoint grouping review](152-endpoint-grouping-plan.md)
 - [#154 — Unify import, preview, and seeding on one staging engine](154-import-staging-plan.md)
-- [#59 — Admin soft-reset by batch](59-admin-soft-reset-plan.md)
+- [#59 — Admin: undo an applied import batch](59-admin-soft-reset-plan.md)
 - [#67 — Conversations schema](67-conversations-schema-plan.md)
 - [#68 — Curated JSON conversations](68-curated-json-conversations-plan.md)
 - [#69 — API conversations](69-api-conversations-plan.md)
