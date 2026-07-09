@@ -62,6 +62,13 @@
   "ErrorConflictNotDecided": "This conflict has no staged decision to undo.",
   "ErrorConflictAmbiguousFieldsUnresolved": "The following fields are ambiguous and need an explicit decision: {0}.",
   "ErrorConflictBatchNotFullyDecided": "Not every conflict in this batch has a decision yet. Decide the remaining conflicts before applying.",
+  "ErrorImportActionNotFound": "No import action exists with that id.",
+  "ErrorImportActionAlreadyResolved": "This import action has already been applied or discarded and can no longer be decided.",
+  "ErrorImportActionNotDecided": "This import action has no staged decision to undo.",
+  "ErrorImportActionNotDecidable": "This import action is a '{0}' action and cannot be manually decided — only Quote actions support a decision.",
+  "ErrorImportActionAmbiguousFieldsUnresolved": "The following fields are ambiguous and need an explicit decision: {0}.",
+  "ErrorImportActionBatchNotFullyDecided": "Not every action in this batch has a decision yet. Decide the remaining actions before applying.",
+  "ErrorImportActionBatchInvalidState": "This batch cannot be discarded — it has already been applied, already been discarded, or has no staged actions.",
   "AdminEndpointsHeading": "Admin endpoints",
   "AdminEndpointsDescription": "These endpoints require an X-Api-Key header matching the admin_api_key configured in the add-on options. They are unavailable when no key is configured.",
   "AdminPreviewSeedLabel": "Preview seed import",
@@ -76,5 +83,10 @@
   "ImportConflictsLabel": "List import conflicts",
   "ImportConflictsDecideLabel": "Decide an import conflict",
   "ImportConflictsUndoLabel": "Undo a conflict decision",
-  "ImportConflictsApplyLabel": "Apply a conflict batch"
+  "ImportConflictsApplyLabel": "Apply a conflict batch",
+  "ImportActionsLabel": "List staged import actions",
+  "ImportActionsDecideLabel": "Decide a staged import action",
+  "ImportActionsUndoLabel": "Undo an import action decision",
+  "ImportActionsApplyLabel": "Apply a staged action batch",
+  "ImportActionsDiscardLabel": "Discard a staged action batch"
 }

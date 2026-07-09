@@ -34,4 +34,11 @@ public static class ApiMessages
     public const string ConflictNotDecided           = "ErrorConflictNotDecided";
     public const string ConflictAmbiguousFieldsUnresolved = "ErrorConflictAmbiguousFieldsUnresolved";
     public const string ConflictBatchNotFullyDecided = "ErrorConflictBatchNotFullyDecided";
+    public const string ImportActionNotFound             = "ErrorImportActionNotFound";
+    public const string ImportActionAlreadyResolved      = "ErrorImportActionAlreadyResolved";
+    public const string ImportActionNotDecided           = "ErrorImportActionNotDecided";
+    public const string ImportActionNotDecidable         = "ErrorImportActionNotDecidable";
+    public const string ImportActionAmbiguousFieldsUnresolved = "ErrorImportActionAmbiguousFieldsUnresolved";
+    public const string ImportActionBatchNotFullyDecided = "ErrorImportActionBatchNotFullyDecided";
+    public const string ImportActionBatchInvalidState    = "ErrorImportActionBatchInvalidState";
 }

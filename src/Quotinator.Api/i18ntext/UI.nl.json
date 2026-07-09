@@ -62,6 +62,13 @@
   "ErrorConflictNotDecided": "Voor dit conflict is geen vastgelegde beslissing om ongedaan te maken.",
   "ErrorConflictAmbiguousFieldsUnresolved": "De volgende velden zijn dubbelzinnig en vereisen een expliciete beslissing: {0}.",
   "ErrorConflictBatchNotFullyDecided": "Nog niet elk conflict in deze batch heeft een beslissing. Beslis de resterende conflicten voordat je toepast.",
+  "ErrorImportActionNotFound": "Er bestaat geen importactie met dat id.",
+  "ErrorImportActionAlreadyResolved": "Deze importactie is al toegepast of verworpen en kan niet meer worden beslist.",
+  "ErrorImportActionNotDecided": "Voor deze importactie is geen vastgelegde beslissing om ongedaan te maken.",
+  "ErrorImportActionNotDecidable": "Deze importactie is een '{0}'-actie en kan niet handmatig worden beslist — alleen Quote-acties ondersteunen een beslissing.",
+  "ErrorImportActionAmbiguousFieldsUnresolved": "De volgende velden zijn dubbelzinnig en vereisen een expliciete beslissing: {0}.",
+  "ErrorImportActionBatchNotFullyDecided": "Nog niet elke actie in deze batch heeft een beslissing. Beslis de resterende acties voordat je toepast.",
+  "ErrorImportActionBatchInvalidState": "Deze batch kan niet worden verworpen — hij is al toegepast, al verworpen, of bevat geen vastgelegde acties.",
   "AdminEndpointsHeading": "Beheereindpunten",
   "AdminEndpointsDescription": "Deze eindpunten vereisen een X-Api-Key-header die overeenkomt met de admin_api_key in de add-on-opties. Ze zijn niet beschikbaar als er geen sleutel is ingesteld.",
   "AdminPreviewSeedLabel": "Importvoorbeeld bekijken",
@@ -76,5 +83,10 @@
   "ImportConflictsLabel": "Importconflicten weergeven",
   "ImportConflictsDecideLabel": "Importconflict beslissen",
   "ImportConflictsUndoLabel": "Conflictbeslissing ongedaan maken",
-  "ImportConflictsApplyLabel": "Conflictbatch toepassen"
+  "ImportConflictsApplyLabel": "Conflictbatch toepassen",
+  "ImportActionsLabel": "Vastgelegde importacties weergeven",
+  "ImportActionsDecideLabel": "Vastgelegde importactie beslissen",
+  "ImportActionsUndoLabel": "Importactiebeslissing ongedaan maken",
+  "ImportActionsApplyLabel": "Vastgelegde actiebatch toepassen",
+  "ImportActionsDiscardLabel": "Vastgelegde actiebatch verwerpen"
 }

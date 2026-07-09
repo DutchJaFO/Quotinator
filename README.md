@@ -135,9 +135,14 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/version` | Running version and environment |
-| POST | `/api/v1/import` | Import one source file (JSON or, via `converter: "csv"` in `settings`, CSV) — same duplicate-detection engine as startup seeding. Multipart fields: `file` (required), `settings` (optional JSON: `converter`, `duplicateResolution`, `enrich`). Returns a summary/conflicts/errors envelope (requires `X-Api-Key`) |
-| POST | `/api/v1/import/preview` | Same as `/import` but rolls back every write — nothing is persisted. Iterate here until the response looks right, then call `/import` with the same payload (requires `X-Api-Key`) |
-| GET | `/api/v1/import/conflicts` | List import conflicts, paginated. Filter by `status` (`pending`, `decided`, `resolved`) and/or `batchId` |
+| POST | `/api/v1/import` | Import one source file (JSON or, via `converter: "csv"` in `settings`, CSV) — same duplicate-detection engine as startup seeding. Multipart fields: `file` (required), `settings` (optional JSON: `converter`, `duplicateResolution`, `enrich`). Stages then attempts to apply — `200` when everything applied, `202` when any row needs a decision. Returns a summary/conflicts/errors envelope (requires `X-Api-Key`) |
+| POST | `/api/v1/import/preview` | Same as `/import` but never applies — a real, inspectable batch is staged (review via `GET /import/actions?batchId=`), nothing is written to quote data. `200` when the batch would apply cleanly as-is, `202` when any row needs a decision (requires `X-Api-Key`) |
+| GET | `/api/v1/import/actions` | List staged import actions (Quote/Source/Character/Person), paginated. Filter by `status` (`Pending`, `Decided`, `Applied`, `Discarded`), `batchId`, and/or `entityType`. Each item includes `relatedActionIds` and `ambiguousFields` |
+| POST | `/api/v1/import/actions/{id}/decide` | Stage a per-field keep/replace/custom decision for one staged Quote action — git-merge-style, nothing is written yet (requires `X-Api-Key`) |
+| POST | `/api/v1/import/actions/{id}/undo` | Revert a staged action's decision back to pending (requires `X-Api-Key`) |
+| POST | `/api/v1/import/actions/apply?batchId=` | Apply every action in a batch atomically, once every one of them has a decision — refuses with the still-pending ids otherwise (requires `X-Api-Key`) |
+| POST | `/api/v1/import/actions/discard?batchId=` | Discard every staged action in a batch — never touches domain tables (requires `X-Api-Key`) |
+| GET | `/api/v1/import/conflicts` | List import conflicts, paginated (legacy manual-review workflow — superseded by `/import/actions`, retained during the transition). Filter by `status` (`pending`, `decided`, `resolved`) and/or `batchId` |
 | POST | `/api/v1/import/conflicts/{id}/decide` | Stage a per-field keep/replace/custom decision for one conflict — git-merge-style, nothing is written yet (requires `X-Api-Key`) |
 | POST | `/api/v1/import/conflicts/{id}/undo` | Revert a conflict's staged decision back to pending (requires `X-Api-Key`) |
 | POST | `/api/v1/import/conflicts/apply?batchId=` | Apply every conflict in a batch atomically, once every one of them has a decision — refuses with the still-pending ids otherwise (requires `X-Api-Key`) |

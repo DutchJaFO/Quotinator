@@ -657,28 +657,29 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    Check that `/version` returns the expected version number — a missing `Directory.Build.props` in the build context silently produces `1.0.0` while `/health` still returns healthy.
    The search queries cover: default full-text (`love` should return results), `field=source` (`Casablanca` should return results), and `field=author`, `field=character`, `type=person` — these three may return an empty `items` array with a `message` when the bundled dataset has no matching data; that is expected behaviour, not a bug.
 
-   **Import and manual conflict-review workflow** (#45, #149, #152) — re-imports a bundled file with `review` policy forced, so the endpoint that would otherwise auto-resolve via the default policy instead produces a genuine pending conflict to exercise decide/undo/apply against:
+   **Import and staged-action review workflow** (#45, #149, #152, #154) — re-imports a bundled file with `review` policy forced, so the endpoint that would otherwise auto-resolve via the default policy instead produces a genuine pending action to exercise decide/undo/apply against. `/api/v1/import/actions/*` (#154's unified staging engine) is the live mechanism — every import and seed run stages through it now. `/api/v1/import/conflicts/*` (#149) is a separate legacy table that stays live during Phase A but is no longer populated by any import or seed path; it is exercised on its own (see below), not through this workflow, until #154 removes it in Phase B.
    ```bash
-   curl -s "http://localhost:8080/api/v1/import/conflicts"
+   curl -s "http://localhost:8080/api/v1/import/actions"
    curl -s -X POST -H "X-Api-Key: <your admin key>" \
      -F "file=@data/sources/quotinator-curated.json" \
      -F 'settings={"duplicateResolution":{"default":"review"}}' \
+     -w "\n%{http_code}\n" \
      "http://localhost:8080/api/v1/import"
-   curl -s "http://localhost:8080/api/v1/import/conflicts?status=pending"
+   curl -s "http://localhost:8080/api/v1/import/actions?status=Pending"
    ```
-   From the last response, copy one conflict's `id` and its `batchId` (already uppercase), then:
+   From the last response, copy one action's `id` and its `batchId` (already uppercase), then:
    ```bash
    curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
      -d '{"quoteText":{"choice":"keep"}}' \
-     "http://localhost:8080/api/v1/import/conflicts/<id>/decide"
-   curl -s "http://localhost:8080/api/v1/import/conflicts?status=decided"
-   curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/conflicts/<id>/undo"
+     "http://localhost:8080/api/v1/import/actions/<id>/decide"
+   curl -s "http://localhost:8080/api/v1/import/actions?status=Decided"
+   curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/<id>/undo"
    curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
      -d '{"quoteText":{"choice":"keep"}}' \
-     "http://localhost:8080/api/v1/import/conflicts/<id>/decide"
-   curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/conflicts/apply?batchId=<batchId>"
+     "http://localhost:8080/api/v1/import/actions/<id>/decide"
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
    ```
-   The first `GET /import/conflicts` (before any import) should return `200` with an empty or existing `items` list — proves the endpoint is reachable with no setup. After the import, `status=pending` must show exactly the conflict just created; after `decide`, `status=decided` must show it (and its `ambiguousFields` must be empty); after `undo`, it must be back under `status=pending`; after `apply`, the batch must return `200` and the quote's field should reflect the decision. A `422` from `apply` listing `pendingConflictIds` before every conflict in the batch is decided is expected, not a bug.
+   The first `GET /import/actions` (before any import) should return `200` with an empty or existing `items` list — proves the endpoint is reachable with no setup. The import itself should return `202` (not `200`) since the re-imported quotes are genuine duplicates left `Pending` under `review`. After the import, `status=Pending` must show exactly the action(s) just created (with `ambiguousFields` populated only when the fields genuinely differ — re-importing the same file unmodified means they usually won't); after `decide`, `status=Decided` must show it; after `undo`, it must be back under `status=Pending`; after `apply`, the request must return `200` and the quote's field should reflect the decision. A `422` from `apply` listing `pendingActionIds` before every action in the batch is decided is expected, not a bug.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 

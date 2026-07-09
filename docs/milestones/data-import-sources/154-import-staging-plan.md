@@ -175,19 +175,27 @@ Section 4/Task 33 replaces it with the real `/import/actions` response shape.
 
 ### 4. Endpoints (`ImportEndpoints.cs`, `Import` tag)
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done (with one deliberate scope trim — see below)
 
 - `POST /api/v1/import/preview` — stage only, commit. **Same `200`/`202` split as `/import`**:
   `200 OK` when nothing in the staged batch is `Pending` (the file would apply cleanly as-is);
   `202 Accepted` with `batchId` + which actions need a decision when anything is `Pending`. Never
-  applies either way.
-- `POST /api/v1/import` — `file`+`settings` (stage + attempt apply, two sequential commits) or
-  `batchId` (apply an already-staged batch — alias for `/import/actions/apply`). `200 OK` when
-  everything applied; `202 Accepted` (body carries `batchId` + which actions need a decision)
-  otherwise.
+  applies either way. — **done**, verified live (curl smoke test against a real dev server: import
+  under `review` policy returned `202`, `GET /import/actions?status=Pending` showed the staged
+  rows, decide+apply round-tripped to `200`, status flipped to `Applied`).
+- `POST /api/v1/import` — `file`+`settings` (stage + attempt apply, two sequential commits). `200 OK`
+  when everything applied; `202 Accepted` (body carries `batchId` + which actions need a decision)
+  otherwise. — **done**. **Scope trim (deliberate, not an oversight)**: the `batchId`-mode alias for
+  `/import/actions/apply` described in the original design was **not built** — `IFormFile file` stays
+  a required multipart field, `POST /import` has no bare-batchId mode. `/import/actions/apply`
+  already provides this exact capability as its own cleanly-typed endpoint (different response shape
+  than `ImportResultResponse`); adding a second request mode to the same route would have meant an
+  inconsistent OpenAPI contract for one route (two different response shapes depending on which
+  fields are present) for a capability that already has a dedicated home. Revisit if a real caller
+  need for the alias specifically emerges.
 - `GET /api/v1/import/actions` — **the conflict-review endpoint** for staged batches; paginated,
-  filter by `batchId`/`status`/`entityType`. Polymorphic `ActionSummaryResponse` (loosely-typed
-  `ExistingFields`/`IncomingFields`, not per-entity-type DTOs) with:
+  filter by `batchId`/`status`/`entityType`. Polymorphic `ImportActionSummaryResponse` (loosely-typed
+  `ExistingFields`/`IncomingFields`, not per-entity-type DTOs) — **done**, with:
   - `RelatedActionIds` — since a Quote action's payload references other staged actions in the same
     batch (its Source/Character/Person), the response must expose that relationship so a caller/UI
     can show "this quote also needs to create Source 'X'."
@@ -202,13 +210,15 @@ Section 4/Task 33 replaces it with the real `/import/actions` response shape.
     drive. Manual one-by-one review (this issue) and bulk-strategy application (#153) are two
     different issues by design.
 - `POST /api/v1/import/actions/{id}/decide` / `.../undo` — reuses `ConflictDecisionRequest`/
-  `FieldDecision`/`GenresFieldDecision` as-is.
+  `FieldDecision`/`GenresFieldDecision` as-is — **done**.
 - `POST /api/v1/import/actions/apply?batchId=` — 422 if anything sharing the batch is still
-  `Pending`; otherwise commits everything.
+  `Pending`; otherwise commits everything — **done**.
 - `POST /api/v1/import/actions/discard?batchId=` — marks everything `Discarded`; never touches
-  domain tables. 422 if already applied/discarded.
+  domain tables. 422 if already applied/discarded — **done**.
 - `/api/v1/import/conflicts/*` (#149) — stays live **only during Phase A** (below); removed in
-  Phase B once `/import/actions/*` reaches parity.
+  Phase B once `/import/actions/*` reaches parity — **unchanged, still live**; note CLAUDE.md's
+  pre-push curl workflow was updated to exercise `/import/actions/*` as the primary path, since no
+  live import/seed path writes to `System_ImportConflicts` any more (Section 5 above superseded it).
 
 ### 5. Seeding integration
 
@@ -265,9 +275,8 @@ this issue's (see "Not in scope" below).
 
 ### 8. Tests
 
-**Status:** 🟡 Partially done — `Quotinator.Data.Tests`, `EntityIdentityTests`,
-`ImportActionPlannerTests`, `SqliteImportActionServiceTests`, and the `QuoteImportServiceTests`
-regression pass are all done; endpoint-level test coverage (Section 4/Task 33) not started.
+**Status:** ✅ Done — every test class the plan called for exists and passes; full suite is 976
+tests, 0 failures, 0 warnings.
 
 - `Quotinator.Data.Tests`: `SystemImportActionWriterReaderTests`, `ImportActionResolutionCoordinatorTests`
   — against a fake classifier/applier callback, proving the coordinator needs no real Quote/Source
@@ -279,31 +288,42 @@ regression pass are all done; endpoint-level test coverage (Section 4/Task 33) n
   stable-id reuse is idempotent across repeated runs. — **done**, 8 tests passing.
 - `SqliteImportActionServiceTests` (Engine.Tests) — decide validates via `FieldMergeResolver`,
   rejects non-Quote/non-Pending decide targets, apply writes correctly and idempotently, discard
-  leaves zero domain rows. — **done**, 8 tests passing.
+  leaves zero domain rows, `GetPagedAsync` correctly computes `RelatedActionIds`/`AmbiguousFields`
+  and honours the `entityType` filter. — **done**, 12 tests passing (4 new this task).
 - Regression proof: existing `QuoteImportServiceTests` — **done**, with a caveat: two tests
   (`ImportAsync_Preview_*`) were rewritten rather than left byte-for-byte unmodified, because
   `/preview`'s contract itself intentionally changed this revision (Key decision 3 — preview now
   stages a real, inspectable batch instead of persisting nothing). All 21 tests in the file pass;
   a code comment on the two rewritten tests explains why. The seeding test suite's own regression
-  pass is still pending (Section 5/Task 31 not started).
-- `ImportActionEndpointsTests` (Api.Tests, new) — mirrors `ImportConflictEndpointsTests`'s shape.
-  Updated `ImportEndpointTests` for the dual-mode/status-code split and preview's new
-  commit-not-rollback, `200`/`202`-split contract (a file with unresolved conflicts must return
-  `202` from `/preview`, not just from `/import`). — **not started**.
+  pass — **done** in Task 31 (`DatabaseInitializerTests`, `ImportBatchesTests`,
+  `SourceCacheWiringTests`, `ConflictResolutionTests` all pass against the rewired pipeline).
+- `ImportActionEndpointsTests` (Api.Tests, new) — mirrors `ImportConflictEndpointsTests`'s shape;
+  16 tests covering auth, decide/undo/apply/discard success and every failure mode
+  (not-found/not-decidable/ambiguous/already-resolved/not-decided/invalid-state). — **done**.
+  Updated `ImportEndpointTests` for the `200`/`202`-split contract (`Import_ResultHasPendingConflict_Returns202`,
+  parameterised over both `/import` and `/import/preview`) — **done**.
 - Deleted alongside Phase B (not before): `SystemImportConflictWriterReaderTests`,
   `ConflictResolutionCoordinatorTests`, `SqliteConflictResolutionServiceTests`,
   `ImportConflictEndpointsTests`.
 
 ### 9. DTOs / i18n / documentation
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-`Quotinator.Core.Models` response DTOs (`ActionSummaryResponse` etc.). New `ApiMessages` +
-all-three-locale `i18ntext/UI.*.json` keys for not-found/already-applied/already-discarded/
-not-decided/ambiguous-fields cases. `README.md`/`addon/DOCS.md`/`RestApi.razor` updates (new
-endpoint rows, both `/import` and `/import/preview`'s two status codes documented). `CLAUDE.md` —
-document the generic-primitive placement rationale and the seeding-can-leave-a-batch-staged
-behavior explicitly.
+`Quotinator.Core.Models`: `ImportActionSummaryResponse`, `ImportActionPageResponse` (mirroring
+`ConflictSummaryResponse`/`ConflictPageResponse`; `ImportActionBatchStatusResponse` already existed
+from Section 2). Seven new `ApiMessages` keys (`ImportActionNotFound`/`AlreadyResolved`/`NotDecided`/
+`NotDecidable`/`AmbiguousFieldsUnresolved`/`BatchNotFullyDecided`/`BatchInvalidState`), each with a
+translated entry in all three `i18ntext/UI.*.json` files, plus five new `RestApi.razor` table-row
+labels per locale. `README.md`/`addon/DOCS.md` — new `/import/actions/*` rows inserted, `/import`
+and `/import/preview`'s existing rows corrected to describe the `200`/`202` split and the
+stage-then-apply/stage-only contract accurately (the old text was already stale — it described
+preview as "rolls back every write," which stopped being true once preview started staging a real
+batch). `RestApi.razor` — five new endpoint rows, verified rendering live (see Verification).
+`CLAUDE.md` — the pre-push checklist's manual conflict-review curl workflow was rewritten around
+`/import/actions/*` as the primary, live path (verified against a running dev server — see
+Verification row 16), with a note that `/import/conflicts/*` is no longer populated by any live
+import/seed path and is exercised separately during Phase A.
 
 ---
 
@@ -315,20 +335,20 @@ behavior explicitly.
 | 2 | ✅ | Reader/writer round-trip for `System_ImportActions`, including all Status transitions | Unit test | `SystemImportActionWriterReaderTests` |
 | 3 | ✅ | `EntityIdentity` produces deterministic, non-colliding ids for Source/Character/Person | Unit test | `EntityIdentityTests` |
 | 4 | ✅ | Planner correctly classifies Add / unambiguous-Modify / ambiguous-Modify for Quotes, Add-only for Source/Character/Person; never writes to any domain table | Unit test | `ImportActionPlannerTests` |
-| 5 | 🟡 | Applier writes Source/Character/Person (idempotently, using the stable id) and the Quote only at apply time; identical result whether reached via `/import`, `/import/actions/apply`, or seeding | Unit test | `SqliteImportActionServiceTests` done; seeding path not yet wired (Section 5) |
+| 5 | ✅ | Applier writes Source/Character/Person (idempotently, using the stable id) and the Quote only at apply time; identical result whether reached via `/import`, `/import/actions/apply`, or seeding | Unit test + Live | `SqliteImportActionServiceTests`; seeding wired (Section 5); live curl smoke test confirmed the `/import` path end-to-end |
 | 6 | ✅ | `DecideAsync` rejects non-Quote/non-Pending targets; validates via `FieldMergeResolver` at decide time | Unit test | `SqliteImportActionServiceTests` |
 | 7 | 🟡 | Existing import behavior preserved by the planner/applier extraction, with preview's contract intentionally changed (Key decision 3) | Unit test | `QuoteImportServiceTests` — 21/21 pass; 2 tests rewritten for the new preview contract, not left unmodified |
 | 8 | ✅ | Existing seeding behavior unchanged where nothing is ambiguous | Unit test | `DatabaseInitializerTests`, `ImportBatchesTests`, `SourceCacheWiringTests`, `ConflictResolutionTests` all pass against the rewired seeding pipeline (some seeding-integration tests were updated, not left byte-for-byte unmodified, since `System_ImportConflicts` is no longer seeding's mechanism — see Section 5) |
-| 9 | ⬜ | `POST /import` returns `200` when everything applies, `202` with a usable `batchId` when something needs review | Unit test | `ImportEndpointTests` (updated) |
-| 10 | ⬜ | `POST /import/preview` stages only, never applies, and returns the **same `200`/`202` split** based on unresolved ambiguity | Unit test | `ImportEndpointTests` (updated) |
-| 11 | ⬜ | New `/import/actions/*` endpoints: correct auth, correct status codes, `AmbiguousFields`/`RelatedActionIds` present | Unit test | `ImportActionEndpointsTests` |
-| 12 | ⬜ | A seed file with unresolved ambiguity leaves its batch `Staged`, doesn't block startup, and is absent from `GET /quotes` until applied | Unit test + Live | Engine.Tests + T1 manual restart |
-| 13 | ⬜ | A discarded (or never-applied) batch leaves zero domain-table rows, including no orphaned Source/Character/Person | Unit test | Engine.Tests |
-| 14 | ⬜ | Re-importing/re-seeding the same data twice creates no duplicate Source/Character/Person rows | Unit test + Live | Engine.Tests + T1/T2 stable-id idempotency check |
-| 15 | ⬜ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0/0; `dotnet test --configuration Release` → all pass |
-| 16 | ⬜ | T1 — full stage → decide → apply cycle in Visual Studio; `/import`/`/import/preview` `200`/`202` splits; ambiguous seed file staged without blocking startup | Live | Manual VS run per this doc's scope |
-| 17 | ⬜ | T2 — same cycle in Docker, including a fresh-seed startup with one intentionally ambiguous source file | Live | `docker build` + smoke test |
-| 18 | ⬜ | **Phase B gate**: `/import/actions/*` demonstrated full parity with `/import/conflicts/*` in both unit tests and T1/T2 before any #149 code is deleted | Live + Unit test | Manual sign-off against items 1–17 |
+| 9 | ✅ | `POST /import` returns `200` when everything applies, `202` with a usable `batchId` when something needs review | Unit test + Live | `ImportEndpointTests.Import_ResultHasPendingConflict_Returns202`; live curl confirmed `202` for a genuine review-policy duplicate, `200` after decide+apply |
+| 10 | ✅ | `POST /import/preview` stages only, never applies, and returns the **same `200`/`202` split** based on unresolved ambiguity | Unit test | Same test, parameterised over `/import` and `/import/preview` |
+| 11 | ✅ | New `/import/actions/*` endpoints: correct auth, correct status codes, `AmbiguousFields`/`RelatedActionIds` present | Unit test + Live | `ImportActionEndpointsTests` (16 tests); live curl confirmed `GET /import/actions?batchId=` shape and decide/apply round-trip |
+| 12 | ⬜ | A seed file with unresolved ambiguity leaves its batch `Staged`, doesn't block startup, and is absent from `GET /quotes` until applied | Unit test + Live | Engine.Tests done conceptually via `ApplyBatchAsync_SomethingPending_ReturnsPendingIdsAndWritesNothing`; **T1 manual restart with a genuinely ambiguous seed file not yet done** — Task 34 |
+| 13 | ✅ | A discarded (or never-applied) batch leaves zero domain-table rows, including no orphaned Source/Character/Person | Unit test | `DiscardBatchAsync_MarksActionsDiscarded_WritesNoDomainRows` |
+| 14 | 🟡 | Re-importing/re-seeding the same data twice creates no duplicate Source/Character/Person rows | Unit test + Live | `ApplyBatchAsync_TwoBatchesReferencingSameNewSource_IdempotentNoDuplicateSourceRow` done; **T1/T2 live idempotency check not yet done** — Task 34 |
+| 15 | ✅ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0/0; `dotnet test --configuration Release` → 976/976 pass |
+| 16 | ⬜ | T1 — full stage → decide → apply cycle in Visual Studio; `/import`/`/import/preview` `200`/`202` splits; ambiguous seed file staged without blocking startup | Live | Manual VS run per this doc's scope — **not yet done as T1**; a curl-based smoke test against `dotnet run` covered the decide→apply cycle and status-code split, but not a full VS-driven T1 pass or the ambiguous-seed-file-at-startup scenario — Task 34 |
+| 17 | ⬜ | T2 — same cycle in Docker, including a fresh-seed startup with one intentionally ambiguous source file | Live | `docker build` + smoke test — Task 34 |
+| 18 | ⬜ | **Phase B gate**: `/import/actions/*` demonstrated full parity with `/import/conflicts/*` in both unit tests and T1/T2 before any #149 code is deleted | Live + Unit test | Manual sign-off against items 1–17 — Task 34/35 |
 
 ---
 

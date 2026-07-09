@@ -372,14 +372,14 @@ internal static class Sql
             "Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, AppliedAt, DiscardedAt";
 
         /// <summary>Paginated action listing, newest first, with optional filters.</summary>
-        internal static string SelectPaged(bool filterBatchId, bool filterStatus)
+        internal static string SelectPaged(bool filterBatchId, bool filterStatus, bool filterEntityType = false)
             => $"SELECT {SelectColumns} FROM System_ImportActions" +
-               BuildWhere(filterBatchId, filterStatus) +
+               BuildWhere(filterBatchId, filterStatus, filterEntityType) +
                " ORDER BY DetectedAt DESC LIMIT @pageSize OFFSET @offset;";
 
         /// <summary>Total matching count for the action list endpoint.</summary>
-        internal static string CountPaged(bool filterBatchId, bool filterStatus)
-            => CountPagedBase + BuildWhere(filterBatchId, filterStatus) + ";";
+        internal static string CountPaged(bool filterBatchId, bool filterStatus, bool filterEntityType = false)
+            => CountPagedBase + BuildWhere(filterBatchId, filterStatus, filterEntityType) + ";";
 
         /// <summary>Single-action lookup by Id (#154's decide/undo/apply/discard flows).</summary>
         internal static string SelectById => $"SELECT {SelectColumns} FROM System_ImportActions WHERE Id = @id;";
@@ -403,11 +403,12 @@ internal static class Sql
         internal const string MarkBatchDiscarded =
             "UPDATE System_ImportActions SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE BatchId = @batchId;";
 
-        private static string BuildWhere(bool filterBatchId, bool filterStatus)
+        private static string BuildWhere(bool filterBatchId, bool filterStatus, bool filterEntityType)
         {
-            var parts = new List<string>(2);
-            if (filterBatchId) parts.Add("BatchId = @batchId");
-            if (filterStatus)  parts.Add("Status = @status");
+            var parts = new List<string>(3);
+            if (filterBatchId)    parts.Add("BatchId = @batchId");
+            if (filterStatus)     parts.Add("Status = @status");
+            if (filterEntityType) parts.Add("EntityType = @entityType");
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
     }

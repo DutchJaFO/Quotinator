@@ -62,6 +62,13 @@
   "ErrorConflictNotDecided": "Für diesen Konflikt gibt es keine gespeicherte Entscheidung, die rückgängig gemacht werden kann.",
   "ErrorConflictAmbiguousFieldsUnresolved": "Die folgenden Felder sind mehrdeutig und benötigen eine ausdrückliche Entscheidung: {0}.",
   "ErrorConflictBatchNotFullyDecided": "Noch nicht jeder Konflikt in diesem Batch hat eine Entscheidung. Entscheiden Sie die verbleibenden Konflikte, bevor Sie anwenden.",
+  "ErrorImportActionNotFound": "Es existiert keine Import-Aktion mit dieser Id.",
+  "ErrorImportActionAlreadyResolved": "Diese Import-Aktion wurde bereits angewendet oder verworfen und kann nicht mehr entschieden werden.",
+  "ErrorImportActionNotDecided": "Für diese Import-Aktion gibt es keine gespeicherte Entscheidung, die rückgängig gemacht werden kann.",
+  "ErrorImportActionNotDecidable": "Diese Import-Aktion ist eine '{0}'-Aktion und kann nicht manuell entschieden werden — nur Quote-Aktionen unterstützen eine Entscheidung.",
+  "ErrorImportActionAmbiguousFieldsUnresolved": "Die folgenden Felder sind mehrdeutig und benötigen eine ausdrückliche Entscheidung: {0}.",
+  "ErrorImportActionBatchNotFullyDecided": "Noch nicht jede Aktion in diesem Batch hat eine Entscheidung. Entscheiden Sie die verbleibenden Aktionen, bevor Sie anwenden.",
+  "ErrorImportActionBatchInvalidState": "Dieser Batch kann nicht verworfen werden — er wurde bereits angewendet, bereits verworfen, oder enthält keine gespeicherten Aktionen.",
   "AdminEndpointsHeading": "Admin-Endpunkte",
   "AdminEndpointsDescription": "Diese Endpunkte erfordern einen X-Api-Key-Header, der mit dem in den Add-on-Optionen konfigurierten admin_api_key übereinstimmt. Sie sind nicht verfügbar, wenn kein Schlüssel konfiguriert ist.",
   "AdminPreviewSeedLabel": "Importvorschau anzeigen",
@@ -76,5 +83,10 @@
   "ImportConflictsLabel": "Importkonflikte auflisten",
   "ImportConflictsDecideLabel": "Importkonflikt entscheiden",
   "ImportConflictsUndoLabel": "Konfliktentscheidung rückgängig machen",
-  "ImportConflictsApplyLabel": "Konfliktbatch anwenden"
+  "ImportConflictsApplyLabel": "Konfliktbatch anwenden",
+  "ImportActionsLabel": "Gespeicherte Import-Aktionen auflisten",
+  "ImportActionsDecideLabel": "Gespeicherte Import-Aktion entscheiden",
+  "ImportActionsUndoLabel": "Import-Aktionsentscheidung rückgängig machen",
+  "ImportActionsApplyLabel": "Gespeicherten Aktionsbatch anwenden",
+  "ImportActionsDiscardLabel": "Gespeicherten Aktionsbatch verwerfen"
 }

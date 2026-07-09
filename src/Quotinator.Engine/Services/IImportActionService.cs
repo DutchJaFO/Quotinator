@@ -15,6 +15,14 @@ namespace Quotinator.Engine.Services;
 public interface IImportActionService
 {
     /// <summary>
+    /// Returns a paged, filtered list of staged actions — the conflict-review surface for
+    /// <c>GET /api/v1/import/actions</c>. Each row's <c>RelatedActionIds</c> links a Quote action to
+    /// the Source/Character/Person actions in the same batch it depends on; <c>AmbiguousFields</c> is
+    /// populated only for a <c>Pending</c> Quote action.
+    /// </summary>
+    Task<ImportActionPageResponse> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stages a decision for one Quote action. Validates immediately — a genuinely ambiguous field
     /// left undecided throws before anything is stored. Throws <see cref="ImportActionNotDecidableException"/>
     /// for a Source/Character/Person action (always already-Decided; never a valid decide target).

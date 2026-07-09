@@ -15,6 +15,11 @@ public static class ApiRoutes
     public const string ImportConflictsDecide = "/api/v1/import/conflicts/{id}/decide";
     public const string ImportConflictsUndo   = "/api/v1/import/conflicts/{id}/undo";
     public const string ImportConflictsApply  = "/api/v1/import/conflicts/apply";
+    public const string ImportActions         = "/api/v1/import/actions";
+    public const string ImportActionsDecide   = "/api/v1/import/actions/{id}/decide";
+    public const string ImportActionsUndo     = "/api/v1/import/actions/{id}/undo";
+    public const string ImportActionsApply    = "/api/v1/import/actions/apply";
+    public const string ImportActionsDiscard  = "/api/v1/import/actions/discard";
     public const string CultureSet       = "/Culture/Set";
     public const string ScalarUi         = "/scalar/v1";
     public const string OpenApiSpec      = "/openapi/v1.json";

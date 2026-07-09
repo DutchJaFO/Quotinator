@@ -145,6 +145,38 @@ public class ImportEndpointTests
     }
 
     [TestMethod]
+    [DataRow("/api/v1/import")]
+    [DataRow("/api/v1/import/preview")]
+    public async Task Import_ResultHasPendingConflict_Returns202(string path)
+    {
+        var service = new FakeQuoteImportService
+        {
+            ReturnResult = new Quotinator.Core.Models.ImportResultResponse
+            {
+                BatchId        = Guid.NewGuid(),
+                Preview        = path.EndsWith("preview"),
+                ConflictPolicy = "review",
+                Summary        = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 0, Updated = 0, Skipped = 1, Errors = 0 },
+                Conflicts =
+                [
+                    new Quotinator.Core.Models.ImportConflictEntry
+                    {
+                        QuoteId       = "11111111-1111-1111-1111-111111111111",
+                        AppliedPolicy = "review",
+                        Status        = "pending",
+                        ExistingValue = new Dictionary<string, object?>(),
+                        IncomingValue = new Dictionary<string, object?>(),
+                    }
+                ],
+            }
+        };
+        using var factory = CreateFactory(TestKey, service);
+        var response = await CreateClientWithKey(factory).PostAsync(path, BuildForm());
+
+        Assert.AreEqual(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
+    [TestMethod]
     public async Task ImportPreview_CorrectKeyAndValidFile_Returns200WithPreviewTrue()
     {
         var service = new FakeQuoteImportService();

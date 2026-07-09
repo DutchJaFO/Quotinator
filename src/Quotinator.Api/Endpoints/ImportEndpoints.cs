@@ -52,15 +52,19 @@ internal static class ImportEndpoints
                     HandleImportAsync(file, settings, importService, localizer, logger, preview: true, cancellationToken))
              .DisableAntiforgery()
              .Produces<ImportResultResponse>(StatusCodes.Status200OK)
+             .Produces<ImportResultResponse>(StatusCodes.Status202Accepted)
              .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
              .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
              .Produces<ProblemDetails>(StatusCodes.Status501NotImplemented)
              .WithName("PreviewImportQuotes")
              .WithSummary("Preview a quote import")
              .WithDescription(
-                 "Runs the full import pipeline and returns exactly what it would do, then rolls back — nothing is persisted, no " +
-                 "`ImportBatch` is created. Iterate against this endpoint until `conflicts`/`errors` look right, then call " +
-                 "`POST /api/v1/import` with the same payload to commit. " + ImportDescription);
+                 "Runs the full import pipeline and stages exactly what it would do, then never applies — a real, inspectable " +
+                 "`ImportBatch` is created (review it via `GET /api/v1/import/actions?batchId=`), but nothing is written to any " +
+                 "quote data. Returns `200` when the batch would apply cleanly as-is, or `202` when any row needs a decision " +
+                 "(adjust the file, or decide the ambiguous rows via `POST /api/v1/import/actions/{id}/decide`). Once ready, " +
+                 "either re-run `POST /api/v1/import` with the same file to stage-and-apply in one call, or apply the already-" +
+                 "staged batch directly via `POST /api/v1/import/actions/apply`. " + ImportDescription);
 
         adminGroup.MapPost("/", (
                 [Description("The source file to import — Quotinator's canonical JSON schema, or a raw upstream format when `settings.converter` names a compiled converter.")] IFormFile file,
@@ -72,12 +76,18 @@ internal static class ImportEndpoints
                     HandleImportAsync(file, settings, importService, localizer, logger, preview: false, cancellationToken))
              .DisableAntiforgery()
              .Produces<ImportResultResponse>(StatusCodes.Status200OK)
+             .Produces<ImportResultResponse>(StatusCodes.Status202Accepted)
              .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
              .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
              .Produces<ProblemDetails>(StatusCodes.Status501NotImplemented)
              .WithName("ImportQuotes")
              .WithSummary("Import quotes")
-             .WithDescription(ImportDescription);
+             .WithDescription(
+                 "Stages the file, then immediately attempts to apply it (two sequential commits — a crash between them " +
+                 "leaves the batch `Staged`, a safe, recoverable state). Returns `200` when everything applied, or `202` " +
+                 "when any row needs a decision (adjust the file and re-import, or decide the ambiguous rows via " +
+                 "`POST /api/v1/import/actions/{id}/decide` then apply the batch via `POST /api/v1/import/actions/apply`). " +
+                 ImportDescription);
 
         publicGroup.MapGet("/conflicts", async (
             string? status,
@@ -193,6 +203,157 @@ internal static class ImportEndpoints
             "until every conflict in the batch has been decided. If any are still pending, applies " +
             "nothing and returns `422` with the list of conflict ids still needing a decision. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
+
+        // ── #154: unified staging engine — /import/actions/* ────────────────────
+
+        publicGroup.MapGet("/actions", async (
+            string? status,
+            string? batchId,
+            string? entityType,
+            IImportActionService service,
+            int page     = 1,
+            int pageSize = 50) =>
+        {
+            if (page < 1)       page     = 1;
+            if (pageSize < 1)   pageSize = 1;
+            if (pageSize > 200) pageSize = 200;
+
+            var result = await service.GetPagedAsync(batchId, status, entityType, page, pageSize);
+            return Results.Ok(result);
+        })
+        .WithName("GetImportActions")
+        .WithSummary("List staged import actions")
+        .WithDescription(
+            "Returns a paginated list of staged import actions (#154), newest first — the review " +
+            "surface for a staged batch, whether staged via `POST /import`, `POST /import/preview`, " +
+            "or startup seeding. Filter by `status` (`Pending`, `Decided`, `Applied`, `Discarded`), " +
+            "`batchId`, and/or `entityType` (`Quote`, `Source`, `Character`, `Person`). Each item " +
+            "includes `relatedActionIds` (the Source/Character/Person actions in the same batch a " +
+            "Quote action depends on) and `ambiguousFields` (the fields genuinely needing a decision, " +
+            "populated only while `status` is `Pending`). Maximum `pageSize` is 200.");
+
+        adminGroup.MapPost("/actions/{id}/decide", async (
+            string id,
+            ConflictDecisionRequest request,
+            IImportActionService service,
+            IApiLocalizer localizer) =>
+        {
+            if (!Guid.TryParse(id, out var actionId))
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionNotFound], statusCode: StatusCodes.Status404NotFound);
+
+            try
+            {
+                await service.DecideAsync(actionId, request);
+                return Results.NoContent();
+            }
+            catch (ImportActionNotFoundException)
+            {
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionNotFound], statusCode: StatusCodes.Status404NotFound);
+            }
+            catch (ImportActionStateException)
+            {
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionAlreadyResolved], statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+            catch (ImportActionNotDecidableException ex)
+            {
+                return Results.Problem(
+                    detail: string.Format(localizer[ApiMessages.ImportActionNotDecidable], ex.EntityType),
+                    statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+            catch (UnresolvedFieldConflictException ex)
+            {
+                return Results.Problem(
+                    detail: string.Format(localizer[ApiMessages.ImportActionAmbiguousFieldsUnresolved], string.Join(", ", ex.FieldNames)),
+                    statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+        })
+        .WithName("DecideImportAction")
+        .WithSummary("Stage a per-field decision for one staged action")
+        .WithDescription(
+            "Records a per-field keep/replace/custom decision for one staged Quote action — git-merge-" +
+            "style: an explicit decision always wins for that field, even if it wasn't actually " +
+            "ambiguous. A field left out auto-resolves (empty-side wins, equal values keep existing); " +
+            "a field that is genuinely ambiguous (both sides non-empty and differ) with no decision " +
+            "returns `422`. Only `Quote` actions can be decided — Source/Character/Person actions are " +
+            "always already-Decided (an Add is never ambiguous), so targeting one returns `422`. " +
+            "Nothing is written to any domain table yet — call `POST /import/actions/apply` once " +
+            "every action in the batch has been decided. Calling this again for the same action " +
+            "overwrites the prior decision. Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
+
+        adminGroup.MapPost("/actions/{id}/undo", async (
+            string id,
+            IImportActionService service,
+            IApiLocalizer localizer) =>
+        {
+            if (!Guid.TryParse(id, out var actionId))
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionNotFound], statusCode: StatusCodes.Status404NotFound);
+
+            try
+            {
+                await service.UndoDecisionAsync(actionId);
+                return Results.NoContent();
+            }
+            catch (ImportActionNotFoundException)
+            {
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionNotFound], statusCode: StatusCodes.Status404NotFound);
+            }
+            catch (ImportActionStateException)
+            {
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionNotDecided], statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+        })
+        .WithName("UndoImportActionDecision")
+        .WithSummary("Undo a staged action decision")
+        .WithDescription(
+            "Reverts a staged action's decision back to pending. Only valid while the action has a " +
+            "decision recorded but its batch hasn't been applied yet. " +
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
+
+        adminGroup.MapPost("/actions/apply", async (
+            string batchId,
+            IImportActionService service,
+            IApiLocalizer localizer) =>
+        {
+            var stillPending = await service.ApplyBatchAsync(batchId);
+            return stillPending is null
+                ? Results.Ok()
+                : Results.Problem(
+                    detail: localizer[ApiMessages.ImportActionBatchNotFullyDecided],
+                    statusCode: StatusCodes.Status422UnprocessableEntity,
+                    extensions: new Dictionary<string, object?> { ["pendingActionIds"] = stillPending.PendingActionIds });
+        })
+        .WithName("ApplyImportActionBatch")
+        .WithSummary("Apply every decided action in a batch")
+        .WithDescription(
+            "Applies every action sharing `batchId`, atomically, once every one of them has a " +
+            "decision recorded — mirrors git: resolving individual actions doesn't commit anything " +
+            "until every action in the batch has been decided. If any are still pending, applies " +
+            "nothing and returns `422` with the list of action ids still needing a decision. " +
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
+
+        adminGroup.MapPost("/actions/discard", async (
+            string batchId,
+            IImportActionService service,
+            IApiLocalizer localizer) =>
+        {
+            try
+            {
+                await service.DiscardBatchAsync(batchId);
+                return Results.NoContent();
+            }
+            catch (ImportBatchStateException)
+            {
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchInvalidState], statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+        })
+        .WithName("DiscardImportActionBatch")
+        .WithSummary("Discard every staged action in a batch")
+        .WithDescription(
+            "Marks every action sharing `batchId` as discarded in one statement — never touches any " +
+            "domain table, since a discarded batch's Add actions never created anything to begin " +
+            "with (creation is deferred to apply time). Returns `422` if the batch has already been " +
+            "applied, already been discarded, or has no staged actions at all. " +
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
     }
 
     private static async Task<IResult> HandleImportAsync(
@@ -214,7 +375,14 @@ internal static class ImportEndpoints
         {
             await using var stream = file.OpenReadStream();
             var result = await importService.ImportAsync(stream, file.FileName, settings, preview, cancellationToken);
-            return Results.Ok(result);
+
+            // 202 tells the caller up front that the batch has unresolved conflicts it must adjust
+            // the file or decide via /import/actions before the batch can be applied — 200 means
+            // everything staged cleanly (and, for a non-preview call, was actually applied).
+            var hasPending = result.Conflicts.Any(c => c.Status == "pending");
+            return hasPending
+                ? Results.Json(result, statusCode: StatusCodes.Status202Accepted)
+                : Results.Ok(result);
         }
         catch (UnknownConverterException ex)
         {

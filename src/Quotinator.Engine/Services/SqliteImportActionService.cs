@@ -33,6 +33,26 @@ public sealed class SqliteImportActionService : IImportActionService
     }
 
     /// <inheritdoc/>
+    public async Task<ImportActionPageResponse> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var result     = await _actionReader.GetPagedAsync(batchId, status, entityType, page, pageSize);
+        var batchCache = new Dictionary<string, IReadOnlyList<SystemImportAction>>();
+
+        var items = new List<ImportActionSummaryResponse>(result.Items.Count);
+        foreach (var action in result.Items)
+            items.Add(await ToSummaryAsync(action, batchCache));
+
+        return new ImportActionPageResponse
+        {
+            TotalMatching = result.TotalCount,
+            TotalPages    = result.TotalPages,
+            Page          = result.Page,
+            PageSize      = result.PageSize,
+            Items         = items,
+        };
+    }
+
+    /// <inheritdoc/>
     public async Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
     {
         var action = await _actionReader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
@@ -242,6 +262,96 @@ public sealed class SqliteImportActionService : IImportActionService
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "person", id, ChangeAction.Created,
                 oldValue: null, newValue: new { name }, connection, transaction);
+    }
+
+    // ── GetPagedAsync helpers ────────────────────────────────────────────────
+
+    private async Task<ImportActionSummaryResponse> ToSummaryAsync(SystemImportAction action, Dictionary<string, IReadOnlyList<SystemImportAction>> batchCache)
+        => new()
+        {
+            Id               = action.Id,
+            BatchId          = action.BatchId,
+            ActionType       = action.ActionType.Raw,
+            EntityType       = action.EntityType,
+            EntityId         = action.EntityId,
+            ExistingBatchId  = action.ExistingBatchId,
+            Status           = action.Status.Raw,
+            AppliedPolicy    = action.AppliedPolicy.Raw,
+            DetectedAt       = action.DetectedAt,
+            AppliedAt        = action.AppliedAt,
+            DiscardedAt      = action.DiscardedAt,
+            ExistingFields   = BuildFields(action.EntityType, action.ExistingValue),
+            IncomingFields   = BuildFields(action.EntityType, action.IncomingValue) ?? new Dictionary<string, object?>(),
+            MergedFields     = BuildFields(action.EntityType, action.MergedFields),
+            RelatedActionIds = await ComputeRelatedActionIdsAsync(action, batchCache),
+            AmbiguousFields  = ComputeAmbiguousFields(action),
+        };
+
+    private static IReadOnlyDictionary<string, object?>? BuildFields(string entityType, string? json)
+    {
+        if (json is null) return null;
+        return entityType switch
+        {
+            "Quote"     => QuoteFieldMerge.ToFieldMap(JsonSerializer.Deserialize<QuoteActionPayload>(json)!.Fields),
+            "Source"    => ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(json)!),
+            "Character" => ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayload>(json)!),
+            "Person"    => ToFieldMap(JsonSerializer.Deserialize<PersonActionPayload>(json)!),
+            _           => null,
+        };
+    }
+
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
+        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type };
+
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
+        new Dictionary<string, object?> { ["name"] = payload.Name, ["sourceId"] = payload.SourceId };
+
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
+        new Dictionary<string, object?> { ["name"] = payload.Name };
+
+    private static IReadOnlyList<string> ComputeAmbiguousFields(SystemImportAction action)
+    {
+        if (action.EntityType != "Quote" || action.Status.Parsed != ImportActionStatus.Pending)
+            return [];
+
+        var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
+        var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.IncomingValue!)!;
+        var existing = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
+        var incoming = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
+
+        try
+        {
+            FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
+            return [];
+        }
+        catch (UnresolvedFieldConflictException ex)
+        {
+            return ex.FieldNames;
+        }
+    }
+
+    private async Task<IReadOnlyList<Guid>> ComputeRelatedActionIdsAsync(SystemImportAction action, Dictionary<string, IReadOnlyList<SystemImportAction>> batchCache)
+    {
+        if (action.EntityType != "Quote") return [];
+
+        var json    = action.ActionType.Parsed == ImportActionKind.Add ? action.IncomingValue : (action.MergedFields ?? action.IncomingValue);
+        var payload = JsonSerializer.Deserialize<QuoteActionPayload>(json!)!;
+
+        if (!batchCache.TryGetValue(action.BatchId, out var batchActions))
+        {
+            batchActions = await _actionReader.GetAllForBatchAsync(action.BatchId);
+            batchCache[action.BatchId] = batchActions;
+        }
+
+        var related = new List<Guid>();
+        foreach (var candidate in batchActions)
+        {
+            if (candidate.Id == action.Id) continue;
+            if (candidate.EntityType == "Source"    && candidate.EntityId == payload.SourceId) related.Add(candidate.Id);
+            if (candidate.EntityType == "Character" && payload.CharacterId is not null && candidate.EntityId == payload.CharacterId) related.Add(candidate.Id);
+            if (candidate.EntityType == "Person"    && payload.PersonId is not null && candidate.EntityId == payload.PersonId) related.Add(candidate.Id);
+        }
+        return related;
     }
 
     private static Dictionary<string, FieldMergeDecision> ToDecisionMap(ConflictDecisionRequest request)

@@ -186,6 +186,62 @@ public class SqliteImportActionServiceTests
     }
 
     [TestMethod]
+    public async Task GetPagedAsync_BrandNewQuote_QuoteActionRelatesToItsSourceAndCharacterActions()
+    {
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote("91111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
+
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, null, 1, 50);
+
+        var quoteItem     = page.Items.Single(i => i.EntityType == "Quote");
+        var sourceItem    = page.Items.Single(i => i.EntityType == "Source");
+        var characterItem = page.Items.Single(i => i.EntityType == "Character");
+
+        CollectionAssert.AreEquivalent(new[] { sourceItem.Id, characterItem.Id }, quoteItem.RelatedActionIds.ToList());
+        Assert.IsTrue(sourceItem.RelatedActionIds.Count == 0, "Source actions never relate to other actions");
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_PendingModify_ComputesAmbiguousFields()
+    {
+        var id = "a1111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote(id)], batchId, DuplicateResolutionPolicy.Review);
+
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, null, 1, 50);
+        var quoteItem = page.Items.Single(i => i.EntityType == "Quote");
+
+        Assert.AreEqual("Pending", quoteItem.Status);
+        CollectionAssert.Contains(quoteItem.AmbiguousFields.ToList(), "quoteText");
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_DecidedAction_AmbiguousFieldsIsEmpty()
+    {
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote("b1111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
+
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, null, 1, 50);
+        var quoteItem = page.Items.Single(i => i.EntityType == "Quote");
+
+        Assert.AreEqual(0, quoteItem.AmbiguousFields.Count, "A Decided Add is never ambiguous");
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_FilterByEntityType_ReturnsOnlyMatchingRows()
+    {
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote("c1111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
+
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, "Source", 1, 50);
+
+        Assert.IsTrue(page.Items.Count > 0);
+        Assert.IsTrue(page.Items.All(i => i.EntityType == "Source"));
+    }
+
+    [TestMethod]
     public async Task DiscardBatchAsync_MarksActionsDiscarded_WritesNoDomainRows()
     {
         var batchId = Guid.NewGuid();
