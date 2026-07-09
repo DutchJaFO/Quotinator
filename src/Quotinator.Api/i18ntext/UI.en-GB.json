@@ -69,6 +69,7 @@
   "ErrorImportActionAmbiguousFieldsUnresolved": "The following fields are ambiguous and need an explicit decision: {0}.",
   "ErrorImportActionBatchNotFullyDecided": "Not every action in this batch has a decision yet. Decide the remaining actions before applying.",
   "ErrorImportActionBatchInvalidState": "This batch cannot be discarded — it has already been applied, already been discarded, or has no staged actions.",
+  "ErrorImportBatchNotFound": "No import batch exists with that id.",
   "AdminEndpointsHeading": "Admin endpoints",
   "AdminEndpointsDescription": "These endpoints require an X-Api-Key header matching the admin_api_key configured in the add-on options. They are unavailable when no key is configured.",
   "AdminPreviewSeedLabel": "Preview seed import",

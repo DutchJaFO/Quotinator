@@ -73,7 +73,7 @@ public class QuoteImportServiceTests
         var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
         var actionService  = new SqliteImportActionService(actionReader, coordinator, changeLogWriter ?? NoOpSystemChangeLogWriter.Instance);
         return new SqliteQuoteImportService(
-            _factory, importBatches, coordinator, actionService,
+            _factory, importBatches, coordinator, actionService, actionReader,
             converters ?? new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase),
             configPolicy ?? new ManifestPolicy(DuplicateResolutionPolicy.NewestWins));
     }
@@ -345,6 +345,49 @@ public class QuoteImportServiceTests
         Assert.AreEqual(1, result.Conflicts.Count, "Response reflects the conflict that would have been detected");
         Assert.IsTrue(await CountAsync("System_ImportActions") > 0, "The Modify action is durably staged, not rolled back");
         Assert.AreEqual("Original.", await ReadQuoteTextAsync(), "Never applied — original row untouched");
+    }
+
+    // ── ApplyStagedBatchAsync — batchId mode, the alias for POST /import/actions/apply ─────────
+
+    [TestMethod]
+    public async Task ApplyStagedBatchAsync_PreviouslyStagedBatch_AppliesItAndReturns200Shape()
+    {
+        var service = CreateService();
+        var previewResult = await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: true);
+        Assert.AreEqual(0, await CountAsync("Quotes"), "Still just staged, not applied");
+
+        var applyResult = await service.ApplyStagedBatchAsync(previewResult.BatchId!.Value);
+
+        Assert.AreEqual(previewResult.BatchId, applyResult.BatchId);
+        Assert.IsFalse(applyResult.Preview);
+        Assert.AreEqual(1, applyResult.Summary.Imported);
+        Assert.AreEqual(0, applyResult.Conflicts.Count(c => c.Status == "pending"), "Nothing pending — endpoint would return 200");
+        Assert.AreEqual(1, await CountAsync("Quotes"), "Applying the staged batch actually writes the quote");
+    }
+
+    [TestMethod]
+    public async Task ApplyStagedBatchAsync_BatchWithPendingConflict_StillReportsItPending()
+    {
+        var service = CreateService();
+        await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false);
+        var previewResult = await service.ImportAsync(
+            JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json",
+            new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Review } },
+            preview: true);
+
+        var applyResult = await service.ApplyStagedBatchAsync(previewResult.BatchId!.Value);
+
+        Assert.AreEqual(1, applyResult.Conflicts.Count(c => c.Status == "pending"), "Still pending — endpoint would return 202, not silently succeed");
+        Assert.AreEqual("Original.", await ReadQuoteTextAsync(), "Never applied — original row untouched");
+    }
+
+    [TestMethod]
+    public async Task ApplyStagedBatchAsync_UnknownBatchId_ThrowsImportBatchNotFoundException()
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsExactlyAsync<ImportBatchNotFoundException>(
+            () => service.ApplyStagedBatchAsync(Guid.NewGuid()));
     }
 
     // ── Row-level error tolerance ────────────────────────────────────────────

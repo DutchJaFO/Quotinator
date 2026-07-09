@@ -58,6 +58,8 @@ public class ImportEndpointTests
         }
         if (settingsJson is not null)
             form.Add(new StringContent(settingsJson), "settings");
+        if (!includeFile && settingsJson is null)
+            form.Add(new StringContent(string.Empty), "_empty");
         return form;
     }
 
@@ -187,6 +189,78 @@ public class ImportEndpointTests
         Assert.AreEqual(true, service.LastPreview);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.IsTrue(doc.RootElement.GetProperty("preview").GetBoolean());
+    }
+
+    // ── batchId mode — POST /import?batchId= (alias for /import/actions/apply) ──────────────
+
+    [TestMethod]
+    public async Task Import_WithBatchId_CallsApplyStagedBatchAsyncNotImportAsync()
+    {
+        var service = new FakeQuoteImportService();
+        using var factory = CreateFactory(TestKey, service);
+        var batchId = Guid.NewGuid();
+
+        var response = await CreateClientWithKey(factory)
+            .PostAsync($"/api/v1/import?batchId={batchId}", BuildForm(includeFile: false));
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(batchId, service.LastAppliedBatchId);
+        Assert.IsNull(service.LastFileName, "batchId mode must never call the file-upload path");
+    }
+
+    [TestMethod]
+    public async Task Import_WithBatchId_NoKey_Returns401()
+    {
+        using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
+        var response = await factory.CreateClient()
+            .PostAsync($"/api/v1/import?batchId={Guid.NewGuid()}", BuildForm(includeFile: false));
+
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Import_WithBatchId_UnknownBatch_Returns404()
+    {
+        var service = new FakeQuoteImportService { ThrowOnApplyStagedBatch = new ImportBatchNotFoundException(Guid.NewGuid()) };
+        using var factory = CreateFactory(TestKey, service);
+
+        var response = await CreateClientWithKey(factory)
+            .PostAsync($"/api/v1/import?batchId={Guid.NewGuid()}", BuildForm(includeFile: false));
+
+        Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Import_WithBatchId_ResultHasPendingConflict_Returns202()
+    {
+        var batchId = Guid.NewGuid();
+        var service = new FakeQuoteImportService
+        {
+            ReturnResult = new Quotinator.Core.Models.ImportResultResponse
+            {
+                BatchId        = batchId,
+                Preview        = false,
+                ConflictPolicy = "review",
+                Summary        = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 0, Updated = 0, Skipped = 1, Errors = 0 },
+                Conflicts =
+                [
+                    new Quotinator.Core.Models.ImportConflictEntry
+                    {
+                        QuoteId       = "11111111-1111-1111-1111-111111111111",
+                        AppliedPolicy = "review",
+                        Status        = "pending",
+                        ExistingValue = new Dictionary<string, object?>(),
+                        IncomingValue = new Dictionary<string, object?>(),
+                    }
+                ],
+            }
+        };
+        using var factory = CreateFactory(TestKey, service);
+
+        var response = await CreateClientWithKey(factory)
+            .PostAsync($"/api/v1/import?batchId={batchId}", BuildForm(includeFile: false));
+
+        Assert.AreEqual(HttpStatusCode.Accepted, response.StatusCode);
     }
 
     [TestMethod]

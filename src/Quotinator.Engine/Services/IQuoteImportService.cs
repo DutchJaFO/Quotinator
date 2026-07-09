@@ -33,4 +33,15 @@ public interface IQuoteImportService
     /// </exception>
     Task<ImportResultResponse> ImportAsync(
         Stream file, string fileName, ImportRequestSettingsDto? settings, bool preview, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Applies an already-staged batch — the <c>batchId</c>-mode alias <c>POST /api/v1/import</c>
+    /// offers alongside its file-upload mode, equivalent to <c>POST /api/v1/import/actions/apply</c>
+    /// but returning the same <see cref="ImportResultResponse"/> shape the file-upload mode does, for
+    /// a consistent response contract regardless of which mode a caller used.
+    /// </summary>
+    /// <param name="batchId">The id of a batch already staged via <c>/import</c> or <c>/import/preview</c>.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <exception cref="ImportBatchNotFoundException"><paramref name="batchId"/> does not exist.</exception>
+    Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, CancellationToken cancellationToken = default);
 }

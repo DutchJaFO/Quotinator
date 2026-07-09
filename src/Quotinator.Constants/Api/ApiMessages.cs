@@ -41,4 +41,5 @@ public static class ApiMessages
     public const string ImportActionAmbiguousFieldsUnresolved = "ErrorImportActionAmbiguousFieldsUnresolved";
     public const string ImportActionBatchNotFullyDecided = "ErrorImportActionBatchNotFullyDecided";
     public const string ImportActionBatchInvalidState    = "ErrorImportActionBatchInvalidState";
+    public const string ImportBatchNotFound              = "ErrorImportBatchNotFound";
 }

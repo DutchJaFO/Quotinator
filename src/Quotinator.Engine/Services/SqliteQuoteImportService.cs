@@ -26,6 +26,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
     private readonly IImportBatchRepository _importBatches;
     private readonly IImportActionCoordinator _actionCoordinator;
     private readonly IImportActionService _actionService;
+    private readonly ISystemImportActionReader _actionReader;
     private readonly IReadOnlyDictionary<string, IQuoteSourceConverter> _converters;
     private readonly ManifestPolicy _configPolicy;
 
@@ -35,6 +36,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         IImportBatchRepository importBatches,
         IImportActionCoordinator actionCoordinator,
         IImportActionService actionService,
+        ISystemImportActionReader actionReader,
         IReadOnlyDictionary<string, IQuoteSourceConverter> converters,
         ManifestPolicy configPolicy)
     {
@@ -42,6 +44,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         _importBatches     = importBatches;
         _actionCoordinator = actionCoordinator;
         _actionService     = actionService;
+        _actionReader      = actionReader;
         _converters        = converters;
         _configPolicy      = configPolicy;
     }
@@ -113,6 +116,48 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             },
             Conflicts = BuildConflictEntries(actions),
             Errors    = errors
+        };
+    }
+
+    /// <inheritdoc/>
+    public async Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, CancellationToken cancellationToken = default)
+    {
+        var batch = await _importBatches.GetByIdAsync(batchId) ?? throw new ImportBatchNotFoundException(batchId);
+        var batchIdStr = batchId.ToString("D").ToUpperInvariant();
+
+        var actions = await _actionReader.GetAllForBatchAsync(batchIdStr);
+
+        var imported = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Add);
+        var updated  = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Modify
+                                       && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
+        var skipped  = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Modify
+                                       && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
+        var totalQuotes = actions.Count(a => a.EntityType == "Quote");
+
+        var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, cancellationToken);
+        if (applyResult is null)
+        {
+            batch.Status      = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Applied.ToString(), ImportBatchStatus.Applied);
+            batch.AppliedAt   = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+            batch.RecordCount = imported + updated;
+            await _importBatches.UpdateAsync(batch);
+        }
+
+        return new ImportResultResponse
+        {
+            BatchId        = batchId,
+            Preview        = false,
+            ConflictPolicy = batch.ConflictPolicy.Parsed is { } p ? ToWireString(p) : batch.ConflictPolicy.Raw,
+            Summary = new ImportSummary
+            {
+                Total    = totalQuotes,
+                Imported = imported,
+                Updated  = updated,
+                Skipped  = skipped,
+                Errors   = 0
+            },
+            Conflicts = BuildConflictEntries(actions),
+            Errors    = []
         };
     }
 

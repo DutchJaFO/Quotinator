@@ -343,6 +343,7 @@ builder.Services.AddSingleton<Quotinator.Engine.Services.IQuoteImportService>(sp
     sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
     sp.GetRequiredService<IImportActionCoordinator>(),
     sp.GetRequiredService<IImportActionService>(),
+    sp.GetRequiredService<ISystemImportActionReader>(),
     quoteSourceConverters,
     configPolicy));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();

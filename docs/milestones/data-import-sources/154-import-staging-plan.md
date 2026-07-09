@@ -175,7 +175,10 @@ Section 4/Task 33 replaces it with the real `/import/actions` response shape.
 
 ### 4. Endpoints (`ImportEndpoints.cs`, `Import` tag)
 
-**Status:** ✅ Done (with one deliberate scope trim — see below)
+**Status:** ✅ Done — including the `batchId`-mode alias on `POST /import` (see below); this was
+initially built as file-mode-only, but the user rejected leaving the alias out on the grounds that
+it's a key feature of the staging→execution design, not an optional convenience — it was built in
+the same session as a follow-up, not deferred.
 
 - `POST /api/v1/import/preview` — stage only, commit. **Same `200`/`202` split as `/import`**:
   `200 OK` when nothing in the staged batch is `Pending` (the file would apply cleanly as-is);
@@ -183,16 +186,17 @@ Section 4/Task 33 replaces it with the real `/import/actions` response shape.
   applies either way. — **done**, verified live (curl smoke test against a real dev server: import
   under `review` policy returned `202`, `GET /import/actions?status=Pending` showed the staged
   rows, decide+apply round-tripped to `200`, status flipped to `Applied`).
-- `POST /api/v1/import` — `file`+`settings` (stage + attempt apply, two sequential commits). `200 OK`
-  when everything applied; `202 Accepted` (body carries `batchId` + which actions need a decision)
-  otherwise. — **done**. **Scope trim (deliberate, not an oversight)**: the `batchId`-mode alias for
-  `/import/actions/apply` described in the original design was **not built** — `IFormFile file` stays
-  a required multipart field, `POST /import` has no bare-batchId mode. `/import/actions/apply`
-  already provides this exact capability as its own cleanly-typed endpoint (different response shape
-  than `ImportResultResponse`); adding a second request mode to the same route would have meant an
-  inconsistent OpenAPI contract for one route (two different response shapes depending on which
-  fields are present) for a capability that already has a dedicated home. Revisit if a real caller
-  need for the alias specifically emerges.
+- `POST /api/v1/import` — two modes on one route, distinguished by whether `batchId` is present:
+  **file mode** (`file` required, `batchId` omitted) stages the file, then immediately attempts to
+  apply it (two sequential commits — a crash between them leaves the batch `Staged`, a safe,
+  recoverable state); **batch mode** (`batchId` given, `file`/`settings` ignored, `IFormFile? file`
+  now nullable) applies a batch already staged by a prior `/import` or `/import/preview` call —
+  a thin alias for `POST /import/actions/apply` (`IQuoteImportService.ApplyStagedBatchAsync`) that
+  returns the same `ImportResultResponse` envelope shape as file mode, for one consistent response
+  contract regardless of which mode was used. `404` (`ImportBatchNotFoundException`) if `batchId`
+  doesn't parse or doesn't exist. Either mode: `200 OK` when everything applied; `202 Accepted`
+  (body carries `batchId` + which actions need a decision) otherwise. — **done**, full test coverage
+  in `ImportEndpointTests`/`QuoteImportServiceTests` (all-modes: 200/401/404/202), full suite green.
 - `GET /api/v1/import/actions` — **the conflict-review endpoint** for staged batches; paginated,
   filter by `batchId`/`status`/`entityType`. Polymorphic `ImportActionSummaryResponse` (loosely-typed
   `ExistingFields`/`IncomingFields`, not per-entity-type DTOs) — **done**, with:

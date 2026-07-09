@@ -67,26 +67,39 @@ internal static class ImportEndpoints
                  "staged batch directly via `POST /api/v1/import/actions/apply`. " + ImportDescription);
 
         adminGroup.MapPost("/", (
-                [Description("The source file to import — Quotinator's canonical JSON schema, or a raw upstream format when `settings.converter` names a compiled converter.")] IFormFile file,
-                [Description("Optional JSON text field: `converter`, `duplicateResolution` (policy object), `enrich` (boolean).")] [FromForm] string? settings,
+                [Description("The source file to import — Quotinator's canonical JSON schema, or a raw upstream format when `settings.converter` names a compiled converter. Omit when `batchId` is given instead.")] IFormFile? file,
+                [Description("Optional JSON text field: `converter`, `duplicateResolution` (policy object), `enrich` (boolean). Ignored when `batchId` is given.")] [FromForm] string? settings,
+                // string?, not Guid? — a nullable value-type query parameter throws BadHttpRequestException
+                // on any binding quirk (same reasoning as the yearFrom/yearTo/page/pageSize pattern in
+                // QuoteEndpoints.cs), which the global BadRequestExceptionHandler safety net then reports as
+                // a generic, misleading "numeric parameters" 422. Parsed explicitly below instead.
+                [Description("Applies an already-staged batch (from a prior `/import` or `/import/preview` call) instead of uploading a file — alias for `POST /import/actions/apply` that returns the same response shape the file-upload mode does.")] string? batchId,
                 IQuoteImportService importService,
                 IApiLocalizer localizer,
                 ILogger<Log> logger,
                 CancellationToken cancellationToken) =>
-                    HandleImportAsync(file, settings, importService, localizer, logger, preview: false, cancellationToken))
+                    batchId is not null
+                        ? HandleApplyBatchAsync(batchId, importService, localizer, logger, cancellationToken)
+                        : HandleImportAsync(file, settings, importService, localizer, logger, preview: false, cancellationToken))
              .DisableAntiforgery()
              .Produces<ImportResultResponse>(StatusCodes.Status200OK)
              .Produces<ImportResultResponse>(StatusCodes.Status202Accepted)
              .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
+             .Produces<ProblemDetails>(StatusCodes.Status404NotFound)
              .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
              .Produces<ProblemDetails>(StatusCodes.Status501NotImplemented)
              .WithName("ImportQuotes")
-             .WithSummary("Import quotes")
+             .WithSummary("Import quotes, or apply an already-staged batch")
              .WithDescription(
-                 "Stages the file, then immediately attempts to apply it (two sequential commits — a crash between them " +
-                 "leaves the batch `Staged`, a safe, recoverable state). Returns `200` when everything applied, or `202` " +
+                 "Two modes on one route, distinguished by whether `batchId` is present: " +
+                 "**file mode** (`file` required, `batchId` omitted) stages the file, then immediately attempts to apply it " +
+                 "(two sequential commits — a crash between them leaves the batch `Staged`, a safe, recoverable state); " +
+                 "**batch mode** (`batchId` given, `file`/`settings` ignored) applies a batch already staged by a prior " +
+                 "`/import` or `/import/preview` call — identical to `POST /import/actions/apply` but returning the same " +
+                 "response envelope shape as file mode, for a consistent contract regardless of which mode was used. " +
+                 "Returns `404` if `batchId` doesn't exist. Either mode returns `200` when everything applied, or `202` " +
                  "when any row needs a decision (adjust the file and re-import, or decide the ambiguous rows via " +
-                 "`POST /api/v1/import/actions/{id}/decide` then apply the batch via `POST /api/v1/import/actions/apply`). " +
+                 "`POST /api/v1/import/actions/{id}/decide` then re-apply). " +
                  ImportDescription);
 
         publicGroup.MapGet("/conflicts", async (
@@ -357,7 +370,7 @@ internal static class ImportEndpoints
     }
 
     private static async Task<IResult> HandleImportAsync(
-        IFormFile file, string? settingsJson, IQuoteImportService importService, IApiLocalizer localizer,
+        IFormFile? file, string? settingsJson, IQuoteImportService importService, IApiLocalizer localizer,
         ILogger<Log> logger, bool preview, CancellationToken cancellationToken)
     {
         logger.LogInformation("[Api - Import] preview={Preview} file={File}", preview, file?.FileName);
@@ -375,14 +388,7 @@ internal static class ImportEndpoints
         {
             await using var stream = file.OpenReadStream();
             var result = await importService.ImportAsync(stream, file.FileName, settings, preview, cancellationToken);
-
-            // 202 tells the caller up front that the batch has unresolved conflicts it must adjust
-            // the file or decide via /import/actions before the batch can be applied — 200 means
-            // everything staged cleanly (and, for a non-preview call, was actually applied).
-            var hasPending = result.Conflicts.Any(c => c.Status == "pending");
-            return hasPending
-                ? Results.Json(result, statusCode: StatusCodes.Status202Accepted)
-                : Results.Ok(result);
+            return ToStatusCodeResult(result);
         }
         catch (UnknownConverterException ex)
         {
@@ -396,5 +402,35 @@ internal static class ImportEndpoints
                 detail: string.Format(localizer[ApiMessages.ImportFileInvalid], ex.Message),
                 statusCode: StatusCodes.Status422UnprocessableEntity);
         }
+    }
+
+    private static async Task<IResult> HandleApplyBatchAsync(
+        string batchIdRaw, IQuoteImportService importService, IApiLocalizer localizer, ILogger<Log> logger, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(batchIdRaw, out var batchId))
+            return Results.Problem(detail: localizer[ApiMessages.ImportBatchNotFound], statusCode: StatusCodes.Status404NotFound);
+
+        logger.LogInformation("[Api - Import] applying already-staged batch {BatchId}", batchId);
+
+        try
+        {
+            var result = await importService.ApplyStagedBatchAsync(batchId, cancellationToken);
+            return ToStatusCodeResult(result);
+        }
+        catch (ImportBatchNotFoundException)
+        {
+            return Results.Problem(detail: localizer[ApiMessages.ImportBatchNotFound], statusCode: StatusCodes.Status404NotFound);
+        }
+    }
+
+    // 202 tells the caller up front that the batch has unresolved conflicts it must adjust the file
+    // or decide via /import/actions before the batch can be applied — 200 means everything staged
+    // cleanly (and, for a non-preview call, was actually applied).
+    private static IResult ToStatusCodeResult(ImportResultResponse result)
+    {
+        var hasPending = result.Conflicts.Any(c => c.Status == "pending");
+        return hasPending
+            ? Results.Json(result, statusCode: StatusCodes.Status202Accepted)
+            : Results.Ok(result);
     }
 }
