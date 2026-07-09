@@ -230,17 +230,16 @@ otherwise.
 
 ### 6. `ImportBatch.Type`/`.Status` enum fix (new, this revision)
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-`ImportBatch.Type`/`.Status` are still plain `string` with manual `.ToString()` defaults, even
-though `ImportBatchType`/`ImportBatchStatus` are real closed enums in the same project — the exact
-pattern corrected everywhere else this milestone (`SystemImportConflict`/`SystemImportAction`). No
-handler was registered for either in `QuotinatorDapperConfiguration.RegisterDomainHandlers()`.
-Folded into this plan since Section 3's work touches `ImportBatch.Status` again anyway: convert to
-`SafeValue<ImportBatchType?>`/`SafeValue<ImportBatchStatus?>`, register
-`RegisterEnumHandler<ImportBatchType>()`/`<ImportBatchStatus>()`, update every call site (watch for
-the bare-enum-to-Dapper-parameter bug already found and fixed for `SystemImportConflict`/
-`SystemImportAction` this milestone).
+Converted to `SafeValue<ImportBatchType?>`/`SafeValue<ImportBatchStatus?>`, registered
+`RegisterEnumHandler<ImportBatchType>()`/`<ImportBatchStatus>()` in
+`QuotinatorDapperConfiguration.RegisterDomainHandlers()`, updated all 5 call sites (2 constructions
++ 2 mutations in `QuotinatorDatabaseInitializer`/`SqliteQuoteImportService`, 1 test fixture
+construction). **No new migration needed** — unlike `SystemImportConflict`/`SystemImportAction`,
+`ImportBatches.Type` and `.Status` already had their CHECK constraints from earlier migrations
+(migration004's widened `Type` CHECK, migration007's `Status` CHECK) — this was a pure C#-side fix.
+Full suite green (953 tests) after the change, no regressions.
 
 ### 7. Retiring #149 — Phase A (build to parity) then Phase B (delete), not simultaneous
 

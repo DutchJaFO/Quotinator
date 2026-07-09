@@ -60,10 +60,10 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         var batch = new ImportBatch
         {
             Name           = fileName,
-            Type           = ImportBatchType.Import.ToString(),
+            Type           = new SafeValue<ImportBatchType?>(ImportBatchType.Import.ToString(), ImportBatchType.Import),
             ImportedAt     = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat),
             ConflictPolicy = new SafeValue<DuplicateResolutionPolicy?>(effectivePolicy.ToString(), effectivePolicy),
-            Status         = ImportBatchStatus.Staged.ToString(),
+            Status         = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Staged.ToString(), ImportBatchStatus.Staged),
         };
         await _importBatches.InsertAsync(batch);
         var batchIdStr = batch.Id.ToString("D").ToUpperInvariant();
@@ -91,7 +91,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, cancellationToken);
             if (applyResult is null)
             {
-                batch.Status    = ImportBatchStatus.Applied.ToString();
+                batch.Status    = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Applied.ToString(), ImportBatchStatus.Applied);
                 batch.AppliedAt = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
                 batch.RecordCount = imported + updated;
                 await _importBatches.UpdateAsync(batch);

@@ -1,5 +1,6 @@
 using Quotinator.Core.Models;
 using Quotinator.Data.Helpers;
+using Quotinator.Engine.Entities;
 
 namespace Quotinator.Engine.Helpers;
 
@@ -19,5 +20,7 @@ public sealed class QuotinatorDapperConfiguration : DatabaseConfiguration
     {
         RegisterEnumHandler<QuoteType>();
         RegisterEnumHandler<Genre>();
+        RegisterEnumHandler<ImportBatchType>();
+        RegisterEnumHandler<ImportBatchStatus>();
     }
 }

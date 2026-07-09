@@ -125,7 +125,7 @@ public class SqliteConflictResolutionServiceTests
         var incomingBatch = new ImportBatch
         {
             Name           = Path.GetFileName(secondPath),
-            Type           = ImportBatchType.Import.ToString(),
+            Type           = new SafeValue<ImportBatchType?>(ImportBatchType.Import.ToString(), ImportBatchType.Import),
             ImportedAt     = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat),
             ConflictPolicy = new SafeValue<DuplicateResolutionPolicy?>(DuplicateResolutionPolicy.Review.ToString(), DuplicateResolutionPolicy.Review),
         };
