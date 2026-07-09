@@ -384,8 +384,14 @@ internal static class Sql
         /// <summary>Single-action lookup by Id (#154's decide/undo/apply/discard flows).</summary>
         internal static string SelectById => $"SELECT {SelectColumns} FROM System_ImportActions WHERE Id = @id;";
 
-        /// <summary>Every action sharing a BatchId, any status — #154's apply-batch readiness check needs the complete set, not a page.</summary>
-        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportActions WHERE BatchId = @batchId;";
+        /// <summary>
+        /// Every action sharing a BatchId, any status — #154's apply-batch readiness check needs the
+        /// complete set, not a page. Case-insensitive: a consumer's own batch-id response DTO may be
+        /// typed as <c>Guid</c>, which .NET serializes lowercase by default, while stored <c>BatchId</c>
+        /// values are always uppercase (<c>Guid.ToString("D").ToUpperInvariant()</c>) — a caller
+        /// round-tripping the batch id straight from such a response must still match.
+        /// </summary>
+        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportActions WHERE UPPER(BatchId) = UPPER(@batchId);";
 
         /// <summary>Stages a per-field decision (#154) — Status→Decided, MergedFields holds the decision payload. Idempotent: resubmitting overwrites the prior decision.</summary>
         internal const string MarkDecided =
@@ -399,14 +405,15 @@ internal static class Sql
         internal const string MarkApplied =
             "UPDATE System_ImportActions SET Status = @status, AppliedAt = @appliedAt, DateModified = @dateModified WHERE Id = @id;";
 
-        /// <summary>Marks every action sharing a BatchId discarded in one statement (#154) — DiscardedAt set.</summary>
+        /// <summary>Marks every action sharing a BatchId discarded in one statement (#154) — DiscardedAt set. Case-insensitive — see <see cref="SelectAllForBatch"/>.</summary>
         internal const string MarkBatchDiscarded =
-            "UPDATE System_ImportActions SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE BatchId = @batchId;";
+            "UPDATE System_ImportActions SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE UPPER(BatchId) = UPPER(@batchId);";
 
+        /// <summary>Case-insensitive — see <see cref="SelectAllForBatch"/>'s remark for why.</summary>
         private static string BuildWhere(bool filterBatchId, bool filterStatus, bool filterEntityType)
         {
             var parts = new List<string>(3);
-            if (filterBatchId)    parts.Add("BatchId = @batchId");
+            if (filterBatchId)    parts.Add("UPPER(BatchId) = UPPER(@batchId)");
             if (filterStatus)     parts.Add("Status = @status");
             if (filterEntityType) parts.Add("EntityType = @entityType");
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;

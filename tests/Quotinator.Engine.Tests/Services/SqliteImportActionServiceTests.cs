@@ -152,6 +152,31 @@ public class SqliteImportActionServiceTests
         Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Characters"));
     }
 
+    /// <summary>
+    /// Regression guard (found during T1 manual testing): <c>ImportResultResponse.BatchId</c> is a
+    /// <c>Guid</c>, which .NET serializes lowercase by default, but stored <c>BatchId</c> values are
+    /// always uppercase. A caller round-tripping the batch id straight from that response — the
+    /// documented workflow — must still find and apply the batch, not silently match nothing and
+    /// report success having applied zero actions.
+    /// </summary>
+    [TestMethod]
+    public async Task GetPagedAsync_And_ApplyBatchAsync_LowercaseBatchId_StillMatchesUppercaseStoredValue()
+    {
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote("d1111111-1111-4111-8111-111111111111", character: null)], batchId, DuplicateResolutionPolicy.NewestWins);
+        var lowercaseBatchId = batchId.ToString("D");
+
+        var page = await _service.GetPagedAsync(lowercaseBatchId, null, null, 1, 50);
+        Assert.AreEqual(2, page.TotalMatching, "Quote + Source actions for a brand-new quote with no character");
+
+        var result = await _service.ApplyBatchAsync(lowercaseBatchId);
+
+        Assert.IsNull(result, "Nothing pending — the whole batch must apply despite the lowercase batch id");
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes"));
+    }
+
     [TestMethod]
     public async Task ApplyBatchAsync_SomethingPending_ReturnsPendingIdsAndWritesNothing()
     {
