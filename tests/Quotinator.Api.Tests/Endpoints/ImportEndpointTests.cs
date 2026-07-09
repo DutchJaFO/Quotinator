@@ -92,6 +92,19 @@ public class ImportEndpointTests
     }
 
     [TestMethod]
+    public async Task Import_NoBodyAndNoBatchId_Returns422()
+    {
+        using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", content: null);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        StringAssert.Contains(body, "file to import or a batchId",
+            "Must be the specific file-or-batchId message, not the generic numeric-parameters fallback " +
+            "a bodyless request without this fix would otherwise fall through to under a real Kestrel host.");
+    }
+
+    [TestMethod]
     public async Task Import_MalformedSettingsJson_Returns422()
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
@@ -206,6 +219,20 @@ public class ImportEndpointTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(batchId, service.LastAppliedBatchId);
         Assert.IsNull(service.LastFileName, "batchId mode must never call the file-upload path");
+    }
+
+    [TestMethod]
+    public async Task Import_WithBatchId_NoBodyAtAll_StillWorks()
+    {
+        var service = new FakeQuoteImportService();
+        using var factory = CreateFactory(TestKey, service);
+        var batchId = Guid.NewGuid();
+
+        var response = await CreateClientWithKey(factory)
+            .PostAsync($"/api/v1/import?batchId={batchId}", content: null);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(batchId, service.LastAppliedBatchId);
     }
 
     [TestMethod]

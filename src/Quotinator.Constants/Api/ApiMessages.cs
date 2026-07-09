@@ -37,4 +37,5 @@ public static class ApiMessages
     public const string ImportActionBatchNotFullyDecided = "ErrorImportActionBatchNotFullyDecided";
     public const string ImportActionBatchInvalidState    = "ErrorImportActionBatchInvalidState";
     public const string ImportBatchNotFound              = "ErrorImportBatchNotFound";
+    public const string ImportFileOrBatchIdRequired      = "ErrorImportFileOrBatchIdRequired";
 }

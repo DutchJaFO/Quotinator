@@ -65,6 +65,7 @@
   "ErrorImportActionBatchNotFullyDecided": "Nog niet elke actie in deze batch heeft een beslissing. Beslis de resterende acties voordat je toepast.",
   "ErrorImportActionBatchInvalidState": "Deze batch kan niet worden verworpen — hij is al toegepast, al verworpen, of bevat geen vastgelegde acties.",
   "ErrorImportBatchNotFound": "Er bestaat geen importbatch met dat id.",
+  "ErrorImportFileOrBatchIdRequired": "Je moet ofwel een bestand om te importeren, ofwel een batchId om een al vastgelegde batch toe te passen, opgeven.",
   "AdminEndpointsHeading": "Beheereindpunten",
   "AdminEndpointsDescription": "Deze eindpunten vereisen een X-Api-Key-header die overeenkomt met de admin_api_key in de add-on-opties. Ze zijn niet beschikbaar als er geen sleutel is ingesteld.",
   "AdminPreviewSeedLabel": "Importvoorbeeld bekijken",

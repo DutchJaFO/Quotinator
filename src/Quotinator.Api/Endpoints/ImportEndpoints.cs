@@ -67,21 +67,28 @@ internal static class ImportEndpoints
                  "staged batch directly via `POST /api/v1/import/actions/apply`. " + ImportDescription);
 
         adminGroup.MapPost("/", (
-                [Description("The source file to import — Quotinator's canonical JSON schema, or a raw upstream format when `settings.converter` names a compiled converter. Omit when `batchId` is given instead.")] IFormFile? file,
-                [Description("Optional JSON text field: `converter`, `duplicateResolution` (policy object), `enrich` (boolean). Ignored when `batchId` is given.")] [FromForm] string? settings,
                 // string?, not Guid? — a nullable value-type query parameter throws BadHttpRequestException
                 // on any binding quirk (same reasoning as the yearFrom/yearTo/page/pageSize pattern in
                 // QuoteEndpoints.cs), which the global BadRequestExceptionHandler safety net then reports as
                 // a generic, misleading "numeric parameters" 422. Parsed explicitly below instead.
                 [Description("Applies an already-staged batch (from a prior `/import` or `/import/preview` call) instead of uploading a file — alias for `POST /import/actions/apply` that returns the same response shape the file-upload mode does.")] string? batchId,
+                // HttpRequest, not a bound IFormFile?/[FromForm] string? pair — this route accepts a request
+                // with no body at all in batchId mode. Minimal API's automatic form binding always requires
+                // a form content-type to even attempt binding; a request with no Content-Type/body fails
+                // that check at the framework's own routing/binding layer (not as a normal thrown exception),
+                // bypassing BadRequestExceptionHandler entirely and producing a bare, uninformative 400.
+                // Reading the request manually — only when batchId is absent — lets us return a clear 422
+                // instead of that generic 400, and never touches the body at all in batchId mode.
+                HttpRequest request,
                 IQuoteImportService importService,
                 IApiLocalizer localizer,
                 ILogger<Log> logger,
                 CancellationToken cancellationToken) =>
                     batchId is not null
                         ? HandleApplyBatchAsync(batchId, importService, localizer, logger, cancellationToken)
-                        : HandleImportAsync(file, settings, importService, localizer, logger, preview: false, cancellationToken))
+                        : HandleImportFromRequestAsync(request, importService, localizer, logger, cancellationToken))
              .DisableAntiforgery()
+             .Accepts<IFormFile>("multipart/form-data")
              .Produces<ImportResultResponse>(StatusCodes.Status200OK)
              .Produces<ImportResultResponse>(StatusCodes.Status202Accepted)
              .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
@@ -97,9 +104,9 @@ internal static class ImportEndpoints
                  "**batch mode** (`batchId` given, `file`/`settings` ignored) applies a batch already staged by a prior " +
                  "`/import` or `/import/preview` call — identical to `POST /import/actions/apply` but returning the same " +
                  "response envelope shape as file mode, for a consistent contract regardless of which mode was used. " +
-                 "Returns `404` if `batchId` doesn't exist. Either mode returns `200` when everything applied, or `202` " +
-                 "when any row needs a decision (adjust the file and re-import, or decide the ambiguous rows via " +
-                 "`POST /api/v1/import/actions/{id}/decide` then re-apply). " +
+                 "Returns `404` if `batchId` doesn't exist, or `422` if neither `file` nor `batchId` is given. Either mode " +
+                 "returns `200` when everything applied, or `202` when any row needs a decision (adjust the file and " +
+                 "re-import, or decide the ambiguous rows via `POST /api/v1/import/actions/{id}/decide` then re-apply). " +
                  ImportDescription);
 
         // ── #154: unified staging engine — /import/actions/* ────────────────────
@@ -287,6 +294,24 @@ internal static class ImportEndpoints
                 detail: string.Format(localizer[ApiMessages.ImportFileInvalid], ex.Message),
                 statusCode: StatusCodes.Status422UnprocessableEntity);
         }
+    }
+
+    // batchId mode dispatches without ever calling this — a request with neither batchId nor a form
+    // body reaches here and gets one clear validation message instead of the framework's own bare 400
+    // (Minimal API's automatic IFormFile?/[FromForm] binding fails at the routing layer, not via a
+    // thrown exception, for a request with no form content-type at all — see the route registration's
+    // comment on `HttpRequest request` for why binding is done manually instead).
+    private static async Task<IResult> HandleImportFromRequestAsync(
+        HttpRequest request, IQuoteImportService importService, IApiLocalizer localizer,
+        ILogger<Log> logger, CancellationToken cancellationToken)
+    {
+        if (!request.HasFormContentType)
+            return Results.Problem(detail: localizer[ApiMessages.ImportFileOrBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
+
+        var form = await request.ReadFormAsync(cancellationToken);
+        return await HandleImportAsync(
+            form.Files["file"], form["settings"].FirstOrDefault(),
+            importService, localizer, logger, preview: false, cancellationToken);
     }
 
     private static async Task<IResult> HandleApplyBatchAsync(
