@@ -409,13 +409,18 @@ internal static class Sql
         internal const string MarkBatchDiscarded =
             "UPDATE System_ImportActions SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE UPPER(BatchId) = UPPER(@batchId);";
 
-        /// <summary>Case-insensitive — see <see cref="SelectAllForBatch"/>'s remark for why.</summary>
+        /// <summary>
+        /// Case-insensitive on every filter — see <see cref="SelectAllForBatch"/>'s remark for why
+        /// <c>BatchId</c> needs it; <c>Status</c>/<c>EntityType</c> need the same treatment because
+        /// they arrive as raw query-string values (e.g. <c>?status=pending</c>), and a caller's
+        /// casing is never guaranteed to match the enum member name's exact casing as stored.
+        /// </summary>
         private static string BuildWhere(bool filterBatchId, bool filterStatus, bool filterEntityType)
         {
             var parts = new List<string>(3);
             if (filterBatchId)    parts.Add("UPPER(BatchId) = UPPER(@batchId)");
-            if (filterStatus)     parts.Add("Status = @status");
-            if (filterEntityType) parts.Add("EntityType = @entityType");
+            if (filterStatus)     parts.Add("UPPER(Status) = UPPER(@status)");
+            if (filterEntityType) parts.Add("UPPER(EntityType) = UPPER(@entityType)");
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
     }
@@ -446,8 +451,13 @@ internal static class Sql
         /// <summary>Single-conflict lookup by Id (#149's decide/undo/apply flows).</summary>
         internal static string SelectById => $"SELECT {SelectColumns} FROM System_ImportConflicts WHERE Id = @id;";
 
-        /// <summary>Every conflict sharing a BatchId, any status — #149's apply-batch readiness check needs the complete set, not a page.</summary>
-        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportConflicts WHERE BatchId = @batchId;";
+        /// <summary>
+        /// Every conflict sharing a BatchId, any status — #149's apply-batch readiness check needs the
+        /// complete set, not a page. Case-insensitive for the same reason as
+        /// <see cref="SystemImportActions.SelectAllForBatch"/>: a caller's batch id, round-tripped from
+        /// a response DTO, is never guaranteed to match stored casing.
+        /// </summary>
+        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportConflicts WHERE UPPER(BatchId) = UPPER(@batchId);";
 
         /// <summary>Stages a per-field decision (#149) — Status→Decided, MergedFields holds the decision payload. Idempotent: resubmitting overwrites the prior decision.</summary>
         internal const string MarkDecided =
@@ -461,11 +471,12 @@ internal static class Sql
         internal const string MarkResolved =
             "UPDATE System_ImportConflicts SET Status = @status, ResolvedAt = @resolvedAt, DateModified = @dateModified WHERE Id = @id;";
 
+        /// <summary>Case-insensitive on every filter — see <see cref="SelectAllForBatch"/>'s remark for why.</summary>
         private static string BuildWhere(bool filterBatchId, bool filterStatus)
         {
             var parts = new List<string>(2);
-            if (filterBatchId) parts.Add("BatchId = @batchId");
-            if (filterStatus)  parts.Add("Status = @status");
+            if (filterBatchId) parts.Add("UPPER(BatchId) = UPPER(@batchId)");
+            if (filterStatus)  parts.Add("UPPER(Status) = UPPER(@status)");
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
     }

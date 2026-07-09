@@ -267,6 +267,30 @@ public class SqliteImportActionServiceTests
     }
 
     [TestMethod]
+    public async Task GetPagedAsync_FilterByEntityTypeLowercase_StillMatchesUppercaseStoredValue()
+    {
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote("e1111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
+
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, "source", 1, 50);
+
+        Assert.IsTrue(page.Items.Count > 0);
+        Assert.IsTrue(page.Items.All(i => i.EntityType == "Source"));
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_FilterByStatusLowercase_StillMatchesStoredValue()
+    {
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote("f1111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
+
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), "decided", null, 1, 50);
+
+        Assert.IsTrue(page.Items.Count > 0);
+        Assert.IsTrue(page.Items.All(i => i.Status == "Decided"));
+    }
+
+    [TestMethod]
     public async Task DiscardBatchAsync_MarksActionsDiscarded_WritesNoDomainRows()
     {
         var batchId = Guid.NewGuid();

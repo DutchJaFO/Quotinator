@@ -241,4 +241,32 @@ public class SqliteConflictResolutionServiceTests
         var (quoteText, _, _) = await ReadResultAsync();
         Assert.AreEqual("Original quote text", quoteText, "Nothing should have been written — apply never ran.");
     }
+
+    [TestMethod]
+    public async Task GetPagedAsync_StatusFilterLowercase_StillMatchesStoredValue()
+    {
+        await SeedPendingConflictAsync();
+
+        var page = await _service.GetPagedAsync(null, "pending", 1, 10);
+
+        Assert.HasCount(1, page.Items, "A lowercase status filter must still match the uppercase-cased 'Pending' stored value.");
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_LowercaseBatchId_StillMatchesUppercaseStoredValue()
+    {
+        var conflictId = await SeedPendingConflictAsync();
+        var page = await _service.GetPagedAsync(null, ImportConflictStatus.Pending.ToString(), 1, 10);
+        var lowercaseBatchId = page.Items[0].BatchId.ToLowerInvariant();
+
+        await _service.DecideAsync(conflictId, new ConflictDecisionRequest
+        {
+            QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Keep },
+            Genres    = new GenresFieldDecision { Choice = FieldResolutionChoice.Keep },
+        });
+
+        var stillPending = await _service.ApplyBatchAsync(lowercaseBatchId);
+
+        Assert.IsNull(stillPending, "Nothing pending — apply must succeed despite the lowercase batch id.");
+    }
 }
