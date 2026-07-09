@@ -11,10 +11,6 @@ public static class ApiRoutes
     public const string AuditLog            = "/api/v1/admin/audit";
     public const string Import              = "/api/v1/import";
     public const string ImportPreview       = "/api/v1/import/preview";
-    public const string ImportConflicts       = "/api/v1/import/conflicts";
-    public const string ImportConflictsDecide = "/api/v1/import/conflicts/{id}/decide";
-    public const string ImportConflictsUndo   = "/api/v1/import/conflicts/{id}/undo";
-    public const string ImportConflictsApply  = "/api/v1/import/conflicts/apply";
     public const string ImportActions         = "/api/v1/import/actions";
     public const string ImportActionsDecide   = "/api/v1/import/actions/{id}/decide";
     public const string ImportActionsUndo     = "/api/v1/import/actions/{id}/undo";

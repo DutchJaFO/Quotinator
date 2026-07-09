@@ -273,12 +273,8 @@ builder.Services.AddSingleton<ICallerContext>(sp => sp.GetRequiredService<Initia
 builder.Services.AddSingleton<IInitiatorContext>(sp => sp.GetRequiredService<InitiatorContext>());
 builder.Services.AddSingleton<ISystemAuditWriter, SystemAuditWriter>();
 builder.Services.AddSingleton<ISystemAuditReader, SystemAuditReader>();
-builder.Services.AddSingleton<ISystemImportConflictWriter, SystemImportConflictWriter>();
-builder.Services.AddSingleton<ISystemImportConflictReader, SystemImportConflictReader>();
 builder.Services.AddSingleton<ISystemChangeLogWriter, SystemChangeLogWriter>();
 builder.Services.AddSingleton<ISystemChangeLogReader, SystemChangeLogReader>();
-builder.Services.AddSingleton<IConflictResolutionCoordinator, ConflictResolutionCoordinator>();
-builder.Services.AddSingleton<IConflictResolutionService, SqliteConflictResolutionService>();
 builder.Services.AddSingleton<ISystemImportActionWriter, SystemImportActionWriter>();
 builder.Services.AddSingleton<ISystemImportActionReader, SystemImportActionReader>();
 builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();

@@ -29,11 +29,6 @@ public static class ApiMessages
     public const string ImportUnknownConverter     = "ErrorImportUnknownConverter";
     public const string ImportFileInvalid          = "ErrorImportFileInvalid";
     public const string ImportEnrichNotImplemented = "ErrorImportEnrichNotImplemented";
-    public const string ConflictNotFound             = "ErrorConflictNotFound";
-    public const string ConflictAlreadyResolved      = "ErrorConflictAlreadyResolved";
-    public const string ConflictNotDecided           = "ErrorConflictNotDecided";
-    public const string ConflictAmbiguousFieldsUnresolved = "ErrorConflictAmbiguousFieldsUnresolved";
-    public const string ConflictBatchNotFullyDecided = "ErrorConflictBatchNotFullyDecided";
     public const string ImportActionNotFound             = "ErrorImportActionNotFound";
     public const string ImportActionAlreadyResolved      = "ErrorImportActionAlreadyResolved";
     public const string ImportActionNotDecided           = "ErrorImportActionNotDecided";

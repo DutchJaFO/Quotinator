@@ -45,16 +45,6 @@ public class RepositorySqlGuardTests
             ["SystemAudit.CountPaged(true,false)",   Sql.SystemAudit.CountPaged(true,   false)],
             ["SystemAudit.CountPaged(false,true)",   Sql.SystemAudit.CountPaged(false,  true)],
             ["SystemAudit.CountPaged(true,true)",    Sql.SystemAudit.CountPaged(true,   true)],
-
-            // Import-conflict factory methods — all four filter-flag combinations.
-            ["SystemImportConflicts.SelectPaged(false,false)", Sql.SystemImportConflicts.SelectPaged(false, false)],
-            ["SystemImportConflicts.SelectPaged(true,false)",  Sql.SystemImportConflicts.SelectPaged(true,  false)],
-            ["SystemImportConflicts.SelectPaged(false,true)",  Sql.SystemImportConflicts.SelectPaged(false, true)],
-            ["SystemImportConflicts.SelectPaged(true,true)",   Sql.SystemImportConflicts.SelectPaged(true,  true)],
-            ["SystemImportConflicts.CountPaged(false,false)",  Sql.SystemImportConflicts.CountPaged(false,  false)],
-            ["SystemImportConflicts.CountPaged(true,false)",   Sql.SystemImportConflicts.CountPaged(true,   false)],
-            ["SystemImportConflicts.CountPaged(false,true)",   Sql.SystemImportConflicts.CountPaged(false,  true)],
-            ["SystemImportConflicts.CountPaged(true,true)",    Sql.SystemImportConflicts.CountPaged(true,   true)],
         ];
     }
 }

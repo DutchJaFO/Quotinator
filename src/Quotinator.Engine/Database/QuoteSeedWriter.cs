@@ -218,49 +218,7 @@ internal static class QuoteSeedWriter
         }
     }
 
-    /// <summary>
-    /// Logs a detected duplicate as a <see cref="SystemImportConflict"/> row — every conflict, not only
-    /// pending ones. <see cref="DuplicateResolutionPolicy.Review"/> is the only policy left
-    /// <see cref="ImportConflictStatus.Pending"/>; every other policy is <see cref="ImportConflictStatus.Resolved"/>
-    /// at detection time, per #64's spec (the table is a full conflict log, not only a review queue).
-    /// </summary>
-    internal static async Task LogImportConflictAsync(
-        ISystemImportConflictWriter conflictWriter,
-        Guid batchId, string quoteId, DuplicateResolutionPolicy policy,
-        IReadOnlyDictionary<string, object?> existingFields, IReadOnlyDictionary<string, object?> incomingFields,
-        FieldMergeResult? mergeResult, SqliteConnection connection, SqliteTransaction? transaction = null,
-        string? existingBatchId = null)
-    {
-        var isPending = policy == DuplicateResolutionPolicy.Review;
-        var now       = DateTime.UtcNow;
-
-        string? mergedFieldsJson = null;
-        if (mergeResult is not null)
-        {
-            var perField = existingFields.Keys.ToDictionary(
-                field => field,
-                field => mergeResult.FieldsFromIncoming.Contains(field) ? "theirs" : "ours");
-            mergedFieldsJson = JsonSerializer.Serialize(perField);
-        }
-
-        var status = isPending ? ImportConflictStatus.Pending : ImportConflictStatus.Resolved;
-        await conflictWriter.WriteAsync(new SystemImportConflict
-        {
-            BatchId         = batchId.ToString("D").ToUpperInvariant(),
-            ExistingBatchId = existingBatchId,
-            EntityType      = "Quote",
-            EntityId        = quoteId,
-            ExistingValue   = JsonSerializer.Serialize(existingFields),
-            IncomingValue   = JsonSerializer.Serialize(incomingFields),
-            AppliedPolicy   = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-            Status          = new SafeValue<ImportConflictStatus?>(status.ToString(), status),
-            MergedFields    = mergedFieldsJson,
-            DetectedAt      = now,
-            ResolvedAt      = isPending ? null : now,
-        }, connection, transaction);
-    }
-
-    /// <summary>Result of <see cref="TryGetExistingFieldsAsync"/> — the existing quote's field map plus the batch that originally created it (#149's <c>ExistingBatchId</c>).</summary>
+    /// <summary>Result of <see cref="TryGetExistingFieldsAsync"/> — the existing quote's field map plus the batch that originally created it.</summary>
     internal readonly record struct ExistingQuoteFields(IReadOnlyDictionary<string, object?> Fields, string? ImportBatchId);
 
     /// <summary>

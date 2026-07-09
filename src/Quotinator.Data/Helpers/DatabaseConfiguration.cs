@@ -27,12 +27,11 @@ public abstract class DatabaseConfiguration
         // DuplicateResolutionPolicy lives in Quotinator.Data.Import (not a consumer's domain), same as
         // ChangeAction/InitiatorType above — belongs here, not in a subclass's RegisterDomainHandlers().
         // Previously only registered via QuotinatorDapperConfiguration, which meant Quotinator.Data.Tests
-        // (which only calls the base Configure()) could never write a SystemImportConflict row at all.
+        // (which only calls the base Configure()) could never write a SystemImportAction row at all.
         RegisterEnumHandler<DuplicateResolutionPolicy>();
-        // ImportConflictStatus/ImportActionStatus/ImportActionKind are closed sets this project's own
-        // coordinator logic assigns and transitions between (see ADR 008) — same category as
-        // DuplicateResolutionPolicy above, registered here rather than in a consumer's RegisterDomainHandlers().
-        RegisterEnumHandler<ImportConflictStatus>();
+        // ImportActionStatus/ImportActionKind are closed sets this project's own coordinator logic
+        // assigns and transitions between (see ADR 008) — same category as DuplicateResolutionPolicy
+        // above, registered here rather than in a consumer's RegisterDomainHandlers().
         RegisterEnumHandler<ImportActionStatus>();
         RegisterEnumHandler<ImportActionKind>();
         RegisterDomainHandlers();

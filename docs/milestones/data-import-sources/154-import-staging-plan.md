@@ -1,10 +1,10 @@
 # #154 — Unify import, preview, and seeding on one staging engine
 
-**Status:** In progress
+**Status:** 🟡 Implementation complete (Phase A + Phase B) — pending developer's final T1/T2 pass before closing
 **GitHub issue:** #154
 **Tiers required:** T1, T2
 **Depends on:** #149 (`FieldMergeResolver`, `UnresolvedFieldConflictException` — reused, not
-`System_ImportConflicts` itself, which this issue retires), #56 (audit/change log)
+`System_ImportConflicts` itself, which this issue retired in Phase B), #56 (audit/change log)
 
 ---
 
@@ -260,25 +260,29 @@ Full suite green (953 tests) after the change, no regressions.
 
 ### 7. Retiring #149 — Phase A (build to parity) then Phase B (delete), not simultaneous
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-**Phase A** — nothing deleted yet: Sections 1–6 above, plus new `/import/actions/*` endpoints
-additive alongside still-live `/conflicts/*`, plus the parity-proving test suite (Section 8). Do
-not start Phase B until this proves `/import/actions/*` fully replaces `/import/conflicts/*`,
-including per-field Keep/Replace/Custom decide, undo, batch-apply, and (new) discard — in both unit
-tests and T1/T2.
+**Phase A** — Sections 1–6 above, plus new `/import/actions/*` endpoints additive alongside
+`/conflicts/*`, plus the parity-proving test suite (Section 8) — done, T1/T2 confirmed.
 
-**Phase B** — one focused commit, after Phase A merges and passes T1/T2: delete
-`SystemImportConflict` entity, `ConflictResolutionCoordinator`/`IConflictResolutionCoordinator`,
-`ConflictNotFoundException`/`ConflictStateException` (keep `FieldMergeResolver`/
-`UnresolvedFieldConflictException` — reused by the new `DecideAsync`),
-`ISystemImportConflictReader`/`Writer` + implementations, `SystemImportConflictPageResult`,
-`SqliteConflictResolutionService`/`IConflictResolutionService`, `ConflictSummaryResponse`/
-`ConflictPageResponse`/`ConflictBatchStatusResponse`, the `/conflicts/*` route registrations, the
-`NoOpSystemImportConflictWriter` test double, and their test files. Leave
-`ConflictDecisionRequest`/`FieldDecision`/`GenresFieldDecision` — absorbed, not deleted. Leave the
-`System_ImportConflicts` migration/baseline entries alone — squashing them is **#155's call**, not
-this issue's (see "Not in scope" below).
+**Phase B** — one focused commit: deleted `SystemImportConflict` entity,
+`ConflictResolutionCoordinator`/`IConflictResolutionCoordinator`, `ConflictNotFoundException`/
+`ConflictStateException` (kept `FieldMergeResolver`/`UnresolvedFieldConflictException` — reused by
+`DecideAsync`), `ISystemImportConflictReader`/`Writer` + implementations,
+`SystemImportConflictPageResult`, `SqliteConflictResolutionService`/`IConflictResolutionService`,
+`ConflictSummaryResponse`/`ConflictPageResponse`/`ConflictBatchStatusResponse`, the `/conflicts/*`
+route registrations, the `NoOpSystemImportConflictWriter` test double (already fully orphaned), and
+their test files (`ImportConflictEndpointsTests`, `FakeConflictResolutionService`,
+`ConflictResolutionCoordinatorTests`, `SystemImportConflictWriterReaderTests`,
+`SqliteConflictResolutionServiceTests`) — 20 files deleted in total. Also removed now-dead
+supporting code: `QuoteSeedWriter.LogImportConflictAsync` (its only remaining caller was the
+deleted `SqliteConflictResolutionServiceTests`), the `ImportConflictStatus` enum (defined on the
+deleted entity, referenced nowhere else), the `ApiRoutes.ImportConflicts*`/`ApiMessages.Conflict*`
+constants, the `/conflicts/*` i18n keys (all three locales), and the `/conflicts/*` rows in
+`README.md`/`addon/DOCS.md`/`RestApi.razor`. Kept `ConflictDecisionRequest`/`FieldDecision`/
+`GenresFieldDecision` — absorbed, not deleted. Kept the `System_ImportConflicts` migration/baseline
+entries and its schema-drift test untouched — squashing them is **#155's call**, not this issue's
+(see "Not in scope" below); the table now simply has zero C# code reading or writing it.
 
 ### 8. Tests
 
@@ -309,9 +313,8 @@ tests, 0 failures, 0 warnings.
   (not-found/not-decidable/ambiguous/already-resolved/not-decided/invalid-state). — **done**.
   Updated `ImportEndpointTests` for the `200`/`202`-split contract (`Import_ResultHasPendingConflict_Returns202`,
   parameterised over both `/import` and `/import/preview`) — **done**.
-- Deleted alongside Phase B (not before): `SystemImportConflictWriterReaderTests`,
-  `ConflictResolutionCoordinatorTests`, `SqliteConflictResolutionServiceTests`,
-  `ImportConflictEndpointsTests`.
+- Deleted in Phase B: `SystemImportConflictWriterReaderTests`, `ConflictResolutionCoordinatorTests`,
+  `SqliteConflictResolutionServiceTests`, `ImportConflictEndpointsTests`, `FakeConflictResolutionService`.
 
 ### 9. DTOs / i18n / documentation
 
@@ -357,6 +360,7 @@ import/seed path and is exercised separately during Phase A.
 | 17 | ✅ | T2 — same cycle in Docker, including a fresh-seed startup with one intentionally ambiguous source file | Live | `docker build -f docker/Dockerfile` succeeded; container run with a mounted `/data/imports/` containing an ambiguous file and `Quotinator__DefaultConflictPolicy=review` reproduced the identical staged-batch/startup-not-blocked behaviour seen under `dotnet run`; `/health`, `/version`, `/quotes/random`, `/quotes/search`, and the full decide→apply cycle against `/import/actions/*` all verified against the running container |
 | 18 | 🟡 | **Phase B gate**: `/import/actions/*` demonstrated full parity with `/import/conflicts/*` in both unit tests and T1/T2 before any #149 code is deleted | Live + Unit test | Every capability `/import/conflicts/*` has is now covered by `/import/actions/*` (list/decide/undo/apply, plus discard which #149 never had) in both unit tests and live T1-equivalent/T2 runs. Held at 🟡, not ✅, only because row 16's T1 was run via `dotnet run` rather than Visual Studio itself — otherwise this gate is met. Proceeding to Task 35 (Phase B) is the developer's call given that distinction |
 | 19 | ✅ | `POST /import`'s `batchId`-mode alias (row 16's VS pass also flagged this as missing, not just the casing bug); `status`/`entityType` query filters on `/import/actions`, and `batchId`/`status` on the still-live `/import/conflicts`, all match case-insensitively | Unit test | `batchId`-mode: `ImportEndpointTests` (200/401/404/202) + `QuoteImportServiceTests.ApplyStagedBatchAsync_*`, full suite green (237/237 at the time). Case-insensitivity: `Sql.SystemImportActions`/`Sql.SystemImportConflicts`'s `BuildWhere`/`SelectAllForBatch` changed to `UPPER(col) = UPPER(@param)` for `Status`/`EntityType`/`BatchId`; new regression tests `GetPagedAsync_FilterByEntityTypeLowercase_StillMatchesUppercaseStoredValue`, `GetPagedAsync_FilterByStatusLowercase_StillMatchesStoredValue` (`SqliteImportActionServiceTests`), `GetPagedAsync_StatusFilterLowercase_StillMatchesStoredValue`, `ApplyBatchAsync_LowercaseBatchId_StillMatchesUppercaseStoredValue` (`SqliteConflictResolutionServiceTests`). Red/green verified by reverting `Sql.cs` and confirming the new tests failed. Full suite: 988/988 across all 9 test projects |
+| 20 | ✅ | **Phase B**: `/import/conflicts/*` and all #149 code deleted (20 files); build clean; full suite green; live smoke test confirms `/conflicts` is gone and `/import/actions` + other endpoints are unaffected | Unit test + Live | `dotnet clean` + `dotnet build --configuration Release` → 0/0 (a stale incremental build initially masked 6 dangling `<see cref>` XML-doc warnings in surviving files — caught and fixed only after a genuinely clean rebuild). `dotnet test --configuration Release` → 938/938 across all 9 test projects (988 minus the ~50 tests belonging to the 5 deleted test files). Live: started `dotnet run` against the built Release binaries — `GET /api/v1/import/conflicts` → `404`, `GET /api/v1/import/actions` → `200` with live staged-action data, `GET /api/v1/health`/`GET /api/v1/quotes/random`/`GET /scalar/v1` → `200` |
 
 ---
 

@@ -4,10 +4,9 @@ namespace Quotinator.Data.Repositories;
 
 /// <summary>Writes import-action rows to the <c>System_ImportActions</c> table.</summary>
 /// <remarks>
-/// Mirrors <see cref="ISystemImportConflictWriter"/>'s shape: the connection overload is used by
-/// callers (e.g. staging) that already hold an open connection, so the write participates in the
-/// same transaction as the triggering stage/apply operation; the no-connection overload is for
-/// callers with no connection of their own.
+/// The connection overload is used by callers (e.g. staging) that already hold an open connection,
+/// so the write participates in the same transaction as the triggering stage/apply operation; the
+/// no-connection overload is for callers with no connection of their own.
 /// </remarks>
 public interface ISystemImportActionWriter
 {

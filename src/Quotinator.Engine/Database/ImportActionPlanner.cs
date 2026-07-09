@@ -93,10 +93,8 @@ internal static class ImportActionPlanner
                 _ => q,
             };
 
-            // Same policy-to-status mapping QuoteSeedWriter.LogImportConflictAsync already used for
-            // #149's conflict log — Review is the only policy left Pending; every other policy is
-            // Decided at detection time, with the final resolved values already computed so apply
-            // never needs policy logic.
+            // Review is the only policy left Pending; every other policy is Decided at detection
+            // time, with the final resolved values already computed so apply never needs policy logic.
             var isPending = policy == DuplicateResolutionPolicy.Review;
             var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 

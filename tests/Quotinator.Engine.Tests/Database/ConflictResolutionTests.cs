@@ -226,9 +226,9 @@ public class ConflictResolutionTests
     // removed. The equivalent through-the-seeding-pipeline classification coverage now lives in
     // ImportActionPlannerTests (Add/Modify/Pending-Modify classification) and
     // SqliteImportActionServiceTests (apply/decide). System_ImportConflicts and
-    // SqliteConflictResolutionService (#149) are still live during Phase A and still have their own
-    // dedicated coverage in SqliteConflictResolutionServiceTests, which now manufactures its own
-    // pending-conflict fixture directly rather than relying on seeding to produce one.
+    // SqliteConflictResolutionService (#149) have been removed entirely (#154 Phase B) — the
+    // System_ImportConflicts table's migration/baseline history is untouched (squashing it is #155's
+    // call), but no C# code reads or writes it any more.
 
     // ── #56: System_ChangeLog ────────────────────────────────────────────────
 

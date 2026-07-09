@@ -14,9 +14,7 @@ namespace Quotinator.Data.Import;
 /// batch outright — is fully generic.
 /// </summary>
 /// <remarks>
-/// This is a new, separate coordinator from <see cref="IConflictResolutionCoordinator"/> (#149),
-/// not a generalization of it — #149's shipped, verified code is untouched. Nothing in this
-/// coordinator knows what a "Quote" is: <see cref="SystemImportAction.ExistingValue"/>/
+/// Nothing in this coordinator knows what a "Quote" is: <see cref="SystemImportAction.ExistingValue"/>/
 /// <see cref="SystemImportAction.IncomingValue"/>/<see cref="SystemImportAction.MergedFields"/> are
 /// never deserialized here; they stay opaque JSON.
 /// </remarks>

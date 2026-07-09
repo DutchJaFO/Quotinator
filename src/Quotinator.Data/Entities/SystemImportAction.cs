@@ -10,14 +10,12 @@ namespace Quotinator.Data.Entities;
 /// This is what makes a staged batch fully inspectable and undoable before (and after) it commits.
 /// </summary>
 /// <remarks>
-/// RecordBase-shaped from creation (#154) — unlike <see cref="SystemImportConflict"/>, this table
-/// never existed before ADR 002, so no create-then-retrofit migration pair is needed.
+/// RecordBase-shaped from creation (#154).
 /// <c>ExistingValue</c>/<c>IncomingValue</c>/<c>MergedFields</c> are opaque JSON blobs — this
 /// project never deserializes them; the consuming project (e.g. Quotinator.Engine) produces and
 /// later interprets that content, since this project has no dependency on any specific domain
-/// schema. Not a candidate for <see cref="Quotinator.Data.Helpers.JsonHandler{T}"/>, for the same
-/// reason as <see cref="SystemImportConflict"/>'s identically-named fields: the concrete shape is
-/// owned by a consumer project (e.g. <c>Quotinator.Core.Models</c>/<c>Quotinator.Engine.Models</c>),
+/// schema. Not a candidate for <see cref="Quotinator.Data.Helpers.JsonHandler{T}"/>: the concrete
+/// shape is owned by a consumer project (e.g. <c>Quotinator.Core.Models</c>/<c>Quotinator.Engine.Models</c>),
 /// and typing this property that way would require <c>Quotinator.Data</c> to reference it, which
 /// ADR 004 forbids. <see cref="EntityType"/> is likewise free-text, entirely caller-defined — Data
 /// never branches on its value beyond storing/filtering by it.
