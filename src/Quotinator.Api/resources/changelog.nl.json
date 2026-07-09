@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143, 149, 152],
+    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143, 149, 152, 154],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -19,7 +19,8 @@
       "Dubbele citaten die tijdens het importeren worden gevonden, kunnen nu veld voor veld worden samengevoegd in plaats van alleen volledig behouden of vervangen te worden, en elk aangetroffen duplicaat wordt nu vastgelegd voor latere controle.",
       "Het standaardgedrag bij dubbele citaten is gewijzigd van het behouden van de eerst geziene versie naar het behouden van de nieuwste versie — wat aansluit bij wat de meeste mensen zouden verwachten wanneer een bronbestand wordt gecorrigeerd of bijgewerkt.",
       "Citaten kunnen nu één bestand tegelijk worden geïmporteerd (JSON of CSV) via een nieuw API-eindpunt, met een voorbeeldmodus die precies laat zien wat er zou gebeuren voordat er iets wordt weggeschreven.",
-      "Dubbele citaten die zijn gemarkeerd voor handmatige controle kunnen nu veld voor veld worden opgelost, waarbij je kiest welke kant wint of je eigen waarde opgeeft — wijzigingen worden pas doorgevoerd zodra elk conflict uit hetzelfde importbestand is beslist."
+      "Dubbele citaten die zijn gemarkeerd voor handmatige controle kunnen nu veld voor veld worden opgelost, waarbij je kiest welke kant wint of je eigen waarde opgeeft — wijzigingen worden pas doorgevoerd zodra elk conflict uit hetzelfde importbestand is beslist.",
+      "Een import die nog beoordeeld moet worden, kan nu later worden afgerond door naar de batch te verwijzen, zonder het bestand opnieuw te hoeven uploaden."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -34,24 +35,27 @@
       "`POST /api/v1/admin/database/reseed` en `.../reset` accepteren nu een queryparameter `forceSourceRefresh` om het ververinterval voor die aanroep te omzeilen",
       "`GET /api/v1/admin/database/seed/preview` en `POST /api/v1/admin/sources/refresh` rapporteren nu per bron het ververresultaat, het tijdstip van laatste verversing en — voor een bestand dat niet kon worden verwerkt — een gelokaliseerde reden",
       "Vijf configureerbare beleidsregels voor het oplossen van duplicaten — `skip`, `newest-wins`, `merge-ours`, `merge-theirs`, `review` — in te stellen via `Quotinator__DefaultConflictPolicy`, met overschrijvingen per entiteitstype en een overschrijving per bron via het manifest",
-      "Nieuwe tabel `System_ImportConflicts` legt elk duplicaat vast dat tijdens het seeden wordt aangetroffen — welk beleid is toegepast, en (voor de twee samenvoegbeleidsregels) van welke kant de waarde van elk veld afkomstig is",
+      "Nieuwe tabel `System_ImportActions` legt elke actie vast die een gefaseerde import- of seedrun zou uitvoeren, niet alleen echte duplicaten, zodat een gefaseerde batch kan worden beoordeeld, beslist en toegepast of verworpen voordat er iets wordt weggeschreven",
       "`ImportBatches` registreert nu welk beleid voor het oplossen van duplicaten actief was voor elke importbatch",
       "Nieuw eindpunt `POST /api/v1/import` importeert één bronbestand (JSON, of CSV via een nieuwe convertorplug-in), waarbij dezelfde duplicaatdetectie wordt gebruikt als bij het seeden bij het opstarten — ondersteunt een overschrijving van `duplicateResolution` per aanvraag en een optionele `converter`-keuze",
       "Nieuw eindpunt `POST /api/v1/import/preview` voert dezelfde importpijplijn uit, maar maakt alle wijzigingen ongedaan, zodat conflicten en fouten kunnen worden beoordeeld voordat er iets wordt vastgelegd",
       "Manifestbestandsvermeldingen (`data/sources/manifest.json` en gebruikersimportmanifesten) kunnen nu hun eigen `duplicateResolution`-overschrijving opgeven, die voorrang heeft op de manifestbrede en geconfigureerde standaardwaarden",
       "Citaten, bronnen, personages en personen hebben nu een `IsComplete`-markering en een `NoValueKnown`-lijst van bevestigd lege velden in de database, als basis voor toekomstige datakwaliteitstools; nog niet beschikbaar via de API of het beheerpaneel, en wordt nooit teruggezet wanneer een bestaand record wordt overschreven door een duplicaatoplossingsbeleid",
       "Een nieuw intern wijzigingslogboek registreert elk citaat, elke bron en elk personage dat tijdens het seeden of importeren is aangemaakt of gewijzigd, inclusief welke importbatch het heeft geïntroduceerd — als basis voor een toekomstig wijzigingsoverzicht; nog niet beschikbaar via de API of het beheerpaneel",
-      "Nieuw eindpunt `GET /api/v1/import/conflicts` toont een gepagineerde lijst van importconflicten, filterbaar op status en importbatch, met de veldwaarden van beide kanten en welke velden echt een beslissing nodig hebben",
-      "Nieuw eindpunt `POST /api/v1/import/conflicts/{id}/decide` legt een keuze per veld (behouden/vervangen/eigen waarde) vast voor één conflict, zonder nog iets weg te schrijven",
-      "Nieuw eindpunt `POST /api/v1/import/conflicts/{id}/undo` maakt een vastgelegde beslissing ongedaan en zet het conflict terug naar in behandeling",
-      "Nieuw eindpunt `POST /api/v1/import/conflicts/apply` past alle conflicten van één importbestand in één keer toe, atomisch, zodra voor elk ervan een beslissing is vastgelegd"
+      "Nieuw eindpunt `GET /api/v1/import/actions` toont een gepagineerde lijst van gefaseerde importacties (citaten, bronnen, personages, personen), filterbaar op status, importbatch en entiteitstype — laat zien welke velden nog een beslissing nodig hebben en hoe samenhangende acties binnen dezelfde batch met elkaar verbonden zijn",
+      "Nieuwe eindpunten `POST /api/v1/import/actions/{id}/decide` en `.../undo` leggen een keuze per veld (behouden/vervangen/eigen waarde) vast voor één gefaseerde actie, of maken die ongedaan",
+      "Nieuw eindpunt `POST /api/v1/import/actions/apply` past alle beslisde acties van een batch in één keer atomisch toe, zodra voor elk ervan een beslissing is vastgelegd",
+      "Nieuw eindpunt `POST /api/v1/import/actions/discard` verwerpt alle gefaseerde acties van een batch in één keer, zonder iets weg te schrijven",
+      "`POST /api/v1/import` kan nu een reeds gefaseerde batch direct toepassen door naar de batch-id te verwijzen, in plaats van steeds opnieuw het bestand te moeten uploaden"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
       "API-antwoorden bevatten niet langer eigenschappen met een `null`-waarde, wat de omvang van de respons verkleint",
       "Het standaardbeleid voor het oplossen van duplicaten is gewijzigd van `skip` (de eerst geziene versie behouden) naar `newest-wins` (de nieuwste versie behouden) wanneer niets dit overschrijft",
       "Interne audit- en duplicaatconflictgegevens hebben nu dezelfde aanmaak-/wijzigingsregistratie als elk ander databaserecord, voor consistentie; bestaande installaties worden bij de volgende opstart automatisch bijgewerkt, zonder dat actie nodig is",
-      "Importeindpunten (`POST /api/v1/import`, `.../import/preview`) zijn verplaatst van onder `/api/v1/quotes` naar hun eigen `/api/v1/import`-routegroep, samen met de conflictbeoordelingseindpunten, allemaal onder een nieuwe `Import`-OpenAPI-tag"
+      "Importeindpunten (`POST /api/v1/import`, `.../import/preview`) zijn verplaatst van onder `/api/v1/quotes` naar hun eigen `/api/v1/import`-routegroep, allemaal onder een nieuwe `Import`-OpenAPI-tag",
+      "`POST /api/v1/import` en `.../import/preview` geven nu `200` terug wanneer alles netjes wordt (of zou worden) toegepast, of `202` wanneer een rij een beslissing nodig heeft, in plaats van altijd `200` terug te geven",
+      "`POST /api/v1/import/preview` faseert nu een echte, inspecteerbare batch in plaats van de wijzigingen ongedaan te maken — in beide gevallen wordt er niets weggeschreven, maar de gefaseerde batch kan achteraf worden bekeken via `GET /api/v1/import/actions?batchId=`"
     ],
     "fixed": [
       "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor elk gebundeld bestand, of het nu extern is aangeleverd met een manifest-URL of intern is samengesteld) en bewaren de bron-URL; voorheen werd elke geseede batch onjuist geregistreerd",
@@ -60,7 +64,9 @@
       "CVE-2026-49451: `Microsoft.OpenApi` (transitief via `Microsoft.AspNetCore.OpenApi`) had een stack-overflow-kwetsbaarheid bij het parsen van OpenAPI-documenten met circulaire schemaverwijzingen; Quotinator genereert alleen zijn eigen OpenAPI-document en parset nooit onvertrouwde documenten, dus het kwetsbare pad was onbereikbaar — desondanks gepatcht naar 2.7.5 via een directe package-override",
       "Een volledige databaseherinitialisatie (`POST /api/v1/admin/database/reset`) wist niet langer het auditlogboek; de audittabel (nu `System_AuditEntries` genoemd) blijft altijd behouden bij een reset, net als al het geval was bij een normale reseed. Interne tabellen die essentieel zijn voor de app gebruiken nu een `System_`-naamsvoorvoegsel, zodat ze automatisch beschermd zijn tegen een reset, in plaats van dat de app elke beschermde tabel bij naam moet kennen",
       "Een databaseherinitialisatie maakt nu eerst een veiligheidsback-up en herstelt deze automatisch als de reset halverwege mislukt, in plaats van de database mogelijk in een kapotte, half-opgebouwde staat achter te laten",
-      "De OpenAPI-specificatie markeert nu elk import- en conflictbeoordelingseindpunt dat schrijft correct als vereist `X-Api-Key`; voorheen toonden alleen `Admin`-getagde eindpunten deze vereiste, waardoor deze nooit als beveiligd verschenen in de Scalar-UI"
+      "De OpenAPI-specificatie markeert nu elk schrijvend import- en actiebeoordelingseindpunt correct als vereist `X-Api-Key`; voorheen toonden alleen `Admin`-getagde eindpunten deze vereiste, waardoor deze nooit als beveiligd verschenen in de Scalar-UI",
+      "De queryfilters `status`, `entityType` en `batchId` bij `GET /api/v1/import/actions` vergeleken hoofdlettergevoelig, waardoor een kleingeschreven waarde (bijv. `?status=pending`) ten onrechte geen resultaten opleverde, terwijl er wel passende gegevens bestonden",
+      "`POST /api/v1/import` zonder bestand, zonder instellingen en zonder batch-id gaf een weinig informatieve algemene foutmelding terug, in plaats van een duidelijke melding dat óf een bestand óf een batch-id vereist is"
     ]
   },
   "releases": [

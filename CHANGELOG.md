@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-06 21:53 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-09 20:40 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The default behaviour for duplicate quotes changed from keeping the first version seen to keeping the newest version — matching what most people would expect when a source file is corrected or updated.
 - Quotes can now be imported one file at a time (JSON or CSV) through a new API endpoint, with a preview mode that shows exactly what would happen before anything is written.
 - Duplicate quotes flagged for manual review can now be resolved field by field, choosing which side wins or supplying your own value — changes only take effect once every conflict from the same import file has been decided.
+- An import that needs review can now be finished later by referencing its batch, without needing to re-upload the file.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -32,24 +33,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `POST /api/v1/admin/database/reseed` and `.../reset` now accept a `forceSourceRefresh` query parameter to bypass the refresh interval for that call
 - `GET /api/v1/admin/database/seed/preview` and `POST /api/v1/admin/sources/refresh` now report each source's refresh outcome, last-refreshed time, and — for a file that failed to parse — a localised reason
 - Five configurable duplicate-resolution policies — `skip`, `newest-wins`, `merge-ours`, `merge-theirs`, `review` — set via `Quotinator__DefaultConflictPolicy`, with per-entity-type overrides and a per-source manifest override
-- New `System_ImportConflicts` table records every duplicate detected during seeding — which policy was applied, and (for the two merge policies) which side each field's value came from
+- New `System_ImportActions` table records every action a staged import or seed run would take, not only genuine duplicates, so a staged batch can be reviewed, decided, and applied or discarded before anything is written
 - `ImportBatches` now records which conflict-resolution policy was active for each import batch
 - New `POST /api/v1/import` endpoint imports a single source file (JSON, or CSV via a new converter plugin), reusing the same duplicate-detection engine as startup seeding — supports a per-request `duplicateResolution` override and an optional `converter` selection
 - New `POST /api/v1/import/preview` endpoint runs the identical import pipeline but rolls back every write, so conflicts and errors can be reviewed before committing
 - Manifest file entries (`data/sources/manifest.json` and user import manifests) can now declare their own `duplicateResolution` override, taking priority over the manifest-wide and configured defaults
 - Quotes, sources, characters, and people now have an `IsComplete` flag and a `NoValueKnown` list of confirmed-empty fields in the database, laying the groundwork for future data-quality tooling; not yet exposed via the API or management UI, and never reset when an existing record is rewritten by a duplicate-resolution policy
 - A new internal change log records every quote, source, and character created or modified during seeding and import, including which import batch introduced it — laying the groundwork for a future change-history view; not yet exposed via the API or management UI
-- New `GET /api/v1/import/conflicts` endpoint lists import conflicts, paginated, filterable by status and import batch, showing both sides' field values and which fields genuinely need a decision
-- New `POST /api/v1/import/conflicts/{id}/decide` endpoint stages a per-field keep/replace/custom-value decision for one conflict without writing anything yet
-- New `POST /api/v1/import/conflicts/{id}/undo` endpoint reverts a staged decision back to pending
-- New `POST /api/v1/import/conflicts/apply` endpoint applies every conflict from one import file at once, atomically, once every one of them has a decision recorded
+- New `GET /api/v1/import/actions` endpoint lists staged import actions (quotes, sources, characters, people), paginated, filterable by status, import batch, and entity type — showing which fields still need a decision and how related actions in the same batch connect to each other
+- New `POST /api/v1/import/actions/{id}/decide` and `.../undo` endpoints stage or revert a per-field keep/replace/custom-value decision for one staged action
+- New `POST /api/v1/import/actions/apply` endpoint applies every decided action in a batch at once, atomically, once every one of them has a decision recorded
+- New `POST /api/v1/import/actions/discard` endpoint discards every staged action in a batch at once, writing nothing
+- `POST /api/v1/import` can now apply an already-staged batch directly by referencing its batch id, instead of always requiring the file to be uploaded again
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
 - API responses no longer include properties with a `null` value, reducing response payload size
 - The default duplicate-resolution policy changed from `skip` (keep the first version seen) to `newest-wins` (keep the latest version) when nothing overrides it
 - Internal audit and duplicate-conflict records now carry the same creation/modification tracking as every other database record, for consistency; existing installations upgrade automatically on next startup with no action needed
-- Import endpoints (`POST /api/v1/import`, `.../import/preview`) moved out from under `/api/v1/quotes` into their own `/api/v1/import` route group, alongside the conflict-review endpoints, all under a new `Import` OpenAPI tag
+- Import endpoints (`POST /api/v1/import`, `.../import/preview`) moved out from under `/api/v1/quotes` into their own `/api/v1/import` route group, all under a new `Import` OpenAPI tag
+- `POST /api/v1/import` and `.../import/preview` now return `200` when everything applies (or would apply) cleanly, or `202` when any row needs a decision, instead of always returning `200`
+- `POST /api/v1/import/preview` now stages a real, inspectable batch instead of rolling back its writes — nothing is written either way, but the staged batch can be reviewed afterward via `GET /api/v1/import/actions?batchId=`
 
 ### Fixed
 - ImportBatch rows created during seeding now record the correct `Type` (`Seed` for any bundled file, whether externally sourced with a manifest URL or internally authored) and persist the source URL; previously every seeded batch was recorded incorrectly
@@ -58,7 +62,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - CVE-2026-49451: `Microsoft.OpenApi` (transitive via `Microsoft.AspNetCore.OpenApi`) had a stack-overflow vulnerability when parsing OpenAPI documents with circular schema references; Quotinator only generates its own OpenAPI document and never parses untrusted ones, so the vulnerable path was unreachable — patched to 2.7.5 via a direct package override regardless
 - A full database reset (`POST /api/v1/admin/database/reset`) no longer wipes the audit log; the audit table (now named `System_AuditEntries`) always survives a reset, matching the behaviour a normal reseed already had. Internal tables essential to the app now use a `System_` name prefix so they are automatically protected from a reset, rather than the app needing to know each protected table by name
 - Resetting the database now takes a safety backup first and automatically restores it if the reset fails partway through, instead of potentially leaving the database in a broken, half-rebuilt state
-- The OpenAPI spec now correctly marks every import and conflict-review write endpoint as requiring `X-Api-Key`; previously only `Admin`-tagged endpoints showed this requirement, so these never appeared as protected in the Scalar UI
+- The OpenAPI spec now correctly marks every import and staged-action-review write endpoint as requiring `X-Api-Key`; previously only `Admin`-tagged endpoints showed this requirement, so these never appeared as protected in the Scalar UI
+- `status`, `entityType`, and `batchId` query filters on `GET /api/v1/import/actions` matched case-sensitively, so a lowercase value (e.g. `?status=pending`) silently returned no results even though matching data existed
+- `POST /api/v1/import` with no file, no settings, and no batch id returned an uninformative generic error instead of a clear message stating that either a file or a batch id is required
 
 ---
 
