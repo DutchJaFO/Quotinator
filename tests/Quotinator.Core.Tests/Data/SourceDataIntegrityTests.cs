@@ -110,6 +110,31 @@ public class SourceDataIntegrityTests
         Assert.IsFalse(result.IsValid, "A manifest entry with both github and url should fail schema validation");
     }
 
+    /// <summary>A manifest file entry may declare `converterOptions` (an opaque, converter-specific object) alongside `converter`.</summary>
+    [TestMethod]
+    public void Manifest_EntryWithConverterOptions_PassesSchemaValidation()
+    {
+        var manifest = new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]             = "a.json",
+                ["name"]             = "a",
+                ["url"]              = "https://example.com/a",
+                ["converter"]        = "basic-json-array",
+                ["converterOptions"] = new JsonObject
+                {
+                    ["propertyMapping"] = new JsonObject { ["source"] = "movie", ["date"] = "year" }
+                }
+            })
+        };
+
+        var element = JsonSerializer.Deserialize<JsonElement>(manifest.ToJsonString());
+        var result  = ManifestSchema.Evaluate(element, StrictOptions);
+
+        Assert.IsTrue(result.IsValid, FormatErrors("synthetic manifest with converterOptions", result));
+    }
+
     // ── Manifest structure ────────────────────────────────────────────────────
 
     /// <summary>Every file listed in manifest.json exists on disk.</summary>

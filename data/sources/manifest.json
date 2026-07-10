@@ -17,7 +17,13 @@
         "path": "data/data.json",
         "branch": "master"
       },
-      "converter": "nikhilnamal17"
+      "converter": "basic-json-array",
+      "converterOptions": {
+        "propertyMapping": {
+          "source": "movie",
+          "date": "year"
+        }
+      }
     },
     {
       "file": "vilaboim_movie-quotes.json",
@@ -28,7 +34,14 @@
         "path": "movie-quotes.json",
         "branch": "master"
       },
-      "converter": "vilaboim"
+      "converter": "regex-array",
+      "converterOptions": {
+        "pattern": "^\"(.+?)\"\\s+(.+)$",
+        "groupMapping": {
+          "quote": 1,
+          "source": 2
+        }
+      }
     }
   ]
 }

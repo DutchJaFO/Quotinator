@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Quotinator.Data.Import;
@@ -18,6 +19,14 @@ public class SourceImportSettingsDto
     /// </summary>
     [JsonPropertyName("converter")]
     public string? Converter { get; init; }
+
+    /// <summary>
+    /// Configuration passed through verbatim to the named <see cref="Converter"/>'s
+    /// <c>IQuoteSourceConverter.ConvertAsync</c> — shape is entirely converter-specific, so this stays
+    /// an opaque, undeserialized payload here. Only meaningful alongside <see cref="Converter"/>.
+    /// </summary>
+    [JsonPropertyName("converterOptions")]
+    public JsonElement? ConverterOptions { get; init; }
 
     /// <summary>
     /// Duplicate-resolution policy overriding the next tier down (a manifest's own top-level policy,

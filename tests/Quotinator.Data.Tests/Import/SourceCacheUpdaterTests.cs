@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Quotinator.Data.Import;
 
@@ -270,6 +271,60 @@ public class SourceCacheUpdaterTests
         Assert.AreEqual("RAW CONTENT", await File.ReadAllTextAsync(Path.Combine(_internalDir, "a.json")));
     }
 
+    // A SeedFile's ConverterOptions is passed through verbatim to ConvertAsync.
+    [TestMethod]
+    public async Task ResolveAsync_ConverterWithOptions_PassesOptionsToConvertAsync()
+    {
+        var converterOptions = JsonSerializer.Deserialize<JsonElement>("""{"propertyMapping": {"source": "movie"}}""");
+        var file  = new SeedFile("/bundled/a.json", null, "https://example.com/a.json", Converter: "upper", ConverterOptions: converterOptions);
+        var batch = Batch(SeedBatchOrigin.Bundled, file);
+        var fakeConverter = new FakeConverter("upper", s => s.ToUpperInvariant());
+        var converters = new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase) { ["upper"] = fakeConverter };
+        var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters);
+
+        await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+
+        Assert.IsNotNull(fakeConverter.LastReceivedOptions);
+        Assert.AreEqual("movie", fakeConverter.LastReceivedOptions!.Value.GetProperty("propertyMapping").GetProperty("source").GetString());
+    }
+
+    // An internal-only converter named from a UserImports-origin batch is refused exactly like an
+    // unregistered name — the whole point of the internal-only mechanism.
+    [TestMethod]
+    public async Task ResolveAsync_InternalOnlyConverterFromUserImportsOrigin_FallsBackLikeUnregistered()
+    {
+        var file  = new SeedFile("/imports/a.json", null, "https://example.com/a.json", Converter: "internal");
+        var batch = Batch(SeedBatchOrigin.UserImports, file);
+        var converters = new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["internal"] = new FakeConverter("internal", isInternalOnly: true)
+        };
+        var logger  = new RecordingLogger();
+        var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters, logger: logger);
+
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+
+        Assert.AreEqual(SourceRefreshOutcome.Failed, result.Results.Single().Outcome);
+        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning && e.Message.Contains("internal-only")));
+    }
+
+    // The same internal-only converter is allowed when the batch comes from the bundled sources manifest.
+    [TestMethod]
+    public async Task ResolveAsync_InternalOnlyConverterFromBundledOrigin_Succeeds()
+    {
+        var file  = new SeedFile("/bundled/a.json", null, "https://example.com/a.json", Converter: "internal");
+        var batch = Batch(SeedBatchOrigin.Bundled, file);
+        var converters = new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["internal"] = new FakeConverter("internal", s => s.ToUpperInvariant(), isInternalOnly: true)
+        };
+        var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters);
+
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+
+        Assert.AreEqual(SourceRefreshOutcome.Updated, result.Results.Single().Outcome);
+    }
+
     // An unregistered converter name fails closed rather than executing anything.
     [TestMethod]
     public async Task ResolveAsync_UnregisteredConverterName_FailsClosedAndLogsWarning()
@@ -372,12 +427,17 @@ public class SourceCacheUpdaterTests
         int defaultTtlHours = 24)
         => new(factory, new SourceCacheOptions(_internalDir, _externalDir, defaultTtlHours, converters, validate), logger ?? new RecordingLogger());
 
-    private sealed class FakeConverter(string name, Func<string, string>? transform = null, Exception? throwException = null) : IQuoteSourceConverter
+    private sealed class FakeConverter(string name, Func<string, string>? transform = null, Exception? throwException = null, bool isInternalOnly = false) : IQuoteSourceConverter
     {
         public string Name => name;
 
-        public Task ConvertAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+        public bool IsInternalOnly => isInternalOnly;
+
+        public JsonElement? LastReceivedOptions { get; private set; }
+
+        public Task ConvertAsync(string inputPath, string outputPath, JsonElement? options = null, CancellationToken cancellationToken = default)
         {
+            LastReceivedOptions = options;
             if (throwException is not null) throw throwException;
             var input = File.ReadAllText(inputPath);
             File.WriteAllText(outputPath, transform?.Invoke(input) ?? input);

@@ -21,7 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Quotinator.Core\Quotinator.Core.csproj" />
     <ProjectReference Include="..\..\src\Quotinator.Data\Quotinator.Data.csproj" />
-    <ProjectReference Include="..\..\src\Quotinator.Converters.Vilaboim\Quotinator.Converters.Vilaboim.csproj" />
+    <ProjectReference Include="..\..\src\Quotinator.Converters.RegexArray\Quotinator.Converters.RegexArray.csproj" />
   </ItemGroup>
 
 </Project>

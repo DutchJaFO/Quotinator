@@ -1,8 +1,9 @@
 using System.Text.Json;
 using System.Xml.Linq;
 using Json.Schema;
-using Quotinator.Converters.NikhilNamal17;
-using Quotinator.Converters.Vilaboim;
+using Quotinator.Converters.BasicJsonArray;
+using Quotinator.Converters.RegexArray;
+using Quotinator.Core.Import;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Api.Tests.Solution;
@@ -135,10 +136,21 @@ public class RepositoryStructureTests
         var schema = JsonSchema.FromText(
             File.ReadAllText(Path.Combine(RepoRoot, "schemas", "source-flat.schema.json")));
 
-        var cases = new (IQuoteSourceConverter Converter, string RawFixtureFile, string BaselineFile)[]
+        var nikhilNamal17Options = JsonSerializer.SerializeToElement(new BasicJsonArrayConverterOptions
         {
-            (new VilaboimMovieQuotesConverter(), "vilaboim_raw.json", "vilaboim_movie-quotes.json"),
-            (new NikhilNamal17PopularMovieQuotesConverter(), "nikhilnamal17_raw.json", "NikhilNamal17_popular-movie-quotes.json"),
+            PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
+        });
+
+        var vilaboimOptions = JsonSerializer.SerializeToElement(new RegexArrayConverterOptions
+        {
+            Pattern      = """^"(.+?)"\s+(.+)$""",
+            GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
+        });
+
+        var cases = new (IQuoteSourceConverter Converter, string RawFixtureFile, string BaselineFile, JsonElement? Options)[]
+        {
+            (new RegexArrayConverter(), "vilaboim_raw.json", "vilaboim_movie-quotes.json", vilaboimOptions),
+            (new BasicJsonArrayConverter(), "nikhilnamal17_raw.json", "NikhilNamal17_popular-movie-quotes.json", nikhilNamal17Options),
         };
 
         var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
@@ -147,13 +159,13 @@ public class RepositoryStructureTests
         {
             var failures = new List<string>();
 
-            foreach (var (converter, rawFixtureFile, baselineFile) in cases)
+            foreach (var (converter, rawFixtureFile, baselineFile, convOptions) in cases)
             {
                 var rawPath      = Path.Combine(RepoRoot, "tests", "Quotinator.Api.Tests", "Solution", "Fixtures", rawFixtureFile);
                 var outputPath   = Path.Combine(tempDir, baselineFile);
                 var baselinePath = Path.Combine(RepoRoot, "data", "sources", baselineFile);
 
-                await converter.ConvertAsync(rawPath, outputPath);
+                await converter.ConvertAsync(rawPath, outputPath, convOptions);
 
                 if (!File.Exists(outputPath))
                 {

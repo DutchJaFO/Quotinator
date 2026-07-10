@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -56,6 +57,34 @@ public class ManifestSeedPlannerTests
         CollectionAssert.AreEqual(
             new[] { "z.json", "a.json" },
             files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+    }
+
+    [TestMethod]
+    public void PlanSeed_FileWithConverterOptions_PopulatesSeedFileConverterOptions()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(
+                new JsonObject
+                {
+                    ["file"]             = "a.json",
+                    ["name"]             = "a",
+                    ["converter"]        = "basic-json-array",
+                    ["converterOptions"] = new JsonObject
+                    {
+                        ["propertyMapping"] = new JsonObject { ["source"] = "movie" }
+                    }
+                })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        var file = files.Single();
+        Assert.AreEqual("basic-json-array", file.Converter);
+        Assert.IsNotNull(file.ConverterOptions);
+        Assert.AreEqual("movie", file.ConverterOptions!.Value.GetProperty("propertyMapping").GetProperty("source").GetString());
     }
 
     [TestMethod]

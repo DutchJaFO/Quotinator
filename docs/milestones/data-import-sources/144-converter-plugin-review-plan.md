@@ -1,6 +1,6 @@
 # #144 — Converter plugins: generic naming, internal-only slots, configuration options
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #144
 **Depends on:** #140
 
@@ -241,20 +241,30 @@ Applies identically to all three plugins; none of them opts in.
 
 ### 1. Shared typed classes: `IndexedFieldMapping`, `NamedFieldMapping`, `QuoteFieldDefaults`, `MappedSourceQuoteBuilder`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `MappedSourceQuoteBuilderTests` (18 tests: `Resolve`'s raw/default coalescing,
+`Build`'s quote/source-required contract, id derivation vs. explicit id, `en`/`Movie` fallbacks, genre
+pass-through), `IndexedFieldMappingTests`/`QuoteFieldDefaultsTests` (deserialization, unmapped slots
+stay `null`). Full suite green (1005 tests) after this step.
 
 New files in `Quotinator.Core.Import` (alongside `QuoteTypeNormalisation.cs`/`YearParsing.cs`), exact
-shapes per Scope changes. `MappedSourceQuoteBuilder.Resolve` coalesces a raw value with its configured
-default (empty/whitespace counts as absent). `MappedSourceQuoteBuilder.Build` assembles one row's
-already-resolved 9 field values into a `SourceQuote?`, returns `null` when `quote`/`source` end up
-empty, and derives `Id` via `QuoteIdentity.StableId` when not otherwise supplied. No parsing/
-disambiguation logic needed here — each plugin's typed options class is deserialized directly from its
-`JsonElement`, so mapping and defaults are already distinct, separately-named properties by the time
-this code runs.
+shapes per Scope changes, each property carrying an explicit `[JsonPropertyName]` matching this
+project's existing DTO convention (`SourceQuote.cs`, `ManifestFileEntryDto.cs`) rather than relying on
+case-insensitive matching. `QuoteFieldDefaults.Type` carries `[JsonConverter(typeof(QuoteTypeJsonConverter))]`
+— the same kebab-case wire converter `SourceQuote.Type` already uses. `MappedSourceQuoteBuilder.Resolve`
+coalesces a raw value with its configured default (empty/whitespace counts as absent).
+`MappedSourceQuoteBuilder.Build` assembles one row's already-resolved 9 field values into a
+`SourceQuote?`, returns `null` when `quote`/`source` end up empty, and derives `Id` via
+`QuoteIdentity.StableId` when not otherwise supplied. No parsing/disambiguation logic needed here —
+each plugin's typed options class is deserialized directly from its `JsonElement`, so mapping and
+defaults are already distinct, separately-named properties by the time this code runs.
 
 ### 2. Thread `converterOptions` through the shared settings DTOs and schema
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `ManifestSeedPlannerTests.PlanSeed_FileWithConverterOptions_PopulatesSeedFileConverterOptions`,
+`SourceDataIntegrityTests.Manifest_EntryWithConverterOptions_PassesSchemaValidation`. Only one call
+site constructed `SeedFile` positionally past the new parameter (`ManifestSeedPlanner.cs`) — found by
+grepping every `new SeedFile(` call site, not assumed safe. Full suite green (1007 tests) after this
+step.
 
 `SourceImportSettingsDto.ConverterOptions` (`JsonElement?`, wire name `converterOptions`) inherited by
 `ManifestFileEntryDto` and `Quotinator.Api`'s `ImportRequestSettingsDto`; `SeedFile.ConverterOptions`
@@ -263,25 +273,49 @@ this code runs.
 
 ### 3. Extend `IQuoteSourceConverter` — options parameter and internal-only opt-in
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `CsvQuoteConverterTests.IsInternalOnly_DefaultsToFalse`. **Not fully
+source-compatible as first assumed**: `options` had to be inserted before `cancellationToken`
+(matching the rest of the codebase's parameter-ordering convention of required-then-optional), which
+broke every call site passing `cancellationToken` positionally as the 3rd argument — caught by the
+compiler as `CS0535`/type-mismatch errors, not silently. Fixed 5 call sites: `SourceCacheUpdater.cs`,
+`SqliteQuoteImportService.cs` (both now pass `cancellationToken:` named, pending Step 4's real options
+wiring), and three `IQuoteSourceConverter` implementers whose signatures had to gain the new parameter
+too (`CsvQuoteConverter`, plus `NikhilNamal17`/`VilaboimMovieQuotesConverter`, both slated for deletion
+in later steps but must compile until then) and two test doubles (`QuoteImportServiceTests
+.PassthroughTestConverter`, `SourceCacheUpdaterTests.FakeConverter` — the latter also extended with
+`IsInternalOnly`/`LastReceivedOptions` now, ahead of Step 4's tests). A default interface member is
+only reachable through the interface type, not the concrete class — `IsInternalOnly_DefaultsToFalse`
+had to cast to `IQuoteSourceConverter` explicitly, found via a real `CS1061` compile error, not assumed.
+Full suite green (1008 tests) after this step.
 
 `JsonElement? options = null` added to `ConvertAsync`; `bool IsInternalOnly => false;` added as a
-default interface member. Additive, source-compatible with every existing implementation.
+default interface member.
 
 ### 4. Wire `converterOptions` and internal-only enforcement into both call sites
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `SourceCacheUpdaterTests.ResolveAsync_ConverterWithOptions_PassesOptionsToConvertAsync`,
+`_InternalOnlyConverterFromUserImportsOrigin_FallsBackLikeUnregistered`,
+`_InternalOnlyConverterFromBundledOrigin_Succeeds`, `SqliteQuoteImportServiceTests
+.ImportAsync_ConverterWithOptions_PassesOptionsToConvertAsync`. `SqliteQuoteImportService
+.LoadQuotesAsync` didn't take a full settings object, only `converterName` — had to add a
+`converterOptions` parameter to it and its one call site, found by grepping every `LoadQuotesAsync`
+reference rather than assumed. Full suite green (1013 tests) after this step.
 
-Unchanged from the original draft: `SourceCacheUpdater` threads `SeedBatchOrigin` from `ResolveAsync`'s
-`batch` down through `ResolveOneAsync` into `TryDownloadAndPrepareAsync`, enforces `IsInternalOnly`
-against `SeedBatchOrigin.UserImports` (fails closed exactly like an unregistered name), and passes
-`file.ConverterOptions` into `ConvertAsync`. `SqliteQuoteImportService.LoadQuotesAsync` passes
-`settings?.ConverterOptions` into `ConvertAsync` at its existing call site; no `SeedBatchOrigin` concept
-applies to the manual upload path (`AdminApiKey` auth is the existing trust boundary there).
+`SourceCacheUpdater` threads `SeedBatchOrigin` from `ResolveAsync`'s `batch` down through
+`ResolveOneAsync` into `TryDownloadAndPrepareAsync`, enforces `IsInternalOnly` against
+`SeedBatchOrigin.UserImports` (fails closed exactly like an unregistered name, with a distinct log
+message) before an internal-only converter is ever invoked, and passes `file.ConverterOptions` into
+`ConvertAsync`. `SqliteQuoteImportService.LoadQuotesAsync` passes `settings?.ConverterOptions` into
+`ConvertAsync`; no `SeedBatchOrigin` concept applies to the manual upload path (`AdminApiKey` auth is
+the existing trust boundary there).
 
 ### 5. Enhance `Quotinator.Converters.Csv` in place
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — all 11 pre-existing `CsvQuoteConverterTests` unchanged and still green (proves
+zero-config behaviour is byte-for-byte preserved), plus `ConvertAsync_ColumnMapping_MapsColumnsByPosition`,
+`_HasHeaderFalse_TreatsFirstRowAsData`, `_Defaults_PopulatesUnmappedField`,
+`_ColumnMappingWithRowValue_RowValueTakesPrecedenceOverDefault`. Full suite green (1017 tests) after
+this step.
 
 Add `CsvConverterOptions` (Scope changes). When `options` is null or deserializes to a `CsvConverterOptions`
 with no `ColumnMapping`: unchanged existing behaviour (header-name auto-match, case-insensitive). When
@@ -294,7 +328,20 @@ whether row 0 is data or a label, default `true`). Per row, resolves each of the
 
 ### 6. `Quotinator.Converters.BasicJsonArray` — new project, replaces `NikhilNamal17`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 11 new `BasicJsonArrayConverterTests`, including the ID-stability regression test
+against the real committed `NikhilNamal17_popular-movie-quotes.json`. Also updated (found by grepping
+every `NikhilNamal17` reference, not assumed complete after just the two obvious projects):
+`Program.cs`'s converter registration + `using`, `Quotinator.Api.csproj`'s/`Quotinator.Api.Tests
+.csproj`'s `ProjectReference`s, `Quotinator.slnx` (project + CVE-folder entries, plus new CVE folders
+created for the new project per `docs/testing-policy.md`'s CVE-folder rule), `docker/Dockerfile`'s
+restore-layer `COPY` — folding the NikhilNamal17 half of Step 8's wiring into this step so the build
+stays green after every step, rather than leaving it red until Step 8. Most significant find: **the
+authoritative integration test wasn't the new unit test at all** — `RepositoryStructureTests
+.ConverterPlugins_AgainstRawFixtures_ProduceFilesMatchingBaseline` (`Quotinator.Api.Tests`)
+independently runs every converter against its committed raw fixture and asserts the *entire id set*
+matches baseline (stricter than my own single-sample-id unit test) — updated its `NikhilNamal17`
+case to run `BasicJsonArrayConverter` with the real production `PropertyMapping`. Full suite green
+(1025 tests) after this step.
 
 `Name => "basic-json-array"`. Add `BasicJsonArrayConverterOptions` (Scope changes). Deserializes the
 raw input as `List<Dictionary<string, JsonElement>>` (a typed `JsonSerializer.Deserialize<T>` target —
@@ -316,7 +363,15 @@ matches the corresponding id already committed in `data/sources/NikhilNamal17_po
 
 ### 7. `Quotinator.Converters.RegexArray` — new project, replaces `Vilaboim`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 9 new `RegexArrayConverterTests`, including the ID-stability regression test
+against the real committed `vilaboim_movie-quotes.json`, plus `ConvertAsync_NoGroupMapping_ThrowsSourceConversionException`
+(not originally listed in the plan — added once implementation surfaced that a `Pattern` with no
+`GroupMapping` is equally unusable and deserved the same explicit, named exception as a missing
+`Pattern`, rather than silently degrading to "zero valid entries"). `RepositoryStructureTests
+.ConverterPlugins_AgainstRawFixtures_ProduceFilesMatchingBaseline`'s Vilaboim case updated the same
+way as NikhilNamal17's in step 6. Program.cs/csproj/slnx/Dockerfile wiring for this swap folded in
+here too, same reasoning as step 6 — see step 8, now just the final confirmation that both swaps are
+complete. Full suite green (1028 tests) after this step.
 
 `Name => "regex-array"`. Add `RegexArrayConverterOptions` (Scope changes). Throws
 `SourceConversionException` when `Pattern` is null/empty — a regex-array entry with no pattern can
@@ -336,17 +391,22 @@ resulting id exactly matches the corresponding id already committed in
 
 ### 8. Update wiring: `Program.cs`, `Quotinator.slnx`, `docker/Dockerfile`
 
-**Status:** ⬜ Not started
-
-`Program.cs`'s `quoteSourceConverters` array: remove `NikhilNamal17PopularMovieQuotesConverter`/
-`VilaboimMovieQuotesConverter`, add `BasicJsonArrayConverter`/`RegexArrayConverter`; update
-`Quotinator.Api.csproj`'s two `ProjectReference`s accordingly. `Quotinator.slnx`: remove the two old
-project entries (main + test each), add the four new ones. `docker/Dockerfile`'s restore-layer `COPY`
-block: swap the two old project paths for the two new ones.
+**Status:** ✅ Done — folded into steps 6 and 7 (each converter swap's wiring done immediately
+alongside its deletion, not deferred to a separate step) so the build stayed green after every step
+rather than going red between "delete old project" and "fix references." Confirmed complete: `Program.cs`'s
+`quoteSourceConverters` registers exactly `RegexArrayConverter`/`BasicJsonArrayConverter`/
+`CsvQuoteConverter`; `Quotinator.Api.csproj`/`Quotinator.Api.Tests.csproj` reference the two new
+projects, not the two deleted ones; `Quotinator.slnx` lists the four new projects (two main, two test)
+plus their CVE folders, with no stale `NikhilNamal17`/`Vilaboim` entries anywhere; `docker/Dockerfile`'s
+restore-layer `COPY` block references the two new project paths.
 
 ### 9. Update `data/sources/manifest.json` and `scripts/SOURCES.md`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `SourceDataIntegrityTests.Manifest_ConformsToSchema` re-passes against the
+updated file. `scripts/SOURCES.md` rewritten: documents all three generic converters with real
+worked examples (the same `converterOptions` now actually configured for NikhilNamal17/Vilaboim in
+the manifest), and reframes "adding a new source" around configuring an existing converter first —
+a new plugin project is now the exception, not the default path.
 
 `data/sources/manifest.json`: NikhilNamal17 entry's `converter`/`converterOptions` per Scope changes;
 Vilaboim entry's `converter`/`converterOptions` per Scope changes. Neither entry's `file`/`name`/
@@ -358,12 +418,19 @@ regex-extractable string array.
 
 ### 10. Full regression pass and live verification
 
-**Status:** ⬜ Not started
-
-Full solution build (0 warnings) and test suite green. T1 (`dotnet run`, `POST
-/api/v1/admin/sources/refresh?force=true`) re-converts both live sources and confirms the resulting
-cached files are equivalent (same ids, same field values, same counts) to the currently-committed
-`data/sources/*.json` files. T2 (Docker) repeats the same check inside a fresh container build.
+**Status:** ✅ Done. Full solution build: 0 warnings, 0 errors. Full test suite: 1028 tests, 0
+failures. T1 (`dotnet run --configuration Release`, real network access,
+`POST /api/v1/admin/sources/refresh?force=true`): both sources returned `"outcome":"updated"` with no
+warnings in the log; the freshly re-converted cache files were diffed id-for-id against the
+already-committed `data/sources/*.json` baselines — **732/732 NikhilNamal17 ids, 99/99 Vilaboim ids,
+zero differences either direction**. T2 (Docker): fresh `docker build` succeeded (both new converter
+projects present in the restore/publish layers); a fresh container's forced refresh produced the
+identical result — same `"outcome":"updated"` for both, zero id differences against baseline, no
+warnings/errors in container logs. This also serves as row 24's live verification: both real sources,
+now configured as `basic-json-array`/`regex-array` in the manifest, converted cleanly with no "not
+registered" warning — proving the swapped registration is correct — while the pre-existing, unaffected
+`SourceCacheUpdaterTests.ResolveAsync_UnregisteredConverterName_FailsClosedAndLogsWarning` still covers
+the rejection path for a genuinely unknown name.
 
 ---
 
@@ -371,32 +438,32 @@ cached files are equivalent (same ids, same field values, same counts) to the cu
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `MappedSourceQuoteBuilder.Resolve` returns the raw value when non-empty, else the default | Unit test | `MappedSourceQuoteBuilderTests.Resolve_RawValuePresent_ReturnsRawValue`, `_RawValueEmpty_ReturnsDefault` |
-| 2 | ❌ | `MappedSourceQuoteBuilder.Build` returns `null` when `quote` or `source` end up empty | Unit test | `MappedSourceQuoteBuilderTests.Build_QuoteOrSourceEmpty_ReturnsNull` |
-| 3 | ❌ | `MappedSourceQuoteBuilder.Build` derives `Id` via `QuoteIdentity.StableId` when not supplied, honours an explicit id when supplied | Unit test | `MappedSourceQuoteBuilderTests.Build_NoIdSupplied_DerivesStableId`, `_ExplicitIdSupplied_TakesPrecedence` |
-| 4 | ❌ | `MappedSourceQuoteBuilder.Build` applies `originalLanguage="en"`/`type=Movie` fallbacks when neither a value nor a default is supplied | Unit test | `MappedSourceQuoteBuilderTests.Build_NoOriginalLanguageOrDefault_FallsBackToEn`, `_NoTypeOrDefault_FallsBackToMovie` |
-| 5 | ❌ | `IndexedFieldMapping`/`NamedFieldMapping`/`QuoteFieldDefaults` deserialize correctly from JSON, with every unmapped slot left `null` | Unit test | `IndexedFieldMappingTests.Deserialize_PartialMapping_UnmappedSlotsAreNull`, `QuoteFieldDefaultsTests.Deserialize_PartialDefaults_UnsetSlotsAreNull` (`Quotinator.Core.Tests`, paired with `Quotinator.Core.Import`) |
-| 6 | ❌ | `SourceImportSettingsDto`/`SeedFile` carry `ConverterOptions` (`JsonElement?`) through to a `SeedFile` built from a manifest entry | Unit test | `ManifestSeedPlannerTests.PlanSeed_FileWithConverterOptions_PopulatesSeedFileConverterOptions` |
-| 7 | ❌ | `schemas/manifest.schema.json` accepts a `files[]` entry with `converterOptions` | Unit test | `ManifestSchemaTests.ValidManifest_WithConverterOptions_PassesSchemaValidation` |
-| 8 | ❌ | `IQuoteSourceConverter.ConvertAsync` accepts a `JsonElement? options` parameter; default `IsInternalOnly` is `false` for an implementation that doesn't override it | Unit test | `CsvQuoteConverterTests.IsInternalOnly_DefaultsToFalse` |
-| 9 | ❌ | `SourceCacheUpdater` passes a `SeedFile`'s `ConverterOptions` into `ConvertAsync`; refuses an internal-only converter from a `UserImports`-origin batch; allows one from a `Bundled`-origin batch | Unit test | `SourceCacheUpdaterTests.ResolveAsync_ConverterWithOptions_PassesOptionsToConvertAsync`, `_InternalOnlyConverterFromUserImportsOrigin_FallsBackLikeUnregistered`, `_InternalOnlyConverterFromBundledOrigin_Succeeds` |
-| 10 | ❌ | `SqliteQuoteImportService`'s manual import path passes `settings.ConverterOptions` into `ConvertAsync` | Unit test | `SqliteQuoteImportServiceTests.ImportAsync_ConverterWithOptions_PassesOptionsToConvertAsync` |
-| 11 | ❌ | `CsvQuoteConverter` with no `converterOptions` (or `ColumnMapping` absent) behaves exactly as before (regression) | Unit test | Existing `CsvQuoteConverterTests` suite, unmodified, still green |
-| 12 | ❌ | `CsvQuoteConverter` with `CsvConverterOptions.ColumnMapping` set maps columns by position, ignoring header text for those fields | Unit test | `CsvQuoteConverterTests.ConvertAsync_ColumnMapping_MapsColumnsByPosition` |
-| 13 | ❌ | `CsvQuoteConverter` with `HasHeader = false` treats row 0 as data | Unit test | `CsvQuoteConverterTests.ConvertAsync_HasHeaderFalse_TreatsFirstRowAsData` |
-| 14 | ❌ | `CsvQuoteConverter` with `Defaults` set populates a canonical field sourced from no column | Unit test | `CsvQuoteConverterTests.ConvertAsync_Defaults_PopulatesUnmappedField` |
-| 15 | ❌ | `BasicJsonArrayConverter` needs no options when raw property names already match canonical names | Unit test | `BasicJsonArrayConverterTests.ConvertAsync_CanonicalPropertyNames_NoOptionsNeeded` |
-| 16 | ❌ | `BasicJsonArrayConverter` deserializes `BasicJsonArrayConverterOptions.PropertyMapping` and remaps a non-canonical raw name | Unit test | `BasicJsonArrayConverterTests.ConvertAsync_PropertyMapping_RemapsField` |
-| 17 | ❌ | `BasicJsonArrayConverter` genres: JSON array, single string, and absent all resolve correctly | Unit test | `BasicJsonArrayConverterTests.ConvertAsync_GenresAsArray_ProducesMultipleGenres`, `_GenresAsSingleString_ProducesOneGenre`, `_GenresAbsent_ProducesEmptyList` |
-| 18 | ❌ | `BasicJsonArrayConverter` skips a row missing quote/source; throws on invalid JSON or zero converted entries | Unit test | `BasicJsonArrayConverterTests.ConvertAsync_RowMissingQuoteOrSource_SkipsRow`, `_InvalidJson_ThrowsSourceConversionException`, `_ZeroValidEntries_ThrowsSourceConversionException` |
-| 19 | ❌ | **ID stability**: `BasicJsonArrayConverter` reproduces every id already committed in `NikhilNamal17_popular-movie-quotes.json` from the same raw fixture | Unit test | `BasicJsonArrayConverterTests.ConvertAsync_AgainstCommittedNikhilNamal17Fixture_IdsMatchExactly` |
-| 20 | ❌ | `RegexArrayConverter` deserializes `RegexArrayConverterOptions`, applies `Pattern`, and maps capture groups by `GroupMapping`'s 1-based index | Unit test | `RegexArrayConverterTests.ConvertAsync_PatternAndGroupMapping_ProducesExpectedQuotes` |
-| 21 | ❌ | `RegexArrayConverter` throws `SourceConversionException` when `Pattern` is null/empty | Unit test | `RegexArrayConverterTests.ConvertAsync_NoPattern_ThrowsSourceConversionException` |
-| 22 | ❌ | `RegexArrayConverter` skips non-matching entries; throws on invalid JSON or zero converted entries | Unit test | `RegexArrayConverterTests.ConvertAsync_NonMatchingEntry_SkipsIt`, `_InvalidJson_ThrowsSourceConversionException`, `_ZeroValidEntries_ThrowsSourceConversionException` |
-| 23 | ❌ | **ID stability**: `RegexArrayConverter` reproduces every id already committed in `vilaboim_movie-quotes.json` | Unit test | `RegexArrayConverterTests.ConvertAsync_AgainstCommittedVilaboimFixture_IdsMatchExactly` |
-| 24 | ❌ | `Program.cs` registers exactly `csv`, `basic-json-array`, `regex-array` — no lingering `nikhilnamal17`/`vilaboim` registration | Unit test | `ProgramConverterRegistrationTests.QuoteSourceConverters_ContainsExpectedNamesOnly` |
-| 25 | ❌ | `data/sources/manifest.json` deserializes with the updated `converter`/`converterOptions` values and still passes schema validation | Unit test | `SourceDataIntegrityTests.BundledManifest_PassesSchemaValidation` (existing test, re-run against the updated file) |
-| 26 | ❌ | `Quotinator.slnx` lists the four new projects (two main, two test), no stale references to the deleted two | Live | `Quotinator.slnx` opened in Visual Studio — both new plugins and their test projects visible, build succeeds |
-| 27 | ❌ | `scripts/SOURCES.md` documents all three formats and each plugin's typed options class | Live | Manual read-through of `scripts/SOURCES.md`'s converter-plugin workflow section |
-| 28 | ❌ | T1 — live re-conversion of both sources via `force=true` refresh produces content matching the currently-committed files | Live | `dotnet run` + `POST /api/v1/admin/sources/refresh?force=true`, diff the refreshed cache files against `data/sources/*.json` |
-| 29 | ❌ | T2 — same re-conversion succeeds inside a fresh Docker container | Live | `docker build` + `docker run` + the same `force=true` refresh + diff |
+| 1 | ✅ | `MappedSourceQuoteBuilder.Resolve` returns the raw value when non-empty, else the default | Unit test | `MappedSourceQuoteBuilderTests.Resolve_RawValuePresent_ReturnsRawValue`, `_RawValueEmpty_ReturnsDefault`, `_RawValueNull_ReturnsDefault`, `_BothNull_ReturnsNull` |
+| 2 | ✅ | `MappedSourceQuoteBuilder.Build` returns `null` when `quote` or `source` end up empty | Unit test | `MappedSourceQuoteBuilderTests.Build_QuoteEmpty_ReturnsNull`, `_SourceEmpty_ReturnsNull` |
+| 3 | ✅ | `MappedSourceQuoteBuilder.Build` derives `Id` via `QuoteIdentity.StableId` when not supplied, honours an explicit id when supplied | Unit test | `MappedSourceQuoteBuilderTests.Build_NoIdSupplied_DerivesStableId`, `_ExplicitIdSupplied_TakesPrecedence` |
+| 4 | ✅ | `MappedSourceQuoteBuilder.Build` applies `originalLanguage="en"`/`type=Movie` fallbacks when neither a value nor a default is supplied | Unit test | `MappedSourceQuoteBuilderTests.Build_NoOriginalLanguageOrDefault_FallsBackToEn`, `_NoTypeOrDefault_FallsBackToMovie` |
+| 5 | ✅ | `IndexedFieldMapping`/`NamedFieldMapping`/`QuoteFieldDefaults` deserialize correctly from JSON, with every unmapped slot left `null` | Unit test | `IndexedFieldMappingTests.Deserialize_PartialMapping_UnmappedSlotsAreNull`, `QuoteFieldDefaultsTests.Deserialize_PartialDefaults_UnsetSlotsAreNull` (`Quotinator.Core.Tests`, paired with `Quotinator.Core.Import`) |
+| 6 | ✅ | `SourceImportSettingsDto`/`SeedFile` carry `ConverterOptions` (`JsonElement?`) through to a `SeedFile` built from a manifest entry | Unit test | `ManifestSeedPlannerTests.PlanSeed_FileWithConverterOptions_PopulatesSeedFileConverterOptions` |
+| 7 | ✅ | `schemas/manifest.schema.json` accepts a `files[]` entry with `converterOptions` | Unit test | `SourceDataIntegrityTests.Manifest_EntryWithConverterOptions_PassesSchemaValidation` |
+| 8 | ✅ | `IQuoteSourceConverter.ConvertAsync` accepts a `JsonElement? options` parameter; default `IsInternalOnly` is `false` for an implementation that doesn't override it | Unit test | `CsvQuoteConverterTests.IsInternalOnly_DefaultsToFalse` |
+| 9 | ✅ | `SourceCacheUpdater` passes a `SeedFile`'s `ConverterOptions` into `ConvertAsync`; refuses an internal-only converter from a `UserImports`-origin batch; allows one from a `Bundled`-origin batch | Unit test | `SourceCacheUpdaterTests.ResolveAsync_ConverterWithOptions_PassesOptionsToConvertAsync`, `_InternalOnlyConverterFromUserImportsOrigin_FallsBackLikeUnregistered`, `_InternalOnlyConverterFromBundledOrigin_Succeeds` |
+| 10 | ✅ | `SqliteQuoteImportService`'s manual import path passes `settings.ConverterOptions` into `ConvertAsync` | Unit test | `SqliteQuoteImportServiceTests.ImportAsync_ConverterWithOptions_PassesOptionsToConvertAsync` |
+| 11 | ✅ | `CsvQuoteConverter` with no `converterOptions` (or `ColumnMapping` absent) behaves exactly as before (regression) | Unit test | Existing `CsvQuoteConverterTests` suite (11 tests), unmodified, still green |
+| 12 | ✅ | `CsvQuoteConverter` with `CsvConverterOptions.ColumnMapping` set maps columns by position, ignoring header text for those fields | Unit test | `CsvQuoteConverterTests.ConvertAsync_ColumnMapping_MapsColumnsByPosition` |
+| 13 | ✅ | `CsvQuoteConverter` with `HasHeader = false` treats row 0 as data | Unit test | `CsvQuoteConverterTests.ConvertAsync_HasHeaderFalse_TreatsFirstRowAsData` |
+| 14 | ✅ | `CsvQuoteConverter` with `Defaults` set populates a canonical field sourced from no column; a row value always takes precedence over a default | Unit test | `CsvQuoteConverterTests.ConvertAsync_Defaults_PopulatesUnmappedField`, `_ColumnMappingWithRowValue_RowValueTakesPrecedenceOverDefault` |
+| 15 | ✅ | `BasicJsonArrayConverter` needs no options when raw property names already match canonical names | Unit test | `BasicJsonArrayConverterTests.ConvertAsync_CanonicalPropertyNames_NoOptionsNeeded` |
+| 16 | ✅ | `BasicJsonArrayConverter` deserializes `BasicJsonArrayConverterOptions.PropertyMapping` and remaps a non-canonical raw name | Unit test | `BasicJsonArrayConverterTests.ConvertAsync_PropertyMapping_RemapsField` |
+| 17 | ✅ | `BasicJsonArrayConverter` genres: JSON array, single string, and absent all resolve correctly | Unit test | `BasicJsonArrayConverterTests.ConvertAsync_GenresAsArray_ProducesMultipleGenres`, `_GenresAsSingleString_ProducesOneGenre`, `_GenresAbsent_ProducesEmptyList` |
+| 18 | ✅ | `BasicJsonArrayConverter` skips a row missing quote/source; throws on invalid JSON or zero converted entries | Unit test | `BasicJsonArrayConverterTests.ConvertAsync_RowMissingQuoteOrSource_SkipsRow`, `_InvalidJson_ThrowsSourceConversionException`, `_ZeroValidEntries_ThrowsSourceConversionException` |
+| 19 | ✅ | **ID stability**: `BasicJsonArrayConverter` reproduces every id already committed in `NikhilNamal17_popular-movie-quotes.json` from the same raw fixture | Unit test | `BasicJsonArrayConverterTests.ConvertAsync_AgainstCommittedNikhilNamal17Fixture_IdsMatchExactly` (single sample id) + `RepositoryStructureTests.ConverterPlugins_AgainstRawFixtures_ProduceFilesMatchingBaseline` (`Quotinator.Api.Tests` — stricter: asserts the entire id set matches, not just one sample) |
+| 20 | ✅ | `RegexArrayConverter` deserializes `RegexArrayConverterOptions`, applies `Pattern`, and maps capture groups by `GroupMapping`'s 1-based index | Unit test | `RegexArrayConverterTests.ConvertAsync_PatternAndGroupMapping_ProducesExpectedQuotes` |
+| 21 | ✅ | `RegexArrayConverter` throws `SourceConversionException` when `Pattern` is null/empty, or when `GroupMapping` is absent | Unit test | `RegexArrayConverterTests.ConvertAsync_NoPattern_ThrowsSourceConversionException`, `_NoGroupMapping_ThrowsSourceConversionException` |
+| 22 | ✅ | `RegexArrayConverter` skips non-matching entries; throws on invalid JSON or zero converted entries | Unit test | `RegexArrayConverterTests.ConvertAsync_NonMatchingEntry_SkipsIt`, `_InvalidJson_ThrowsSourceConversionException`, `_ZeroValidEntries_ThrowsSourceConversionException` |
+| 23 | ✅ | **ID stability**: `RegexArrayConverter` reproduces every id already committed in `vilaboim_movie-quotes.json` | Unit test | `RegexArrayConverterTests.ConvertAsync_AgainstCommittedVilaboimFixture_IdsMatchExactly` (single sample id) + `RepositoryStructureTests.ConverterPlugins_AgainstRawFixtures_ProduceFilesMatchingBaseline` (`Quotinator.Api.Tests` — entire id set) |
+| 24 | ✅ | `Program.cs` registers exactly `csv`, `basic-json-array`, `regex-array` — no lingering `nikhilnamal17`/`vilaboim` registration | Live | No clean unit-testable seam exists — `quoteSourceConverters` is a closure-local `Dictionary` baked into `SourceCacheOptions` inside a DI factory, not itself exposed via DI (adding a seam purely for this one assertion would be testability-driven over-engineering). Verified at T1 and T2 (step 10): `POST /api/v1/admin/sources/refresh?force=true` produced no "not registered" warning for either real source (now configured as `basic-json-array`/`regex-array`) in either environment, with an exact id-set match against baseline proving the correct converter actually ran, not just that something didn't warn. The rejection path for a genuinely unknown name is separately covered by the pre-existing, unaffected `SourceCacheUpdaterTests.ResolveAsync_UnregisteredConverterName_FailsClosedAndLogsWarning` |
+| 25 | ✅ | `data/sources/manifest.json` deserializes with the updated `converter`/`converterOptions` values and still passes schema validation | Unit test | `SourceDataIntegrityTests.Manifest_ConformsToSchema` |
+| 26 | ✅ | `Quotinator.slnx` lists the four new projects (two main, two test), no stale references to the deleted two | Live | `Quotinator.slnx` manually re-read end-to-end — both new plugins, their test projects, and their CVE folders present; `grep` for `NikhilNamal17`/`Vilaboim` across the repo returns only the untouched `data/sources/NikhilNamal17_popular-movie-quotes.json` filename (deliberately unrenamed, Scope changes) and doc/changelog prose; `dotnet build --configuration Release` succeeds at 0 warnings/errors, which VS's own build uses the same MSBuild engine to reproduce |
+| 27 | ✅ | `scripts/SOURCES.md` documents all three formats and each plugin's typed options class | Live | Manual read-through of the rewritten `scripts/SOURCES.md` — all three converters documented with real, now-actually-configured examples |
+| 28 | ✅ | T1 — live re-conversion of both sources via `force=true` refresh produces content matching the currently-committed files | Live | `dotnet run --configuration Release` + `POST /api/v1/admin/sources/refresh?force=true` against real upstream URLs → both `"outcome":"updated"`, no warnings; id-set diff against `data/sources/*.json`: 732/732 NikhilNamal17, 99/99 Vilaboim, zero differences |
+| 29 | ✅ | T2 — same re-conversion succeeds inside a fresh Docker container | Live | `docker build -f docker/Dockerfile` succeeded; fresh container's forced refresh → both `"outcome":"updated"`, zero id differences against baseline (same counts as T1), no warnings/errors in container logs |

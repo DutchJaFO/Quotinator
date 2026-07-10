@@ -10,8 +10,8 @@ COPY src/Quotinator.Changelog/Quotinator.Changelog.csproj src/Quotinator.Changel
 COPY src/Quotinator.Data/Quotinator.Data.csproj src/Quotinator.Data/
 COPY src/Quotinator.Core/Quotinator.Core.csproj src/Quotinator.Core/
 COPY src/Quotinator.Engine/Quotinator.Engine.csproj src/Quotinator.Engine/
-COPY src/Quotinator.Converters.Vilaboim/Quotinator.Converters.Vilaboim.csproj src/Quotinator.Converters.Vilaboim/
-COPY src/Quotinator.Converters.NikhilNamal17/Quotinator.Converters.NikhilNamal17.csproj src/Quotinator.Converters.NikhilNamal17/
+COPY src/Quotinator.Converters.RegexArray/Quotinator.Converters.RegexArray.csproj src/Quotinator.Converters.RegexArray/
+COPY src/Quotinator.Converters.BasicJsonArray/Quotinator.Converters.BasicJsonArray.csproj src/Quotinator.Converters.BasicJsonArray/
 COPY src/Quotinator.Converters.Csv/Quotinator.Converters.Csv.csproj src/Quotinator.Converters.Csv/
 COPY src/Quotinator.Api/Quotinator.Api.csproj src/Quotinator.Api/
 RUN dotnet restore src/Quotinator.Api/Quotinator.Api.csproj

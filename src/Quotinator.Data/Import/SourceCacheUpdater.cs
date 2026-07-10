@@ -65,7 +65,7 @@ public sealed class SourceCacheUpdater(
                     continue;
                 }
 
-                var (effectivePath, result) = await ResolveOneAsync(file, targetPath, allowNetwork, forceRefresh, cancellationToken);
+                var (effectivePath, result) = await ResolveOneAsync(file, targetPath, batch.Origin, allowNetwork, forceRefresh, cancellationToken);
                 effectivePaths[(batchIndex, fileIndex)] = effectivePath;
                 results.Add(result);
             }
@@ -86,7 +86,7 @@ public sealed class SourceCacheUpdater(
     }
 
     private async Task<(string EffectivePath, SourceRefreshResult Result)> ResolveOneAsync(
-        SeedFile file, string targetPath, bool allowNetwork, bool forceRefresh, CancellationToken cancellationToken)
+        SeedFile file, string targetPath, SeedBatchOrigin origin, bool allowNetwork, bool forceRefresh, CancellationToken cancellationToken)
     {
         var name       = Path.GetFileName(file.FilePath);
         var cacheExists = File.Exists(targetPath);
@@ -107,7 +107,7 @@ public sealed class SourceCacheUpdater(
         if (!needsRefresh)
             return (targetPath, new SourceRefreshResult(name, file.DownloadUrl!, SourceRefreshOutcome.UpToDate, LastRefreshedAtUtc: GetLastRefreshedAt(targetPath)));
 
-        var downloaded = await TryDownloadAndPrepareAsync(file, targetPath, cancellationToken);
+        var downloaded = await TryDownloadAndPrepareAsync(file, targetPath, origin, cancellationToken);
         if (downloaded)
             return (targetPath, new SourceRefreshResult(name, file.DownloadUrl!, SourceRefreshOutcome.Updated, LastRefreshedAtUtc: GetLastRefreshedAt(targetPath)));
 
@@ -148,7 +148,7 @@ public sealed class SourceCacheUpdater(
         return age >= TimeSpan.FromHours(ttlHours);
     }
 
-    private async Task<bool> TryDownloadAndPrepareAsync(SeedFile file, string targetPath, CancellationToken cancellationToken)
+    private async Task<bool> TryDownloadAndPrepareAsync(SeedFile file, string targetPath, SeedBatchOrigin origin, CancellationToken cancellationToken)
     {
         var name         = Path.GetFileName(file.FilePath);
         var rawTempPath  = targetPath + ".download.tmp";
@@ -187,9 +187,17 @@ public sealed class SourceCacheUpdater(
                     return false;
                 }
 
+                if (converter.IsInternalOnly && origin == SeedBatchOrigin.UserImports)
+                {
+                    logger.LogWarning(
+                        "[Database - SourceRefresh] converter '{Converter}' named for {File} is internal-only and cannot be selected from a user-writable manifest — using local {File}",
+                        file.Converter, name, name);
+                    return false;
+                }
+
                 try
                 {
-                    await converter.ConvertAsync(rawTempPath, convertedTempPath, cancellationToken);
+                    await converter.ConvertAsync(rawTempPath, convertedTempPath, file.ConverterOptions, cancellationToken);
                     preparedPath = convertedTempPath;
                 }
                 catch (SourceConversionException ex)

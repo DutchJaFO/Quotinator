@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Description>IQuoteSourceConverter plugin for the vilaboim/movie-quotes source's quoted-string raw format.</Description>
+    <Description>IQuoteSourceConverter plugin for a JSON array of bare strings, extracted via a manifest-supplied regex pattern with 1-based capture-group-to-field mapping.</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>Quotinator.Converters.Vilaboim.Tests</_Parameter1>
+      <_Parameter1>Quotinator.Converters.RegexArray.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

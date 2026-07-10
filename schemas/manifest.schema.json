@@ -59,6 +59,10 @@
             "minLength": 1,
             "description": "Name of a compiled converter plugin (an IQuoteSourceConverter implementation's Name) that transforms this source's raw upstream format into Quotinator's canonical quote schema before it is cached. Only meaningful alongside downloadUrl/github. The referenced converter must be one of the plugins compiled into the running image — an unrecognised name causes the download to fail closed (falls back like a network failure, never crashes startup)."
           },
+          "converterOptions": {
+            "type": "object",
+            "description": "Configuration passed through verbatim to the named converter's ConvertAsync. Shape is entirely converter-specific (see each converter's own documentation) — this schema only requires it to be a JSON object. Only meaningful alongside converter."
+          },
           "duplicateResolution": {
             "$ref": "#/$defs/policySet",
             "description": "Duplicate-resolution policy overriding this manifest's own top-level duplicateResolution for this file specifically. Omit to inherit the manifest-level policy (which itself falls back to application configuration when absent). This is the highest-priority tier — file, then manifest, then configuration."

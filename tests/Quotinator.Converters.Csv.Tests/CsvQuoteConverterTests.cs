@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Quotinator.Converters.Csv;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
@@ -165,6 +166,88 @@ public class CsvQuoteConverterTests
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
     }
+
+    [TestMethod]
+    public void IsInternalOnly_DefaultsToFalse()
+        => Assert.IsFalse(((IQuoteSourceConverter)new CsvQuoteConverter()).IsInternalOnly);
+
+    // -------------------------------------------------------------------------
+    #region ColumnMapping / Defaults options
+
+    [TestMethod]
+    public async Task ConvertAsync_ColumnMapping_MapsColumnsByPosition()
+    {
+        // Header labels deliberately don't match canonical names — mapping must be used exclusively.
+        var inputPath  = WriteInput("Text,Movie\nA quote.,A Source\n");
+        var outputPath = Path.Combine(_tempDir, "output.json");
+        var options = ToOptions(new CsvConverterOptions
+        {
+            ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
+        });
+
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options);
+
+        var quote = await ReadSingle(outputPath);
+        Assert.AreEqual("A quote.", quote.QuoteText);
+        Assert.AreEqual("A Source", quote.Source);
+    }
+
+    [TestMethod]
+    public async Task ConvertAsync_HasHeaderFalse_TreatsFirstRowAsData()
+    {
+        var inputPath  = WriteInput("A quote.,A Source\n");
+        var outputPath = Path.Combine(_tempDir, "output.json");
+        var options = ToOptions(new CsvConverterOptions
+        {
+            HasHeader     = false,
+            ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
+        });
+
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options);
+
+        var quote = await ReadSingle(outputPath);
+        Assert.AreEqual("A quote.", quote.QuoteText);
+    }
+
+    [TestMethod]
+    public async Task ConvertAsync_Defaults_PopulatesUnmappedField()
+    {
+        var inputPath  = WriteInput("quote,source\nA quote.,A Source\n");
+        var outputPath = Path.Combine(_tempDir, "output.json");
+        var options = ToOptions(new CsvConverterOptions
+        {
+            Defaults = new QuoteFieldDefaults { OriginalLanguage = "nl", Type = QuoteType.Book }
+        });
+
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options);
+
+        var quote = await ReadSingle(outputPath);
+        Assert.AreEqual("nl", quote.OriginalLanguage);
+        Assert.AreEqual(QuoteType.Book, quote.Type);
+    }
+
+    [TestMethod]
+    public async Task ConvertAsync_ColumnMappingWithRowValue_RowValueTakesPrecedenceOverDefault()
+    {
+        var inputPath  = WriteInput("A quote.,A Source,book\n");
+        var outputPath = Path.Combine(_tempDir, "output.json");
+        var options = ToOptions(new CsvConverterOptions
+        {
+            HasHeader     = false,
+            ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2, Type = 3 },
+            Defaults      = new QuoteFieldDefaults { Type = QuoteType.Tv }
+        });
+
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options);
+
+        var quote = await ReadSingle(outputPath);
+        Assert.AreEqual(QuoteType.Book, quote.Type);
+    }
+
+    private static JsonElement ToOptions(CsvConverterOptions options)
+        => JsonSerializer.SerializeToElement(options);
+
+    #endregion
 
     private string WriteInput(string content)
     {

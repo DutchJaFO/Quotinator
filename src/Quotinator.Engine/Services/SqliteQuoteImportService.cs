@@ -55,7 +55,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         Stream file, string fileName, ImportRequestSettingsDto? settings, bool preview,
         CancellationToken cancellationToken = default)
     {
-        var quotes = await LoadQuotesAsync(file, settings?.Converter, cancellationToken);
+        var quotes = await LoadQuotesAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
         var policy = ManifestPolicy.Resolve(ToManifestPolicy(settings?.DuplicateResolution), _configPolicy);
         var effectivePolicy = policy.ForQuotes;
 
@@ -219,7 +219,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         return (valid, errors);
     }
 
-    private async Task<List<SourceQuote>> LoadQuotesAsync(Stream file, string? converterName, CancellationToken cancellationToken)
+    private async Task<List<SourceQuote>> LoadQuotesAsync(Stream file, string? converterName, JsonElement? converterOptions, CancellationToken cancellationToken)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "quotinator-import-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -239,7 +239,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                 var convertedPath = Path.Combine(tempDir, "converted.json");
                 try
                 {
-                    await converter.ConvertAsync(rawPath, convertedPath, cancellationToken);
+                    await converter.ConvertAsync(rawPath, convertedPath, converterOptions, cancellationToken);
                 }
                 catch (SourceConversionException ex)
                 {

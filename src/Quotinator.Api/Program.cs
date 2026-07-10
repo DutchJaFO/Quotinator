@@ -26,9 +26,9 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Changelog.Services;
+using Quotinator.Converters.BasicJsonArray;
 using Quotinator.Converters.Csv;
-using Quotinator.Converters.NikhilNamal17;
-using Quotinator.Converters.Vilaboim;
+using Quotinator.Converters.RegexArray;
 using Quotinator.Core.Import;
 using Quotinator.Core.Services;
 using Scalar.AspNetCore;
@@ -306,8 +306,8 @@ builder.Services.AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout
 // assembled before a factory closure, same shape already used for SourceCacheOptions itself).
 var quoteSourceConverters = new IQuoteSourceConverter[]
 {
-    new VilaboimMovieQuotesConverter(),
-    new NikhilNamal17PopularMovieQuotesConverter(),
+    new RegexArrayConverter(),
+    new BasicJsonArrayConverter(),
     new CsvQuoteConverter(),
 }.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
 

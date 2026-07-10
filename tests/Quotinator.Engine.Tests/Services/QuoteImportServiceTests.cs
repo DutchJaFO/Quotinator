@@ -473,12 +473,36 @@ public class QuoteImportServiceTests
         Assert.AreEqual("Converted quote.", await ReadQuoteTextAsync());
     }
 
+    [TestMethod]
+    public async Task ImportAsync_ConverterWithOptions_PassesOptionsToConvertAsync()
+    {
+        var passthrough = new PassthroughTestConverter();
+        var converters = new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["passthrough"] = passthrough
+        };
+        var service = CreateService(converters: converters);
+        var converterOptions = JsonSerializer.Deserialize<JsonElement>("""{"propertyMapping": {"source": "movie"}}""");
+        var settings = new ImportRequestSettingsDto { Converter = "passthrough", ConverterOptions = converterOptions };
+
+        await service.ImportAsync(
+            JsonStream(OneQuoteJson("Converted quote.", "A Source")), "raw.txt", settings, preview: false);
+
+        Assert.IsNotNull(passthrough.LastReceivedOptions);
+        Assert.AreEqual("movie", passthrough.LastReceivedOptions!.Value.GetProperty("propertyMapping").GetProperty("source").GetString());
+    }
+
     /// <summary>Trivial converter that copies its input verbatim — the input is already canonical JSON for this test's purposes.</summary>
     private sealed class PassthroughTestConverter : IQuoteSourceConverter
     {
         public string Name => "passthrough";
 
-        public async Task ConvertAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
-            => await File.WriteAllTextAsync(outputPath, await File.ReadAllTextAsync(inputPath, cancellationToken), cancellationToken);
+        public JsonElement? LastReceivedOptions { get; private set; }
+
+        public async Task ConvertAsync(string inputPath, string outputPath, JsonElement? options = null, CancellationToken cancellationToken = default)
+        {
+            LastReceivedOptions = options;
+            await File.WriteAllTextAsync(outputPath, await File.ReadAllTextAsync(inputPath, cancellationToken), cancellationToken);
+        }
     }
 }
