@@ -3,7 +3,11 @@
     "allow": [
       "Bash(dotnet build *)",
       "Bash(dotnet test *)",
-      "Bash(curl -s http://localhost:*)"
+      "Bash(curl -s http://localhost:*)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list *)",
+      "Bash(gh api repos/DutchJaFO/Quotinator/milestones*)",
+      "Bash(gh milestone list*)"
     ],
     "ask": [
       "Bash(git push *)",
