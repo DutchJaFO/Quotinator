@@ -16,6 +16,7 @@ using Quotinator.Constants.Routes;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Engine.Database;
+using Quotinator.Engine.Entities;
 using Quotinator.Engine.Helpers;
 using Quotinator.Engine.Repositories;
 using Quotinator.Engine.Services;
@@ -279,6 +280,14 @@ builder.Services.AddSingleton<ISystemImportActionWriter, SystemImportActionWrite
 builder.Services.AddSingleton<ISystemImportActionReader, SystemImportActionReader>();
 builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
 builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
+
+// #59: restorable-repository access for Quote/Source/Character/Person, needed only by batch-undo
+// (reversal) — nothing else in the app soft-deletes these tables today. Fully generic, already
+// tested against a synthetic fixture in Quotinator.Data.Tests; no new repository code required.
+builder.Services.AddSingleton<IRestorableRepository<QuoteEntity>, SqliteRestorableRepository<QuoteEntity>>();
+builder.Services.AddSingleton<IRestorableRepository<Source>, SqliteRestorableRepository<Source>>();
+builder.Services.AddSingleton<IRestorableRepository<Character>, SqliteRestorableRepository<Character>>();
+builder.Services.AddSingleton<IRestorableRepository<Person>, SqliteRestorableRepository<Person>>();
 
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the

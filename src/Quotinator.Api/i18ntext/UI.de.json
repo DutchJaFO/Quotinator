@@ -66,6 +66,7 @@
   "ErrorImportActionBatchInvalidState": "Dieser Batch kann nicht verworfen werden — er wurde bereits angewendet, bereits verworfen, oder enthält keine gespeicherten Aktionen.",
   "ErrorImportBatchNotFound": "Es existiert kein Import-Batch mit dieser Id.",
   "ErrorImportFileOrBatchIdRequired": "Sie müssen entweder eine Datei zum Importieren oder eine batchId zum Anwenden eines bereits gespeicherten Batches angeben.",
+  "ErrorImportActionBatchNotReversible": "Dieser Batch kann nicht rückgängig gemacht werden — er ist derzeit nicht angewendet, ist nicht der zuletzt angewendete, noch aktive Batch, enthält keine Aktionen, oder die ursprüngliche Source/Character/Person-Verknüpfung einer Modify-Aktion kann nicht mehr aufgelöst werden.",
   "AdminEndpointsHeading": "Admin-Endpunkte",
   "AdminEndpointsDescription": "Diese Endpunkte erfordern einen X-Api-Key-Header, der mit dem in den Add-on-Optionen konfigurierten admin_api_key übereinstimmt. Sie sind nicht verfügbar, wenn kein Schlüssel konfiguriert ist.",
   "AdminPreviewSeedLabel": "Importvorschau anzeigen",
@@ -81,5 +82,6 @@
   "ImportActionsDecideLabel": "Gespeicherte Import-Aktion entscheiden",
   "ImportActionsUndoLabel": "Import-Aktionsentscheidung rückgängig machen",
   "ImportActionsApplyLabel": "Gespeicherten Aktionsbatch anwenden",
-  "ImportActionsDiscardLabel": "Gespeicherten Aktionsbatch verwerfen"
+  "ImportActionsDiscardLabel": "Gespeicherten Aktionsbatch verwerfen",
+  "ImportActionsReverseLabel": "Angewendeten Importbatch rückgängig machen"
 }

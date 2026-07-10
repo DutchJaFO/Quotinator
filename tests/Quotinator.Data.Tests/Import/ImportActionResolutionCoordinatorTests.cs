@@ -301,4 +301,89 @@ public class ImportActionResolutionCoordinatorTests
 
         await Assert.ThrowsExactlyAsync<ImportBatchStateException>(() => _coordinator.DiscardBatchAsync("BATCH-1"));
     }
+
+    // ── TryReverseBatchAsync ──────────────────────────────────────────────────
+
+    private async Task MarkAppliedAsync(Guid id)
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        await _writer.MarkAppliedAsync(id, conn);
+    }
+
+    [TestMethod]
+    public async Task TryReverseBatchAsync_AllApplied_InvokesCallbackOnceWithWholeBatchAndReturnsNull()
+    {
+        var a1 = BuildDecidedAdd("BATCH-1");
+        var a2 = BuildDecidedAdd("BATCH-1");
+        await _writer.WriteAsync(a1);
+        await _writer.WriteAsync(a2);
+        await MarkAppliedAsync(a1.Id);
+        await MarkAppliedAsync(a2.Id);
+
+        var invocationCount = 0;
+        IReadOnlyList<SystemImportAction>? seenBatch = null;
+        var result = await _coordinator.TryReverseBatchAsync("BATCH-1", (actions, connection, transaction) =>
+        {
+            invocationCount++;
+            seenBatch = actions;
+            Assert.IsNotNull(connection);
+            Assert.IsNotNull(transaction);
+            return Task.CompletedTask;
+        });
+
+        Assert.IsNull(result, "A fully-Applied batch must reverse successfully (null return).");
+        Assert.AreEqual(1, invocationCount, "The callback must receive the whole batch in one call, not once per action.");
+        CollectionAssert.AreEquivalent(new[] { a1.Id, a2.Id }, seenBatch!.Select(a => a.Id).ToList());
+    }
+
+    [TestMethod]
+    public async Task TryReverseBatchAsync_ActionNotApplied_ReturnsBlockingIdsAndNeverInvokesCallback()
+    {
+        var applied = BuildDecidedAdd("BATCH-1");
+        var decided = BuildDecidedAdd("BATCH-1");
+        await _writer.WriteAsync(applied);
+        await _writer.WriteAsync(decided);
+        await MarkAppliedAsync(applied.Id);
+        // decided stays Decided, never Applied.
+
+        var callbackInvoked = false;
+        var result = await _coordinator.TryReverseBatchAsync("BATCH-1", (_, _, _) =>
+        {
+            callbackInvoked = true;
+            return Task.CompletedTask;
+        });
+
+        Assert.IsNotNull(result);
+        CollectionAssert.AreEqual(new[] { decided.Id }, result!.ToList());
+        Assert.IsFalse(callbackInvoked, "Nothing should be reversed while any action in the batch isn't Applied.");
+    }
+
+    [TestMethod]
+    public async Task TryReverseBatchAsync_NoActionsForBatch_ReturnsNullWithoutInvokingCallback()
+    {
+        var callbackInvoked = false;
+        var result = await _coordinator.TryReverseBatchAsync("NO-SUCH-BATCH", (_, _, _) =>
+        {
+            callbackInvoked = true;
+            return Task.CompletedTask;
+        });
+
+        Assert.IsNull(result);
+        Assert.IsFalse(callbackInvoked);
+    }
+
+    [TestMethod]
+    public async Task TryReverseBatchAsync_CallbackThrows_RollsBackAndBatchRemainsQueryable()
+    {
+        var entry = BuildDecidedAdd("BATCH-1");
+        await _writer.WriteAsync(entry);
+        await MarkAppliedAsync(entry.Id);
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+            _coordinator.TryReverseBatchAsync("BATCH-1", (_, _, _) => throw new InvalidOperationException("boom")));
+
+        var found = await _reader.GetByIdAsync(entry.Id);
+        Assert.AreEqual(ImportActionStatus.Applied, found!.Status.Parsed, "A failed reversal must leave the action exactly as it was.");
+    }
 }

@@ -69,6 +69,9 @@ public class SqlQueryGuardTests
             "Sources.CountActive",                // COUNT(*)
             "SystemAudit.CountPagedBase",         // COUNT(*) — private base for CountPaged factory
             "SystemImportActions.CountPagedBase",   // COUNT(*) — private base for CountPaged factory
+            "Characters.CountActiveReferences",   // COUNT(*) — #59 reversal reference check
+            "People.CountActiveReferences",       // COUNT(*) — #59 reversal reference check
+            "Sources.CountActiveReferences",      // COUNT(*) x2 (subqueries) — #59 reversal reference check
         };
 
         var actual = EnumerateSqlConstants()

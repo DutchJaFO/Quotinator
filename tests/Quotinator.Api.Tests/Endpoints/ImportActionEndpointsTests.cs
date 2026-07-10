@@ -312,4 +312,89 @@ public class ImportActionEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
+
+    // ── POST /actions/reverse — requires X-Api-Key ───────────────────────────
+
+    [TestMethod]
+    public async Task ReverseActions_NoApiKey_Returns401()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null);
+
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ReverseActions_CorrectKey_Returns200()
+    {
+        var fake = new FakeImportActionService();
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("BATCH-1", fake.LastReversedBatchId);
+        Assert.AreEqual(false, fake.LastReversePreview);
+    }
+
+    [TestMethod]
+    public async Task ReverseActions_LowercaseBatchId_StillMatchesUppercaseStoredValue()
+    {
+        // The endpoint passes batchId straight through as a string — case-insensitive matching is
+        // the service/coordinator's own responsibility (already covered at that layer). This proves
+        // the endpoint itself does not mangle or reject a lowercase batchId before it gets there.
+        var fake = new FakeImportActionService();
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=batch-1", null);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("batch-1", fake.LastReversedBatchId);
+    }
+
+    [TestMethod]
+    public async Task ReverseActions_Preview_PassesPreviewTrueAndReturns200()
+    {
+        var fake = new FakeImportActionService();
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1&preview=true", null);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(true, fake.LastReversePreview);
+    }
+
+    [TestMethod]
+    public async Task ReverseActions_UnknownOrAlreadyReversedBatchId_Returns404()
+    {
+        var fake = new FakeImportActionService { ThrowOnReverse = new ImportBatchNotFoundException(Guid.NewGuid()) };
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null);
+
+        Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ReverseActions_EmptyOrNotApplied_Returns422()
+    {
+        var fake = new FakeImportActionService { ThrowOnReverse = new ImportBatchStateException("BATCH-1", "has no actions and cannot be reversed.") };
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null);
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
 }

@@ -69,4 +69,29 @@ public interface IImportActionCoordinator
     /// </summary>
     /// <exception cref="ImportBatchStateException">The batch has no staged actions, or any action sharing it is already <see cref="ImportActionStatus.Applied"/> or <see cref="ImportActionStatus.Discarded"/>.</exception>
     Task DiscardBatchAsync(string batchId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Attempts to reverse every action sharing <paramref name="batchId"/> — #59's batch-undo. If
+    /// any action isn't <see cref="ImportActionStatus.Applied"/> yet (still <see cref="ImportActionStatus.Pending"/>/
+    /// <see cref="ImportActionStatus.Decided"/>, or already <see cref="ImportActionStatus.Discarded"/>),
+    /// returns their ids and reverses nothing — the symmetric mirror of <see cref="TryApplyBatchAsync"/>'s
+    /// "refuse if anything is still Pending" contract, checking the opposite condition. Otherwise, in
+    /// one transaction, invokes <paramref name="reverseActions"/> once with the batch's full action
+    /// list (unlike <see cref="TryApplyBatchAsync"/>'s per-action callback — reversal's own entity
+    /// ordering requirement needs the whole batch visible at once, which a per-action callback can't
+    /// provide without this coordinator knowing entity-type semantics ADR 004 says it shouldn't).
+    /// Commits once the callback completes without throwing.
+    /// <para/>
+    /// Unlike <see cref="ImportActionStatus.Applied"/>, this coordinator never introduces a
+    /// <c>Reversed</c> action status — every action stays <see cref="ImportActionStatus.Applied"/>
+    /// permanently, an accurate historical record of what was done. Whether a batch's effects are
+    /// still live is entirely the consuming project's own concern (e.g. Quotinator.Engine soft-deletes
+    /// its own <c>ImportBatch</c> row inside <paramref name="reverseActions"/> itself) — this
+    /// coordinator has no domain-level batch concept to update.
+    /// </summary>
+    /// <returns><c>null</c> if the whole batch was reversed; otherwise the ids not yet <see cref="ImportActionStatus.Applied"/>.</returns>
+    Task<IReadOnlyList<Guid>?> TryReverseBatchAsync(
+        string batchId,
+        Func<IReadOnlyList<SystemImportAction>, IDbConnection, IDbTransaction, Task> reverseActions,
+        CancellationToken cancellationToken = default);
 }

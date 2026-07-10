@@ -4,13 +4,16 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
+using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Engine.Database;
+using Quotinator.Engine.Entities;
 using Quotinator.Engine.Models;
+using Quotinator.Engine.Repositories;
 
 namespace Quotinator.Engine.Services;
 
@@ -20,16 +23,34 @@ public sealed class SqliteImportActionService : IImportActionService
     private readonly ISystemImportActionReader _actionReader;
     private readonly IImportActionCoordinator _coordinator;
     private readonly ISystemChangeLogWriter _changeLogWriter;
+    private readonly IRestorableRepository<QuoteEntity> _quoteRepository;
+    private readonly IRestorableRepository<Source> _sourceRepository;
+    private readonly IRestorableRepository<Character> _characterRepository;
+    private readonly IRestorableRepository<Person> _personRepository;
+    private readonly IImportBatchRepository _importBatchRepository;
+    private readonly IDbConnectionFactory _factory;
 
     /// <summary>Initialises the service with the generic Data-layer pieces it wraps.</summary>
     public SqliteImportActionService(
         ISystemImportActionReader actionReader,
         IImportActionCoordinator coordinator,
-        ISystemChangeLogWriter changeLogWriter)
+        ISystemChangeLogWriter changeLogWriter,
+        IRestorableRepository<QuoteEntity> quoteRepository,
+        IRestorableRepository<Source> sourceRepository,
+        IRestorableRepository<Character> characterRepository,
+        IRestorableRepository<Person> personRepository,
+        IImportBatchRepository importBatchRepository,
+        IDbConnectionFactory factory)
     {
-        _actionReader    = actionReader;
-        _coordinator     = coordinator;
-        _changeLogWriter = changeLogWriter;
+        _actionReader          = actionReader;
+        _coordinator           = coordinator;
+        _changeLogWriter       = changeLogWriter;
+        _quoteRepository       = quoteRepository;
+        _sourceRepository      = sourceRepository;
+        _characterRepository   = characterRepository;
+        _personRepository      = personRepository;
+        _importBatchRepository = importBatchRepository;
+        _factory               = factory;
     }
 
     /// <inheritdoc/>
@@ -90,6 +111,8 @@ public sealed class SqliteImportActionService : IImportActionService
     /// <inheritdoc/>
     public async Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, CancellationToken cancellationToken = default)
     {
+        await ClearStaleAddTargetsAsync(batchId);
+
         var pending = await _coordinator.TryApplyBatchAsync(
             batchId, (action, conn, tx) => ApplyResolvedActionAsync(action, conn, tx, initiatedByType), cancellationToken);
 
@@ -98,9 +121,240 @@ public sealed class SqliteImportActionService : IImportActionService
             : new ImportActionBatchStatusResponse { BatchId = batchId, PendingActionIds = pending };
     }
 
+    /// <summary>
+    /// #59: a soft-deleted row must never block a fresh insert at the same id — every existence
+    /// check the planner relies on for duplicate detection filters <c>IsDeleted = 0</c>, so
+    /// re-importing previously-undone content stages a fresh Add against an id that is still
+    /// physically occupied by a soft-deleted row, and <c>INSERT OR IGNORE</c> would otherwise
+    /// silently no-op against it. Hard-deletes every Add action's target before the batch applies.
+    /// <para/>
+    /// Must run in dependency order — Quote first, then Character, then Source/Person — not the
+    /// apply-time insert order (Source/Person, then Character, then Quote): a stale Source or
+    /// Character can still be physically referenced by a stale Quote/Character row (SQLite enforces
+    /// foreign keys against the physical row, not the logical <c>IsDeleted</c> flag), so the
+    /// referencing row must be cleared first regardless of which order the batch's own actions
+    /// happen to apply in later. This runs once per batch, before <see cref="IImportActionCoordinator.TryApplyBatchAsync"/>
+    /// opens its own transaction — not inside it, since hard-deleting an already soft-deleted row is
+    /// idempotent and safe to repeat if a retry re-runs this pass.
+    /// </summary>
+    private async Task ClearStaleAddTargetsAsync(string batchId)
+    {
+        var actions = await _actionReader.GetAllForBatchAsync(batchId);
+        var adds    = actions.Where(a => a.ActionType.Parsed == ImportActionKind.Add).ToList();
+
+        // Quote ids are NOT necessarily uppercase — an explicit "id" in a source file can be any
+        // case, and QuoteIdentity.StableId (the hash-derived fallback, deliberately frozen) returns
+        // Guid.ToString()'s default lowercase format. IRestorableRepository<T>.HardDeleteAsync takes
+        // a Guid, which the registered GuidHandler always uppercases before comparing — silently
+        // matching zero rows against a lowercase-stored Quote.Id (SQLite's default TEXT comparison
+        // is case-sensitive). Sql.Quotes.Insert/SelectRawById/UpdateOnNewestWins all compare Id as a
+        // plain string with no case normalization, so raw SQL matching that same convention is used
+        // here instead — found via a genuinely red test, not assumed correct.
+        using var quoteConn = _factory.CreateConnection();
+        quoteConn.Open();
+        foreach (var action in adds.Where(a => a.EntityType == "Quote"))
+        {
+            // QuoteGenres/QuoteTranslations both carry a hard FK to Quotes(Id) — a stale Quote's
+            // genre rows (written by every Add, per QuoteSeedWriter.InsertGenresAsync) still
+            // physically exist even though only the Quote row itself was soft-deleted on reversal,
+            // and block the hard-delete below with the same FK violation this whole method exists to
+            // avoid. Found live (T2), not by the unit suite — the test fixture used had no genres.
+            await quoteConn.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote, new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(Sql.QuoteTranslations.DeleteForQuote, new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotes"), new { id = action.EntityId });
+        }
+
+        // Character/Source/Person Add ids are always freshly computed via EntityIdentity (never a
+        // natural-key lookup result — a natural-key match means "already exists", which is a Modify,
+        // never an Add), and EntityIdentity.StableId always uppercases — safe to use the repository's
+        // Guid-typed API here.
+        foreach (var action in adds.Where(a => a.EntityType == "Character"))
+            await _characterRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
+
+        foreach (var action in adds.Where(a => a.EntityType == "Source"))
+            await _sourceRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
+
+        foreach (var action in adds.Where(a => a.EntityType == "Person"))
+            await _personRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
+    }
+
     /// <inheritdoc/>
     public async Task DiscardBatchAsync(string batchId, CancellationToken cancellationToken = default)
         => await _coordinator.DiscardBatchAsync(batchId, cancellationToken);
+
+    /// <inheritdoc/>
+    public async Task ReverseBatchAsync(string batchId, bool preview = false, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(batchId, out var batchGuid))
+            throw new ImportBatchNotFoundException(Guid.Empty);
+
+        var batch = await _importBatchRepository.GetByIdAsync(batchGuid) ?? throw new ImportBatchNotFoundException(batchGuid);
+        if (batch.IsDeleted)
+            throw new ImportBatchNotFoundException(batchGuid); // Already reversed — treated as absent, matching every other soft-deleted row in this codebase.
+
+        if (batch.Status.Parsed != ImportBatchStatus.Applied)
+            throw new ImportBatchStateException(batchId, $"is not currently applied (status: {batch.Status.Raw}) and cannot be reversed.");
+
+        // #59 Scope changes decision 7: strict global LIFO stack, not a per-entity overlap check —
+        // GetAllAsync is already newest-first, IsDeleted = 0 filtered (Sql.ImportBatches.SelectAll).
+        // The first Applied entry in that list is, by definition, the only batch currently reversible.
+        var liveBatches = await _importBatchRepository.GetAllAsync();
+        var topOfStack  = liveBatches.FirstOrDefault(b => b.Status.Parsed == ImportBatchStatus.Applied);
+        if (topOfStack is null || topOfStack.Id != batchGuid)
+        {
+            var blocker = topOfStack is null ? "no batch" : $"'{topOfStack.Name}' ({topOfStack.Id})";
+            throw new ImportBatchStateException(batchId, $"is not the most recently applied batch — {blocker} must be reversed first.");
+        }
+
+        var actions = await _actionReader.GetAllForBatchAsync(batchId);
+        if (actions.Count == 0)
+            throw new ImportBatchStateException(batchId, "has no actions and cannot be reversed.");
+
+        // Preview stops here — every blocking condition above has already been checked, so a caller
+        // knows whether the real call would succeed, without anything being written.
+        if (preview)
+            return;
+
+        var stillApplied = await _coordinator.TryReverseBatchAsync(
+            batchId, (actions, conn, tx) => ReverseAppliedActionsAsync(actions, conn, tx, initiatedByType), cancellationToken);
+
+        // Defensive only — batch.Status == Applied already guarantees every one of its actions is
+        // Applied too (they transition together in TryApplyBatchAsync), so this should be unreachable.
+        if (stillApplied is not null)
+            throw new ImportBatchStateException(batchId, "has actions that are not Applied and cannot be reversed.");
+    }
+
+    /// <summary>
+    /// The domain-specific whole-batch reversal callback passed to <see cref="IImportActionCoordinator.TryReverseBatchAsync"/>.
+    /// Sorts Quote → Character → Source/Person (spec item 4's bottom-up ordering — a Source/Character
+    /// still referenced by one of this batch's own about-to-be-removed quotes must not be kept just
+    /// because it was checked before those quotes were cleared). As the last step, soft-deletes the
+    /// batch's own <c>ImportBatch</c> row — see Scope changes decision 6.
+    /// </summary>
+    private async Task ReverseAppliedActionsAsync(IReadOnlyList<SystemImportAction> actions, IDbConnection connection, IDbTransaction transaction, InitiatorType initiatedByType)
+    {
+        var sqliteConnection  = (SqliteConnection)connection;
+        var sqliteTransaction = (SqliteTransaction)transaction;
+        var uow       = new SqliteUnitOfWork(connection, transaction);
+        var now       = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+        var batchGuid = Guid.Parse(actions[0].BatchId);
+        var changeLog = new QuoteSeedWriter.ChangeLogContext(_changeLogWriter, initiatedByType, actions[0].BatchId);
+
+        var order = new Dictionary<string, int> { ["Quote"] = 0, ["Character"] = 1, ["Source"] = 2, ["Person"] = 2 };
+        foreach (var action in actions.OrderBy(a => order.GetValueOrDefault(a.EntityType, 3)))
+        {
+            switch (action.EntityType)
+            {
+                case "Quote":
+                    await ReverseQuoteActionAsync(action, sqliteConnection, sqliteTransaction, uow, now, changeLog);
+                    break;
+                case "Character":
+                    var charRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Characters.CountActiveReferences, action.EntityId);
+                    if (charRefs)
+                        break;
+                    await _characterRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "character", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
+                    break;
+                case "Source":
+                    var sourceRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Sources.CountActiveReferences, action.EntityId);
+                    if (sourceRefs)
+                        break;
+                    await _sourceRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "source", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
+                    break;
+                case "Person":
+                    if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.People.CountActiveReferences, action.EntityId))
+                        break;
+                    await _personRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "person", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Action '{action.Id}' has an unrecognised EntityType '{action.EntityType}'.");
+            }
+        }
+
+        await _importBatchRepository.SoftDeleteAsync(batchGuid, uow);
+    }
+
+    /// <summary>Reverses one Quote action: soft-delete for an Add, field-restore for a genuine Modify, no-op write for a Skip-policy Modify.</summary>
+    private async Task ReverseQuoteActionAsync(SystemImportAction action, SqliteConnection connection, SqliteTransaction transaction, IUnitOfWork uow, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+    {
+        var isAdd = action.ActionType.Parsed == ImportActionKind.Add;
+
+        if (isAdd)
+        {
+            // Raw SQL, not _quoteRepository.SoftDeleteAsync — see ClearStaleAddTargetsAsync's remarks
+            // on why a Quote's own Id can't safely go through the repository's Guid-typed (forced
+            // uppercase) comparison.
+            await connection.ExecuteAsync(RepositorySql.SoftDelete("Quotes"),
+                new { now = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat), id = action.EntityId }, transaction);
+            await QuoteSeedWriter.LogChangeAsync(changeLog, "quote", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, connection, transaction);
+            return;
+        }
+
+        if (action.AppliedPolicy.Parsed == DuplicateResolutionPolicy.Skip)
+            return; // Nothing was ever written for a Skip-policy Modify — its reversal is a no-op write.
+
+        var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
+        var existingFields  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
+        // Only .Id and .Translations are actually taken from this template (see ApplyMergedFields'
+        // own remarks) — QuoteText/Source are required properties but immediately overwritten below.
+        var resolved = QuoteFieldMerge.ApplyMergedFields(existingFields, new SourceQuote { Id = action.EntityId, QuoteText = string.Empty, Source = string.Empty });
+
+        // #59 Risk 1: existingPayload.SourceId/CharacterId/PersonId are the *incoming* quote's
+        // resolved ids at staging time (see ImportActionPlanner.PlanAsync), not the existing row's
+        // actual linkage — invisible when source/character/author text didn't change, wrong the
+        // moment it did. Re-resolve from the restored text via the same natural-key lookups the
+        // planner itself uses; never trust the stored ids directly.
+        var sourceId = await connection.ExecuteScalarAsync<Guid?>(Sql.Sources.SelectIdByTitleAndType,
+            new { title = resolved.Source, type = resolved.Type.ToString() }, transaction);
+        if (sourceId is null)
+            throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Source '{resolved.Source}' ({resolved.Type}) no longer exists.");
+
+        Guid? characterId = null;
+        if (!string.IsNullOrWhiteSpace(resolved.Character))
+        {
+            characterId = await connection.ExecuteScalarAsync<Guid?>(Sql.Characters.SelectIdBySourceAndName,
+                new { sourceId = sourceId.Value.ToString("D").ToUpperInvariant(), name = resolved.Character }, transaction);
+            if (characterId is null)
+                throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Character '{resolved.Character}' no longer exists.");
+        }
+
+        Guid? personId = null;
+        if (!string.IsNullOrWhiteSpace(resolved.Author))
+        {
+            personId = await connection.ExecuteScalarAsync<Guid?>(Sql.People.SelectIdByName, new { name = resolved.Author }, transaction);
+            if (personId is null)
+                throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Person '{resolved.Author}' no longer exists.");
+        }
+
+        await connection.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote, new { id = resolved.Id }, transaction);
+
+        // ExistingBatchId — not action.BatchId (the reversing batch) — restores provenance to the
+        // batch that actually owns the content being brought back (#59 spec item 2 / Risk 2). Null
+        // is itself a legitimate, meaningful value here (QuoteEntity.ImportBatchId's own remark:
+        // "Null for records predating provenance tracking") — restoring it must preserve that, not
+        // crash trying to parse a batch id that never existed.
+        await connection.ExecuteAsync(Sql.Quotes.UpdateOnNewestWins, new
+        {
+            text    = resolved.QuoteText,
+            lang    = resolved.OriginalLanguage,
+            sid     = sourceId.Value,
+            cid     = characterId,
+            pid     = personId,
+            batchId = action.ExistingBatchId is null ? (Guid?)null : Guid.Parse(action.ExistingBatchId),
+            mod     = now,
+            id      = resolved.Id,
+        }, transaction);
+
+        await QuoteSeedWriter.InsertGenresAsync(connection, resolved, Guid.Parse(resolved.Id), now, transaction);
+        await QuoteSeedWriter.LogChangeAsync(changeLog, "quote", resolved.Id, ChangeAction.Modified,
+            oldValue: action.MergedFields ?? action.IncomingValue, newValue: existingPayload, connection, transaction);
+    }
+
+    /// <summary>Spec item 3: a Source/Character/Person Add is reversible only if no active row still references it.</summary>
+    private static async Task<bool> HasActiveReferencesAsync(SqliteConnection connection, SqliteTransaction transaction, string countSql, string id)
+        => await connection.ExecuteScalarAsync<int>(countSql, new { id }, transaction) > 0;
 
     // ── The domain-specific apply dispatch ──────────────────────────────────
 
@@ -183,6 +437,9 @@ public sealed class SqliteImportActionService : IImportActionService
 
                 if (isAdd)
                 {
+                    // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync,
+                    // before this batch's apply transaction opened — see that method's remarks for
+                    // why it can't be done per-action, in insert order, here.
                     await sqliteConnection.ExecuteAsync(Sql.Quotes.Insert, new
                     {
                         Id               = resolved.Id,
@@ -235,6 +492,7 @@ public sealed class SqliteImportActionService : IImportActionService
         SqliteConnection connection, SqliteTransaction transaction, string id, string title, string type,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
+        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
         var inserted = await connection.ExecuteAsync(Sql.Sources.InsertIfNotExists,
             new { Id = id, Title = title, Type = type, Date = (string?)null, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
@@ -246,6 +504,7 @@ public sealed class SqliteImportActionService : IImportActionService
         SqliteConnection connection, SqliteTransaction transaction, string id, string sourceId, string name,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
+        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
         var inserted = await connection.ExecuteAsync(Sql.Characters.InsertIfNotExists,
             new { Id = id, SourceId = sourceId, Name = name, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
@@ -257,6 +516,7 @@ public sealed class SqliteImportActionService : IImportActionService
         SqliteConnection connection, SqliteTransaction transaction, string id, string name,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
+        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
         var inserted = await connection.ExecuteAsync(Sql.People.InsertIfNotExists,
             new { Id = id, Name = name, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)

@@ -259,6 +259,42 @@ internal static class ImportEndpoints
             "with (creation is deferred to apply time). Returns `422` if the batch has already been " +
             "applied, already been discarded, or has no staged actions at all. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
+
+        adminGroup.MapPost("/actions/reverse", async (
+            string batchId,
+            bool? preview,
+            IImportActionService service,
+            IApiLocalizer localizer) =>
+        {
+            try
+            {
+                await service.ReverseBatchAsync(batchId, preview ?? false);
+                return Results.Ok();
+            }
+            catch (ImportBatchNotFoundException)
+            {
+                return Results.Problem(detail: localizer[ApiMessages.ImportBatchNotFound], statusCode: StatusCodes.Status404NotFound);
+            }
+            catch (ImportBatchStateException)
+            {
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchNotReversible], statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+        })
+        .WithName("ReverseImportActionBatch")
+        .WithSummary("Undo an applied import batch")
+        .WithDescription(
+            "Reverses (undoes) every Applied action sharing `batchId` — Add actions are soft-deleted, " +
+            "Modify actions are restored to their pre-change snapshot. Batches undo as a strict global " +
+            "LIFO stack: only the most recently applied batch still live may be reversed, regardless " +
+            "of whether an older batch shares any entities with it — reverse the newest batch first. " +
+            "On success the batch's own record is itself soft-deleted, and it is the sole signal that " +
+            "the batch is no longer live; its staged actions remain visible via `GET /import/actions`, " +
+            "permanently marked Applied, as the historical record of what was done. " +
+            "`?preview=true` runs every check without writing anything, so a caller can tell whether " +
+            "the real call would succeed. Returns `404` if `batchId` doesn't exist or was already " +
+            "reversed; `422` if the batch isn't currently applied, isn't the top of the stack, has no " +
+            "actions, or a Modify's original Source/Character/Person linkage can no longer be resolved. " +
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
     }
 
     private static async Task<IResult> HandleImportAsync(

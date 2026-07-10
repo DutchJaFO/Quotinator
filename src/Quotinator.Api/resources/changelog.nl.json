@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143, 149, 152, 154],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 140, 141, 143, 149, 152, 154],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -20,7 +20,8 @@
       "Het standaardgedrag bij dubbele citaten is gewijzigd van het behouden van de eerst geziene versie naar het behouden van de nieuwste versie — wat aansluit bij wat de meeste mensen zouden verwachten wanneer een bronbestand wordt gecorrigeerd of bijgewerkt.",
       "Citaten kunnen nu één bestand tegelijk worden geïmporteerd (JSON of CSV) via een nieuw API-eindpunt, met een voorbeeldmodus die precies laat zien wat er zou gebeuren voordat er iets wordt weggeschreven.",
       "Dubbele citaten die zijn gemarkeerd voor handmatige controle kunnen nu veld voor veld worden opgelost, waarbij je kiest welke kant wint of je eigen waarde opgeeft — wijzigingen worden pas doorgevoerd zodra elk conflict uit hetzelfde importbestand is beslist.",
-      "Een import die nog beoordeeld moet worden, kan nu later worden afgerond door naar de batch te verwijzen, zonder het bestand opnieuw te hoeven uploaden."
+      "Een import die nog beoordeeld moet worden, kan nu later worden afgerond door naar de batch te verwijzen, zonder het bestand opnieuw te hoeven uploaden.",
+      "Een toegepaste import kan nu ongedaan worden gemaakt via een nieuw eindpunt — dit maakt alles ongedaan wat is toegevoegd of gewijzigd, zolang er sindsdien geen nieuwere import heeft plaatsgevonden."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -46,7 +47,8 @@
       "Nieuwe eindpunten `POST /api/v1/import/actions/{id}/decide` en `.../undo` leggen een keuze per veld (behouden/vervangen/eigen waarde) vast voor één gefaseerde actie, of maken die ongedaan",
       "Nieuw eindpunt `POST /api/v1/import/actions/apply` past alle beslisde acties van een batch in één keer atomisch toe, zodra voor elk ervan een beslissing is vastgelegd",
       "Nieuw eindpunt `POST /api/v1/import/actions/discard` verwerpt alle gefaseerde acties van een batch in één keer, zonder iets weg te schrijven",
-      "`POST /api/v1/import` kan nu een reeds gefaseerde batch direct toepassen door naar de batch-id te verwijzen, in plaats van steeds opnieuw het bestand te moeten uploaden"
+      "`POST /api/v1/import` kan nu een reeds gefaseerde batch direct toepassen door naar de batch-id te verwijzen, in plaats van steeds opnieuw het bestand te moeten uploaden",
+      "Nieuw eindpunt `POST /api/v1/import/actions/reverse` maakt elke actie in een toegepaste importbatch ongedaan — het ongedaan maken van een Add verwijdert het aangemaakte record zacht, het ongedaan maken van een Modify herstelt de veldwaarden van vóór de wijziging; alleen de meest recent toegepaste batch die nog actief is kan ongedaan worden gemaakt, en een `?preview=true`-modus valideert zonder iets weg te schrijven"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
@@ -66,7 +68,8 @@
       "Een databaseherinitialisatie maakt nu eerst een veiligheidsback-up en herstelt deze automatisch als de reset halverwege mislukt, in plaats van de database mogelijk in een kapotte, half-opgebouwde staat achter te laten",
       "De OpenAPI-specificatie markeert nu elk schrijvend import- en actiebeoordelingseindpunt correct als vereist `X-Api-Key`; voorheen toonden alleen `Admin`-getagde eindpunten deze vereiste, waardoor deze nooit als beveiligd verschenen in de Scalar-UI",
       "De queryfilters `status`, `entityType` en `batchId` bij `GET /api/v1/import/actions` vergeleken hoofdlettergevoelig, waardoor een kleingeschreven waarde (bijv. `?status=pending`) ten onrechte geen resultaten opleverde, terwijl er wel passende gegevens bestonden",
-      "`POST /api/v1/import` zonder bestand, zonder instellingen en zonder batch-id gaf een weinig informatieve algemene foutmelding terug, in plaats van een duidelijke melding dat óf een bestand óf een batch-id vereist is"
+      "`POST /api/v1/import` zonder bestand, zonder instellingen en zonder batch-id gaf een weinig informatieve algemene foutmelding terug, in plaats van een duidelijke melding dat óf een bestand óf een batch-id vereist is",
+      "Het opnieuw importeren of opnieuw seeden van content die eerder zacht was verwijderd (via ongedaan maken, of anderszins) herstelde deze niet — het record en de bijbehorende rijen worden nu correct hersteld in plaats van permanent verborgen te blijven achter het oude record"
     ]
   },
   "releases": [

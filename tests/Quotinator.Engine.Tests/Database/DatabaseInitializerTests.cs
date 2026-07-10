@@ -8,6 +8,7 @@ using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Engine.Database;
+using Quotinator.Engine.Entities;
 using Quotinator.Engine.Repositories;
 using Quotinator.Engine.Services;
 
@@ -58,7 +59,12 @@ public class DatabaseInitializerTests
         var actionReader   = new SystemImportActionReader(factory);
         var actionWriter   = new SystemImportActionWriter(factory);
         var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService  = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance);
+        var actionService  = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            importBatches, factory);
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
             coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
@@ -509,7 +515,12 @@ public class DatabaseInitializerTests
         var actionReader  = new SystemImportActionReader(factory);
         var actionWriter  = new SystemImportActionWriter(factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance);
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            importBatches, factory);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,

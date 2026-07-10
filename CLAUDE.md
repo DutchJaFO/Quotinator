@@ -719,6 +719,48 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    ```
    Discard must return `204`; every action in that batch must now show `"status":"Discarded"` — nothing was ever applied, since creation is deferred to apply time.
 
+   **Reverse (undo)** (#59):
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" \
+     -F "file=@data/sources/quotinator-curated.json" \
+     -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
+     -w "\n%{http_code}\n" \
+     "http://localhost:8080/api/v1/import"
+   ```
+   Note the returned `batchId` — this must be `200` (a clean apply, nothing pending) so there is a
+   genuinely `Applied` batch to reverse.
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
+   curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>"
+   ```
+   `preview=true` must return `200` without changing anything; the real call must also return `200`.
+   The actions listing must still show every action `"status":"Applied"` afterwards — reversal never
+   introduces a new action status; the batch's own record being gone is the only signal it was undone
+   (confirm via `GET /api/v1/admin/audit` or `Quotinator.Tools.DbInspector` against `ImportBatches`
+   showing `IsDeleted=1` for this batch, since there is no `GET /import-batches` listing endpoint).
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
+   ```
+   Reversing the same batch again must now return `404` (already reversed, treated as absent).
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" \
+     -F "file=@data/sources/quotinator-curated.json" \
+     -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
+     -w "\n%{http_code}\n" \
+     "http://localhost:8080/api/v1/import"
+   ```
+   Re-importing the same file after reversal must succeed (`200`/`202`, never a silent no-op) and the
+   curated quotes must be reachable again via `GET /api/v1/quotes/search?q=Airplane&field=source` —
+   this is the resurrection fix (#59) proven live, not just by `ApplyResolvedActionAsync_ReAddAfterSoftDelete_ResurrectsSoftDeletedRow`.
+   Finally, with at least one other batch applied after the one just reversed (true for a normal
+   database with seed + this import history), attempt to reverse an older batch out of order:
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<an older batchId>"
+   ```
+   Must return `422` — the strict LIFO stack rule (#59): only the most recently applied batch still
+   live may be reversed, regardless of whether it shares any entities with the older one.
+
    **Bodyless request validation** (#154) — a `POST /import` with no body, no `Content-Type`, and no `batchId` must be rejected with a clear, actionable message rather than a bare framework `400`:
    ```bash
    curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import"

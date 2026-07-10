@@ -248,6 +248,14 @@ internal static class Sql
         internal const string SelectIdBySourceAndName =
             "SELECT Id FROM Characters WHERE SourceId = @sourceId AND Name = @name AND IsDeleted = 0;";
 
+        /// <summary>
+        /// Number of active (non-deleted) Quotes still referencing this Character — used by #59's
+        /// batch-undo to decide whether reversing a Character Add is safe (no live row still needs
+        /// it) or must be skipped (still shared).
+        /// </summary>
+        internal const string CountActiveReferences =
+            "SELECT COUNT(*) FROM Quotes WHERE CharacterId = @id AND IsDeleted = 0;";
+
         // #154's applier resolves an already-staged EntityId (a stable id or a real one from
         // planning-time lookup) idempotently — OR IGNORE lets two concurrently-applied batches that
         // both staged an Add for the same not-yet-existing Character land safely.
@@ -263,6 +271,10 @@ internal static class Sql
         internal const string DeleteAll   = "DELETE FROM People;";
         internal const string SelectIdByName = "SELECT Id FROM People WHERE Name = @name AND IsDeleted = 0;";
 
+        /// <summary>Number of active (non-deleted) Quotes still referencing this Person — see <see cref="Characters.CountActiveReferences"/>'s remark.</summary>
+        internal const string CountActiveReferences =
+            "SELECT COUNT(*) FROM Quotes WHERE PersonId = @id AND IsDeleted = 0;";
+
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
         internal const string InsertIfNotExists =
             "INSERT OR IGNORE INTO People (Id, Name, DateOfBirth, DateOfDeath, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, IsComplete, NoValueKnown) " +
@@ -277,6 +289,15 @@ internal static class Sql
         internal const string SelectIdByTitleAndType =
             "SELECT Id FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
 
+        /// <summary>
+        /// Number of active (non-deleted) rows still referencing this Source — sums both direct
+        /// Quotes and Characters, since a Character can outlive the specific Quote that introduced it
+        /// (see <see cref="Characters.CountActiveReferences"/>'s remark for the reversal use case).
+        /// </summary>
+        internal const string CountActiveReferences =
+            "SELECT (SELECT COUNT(*) FROM Quotes WHERE SourceId = @id AND IsDeleted = 0) " +
+            "+ (SELECT COUNT(*) FROM Characters WHERE SourceId = @id AND IsDeleted = 0);";
+
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
         internal const string InsertIfNotExists =
             "INSERT OR IGNORE INTO Sources (Id, Title, Type, Date, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, IsComplete, NoValueKnown) " +
@@ -286,11 +307,16 @@ internal static class Sql
     /// <summary>ImportBatches table.</summary>
     internal static class ImportBatches
     {
+        // ImportedAt has only whole-second precision, so two batches created within the same second
+        // (routine in tests, and possible in fast-successive real API calls) tie under ORDER BY
+        // ImportedAt DESC alone — SQLite does not guarantee a stable order for ties. ROWID DESC breaks
+        // the tie deterministically in insertion order (#59's strict batch-undo stack relies on this
+        // ordering being exact, not just "usually right" — found via a genuinely red test).
         internal const string SelectAll =
-            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 ORDER BY ImportedAt DESC;";
+            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 ORDER BY ImportedAt DESC, ROWID DESC;";
 
         internal const string SelectByType =
-            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC;";
+            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC, ROWID DESC;";
 
         internal const string UpdateRecordCount =
             "UPDATE ImportBatches SET RecordCount = @count, DateModified = @now WHERE Id = @id;";

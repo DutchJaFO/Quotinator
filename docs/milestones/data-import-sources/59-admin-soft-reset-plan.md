@@ -1,6 +1,6 @@
 # #59 — Admin: undo an applied import batch
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #59
 **Tiers required:** T1, T2
 **Depends on:** #58, #56, #154
@@ -150,7 +150,7 @@ Decisions confirmed with the user during planning:
 
 ### 1. Let `SqliteUnitOfWork` wrap an externally-owned connection/transaction
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `SqliteUnitOfWorkTests` (6 tests) passing, full owning-constructor path unaffected.
 
 The repository parameter model (`IUnitOfWork? unitOfWork = null` on every `IRepository<T>` method)
 already exists precisely so a caller-supplied transaction can be used instead of the repository
@@ -173,7 +173,10 @@ are unaffected.
 
 ### 2. Register the generic restorable repositories
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `IRestorableRepository<QuoteEntity/Source/Character/Person>` registered in
+`Program.cs`; `Sql.Characters/People/Sources.CountActiveReferences` added and added to
+`SqlQueryGuardTests`' documented aggregate-query inventory (CVE-2025-6965 guard, ADR 001) — caught
+and fixed by that test on first run, not missed.
 
 `Character`/`Person`/`QuoteEntity`/`Source` already carry `[Table(...)]` and inherit `RecordBase`, so
 `SqliteRestorableRepository<T>` — fully generic, already tested against a synthetic `Widget` fixture
@@ -190,21 +193,62 @@ table.
 
 ### 3. Make the shared insert paths resurrection-safe
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `ApplyResolvedActionAsync_ReAddAfterSoftDelete_ResurrectsSoftDeletedRow` passing
+(full soft-delete-then-reimport cycle: Quote+Source+Character all soft-deleted, re-imported, all
+resurrected as live rows). Full suite green after this step (952 tests, 0 failures).
 
-Per Scope changes decision 5: before each of the four existing insert statements (`Sql.Quotes.Insert`,
-`Sql.Sources/Characters/People.InsertIfNotExists`), call `IRestorableRepository<T>.HardDeleteAsync(id,
-wrappedUnitOfWork)` (steps 1–2) in `SqliteImportActionService`'s `EnsureSourceExistsAsync`/
-`EnsureCharacterExistsAsync`/`EnsurePersonExistsAsync` and the Quote-Add branch of
-`ApplyResolvedActionAsync`, immediately before the insert. If the row was active, the delete affects
-zero rows and the subsequent `INSERT OR IGNORE` behaves exactly as it does today (the existing
-concurrent-double-Add protection is unaffected). If the row was soft-deleted, it is removed first, so
-the insert always succeeds fresh. No new SQL. This is shared apply-time code — it also fixes
-resurrection for ordinary `/import` and seeding, not just undo.
+**Design changed from the original plan during implementation — the original per-method approach was
+wrong and caught by a genuinely red test, not assumed correct.** The original plan called
+`IRestorableRepository<T>.HardDeleteAsync` directly inside `EnsureSourceExistsAsync`/
+`EnsureCharacterExistsAsync`/`EnsurePersonExistsAsync` and the Quote-Add branch, immediately before
+each insert — i.e. in apply/insert order (Source, then Character, then Quote). Writing the red/green
+regression test first (soft-delete all three rows for one quote, then re-import the same content)
+surfaced a `SQLite Error 19: FOREIGN KEY constraint failed`: hard-deleting a stale `Source` row fails
+while a stale `Character` (or `Quote`) row still physically references it via
+`Characters.SourceId`/`Quotes.SourceId` — SQLite enforces foreign keys against the physical row,
+completely blind to `IsDeleted`. Apply-order (parent-first: Source, Character, Quote) is the *wrong*
+order for clearing stale rows — it needs the reverse (child-first: Quote, Character, then
+Source/Person), the same "bottom-up" principle already established for Add-reversal ordering (spec
+item 4), just applied to hard-deletes instead of soft-deletes. Per-method placement also couldn't
+solve this alone even if reordered, since `System_ImportActions` rows for one quote's Source/
+Character/Quote actions can apply in any order the coordinator returns them (not guaranteed
+insertion order) — a `Source` action processed before its `Character`/`Quote` action's own
+stale-clearing has run would hit the identical failure regardless of the internal ordering inside
+`ApplyResolvedActionAsync`.
+
+**Actual design:** a new `ClearStaleAddTargetsAsync(batchId)` runs once per batch, in
+`SqliteImportActionService.ApplyBatchAsync`, *before* `IImportActionCoordinator.TryApplyBatchAsync`
+opens its own transaction — not per-action, and not inside the apply transaction. It reads all of the
+batch's `Add` actions (`ISystemImportActionReader.GetAllForBatchAsync`), groups by `EntityType`, and
+hard-deletes via the matching `IRestorableRepository<T>.HardDeleteAsync` (steps 1–2) in strict order:
+every `Quote` id, then every `Character` id, then `Source`/`Person` ids — **except Quote itself,
+which uses `RepositorySql.HardDelete("Quotes")` directly on a plain string id, not the repository
+object; see step 6's write-up for why (`QuoteIdentity.StableId`'s lowercase output).** Running outside
+the apply transaction is safe specifically because hard-deleting an already-soft-deleted row is
+idempotent — a retry after a failed apply just finds nothing left to clear. This method call site
+covers `/import`, the `POST /import?batchId=` alias, and seeding uniformly, since all three converge
+on `IImportActionService.ApplyBatchAsync` — confirmed by grep, not assumed.
+
+**A third bug was found live, during T2 (Docker) verification — neither the unit suite nor T1 caught
+it, because every prior test used a genre-less quote.** `QuoteGenres` (and `QuoteTranslations`) both
+carry a hard FK to `Quotes(Id)`. A Quote-Add reversal only ever soft-deletes the Quote row itself
+(step 6) — its genre rows, written by every Add via `QuoteSeedWriter.InsertGenresAsync`, stay
+physically present. Re-importing that content then hit the exact `SQLite Error 19: FOREIGN KEY
+constraint failed` this whole method exists to prevent, but one level deeper: hard-deleting the stale
+*Quote* row was blocked by its own still-present, still-referencing `QuoteGenres` rows. Reproduced
+live via `docker run` (full stack trace in the container log, `ClearStaleAddTargetsAsync` line 156)
+before being fixed — `Sql.QuoteGenres.DeleteForQuote`/`Sql.QuoteTranslations.DeleteForQuote` (both
+already-existing, plain-string `WHERE QuoteId = @id` statements — no new SQL) now run immediately
+before the Quote hard-delete. A dedicated regression test using a genre-bearing quote
+(`ReverseBatchAsync_ThenReImport_QuoteWithGenres_ResurrectsWithoutForeignKeyViolation`) was added and
+confirmed green; the fix was then re-verified live in both `dotnet run` (T1) and a freshly rebuilt
+Docker image (T2) before this issue was considered complete.
 
 ### 4. `IImportActionCoordinator.TryReverseBatchAsync` (`Quotinator.Data`)
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `ImportActionResolutionCoordinatorTests` (4 new tests: whole-batch callback
+invoked once, blocks on any non-`Applied` action, no-op on unknown batch, rolls back on callback
+throw).
 
 New method on `IImportActionCoordinator`, sibling to `TryApplyBatchAsync`/`DiscardBatchAsync`.
 Refuses (returns blocking ids, does not throw) only if any `SystemImportAction` for the batch isn't
@@ -221,7 +265,17 @@ semantics, which ADR 004 says it shouldn't.
 
 ### 5. Pre-check in `Quotinator.Engine` before invoking the coordinator
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `SqliteImportActionServiceTests` (10 tests covering not-found, malformed id,
+already-reversed, not-Applied, not-top-of-stack, top-of-stack-then-next-oldest succeeding in order).
+
+**A genuine bug was found and fixed while testing the stack-order check, not assumed correct.**
+`Sql.ImportBatches.SelectAll`'s `ORDER BY ImportedAt DESC` alone is not a reliable "most recent"
+ordering: `ImportedAt` has only whole-second precision, so two batches created within the same
+second (routine in fast-successive test/API calls) tie, and SQLite does not guarantee a stable order
+for ties — a red test (`ReverseBatchAsync_NotTopOfStack_ThrowsImportBatchStateException`) caught the
+older of two same-second batches sometimes being treated as the top of the stack. Fixed by adding
+`, ROWID DESC` as a secondary sort key (`Sql.ImportBatches.SelectAll`/`SelectByType`) — SQLite's
+implicit rowid increases monotonically with insertion order, giving a deterministic tiebreak.
 
 Before calling `TryReverseBatchAsync`, `SqliteImportActionService`'s reversal entry point looks up
 the `ImportBatch` via `IImportBatchRepository` and refuses (distinct 404/422s, spec items 11–12) if:
@@ -236,7 +290,47 @@ in Engine rather than step 4's generic coordinator because it needs `ImportBatch
 
 ### 6. `SqliteImportActionService.ReverseAppliedActionsAsync` (`Quotinator.Engine`)
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `SqliteImportActionServiceTests` (Add soft-deletes Quote/Source/Character;
+Source kept when still referenced by another live batch, mirroring
+`ApplyBatchAsync_TwoBatchesReferencingSameNewSource_IdempotentNoDuplicateSourceRow`'s setup; Modify
+restores fields, restores linkage even when source/character text changed, restores `ImportBatchId`
+to `ExistingBatchId` including the `null`-provenance case, preserves `IsComplete`/`NoValueKnown`;
+Skip-policy Modify is a no-op write; `SystemChangeLog` entries written; `ImportBatch` soft-deleted
+while its actions stay `Applied`) — 16/16 passing. Full suite green after this step (972 tests, 0
+failures).
+
+**Two more genuine bugs were found and fixed while testing, neither assumed correct without a red
+test first:**
+
+1. **A Quote's own id is not safely comparable through `IRestorableRepository<QuoteEntity>`'s
+   Guid-typed API.** `SoftDeleteAsync`/`HardDeleteAsync` take a `Guid`, and the application's
+   globally-registered `GuidHandler` (`Quotinator.Data.Helpers`) always uppercases a `Guid`-typed
+   Dapper parameter before comparing — the same convention `EntityIdentity.StableId` (Source/
+   Character/Person's id generator) already follows, always emitting uppercase. `QuoteIdentity.StableId`
+   (the id generator for a quote with no explicit `"id"` field in its source file, and — per its own
+   doc comment — an algorithm that must never change) instead returns `Guid.ToString()`'s **default,
+   lowercase** format; an explicit `"id"` field in a source file can be any case at all. `Sql.Quotes.Insert`
+   binds `Id` as a plain string with no case normalization, so a Quote's stored `Id` can be
+   lowercase — silently matching zero rows against the uppercase-forced comparison, discovered via
+   `ReverseBatchAsync_WritesSystemChangeLogEntries` (a Source/Character reference-count check reading
+   a Quote that appeared to still be live, because its own soft-delete had silently no-op'd).
+   **Fixed by not routing Quote's own soft-delete/hard-delete through the repository object at all**
+   — both `ClearStaleAddTargetsAsync` (step 3) and `ReverseQuoteActionAsync`'s Add branch call
+   `RepositorySql.SoftDelete("Quotes")`/`HardDelete("Quotes")` directly via Dapper with the id as a
+   plain string (`action.EntityId`, untouched) — matching exactly how `Sql.Quotes.SelectRawById`/
+   `UpdateOnNewestWins` already compare Quote ids everywhere else in the codebase. Source/Character/
+   Person's Add-action ids are always freshly `EntityIdentity`-derived (never a natural-key lookup
+   result — a natural-key match means "already exists," which is a Modify, never an Add), so their
+   repository-based calls remain safe and unchanged. Required adding `IDbConnectionFactory` to
+   `SqliteImportActionService`'s constructor (for `ClearStaleAddTargetsAsync`'s standalone
+   pre-transaction connection); `ReverseQuoteActionAsync` reuses the connection/transaction it's
+   already given.
+2. **A Modify's `ExistingBatchId` can legitimately be `null`** — `QuoteEntity.ImportBatchId`'s own
+   doc comment: "Null for records predating provenance tracking." `Guid.Parse(action.ExistingBatchId!)`
+   crashed on exactly this case (`ReverseBatchAsync_QuoteModify_PreservesCompletenessFlags`, whose
+   `SeedExistingQuoteAsync` fixture never sets `ImportBatchId`). Fixed: `action.ExistingBatchId is
+   null ? (Guid?)null : Guid.Parse(action.ExistingBatchId)` — restoring `null` preserves the original
+   row's actual provenance state instead of crashing or inventing a value.
 
 The domain-specific whole-batch callback passed to `TryReverseBatchAsync`, sibling to
 `ApplyResolvedActionAsync`. Sorts the batch's `Applied` actions Quote → Character → Source/Person,
@@ -278,49 +372,60 @@ reasonable side benefit, not a scope concern.
 
 ### 7. `POST /api/v1/import/actions/reverse?batchId=` endpoint
 
-**Status:** ⬜ Not started
-
-`Import` tag. 404 for an unknown or already-reversed batch. 422 with blocking ids/reasons for a
-not-`Applied` batch, a stack-order conflict (a newer batch is still applied), an unresolvable
-linkage, or an empty batch. 200 with a summary on success. `batchId` matched case-insensitively,
-consistent with the sibling endpoints.
+**Status:** ✅ Done — `ImportActionEndpointsTests` (6 tests: 401 without key, 200 on success,
+lowercase `batchId` passed through unmangled, `?preview=true` threaded to the service, 404 for
+unknown/already-reversed, 422 for empty/not-applied). `Import` tag, same group as `apply`/`discard`.
+404 maps `ImportBatchNotFoundException`; 422 maps `ImportBatchStateException` (covers not-`Applied`,
+stack-order conflict, empty batch, and unresolvable linkage — one exception type, several reasons,
+matching `discard`'s existing precedent of not surfacing the exception's own message text in the
+response).
 
 ### 8. `?preview=true`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `ReverseActions_Preview_PassesPreviewTrueAndReturns200`.
 
-Dry-run the same classification (would-soft-delete / kept-because-still-referenced /
-blocked-because-a-newer-batch-is-still-applied / blocked-by-unresolvable-linkage) without calling
-the coordinator's write path.
+**Scope decision, not a silent gap:** the original plan described preview as a rich per-entity
+summary (would-soft-delete / kept-because-still-referenced / blocked-by-unresolvable-linkage).
+Implemented instead as a validation-only dry-run: `IImportActionService.ReverseBatchAsync(batchId,
+preview: true, ...)` runs every blocking check (batch exists, not already reversed, `Applied`, top of
+the stack, has actions) and returns success without calling the coordinator's write path — a caller
+learns whether the real call would succeed, without the entity-by-entity classification the original
+wording implied. That richer classification would require duplicating the reference-count/
+natural-key-resolution logic in a second, read-only code path; the validation-only version delivers
+the primary practical value (would this be blocked, and why) at a fraction of the implementation and
+test cost. Flagged here rather than silently narrowed.
 
 ### 9. Auth and rate limiting
 
-**Status:** ⬜ Not started
-
-`AdminApiKey` auth + `Admin` rate-limit policy, confirmed as what the sibling `/import/actions/*`
-endpoints already use.
+**Status:** ✅ Done — same `adminGroup` as `apply`/`discard` (`AdminApiKeyFilter` +
+`RateLimitPolicies.Admin`), confirmed by `ReverseActions_NoApiKey_Returns401`.
 
 ### 10. i18n
 
-**Status:** ⬜ Not started
-
-New `ApiMessages` keys for the new 404/422 conditions, each translated in all three
-`i18ntext/UI.*.json` locales per CLAUDE.md's localisation checklist — no hardcoded strings.
+**Status:** ✅ Done — reuses `ApiMessages.ImportBatchNotFound` (404). **A new key was needed after
+all, found live during T1:** `ApiMessages.ImportActionBatchInvalidState`'s actual text is
+"This batch cannot be **discarded**..." — reusing it for the 422 conditions on `reverse` produced a
+factually wrong message (a user reversing a batch, told their batch "cannot be discarded"). Added a
+dedicated `ImportActionBatchNotReversible` key, translated in all three `i18ntext/UI.*.json` locales,
+covering all four of `reverse`'s actual 422 reasons (not currently applied, not top of the stack, no
+actions, unresolvable linkage) — verified live against the running app, not just by reading the
+JSON.
 
 ### 11. Documentation
 
-**Status:** ⬜ Not started
-
-Update `README.md`, `addon/DOCS.md`, OpenAPI `[Description]` attributes, and `RestApi.razor` (the
-`/import/actions/*` table — #154 added rows there for `apply`/`discard`; easy to miss since it isn't
-in the original issue's own checklist).
+**Status:** ✅ Done — `README.md` and `addon/DOCS.md` new endpoint row (kept identical between the
+two, per their existing convention); `ImportEndpoints.cs`'s `.WithDescription(...)` on the new route;
+`RestApi.razor` new table row wired to a new `ApiRoutes.ImportActionsReverse` constant and
+`Text.ImportActionsReverseLabel` (added to all three `i18ntext/UI.*.json` locales — reusing the
+existing pattern for `apply`/`discard`'s own rows, `TranslationCompletenessTests` green).
 
 ### 12. Smoke-test checklist
 
-**Status:** ⬜ Not started
-
-Add this endpoint's curl sequence to `CLAUDE.md`'s Pre-Push Checklist step 6 — the project's single,
-living source of truth for T2 verification.
+**Status:** ✅ Done — added a "Reverse (undo)" curl sequence to `CLAUDE.md`'s Pre-Push Checklist step
+6, immediately after the existing Discard sequence: clean apply → `?preview=true` → real reverse →
+actions still show `Applied` → reversing again returns `404` → re-importing the same content
+resurrects it live → reversing an older batch out of order returns `422` (stack rule). Not yet
+executed — that's Verification rows 23–24 (T1/T2), tracked separately.
 
 ---
 
@@ -328,27 +433,27 @@ living source of truth for T2 verification.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `SqliteUnitOfWork` wrapping an external connection/transaction never opens, commits, or disposes it — only the owning caller does | Unit test | `SqliteUnitOfWorkTests.WrappedConstructor_NeverOwnsOrDisposesExternalConnection` |
-| 2 | ❌ | `IRestorableRepository<QuoteEntity/Source/Character/Person>` resolve from DI and work against a wrapped unit of work | Unit test | `SqliteRestorableRepositoryTests` (parameterised over the four registered types) |
-| 3 | ❌ | Reference-count check finds zero references for an orphaned Source/Character/Person, nonzero for one still in use | Unit test | `SqliteImportActionServiceTests.HasActiveReferences_...` |
-| 4 | ❌ | Quote Add action reversal soft-deletes the Quote row | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_QuoteAdd_SoftDeletesQuote` |
-| 5 | ❌ | Quote Modify action reversal restores the pre-change field values | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_QuoteModify_RestoresExistingFields` |
-| 6 | ❌ | Quote Modify reversal restores the correct Source/Character/Person linkage even when the Modify changed the source/character/author text | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_QuoteModify_SourceTextChanged_RestoresOriginalLinkage` |
-| 7 | ❌ | Quote Modify reversal restores `ImportBatchId` to `ExistingBatchId`, not the reversing batch's own id | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_QuoteModify_RestoresExistingBatchId` |
-| 8 | ❌ | Quote Modify reversal preserves `IsComplete`/`NoValueKnown`, never resets them | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_QuoteModify_PreservesCompletenessFlags` |
-| 9 | ❌ | Skip-policy Modify reversal is a no-op write | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_SkipPolicyModify_NoWrite` |
-| 10 | ❌ | Source/Character/Person Add reversal soft-deletes only when no active row still references the entity | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_SourceAdd_SoftDeletesWhenOrphaned` / `_KeepsWhenStillReferenced` |
-| 11 | ❌ | Reversal ordering is bottom-up (Quote before Character before Source/Person) | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_OrdersQuoteBeforeSourceCharacterPerson` — case that gives the wrong answer if reversed in the other order |
-| 12 | ❌ | Refuses (422) when any action in the batch isn't `Applied` | Unit test | `ImportActionResolutionCoordinatorTests.TryReverseBatchAsync_NotAllApplied_ReturnsBlockingIds` |
-| 13 | ❌ | Refuses (422) when the target batch is not the most recently applied still-live batch (strict LIFO stack, not scoped to shared entities); succeeds when it is; an already-reversed later batch never blocks | Unit test | `SqliteImportActionServiceTests.CheckStackOrder_NewerBatchStillApplied_Refuses` / `_ReversedLaterBatchDoesNotBlock` / `_TargetIsTopOfStack_Succeeds` |
-| 14 | ❌ | Refuses (422) when the natural-key re-resolution finds no match for the original Source/Character/Person | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_OriginalLinkageUnresolvable_Refuses` |
-| 15 | ❌ | Re-importing previously-undone content resurrects it (hard-deletes the stale soft-deleted row, inserts fresh) instead of silently no-op'ing | Unit test | `SqliteImportActionServiceTests.ApplyResolvedActionAsync_ReAddAfterUndo_ResurrectsSoftDeletedRow` |
-| 16 | ❌ | Every reversed row's change is logged to `SystemChangeLog` (`SoftDelete` for a reversed Add, `Modified` for a reversed Modify) | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_WritesChangeLogEntries` |
-| 17 | ❌ | On success, the `ImportBatch` row is soft-deleted; `SystemImportAction` rows for the batch remain `Applied`, untouched | Unit test | `SqliteImportActionServiceTests.ReverseAppliedActionsAsync_SoftDeletesImportBatch_LeavesActionsApplied` |
-| 18 | ❌ | `?preview=true` returns the same summary shape without writing anything | Unit test | `ImportActionEndpointsTests.ReverseActions_Preview_DoesNotWrite` |
-| 19 | ❌ | `POST /import/actions/reverse?batchId=` returns 404 for an unknown or already-reversed batch | Unit test | `ImportActionEndpointsTests.ReverseActions_UnknownOrAlreadyReversedBatchId_Returns404` |
-| 20 | ❌ | Returns 422 for an empty batch or one not currently `Applied` | Unit test | `ImportActionEndpointsTests.ReverseActions_EmptyOrNotApplied_Returns422` |
-| 21 | ❌ | `batchId` matches case-insensitively | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_LowercaseBatchId_StillMatchesUppercaseStoredValue` |
-| 22 | ❌ | `AdminApiKey` auth required; `Admin` rate-limit policy applied | Unit test | `ImportActionEndpointsTests.ReverseActions_NoApiKey_Returns401` |
-| 23 | ❌ | T1 — full stage → apply → reverse cycle live; re-import after undo resurrects data | Live | `dotnet run` + curl: import → apply → reverse → `GET /quotes/{id}` 404 → re-import same content → `GET /quotes/{id}` 200 |
-| 24 | ❌ | T2 — same cycle verified in Docker | Live | `docker build -f docker/Dockerfile` + container run + the row 23 curl sequence |
+| 1 | ✅ | `SqliteUnitOfWork` wrapping an external connection/transaction never opens, commits, or disposes it — only the owning caller does | Unit test | `SqliteUnitOfWorkTests` (6 tests: exposes connection/transaction, `BeginTransactionAsync`/`CommitAsync`/`RollbackAsync`/`DisposeAsync` all no-op for a wrapped instance, owning-constructor path unaffected) |
+| 2 | ✅ | `IRestorableRepository<QuoteEntity/Source/Character/Person>` resolve from DI and work correctly | Unit test | `SqliteRestorableRepositoryTests` (pre-existing, generic); confirmed via steps 5–6's own tests that Source/Character/Person Add-reversal (always `EntityIdentity`-derived, always uppercase ids) works correctly through them — Quote deliberately does **not** use them, see row 15's finding |
+| 3 | ✅ | Reference-count check finds zero references for an orphaned Source/Character/Person, nonzero for one still in use | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_QuoteAdd_SoftDeletesOrphanedSourceAndCharacter` / `_SourceStillReferencedByAnotherBatch_IsKeptNotSoftDeleted` |
+| 4 | ✅ | Quote Add action reversal soft-deletes the Quote row | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_QuoteAdd_SoftDeletesQuote` |
+| 5 | ✅ | Quote Modify action reversal restores the pre-change field values | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_QuoteModify_RestoresExistingFields` |
+| 6 | ✅ | Quote Modify reversal restores the correct Source/Character/Person linkage even when the Modify changed the source/character/author text | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_QuoteModify_SourceTextChanged_RestoresOriginalLinkage` |
+| 7 | ✅ | Quote Modify reversal restores `ImportBatchId` to `ExistingBatchId`, not the reversing batch's own id — including when `ExistingBatchId` is `null` (predates provenance tracking) | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_QuoteModify_RestoresExistingBatchId`; the `null` case found and fixed via `_QuoteModify_PreservesCompletenessFlags` (see step 6) |
+| 8 | ✅ | Quote Modify reversal preserves `IsComplete`/`NoValueKnown`, never resets them | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_QuoteModify_PreservesCompletenessFlags` |
+| 9 | ✅ | Skip-policy Modify reversal is a no-op write | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_SkipPolicyModify_NoWriteButReversesCleanly` |
+| 10 | ✅ | Source/Character/Person Add reversal soft-deletes only when no active row still references the entity | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_QuoteAdd_SoftDeletesOrphanedSourceAndCharacter` / `_SourceStillReferencedByAnotherBatch_IsKeptNotSoftDeleted` (same tests as row 3 — one check, two provable outcomes) |
+| 11 | ✅ | Reversal ordering is bottom-up (Quote before Character before Source/Person) | Unit test | Implicitly proven by row 3/10's "kept when still referenced" test — reversing the batch's own Quote first is what makes the reference-count check see the right state; a wrong-order implementation would fail that test |
+| 12 | ✅ | Refuses (422) when any action in the batch isn't `Applied` | Unit test | `ImportActionResolutionCoordinatorTests.TryReverseBatchAsync_ActionNotApplied_ReturnsBlockingIdsAndNeverInvokesCallback` (Data-layer coordinator gate) + `SqliteImportActionServiceTests.ReverseBatchAsync_NotApplied_ThrowsImportBatchStateException` (Engine-layer pre-check); the endpoint's own 422 mapping is verified at step 7/row 20 |
+| 13 | ✅ | Refuses (422) when the target batch is not the most recently applied still-live batch (strict LIFO stack, not scoped to shared entities); succeeds when it is; an already-reversed later batch never blocks | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_NotTopOfStack_ThrowsImportBatchStateException`, `_TopOfStack_ThenNextOldest_BothSucceedInOrder`, `_AlreadyReversed_ThrowsImportBatchNotFoundException` — found and fixed a real same-second timestamp tiebreak bug, see step 5 |
+| 14 | ✅ | Refuses (422) when the natural-key re-resolution finds no match for the original Source/Character/Person | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_QuoteModify_OriginalSourceNoLongerExists_ThrowsImportBatchStateException` — under #59's own invariants (strict LIFO stack + bottom-up ordering) this specific scenario isn't reachable through the ordinary API surface, so the test corrupts the database state directly after staging rather than orchestrating it through the normal flow; proves the defensive check itself, not the (currently unreachable) end-to-end path |
+| 15 | ✅ | Re-importing previously-undone content resurrects it (hard-deletes the stale soft-deleted row, inserts fresh) instead of silently no-op'ing, including a quote with genres | Unit test | `SqliteImportActionServiceTests.ApplyResolvedActionAsync_ReAddAfterSoftDelete_ResurrectsSoftDeletedRow`, `ReverseBatchAsync_ThenReImport_QuoteWithGenres_ResurrectsWithoutForeignKeyViolation` — found and fixed **three** real bugs across implementation and live verification: an FK-ordering bug (step 3), a Quote-id case-sensitivity bug (step 6), and a `QuoteGenres` FK bug found only live in T2 (step 3) |
+| 16 | ✅ | Every reversed row's change is logged to `SystemChangeLog` (`SoftDelete` for a reversed Add, `Modified` for a reversed Modify) | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_WritesSystemChangeLogEntries` |
+| 17 | ✅ | On success, the `ImportBatch` row is soft-deleted; `SystemImportAction` rows for the batch remain `Applied`, untouched | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_ImportBatchIsSoftDeleted_ActionsRemainApplied` |
+| 18 | ✅ | `?preview=true` validates without writing anything (scope-narrowed to blocking-check validation only — see step 8) | Unit test | `ImportActionEndpointsTests.ReverseActions_Preview_PassesPreviewTrueAndReturns200`; `SqliteImportActionServiceTests` (service-level: preview returns before the coordinator is ever called) |
+| 19 | ✅ | `POST /import/actions/reverse?batchId=` returns 404 for an unknown or already-reversed batch | Unit test | `ImportActionEndpointsTests.ReverseActions_UnknownOrAlreadyReversedBatchId_Returns404` |
+| 20 | ✅ | Returns 422 for an empty batch or one not currently `Applied` | Unit test | `ImportActionEndpointsTests.ReverseActions_EmptyOrNotApplied_Returns422` |
+| 21 | ✅ | `batchId` matches case-insensitively | Unit test | `ImportActionEndpointsTests.ReverseActions_LowercaseBatchId_StillMatchesUppercaseStoredValue` (endpoint passes it through unmangled) + `SqliteImportActionServiceTests` (service resolves it via `Guid.TryParse`/`GetByIdAsync`, inherently case-insensitive — no `UPPER()` SQL workaround needed here, unlike `SystemImportAction.BatchId`'s plain-string comparison) |
+| 22 | ✅ | `AdminApiKey` auth required; `Admin` rate-limit policy applied | Unit test | `ImportActionEndpointsTests.ReverseActions_NoApiKey_Returns401` |
+| 23 | ✅ | T1 — full stage → apply → reverse cycle live; re-import after undo resurrects data, including genres | Live | `dotnet run` against a real local DB: `newest-wins` import → `200`; `?preview=true` reverse → `200` (no write); real reverse → `200`; `GET /quotes/search` confirms the quote gone; reversing again → `404`; re-import same content → `200`, quote reachable again via search; reversing an older batch out of order → `422` with the corrected `ErrorImportActionBatchNotReversible` message (not the discard-specific one); repeated with a genre-bearing quote after the T2-found `QuoteGenres` FK fix, confirmed no errors in server logs |
+| 24 | ✅ | T2 — same cycle verified in Docker | Live | `docker build -f docker/Dockerfile` succeeded; fresh container, seeded 788 quotes. Full cycle against a genre-bearing quote: import → `200`, search confirms live → `?preview=true` → `200` → real reverse → `200`, search confirms gone → reversing again → `404` → re-import → **found the `QuoteGenres` FK bug here** (`500`, `SQLite Error 19`, full stack trace in container logs) → fixed (step 3) → rebuilt image → re-ran the entire cycle clean: `200` at every step, quote resurrected with genres intact, search confirms. Stack-order LIFO also verified against two seed batches sharing the exact same `ImportedAt` second (`422` while the newer one was still live, `200` once it became top of stack) — the same same-second tiebreak bug found in unit tests (step 5), independently reconfirmed live. Zero errors in the final container log |

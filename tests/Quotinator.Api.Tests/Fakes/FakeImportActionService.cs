@@ -12,6 +12,7 @@ internal sealed class FakeImportActionService : IImportActionService
     public Exception? ThrowOnDecide { get; set; }
     public Exception? ThrowOnUndo { get; set; }
     public Exception? ThrowOnDiscard { get; set; }
+    public Exception? ThrowOnReverse { get; set; }
     public ImportActionBatchStatusResponse? ReturnApplyResult { get; set; }
 
     public Guid? LastDecidedActionId { get; private set; }
@@ -19,6 +20,7 @@ internal sealed class FakeImportActionService : IImportActionService
     public Guid? LastUndoneActionId { get; private set; }
     public string? LastAppliedBatchId { get; private set; }
     public string? LastDiscardedBatchId { get; private set; }
+    public string? LastReversedBatchId { get; private set; }
 
     public Task<ImportActionPageResponse> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
         => Task.FromResult(ReturnPage ?? new ImportActionPageResponse
@@ -55,6 +57,16 @@ internal sealed class FakeImportActionService : IImportActionService
     {
         LastDiscardedBatchId = batchId;
         if (ThrowOnDiscard is not null) throw ThrowOnDiscard;
+        return Task.CompletedTask;
+    }
+
+    public bool? LastReversePreview { get; private set; }
+
+    public Task ReverseBatchAsync(string batchId, bool preview = false, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, CancellationToken cancellationToken = default)
+    {
+        LastReversedBatchId = batchId;
+        LastReversePreview  = preview;
+        if (ThrowOnReverse is not null) throw ThrowOnReverse;
         return Task.CompletedTask;
     }
 }

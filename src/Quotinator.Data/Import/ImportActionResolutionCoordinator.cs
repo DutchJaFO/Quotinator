@@ -121,4 +121,30 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
         conn.Open();
         await _writer.MarkBatchDiscardedAsync(batchId, conn);
     }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<Guid>?> TryReverseBatchAsync(
+        string batchId,
+        Func<IReadOnlyList<SystemImportAction>, IDbConnection, IDbTransaction, Task> reverseActions,
+        CancellationToken cancellationToken = default)
+    {
+        var actions = await _reader.GetAllForBatchAsync(batchId);
+
+        var notApplied = actions.Where(a => a.Status.Parsed != ImportActionStatus.Applied).Select(a => a.Id).ToList();
+        if (notApplied.Count > 0)
+            return notApplied;
+
+        if (actions.Count == 0)
+            return null; // Nothing to reverse — caller (Engine) is responsible for treating an unknown/empty batch as its own error.
+
+        using var conn = _factory.CreateConnection();
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await reverseActions(actions, conn, tx);
+
+        tx.Commit();
+        return null;
+    }
 }

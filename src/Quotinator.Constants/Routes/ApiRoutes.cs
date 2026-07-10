@@ -16,6 +16,7 @@ public static class ApiRoutes
     public const string ImportActionsUndo     = "/api/v1/import/actions/{id}/undo";
     public const string ImportActionsApply    = "/api/v1/import/actions/apply";
     public const string ImportActionsDiscard  = "/api/v1/import/actions/discard";
+    public const string ImportActionsReverse  = "/api/v1/import/actions/reverse";
     public const string CultureSet       = "/Culture/Set";
     public const string ScalarUi         = "/scalar/v1";
     public const string OpenApiSpec      = "/openapi/v1.json";

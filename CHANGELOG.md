@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-09 20:40 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-10 16:02 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Quotes can now be imported one file at a time (JSON or CSV) through a new API endpoint, with a preview mode that shows exactly what would happen before anything is written.
 - Duplicate quotes flagged for manual review can now be resolved field by field, choosing which side wins or supplying your own value — changes only take effect once every conflict from the same import file has been decided.
 - An import that needs review can now be finished later by referencing its batch, without needing to re-upload the file.
+- An applied import can now be undone through a new endpoint — reversing everything it added or changed, as long as no newer import has happened since.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -45,6 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New `POST /api/v1/import/actions/apply` endpoint applies every decided action in a batch at once, atomically, once every one of them has a decision recorded
 - New `POST /api/v1/import/actions/discard` endpoint discards every staged action in a batch at once, writing nothing
 - `POST /api/v1/import` can now apply an already-staged batch directly by referencing its batch id, instead of always requiring the file to be uploaded again
+- New `POST /api/v1/import/actions/reverse` endpoint undoes every action in an applied import batch — reversing an Add soft-deletes the record it created, reversing a Modify restores the pre-change field values; only the most recently applied batch still live can be reversed, and a `?preview=true` mode validates without writing anything
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
@@ -65,6 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The OpenAPI spec now correctly marks every import and staged-action-review write endpoint as requiring `X-Api-Key`; previously only `Admin`-tagged endpoints showed this requirement, so these never appeared as protected in the Scalar UI
 - `status`, `entityType`, and `batchId` query filters on `GET /api/v1/import/actions` matched case-sensitively, so a lowercase value (e.g. `?status=pending`) silently returned no results even though matching data existed
 - `POST /api/v1/import` with no file, no settings, and no batch id returned an uninformative generic error instead of a clear message stating that either a file or a batch id is required
+- Re-importing or reseeding content that had previously been soft-deleted (via undo, or otherwise) silently failed to restore it — the record and its related rows are now properly resurrected instead of being permanently hidden behind the old row
 
 ---
 

@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 62, 63, 64, 65, 140, 141, 143, 149, 152, 154],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 140, 141, 143, 149, 152, 154],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -20,7 +20,8 @@
       "Das Standardverhalten bei doppelten Zitaten wurde geändert: statt die zuerst gesehene Version zu behalten, wird jetzt die neueste Version behalten — das entspricht dem, was die meisten Menschen erwarten würden, wenn eine Quelldatei korrigiert oder aktualisiert wird.",
       "Zitate können jetzt über einen neuen API-Endpunkt jeweils eine Datei auf einmal importiert werden (JSON oder CSV), mit einem Vorschaumodus, der genau zeigt, was passieren würde, bevor etwas geschrieben wird.",
       "Doppelte Zitate, die zur manuellen Überprüfung markiert wurden, können jetzt Feld für Feld gelöst werden, wobei du wählst, welche Seite gewinnt, oder einen eigenen Wert angibst — Änderungen werden erst wirksam, sobald jeder Konflikt aus derselben Importdatei entschieden wurde.",
-      "Ein Import, der noch überprüft werden muss, kann jetzt später abgeschlossen werden, indem auf seinen Batch verwiesen wird, ohne die Datei erneut hochzuladen."
+      "Ein Import, der noch überprüft werden muss, kann jetzt später abgeschlossen werden, indem auf seinen Batch verwiesen wird, ohne die Datei erneut hochzuladen.",
+      "Ein angewendeter Import kann jetzt über einen neuen Endpunkt rückgängig gemacht werden — alles, was hinzugefügt oder geändert wurde, wird zurückgenommen, sofern seitdem kein neuerer Import stattgefunden hat."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -46,7 +47,8 @@
       "Neue Endpunkte `POST /api/v1/import/actions/{id}/decide` und `.../undo` legen eine Entscheidung pro Feld (behalten/ersetzen/eigener Wert) für eine gestaffelte Aktion fest oder machen sie rückgängig",
       "Neuer Endpunkt `POST /api/v1/import/actions/apply` wendet alle entschiedenen Aktionen eines Batches auf einmal atomisch an, sobald für jede davon eine Entscheidung vorliegt",
       "Neuer Endpunkt `POST /api/v1/import/actions/discard` verwirft alle gestaffelten Aktionen eines Batches auf einmal, ohne etwas zu schreiben",
-      "`POST /api/v1/import` kann jetzt einen bereits gestaffelten Batch direkt anwenden, indem auf dessen Batch-Id verwiesen wird, statt die Datei immer erneut hochladen zu müssen"
+      "`POST /api/v1/import` kann jetzt einen bereits gestaffelten Batch direkt anwenden, indem auf dessen Batch-Id verwiesen wird, statt die Datei immer erneut hochladen zu müssen",
+      "Neuer Endpunkt `POST /api/v1/import/actions/reverse` macht jede Aktion in einem angewendeten Import-Batch rückgängig — das Rückgängigmachen eines Add löscht den erstellten Datensatz weich, das Rückgängigmachen eines Modify stellt die Feldwerte vor der Änderung wieder her; rückgängig gemacht werden kann nur der zuletzt angewendete, noch aktive Batch, und ein `?preview=true`-Modus validiert, ohne etwas zu schreiben"
     ],
     "changed": [
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",
@@ -66,7 +68,8 @@
       "Ein Datenbank-Reset erstellt jetzt zuerst eine Sicherheitskopie und stellt diese automatisch wieder her, falls der Reset mittendrin fehlschlägt, anstatt die Datenbank möglicherweise in einem defekten, halb wiederhergestellten Zustand zu belassen",
       "Die OpenAPI-Spezifikation kennzeichnet jetzt jeden schreibenden Import- und Aktionsüberprüfungs-Endpunkt korrekt als `X-Api-Key` erfordernd; zuvor zeigten nur mit `Admin` getaggte Endpunkte diese Anforderung, sodass diese in der Scalar-UI nie als geschützt erschienen",
       "Die Query-Filter `status`, `entityType` und `batchId` bei `GET /api/v1/import/actions` verglichen Groß-/Kleinschreibung, sodass ein kleingeschriebener Wert (z. B. `?status=pending`) fälschlich keine Ergebnisse lieferte, obwohl passende Daten vorhanden waren",
-      "`POST /api/v1/import` ohne Datei, ohne Einstellungen und ohne Batch-Id gab eine wenig aussagekräftige allgemeine Fehlermeldung zurück, statt einer klaren Meldung, dass entweder eine Datei oder eine Batch-Id erforderlich ist"
+      "`POST /api/v1/import` ohne Datei, ohne Einstellungen und ohne Batch-Id gab eine wenig aussagekräftige allgemeine Fehlermeldung zurück, statt einer klaren Meldung, dass entweder eine Datei oder eine Batch-Id erforderlich ist",
+      "Das erneute Importieren oder Neu-Seeding von Inhalten, die zuvor weich gelöscht wurden (durch Rückgängigmachen oder anderweitig), stellte diese nicht wieder her — der Datensatz und seine zugehörigen Zeilen werden jetzt korrekt wiederhergestellt, statt dauerhaft hinter dem alten Datensatz verborgen zu bleiben"
     ]
   },
   "releases": [

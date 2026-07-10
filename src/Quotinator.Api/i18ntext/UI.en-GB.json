@@ -66,6 +66,7 @@
   "ErrorImportActionBatchInvalidState": "This batch cannot be discarded — it has already been applied, already been discarded, or has no staged actions.",
   "ErrorImportBatchNotFound": "No import batch exists with that id.",
   "ErrorImportFileOrBatchIdRequired": "You must provide either a file to import or a batchId to apply an already-staged batch.",
+  "ErrorImportActionBatchNotReversible": "This batch cannot be reversed — it is not currently applied, is not the most recently applied batch still live, has no actions, or a Modify's original Source/Character/Person linkage can no longer be resolved.",
   "AdminEndpointsHeading": "Admin endpoints",
   "AdminEndpointsDescription": "These endpoints require an X-Api-Key header matching the admin_api_key configured in the add-on options. They are unavailable when no key is configured.",
   "AdminPreviewSeedLabel": "Preview seed import",
@@ -81,5 +82,6 @@
   "ImportActionsDecideLabel": "Decide a staged import action",
   "ImportActionsUndoLabel": "Undo an import action decision",
   "ImportActionsApplyLabel": "Apply a staged action batch",
-  "ImportActionsDiscardLabel": "Discard a staged action batch"
+  "ImportActionsDiscardLabel": "Discard a staged action batch",
+  "ImportActionsReverseLabel": "Undo an applied import batch"
 }

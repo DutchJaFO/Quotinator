@@ -10,7 +10,8 @@ namespace Quotinator.Data.Repositories;
 /// </summary>
 public sealed class SqliteUnitOfWork : IUnitOfWork
 {
-    private readonly IDbConnectionFactory _factory;
+    private readonly IDbConnectionFactory? _factory;
+    private readonly bool _ownsConnection;
     private bool _finalised;
 
     /// <summary>The open connection for this unit of work. Accessible to repository classes in this assembly.</summary>
@@ -24,12 +25,33 @@ public sealed class SqliteUnitOfWork : IUnitOfWork
     public SqliteUnitOfWork(IDbConnectionFactory factory)
     {
         _factory = factory;
+        _ownsConnection = true;
+    }
+
+    /// <summary>
+    /// Wraps a connection and transaction some other owner (e.g. <c>IImportActionCoordinator</c>'s
+    /// batch-scoped callback) already opened and will commit/roll back/dispose itself. This instance
+    /// never opens, commits, rolls back, or disposes the wrapped connection/transaction — it exists
+    /// only so repository calls that require an <see cref="IUnitOfWork"/> can participate in a
+    /// transaction they do not own.
+    /// </summary>
+    /// <param name="connection">An already-open connection owned by the caller.</param>
+    /// <param name="transaction">An already-active transaction owned by the caller.</param>
+    internal SqliteUnitOfWork(IDbConnection connection, IDbTransaction transaction)
+    {
+        Connection = connection;
+        Transaction = transaction;
+        _ownsConnection = false;
+        _finalised = true;
     }
 
     /// <inheritdoc/>
     public Task BeginTransactionAsync()
     {
-        Connection = _factory.CreateConnection();
+        if (!_ownsConnection)
+            return Task.CompletedTask;
+
+        Connection = _factory!.CreateConnection();
         Connection.Open();
         Transaction = Connection.BeginTransaction();
         return Task.CompletedTask;
@@ -38,6 +60,9 @@ public sealed class SqliteUnitOfWork : IUnitOfWork
     /// <inheritdoc/>
     public Task CommitAsync()
     {
+        if (!_ownsConnection)
+            return Task.CompletedTask;
+
         Transaction?.Commit();
         _finalised = true;
         return Task.CompletedTask;
@@ -46,6 +71,9 @@ public sealed class SqliteUnitOfWork : IUnitOfWork
     /// <inheritdoc/>
     public Task RollbackAsync()
     {
+        if (!_ownsConnection)
+            return Task.CompletedTask;
+
         Transaction?.Rollback();
         _finalised = true;
         return Task.CompletedTask;
@@ -54,6 +82,9 @@ public sealed class SqliteUnitOfWork : IUnitOfWork
     /// <inheritdoc/>
     public ValueTask DisposeAsync()
     {
+        if (!_ownsConnection)
+            return ValueTask.CompletedTask;
+
         if (!_finalised)
             Transaction?.Rollback();
         Transaction?.Dispose();
