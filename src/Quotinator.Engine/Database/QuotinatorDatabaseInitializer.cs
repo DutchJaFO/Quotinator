@@ -11,6 +11,7 @@ using Quotinator.Data.Models;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Engine.Entities;
+using Quotinator.Engine.Helpers;
 using Quotinator.Engine.Repositories;
 using Quotinator.Engine.Services;
 
@@ -251,7 +252,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
                 foreach (var action in actions)
                 {
-                    if (action.EntityType != "Quote" || action.ActionType.Parsed != ImportActionKind.Modify)
+                    if (action.EntityType != ImportActionEntityTypes.Quote || action.ActionType.Parsed != ImportActionKind.Modify)
                         continue;
 
                     lastFileByQuoteId.TryGetValue(action.EntityId, out var firstFile);
@@ -268,8 +269,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Seed);
                 if (applyResult is null)
                 {
-                    var imported = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Add);
-                    var updated  = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Modify
+                    var imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
+                    var updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                                    && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
 
                     importBatch.Status      = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Applied.ToString(), ImportBatchStatus.Applied);

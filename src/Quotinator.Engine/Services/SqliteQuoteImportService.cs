@@ -9,6 +9,7 @@ using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Entities;
+using Quotinator.Engine.Helpers;
 using Quotinator.Engine.Repositories;
 
 namespace Quotinator.Engine.Services;
@@ -83,10 +84,10 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
 
         // Matches the pre-#154 summary contract exactly: Skip and Review both never write, so both
         // count as "skipped" here (Review is additionally left Pending, awaiting a manual decision).
-        var imported = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Add);
-        var updated  = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Modify
+        var imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
+        var updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
-        var skipped  = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Modify
+        var skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
 
         if (!preview)
@@ -127,12 +128,12 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
 
         var actions = await _actionReader.GetAllForBatchAsync(batchIdStr);
 
-        var imported = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Add);
-        var updated  = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Modify
+        var imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
+        var updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
-        var skipped  = actions.Count(a => a.EntityType == "Quote" && a.ActionType.Parsed == ImportActionKind.Modify
+        var skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
-        var totalQuotes = actions.Count(a => a.EntityType == "Quote");
+        var totalQuotes = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote);
 
         var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, cancellationToken);
         if (applyResult is null)
@@ -168,7 +169,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         var entries = new List<ImportConflictEntry>();
         foreach (var action in actions)
         {
-            if (action.EntityType != "Quote" || action.ActionType.Parsed != ImportActionKind.Modify)
+            if (action.EntityType != ImportActionEntityTypes.Quote || action.ActionType.Parsed != ImportActionKind.Modify)
                 continue;
 
             var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;

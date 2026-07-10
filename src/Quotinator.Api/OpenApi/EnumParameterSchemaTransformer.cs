@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 using Quotinator.Core.Helpers;
 using Quotinator.Data.Entities;
+using Quotinator.Engine.Helpers;
 
 namespace Quotinator.Api.OpenApi;
 
@@ -14,12 +15,10 @@ namespace Quotinator.Api.OpenApi;
 /// as <see cref="YearParameterSchemaTransformer"/>, so the generator infers an unconstrained schema.
 /// </para>
 /// <para>
-/// Values are derived from their actual source of truth where one exists
+/// Values are derived from their actual source of truth in every case
 /// (<see cref="InputValidation.ValidTypes"/>, <see cref="InputValidation.ValidSearchFields"/>, the
-/// <see cref="ImportActionStatus"/> enum) so this can never drift out of sync. <c>entityType</c> has
-/// no such source — <see cref="SystemImportAction.EntityType"/> is deliberately free-text per ADR 004
-/// (<c>Quotinator.Data</c> cannot know about Engine's entity types) — so its four values are
-/// hand-listed here, matching the literals <c>ImportActionPlanner</c> actually writes.
+/// <see cref="ImportActionStatus"/> enum, and <see cref="ImportActionEntityTypes"/>) so none of these
+/// can drift out of sync with the values the rest of the codebase actually writes/compares against.
 /// </para>
 /// <para>
 /// <c>genre</c> is deliberately excluded — an open, extensible tag set, not a closed enum.
@@ -30,7 +29,7 @@ internal sealed class EnumParameterSchemaTransformer : IOpenApiOperationTransfor
     private static readonly string[] QuoteTypeValues = [.. InputValidation.ValidTypes];
     private static readonly string[] SearchFieldValues = [.. InputValidation.ValidSearchFields];
     private static readonly string[] ImportActionStatusValues = [.. Enum.GetValues<ImportActionStatus>().Select(v => v.ToString())];
-    private static readonly string[] EntityTypeValues = ["Quote", "Source", "Character", "Person"];
+    private static readonly string[] EntityTypeValues = ImportActionEntityTypes.All;
 
     internal static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>> EnumParamsByPath =
         new Dictionary<string, IReadOnlyDictionary<string, string[]>>(StringComparer.OrdinalIgnoreCase)

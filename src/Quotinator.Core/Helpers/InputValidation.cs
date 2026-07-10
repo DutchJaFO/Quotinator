@@ -18,10 +18,17 @@ public static partial class InputValidation
             .Where(t => t != QuoteType.Unknown)
             .Select(t => t.ToString().ToLowerInvariant())];
 
-    /// <summary>The set of accepted field names for the <c>field=</c> parameter on the search endpoint.
-    /// No backing enum exists for this — it names which column to search, not a stored value.</summary>
+    /// <summary>The set of accepted field names for the <c>field=</c> parameter on the search endpoint —
+    /// derived from <see cref="QuoteResponse"/>'s own searchable properties (<see cref="QuoteResponse.Quote"/>,
+    /// <see cref="QuoteResponse.Source"/>, <see cref="QuoteResponse.Character"/>, <see cref="QuoteResponse.Author"/>)
+    /// so a property rename breaks this at compile time instead of silently diverging.</summary>
     public static readonly HashSet<string> ValidSearchFields =
-        ["quote", "source", "character", "author"];
+        [
+            nameof(QuoteResponse.Quote).ToLowerInvariant(),
+            nameof(QuoteResponse.Source).ToLowerInvariant(),
+            nameof(QuoteResponse.Character).ToLowerInvariant(),
+            nameof(QuoteResponse.Author).ToLowerInvariant(),
+        ];
 
     /// <summary>The set of accepted genre tag values for the <c>genre=</c> query parameter — derived
     /// from <see cref="Genre"/> (excluding the <see cref="Genre.Unknown"/> fallback sentinel),

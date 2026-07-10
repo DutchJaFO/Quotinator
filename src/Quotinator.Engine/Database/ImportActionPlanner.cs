@@ -7,6 +7,7 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Queries;
+using Quotinator.Engine.Helpers;
 
 namespace Quotinator.Engine.Database;
 
@@ -66,7 +67,7 @@ internal static class ImportActionPlanner
                 {
                     BatchId       = batchIdStr,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-                    EntityType    = "Quote",
+                    EntityType    = ImportActionEntityTypes.Quote,
                     EntityId      = q.Id,
                     IncomingValue = JsonSerializer.Serialize(payload),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
@@ -103,7 +104,7 @@ internal static class ImportActionPlanner
                 BatchId         = batchIdStr,
                 ExistingBatchId = existingBatchId,
                 ActionType      = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                EntityType      = "Quote",
+                EntityType      = ImportActionEntityTypes.Quote,
                 EntityId        = q.Id,
                 ExistingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
                 IncomingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
@@ -144,7 +145,7 @@ internal static class ImportActionPlanner
         {
             BatchId       = batchId,
             ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-            EntityType    = "Source",
+            EntityType    = ImportActionEntityTypes.Source,
             EntityId      = stableId,
             IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(q.Source, typeStr)),
             Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
@@ -180,7 +181,7 @@ internal static class ImportActionPlanner
         {
             BatchId       = batchId,
             ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-            EntityType    = "Character",
+            EntityType    = ImportActionEntityTypes.Character,
             EntityId      = stableId,
             IncomingValue = JsonSerializer.Serialize(new CharacterActionPayload(sourceId, q.Character, q.Source, sourceTypeStr)),
             Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
@@ -214,7 +215,7 @@ internal static class ImportActionPlanner
         {
             BatchId       = batchId,
             ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-            EntityType    = "Person",
+            EntityType    = ImportActionEntityTypes.Person,
             EntityId      = stableId,
             IncomingValue = JsonSerializer.Serialize(new PersonActionPayload(q.Author)),
             Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),

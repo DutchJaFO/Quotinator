@@ -12,6 +12,7 @@ using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Entities;
+using Quotinator.Engine.Helpers;
 using Quotinator.Engine.Models;
 using Quotinator.Engine.Repositories;
 
@@ -77,7 +78,7 @@ public sealed class SqliteImportActionService : IImportActionService
     public async Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
     {
         var action = await _actionReader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
-        if (action.EntityType != "Quote")
+        if (action.EntityType != ImportActionEntityTypes.Quote)
             throw new ImportActionNotDecidableException(actionId, action.EntityType);
 
         var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
@@ -152,7 +153,7 @@ public sealed class SqliteImportActionService : IImportActionService
         // here instead — found via a genuinely red test, not assumed correct.
         using var quoteConn = _factory.CreateConnection();
         quoteConn.Open();
-        foreach (var action in adds.Where(a => a.EntityType == "Quote"))
+        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Quote))
         {
             // QuoteGenres/QuoteTranslations both carry a hard FK to Quotes(Id) — a stale Quote's
             // genre rows (written by every Add, per QuoteSeedWriter.InsertGenresAsync) still
@@ -168,13 +169,13 @@ public sealed class SqliteImportActionService : IImportActionService
         // natural-key lookup result — a natural-key match means "already exists", which is a Modify,
         // never an Add), and EntityIdentity.StableId always uppercases — safe to use the repository's
         // Guid-typed API here.
-        foreach (var action in adds.Where(a => a.EntityType == "Character"))
+        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Character))
             await _characterRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
 
-        foreach (var action in adds.Where(a => a.EntityType == "Source"))
+        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Source))
             await _sourceRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
 
-        foreach (var action in adds.Where(a => a.EntityType == "Person"))
+        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Person))
             await _personRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
     }
 
@@ -240,29 +241,35 @@ public sealed class SqliteImportActionService : IImportActionService
         var batchGuid = Guid.Parse(actions[0].BatchId);
         var changeLog = new QuoteSeedWriter.ChangeLogContext(_changeLogWriter, initiatedByType, actions[0].BatchId);
 
-        var order = new Dictionary<string, int> { ["Quote"] = 0, ["Character"] = 1, ["Source"] = 2, ["Person"] = 2 };
+        var order = new Dictionary<string, int>
+        {
+            [ImportActionEntityTypes.Quote]     = 0,
+            [ImportActionEntityTypes.Character] = 1,
+            [ImportActionEntityTypes.Source]    = 2,
+            [ImportActionEntityTypes.Person]    = 2,
+        };
         foreach (var action in actions.OrderBy(a => order.GetValueOrDefault(a.EntityType, 3)))
         {
             switch (action.EntityType)
             {
-                case "Quote":
+                case ImportActionEntityTypes.Quote:
                     await ReverseQuoteActionAsync(action, sqliteConnection, sqliteTransaction, uow, now, changeLog);
                     break;
-                case "Character":
+                case ImportActionEntityTypes.Character:
                     var charRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Characters.CountActiveReferences, action.EntityId);
                     if (charRefs)
                         break;
                     await _characterRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "character", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
-                case "Source":
+                case ImportActionEntityTypes.Source:
                     var sourceRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Sources.CountActiveReferences, action.EntityId);
                     if (sourceRefs)
                         break;
                     await _sourceRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "source", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
-                case "Person":
+                case ImportActionEntityTypes.Person:
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.People.CountActiveReferences, action.EntityId))
                         break;
                     await _personRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow);
@@ -375,13 +382,13 @@ public sealed class SqliteImportActionService : IImportActionService
 
         switch (action.EntityType)
         {
-            case "Source":
+            case ImportActionEntityTypes.Source:
             {
                 var payload = JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!;
                 await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Title, payload.Type, batchId, now, changeLog);
                 break;
             }
-            case "Character":
+            case ImportActionEntityTypes.Character:
             {
                 var payload = JsonSerializer.Deserialize<CharacterActionPayload>(action.IncomingValue!)!;
                 // Defensive: Characters.SourceId is a real FK, but System_ImportActions rows apply in
@@ -391,13 +398,13 @@ public sealed class SqliteImportActionService : IImportActionService
                 await EnsureCharacterExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.SourceId, payload.Name, batchId, now, changeLog);
                 break;
             }
-            case "Person":
+            case ImportActionEntityTypes.Person:
             {
                 var payload = JsonSerializer.Deserialize<PersonActionPayload>(action.IncomingValue!)!;
                 await EnsurePersonExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog);
                 break;
             }
-            case "Quote":
+            case ImportActionEntityTypes.Quote:
             {
                 var isAdd = action.ActionType.Parsed == ImportActionKind.Add;
 
@@ -571,7 +578,7 @@ public sealed class SqliteImportActionService : IImportActionService
 
     private static IReadOnlyList<string> ComputeAmbiguousFields(SystemImportAction action)
     {
-        if (action.EntityType != "Quote" || action.Status.Parsed != ImportActionStatus.Pending)
+        if (action.EntityType != ImportActionEntityTypes.Quote || action.Status.Parsed != ImportActionStatus.Pending)
             return [];
 
         var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
@@ -592,7 +599,7 @@ public sealed class SqliteImportActionService : IImportActionService
 
     private async Task<IReadOnlyList<Guid>> ComputeRelatedActionIdsAsync(SystemImportAction action, Dictionary<string, IReadOnlyList<SystemImportAction>> batchCache)
     {
-        if (action.EntityType != "Quote") return [];
+        if (action.EntityType != ImportActionEntityTypes.Quote) return [];
 
         var json    = action.ActionType.Parsed == ImportActionKind.Add ? action.IncomingValue : (action.MergedFields ?? action.IncomingValue);
         var payload = JsonSerializer.Deserialize<QuoteActionPayload>(json!)!;
@@ -607,9 +614,9 @@ public sealed class SqliteImportActionService : IImportActionService
         foreach (var candidate in batchActions)
         {
             if (candidate.Id == action.Id) continue;
-            if (candidate.EntityType == "Source"    && candidate.EntityId == payload.SourceId) related.Add(candidate.Id);
-            if (candidate.EntityType == "Character" && payload.CharacterId is not null && candidate.EntityId == payload.CharacterId) related.Add(candidate.Id);
-            if (candidate.EntityType == "Person"    && payload.PersonId is not null && candidate.EntityId == payload.PersonId) related.Add(candidate.Id);
+            if (candidate.EntityType == ImportActionEntityTypes.Source    && candidate.EntityId == payload.SourceId) related.Add(candidate.Id);
+            if (candidate.EntityType == ImportActionEntityTypes.Character && payload.CharacterId is not null && candidate.EntityId == payload.CharacterId) related.Add(candidate.Id);
+            if (candidate.EntityType == ImportActionEntityTypes.Person    && payload.PersonId is not null && candidate.EntityId == payload.PersonId) related.Add(candidate.Id);
         }
         return related;
     }
