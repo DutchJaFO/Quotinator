@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-10 16:02 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-10 16:48 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New `POST /api/v1/import/actions/discard` endpoint discards every staged action in a batch at once, writing nothing
 - `POST /api/v1/import` can now apply an already-staged batch directly by referencing its batch id, instead of always requiring the file to be uploaded again
 - New `POST /api/v1/import/actions/reverse` endpoint undoes every action in an applied import batch — reversing an Add soft-deletes the record it created, reversing a Modify restores the pre-change field values; only the most recently applied batch still live can be reversed, and a `?preview=true` mode validates without writing anything
+- The OpenAPI spec now documents `type`, `field`, `status`, and `entityType` query parameters as proper enums with their allowed values, instead of unconstrained strings
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
@@ -68,6 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `status`, `entityType`, and `batchId` query filters on `GET /api/v1/import/actions` matched case-sensitively, so a lowercase value (e.g. `?status=pending`) silently returned no results even though matching data existed
 - `POST /api/v1/import` with no file, no settings, and no batch id returned an uninformative generic error instead of a clear message stating that either a file or a batch id is required
 - Re-importing or reseeding content that had previously been soft-deleted (via undo, or otherwise) silently failed to restore it — the record and its related rows are now properly resurrected instead of being permanently hidden behind the old row
+- `GET /api/v1/quotes`'s `yearFrom`/`yearTo`/`year`/`decade` filters were documented as `integer` in the OpenAPI spec, but the schema patch never actually applied to this specific endpoint due to a route-path mismatch — the Scalar UI showed them as plain `string`; request handling itself was unaffected, this was a documentation-accuracy bug only
 
 ---
 

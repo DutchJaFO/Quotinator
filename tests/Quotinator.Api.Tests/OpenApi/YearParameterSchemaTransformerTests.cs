@@ -66,6 +66,10 @@ public class YearParameterSchemaTransformerTests
     public async Task YearFrom_OnPaginatedList_PatchedToInteger()
         => Assert.AreEqual(Integer, await TransformAndGetType("yearFrom", "api/v1/quotes"));
 
+    [TestMethod]
+    public async Task YearFrom_OnPaginatedListWithTrailingSlash_PatchedToInteger()
+        => Assert.AreEqual(Integer, await TransformAndGetType("yearFrom", "api/v1/quotes/"));
+
     #endregion
 
     // -------------------------------------------------------------------------

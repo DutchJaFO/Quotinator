@@ -20,6 +20,14 @@ namespace Quotinator.Api.OpenApi;
 /// Scoped to the three paths that use <c>TryParseYear</c>. Do not add any endpoint to
 /// <see cref="YearFilterPaths"/> unless it also uses <c>TryParseYear</c> for these parameters.
 /// </para>
+/// <para>
+/// <c>context.Description.RelativePath</c> for the bare listing endpoint
+/// (<c>group.MapGet("/", GetAll)</c>) is <c>"api/v1/quotes/"</c> — a trailing slash the other two
+/// paths don't have — so the match trims it before comparing against <see cref="YearFilterPaths"/>'s
+/// slash-free keys. Missing this silently meant <c>GET /api/v1/quotes</c>'s year filters were never
+/// actually patched to <c>integer</c>, despite this transformer existing — found while diagnosing
+/// <see cref="EnumParameterSchemaTransformer"/> against the live spec, not by any prior test.
+/// </para>
 /// </remarks>
 internal sealed class YearParameterSchemaTransformer : IOpenApiOperationTransformer
 {
@@ -39,7 +47,8 @@ internal sealed class YearParameterSchemaTransformer : IOpenApiOperationTransfor
         OpenApiOperationTransformerContext context,
         CancellationToken cancellationToken)
     {
-        if (!YearFilterPaths.Contains(context.Description.RelativePath ?? string.Empty))
+        var path = (context.Description.RelativePath ?? string.Empty).TrimEnd('/');
+        if (!YearFilterPaths.Contains(path))
             return Task.CompletedTask;
 
         foreach (var param in operation.Parameters ?? [])

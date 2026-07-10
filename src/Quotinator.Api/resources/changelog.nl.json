@@ -48,7 +48,8 @@
       "Nieuw eindpunt `POST /api/v1/import/actions/apply` past alle beslisde acties van een batch in één keer atomisch toe, zodra voor elk ervan een beslissing is vastgelegd",
       "Nieuw eindpunt `POST /api/v1/import/actions/discard` verwerpt alle gefaseerde acties van een batch in één keer, zonder iets weg te schrijven",
       "`POST /api/v1/import` kan nu een reeds gefaseerde batch direct toepassen door naar de batch-id te verwijzen, in plaats van steeds opnieuw het bestand te moeten uploaden",
-      "Nieuw eindpunt `POST /api/v1/import/actions/reverse` maakt elke actie in een toegepaste importbatch ongedaan — het ongedaan maken van een Add verwijdert het aangemaakte record zacht, het ongedaan maken van een Modify herstelt de veldwaarden van vóór de wijziging; alleen de meest recent toegepaste batch die nog actief is kan ongedaan worden gemaakt, en een `?preview=true`-modus valideert zonder iets weg te schrijven"
+      "Nieuw eindpunt `POST /api/v1/import/actions/reverse` maakt elke actie in een toegepaste importbatch ongedaan — het ongedaan maken van een Add verwijdert het aangemaakte record zacht, het ongedaan maken van een Modify herstelt de veldwaarden van vóór de wijziging; alleen de meest recent toegepaste batch die nog actief is kan ongedaan worden gemaakt, en een `?preview=true`-modus valideert zonder iets weg te schrijven",
+      "De OpenAPI-specificatie documenteert de queryparameters `type`, `field`, `status` en `entityType` nu als echte enums met hun toegestane waarden, in plaats van als vrije tekststrings"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
@@ -69,7 +70,8 @@
       "De OpenAPI-specificatie markeert nu elk schrijvend import- en actiebeoordelingseindpunt correct als vereist `X-Api-Key`; voorheen toonden alleen `Admin`-getagde eindpunten deze vereiste, waardoor deze nooit als beveiligd verschenen in de Scalar-UI",
       "De queryfilters `status`, `entityType` en `batchId` bij `GET /api/v1/import/actions` vergeleken hoofdlettergevoelig, waardoor een kleingeschreven waarde (bijv. `?status=pending`) ten onrechte geen resultaten opleverde, terwijl er wel passende gegevens bestonden",
       "`POST /api/v1/import` zonder bestand, zonder instellingen en zonder batch-id gaf een weinig informatieve algemene foutmelding terug, in plaats van een duidelijke melding dat óf een bestand óf een batch-id vereist is",
-      "Het opnieuw importeren of opnieuw seeden van content die eerder zacht was verwijderd (via ongedaan maken, of anderszins) herstelde deze niet — het record en de bijbehorende rijen worden nu correct hersteld in plaats van permanent verborgen te blijven achter het oude record"
+      "Het opnieuw importeren of opnieuw seeden van content die eerder zacht was verwijderd (via ongedaan maken, of anderszins) herstelde deze niet — het record en de bijbehorende rijen worden nu correct hersteld in plaats van permanent verborgen te blijven achter het oude record",
+      "De filters `yearFrom`/`yearTo`/`year`/`decade` van `GET /api/v1/quotes` waren in de OpenAPI-specificatie gedocumenteerd als `integer`, maar de schemacorrectie werd door een padmismatch nooit daadwerkelijk toegepast op dit specifieke eindpunt — de Scalar-UI toonde ze als gewone `string`; de daadwerkelijke verwerking van de aanvraag was niet beïnvloed, dit was uitsluitend een documentatienauwkeurigheidsfout"
     ]
   },
   "releases": [

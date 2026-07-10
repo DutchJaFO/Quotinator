@@ -101,6 +101,7 @@ builder.Services.AddOpenApi(options =>
 
     options.AddOperationTransformer<AdminApiKeySecurityTransformer>();
     options.AddOperationTransformer<YearParameterSchemaTransformer>();
+    options.AddOperationTransformer<EnumParameterSchemaTransformer>();
     options.AddSchemaTransformer<ImportModelSchemaTransformer>();
 });
 
