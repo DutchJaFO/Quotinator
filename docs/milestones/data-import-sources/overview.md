@@ -50,9 +50,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#55](https://github.com/DutchJaFO/Quotinator/issues/55) | Record completeness flag | Waiting for release | T1 ✅ T2 ✅ | [55-record-completeness-plan.md](55-record-completeness-plan.md) |
 | [#56](https://github.com/DutchJaFO/Quotinator/issues/56) | Audit log (System_ChangeLog) | Waiting for release | T1 ✅ T2 ✅ | [56-audit-log-plan.md](56-audit-log-plan.md) |
 | [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: undo an applied import batch | Waiting for release | T1 ✅ T2 ✅ | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
-| [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Planning | Not yet assessed | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
-| [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Planning | Not yet assessed | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
-| [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | Planning | Not yet assessed | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
+| [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Planning | T1 ⬜ T2 ⬜ | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
+| [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Planning | T1 ⬜ T2 ⬜ | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
+| [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | Planning | T1 ⬜ T2 ⬜ | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
 | [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow | Waiting for release | T1 ✅ T2 ✅ | [149-manual-conflict-review-plan.md](149-manual-conflict-review-plan.md) |
 | [#152](https://github.com/DutchJaFO/Quotinator/issues/152) | Review endpoint grouping: split Admin / Quote / Import | Waiting for release | T1 ✅ T2 ✅ | [152-endpoint-grouping-plan.md](152-endpoint-grouping-plan.md) |
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts | Planning | Not yet assessed | No plan doc yet — deferred out of #149 |
@@ -80,7 +80,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #56 (audit log) → requires #58 for batch actor; connects to #45, #55, #59
 #59 (soft-reset by batch) → redefined to depend on #154 (undoes an already-applied batch using #154's System_ImportActions log instead of the originally-planned FK-sharing-cascade approach); still requires #58 and #56
 #67 (conversations schema) → requires #58 for batch FK; unblocks #68, #69
-#68 (curated format) → requires #67, #61
+#68 (curated format) → requires #67, #61, #58 and #154 (conversations/stageDirections/soundCues are seeded through the same shared writer + System_ImportActions staging path as Quotes — plan doc scope correction)
 #69 (API conversations) → requires #67, #68
 #140 (auto-update sources) → requires #58 fix + #63; unblocks #144
 #144 (converter plugin review) → requires #140 (done)
