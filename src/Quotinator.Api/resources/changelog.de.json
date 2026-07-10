@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 140, 141, 143, 144, 149, 152, 154],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 140, 141, 143, 144, 149, 152, 154],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -52,7 +52,8 @@
       "Neuer Endpunkt `POST /api/v1/import/actions/reverse` macht jede Aktion in einem angewendeten Import-Batch rückgängig — das Rückgängigmachen eines Add löscht den erstellten Datensatz weich, das Rückgängigmachen eines Modify stellt die Feldwerte vor der Änderung wieder her; rückgängig gemacht werden kann nur der zuletzt angewendete, noch aktive Batch, und ein `?preview=true`-Modus validiert, ohne etwas zu schreiben",
       "Die OpenAPI-Spezifikation dokumentiert die Query-Parameter `type`, `field`, `status` und `entityType` jetzt als echte Enums mit ihren zulässigen Werten, statt als unbeschränkte Strings",
       "Die neuen Konverter-Plugins `basic-json-array` und `regex-array` verarbeiten ein flaches JSON-Objektarray beziehungsweise ein JSON-Array von per regulärem Ausdruck extrahierbaren Strings, beide vollständig konfigurierbar über die `converterOptions` eines Manifesteintrags — die meisten neuen Quellen benötigen kein eigenes Konverterprojekt mehr",
-      "Das `csv`-Konverter-Plugin unterstützt jetzt `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) für CSV-Dateien, deren Spaltenüberschriften nicht mit Quotinators eigenen Feldnamen übereinstimmen, oder die gar keine Kopfzeile haben — zuvor wurden nur exakt übereinstimmende Spaltenüberschriften unterstützt"
+      "Das `csv`-Konverter-Plugin unterstützt jetzt `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) für CSV-Dateien, deren Spaltenüberschriften nicht mit Quotinators eigenen Feldnamen übereinstimmen, oder die gar keine Kopfzeile haben — zuvor wurden nur exakt übereinstimmende Spaltenüberschriften unterstützt",
+      "Neue Datenbanktabellen legen die Grundlage für mehrzeilige Konversationen — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues` und ihre Übersetzungstabellen — wodurch Zitate, Regieanweisungen und Toncues zu einem geordneten Dialog gruppiert werden können; noch nicht durch eine Quelldatei befüllt und noch nicht über die API verfügbar (Issue #67)"
     ],
     "changed": [
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",

@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 140, 141, 143, 144, 149, 152, 154],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 140, 141, 143, 144, 149, 152, 154],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -52,7 +52,8 @@
       "Nieuw eindpunt `POST /api/v1/import/actions/reverse` maakt elke actie in een toegepaste importbatch ongedaan — het ongedaan maken van een Add verwijdert het aangemaakte record zacht, het ongedaan maken van een Modify herstelt de veldwaarden van vóór de wijziging; alleen de meest recent toegepaste batch die nog actief is kan ongedaan worden gemaakt, en een `?preview=true`-modus valideert zonder iets weg te schrijven",
       "De OpenAPI-specificatie documenteert de queryparameters `type`, `field`, `status` en `entityType` nu als echte enums met hun toegestane waarden, in plaats van als vrije tekststrings",
       "Nieuwe convertorplug-ins `basic-json-array` en `regex-array` verwerken respectievelijk een platte JSON-objectarray of een JSON-array van via reguliere expressies te extraheren strings, beide volledig configureerbaar via de `converterOptions` van een manifestvermelding — de meeste nieuwe bronnen hebben geen eigen convertorproject meer nodig",
-      "De `csv`-convertorplug-in ondersteunt nu `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) voor CSV-bestanden waarvan de kolomlabels niet overeenkomen met Quotinators eigen veldnamen, of die geen header hebben — voorheen werden alleen exact overeenkomende headernamen ondersteund"
+      "De `csv`-convertorplug-in ondersteunt nu `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) voor CSV-bestanden waarvan de kolomlabels niet overeenkomen met Quotinators eigen veldnamen, of die geen header hebben — voorheen werden alleen exact overeenkomende headernamen ondersteund",
+      "Nieuwe databasetabellen leggen de basis voor meerregelige conversaties — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues` en hun vertaaltabellen — waarmee quotes, regieaanwijzingen en geluidscues gegroepeerd kunnen worden tot een geordende dialoog; nog niet gevuld vanuit een bronbestand en nog niet beschikbaar via de API (issue #67)"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",

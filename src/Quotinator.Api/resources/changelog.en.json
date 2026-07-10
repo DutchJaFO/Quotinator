@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 140, 141, 143, 144, 149, 152, 154],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 140, 141, 143, 144, 149, 152, 154],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.",
@@ -45,7 +45,8 @@
       "New `POST /api/v1/import/actions/reverse` endpoint undoes every action in an applied import batch — reversing an Add soft-deletes the record it created, reversing a Modify restores the pre-change field values; only the most recently applied batch still live can be reversed, and a `?preview=true` mode validates without writing anything",
       "The OpenAPI spec now documents `type`, `field`, `status`, and `entityType` query parameters as proper enums with their allowed values, instead of unconstrained strings",
       "New `basic-json-array` and `regex-array` converter plugins handle a flat JSON object array or a JSON array of regex-extractable strings respectively, both fully configurable via a manifest entry's `converterOptions` — most new sources no longer need a dedicated converter project",
-      "The `csv` converter plugin now supports `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) for CSV files whose header labels don't match Quotinator's own field names, or that have no header at all — previously only exact-matching header names were supported"
+      "The `csv` converter plugin now supports `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) for CSV files whose header labels don't match Quotinator's own field names, or that have no header at all — previously only exact-matching header names were supported",
+      "New database tables lay the groundwork for multi-line conversations — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues`, and their translation tables — allowing quotes, stage directions, and sound cues to be grouped into an ordered exchange; not yet populated by any source file or exposed via the API (issue #67)"
     ],
     "changed": [
       "A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before",

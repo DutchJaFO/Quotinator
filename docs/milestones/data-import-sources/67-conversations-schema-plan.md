@@ -1,6 +1,6 @@
 # #67 — Conversations schema
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #67
 **Tiers required:** T1, T2
 **Depends on:** #58
@@ -71,7 +71,7 @@ Indexes on every FK column.
 
 ### 1. Migration
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 New `Migration008_Conversations` appended to `QuotinatorMigrations.All` (`Quotinator.Engine` —
 these are Quotinator domain tables, not `Quotinator.Data` infrastructure, per
@@ -171,7 +171,7 @@ per the mandatory baseline/incremental-replay parity rule.
 
 ### 2. Entities
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 New `Quotinator.Engine/Entities/` classes, each `RecordBase`-derived with `[Table("...")]`, mirroring
 `QuoteTranslationEntity`'s shape: `ConversationEntity`, `ConversationLineEntity`,
@@ -183,22 +183,28 @@ once via `RegisterEnumHandler<ConversationLineType>()` in `QuotinatorDapperConfi
 
 ### 3. Repositories
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — none registered, by design
 
-Standard `IRepository<T>`/`IRestorableRepository<T>` via the generic repository pattern (#71) — no
-bespoke Dapper code needed for basic CRUD. `ConversationLines` reads (ordered line list for a given
-`ConversationId`) go through a dedicated join query in `Quotinator.Data.Queries.Sql` per the SQL
-centralisation policy, consumed by #69's endpoint — not built in this issue, but the query shape
-should be designed here since it drives the FK/index choices above. Confirmed the four FK indexes
-above are sufficient for that join (each side of the polymorphic FK, plus the parent lookup).
+Checked `Program.cs` before implementing: `IRestorableRepository<T>` is registered today only for
+`QuoteEntity`/`Source`/`Character`/`Person`, and the registration comment says explicitly why —
+"needed only by batch-undo (reversal) — nothing else in the app soft-deletes these tables today."
+`QuoteTranslations`/`QuoteGenres` (the closest existing precedent for a detail/translation table)
+have **no** registered repository at all; they're written via direct SQL in `QuoteSeedWriter`. #67
+has no reversal/undo requirement and no writer yet (that's #68), so registering a repository now
+would be speculative. None of the six new entities get a DI repository registration in this issue —
+one gets added later only if and when a consumer (e.g. a future admin/undo feature) actually needs
+it, mirroring the existing precedent exactly rather than pattern-matching "entities generally get
+repositories."
 
-### 4. SQL query guard coverage
+### 4. Join query for ordered line reads
 
-**Status:** ⬜ Not started
+**Status:** Deferred to #69
 
-Any new `Sql.*` factory method added for the join query in section 3 needs a
-`SqlQueryGuardTests.AssembledQueryCases` entry per the SQL centralisation policy — even though the
-join itself is consumed by #69, the query constant is added here since it's schema-adjacent.
+Originally scoped as "design the query shape here, build it in #69" — on reflection this added
+nothing #69 can't decide for itself once it has an actual consumer (`QuoteResponse.Conversations`
+and `GET /conversations/{id}`) to shape the query against. No `Sql.cs` changes in this issue. The
+four `ConversationLines` FK indexes added in section 1 (`ConversationId`, `QuoteId`,
+`StageDirectionId`, `SoundCueId`) are sufficient for that future join either direction.
 
 ---
 
@@ -206,16 +212,22 @@ join itself is consumed by #69, the query constant is added here since it's sche
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | All six tables created with correct columns, FKs, and RecordBase columns | Unit test | `DatabaseInitializerTests` — new test asserting `PRAGMA table_info` for each table includes `DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted` |
-| 2 | ⬜ | `ConversationLines.LineType` CHECK rejects a value outside `Quote`/`StageDirection`/`SoundCue` | Unit test | New test: insert with `LineType = 'Bogus'` throws `SqliteException` |
-| 3 | ⬜ | `ConversationLines` FK-exclusivity CHECK rejects mismatched `LineType`/FK combinations | Unit test | New test: insert `LineType = 'Quote'` with `StageDirectionId` set (or `QuoteId` null) throws `SqliteException` |
-| 4 | ⬜ | `UNIQUE (ConversationId, Order)` enforced | Unit test | New test: two lines with the same `(ConversationId, Order)` throws `SqliteException` |
-| 5 | ⬜ | Translation tables enforce `UNIQUE (EntityId, Language)` | Unit test | New tests for `StageDirectionTranslations` and `SoundCueTranslations` |
-| 6 | ⬜ | Baseline schema and incremental replay produce an identical schema | Unit test | `DatabaseInitializerTests.Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema` |
-| 7 | ⬜ | Baseline and incremental replay accept the same CHECK values | Unit test | `DatabaseInitializerTests.Baseline_And_IncrementalReplay_AcceptSameCheckConstraintValues` |
-| 8 | ⬜ | `ConversationLineType` round-trips correctly through Dapper (no enum-as-int bug) | Unit test | New `SafeEnumHandler`-pattern test, mirroring existing `ImportBatchType`/`Status` handler tests |
-| 9 | ⬜ | App starts in Visual Studio with the new migration applied, no startup error | Live (T1) | Run `dotnet run --project src/Quotinator.Api`; confirm `Data:` startup log line and no exception |
-| 10 | ⬜ | Docker build succeeds with the new schema | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` |
+| 1 | ✅ | All six tables created with RecordBase columns | Unit test | `DatabaseInitializerTests.ConversationTables_AllHaveRecordBaseColumns` |
+| 2 | ✅ | `ConversationLines.LineType` CHECK rejects a value outside `Quote`/`StageDirection`/`SoundCue` | Unit test | `DatabaseInitializerTests.Baseline_And_IncrementalReplay_AcceptSameCheckConstraintValues` |
+| 3 | ✅ | `ConversationLines` FK-exclusivity CHECK rejects mismatched `LineType`/FK combinations | Unit test | `DatabaseInitializerTests.Baseline_And_IncrementalReplay_AcceptSameCheckConstraintValues` |
+| 4 | ✅ | `UNIQUE (ConversationId, Order)` enforced | Unit test | `DatabaseInitializerTests.ConversationLines_UniqueConstraint_RejectsDuplicateOrder` |
+| 5 | ✅ | Translation tables enforce `UNIQUE (EntityId, Language)` | Unit test | `DatabaseInitializerTests.TranslationTables_UniqueConstraint_RejectsDuplicateLanguage` |
+| 6 | ✅ | Baseline schema and incremental replay produce an identical schema, including the six new tables | Unit test | `DatabaseInitializerTests.Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema` (`EngineDomainTables` extended with the six new table names) |
+| 7 | ✅ | Baseline and incremental replay accept the same CHECK values | Unit test | `DatabaseInitializerTests.Baseline_And_IncrementalReplay_AcceptSameCheckConstraintValues` |
+| 8 | ✅ | `ConversationLineType` round-trips correctly through Dapper (no enum-as-int bug) | Unit test | `DatabaseInitializerTests.ConversationLineType_RoundTripsThroughDapper` |
+| 9 | ✅ | App starts with the new migration applied, no startup error — both the incremental path (existing dev DB) and the fresh baseline path | Live (T1) | Confirmed twice: `dotnet run --project src/Quotinator.Api --configuration Release` (AI session) and by the developer running the solution in Visual Studio (Debug build) — both show `applying 1 pending App migration(s) (version 7 → 8)` then `schema updated (data v9, app v8)`, no exception, app serves `/api/v1/quotes/random` successfully afterward |
+| 10 | ✅ | Docker build succeeds with the new schema; fresh container also takes the baseline path cleanly | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; `docker run` + `curl /api/v1/version` returned `"schemaVersion":8`; container log shows `fresh database detected — creating schema directly at baseline (data v9, app v8)`, no errors |
+
+All existing tests that hardcoded the previous schema version (`7`) were updated to `8`:
+`DatabaseInitializerTests` (4 assertions) and `ImportBatchesTests.Schema_MigrationVersion_IsBumped`.
+Full solution: `dotnet build --configuration Release` and `dotnet test --configuration Release`
+both clean — 0 warnings, 0 errors, all tests passing (Engine: 125/125; full solution: every project
+green).
 
 ---
 

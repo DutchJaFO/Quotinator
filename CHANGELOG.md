@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-10 20:16 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-10 21:52 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -51,6 +51,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The OpenAPI spec now documents `type`, `field`, `status`, and `entityType` query parameters as proper enums with their allowed values, instead of unconstrained strings
 - New `basic-json-array` and `regex-array` converter plugins handle a flat JSON object array or a JSON array of regex-extractable strings respectively, both fully configurable via a manifest entry's `converterOptions` — most new sources no longer need a dedicated converter project
 - The `csv` converter plugin now supports `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) for CSV files whose header labels don't match Quotinator's own field names, or that have no header at all — previously only exact-matching header names were supported
+- New database tables lay the groundwork for multi-line conversations — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues`, and their translation tables — allowing quotes, stage directions, and sound cues to be grouped into an ordered exchange; not yet populated by any source file or exposed via the API (issue #67)
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before

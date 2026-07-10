@@ -22,5 +22,6 @@ public sealed class QuotinatorDapperConfiguration : DatabaseConfiguration
         RegisterEnumHandler<Genre>();
         RegisterEnumHandler<ImportBatchType>();
         RegisterEnumHandler<ImportBatchStatus>();
+        RegisterEnumHandler<ConversationLineType>();
     }
 }

@@ -501,7 +501,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(7, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+        Assert.AreEqual(8, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
     }
 
     // ── #143 — migration ownership split + baseline schema ─────────────────────
@@ -553,7 +553,9 @@ public class DatabaseInitializerTests
 
     private static readonly string[] EngineDomainTables =
         ["ImportBatches", "Sources", "SourceTranslations", "Characters", "CharacterTranslations",
-         "People", "Quotes", "QuoteTranslations", "QuoteGenres"];
+         "People", "Quotes", "QuoteTranslations", "QuoteGenres",
+         "Conversations", "ConversationLines", "StageDirections", "StageDirectionTranslations",
+         "SoundCues", "SoundCueTranslations"];
 
     /// <summary>
     /// QuotinatorMigrations.Baseline must produce the exact same schema, table by table, as
@@ -642,7 +644,142 @@ public class DatabaseInitializerTests
                 "INSERT INTO QuoteGenres (Id, QuoteId, Genre, DateCreated, IsDeleted) " +
                 "VALUES (@id, @quoteId, 'SciFi', @now, 0);",
                 new { id = Guid.NewGuid().ToString(), quoteId = Guid.NewGuid().ToString(), now });
+
+            // ConversationLines carries two independent CHECK constraints (#67): a simple
+            // LineType-membership CHECK (ADR 008) and a separate cross-field CHECK enforcing that
+            // exactly the FK matching LineType is populated. Both are exercised here.
+            var quoteLineId = Guid.NewGuid().ToString();
+            await conn.ExecuteAsync(
+                "INSERT INTO ConversationLines (Id, ConversationId, [Order], LineType, QuoteId, DateCreated, IsDeleted) " +
+                "VALUES (@id, @conversationId, 1, 'Quote', @quoteId, @now, 0);",
+                new { id = quoteLineId, conversationId = Guid.NewGuid().ToString(), quoteId = Guid.NewGuid().ToString(), now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO ConversationLines (Id, ConversationId, [Order], LineType, QuoteId, DateCreated, IsDeleted) " +
+                "VALUES (@id, @conversationId, 2, 'NotARealLineType', @quoteId, @now, 0);",
+                new { id = Guid.NewGuid().ToString(), conversationId = Guid.NewGuid().ToString(), quoteId = Guid.NewGuid().ToString(), now }));
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO ConversationLines (Id, ConversationId, [Order], LineType, StageDirectionId, DateCreated, IsDeleted) " +
+                "VALUES (@id, @conversationId, 3, 'Quote', @stageDirectionId, @now, 0);",
+                new { id = Guid.NewGuid().ToString(), conversationId = Guid.NewGuid().ToString(), stageDirectionId = Guid.NewGuid().ToString(), now }));
         }
+    }
+
+    // ── #67 — Conversations schema ──────────────────────────────────────────────
+
+    private static readonly string[] ConversationTablesWithRecordBase =
+        ["Conversations", "ConversationLines", "StageDirections", "StageDirectionTranslations",
+         "SoundCues", "SoundCueTranslations"];
+
+    /// <summary>Every table added by #67 carries RecordBase's four audit columns — ADR 002 applies without exception, including the line/junction table and both translation tables.</summary>
+    [TestMethod]
+    public async Task ConversationTables_AllHaveRecordBaseColumns()
+    {
+        var db = CreateInitializer([]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        foreach (var table in ConversationTablesWithRecordBase)
+        {
+            var columns = (await conn.QueryAsync<string>(
+                $"SELECT name FROM pragma_table_info('{table}');")).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var recordBaseColumn in new[] { "Id", "DateCreated", "DateModified", "DateDeleted", "IsDeleted" })
+                Assert.IsTrue(columns.Contains(recordBaseColumn), $"{table} is missing RecordBase column {recordBaseColumn}");
+        }
+    }
+
+    /// <summary><c>UNIQUE (ConversationId, Order)</c> rejects a second line at an already-used position.</summary>
+    [TestMethod]
+    public async Task ConversationLines_UniqueConstraint_RejectsDuplicateOrder()
+    {
+        var db = CreateInitializer([]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+
+        var now            = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        var conversationId = Guid.NewGuid().ToString();
+
+        await conn.ExecuteAsync(
+            "INSERT INTO ConversationLines (Id, ConversationId, [Order], LineType, QuoteId, DateCreated, IsDeleted) " +
+            "VALUES (@id, @conversationId, 1, 'Quote', @quoteId, @now, 0);",
+            new { id = Guid.NewGuid().ToString(), conversationId, quoteId = Guid.NewGuid().ToString(), now });
+
+        await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+            "INSERT INTO ConversationLines (Id, ConversationId, [Order], LineType, QuoteId, DateCreated, IsDeleted) " +
+            "VALUES (@id, @conversationId, 1, 'Quote', @quoteId, @now, 0);",
+            new { id = Guid.NewGuid().ToString(), conversationId, quoteId = Guid.NewGuid().ToString(), now }));
+    }
+
+    /// <summary><c>UNIQUE (StageDirectionId, Language)</c> and <c>UNIQUE (SoundCueId, Language)</c> reject a second translation in the same language.</summary>
+    [TestMethod]
+    public async Task TranslationTables_UniqueConstraint_RejectsDuplicateLanguage()
+    {
+        var db = CreateInitializer([]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+
+        var now              = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        var stageDirectionId = Guid.NewGuid().ToString();
+        var soundCueId       = Guid.NewGuid().ToString();
+
+        await conn.ExecuteAsync(
+            "INSERT INTO StageDirectionTranslations (Id, StageDirectionId, Language, Text, DateCreated, IsDeleted) " +
+            "VALUES (@id, @stageDirectionId, 'nl', 'Tekst', @now, 0);",
+            new { id = Guid.NewGuid().ToString(), stageDirectionId, now });
+
+        await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+            "INSERT INTO StageDirectionTranslations (Id, StageDirectionId, Language, Text, DateCreated, IsDeleted) " +
+            "VALUES (@id, @stageDirectionId, 'nl', 'Andere tekst', @now, 0);",
+            new { id = Guid.NewGuid().ToString(), stageDirectionId, now }));
+
+        await conn.ExecuteAsync(
+            "INSERT INTO SoundCueTranslations (Id, SoundCueId, Language, Text, DateCreated, IsDeleted) " +
+            "VALUES (@id, @soundCueId, 'nl', 'Tekst', @now, 0);",
+            new { id = Guid.NewGuid().ToString(), soundCueId, now });
+
+        await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+            "INSERT INTO SoundCueTranslations (Id, SoundCueId, Language, Text, DateCreated, IsDeleted) " +
+            "VALUES (@id, @soundCueId, 'nl', 'Andere tekst', @now, 0);",
+            new { id = Guid.NewGuid().ToString(), soundCueId, now }));
+    }
+
+    /// <summary><see cref="ConversationLineType"/> round-trips through Dapper as a real enum, not an int — the <see cref="Data.Helpers.SafeEnumHandler{TEnum}"/> pattern already used for <see cref="ImportBatchType"/>/<see cref="ImportBatchStatus"/>.</summary>
+    [TestMethod]
+    public async Task ConversationLineType_RoundTripsThroughDapper()
+    {
+        var db = CreateInitializer([]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+
+        var lineId = Guid.NewGuid();
+        await conn.ExecuteAsync(
+            "INSERT INTO ConversationLines (Id, ConversationId, [Order], LineType, StageDirectionId, DateCreated, IsDeleted) " +
+            "VALUES (@id, @conversationId, 1, 'StageDirection', @stageDirectionId, @now, 0);",
+            new
+            {
+                id             = lineId.ToString(),
+                conversationId = Guid.NewGuid().ToString(),
+                stageDirectionId = Guid.NewGuid().ToString(),
+                now            = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")
+            });
+
+        var line = await conn.QuerySingleAsync<ConversationLineEntity>(
+            "SELECT * FROM ConversationLines WHERE Id = @id;", new { id = lineId.ToString() });
+
+        Assert.AreEqual(ConversationLineType.StageDirection, line.LineType.Parsed);
     }
 
     /// <summary>A fresh (zero-table) database takes the baseline path — both version tables end up with exactly one row each, at the final version.</summary>
@@ -660,7 +797,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
         Assert.AreEqual(9, db.DataSchemaVersion);
-        Assert.AreEqual(7, db.SchemaVersion);
+        Assert.AreEqual(8, db.SchemaVersion);
     }
 
     /// <summary>
@@ -687,7 +824,7 @@ public class DatabaseInitializerTests
         var db2 = CreateInitializer([]);
         await db2.InitialiseAsync();
 
-        Assert.AreEqual(7, db2.SchemaVersion,     "All four remaining App migrations (4, 5, 6, and 7) should have replayed");
+        Assert.AreEqual(8, db2.SchemaVersion,     "All five remaining App migrations (4, 5, 6, 7, and 8) should have replayed");
         Assert.AreEqual(9, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
     }
 
@@ -732,7 +869,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(7, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+        Assert.AreEqual(8, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
 }

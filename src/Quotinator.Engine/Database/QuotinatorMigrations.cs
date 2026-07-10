@@ -24,6 +24,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 5, Sql = Migration005_ImportBatchConflictPolicy },
         new SchemaMigration { Version = 6, Sql = Migration006_RecordCompleteness },
         new SchemaMigration { Version = 7, Sql = Migration007_ImportBatchStagingStatus },
+        new SchemaMigration { Version = 8, Sql = Migration008_Conversations },
     ];
 
     /// <summary>
@@ -247,7 +248,104 @@ public static class QuotinatorMigrations
         ALTER TABLE ImportBatches ADD COLUMN AppliedAt TEXT;
         """;
 
-    // Consolidated schema for a genuinely fresh database — the union of migrations 1-7's final
+    // Adds Conversations, ConversationLines, StageDirections, StageDirectionTranslations,
+    // SoundCues, SoundCueTranslations (#67). ConversationLines.LineType is backed by a real C#
+    // enum (ConversationLineType), so it gets a CHECK per ADR 008 — kept as its own simple
+    // membership CHECK, separate from the second CHECK enforcing the "exactly one FK matches
+    // LineType" business rule, so the ADR's literal "CHECK enumerating the same member names"
+    // requirement is satisfied independently of the cross-field rule. Every table here carries
+    // RecordBase columns without exception (ADR 002), including ConversationLines (a line/junction
+    // table) and the two translation tables, which use a synthetic Id + UNIQUE(EntityId, Language)
+    // rather than a composite primary key — matching QuoteTranslations/SourceTranslations/
+    // CharacterTranslations, not a new shape.
+    private const string Migration008_Conversations = """
+        CREATE TABLE IF NOT EXISTS Conversations (
+            Id            TEXT    PRIMARY KEY,
+            Description   TEXT,
+            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
+            DateCreated   TEXT    NOT NULL,
+            DateModified  TEXT,
+            DateDeleted   TEXT,
+            IsDeleted     INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS StageDirections (
+            Id            TEXT    PRIMARY KEY,
+            Text          TEXT    NOT NULL,
+            ImageUrl      TEXT,
+            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
+            DateCreated   TEXT    NOT NULL,
+            DateModified  TEXT,
+            DateDeleted   TEXT,
+            IsDeleted     INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS StageDirectionTranslations (
+            Id               TEXT    PRIMARY KEY,
+            StageDirectionId TEXT    NOT NULL REFERENCES StageDirections(Id),
+            Language         TEXT    NOT NULL,
+            Text             TEXT    NOT NULL,
+            DateCreated      TEXT    NOT NULL,
+            DateModified     TEXT,
+            DateDeleted      TEXT,
+            IsDeleted        INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (StageDirectionId, Language)
+        );
+
+        CREATE TABLE IF NOT EXISTS SoundCues (
+            Id            TEXT    PRIMARY KEY,
+            Text          TEXT    NOT NULL,
+            SoundFileUrl  TEXT,
+            ImageUrl      TEXT,
+            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
+            DateCreated   TEXT    NOT NULL,
+            DateModified  TEXT,
+            DateDeleted   TEXT,
+            IsDeleted     INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS SoundCueTranslations (
+            Id           TEXT    PRIMARY KEY,
+            SoundCueId   TEXT    NOT NULL REFERENCES SoundCues(Id),
+            Language     TEXT    NOT NULL,
+            Text         TEXT    NOT NULL,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (SoundCueId, Language)
+        );
+
+        CREATE TABLE IF NOT EXISTS ConversationLines (
+            Id                TEXT    PRIMARY KEY,
+            ConversationId    TEXT    NOT NULL REFERENCES Conversations(Id),
+            [Order]           INTEGER NOT NULL,
+            LineType          TEXT    NOT NULL
+                              CHECK (LineType IN ('Quote','StageDirection','SoundCue')),
+            QuoteId           TEXT    REFERENCES Quotes(Id),
+            StageDirectionId  TEXT    REFERENCES StageDirections(Id),
+            SoundCueId        TEXT    REFERENCES SoundCues(Id),
+            DateCreated       TEXT    NOT NULL,
+            DateModified      TEXT,
+            DateDeleted       TEXT,
+            IsDeleted         INTEGER NOT NULL DEFAULT 0,
+            CHECK (
+                (LineType = 'Quote'          AND QuoteId          IS NOT NULL AND StageDirectionId IS NULL AND SoundCueId IS NULL) OR
+                (LineType = 'StageDirection' AND StageDirectionId IS NOT NULL AND QuoteId          IS NULL AND SoundCueId IS NULL) OR
+                (LineType = 'SoundCue'       AND SoundCueId       IS NOT NULL AND QuoteId          IS NULL AND StageDirectionId IS NULL)
+            ),
+            UNIQUE (ConversationId, [Order])
+        );
+
+        CREATE INDEX IF NOT EXISTS IX_ConversationLines_ConversationId           ON ConversationLines(ConversationId);
+        CREATE INDEX IF NOT EXISTS IX_ConversationLines_QuoteId                  ON ConversationLines(QuoteId);
+        CREATE INDEX IF NOT EXISTS IX_ConversationLines_StageDirectionId         ON ConversationLines(StageDirectionId);
+        CREATE INDEX IF NOT EXISTS IX_ConversationLines_SoundCueId               ON ConversationLines(SoundCueId);
+        CREATE INDEX IF NOT EXISTS IX_StageDirectionTranslations_StageDirectionId ON StageDirectionTranslations(StageDirectionId);
+        CREATE INDEX IF NOT EXISTS IX_SoundCueTranslations_SoundCueId            ON SoundCueTranslations(SoundCueId);
+        """;
+
+    // Consolidated schema for a genuinely fresh database — the union of migrations 1-8's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
     // ImportBatches using the final widened CHECK constraint (migration004), ImportBatches.
@@ -255,11 +353,13 @@ public static class QuotinatorMigrations
     // last too) present with the same 'skip' default backfill value, IsComplete/NoValueKnown
     // (migration006's ALTER TABLE ADD COLUMN, appended last again) on the four entity tables, and
     // ImportBatches.Status/AppliedAt (migration007's ALTER TABLE ADD COLUMN, appended last) with the
-    // same 'Applied' default backfill value.
+    // same 'Applied' default backfill value, and migration008's Conversations/ConversationLines/
+    // StageDirections/StageDirectionTranslations/SoundCues/SoundCueTranslations tables verbatim
+    // (all created via CREATE TABLE, so no column-ordering caveat applies to them).
     // Deliberately omits migration002's DELETE FROM QuoteGenres (data-repair for pre-existing bad
     // data — nothing to repair on a fresh database) and migration003's pre-seed INSERTs (WHERE
     // EXISTS-guarded, always a no-op before any quote has been seeded). Kept in sync with
-    // migrations 1-7 by DatabaseInitializerTests' schema-drift comparison.
+    // migrations 1-8 by DatabaseInitializerTests' schema-drift comparison.
     private const string BaselineSchema = """
         CREATE TABLE IF NOT EXISTS ImportBatches (
             Id           TEXT    PRIMARY KEY,
@@ -388,5 +488,90 @@ public static class QuotinatorMigrations
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
             UNIQUE (QuoteId, Genre)
         );
+
+        CREATE TABLE IF NOT EXISTS Conversations (
+            Id            TEXT    PRIMARY KEY,
+            Description   TEXT,
+            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
+            DateCreated   TEXT    NOT NULL,
+            DateModified  TEXT,
+            DateDeleted   TEXT,
+            IsDeleted     INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS StageDirections (
+            Id            TEXT    PRIMARY KEY,
+            Text          TEXT    NOT NULL,
+            ImageUrl      TEXT,
+            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
+            DateCreated   TEXT    NOT NULL,
+            DateModified  TEXT,
+            DateDeleted   TEXT,
+            IsDeleted     INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS StageDirectionTranslations (
+            Id               TEXT    PRIMARY KEY,
+            StageDirectionId TEXT    NOT NULL REFERENCES StageDirections(Id),
+            Language         TEXT    NOT NULL,
+            Text             TEXT    NOT NULL,
+            DateCreated      TEXT    NOT NULL,
+            DateModified     TEXT,
+            DateDeleted      TEXT,
+            IsDeleted        INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (StageDirectionId, Language)
+        );
+
+        CREATE TABLE IF NOT EXISTS SoundCues (
+            Id            TEXT    PRIMARY KEY,
+            Text          TEXT    NOT NULL,
+            SoundFileUrl  TEXT,
+            ImageUrl      TEXT,
+            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
+            DateCreated   TEXT    NOT NULL,
+            DateModified  TEXT,
+            DateDeleted   TEXT,
+            IsDeleted     INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS SoundCueTranslations (
+            Id           TEXT    PRIMARY KEY,
+            SoundCueId   TEXT    NOT NULL REFERENCES SoundCues(Id),
+            Language     TEXT    NOT NULL,
+            Text         TEXT    NOT NULL,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (SoundCueId, Language)
+        );
+
+        CREATE TABLE IF NOT EXISTS ConversationLines (
+            Id                TEXT    PRIMARY KEY,
+            ConversationId    TEXT    NOT NULL REFERENCES Conversations(Id),
+            [Order]           INTEGER NOT NULL,
+            LineType          TEXT    NOT NULL
+                              CHECK (LineType IN ('Quote','StageDirection','SoundCue')),
+            QuoteId           TEXT    REFERENCES Quotes(Id),
+            StageDirectionId  TEXT    REFERENCES StageDirections(Id),
+            SoundCueId        TEXT    REFERENCES SoundCues(Id),
+            DateCreated       TEXT    NOT NULL,
+            DateModified      TEXT,
+            DateDeleted       TEXT,
+            IsDeleted         INTEGER NOT NULL DEFAULT 0,
+            CHECK (
+                (LineType = 'Quote'          AND QuoteId          IS NOT NULL AND StageDirectionId IS NULL AND SoundCueId IS NULL) OR
+                (LineType = 'StageDirection' AND StageDirectionId IS NOT NULL AND QuoteId          IS NULL AND SoundCueId IS NULL) OR
+                (LineType = 'SoundCue'       AND SoundCueId       IS NOT NULL AND QuoteId          IS NULL AND StageDirectionId IS NULL)
+            ),
+            UNIQUE (ConversationId, [Order])
+        );
+
+        CREATE INDEX IF NOT EXISTS IX_ConversationLines_ConversationId           ON ConversationLines(ConversationId);
+        CREATE INDEX IF NOT EXISTS IX_ConversationLines_QuoteId                  ON ConversationLines(QuoteId);
+        CREATE INDEX IF NOT EXISTS IX_ConversationLines_StageDirectionId         ON ConversationLines(StageDirectionId);
+        CREATE INDEX IF NOT EXISTS IX_ConversationLines_SoundCueId               ON ConversationLines(SoundCueId);
+        CREATE INDEX IF NOT EXISTS IX_StageDirectionTranslations_StageDirectionId ON StageDirectionTranslations(StageDirectionId);
+        CREATE INDEX IF NOT EXISTS IX_SoundCueTranslations_SoundCueId            ON SoundCueTranslations(SoundCueId);
         """;
 }
