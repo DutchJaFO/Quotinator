@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 
@@ -58,6 +59,15 @@ public class InputValidationTests
         Assert.IsFalse(InputValidation.ValidTypes.Contains("Movie")); // case-sensitive
     }
 
+    [TestMethod]
+    public void ValidTypes_MatchesQuoteTypeEnumExactly()
+    {
+        var expected = Enum.GetValues<QuoteType>()
+            .Where(t => t != QuoteType.Unknown)
+            .Select(t => t.ToString().ToLowerInvariant());
+        CollectionAssert.AreEquivalent(expected.ToList(), InputValidation.ValidTypes.ToList());
+    }
+
     #endregion
 
     #region ValidSearchFields
@@ -100,6 +110,15 @@ public class InputValidationTests
         Assert.IsFalse(InputValidation.ValidGenres.Contains("scifi"));    // missing hyphen
         Assert.IsFalse(InputValidation.ValidGenres.Contains("SciFi"));    // wrong casing
         Assert.IsFalse(InputValidation.ValidGenres.Contains("cartoon"));
+    }
+
+    [TestMethod]
+    public void ValidGenres_MatchesGenreEnumExactly()
+    {
+        var expected = Enum.GetValues<Genre>()
+            .Where(g => g != Genre.Unknown)
+            .Select(g => JsonNamingPolicy.KebabCaseLower.ConvertName(g.ToString()));
+        CollectionAssert.AreEquivalent(expected.ToList(), InputValidation.ValidGenres.ToList());
     }
 
     #endregion
