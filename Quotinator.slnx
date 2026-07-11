@@ -3,6 +3,7 @@
     <File Path=".github/dependabot.yml" />
     <File Path=".github/workflows/_build-test.yml" />
     <File Path=".github/workflows/ci.yml" />
+    <File Path=".github/workflows/codeql.yml" />
     <File Path=".github/workflows/release.yml" />
     <File Path=".github/PULL_REQUEST_TEMPLATE.md" />
   </Folder>
