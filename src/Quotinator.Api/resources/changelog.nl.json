@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 140, 141, 143, 144, 149, 152, 154],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 140, 141, 143, 144, 149, 152, 154],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -53,7 +53,8 @@
       "De OpenAPI-specificatie documenteert de queryparameters `type`, `field`, `status` en `entityType` nu als echte enums met hun toegestane waarden, in plaats van als vrije tekststrings",
       "Nieuwe convertorplug-ins `basic-json-array` en `regex-array` verwerken respectievelijk een platte JSON-objectarray of een JSON-array van via reguliere expressies te extraheren strings, beide volledig configureerbaar via de `converterOptions` van een manifestvermelding — de meeste nieuwe bronnen hebben geen eigen convertorproject meer nodig",
       "De `csv`-convertorplug-in ondersteunt nu `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) voor CSV-bestanden waarvan de kolomlabels niet overeenkomen met Quotinators eigen veldnamen, of die geen header hebben — voorheen werden alleen exact overeenkomende headernamen ondersteund",
-      "Nieuwe databasetabellen leggen de basis voor meerregelige conversaties — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues` en hun vertaaltabellen — waarmee quotes, regieaanwijzingen en geluidscues gegroepeerd kunnen worden tot een geordende dialoog; nog niet gevuld vanuit een bronbestand en nog niet beschikbaar via de API (issue #67)"
+      "Nieuwe databasetabellen leggen de basis voor meerregelige conversaties — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues` en hun vertaaltabellen — waarmee quotes, regieaanwijzingen en geluidscues gegroepeerd kunnen worden tot een geordende dialoog; nog niet gevuld vanuit een bronbestand en nog niet beschikbaar via de API (issue #67)",
+      "De secties `stageDirections`, `soundCues` en `conversations` van het uitgebreide bronbestandsformaat kunnen nu worden geparsed; nog niet gekoppeld aan het inlezen of het importeindpunt — het wegschrijven van geparste conversaties naar de database wordt afzonderlijk gevolgd (issue #68)"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
@@ -76,7 +77,8 @@
       "De queryfilters `status`, `entityType` en `batchId` bij `GET /api/v1/import/actions` vergeleken hoofdlettergevoelig, waardoor een kleingeschreven waarde (bijv. `?status=pending`) ten onrechte geen resultaten opleverde, terwijl er wel passende gegevens bestonden",
       "`POST /api/v1/import` zonder bestand, zonder instellingen en zonder batch-id gaf een weinig informatieve algemene foutmelding terug, in plaats van een duidelijke melding dat óf een bestand óf een batch-id vereist is",
       "Het opnieuw importeren of opnieuw seeden van content die eerder zacht was verwijderd (via ongedaan maken, of anderszins) herstelde deze niet — het record en de bijbehorende rijen worden nu correct hersteld in plaats van permanent verborgen te blijven achter het oude record",
-      "De filters `yearFrom`/`yearTo`/`year`/`decade` van `GET /api/v1/quotes` waren in de OpenAPI-specificatie gedocumenteerd als `integer`, maar de schemacorrectie werd door een padmismatch nooit daadwerkelijk toegepast op dit specifieke eindpunt — de Scalar-UI toonde ze als gewone `string`; de daadwerkelijke verwerking van de aanvraag was niet beïnvloed, dit was uitsluitend een documentatienauwkeurigheidsfout"
+      "De filters `yearFrom`/`yearTo`/`year`/`decade` van `GET /api/v1/quotes` waren in de OpenAPI-specificatie gedocumenteerd als `integer`, maar de schemacorrectie werd door een padmismatch nooit daadwerkelijk toegepast op dit specifieke eindpunt — de Scalar-UI toonde ze als gewone `string`; de daadwerkelijke verwerking van de aanvraag was niet beïnvloed, dit was uitsluitend een documentatienauwkeurigheidsfout",
+      "De verouderde in-memory `QuoteService` dupliceerde de parserlogica van de bronbestandslezer in plaats van deze te hergebruiken, en liep vast zodra een bronbestand het uitgebreide objectformaat gebruikte; hergebruikt nu de gedeelde parser. Dit codepad is niet bereikbaar in de draaiende applicatie — niets registreert het meer sinds de SQLite-migratie — maar wordt nog steeds gedekt door zijn eigen testsuite (issue #68)"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"
