@@ -266,6 +266,14 @@ covered? If so, resolve which of the two outcomes above applies before consideri
 complete. See `checklist.md`'s "Before closing an issue" and "Milestone close" sections for the
 concrete checklist items this produces.
 
+**How a discovered gap gets resolved is always the developer's decision — never the AI assistant's
+own call.** An AI assistant's job here is investigation and presentation: identify the gap, classify
+it (ignored-vs-genuine per the two outcomes above), and lay out what closing it would look like — not
+to pick the resolution and implement it unprompted. This applies even when a resolution seems obvious
+or "small" (e.g. adding one sentence to an existing section) — present it and wait for the developer
+to say yes, the same as any other doc/process change. Silence or a general "handle it" is not the same
+as an explicit decision on a specific proposed resolution.
+
 ---
 
 ## Completing an issue
