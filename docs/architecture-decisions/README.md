@@ -17,6 +17,7 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 - ADRs are never deleted. If a decision is reversed, the original ADR is marked **Superseded** and a new ADR is written.
 - Number sequentially from `001`. Do not reuse numbers.
 - Link related GitHub issues in the header.
+- **Header fields state the current fact only — never an accumulated history.** An `Updated:` field, if present, holds a single date, not a running parenthetical log of every issue that touched the file (`2026-06-28 (issue #121 — ...); 2026-07-11 (issue #157 — ...)`). Git history and commit messages are the record of *when* and *why* something changed; a header field that duplicates that turns into a second, driftable copy of the same information. Same principle as `docs/workflow/process.md`'s "Where information lives" rule for plan docs' `**Status:**` line — it applies to every ADR header field too. The substance of a revision (what changed, why, what it corrects) belongs in a `## Revision — issue #N` body section, not the header.
 
 ## Index
 

@@ -28,6 +28,17 @@ This does not apply to an individual step section's own `**Status:**` line (e.g.
 
 **`In progress` requires actual outstanding code/doc work.** Before setting or leaving an issue at `In progress`, check whether every step section and every verification row in its plan doc is already ✅. If they are, the issue is `Waiting for release` even if its Tiers column still shows an unverified tier (e.g. `T3 ⬜`) — Tiers and Status are separate axes. This matters specifically for T3: T3 verification (live HA supervisor) can only happen after a beta tag exists, so a T3-only gap is never something more code work can close right now. Calling that `In progress` implies work that doesn't exist. Re-check this whenever you review or update a plan doc's header status, not just when you first set it.
 
+**The same "don't duplicate what git already tracks" principle applies to ADR headers.** An ADR's
+`Updated:` field (see `docs/architecture-decisions/README.md`) holds one date, never an accumulated
+parenthetical log of every issue that touched the file — that log is exactly what `git log` on the
+file already is. This is why plan doc and ADR updates must land in their own commit, separate from
+the code change that motivated them: a code commit that also silently rewrites a doc's header buries
+the doc change inside an unrelated diff, and the git-history-as-source-of-truth argument above only
+holds if the history is actually legible per-file. Going forward: when a step of work produces both a
+code change and a plan-doc/ADR update, commit the code first, then the doc update as its own commit
+(same issue number, `docs [#N]: ...` per the existing commit-message convention) — never combine them
+just because they happened in the same session.
+
 ## Folder and file naming
 
 Milestone slugs and plan file names use only lowercase letters, numbers, and hyphens — no spaces or special characters. Derived from the milestone title: replace spaces with hyphens, strip punctuation, lowercase everything.

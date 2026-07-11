@@ -3,7 +3,7 @@
 **Status:** Superseded in part by ADR 004-A (Engine layer)  
 **Date:** 2026-06-25  
 **GitHub issue:** #115  
-**Updated:** 2026-06-28 (issue #121 — introduced `Quotinator.Engine`; revised dependency direction); 2026-07-11 (issue #157 — closed the `Sql.cs` placement gap left open by the #121 revision; issue #158 — stated the consumer-entity-interaction test as the ADR's governing heuristic, after `ImportBatch` was found misplaced despite being named explicitly in this ADR's own original text)
+**Updated:** 2026-07-11
 
 ---
 
