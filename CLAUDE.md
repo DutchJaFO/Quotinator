@@ -32,7 +32,8 @@ curl -X POST -H "X-Api-Key: <your admin key>" "http://localhost:5000/api/v1/admi
 # Build the Docker image locally (required before tagging a release)
 docker build -f docker/Dockerfile -t quotinator:local .
 
-# Install git hooks (run once per clone — prevents accidental GitHub issue auto-close via commit message)
+# Install git hooks (run once per clone — prevents accidental GitHub issue auto-close via commit
+# message, and enforces the draft-then-review commit rule below)
 cp scripts/hooks/commit-msg .git/hooks/commit-msg
 chmod +x .git/hooks/commit-msg
 ```
@@ -40,6 +41,8 @@ chmod +x .git/hooks/commit-msg
 The Scalar API reference is at `/scalar/v1` and the OpenAPI spec at `/openapi/v1.json` — available in all environments including production.
 
 **An AI assistant must never run `dotnet run`/`dotnet watch` directly for its own verification.** `dotnet run --project src/Quotinator.Api` above is listed for a human developer — running it as the assistant risks a port/process conflict with a developer's own Visual Studio instance (this has already caused a real IIS Express outage requiring a reboot). For the assistant's own live/smoke verification, use Docker (`docker build` + `docker run` — see `docs/release-verification.md`'s T2 tier). T1 (Visual Studio) is exclusively the developer's own action to perform and confirm — never something the assistant replicates locally.
+
+**Draft, review, then act — for every `git commit` and every GitHub issue create/edit, no exceptions.** Write the full intended text (commit message, or issue title + body) to a file, show it to the developer, and only run the actual command after explicit approval. See `docs/workflow/process.md`'s "Commit message format and content" for the exact mechanics (`.claude/temp/commit-draft.md`, `git commit -F`). The `commit-msg` hook installed above enforces the commit side of this mechanically; `gh issue create`/`edit` have no equivalent hook, so that side relies on this rule being followed, not on tooling.
 
 ---
 

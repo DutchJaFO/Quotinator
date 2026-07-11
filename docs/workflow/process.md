@@ -59,6 +59,17 @@ Content differs by commit type:
   the document and why in enough detail to stand alone in `git log`, the way the ADR's own `##
   Revision — issue #N` body section does for the document itself.
 
+**Draft, review, then commit — every time, no exceptions.** Before running `git commit`, write the
+full intended commit message to `.claude/temp/commit-draft.md` and show it for review. Only run the
+actual commit after explicit approval, via `git commit -F .claude/temp/commit-draft.md` so the
+reviewed text and the committed text are identical by construction. The `commit-msg` hook
+(`scripts/hooks/commit-msg`) enforces the mechanics of this — it blocks any non-merge commit whose
+message doesn't exactly match `.claude/temp/commit-draft.md` — but it cannot verify the review itself
+happened, only that the draft-then-commit sequence was followed. The same draft-then-review rule
+applies to GitHub issue text (`gh issue create`/`gh issue edit`): write the draft to a file, show it,
+get approval, then run the command against that file. There is no equivalent client-side hook for `gh`
+issue commands, so that half of the rule is enforced by discipline, not tooling.
+
 ## Folder and file naming
 
 Milestone slugs and plan file names use only lowercase letters, numbers, and hyphens — no spaces or special characters. Derived from the milestone title: replace spaces with hyphens, strip punctuation, lowercase everything.
