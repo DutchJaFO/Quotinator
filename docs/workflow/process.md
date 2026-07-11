@@ -242,6 +242,32 @@ chmod +x .git/hooks/commit-msg
 
 ---
 
+## Process gap discovery
+
+Whenever something about the workflow itself doesn't go as expected — a step feels undefined, a
+rule seems to have been skipped, an artifact (a checkbox, a header field, a checklist item) turns
+out to be stale or unmaintained — investigate it before moving on, rather than fixing the immediate
+symptom and continuing. Two distinct outcomes are possible, and the fix is different for each:
+
+1. **The rule already existed and was ignored.** Grep the relevant doc (`CLAUDE.md`,
+   `docs/workflow/*.md`, `docs/*-conventions.md`, the relevant ADR) to confirm the rule's exact
+   wording and location. If it was there and simply not followed, the fix is behavioural, not
+   documentary — no doc change needed, but note the incident and, if it's likely to recur, consider
+   whether the existing wording is discoverable enough (e.g. buried in an unrelated section).
+2. **It's a genuine gap — the rule was never written down anywhere.** Add it to the document that
+   should have carried it (see `Where information lives` above for which document owns which kind of
+   fact). A genuine gap gets a doc fix in its own commit (see "Commit message format and content"
+   above) — never left as an unwritten habit a future session has no way to discover.
+
+**This check is a standing step when closing an issue or closing a milestone, not something done only
+when a gap happens to be noticed.** At both points, ask: did anything about *how this issue/milestone
+was worked* diverge from what's documented, or expose something the documentation never actually
+covered? If so, resolve which of the two outcomes above applies before considering the close
+complete. See `checklist.md`'s "Before closing an issue" and "Milestone close" sections for the
+concrete checklist items this produces.
+
+---
+
 ## Completing an issue
 
 An issue may only be closed when **all** of the following are true:
@@ -258,7 +284,8 @@ Steps:
 1. Update the plan doc status to `Complete`.
 2. Update the status column in `overview.md`.
 3. Re-verify the order of operations table — a completed issue may unblock others or change the correct sequence. Update the table if needed before picking the next issue.
-4. **After the PR is merged to `main`:** close on GitHub:
+4. **Tick every checkbox in the GitHub issue's own "Definition of done" section** — each one should already correspond to a ✅ row in the plan doc's Verification table; ticking is a mechanical sync, not a new judgment call. There is no per-checkbox `gh` command for this: fetch the current body (`gh issue view <N> --json body -q .body`), replace each remaining `- [ ]` with `- [x]`, and write it back (`gh issue edit <N> --body-file -` or `--body "<full updated body>"`). A box that cannot honestly be ticked means the issue is not actually done — resolve that before proceeding, not by leaving the box unchecked and closing anyway.
+5. **After the PR is merged to `main`:** close on GitHub:
    ```
    gh issue close <N> --comment "<short note on what was done>"
    ```

@@ -71,6 +71,8 @@ A short flat per-issue index list of plan-doc links at the end is optional but e
 - [ ] All live commands have been run and produced the expected output (green)
 - [ ] **User manual test** — user starts the app in Visual Studio and confirms it starts without error. For documentation/content issues: user reads or views every item listed in the verification table and confirms each one explicitly.
 - [ ] No requirement is still unconfirmed — if anything is unverified, the issue stays open
+- [ ] **Definition of done checkboxes ticked** — every box in the GitHub issue's own "Definition of done" section reflects the (already-verified) plan doc Verification table; see `process.md` → "Completing an issue" for the `gh issue edit` mechanics. A box that can't honestly be ticked means the issue isn't done yet.
+- [ ] **Process gap check** — did anything about how this issue was worked diverge from documented process, or expose something the docs never covered? If so, resolve per `process.md` → "Process gap discovery" (fix the doc if it's a genuine gap; otherwise no doc change, just note it) before considering this issue's closing complete.
 - [ ] **Changelog updated** — add the issue number to `unreleased.issues` in `changelog.en.json`; add at least one entry to `added`, `changed`, or `fixed`; add a `highlights` entry if the change is user-facing; update `nl.json` and `de.json` lockstep; regenerate `CHANGELOG.md` and `addon/CHANGELOG.md` via `scripts/changelog.csx`. This is part of closing — not a separate PR.
 - [ ] **PR merged to `main`** — do not run `gh issue close` while still on the feature branch; the issue stays open until the merge lands
 - [ ] Confirm all changes are merged to `main` and included in a tagged release
@@ -100,6 +102,7 @@ CI enforces build and test pass. The additional check before opening a PR:
 Releases follow a two-stage model. See `docs/release-verification.md` for tier definitions (T1/T2/T3) and the full stage table.
 
 - [ ] All issues verified: `gh issue list --milestone "<Name>" --state open` returns empty
+- [ ] **Process gap check** — across the whole milestone, did anything about the workflow itself repeatedly feel undefined or get skipped? A pattern visible only at milestone scope (not from any single issue) still needs the same investigate-and-decide treatment — see `process.md` → "Process gap discovery"
 - [ ] If the milestone added any migrations: full incremental migration path verified against a
       database matching the *last published release's* schema, not the accumulated dev database —
       see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md)

@@ -171,3 +171,5 @@ If the new issue blocks the current issue:
 The verification checklist table format, red-to-green rule, and bug-must-be-red-first requirement are defined in `process.md § Working on an issue`. This document does not repeat them — it defines what goes into the GitHub issue itself before a plan doc is created.
 
 The closing comment format (verification table reproducing the plan doc results) is defined in `process.md § Completing an issue` and `checklist.md § Before closing an issue`.
+
+**A "Definition of done" section's checkboxes are not just filled in once at filing time — they get ticked as the corresponding plan doc Verification table rows turn ✅, and every box must be ticked before the issue closes.** See `process.md § Completing an issue` for the `gh issue edit` mechanics.

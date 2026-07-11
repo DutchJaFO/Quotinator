@@ -18,7 +18,7 @@ This document defines the three verification tiers used in the Quotinator releas
 
 **When required:** any change that touches `.razor`, `.razor.cs`, `_Imports.razor`, Blazor services, or middleware registered before the request pipeline reaches Blazor; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`, migration SQL, or schema/table-wipe logic (reseed, reset, backup).
 
-**Gate:** user starts the app in Visual Studio and confirms it starts without error; affected pages render correctly.
+**Gate:** user starts the app in Visual Studio and confirms it starts without error; affected pages render correctly. This is exclusively the developer's own action — an AI assistant never runs `dotnet run` itself to perform or substitute for this gate (see CLAUDE.md's Commands section).
 
 ---
 

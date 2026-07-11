@@ -39,6 +39,8 @@ chmod +x .git/hooks/commit-msg
 
 The Scalar API reference is at `/scalar/v1` and the OpenAPI spec at `/openapi/v1.json` — available in all environments including production.
 
+**An AI assistant must never run `dotnet run`/`dotnet watch` directly for its own verification.** `dotnet run --project src/Quotinator.Api` above is listed for a human developer — running it as the assistant risks a port/process conflict with a developer's own Visual Studio instance (this has already caused a real IIS Express outage requiring a reboot). For the assistant's own live/smoke verification, use Docker (`docker build` + `docker run` — see `docs/release-verification.md`'s T2 tier). T1 (Visual Studio) is exclusively the developer's own action to perform and confirm — never something the assistant replicates locally.
+
 ---
 
 ## What is Quotinator?
@@ -361,7 +363,7 @@ The navbar `LanguageSelector` control (`Components/Controls/LanguageSelector.raz
 
 ### Endpoint test pattern
 
-Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.Mvc.Testing`) and replace `IQuoteService` with `FakeQuoteService` via `WithWebHostBuilder`. See `tests/Quotinator.Api.Tests/Endpoints/QuoteEndpointsTests.cs` for the canonical pattern. The `public partial class Program { }` line at the bottom of `Program.cs` is required to expose the entry point to the test project.
+Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.Mvc.Testing`) and replace `IQuoteService` with `FakeQuoteService` via `WithWebHostBuilder`. **Also register `IDatabaseInitializer` with `NoOpDatabaseInitializer`** in the same `WithWebHostBuilder` call — without it, the test hits a real database at startup even though `FakeQuoteService` makes the endpoint logic itself DB-free. A test that intends real database contact registers a real (or in-memory-backed) initializer explicitly instead; the default for endpoint tests is no DB contact at all. See `tests/Quotinator.Api.Tests/Endpoints/QuoteEndpointsTests.cs` for the canonical pattern. The `public partial class Program { }` line at the bottom of `Program.cs` is required to expose the entry point to the test project.
 
 ### Route registration order
 
@@ -377,6 +379,10 @@ The downside is that the OpenAPI generator infers `type: string` from the C# typ
 - Declare as `string?` and parse with `int.TryParse` (or a dedicated helper) — never `int?`
 - Return 422 on parse failure via `Results.Problem`
 - Add the endpoint path to the year-param schema transformer in `Program.cs`
+
+### GUID/enum parameter binding pattern
+
+Any GUID or enum-valued value arriving from a route or query parameter (`{id}`, `?status=`, `?batchId=`, `?entityType=`) matches **case-insensitively by default** — never case-sensitively, and never behind a config toggle. `.NET` serializes a `Guid` lowercase by default, but stored values in this codebase are consistently uppercase (`Guid.ToString("D").ToUpperInvariant()`), so a caller round-tripping an id straight from a prior API response must still match. The pattern is `UPPER(column) = UPPER(@param)` in the `Sql.cs` query (see `Sql.Conversations.SelectForRead`, `Sql.SystemImportActions.SelectAllForBatch`'s `BuildWhere`). Found and fixed piecemeal across `status`/`entityType`/`batchId` (#154) and a conversation `{id}` route (#69) before being recognised as a general rule — when adding any new GUID/enum-valued parameter, apply case-insensitive matching from the start rather than waiting for it to be reported as a bug on that specific parameter.
 
 ### Vocabulary and abbreviations
 
@@ -538,6 +544,7 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `docs/security/README.md` | Summary of all known CVEs and their current status across all projects |
 | `docs/milestones/` | Per-milestone overview and per-issue plan docs |
 | `.gitignore` | Must exclude `appsettings.local.json`, `.env`, and `data/*.db` |
+| `.claude/temp/` | Gitignored — the place for temporary/test-output files (one-off inspection output, scratch files generated purely to check something). Never write temporary output into a tracked folder such as `scripts/changelog-reference/`. |
 | `src/[project]/CVE/` | Per-project CVE tracking — `CVE-YYYY-NNNNN.md` per alert; closed CVEs in `CVE/archived/` |
 | `tools/Quotinator.Tools.DbInspector/` | Dev-only CLI — run arbitrary SQL against a Quotinator SQLite file; see its `README.md` |
 
@@ -605,6 +612,8 @@ The actual host, port, and file path are configured in the consumer environment,
 
 Run these checks before pushing any commit or tag. Tests alone do not cover all failure modes — the Docker build in particular is only verified here and in the release workflow.
 
+**`main` must always be green.** A failing build or test is acceptable on a feature branch mid-development — it is never acceptable on `main`. This checklist exists specifically to guarantee that; do not skip steps because a deadline is close or the failure "looks unrelated."
+
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`. The same 0-warnings policy that applies to `dotnet build` applies here — any compiler warning surfaced during test build is a blocking failure.
 3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
@@ -612,6 +621,10 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    **Before writing any entries, read `schemas/changelog.schema.json`** — it is the authoritative definition of every field and which fields are required. Do not infer the format from prior entries or git history.
 
    **During development — at issue close time** (not deferred to release): add entries to the `unreleased` section at the top of `changelog.en.json`. Include the issue number in `unreleased.issues`. This follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `[Unreleased]` convention and keeps the changelog in sync without waiting for a release. Decide at the time of writing whether the change deserves a `highlights` entry (user-facing impact) or only `added`/`changed`/`fixed`/`removed` (technical). See `docs/workflow/checklist.md` → "Before closing an issue" for the full closing step.
+
+   **`changelog.nl.json` and `changelog.de.json` update in lockstep with `en.json`, in the same commit — every time, not only when filling an `issues[]` gap.** Every entry added to `en.json`'s `unreleased` section gets a matching translated entry in both other files before that commit is made; `TranslationCompletenessTests`-style drift between locales is a blocking failure, the same as a missing English entry.
+
+   **Before tagging a release, audit `unreleased.issues[]` against every issue actually touched during the session(s) since the last release** — not just the most recent one. It is easy to add entries as you go and still miss an issue from earlier in a long session; a missed issue number breaks the "release linking" traceability the changelog exists to provide.
 
    **Release issue-list rule:** every release entry whose work traces back to a specific issue must carry that issue's number in its `issues[]` array — including hotfix releases spawned by the same issue. Example: issue #100 spawned both v1.6.3 (primary Serilog change) and v1.6.4 (HA crash hotfix); both entries carry `"issues": [100]`. If a release is already tagged when the gap is noticed, add the number to the matching entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep) and regenerate.
 
