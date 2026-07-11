@@ -57,7 +57,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#158](https://github.com/DutchJaFO/Quotinator/issues/158) | ImportBatch entity/repository/enums live in Quotinator.Engine instead of Quotinator.Data | Waiting for release | T2 ✅ | [158-importbatch-to-data-plan.md](158-importbatch-to-data-plan.md) |
 | [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow | Waiting for release | T1 ✅ T2 ✅ | [149-manual-conflict-review-plan.md](149-manual-conflict-review-plan.md) |
 | [#152](https://github.com/DutchJaFO/Quotinator/issues/152) | Review endpoint grouping: split Admin / Quote / Import | Waiting for release | T1 ✅ T2 ✅ | [152-endpoint-grouping-plan.md](152-endpoint-grouping-plan.md) |
-| [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts | Planning | Not yet assessed | No plan doc yet — deferred out of #149 |
+| [#162](https://github.com/DutchJaFO/Quotinator/issues/162) | Detect and allow deciding Source field drift (Date) during import staging | Planning | Not yet assessed | No plan doc yet — decomposed out of #153 |
+| [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning | Not yet assessed | No plan doc yet — decomposed out of #153 |
+| [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning | Not yet assessed | No plan doc yet — deferred out of #149 |
 | [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Waiting for release | T1 ✅ T2 ✅ | [154-import-staging-plan.md](154-import-staging-plan.md) |
 | [#155](https://github.com/DutchJaFO/Quotinator/issues/155) | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning | Not yet assessed | No plan doc yet — deferred to just before milestone close |
 
@@ -90,8 +92,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #144 (converter plugin review) → requires #140 (done)
 #149 (manual conflict-review workflow) → deferred out of #45; requires #56 (audit log) — done; unblocks #153
 #152 (endpoint grouping review) → depended on #149's /api/v1/import group/tag existing first; moved the remaining /quotes/import(/preview) endpoints into that same group — done
-#153 (declarative conflict-resolution file) → deferred out of #149; requires #149 (decide/undo/apply machinery and FieldMergeResolver to build on); also builds naturally on #154's staging model once it ships
-#154 (unify import/preview/seeding on one staging engine) → emerged while planning #59; requires #149 (IConflictResolutionCoordinator, System_ImportConflicts as the template) and #56 (audit log); unblocks #59 (redefined) and #153 (natural fit, not required)
+#162 (Source field decidability) → decomposed out of #153 while planning it (2026-07-11); prerequisite for #163's "mixed Quote/Source rows" coverage, not a phase of #153 itself; requires #149's decide/undo/apply machinery and #154's staging engine
+#163 (bulk-decide via file export/import, Phase 1 of #153) → decomposed out of #153 while planning it; requires #162 (so more than Quote rows are decidable) and #149/#154's existing decide machinery; unblocks #153 (Phase 2)
+#153 (declarative conflict-resolution file, Phase 2) → deferred out of #149; requires #149 (decide/undo/apply machinery and FieldMergeResolver to build on), #154's staging model, and #163 (Phase 1 — generalizes the per-action decisions #163's file format produces into persistent per-source rules)
+#154 (unify import/preview/seeding on one staging engine) → emerged while planning #59; requires #149 (IConflictResolutionCoordinator, System_ImportConflicts as the template) and #56 (audit log); unblocks #59 (redefined), #162, #163, and #153
 #155 (migration review before milestone close) → independent of the others; should be done last, immediately before this milestone closes
 ```
 
@@ -126,8 +130,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 23 | #157 | Sql.cs mixes domain-specific SQL into domain-agnostic Quotinator.Data | Waiting for release |
 | 24 | #158 | ImportBatch entity/repository/enums live in Quotinator.Engine instead of Quotinator.Data | Waiting for release |
 | 25 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Waiting for release |
-| 26 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts | Planning |
-| 27 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
+| 26 | #162 | Detect and allow deciding Source field drift (Date) during import staging | Planning |
+| 27 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
+| 28 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
+| 29 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
 
 ---
 
