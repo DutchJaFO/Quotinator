@@ -117,6 +117,9 @@ tests/
   Quotinator.Data.Testing.Tests/    # Tests for the Data.Testing helper library
   Quotinator.Data.Tests/            # Integration tests for Data infrastructure (real SQLite, no fakes)
   Quotinator.Engine.Tests/          # Integration tests for Engine (SqliteQuoteService, migrations)
+  Quotinator.Tools.DbInspector.Tests/  # Unit tests for the DbInspector dev tool
+tools/
+  Quotinator.Tools.DbInspector/     # Dev-only CLI: run arbitrary SQL against a Quotinator SQLite file. Never shipped.
 data/sources/             # Bundled source files (one JSON per dataset) + manifest
 docs/                     # Workflow guides, testing policy, CVE docs, milestone plans
 scripts/
@@ -127,6 +130,8 @@ addon/                    # Home Assistant add-on manifest and assets
 ```
 
 Dependency direction: `Quotinator.Api` → `Quotinator.Engine` → `Quotinator.Core`; `Quotinator.Engine` → `Quotinator.Data`; `Quotinator.Api` → `Quotinator.Constants`. Core and Data have no dependencies on each other or on Engine. `Quotinator.Data.Testing` → `Quotinator.Data` only.
+
+`tools/` holds standalone developer utilities that are never referenced by any `src/` project and never built into the Docker image — they exist purely to support local development/debugging. See `tools/Quotinator.Tools.DbInspector/README.md` for the current example.
 
 ### File placement rule
 
@@ -493,6 +498,7 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `docs/milestones/` | Per-milestone overview and per-issue plan docs |
 | `.gitignore` | Must exclude `appsettings.local.json`, `.env`, and `data/*.db` |
 | `src/[project]/CVE/` | Per-project CVE tracking — `CVE-YYYY-NNNNN.md` per alert; closed CVEs in `CVE/archived/` |
+| `tools/Quotinator.Tools.DbInspector/` | Dev-only CLI — run arbitrary SQL against a Quotinator SQLite file; see its `README.md` |
 
 ---
 

@@ -99,7 +99,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     }
 
     /// <inheritdoc/>
-    protected override async Task OnResetAsync(SqliteConnection connection)
+    protected override async Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion)
     {
         var totalFiles = _batches.Sum(b => b.Files.Count);
         Logger.LogInformation("[Database - Init] reset requested — rebuilding schema and reimporting from {Count} source file(s)...", totalFiles);
@@ -107,7 +107,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         await SharedSeedLock.WaitAsync();
         try
         {
-            await DropAndRebuildAsync(connection);
+            await DropAndRebuildAsync(connection, preserveSchemaVersion);
             await SeedIfEmptyInternalAsync(connection);
         }
         finally
@@ -136,10 +136,10 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         foreach (var batch in _batches)
         {
-            foreach (var file in batch.Files)
+            foreach (var seedFile in batch.Files)
             {
-                var fileName = Path.GetFileName(file);
-                var quotes   = LoadQuotesFromFile(file);
+                var fileName = Path.GetFileName(seedFile.FilePath);
+                var quotes   = LoadQuotesFromFile(seedFile.FilePath);
                 filePreviews.Add(new SeedFilePreview(fileName, quotes.Count));
                 totalQuotes += quotes.Count;
 
@@ -154,7 +154,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                     }
                     else
                     {
-                        seenIds[q.Id] = file;
+                        seenIds[q.Id] = seedFile.FilePath;
                     }
                 }
             }
@@ -203,11 +203,11 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         foreach (var batch in _batches)
         {
-            foreach (var file in batch.Files)
+            foreach (var seedFile in batch.Files)
             {
-                var fileName    = Path.GetFileName(file);
-                var quotes      = LoadQuotesFromFile(file);
-                var importBatch = await CreateImportBatchAsync(file);
+                var fileName    = Path.GetFileName(seedFile.FilePath);
+                var quotes      = LoadQuotesFromFile(seedFile.FilePath);
+                var importBatch = await CreateImportBatchAsync(batch, seedFile);
 
                 Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
                     quotes.Count, fileName, batch.Label);
@@ -256,7 +256,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                                 id      = q.Id
                             });
 
-                        seenIds[q.Id] = file;
+                        seenIds[q.Id] = seedFile.FilePath;
 
                         var owQuoteId = Guid.Parse(q.Id);
                         await InsertTranslationsAsync(connection, q, owQuoteId, owSourceId, now);
@@ -264,7 +264,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                         continue;
                     }
 
-                    seenIds[q.Id] = file;
+                    seenIds[q.Id] = seedFile.FilePath;
 
                     var sourceId    = await GetOrCreateSourceAsync(connection, q, sourceIndex, importBatch.Id);
                     var characterId = await GetOrCreateCharacterAsync(connection, q, sourceId, characterIndex, importBatch.Id);
@@ -332,9 +332,9 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
         foreach (var batch in _batches)
         {
-            foreach (var file in batch.Files)
+            foreach (var seedFile in batch.Files)
             {
-                var quotes = LoadQuotesFromFile(file);
+                var quotes = LoadQuotesFromFile(seedFile.FilePath);
                 foreach (var q in quotes)
                 {
                     foreach (var genre in q.Genres)
@@ -411,17 +411,27 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         }
     }
 
-    private async Task<ImportBatch> CreateImportBatchAsync(string filePath)
+    private async Task<ImportBatch> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile)
     {
+        var type = DetermineType(seedBatch.Origin, seedFile.Url);
         var batch = new ImportBatch
         {
-            Name       = Path.GetFileName(filePath),
-            Type       = ImportBatchType.System.ToString(),
+            Name       = Path.GetFileName(seedFile.FilePath),
+            Type       = type.ToString(),
+            Url        = seedFile.Url,
             ImportedAt = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat)
         };
         await _importBatches.InsertAsync(batch);
         return batch;
     }
+
+    // Origin always wins over URL presence — a user-imports-folder file that happens to declare
+    // its own url/github manifest entry is still UserSeed, never Seed, so provenance always
+    // reflects which folder the file was actually scanned from.
+    private static ImportBatchType DetermineType(SeedBatchOrigin origin, string? url) =>
+        origin == SeedBatchOrigin.UserImports
+            ? ImportBatchType.UserSeed
+            : string.IsNullOrEmpty(url) ? ImportBatchType.System : ImportBatchType.Seed;
 
     private static async Task<Guid> GetOrCreateSourceAsync(
         SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId)
@@ -498,20 +508,29 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         return false;
     }
 
-    private static List<SourceQuote> LoadQuotesFromFile(string filePath)
+    private List<SourceQuote> LoadQuotesFromFile(string filePath)
     {
         if (!File.Exists(filePath)) return [];
 
         var json    = File.ReadAllText(filePath);
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        var root    = JsonNode.Parse(json);
 
-        if (root is JsonArray)
-            return JsonSerializer.Deserialize<List<SourceQuote>>(json, options) ?? [];
+        try
+        {
+            var root = JsonNode.Parse(json);
 
-        var quotesNode = root?["quotes"];
-        if (quotesNode is null) return [];
-        return quotesNode.Deserialize<List<SourceQuote>>(options) ?? [];
+            if (root is JsonArray)
+                return JsonSerializer.Deserialize<List<SourceQuote>>(json, options) ?? [];
+
+            var quotesNode = root?["quotes"];
+            if (quotesNode is null) return [];
+            return quotesNode.Deserialize<List<SourceQuote>>(options) ?? [];
+        }
+        catch (JsonException ex)
+        {
+            Logger.LogWarning(ex, "[Database - Seed] {File} is empty or not valid JSON — skipping", Path.GetFileName(filePath));
+            return [];
+        }
     }
 
     private static string TruncateLabel(string text, int maxLen = 60)

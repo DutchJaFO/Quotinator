@@ -52,7 +52,7 @@ public class StartupSummaryLoggerTests
         public IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates => [];
         public Task InitialiseAsync()                    => Task.CompletedTask;
         public Task ReseedAsync()                        => Task.CompletedTask;
-        public Task ResetAsync()                         => Task.CompletedTask;
+        public Task ResetAsync(bool preserveSchemaVersion = false) => Task.CompletedTask;
         public Task<SeedPreviewResult> PreviewSeedAsync() =>
             Task.FromResult(new SeedPreviewResult([], [], 0, 0));
     }

@@ -37,7 +37,7 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public Task ReseedAsync() => Task.CompletedTask;
 
     /// <inheritdoc/>
-    public Task ResetAsync() => Task.CompletedTask;
+    public Task ResetAsync(bool preserveSchemaVersion = false) => Task.CompletedTask;
 
     /// <inheritdoc/>
     public Task<SeedPreviewResult> PreviewSeedAsync()
