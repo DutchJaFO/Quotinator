@@ -65,10 +65,14 @@ actual commit after explicit approval, via `git commit -F .claude/temp/commit-dr
 reviewed text and the committed text are identical by construction. The `commit-msg` hook
 (`scripts/hooks/commit-msg`) enforces the mechanics of this — it blocks any non-merge commit whose
 message doesn't exactly match `.claude/temp/commit-draft.md` — but it cannot verify the review itself
-happened, only that the draft-then-commit sequence was followed. The same draft-then-review rule
-applies to GitHub issue text (`gh issue create`/`gh issue edit`): write the draft to a file, show it,
-get approval, then run the command against that file. There is no equivalent client-side hook for `gh`
-issue commands, so that half of the rule is enforced by discipline, not tooling.
+happened, only that the draft-then-commit sequence was followed. A `post-commit` hook
+(`scripts/hooks/post-commit`) automatically deletes `.claude/temp/commit-draft.md` right after a
+successful commit, so a leftover draft can't silently satisfy the `commit-msg` hook for a later,
+unrelated, unreviewed commit — this is automated, not something to remember by hand. The same
+draft-then-review rule applies to GitHub issue text (`gh issue create`/`gh issue edit`): write the
+draft to a file, show it, get approval, then run the command against that file, then delete the draft
+file the same way. There is no equivalent client-side hook for `gh` issue commands — neither the
+review gate nor the cleanup — so that whole side is enforced by discipline, not tooling.
 
 ## Folder and file naming
 

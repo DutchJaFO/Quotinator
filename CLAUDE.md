@@ -33,9 +33,11 @@ curl -X POST -H "X-Api-Key: <your admin key>" "http://localhost:5000/api/v1/admi
 docker build -f docker/Dockerfile -t quotinator:local .
 
 # Install git hooks (run once per clone — prevents accidental GitHub issue auto-close via commit
-# message, and enforces the draft-then-review commit rule below)
+# message, enforces the draft-then-review commit rule below, and auto-deletes the reviewed draft
+# after a successful commit)
 cp scripts/hooks/commit-msg .git/hooks/commit-msg
-chmod +x .git/hooks/commit-msg
+cp scripts/hooks/post-commit .git/hooks/post-commit
+chmod +x .git/hooks/commit-msg .git/hooks/post-commit
 ```
 
 The Scalar API reference is at `/scalar/v1` and the OpenAPI spec at `/openapi/v1.json` — available in all environments including production.
