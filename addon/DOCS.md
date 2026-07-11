@@ -18,7 +18,7 @@ The REST API is accessible in two ways:
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/v1/quotes/random` | Random quote(s) — returns a result envelope with `status`, `items`, `totalMatching` |
+| `GET /api/v1/quotes/random` | Random quote(s) — returns a result envelope with `status`, `items`, `totalMatching`, `requestedCount`, `returnedCount`. When a returned quote belongs to a conversation, one is embedded on that item's `embeddedConversation` and every other quote sharing it is excluded from the rest of the result |
 | `GET /api/v1/quotes/random?n=10` | N random quotes (1–100) |
 | `GET /api/v1/quotes/random?type=movie&type=book` | Random quote from movies or books (repeatable, OR logic) |
 | `GET /api/v1/quotes/random?genre=sci-fi&character=Gandalf` | Filter by genre and character (AND between params) |
@@ -27,6 +27,7 @@ The REST API is accessible in two ways:
 | `GET /api/v1/quotes` | All quotes, paginated; `type`, `genre`, `yearFrom`, `yearTo`, `year`, `decade` all supported |
 | `GET /api/v1/quotes/{id}` | Quote by UUID |
 | `GET /api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
+| `GET /api/v1/conversations/{id}` | A conversation's full ordered line list — quotes, stage directions, and sound cues |
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/version` | Running version |
 | `POST /api/v1/import` | Import one source file (JSON or, via `converter: "csv"` in `settings`, CSV) — same duplicate-detection engine as startup seeding. Multipart fields: `file`, `settings` (optional JSON: `converter`, `duplicateResolution`, `enrich`) — or pass `batchId` (query string) instead of `file` to apply a batch already staged by a prior `/import`/`/import/preview` call. Stages then attempts to apply — `200` when everything applied, `202` when any row needs a decision, `422` if neither `file` nor `batchId` is given. Returns a summary/conflicts/errors envelope (requires `X-Api-Key`) |

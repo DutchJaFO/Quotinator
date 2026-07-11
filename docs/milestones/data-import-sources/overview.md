@@ -52,7 +52,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: undo an applied import batch | Waiting for release | T1 ✅ T2 ✅ | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
 | [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Waiting for release | T1 ✅ T2 ✅ | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
 | [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Waiting for release | T1 ✅ T2 ✅ | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
-| [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | Planning | T1 ⬜ T2 ⬜ | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
+| [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | In progress | T1 ⬜ T2 ✅ | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
+| [#157](https://github.com/DutchJaFO/Quotinator/issues/157) | Sql.cs mixes domain-specific SQL into domain-agnostic Quotinator.Data | Waiting for release | T2 ✅ | [157-sql-domain-engine-split-plan.md](157-sql-domain-engine-split-plan.md) |
 | [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow | Waiting for release | T1 ✅ T2 ✅ | [149-manual-conflict-review-plan.md](149-manual-conflict-review-plan.md) |
 | [#152](https://github.com/DutchJaFO/Quotinator/issues/152) | Review endpoint grouping: split Admin / Quote / Import | Waiting for release | T1 ✅ T2 ✅ | [152-endpoint-grouping-plan.md](152-endpoint-grouping-plan.md) |
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts | Planning | Not yet assessed | No plan doc yet — deferred out of #149 |
@@ -82,6 +83,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #67 (conversations schema) → requires #58 for batch FK; unblocks #68, #69
 #68 (curated format) → requires #67, #61, #58 and #154 (conversations/stageDirections/soundCues are seeded through the same shared writer + System_ImportActions staging path as Quotes — plan doc scope correction)
 #69 (API conversations) → requires #67, #68
+#157 (Sql.cs domain/generic split) → discovered while implementing #69; no dependency on #69's own output, but touches the same Sql.cs file so is sequenced immediately after it to avoid a merge conflict with any later issue's SQL additions
 #140 (auto-update sources) → requires #58 fix + #63; unblocks #144
 #144 (converter plugin review) → requires #140 (done)
 #149 (manual conflict-review workflow) → deferred out of #45; requires #56 (audit log) — done; unblocks #153
@@ -118,10 +120,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 19 | #59 | Admin: undo an applied import batch | Waiting for release |
 | 20 | #67 | Conversations schema | Waiting for release |
 | 21 | #68 | Curated JSON conversations | Waiting for release |
-| 22 | #69 | API conversations | Planning |
-| 23 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Waiting for release |
-| 24 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts | Planning |
-| 25 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
+| 22 | #69 | API conversations | In progress |
+| 23 | #157 | Sql.cs mixes domain-specific SQL into domain-agnostic Quotinator.Data | Waiting for release |
+| 24 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Waiting for release |
+| 25 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts | Planning |
+| 26 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
 
 ---
 
@@ -168,6 +171,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 - [#67 — Conversations schema](67-conversations-schema-plan.md)
 - [#68 — Curated JSON conversations](68-curated-json-conversations-plan.md)
 - [#69 — API conversations](69-api-conversations-plan.md)
+- [#157 — Sql.cs domain/generic split](157-sql-domain-engine-split-plan.md)
 - [#140 — Auto-update bundled sources from manifest URL](140-auto-update-sources-plan.md)
 - [#144 — Converter plugins: generic naming, internal-only slots, configuration options](144-converter-plugin-review-plan.md)
 - [#141 — System table preservation on Reset (System_AuditEntries, System_SchemaVersion)](141-system-table-preservation-plan.md)

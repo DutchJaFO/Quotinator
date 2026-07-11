@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-11 13:39 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-11 18:16 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - An import that needs review can now be finished later by referencing its batch, without needing to re-upload the file.
 - An applied import can now be undone through a new endpoint — reversing everything it added or changed, as long as no newer import has happened since.
 - Adding a new quote source in CSV or JSON format usually no longer requires writing any code — a manifest entry with simple field-mapping options is now enough for most formats.
+- Multi-line exchanges — a back-and-forth between characters, with stage directions and sound cues in between — can now be fetched as a single ordered conversation, and a random quote that's part of one no longer shows up on its own without the rest of the exchange.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -53,6 +54,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The `csv` converter plugin now supports `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) for CSV files whose header labels don't match Quotinator's own field names, or that have no header at all — previously only exact-matching header names were supported
 - New database tables lay the groundwork for multi-line conversations — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues`, and their translation tables — allowing quotes, stage directions, and sound cues to be grouped into an ordered exchange; not yet populated by any source file or exposed via the API (issue #67)
 - Source files can now define reusable stage directions, sound cues, and conversations grouping them together with quotes in order — seeded at startup and importable via `POST /api/v1/import` (JSON only) the same way quotes are, including duplicate detection and undo; not yet exposed via a read endpoint (issue #68)
+- New `GET /api/v1/conversations/{id}` endpoint returns a full ordered conversation — quotes, stage directions, and sound cues in sequence, respecting `?lang=` with fallback to the original language (issue #69)
+- Quote responses now include a `conversations` field listing which conversation(s) a quote belongs to, its position, and the conversation's total line count; omitted entirely for a quote that belongs to no conversation (issue #69)
+- `GET /api/v1/quotes/random` now embeds the full conversation when a selected quote belongs to one, and excludes every other quote from that same conversation for the rest of the request; the response now reports `requestedCount` and `returnedCount` so a shortfall caused by this deduplication is visible (issue #69)
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
@@ -77,6 +81,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Re-importing or reseeding content that had previously been soft-deleted (via undo, or otherwise) silently failed to restore it — the record and its related rows are now properly resurrected instead of being permanently hidden behind the old row
 - `GET /api/v1/quotes`'s `yearFrom`/`yearTo`/`year`/`decade` filters were documented as `integer` in the OpenAPI spec, but the schema patch never actually applied to this specific endpoint due to a route-path mismatch — the Scalar UI showed them as plain `string`; request handling itself was unaffected, this was a documentation-accuracy bug only
 - The legacy in-memory `QuoteService` duplicated the source-file parser's logic instead of reusing it, and broke once a source file used the extended object format; now reuses the shared parser. This code path is not reachable in the running application — nothing has registered it since the SQLite migration — but it remains covered by its own test suite (issue #68)
+- Quote, source, character, and conversation SQL queries had been living inside the generic data-access library instead of the Quotinator-specific project since before that split existed — a purely internal code-organisation fix with no behaviour change (issue #157)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`

@@ -120,6 +120,7 @@
     <File Path="docs/milestones/data-import-sources/149-manual-conflict-review-plan.md" />
     <File Path="docs/milestones/data-import-sources/152-endpoint-grouping-plan.md" />
     <File Path="docs/milestones/data-import-sources/154-import-staging-plan.md" />
+    <File Path="docs/milestones/data-import-sources/157-sql-domain-engine-split-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/">
     <File Path="docs/milestones/v1-7-0/overview.md" />

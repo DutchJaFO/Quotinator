@@ -28,9 +28,6 @@
       <_Parameter1>Quotinator.Engine.Tests</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>Quotinator.Core.Tests</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Quotinator.Data.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>

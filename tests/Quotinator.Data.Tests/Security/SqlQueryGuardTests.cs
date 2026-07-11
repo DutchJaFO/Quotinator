@@ -1,9 +1,8 @@
 using System.Reflection;
-using Quotinator.Engine.Services;
 using Quotinator.Data.Diagnostics;
 using Quotinator.Data.Queries;
 
-namespace Quotinator.Core.Tests.Security;
+namespace Quotinator.Data.Tests.Security;
 
 [TestClass]
 public class SqlQueryGuardTests
@@ -25,11 +24,11 @@ public class SqlQueryGuardTests
     }
 
     /// <summary>
-    /// Verifies that every dynamically-assembled query produced by the <c>Sql.Quotes</c> factory
-    /// methods passes the aggregate guard for all clause combinations.
-    /// Covers the complete WHERE clause matrix from <c>SqliteQuoteService.BuildFilterWhere</c>
-    /// and all field-filter variants from <c>Sql.SearchField</c>.
-    /// Repository factory methods are covered in <c>Quotinator.Data.Tests.RepositorySqlGuardTests</c>.
+    /// Verifies that every dynamically-assembled query produced by the generic-infrastructure
+    /// factory methods (<c>SystemAudit</c>, <c>SystemImportActions</c>, <c>Queries</c>) passes the
+    /// aggregate guard for all filter-flag combinations.
+    /// Quotinator-domain factory methods (<c>Quotes</c>, etc.) are covered in
+    /// <c>Quotinator.Engine.Tests.Security.SqlQueryGuardTests</c>.
     /// </summary>
     [TestMethod]
     [DynamicData(nameof(AssembledQueryCases))]
@@ -38,7 +37,7 @@ public class SqlQueryGuardTests
         Assert.IsFalse(
             SqlAggregateGuard.IsVulnerablePattern(fullSql),
             $"Assembled query '{label}' contains a vulnerable aggregate pattern. " +
-            "Review BuildFilterWhere or Sql.Quotes factory methods and consult docs/sql-safety.md.");
+            "Review the factory method and consult docs/sql-safety.md.");
     }
 
     /// <summary>
@@ -58,22 +57,8 @@ public class SqlQueryGuardTests
             "Schema.GetConsumerCurrentVersion",   // COALESCE(MAX(...))
             "Schema.LegacySchemaVersionExists",   // COUNT(*) — one-time bootstrap legacy-table detection (#141 amendment)
             "Schema.AnyTableExists",              // COUNT(*) — fresh-database detection for the baseline path (#143)
-            "Quotes.CountAll",                    // COUNT(*)
-            "Quotes.CountActive",                 // COUNT(*)
-            "Quotes.CountForRandomBase",          // COUNT(*) — private base for CountRandom factory
-            "Quotes.CountForGetAllBase",          // COUNT(*) — private base for CountGetAll factory
-            "QuoteGenres.CountAll",               // COUNT(*)
-            "SourceTranslations.CountForSource",  // COUNT(*)
-            "Characters.CountActive",             // COUNT(*)
-            "People.CountActive",                 // COUNT(*)
-            "Sources.CountActive",                // COUNT(*)
             "SystemAudit.CountPagedBase",         // COUNT(*) — private base for CountPaged factory
-            "SystemImportActions.CountPagedBase",   // COUNT(*) — private base for CountPaged factory
-            "Characters.CountActiveReferences",   // COUNT(*) — #59 reversal reference check
-            "People.CountActiveReferences",       // COUNT(*) — #59 reversal reference check
-            "Sources.CountActiveReferences",      // COUNT(*) x2 (subqueries) — #59 reversal reference check
-            "StageDirections.CountActiveReferences", // COUNT(*) — #68 reversal reference check
-            "SoundCues.CountActiveReferences",       // COUNT(*) — #68 reversal reference check
+            "SystemImportActions.CountPagedBase", // COUNT(*) — private base for CountPaged factory
         };
 
         var actual = EnumerateSqlConstants()
@@ -91,57 +76,26 @@ public class SqlQueryGuardTests
 
     public static IEnumerable<object[]> AssembledQueryCases()
     {
-        // Full matrix of filter combinations — exercises every branch in BuildFilterWhere.
-        var filterCases = new (string Label, string[]? Types, string[]? Genres, string? Lang, string? Character, string? Author, string? Source, int? YearFrom, int? YearTo)[]
-        {
-            ("no filters",      null,               null,               null, null,       null,    null,    null, null),
-            ("type",            ["movie"],          null,               null, null,       null,    null,    null, null),
-            ("genre",           null,               ["drama"],          null, null,       null,    null,    null, null),
-            ("lang",            null,               null,               "nl", null,       null,    null,    null, null),
-            ("character",       null,               null,               null, "Hannibal", null,    null,    null, null),
-            ("author",          null,               null,               null, null,       "Twain", null,    null, null),
-            ("source",          null,               null,               null, null,       null,    "Matrix",null, null),
-            ("yearFrom",        null,               null,               null, null,       null,    null,    1990, null),
-            ("yearTo",          null,               null,               null, null,       null,    null,    null, 2000),
-            ("all filters",     ["tv"],             ["comedy"],         "de", "Sherlock", "Doyle", "BBC",   1900, 2020),
-            ("multi-type",      ["movie", "book"],  null,               null, null,       null,    null,    null, null),
-            ("multi-genre",     null,               ["sci-fi", "drama"],null, null,       null,    null,    null, null),
-        };
-
-        foreach (var (label, types, genres, lang, character, author, source, yearFrom, yearTo) in filterCases)
-        {
-            var (whereClause, _) = SqliteQuoteService.BuildFilterWhere(
-                types, genres, lang, character, author, source, yearFrom, yearTo);
-
-            yield return [$"CountRandom({label})",    Sql.Quotes.CountRandom(whereClause)];
-            yield return [$"CountGetAll({label})",    Sql.Quotes.CountGetAll(whereClause)];
-            yield return [$"SelectRandom({label})",   Sql.Quotes.SelectRandom(whereClause)];
-            yield return [$"SelectPaged({label})",    Sql.Quotes.SelectPaged(whereClause)];
-        }
-
         // Sql.Queries factory methods — one case per method.
         yield return ["Queries.WidgetWithOwner()", Sql.Queries.WidgetWithOwner()];
 
-        // SelectById has no dynamic clauses — one case covers it.
-        yield return ["SelectById()", Sql.Quotes.SelectById()];
-
-        // SelectRawById has no dynamic clauses — one case covers it.
-        yield return ["SelectRawById()", Sql.Quotes.SelectRawById()];
-
-        // SelectSearch: one case per field-filter constant × a representative where clause.
-        var (baseWhere, _) = SqliteQuoteService.BuildFilterWhere(["movie"], ["drama"], null, null, null, null, null, null);
-        foreach (var (fieldName, fieldFilter) in new[]
+        // SystemAudit.SelectPaged/CountPaged — one case per filter-flag combination.
+        foreach (var (filterTable, filterRecordId) in new[] { (false, false), (true, false), (false, true), (true, true) })
         {
-            (nameof(Sql.SearchField.Quote),     Sql.SearchField.Quote),
-            (nameof(Sql.SearchField.Source),    Sql.SearchField.Source),
-            (nameof(Sql.SearchField.Character), Sql.SearchField.Character),
-            (nameof(Sql.SearchField.Author),    Sql.SearchField.Author),
-            (nameof(Sql.SearchField.All),       Sql.SearchField.All),
-        })
-        {
-            yield return [$"SelectSearch(field={fieldName})", Sql.Quotes.SelectSearch(baseWhere, fieldFilter)];
+            yield return [$"SystemAudit.SelectPaged({filterTable},{filterRecordId})", Sql.SystemAudit.SelectPaged(filterTable, filterRecordId)];
+            yield return [$"SystemAudit.CountPaged({filterTable},{filterRecordId})", Sql.SystemAudit.CountPaged(filterTable, filterRecordId)];
         }
 
+        // SystemImportActions.SelectPaged/CountPaged — one case per filter-flag combination.
+        foreach (var (filterBatchId, filterStatus, filterEntityType) in new[]
+        {
+            (false, false, false), (true, false, false), (false, true, false), (false, false, true),
+            (true, true, false), (true, false, true), (false, true, true), (true, true, true),
+        })
+        {
+            yield return [$"SystemImportActions.SelectPaged({filterBatchId},{filterStatus},{filterEntityType})", Sql.SystemImportActions.SelectPaged(filterBatchId, filterStatus, filterEntityType)];
+            yield return [$"SystemImportActions.CountPaged({filterBatchId},{filterStatus},{filterEntityType})", Sql.SystemImportActions.CountPaged(filterBatchId, filterStatus, filterEntityType)];
+        }
     }
 
     /// <summary>

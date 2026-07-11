@@ -8,9 +8,9 @@ using Quotinator.Core.Models;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
-using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Engine.Entities;
+using Quotinator.Engine.Queries;
 
 namespace Quotinator.Engine.Database;
 

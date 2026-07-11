@@ -32,7 +32,13 @@ internal static class QuoteEndpoints
                  "`character`, `author`, or `source` (case-insensitive contains match), " +
                  "`yearFrom` / `yearTo` (inclusive year range), `year` (exact year), or `decade` (e.g. `1980` for 1980–1989, must be divisible by 10). " +
                  "Multiple distinct filter parameters combine with AND logic. " +
-                 "The envelope always includes `status`, `items`, and `totalMatching` (pool size before random selection). " +
+                 "The envelope always includes `status`, `items`, and `totalMatching` (pool size before random selection), " +
+                 "plus `requestedCount` (the effective `n`) and `returnedCount` (`items.length`), which can differ from " +
+                 "`requestedCount` when the pool is smaller than requested or when conversation-aware deduplication excludes " +
+                 "quotes that share a conversation with an already-selected one. " +
+                 "When a returned quote belongs to a conversation, one is chosen at random and its full line list is embedded " +
+                 "on that item's `embeddedConversation` field — every other quote in that conversation is excluded from the " +
+                 "rest of the result set. " +
                  "Use `lang` (ISO 639-1) to request a specific language.");
 
         // /search must be registered before /{id} so the literal segment wins.
@@ -200,10 +206,12 @@ internal static class QuoteEndpoints
         if (result.Status == FilteredResultStatus.NoResults)
             return Results.Ok(new FilteredQuoteResult<QuoteResponse>
             {
-                Status        = FilteredResultStatus.NoResults,
-                Items         = [],
-                TotalMatching = 0,
-                Message       = localizer[ApiMessages.NoQuotesMatchFilters],
+                Status         = FilteredResultStatus.NoResults,
+                Items          = [],
+                TotalMatching  = 0,
+                Message        = localizer[ApiMessages.NoQuotesMatchFilters],
+                RequestedCount = result.RequestedCount,
+                ReturnedCount  = result.ReturnedCount,
             });
 
         return Results.Ok(result);

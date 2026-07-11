@@ -3,7 +3,7 @@
 **Status:** Superseded in part by ADR 004-A (Engine layer)  
 **Date:** 2026-06-25  
 **GitHub issue:** #115  
-**Updated:** 2026-06-28 (issue #121 — introduced `Quotinator.Engine`; revised dependency direction)
+**Updated:** 2026-06-28 (issue #121 — introduced `Quotinator.Engine`; revised dependency direction); 2026-07-11 (issue #157 — closed the `Sql.cs` placement gap left open by the #121 revision)
 
 ---
 
@@ -96,3 +96,32 @@ Quotinator.Constants  ←  Quotinator.Core  ←  Quotinator.Engine  ←  Quotina
 - `Quotinator.Data` must have zero Core project references and zero Quotinator-domain types.
 - `Quotinator.Engine` may reference both Core and Data. It is the only project with this privilege.
 - `Quotinator.Api` wires everything via DI. It may reference Engine (to register types) but must not contain business logic.
+
+---
+
+## Revision — issue #157 closed the `Sql.cs` placement gap
+
+Line 43 above ("SQL query string constants (`Sql.cs`) — these are strings, not Dapper types; they
+remain testable from Core") predates the Engine revision and was never updated when `Quotinator.Engine`
+was introduced. In practice `Sql.cs` stayed in `Quotinator.Data` by default, and every
+Quotinator-domain query added since (`Quotes`, `Characters`, `Sources`, `Conversations`, etc.) copied
+that placement without anyone checking it against this ADR — the exact "existing code is not a
+validated decision" failure mode CLAUDE.md warns about via the `SystemAuditEntry` incident.
+
+**A SQL query string constant follows the same domain/generic split as everything else in this ADR,
+regardless of the fact that it is "just a string, not a Dapper type":** a query naming a
+Quotinator-domain table (`Quotes`, `Sources`, `Characters`, `People`, `Conversations`,
+`ConversationLines`, `StageDirections`, `SoundCues`, and their translation/detail tables,
+`ImportBatches`) is domain-specific SQL and belongs in `Quotinator.Engine/Queries/Sql.cs` —
+`internal static class Sql` in namespace `Quotinator.Engine.Queries` — alongside the entity classes
+that use it. A query touching only generic infrastructure (`Schema`, `Joins`, the `Queries` example,
+and the `System_`-prefixed tables `Quotinator.Data` itself owns — `SystemAudit`, `SystemImportActions`,
+`SystemChangeLog`) stays in `Quotinator.Data/Queries/Sql.cs`. The original "just a string" reasoning
+undersold the coupling: a query's `FROM`/`JOIN` clauses hardcode a domain schema shape just as much as
+a Dapper entity class does, even without a compile-time type reference.
+
+This also applies to any *code that assembles or executes* domain-specific SQL, not only the string
+constants themselves — found while doing this split: `DatabaseInitializer.TruncateDataAsync`
+(the shared base class in `Quotinator.Data`) directly called `Sql.Quotes.DeleteAll`,
+`Sql.Conversations.DeleteAll`, and similar Quotinator-domain deletes. It moved to
+`QuotinatorDatabaseInitializer` (`Quotinator.Engine`), its only caller.

@@ -1,6 +1,6 @@
 # #69 — API: conversation membership, GET /conversations/{id}, random dedup
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #69
 **Tiers required:** T1, T2
 **Depends on:** #67, #68
@@ -60,45 +60,68 @@ changes above).
 
 ### 1. `QuoteResponse.Conversations`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-New `QuoteConversationMembership` DTO in `Quotinator.Core.Models`. `SqliteQuoteService` populates it
-via a join against `ConversationLines` (query added to `Sql.cs` per the SQL centralisation policy,
-with a `SqlQueryGuardTests.AssembledQueryCases` entry) — designed in #67 section 3, implemented here.
+New `QuoteConversationMembership` DTO in `Quotinator.Core.Models`. `SqliteQuoteService.GetById`,
+`GetAll`, and `Search` all call a new private `LoadConversationMemberships` helper, backed by
+`Sql.ConversationLines.SelectMembershipForQuote` (added to `Sql.cs`, with a
+`SqlQueryGuardTests.AggregateQueries_MatchDocumentedInventory` entry since it contains a `COUNT(*)`
+subquery for `totalLines`). `Conversations` is `null` (never `[]`) when the quote belongs to no
+conversation, matching the deliberate exception to the `Genres` pattern documented in the spec
+above.
+
+Design decision found while implementing: `StageDirectionEntity`/`SoundCueEntity` (added in #67)
+have no `OriginalLanguage` column — #67's schema only tracked it on `Quote`/`Conversation`. Rather
+than reopening the already-shipped #67 migration, the original language for stage-direction and
+sound-cue text is hardcoded to `"en"` in `Sql.StageDirections.SelectByIdWithTranslation` /
+`Sql.SoundCues.SelectByIdWithTranslation` and `SqliteQuoteService.BuildLineResponse`. This is a
+known, deliberate limitation — documented inline in `Sql.cs` — not an oversight; every bundled and
+curated stage direction/sound cue is in fact English-original at time of writing.
 
 ### 2. `GET /api/v1/conversations/{id}` endpoint
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-Registered in `QuoteEndpoints.cs` (or a new `ConversationEndpoints.cs` if the file is getting large
-— follow #152's grouping precedent and put it under the same route-group tag as the other
-`/api/v1/conversations` surface, since #69 is the only issue that adds one). `{id}` lookup uses
-`UPPER(Id) = UPPER(@id)` in its `Sql.cs` query — new GUID route parameters default to
-case-insensitive matching (established rule; the existing `/quotes/{id}` lookup predates it and is
-a separate, already-tracked gap, not something this issue touches). 404 message goes through
-`IApiLocalizer`/`ApiMessages` + `i18ntext/UI.*.json` (all three locales), never a hardcoded string.
-`[Description]` attributes on the endpoint and its parameters per the OpenAPI documentation
-requirement.
+Implemented as a new `Quotinator.Api.Endpoints.ConversationEndpoints.cs` (file getting large was the
+trigger, following #152's grouping precedent), registered via `app.MapConversationEndpoints()` in
+`Program.cs` under a new `Conversations` OpenAPI tag (`ApiTags.Conversations`). `{id}` lookup uses
+`Sql.Conversations.SelectForRead`, case-insensitive per the established rule. 404 goes through
+`IApiLocalizer`/`ApiMessages.ConversationNotFound`, translated in all three
+`i18ntext/UI.*.json` locales. `?lang=` validated the same way as the existing quote endpoints
+(400 on an invalid code). `[Description]` attributes present on the endpoint and its parameters.
+
+`SqliteQuoteService.BuildConversationResponse` builds the full ordered line list; each line is
+either a `QuoteResponse` (via the existing `ToResponse`, called with `conversations: null,
+embeddedConversation: null` to suppress recursion — proven by
+`ConversationEndpointsTests.GetById_QuoteLine_HasNoRecursiveConversationsField`) or a
+stage-direction/sound-cue line. The wire-format `type` discriminator (`stage_direction`/
+`sound_cue`/`quote`) is derived from the DB enum name via
+`JsonNamingPolicy.SnakeCaseLower.ConvertName`, avoiding a hand-duplicated mapping table.
 
 ### 3. Random dedup
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-`SqliteQuoteService.GetRandom` gains conversation-exclusion logic: after selecting a quote that
-belongs to ≥1 conversation, pick one conversation, look up every `QuoteId` referenced by its
-`ConversationLines`, and add them all to the running exclusion set before continuing to fill the
-remaining `n - 1` slots. `RequestedCount`/`ReturnedCount` set on the returned
-`FilteredQuoteResult<QuoteResponse>` per the Scope changes correction above.
+`SqliteQuoteService.GetRandom` rewritten with an iterative loop: while `items.Count < count`, query
+excluding `excludedIds` so far; for each picked quote, call `LoadConversationMemberships` — if any
+membership exists, pick one conversation at random (`Random.Shared.Next`) and add every quote id
+referenced by that conversation's lines (`Sql.ConversationLines.SelectQuoteIdsForConversation`) to
+`excludedIds` before continuing, embedding the full conversation via `BuildConversationResponse`.
+Loop is safety-valved by `maxPasses = totalMatching + 1` so an exhausted pool returns early rather
+than looping forever. `RequestedCount`/`ReturnedCount` are set on the returned
+`FilteredQuoteResult<QuoteResponse>`; the `NoResults` branch in `QuoteEndpoints.GetRandom` was fixed
+to preserve them rather than discarding them on an empty result.
 
 ### 4. Documentation sync
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-Per CLAUDE.md's "Keeping API documentation in sync": update `README.md`'s endpoint table,
-`addon/DOCS.md`'s endpoint table, and `QuoteEndpoints.cs`'s `[Description]` attributes in the same
-commit. Note the new nullable `RequestedCount`/`ReturnedCount` fields on the `/random` response in
-both docs; no `?n=` breaking-change note needed since the existing envelope shape is preserved
-(update, not replace).
+`README.md` and `addon/DOCS.md` endpoint tables updated with the new
+`GET /api/v1/conversations/{id}` row; `/random`'s row/description updated to mention
+`requestedCount`/`returnedCount`/`embeddedConversation`. README also gained a short paragraph
+explaining the universal `conversations` membership field on quote responses.
+`QuoteEndpoints.cs`'s `/random` `.WithDescription(...)` updated in the same commit. No `?n=`
+breaking-change note needed — the existing envelope shape was extended, not replaced.
 
 ---
 
@@ -106,18 +129,18 @@ both docs; no `?n=` breaking-change note needed since the existing envelope shap
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | `QuoteResponse.Conversations` is `null` for a quote in no conversation, populated for one that is | Unit test | New `Quotinator.Engine.Tests` test |
-| 2 | ⬜ | `GET /api/v1/conversations/{id}` returns lines in `Order` order | Unit test | New `Quotinator.Api.Tests` endpoint test |
-| 3 | ⬜ | `GET /api/v1/conversations/{id}` respects `?lang=` with fallback to `originalLanguage` | Unit test | New endpoint test, translated + untranslated case |
-| 4 | ⬜ | `{id}` route lookup is case-insensitive | Unit test | New endpoint test: uppercase-cased id in the URL still resolves |
-| 5 | ⬜ | `GET /api/v1/conversations/{unknown-id}` returns 404 via `IApiLocalizer` (not a hardcoded string) | Unit test | New endpoint test asserting the response body matches the localized key |
-| 6 | ⬜ | Embedded `QuoteResponse` inside a conversation line has no recursive `Conversations` field | Unit test | New endpoint test |
-| 7 | ⬜ | `/random?n=` never returns two quotes from the same conversation | Unit test | New `SqliteQuoteService` test with a seeded conversation |
-| 8 | ⬜ | `RequestedCount`/`ReturnedCount` reflect a short result when the pool is exhausted by dedup | Unit test | New test with a small seeded pool |
-| 9 | ⬜ | `RequestedCount`/`ReturnedCount` are `null` for `/search` (unaffected by this change) | Unit test | Existing `QuoteEndpointsTests` search cases still pass unmodified |
-| 10 | ⬜ | `README.md`/`addon/DOCS.md` endpoint tables updated | Live | Manual doc review against the implemented endpoint |
-| 11 | ⬜ | OpenAPI/Scalar reference reflects the new endpoint and fields | Live (T1) | `GET /scalar/v1` in a running instance; confirm `/conversations/{id}` and the two new fields appear |
-| 12 | ⬜ | Docker build succeeds | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` |
+| 1 | ✅ | `QuoteResponse.Conversations` is `null` for a quote in no conversation, populated for one that is | Unit test | `SqliteQuoteServiceConversationTests.GetById_QuoteInNoConversation_ConversationsIsNull` / `GetById_QuoteInConversation_ConversationsPopulated` |
+| 2 | ✅ | `GET /api/v1/conversations/{id}` returns lines in `Order` order | Unit test | `ConversationEndpointsTests.GetById_KnownId_ReturnsOkWithLinesInOrder`; also `SqliteQuoteServiceConversationTests.GetConversation_MixedLineTypes_ReturnsInOrder` |
+| 3 | ✅ | `GET /api/v1/conversations/{id}` respects `?lang=` with fallback to `originalLanguage` | Unit test | `SqliteQuoteServiceConversationTests.GetConversation_WithTranslation_ReturnsTranslatedText` / `..._NoTranslation_FallsBackToOriginal` |
+| 4 | ✅ | `{id}` route lookup is case-insensitive | Unit test | `ConversationEndpointsTests.GetById_UppercaseCasedId_StillResolves`; `SqliteQuoteServiceConversationTests.GetConversation_CaseInsensitiveId_Resolves` |
+| 5 | ✅ | `GET /api/v1/conversations/{unknown-id}` returns 404 via `IApiLocalizer` (not a hardcoded string) | Unit test | `ConversationEndpointsTests.GetById_UnknownId_Returns404WithLocalisedDetail` / `..._WithAcceptLanguageNl_ReturnsDutchDetail` |
+| 6 | ✅ | Embedded `QuoteResponse` inside a conversation line has no recursive `Conversations` field | Unit test | `ConversationEndpointsTests.GetById_QuoteLine_HasNoRecursiveConversationsField`; `SqliteQuoteServiceConversationTests.GetConversation_QuoteLine_HasNoRecursion` |
+| 7 | ✅ | `/random?n=` never returns two quotes from the same conversation | Unit test | `SqliteQuoteServiceConversationTests.GetRandom_ConversationQuote_DedupsPartnerQuote` (+ live T2 evidence below) |
+| 8 | ✅ | `RequestedCount`/`ReturnedCount` reflect a short result when the pool is exhausted by dedup | Unit test | `SqliteQuoteServiceConversationTests.GetRandom_DedupShrinksPool_ReturnedCountLessThanRequested` (+ live T2 evidence below) |
+| 9 | ✅ | `RequestedCount`/`ReturnedCount` are `null` for `/search` (unaffected by this change) | Unit test | Existing `QuoteEndpointsTests` search cases pass unmodified; `FilteredQuoteResult<T>` leaves both fields unset outside `GetRandom` |
+| 10 | ✅ | `README.md`/`addon/DOCS.md` endpoint tables updated | Live | Manual doc review — `/api/v1/conversations/{id}` row added, `/random` description mentions `requestedCount`/`returnedCount`/`embeddedConversation` |
+| 11 | ⬜ | OpenAPI/Scalar reference reflects the new endpoint and fields | Live (T1) | Awaiting user's own Visual Studio build/run per the T1 tier — `GET /scalar/v1`; confirm `/conversations/{id}` and the two new fields appear |
+| 12 | ✅ | Docker build succeeds | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; container run confirmed `/api/v1/version` healthy (`schemaVersion: 8`), `GET /api/v1/conversations/{id}` against the real seeded "The Black Knight" conversation (`ce516316-6d19-4244-a7b2-f2eddd125cda`) returned ordered `sound_cue` + 2 `quote` lines, uppercase-cased id resolved, unknown id returned 404 with the localized detail, and `?character=Ted%20Striker`/`?source=Airplane!&n=2` confirmed live dedup (`requestedCount: 2, returnedCount: 1`) with `embeddedConversation` populated |
 
 ---
 

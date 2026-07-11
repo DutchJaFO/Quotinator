@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 140, 141, 143, 144, 149, 152, 154],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -22,7 +22,8 @@
       "Dubbele citaten die zijn gemarkeerd voor handmatige controle kunnen nu veld voor veld worden opgelost, waarbij je kiest welke kant wint of je eigen waarde opgeeft — wijzigingen worden pas doorgevoerd zodra elk conflict uit hetzelfde importbestand is beslist.",
       "Een import die nog beoordeeld moet worden, kan nu later worden afgerond door naar de batch te verwijzen, zonder het bestand opnieuw te hoeven uploaden.",
       "Een toegepaste import kan nu ongedaan worden gemaakt via een nieuw eindpunt — dit maakt alles ongedaan wat is toegevoegd of gewijzigd, zolang er sindsdien geen nieuwere import heeft plaatsgevonden.",
-      "Een nieuwe citaatbron toevoegen in CSV- of JSON-formaat vereist meestal geen code meer — een manifestvermelding met eenvoudige veldtoewijzingsopties volstaat nu voor de meeste formaten."
+      "Een nieuwe citaatbron toevoegen in CSV- of JSON-formaat vereist meestal geen code meer — een manifestvermelding met eenvoudige veldtoewijzingsopties volstaat nu voor de meeste formaten.",
+      "Meerregelige dialogen — een heen-en-weer tussen personages, met regieaanwijzingen en geluidscues ertussen — kunnen nu als één geordende conversatie worden opgevraagd, en een willekeurig citaat dat daar deel van uitmaakt verschijnt niet langer los zonder de rest van de dialoog."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -54,7 +55,10 @@
       "Nieuwe convertorplug-ins `basic-json-array` en `regex-array` verwerken respectievelijk een platte JSON-objectarray of een JSON-array van via reguliere expressies te extraheren strings, beide volledig configureerbaar via de `converterOptions` van een manifestvermelding — de meeste nieuwe bronnen hebben geen eigen convertorproject meer nodig",
       "De `csv`-convertorplug-in ondersteunt nu `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) voor CSV-bestanden waarvan de kolomlabels niet overeenkomen met Quotinators eigen veldnamen, of die geen header hebben — voorheen werden alleen exact overeenkomende headernamen ondersteund",
       "Nieuwe databasetabellen leggen de basis voor meerregelige conversaties — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues` en hun vertaaltabellen — waarmee quotes, regieaanwijzingen en geluidscues gegroepeerd kunnen worden tot een geordende dialoog; nog niet gevuld vanuit een bronbestand en nog niet beschikbaar via de API (issue #67)",
-      "Bronbestanden kunnen nu herbruikbare regieaanwijzingen, geluidscues en conversaties definiëren die samen met quotes in volgorde worden gegroepeerd — ingelezen bij het opstarten en te importeren via `POST /api/v1/import` (alleen JSON) op dezelfde manier als quotes, inclusief detectie van duplicaten en ongedaan maken; nog niet beschikbaar via een leeseindpunt (issue #68)"
+      "Bronbestanden kunnen nu herbruikbare regieaanwijzingen, geluidscues en conversaties definiëren die samen met quotes in volgorde worden gegroepeerd — ingelezen bij het opstarten en te importeren via `POST /api/v1/import` (alleen JSON) op dezelfde manier als quotes, inclusief detectie van duplicaten en ongedaan maken; nog niet beschikbaar via een leeseindpunt (issue #68)",
+      "Nieuw eindpunt `GET /api/v1/conversations/{id}` geeft een volledige, geordende conversatie terug — quotes, regieaanwijzingen en geluidscues in volgorde, met ondersteuning voor `?lang=` en terugval naar de oorspronkelijke taal (issue #69)",
+      "Citaatresponsen bevatten nu een veld `conversations` dat aangeeft tot welke conversatie(s) een citaat behoort, de positie erin en het totale aantal regels van die conversatie; dit veld ontbreekt volledig als een citaat tot geen enkele conversatie behoort (issue #69)",
+      "`GET /api/v1/quotes/random` toont nu de volledige conversatie wanneer een gekozen citaat daar deel van uitmaakt, en sluit voor de rest van de aanvraag elk ander citaat uit diezelfde conversatie uit; de respons rapporteert nu `requestedCount` en `returnedCount`, zodat een tekort door deze deduplicatie zichtbaar is (issue #69)"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
@@ -78,7 +82,8 @@
       "`POST /api/v1/import` zonder bestand, zonder instellingen en zonder batch-id gaf een weinig informatieve algemene foutmelding terug, in plaats van een duidelijke melding dat óf een bestand óf een batch-id vereist is",
       "Het opnieuw importeren of opnieuw seeden van content die eerder zacht was verwijderd (via ongedaan maken, of anderszins) herstelde deze niet — het record en de bijbehorende rijen worden nu correct hersteld in plaats van permanent verborgen te blijven achter het oude record",
       "De filters `yearFrom`/`yearTo`/`year`/`decade` van `GET /api/v1/quotes` waren in de OpenAPI-specificatie gedocumenteerd als `integer`, maar de schemacorrectie werd door een padmismatch nooit daadwerkelijk toegepast op dit specifieke eindpunt — de Scalar-UI toonde ze als gewone `string`; de daadwerkelijke verwerking van de aanvraag was niet beïnvloed, dit was uitsluitend een documentatienauwkeurigheidsfout",
-      "De verouderde in-memory `QuoteService` dupliceerde de parserlogica van de bronbestandslezer in plaats van deze te hergebruiken, en liep vast zodra een bronbestand het uitgebreide objectformaat gebruikte; hergebruikt nu de gedeelde parser. Dit codepad is niet bereikbaar in de draaiende applicatie — niets registreert het meer sinds de SQLite-migratie — maar wordt nog steeds gedekt door zijn eigen testsuite (issue #68)"
+      "De verouderde in-memory `QuoteService` dupliceerde de parserlogica van de bronbestandslezer in plaats van deze te hergebruiken, en liep vast zodra een bronbestand het uitgebreide objectformaat gebruikte; hergebruikt nu de gedeelde parser. Dit codepad is niet bereikbaar in de draaiende applicatie — niets registreert het meer sinds de SQLite-migratie — maar wordt nog steeds gedekt door zijn eigen testsuite (issue #68)",
+      "Citaat-, bron-, personage- en conversatie-SQL-query's stonden al sinds vóór die scheiding bestond in de generieke gegevenstoegangsbibliotheek in plaats van in het Quotinator-specifieke project — een zuiver interne code-organisatiecorrectie zonder gedragswijziging (issue #157)"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"

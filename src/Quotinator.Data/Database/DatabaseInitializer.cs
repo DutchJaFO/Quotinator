@@ -272,28 +272,6 @@ public class DatabaseInitializer : IDatabaseInitializer
     // -------------------------------------------------------------------------
     #region Protected utilities for subclasses
 
-    /// <summary>Truncates all quote-related data tables. Subclasses call this during reseed/reset.</summary>
-    protected static async Task TruncateDataAsync(SqliteConnection connection)
-    {
-        await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
-        await connection.ExecuteAsync(Sql.ConversationLines.DeleteAll);
-        await connection.ExecuteAsync(Sql.StageDirectionTranslations.DeleteAll);
-        await connection.ExecuteAsync(Sql.SoundCueTranslations.DeleteAll);
-        await connection.ExecuteAsync(Sql.Conversations.DeleteAll);
-        await connection.ExecuteAsync(Sql.StageDirections.DeleteAll);
-        await connection.ExecuteAsync(Sql.SoundCues.DeleteAll);
-        await connection.ExecuteAsync(Sql.QuoteGenres.DeleteAll);
-        await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteAll);
-        await connection.ExecuteAsync(Sql.SourceTranslations.DeleteAll);
-        await connection.ExecuteAsync(Sql.CharacterTranslations.DeleteAll);
-        await connection.ExecuteAsync(Sql.Quotes.DeleteAll);
-        await connection.ExecuteAsync(Sql.Characters.DeleteAll);
-        await connection.ExecuteAsync(Sql.People.DeleteAll);
-        await connection.ExecuteAsync(Sql.Sources.DeleteAll);
-        await connection.ExecuteAsync(Sql.ImportBatches.DeleteAll);
-        await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
-    }
-
     /// <summary>
     /// Drops and recreates the consumer's own domain tables by reapplying its migrations.
     /// Subclasses call this during reset. <c>System_AuditEntries</c> is never dropped (see

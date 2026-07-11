@@ -5,11 +5,11 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
-using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Entities;
+using Quotinator.Engine.Queries;
 using Quotinator.Engine.Repositories;
 using Quotinator.Engine.Services;
 

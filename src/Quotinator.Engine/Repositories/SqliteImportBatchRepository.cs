@@ -1,9 +1,9 @@
 using Dapper;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Models;
-using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Engine.Entities;
+using Quotinator.Engine.Queries;
 
 namespace Quotinator.Engine.Repositories;
 

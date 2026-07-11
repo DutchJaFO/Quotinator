@@ -74,6 +74,18 @@ internal sealed class FakeQuoteService : IQuoteService
 
     private static readonly IReadOnlyList<QuoteResponse> All = [CasablancaEn, Terminator, Churchill, Tolkien];
 
+    /// <summary>Fixture for <c>GET /api/v1/conversations/{id}</c> endpoint tests — a stage direction followed by a quote line. The embedded <see cref="QuoteResponse"/> deliberately carries no <see cref="QuoteResponse.Conversations"/>/<see cref="QuoteResponse.EmbeddedConversation"/> of its own, matching the no-recursive-expansion rule.</summary>
+    internal static readonly ConversationResponse SampleConversation = new()
+    {
+        Id          = "bbbbbbbb-0000-0000-0000-000000000001",
+        Description = "Sample scene",
+        Lines =
+        [
+            new ConversationLineResponse { Order = 1, Type = "stage_direction", Text = "[EXT. CASABLANCA - NIGHT]", Language = "en", IsTranslated = false },
+            new ConversationLineResponse { Order = 2, Type = "quote", Quote = CasablancaEn },
+        ],
+    };
+
     public QuoteResponse? GetById(string id, string? lang = null)
     {
         if (id == CasablancaEn.Id && lang == "nl") return CasablancaNl;
@@ -163,4 +175,7 @@ internal sealed class FakeQuoteService : IQuoteService
         if (date is null || date.Length < 4) return null;
         return int.TryParse(date.AsSpan(0, 4), out var y) ? y : null;
     }
+
+    public ConversationResponse? GetConversation(string id, string? lang = null)
+        => id.Equals(SampleConversation.Id, StringComparison.OrdinalIgnoreCase) ? SampleConversation : null;
 }

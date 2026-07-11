@@ -44,4 +44,21 @@ public sealed class QuoteResponse
 
     /// <summary>Genre tags. See <c>Quote.Genres</c> for standard values.</summary>
     public IReadOnlyList<string> Genres { get; init; } = [];
+
+    /// <summary>
+    /// Conversations this quote appears in — id, position, and total line count only, not the full
+    /// line list (fetch that via <c>GET /api/v1/conversations/{id}</c>). <c>null</c> when the quote
+    /// belongs to no conversation; an empty array is never returned. Always <c>null</c> on a
+    /// <see cref="ConversationLineResponse.Quote"/> embedded inside a conversation's own line list —
+    /// no recursive expansion.
+    /// </summary>
+    public IReadOnlyList<QuoteConversationMembership>? Conversations { get; init; }
+
+    /// <summary>
+    /// Populated only by <c>GET /api/v1/quotes/random</c>: when this quote belongs to one or more
+    /// conversations, one is chosen at random and its full line list embedded here, saving the
+    /// caller a second round-trip to <c>GET /api/v1/conversations/{id}</c>. <c>null</c> everywhere
+    /// else, and <c>null</c> here too when the quote belongs to no conversation.
+    /// </summary>
+    public ConversationResponse? EmbeddedConversation { get; init; }
 }

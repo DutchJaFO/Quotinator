@@ -29,4 +29,7 @@ public interface IQuoteService
 
     /// <summary>Returns quotes whose text, source, character, or author contain <paramref name="query"/> (case-insensitive). Pass <paramref name="field"/> to restrict which field is searched.</summary>
     FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null);
+
+    /// <summary>Returns the full ordered line list of the conversation with the given ID (case-insensitive), localised to <paramref name="lang"/> where a translation exists. Returns <c>null</c> if not found.</summary>
+    ConversationResponse? GetConversation(string id, string? lang = null);
 }

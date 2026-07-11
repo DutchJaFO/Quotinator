@@ -8,12 +8,12 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
-using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Entities;
 using Quotinator.Engine.Helpers;
 using Quotinator.Engine.Models;
+using Quotinator.Engine.Queries;
 using Quotinator.Engine.Repositories;
 
 namespace Quotinator.Engine.Services;

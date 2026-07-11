@@ -6,8 +6,8 @@ using Quotinator.Core.Models;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
-using Quotinator.Data.Queries;
 using Quotinator.Engine.Helpers;
+using Quotinator.Engine.Queries;
 
 namespace Quotinator.Engine.Database;
 
@@ -29,7 +29,7 @@ internal static class ImportActionPlanner
     /// rows for the Quote itself and any not-yet-existing Source/Character/Person it references,
     /// then (#68) every not-yet-existing <paramref name="stageDirections"/>/<paramref name="soundCues"/>/
     /// <paramref name="conversations"/> row, in that order — a Conversation's lines reference the
-    /// other two, and <see cref="Sql.SystemImportActions.SelectAllForBatch"/>'s insertion-order
+    /// other two, and <see cref="Quotinator.Data.Queries.Sql.SystemImportActions.SelectAllForBatch"/>'s insertion-order
     /// guarantee is what lets apply time trust those referenced rows already exist by the time a
     /// Conversation's own action applies, without needing to defensively re-create them the way
     /// Quote/Character do for Source. Read-only against the database — never writes.

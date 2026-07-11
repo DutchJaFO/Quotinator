@@ -8,10 +8,10 @@ using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
-using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Engine.Entities;
 using Quotinator.Engine.Helpers;
+using Quotinator.Engine.Queries;
 using Quotinator.Engine.Repositories;
 using Quotinator.Engine.Services;
 
@@ -120,6 +120,28 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             PerformedAt = DateTime.UtcNow,
         });
         Logger.LogInformation("[Database - Init] reset complete");
+    }
+
+    /// <summary>Truncates all Quotinator domain data tables. Called during reseed/reset.</summary>
+    private static async Task TruncateDataAsync(SqliteConnection connection)
+    {
+        await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+        await connection.ExecuteAsync(Sql.ConversationLines.DeleteAll);
+        await connection.ExecuteAsync(Sql.StageDirectionTranslations.DeleteAll);
+        await connection.ExecuteAsync(Sql.SoundCueTranslations.DeleteAll);
+        await connection.ExecuteAsync(Sql.Conversations.DeleteAll);
+        await connection.ExecuteAsync(Sql.StageDirections.DeleteAll);
+        await connection.ExecuteAsync(Sql.SoundCues.DeleteAll);
+        await connection.ExecuteAsync(Sql.QuoteGenres.DeleteAll);
+        await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteAll);
+        await connection.ExecuteAsync(Sql.SourceTranslations.DeleteAll);
+        await connection.ExecuteAsync(Sql.CharacterTranslations.DeleteAll);
+        await connection.ExecuteAsync(Sql.Quotes.DeleteAll);
+        await connection.ExecuteAsync(Sql.Characters.DeleteAll);
+        await connection.ExecuteAsync(Sql.People.DeleteAll);
+        await connection.ExecuteAsync(Sql.Sources.DeleteAll);
+        await connection.ExecuteAsync(Sql.ImportBatches.DeleteAll);
+        await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
     }
 
     /// <inheritdoc/>

@@ -106,6 +106,10 @@ public sealed class QuoteService : IQuoteService
         };
     }
 
+    /// <inheritdoc/>
+    /// <remarks>#69: this legacy v1 in-memory service only ever loads flat <see cref="SourceQuote"/> records — it has no conversation data to serve, so this always returns <c>null</c>. Nothing registers this service in the running app; the real implementation is <c>Quotinator.Engine.Services.SqliteQuoteService</c>.</remarks>
+    public ConversationResponse? GetConversation(string id, string? lang = null) => null;
+
     private static IReadOnlyList<SourceQuote> Filter(IReadOnlyList<SourceQuote> quotes, string[]? types, string[]? genres, int? yearFrom = null, int? yearTo = null)
     {
         IEnumerable<SourceQuote> result = quotes;

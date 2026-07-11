@@ -122,7 +122,7 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/v1/quotes/random` | Random quote(s) — returns a `FilteredQuoteResult` envelope |
+| GET | `/api/v1/quotes/random` | Random quote(s) — returns a `FilteredQuoteResult` envelope. When a returned quote belongs to a conversation, one is chosen at random and its full line list embedded on that item's `embeddedConversation`; every other quote in that conversation is excluded from the rest of the result |
 | GET | `/api/v1/quotes/random?n=10` | N random quotes (1–100) |
 | GET | `/api/v1/quotes/random?type=movie&type=book` | Random quote from movies or books (multi-value OR logic) |
 | GET | `/api/v1/quotes/random?genre=sci-fi&genre=drama` | Random quote matching either genre |
@@ -133,6 +133,7 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`, `type`, `genre`, `yearFrom`, `yearTo`, `year`, `decade` — all optional) |
 | GET | `/api/v1/quotes/{id}` | Quote by UUID |
 | GET | `/api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
+| GET | `/api/v1/conversations/{id}` | A conversation's full ordered line list — quotes, stage directions, and sound cues |
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/version` | Running version and environment |
 | POST | `/api/v1/import` | Import one source file (JSON or, via `converter: "csv"` in `settings`, CSV) — same duplicate-detection engine as startup seeding. Multipart fields: `file`, `settings` (optional JSON: `converter`, `duplicateResolution`, `enrich`) — or pass `batchId` (query string) instead of `file` to apply a batch already staged by a prior `/import`/`/import/preview` call. Stages then attempts to apply — `200` when everything applied, `202` when any row needs a decision, `422` if neither `file` nor `batchId` is given. Returns a summary/conflicts/errors envelope (requires `X-Api-Key`) |
@@ -152,7 +153,9 @@ Admin endpoints require the `X-Api-Key: <key>` request header matching the `admi
 
 Sources declaring a `downloadUrl` or `github` manifest entry are automatically refreshed from the network before seeding — controlled by `Quotinator__AutoUpdateSources` (default `true`; set `false` for fully offline/air-gapped installs) and `Quotinator__SourceUpdateIntervalHours` (default `24`, overridable per-entry via the manifest's `refreshIntervalHours` field). A network failure never blocks startup, reseed, or reset — the app falls back to whatever copy is already on disk.
 
-**`/random` and `/search` filter parameters:** `type` and `genre` are repeatable (OR logic within each, AND between them). `yearFrom` / `yearTo` are inclusive year bounds; `year` is shorthand for a single year; `decade` (must be divisible by 10) is shorthand for a 10-year range. All filter combinations are ANDed. Both endpoints return a result envelope with `status` (`Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`), `items`, `totalMatching`, and an optional `message` (set when status is not `Ok`). `/random` additionally supports `character`, `author`, and `source` as case-insensitive contains filters on the random pool; `/search` uses `field` (`quote`, `source`, `character`, `author`) to restrict which field the search term is matched against.
+**`/random` and `/search` filter parameters:** `type` and `genre` are repeatable (OR logic within each, AND between them). `yearFrom` / `yearTo` are inclusive year bounds; `year` is shorthand for a single year; `decade` (must be divisible by 10) is shorthand for a 10-year range. All filter combinations are ANDed. Both endpoints return a result envelope with `status` (`Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`), `items`, `totalMatching`, and an optional `message` (set when status is not `Ok`). `/random` additionally supports `character`, `author`, and `source` as case-insensitive contains filters on the random pool, and includes `requestedCount`/`returnedCount` (`null` on `/search`) — `returnedCount` can be lower than `requestedCount` when the pool is smaller than requested or conversation-aware deduplication excluded quotes sharing a conversation with an already-selected one; `/search` uses `field` (`quote`, `source`, `character`, `author`) to restrict which field the search term is matched against.
+
+Every quote response includes a `conversations` field — `null` unless the quote belongs to one or more conversations, in which case it lists `{ conversationId, position, totalLines }` for each (fetch the full line list via `GET /api/v1/conversations/{id}`).
 
 All endpoints return [RFC 7807 ProblemDetails](https://www.rfc-editor.org/rfc/rfc7807) on structural errors (invalid `lang`, out-of-range `n`, etc.), with localised `detail` messages driven by the `Accept-Language` request header. The API applies a sliding-window rate limit of 100 requests per minute per IP.
 

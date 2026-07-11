@@ -67,6 +67,7 @@
   "ErrorImportBatchNotFound": "No import batch exists with that id.",
   "ErrorImportFileOrBatchIdRequired": "You must provide either a file to import or a batchId to apply an already-staged batch.",
   "ErrorImportActionBatchNotReversible": "This batch cannot be reversed — it is not currently applied, is not the most recently applied batch still live, has no actions, or a Modify's original Source/Character/Person linkage can no longer be resolved.",
+  "ErrorConversationNotFound": "No conversation with the requested ID was found.",
   "AdminEndpointsHeading": "Admin endpoints",
   "AdminEndpointsDescription": "These endpoints require an X-Api-Key header matching the admin_api_key configured in the add-on options. They are unavailable when no key is configured.",
   "AdminPreviewSeedLabel": "Preview seed import",

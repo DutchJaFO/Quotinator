@@ -39,4 +39,5 @@ public static class ApiMessages
     public const string ImportBatchNotFound              = "ErrorImportBatchNotFound";
     public const string ImportFileOrBatchIdRequired      = "ErrorImportFileOrBatchIdRequired";
     public const string ImportActionBatchNotReversible   = "ErrorImportActionBatchNotReversible";
+    public const string ConversationNotFound             = "ErrorConversationNotFound";
 }

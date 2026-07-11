@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 140, 141, 143, 144, 149, 152, 154],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -22,7 +22,8 @@
       "Doppelte Zitate, die zur manuellen Überprüfung markiert wurden, können jetzt Feld für Feld gelöst werden, wobei du wählst, welche Seite gewinnt, oder einen eigenen Wert angibst — Änderungen werden erst wirksam, sobald jeder Konflikt aus derselben Importdatei entschieden wurde.",
       "Ein Import, der noch überprüft werden muss, kann jetzt später abgeschlossen werden, indem auf seinen Batch verwiesen wird, ohne die Datei erneut hochzuladen.",
       "Ein angewendeter Import kann jetzt über einen neuen Endpunkt rückgängig gemacht werden — alles, was hinzugefügt oder geändert wurde, wird zurückgenommen, sofern seitdem kein neuerer Import stattgefunden hat.",
-      "Eine neue Zitatquelle im CSV- oder JSON-Format hinzuzufügen erfordert jetzt meist keinen eigenen Code mehr — ein Manifesteintrag mit einfachen Feldzuordnungsoptionen genügt nun für die meisten Formate."
+      "Eine neue Zitatquelle im CSV- oder JSON-Format hinzuzufügen erfordert jetzt meist keinen eigenen Code mehr — ein Manifesteintrag mit einfachen Feldzuordnungsoptionen genügt nun für die meisten Formate.",
+      "Mehrzeilige Dialoge — ein Hin und Her zwischen Charakteren, mit Regieanweisungen und Toncues dazwischen — können jetzt als eine einzige geordnete Konversation abgerufen werden, und ein zufälliges Zitat, das Teil davon ist, erscheint nicht mehr allein ohne den Rest des Dialogs."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -54,7 +55,10 @@
       "Die neuen Konverter-Plugins `basic-json-array` und `regex-array` verarbeiten ein flaches JSON-Objektarray beziehungsweise ein JSON-Array von per regulärem Ausdruck extrahierbaren Strings, beide vollständig konfigurierbar über die `converterOptions` eines Manifesteintrags — die meisten neuen Quellen benötigen kein eigenes Konverterprojekt mehr",
       "Das `csv`-Konverter-Plugin unterstützt jetzt `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) für CSV-Dateien, deren Spaltenüberschriften nicht mit Quotinators eigenen Feldnamen übereinstimmen, oder die gar keine Kopfzeile haben — zuvor wurden nur exakt übereinstimmende Spaltenüberschriften unterstützt",
       "Neue Datenbanktabellen legen die Grundlage für mehrzeilige Konversationen — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues` und ihre Übersetzungstabellen — wodurch Zitate, Regieanweisungen und Toncues zu einem geordneten Dialog gruppiert werden können; noch nicht durch eine Quelldatei befüllt und noch nicht über die API verfügbar (Issue #67)",
-      "Quelldateien können jetzt wiederverwendbare Regieanweisungen, Toncues und Konversationen definieren, die Zitate in einer bestimmten Reihenfolge gruppieren — beim Start eingelesen und über `POST /api/v1/import` (nur JSON) importierbar, genau wie Zitate, einschließlich Duplikaterkennung und Rückgängigmachen; noch nicht über einen Lese-Endpunkt verfügbar (Issue #68)"
+      "Quelldateien können jetzt wiederverwendbare Regieanweisungen, Toncues und Konversationen definieren, die Zitate in einer bestimmten Reihenfolge gruppieren — beim Start eingelesen und über `POST /api/v1/import` (nur JSON) importierbar, genau wie Zitate, einschließlich Duplikaterkennung und Rückgängigmachen; noch nicht über einen Lese-Endpunkt verfügbar (Issue #68)",
+      "Neuer Endpunkt `GET /api/v1/conversations/{id}` liefert eine vollständige, geordnete Konversation zurück — Zitate, Regieanweisungen und Toncues in Reihenfolge, mit Unterstützung für `?lang=` und Rückfall auf die Originalsprache (Issue #69)",
+      "Zitatantworten enthalten jetzt ein Feld `conversations`, das angibt, zu welcher Konversation bzw. welchen Konversationen ein Zitat gehört, an welcher Position und mit der Gesamtzeilenzahl der Konversation; fehlt vollständig, wenn ein Zitat zu keiner Konversation gehört (Issue #69)",
+      "`GET /api/v1/quotes/random` bettet jetzt die vollständige Konversation ein, wenn ein ausgewähltes Zitat dazugehört, und schließt für den Rest der Anfrage jedes andere Zitat aus derselben Konversation aus; die Antwort meldet jetzt `requestedCount` und `returnedCount`, sodass ein durch diese Deduplizierung verursachtes Defizit sichtbar wird (Issue #69)"
     ],
     "changed": [
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",
@@ -78,7 +82,8 @@
       "`POST /api/v1/import` ohne Datei, ohne Einstellungen und ohne Batch-Id gab eine wenig aussagekräftige allgemeine Fehlermeldung zurück, statt einer klaren Meldung, dass entweder eine Datei oder eine Batch-Id erforderlich ist",
       "Das erneute Importieren oder Neu-Seeding von Inhalten, die zuvor weich gelöscht wurden (durch Rückgängigmachen oder anderweitig), stellte diese nicht wieder her — der Datensatz und seine zugehörigen Zeilen werden jetzt korrekt wiederhergestellt, statt dauerhaft hinter dem alten Datensatz verborgen zu bleiben",
       "Die Filter `yearFrom`/`yearTo`/`year`/`decade` von `GET /api/v1/quotes` waren in der OpenAPI-Spezifikation als `integer` dokumentiert, aber die Schemakorrektur wurde wegen einer Pfad-Nichtübereinstimmung für diesen Endpunkt nie tatsächlich angewendet — die Scalar-UI zeigte sie als einfachen `string`; die eigentliche Anfrageverarbeitung war davon nicht betroffen, dies war ausschließlich ein Dokumentationsgenauigkeitsfehler",
-      "Der veraltete In-Memory-`QuoteService` duplizierte die Parserlogik des Quelldatei-Lesers, anstatt sie wiederzuverwenden, und brach ab, sobald eine Quelldatei das erweiterte Objektformat verwendete; verwendet jetzt den gemeinsamen Parser. Dieser Codepfad ist in der laufenden Anwendung nicht erreichbar — seit der SQLite-Migration registriert ihn nichts mehr —, wird aber weiterhin von seiner eigenen Testsuite abgedeckt (Issue #68)"
+      "Der veraltete In-Memory-`QuoteService` duplizierte die Parserlogik des Quelldatei-Lesers, anstatt sie wiederzuverwenden, und brach ab, sobald eine Quelldatei das erweiterte Objektformat verwendete; verwendet jetzt den gemeinsamen Parser. Dieser Codepfad ist in der laufenden Anwendung nicht erreichbar — seit der SQLite-Migration registriert ihn nichts mehr —, wird aber weiterhin von seiner eigenen Testsuite abgedeckt (Issue #68)",
+      "Zitat-, Quellen-, Charakter- und Konversations-SQL-Abfragen befanden sich schon vor dieser Trennung in der generischen Datenzugriffsbibliothek statt im Quotinator-spezifischen Projekt — eine rein interne Code-Organisationskorrektur ohne Verhaltensänderung (Issue #157)"
     ],
     "removed": [
       "Die Konvertornamen `nikhilnamal17` und `vilaboim` existieren nicht mehr — ein benutzerdefinierter Manifesteintrag, der einen von beiden namentlich referenziert, muss auf `basic-json-array`/`regex-array` mit den entsprechenden `converterOptions` aktualisiert werden"

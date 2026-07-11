@@ -75,7 +75,7 @@ itself.
 | | Rule |
 |---|---|
 | ✅ Do | Use parameterised queries or a query builder that parameterises automatically, for every parameter that originates from an HTTP request. |
-| ✅ Do | Put every SQL string in `src/Quotinator.Data/Queries/Sql.cs` — fixed queries as `const` fields, dynamic queries (e.g. optional WHERE clauses) as `static` factory methods. Add a `SqlQueryGuardTests.AssembledQueryCases` entry for every clause combination a factory method can produce. |
+| ✅ Do | Put every SQL string in a project's own `Sql.cs` — never inline. Generic infrastructure SQL (no Quotinator-domain table name) goes in `src/Quotinator.Data/Queries/Sql.cs`; SQL naming a Quotinator-domain table (Quotes, Sources, Characters, Conversations, etc.) goes in `src/Quotinator.Engine/Queries/Sql.cs` instead (ADR 004 — Quotinator.Data must stay domain-agnostic, see below). Fixed queries as `const` fields, dynamic queries (e.g. optional WHERE clauses) as `static` factory methods. Add a `SqlQueryGuardTests.AssembledQueryCases` entry (in the guard test class for whichever project's `Sql.cs` the query lives in) for every clause combination a factory method can produce. |
 | ❌ Don't | Build a SQL string by concatenating user input, anywhere, for any reason. |
 | ❌ Don't | Write a SQL string literal anywhere else in `src/` — including inline in a service, repository, or endpoint handler. If a query needs a table name interpolated, it must come from a `[Table]` attribute (developer-controlled metadata) or a compile-time literal, never user input. |
 
@@ -98,6 +98,7 @@ itself.
 |---|---|
 | ✅ Do | Keep `Quotinator.Data` reusable by any future consumer with its own schema — generic infrastructure (repositories, Unit of Work, migrations base, type handlers, conflict-resolution strategies) only. |
 | ✅ Do | Put Quotinator-specific entities, migrations, and Dapper handler registrations in `Quotinator.Engine` instead — the one project allowed to reference both `Core` and `Data`. |
+| ✅ Do | Put Quotinator-domain SQL query strings in `Quotinator.Engine/Queries/Sql.cs`, not `Quotinator.Data`'s — a query naming a domain table is domain coupling even though it's "just a string," not a C# type reference (found via #157: `Quotes`/`Characters`/`Sources`/etc. had lived in `Quotinator.Data`'s `Sql.cs` since before `Quotinator.Engine` existed, and every table added since had copied that placement without checking). |
 | ❌ Don't | Let `Quotinator.Data` reference `Quotinator.Core`, or carry any Quotinator-domain type (`Genre`, `QuoteType`, `Source`, etc.) — the dependency only flows one way. |
 | ❌ Don't | Expose `IDbConnection`/`IDbTransaction`/any Dapper type on a public `Quotinator.Data` interface — `IUnitOfWork` exists specifically so callers never see the underlying connection type. |
 
