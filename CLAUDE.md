@@ -62,6 +62,7 @@ Quotes come from **films, television, books, and famous people**. All quotes are
 - UI framework: **Blazor Server**
 - Deployment: **Docker** (linux/amd64 + linux/arm64)
 - The developer works professionally with C# and Blazor — keep patterns familiar and idiomatic
+- **This repository is C#-only** ([ADR 010](docs/architecture-decisions/010-repository-is-csharp-only.md)). Any script worth keeping is a `dotnet-script` `.csx` file under `scripts/` (see `scripts/changelog.csx`) or a proper C# project under `tools/` — never Python, Perl, Node.js, or a Unix text-processing one-liner (`sed`, `awk`, etc.), including ad hoc during a development session. Direct invocation of already-installed CLI tools (`git`, `dotnet`, `docker`, `gh`) via the shell is unaffected — the rule governs what gets *written*, not which shell runs an existing command.
 
 ---
 

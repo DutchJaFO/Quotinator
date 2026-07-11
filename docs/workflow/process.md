@@ -39,6 +39,26 @@ code change and a plan-doc/ADR update, commit the code first, then the doc updat
 (same issue number, `docs [#N]: ...` per the existing commit-message convention) — never combine them
 just because they happened in the same session.
 
+**Commit message format and content.** Title is `type [#N]: short summary` — `type` is one of `feat`
+(new capability), `fix` (bug fix), `docs` (documentation-only change, no source files), `chore`
+(tooling/dependency/config, no behaviour change), `refactor` (code-organisation change with no
+behaviour change, e.g. moving a type between projects); `[#N]` is the GitHub issue number, or
+multiple bracketed numbers (`[#69][#157]`) when a commit's work genuinely spans more than one issue.
+Content differs by commit type:
+
+- **Code commits (`feat`/`fix`/`refactor`/`chore`) are terse.** The diff and the code's own comments
+  already explain *what* changed — a commit message that restates them (`"added X property to Y
+  class"`, `"changed the loop to use LINQ"`) is redundant. State the *why* in one or two sentences,
+  only when it isn't obvious from the diff itself (a bug's root cause, a design trade-off, which
+  issue's requirement this satisfies). If there's nothing non-obvious to say, the title alone is a
+  complete commit message — do not pad it with a body just to have one.
+- **Documentation-only commits (`docs`) are the exception — write fuller content.** Since ADR/plan-doc
+  headers no longer carry accumulated history (see above), the commit message for a `docs` commit *is*
+  that document's historical record — there is no header field or code diff to fall back on for
+  understanding what changed and why later. A `docs` commit message should describe what changed in
+  the document and why in enough detail to stand alone in `git log`, the way the ADR's own `##
+  Revision — issue #N` body section does for the document itself.
+
 ## Folder and file naming
 
 Milestone slugs and plan file names use only lowercase letters, numbers, and hyphens — no spaces or special characters. Derived from the milestone title: replace spaces with hyphens, strip punctuation, lowercase everything.
