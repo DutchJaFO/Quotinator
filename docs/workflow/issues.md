@@ -20,6 +20,18 @@ Every issue must have exactly one of these labels.
 
 ## Required content by type
 
+**A `Definition of done` section is copied verbatim from the template for that issue's type below —
+never customized, never given extra issue-specific bullets.** The specific requirements for an issue
+belong in `What needs to be done` / `Expected behaviour` and the `Failing tests` / `Expected tests`
+table, not restated as `Definition of done` checkboxes. The `Definition of done` list is a fixed
+completion gate that looks the same on every issue of a given type — if it starts accumulating
+issue-specific content, that content belongs somewhere else in the issue, not there.
+
+**Critical, non-negotiable, and universal across Bug and Enhancement issues: unit tests always go red
+before the fix/feature is implemented, and green after.** This is verified by an actual red test run —
+not asserted, not inferred from "the code clearly didn't have this before." See `process.md` §
+"Working on an issue" for the full red-to-green rule.
+
 ### Bug
 
 ```
@@ -87,6 +99,7 @@ Omit this section only if all verification is via live commands (rare).
 - [ ] All expected tests listed above start red before implementation
 - [ ] All requirements implemented
 - [ ] All expected tests pass (green)
+- [ ] No regression in related tests
 - [ ] Findings summarised in a closing comment
 ```
 
