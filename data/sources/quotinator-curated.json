@@ -1,30 +1,215 @@
-[
-  {
-    "id": "588334be-d4ac-6948-9a7e-81a01090a660",
-    "quote": "Surely you can't be serious.",
-    "originalLanguage": "en",
-    "source": "Airplane!",
-    "date": "1980",
-    "character": "Ted Striker",
-    "author": null,
-    "type": "movie",
-    "genres": [
-      "comedy"
-    ],
-    "translations": {}
-  },
-  {
-    "id": "72f8e7e1-0b7a-624a-aa59-c97fd9d79f29",
-    "quote": "I am serious. And don't call me Shirley.",
-    "originalLanguage": "en",
-    "source": "Airplane!",
-    "date": "1980",
-    "character": "Dr. Rumack",
-    "author": null,
-    "type": "movie",
-    "genres": [
-      "comedy"
-    ],
-    "translations": {}
-  }
-]
+{
+  "quotes": [
+    {
+      "id": "588334be-d4ac-6948-9a7e-81a01090a660",
+      "quote": "Surely you can't be serious.",
+      "originalLanguage": "en",
+      "source": "Airplane!",
+      "date": "1980",
+      "character": "Ted Striker",
+      "author": null,
+      "type": "movie",
+      "genres": [
+        "comedy"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "72f8e7e1-0b7a-624a-aa59-c97fd9d79f29",
+      "quote": "I am serious. And don't call me Shirley.",
+      "originalLanguage": "en",
+      "source": "Airplane!",
+      "date": "1980",
+      "character": "Dr. Rumack",
+      "author": null,
+      "type": "movie",
+      "genres": [
+        "comedy"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "827ee62e-f57a-4d69-a10b-3113b1fb6f1b",
+      "quote": "'Tis but a scratch.",
+      "originalLanguage": "en",
+      "source": "Monty Python and the Holy Grail",
+      "date": "1975",
+      "character": "The Black Knight",
+      "author": null,
+      "type": "movie",
+      "genres": [
+        "comedy",
+        "fantasy"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "a0ad6a1c-e16d-48e1-a302-1e0873158902",
+      "quote": "Your arm's off.",
+      "originalLanguage": "en",
+      "source": "Monty Python and the Holy Grail",
+      "date": "1975",
+      "character": "King Arthur",
+      "author": null,
+      "type": "movie",
+      "genres": [
+        "comedy",
+        "fantasy"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "94aa7492-10f7-40fa-97e3-b60526aaf7fb",
+      "quote": "No, it isn't.",
+      "originalLanguage": "en",
+      "source": "Monty Python and the Holy Grail",
+      "date": "1975",
+      "character": "The Black Knight",
+      "author": null,
+      "type": "movie",
+      "genres": [
+        "comedy",
+        "fantasy"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "f3557c41-4d2e-4145-82f5-7f0ea4df5d7f",
+      "quote": "Hello. My name is Inigo Montoya. You killed my father. Prepare to die.",
+      "originalLanguage": "en",
+      "source": "The Princess Bride",
+      "date": "1987",
+      "character": "Inigo Montoya",
+      "author": null,
+      "type": "movie",
+      "genres": [
+        "adventure",
+        "comedy",
+        "romance"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "be56ac73-17f9-4cc8-83d3-2ba9ae87a2e1",
+      "quote": "Obi-Wan never told you what happened to your father.",
+      "originalLanguage": "en",
+      "source": "Star Wars: Episode V - The Empire Strikes Back",
+      "date": "1980",
+      "character": "Darth Vader",
+      "author": null,
+      "type": "movie",
+      "genres": [
+        "sci-fi",
+        "action"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "ef420d29-afd2-456c-a4a1-b242decfd146",
+      "quote": "He told me enough! It was you who killed him.",
+      "originalLanguage": "en",
+      "source": "Star Wars: Episode V - The Empire Strikes Back",
+      "date": "1980",
+      "character": "Luke Skywalker",
+      "author": null,
+      "type": "movie",
+      "genres": [
+        "sci-fi",
+        "action"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "8590e578-2ff7-4faf-8006-3234e7b676dc",
+      "quote": "No. I am your father.",
+      "originalLanguage": "en",
+      "source": "Star Wars: Episode V - The Empire Strikes Back",
+      "date": "1980",
+      "character": "Darth Vader",
+      "author": null,
+      "type": "movie",
+      "genres": [
+        "sci-fi",
+        "action"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "77dae5d9-2392-4403-b5bd-4ace91fbbc94",
+      "quote": "That's not true! That's impossible!",
+      "originalLanguage": "en",
+      "source": "Star Wars: Episode V - The Empire Strikes Back",
+      "date": "1980",
+      "character": "Luke Skywalker",
+      "author": null,
+      "type": "movie",
+      "genres": [
+        "sci-fi",
+        "action"
+      ],
+      "translations": {}
+    }
+  ],
+  "stageDirections": [
+    {
+      "id": "8206c30d-02e2-4320-a330-895e65b1dad3",
+      "text": "[Inigo Montoya corners Count Rugen in the castle]",
+      "imageUrl": null,
+      "translations": {}
+    },
+    {
+      "id": "f313465c-7077-41ac-9988-b2543a740570",
+      "text": "[Vader and Luke duel above the Cloud City reactor shaft]",
+      "imageUrl": null,
+      "translations": {}
+    }
+  ],
+  "soundCues": [
+    {
+      "id": "e7d9e930-6f30-4c68-89b9-fbc526d7c03d",
+      "text": "[clang of swords]",
+      "soundFileUrl": null,
+      "imageUrl": null,
+      "translations": {}
+    }
+  ],
+  "conversations": [
+    {
+      "id": "669b9452-3687-40e1-859e-c059cea45cdc",
+      "description": null,
+      "lines": [
+        { "order": 1, "type": "quote", "quoteId": "588334be-d4ac-6948-9a7e-81a01090a660" },
+        { "order": 2, "type": "quote", "quoteId": "72f8e7e1-0b7a-624a-aa59-c97fd9d79f29" }
+      ]
+    },
+    {
+      "id": "ce516316-6d19-4244-a7b2-f2eddd125cda",
+      "description": "The Black Knight",
+      "lines": [
+        { "order": 1, "type": "sound_cue", "soundCueId": "e7d9e930-6f30-4c68-89b9-fbc526d7c03d" },
+        { "order": 2, "type": "quote", "quoteId": "827ee62e-f57a-4d69-a10b-3113b1fb6f1b" },
+        { "order": 3, "type": "quote", "quoteId": "a0ad6a1c-e16d-48e1-a302-1e0873158902" },
+        { "order": 4, "type": "quote", "quoteId": "94aa7492-10f7-40fa-97e3-b60526aaf7fb" }
+      ]
+    },
+    {
+      "id": "a11bc923-3de0-445d-aa6e-2c31fb6cdf12",
+      "description": "Inigo Montoya's revenge",
+      "lines": [
+        { "order": 1, "type": "stage_direction", "stageDirectionId": "8206c30d-02e2-4320-a330-895e65b1dad3" },
+        { "order": 2, "type": "quote", "quoteId": "f3557c41-4d2e-4145-82f5-7f0ea4df5d7f" }
+      ]
+    },
+    {
+      "id": "0c2b3ba8-6171-446c-8c17-1a02403ca45d",
+      "description": "I am your father",
+      "lines": [
+        { "order": 1, "type": "stage_direction", "stageDirectionId": "f313465c-7077-41ac-9988-b2543a740570" },
+        { "order": 2, "type": "quote", "quoteId": "be56ac73-17f9-4cc8-83d3-2ba9ae87a2e1" },
+        { "order": 3, "type": "quote", "quoteId": "ef420d29-afd2-456c-a4a1-b242decfd146" },
+        { "order": 4, "type": "quote", "quoteId": "8590e578-2ff7-4faf-8006-3234e7b676dc" },
+        { "order": 5, "type": "quote", "quoteId": "77dae5d9-2392-4403-b5bd-4ace91fbbc94" }
+      ]
+    }
+  ]
+}

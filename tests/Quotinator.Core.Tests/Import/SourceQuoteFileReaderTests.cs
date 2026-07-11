@@ -1,4 +1,5 @@
 using Quotinator.Core.Import;
+using Quotinator.Core.Models;
 
 namespace Quotinator.Core.Tests.Import;
 
@@ -72,5 +73,103 @@ public class SourceQuoteFileReaderTests
 
         Assert.IsFalse(result);
         Assert.IsNull(quotes);
+    }
+
+    // ── TryParseExtended (#68) ───────────────────────────────────────────────
+
+    [TestMethod]
+    public void TryParseExtended_BareArray_YieldsQuotesAndEmptyExtendedSections()
+    {
+        var json = """
+            [{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello","source":"World"}]
+            """;
+
+        var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual(1, parsed!.Quotes.Count);
+        Assert.AreEqual(0, parsed.StageDirections.Count);
+        Assert.AreEqual(0, parsed.SoundCues.Count);
+        Assert.AreEqual(0, parsed.Conversations.Count);
+    }
+
+    [TestMethod]
+    public void TryParseExtended_FullObject_ParsesAllFourSections()
+    {
+        var json = """
+            {
+              "quotes": [{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello","source":"World"}],
+              "stageDirections": [{"id":"22222222-2222-2222-2222-222222222222","text":"[EXT. AIRPORT - DAY]"}],
+              "soundCues": [{"id":"33333333-3333-3333-3333-333333333333","text":"[rimshot]"}],
+              "conversations": [{
+                "id":"44444444-4444-4444-4444-444444444444",
+                "lines":[
+                  {"order":1,"type":"stage_direction","stageDirectionId":"22222222-2222-2222-2222-222222222222"},
+                  {"order":2,"type":"quote","quoteId":"11111111-1111-1111-1111-111111111111"},
+                  {"order":3,"type":"sound_cue","soundCueId":"33333333-3333-3333-3333-333333333333"}
+                ]
+              }]
+            }
+            """;
+
+        var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual(1, parsed!.Quotes.Count);
+        Assert.AreEqual(1, parsed.StageDirections.Count);
+        Assert.AreEqual("[EXT. AIRPORT - DAY]", parsed.StageDirections[0].Text);
+        Assert.AreEqual(1, parsed.SoundCues.Count);
+        Assert.AreEqual("[rimshot]", parsed.SoundCues[0].Text);
+        Assert.AreEqual(1, parsed.Conversations.Count);
+
+        var lines = parsed.Conversations[0].Lines;
+        Assert.AreEqual(3, lines.Count);
+        Assert.AreEqual(ConversationLineType.StageDirection, lines[0].Type);
+        Assert.AreEqual("22222222-2222-2222-2222-222222222222", lines[0].StageDirectionId);
+        Assert.AreEqual(ConversationLineType.Quote, lines[1].Type);
+        Assert.AreEqual("11111111-1111-1111-1111-111111111111", lines[1].QuoteId);
+        Assert.AreEqual(ConversationLineType.SoundCue, lines[2].Type);
+        Assert.AreEqual("33333333-3333-3333-3333-333333333333", lines[2].SoundCueId);
+    }
+
+    [TestMethod]
+    public void TryParseExtended_ObjectWithNoExtendedSections_YieldsEmptyLists()
+    {
+        var json = """{"quotes":[]}""";
+
+        var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual(0, parsed!.StageDirections.Count);
+        Assert.AreEqual(0, parsed.SoundCues.Count);
+        Assert.AreEqual(0, parsed.Conversations.Count);
+    }
+
+    [TestMethod]
+    public void TryParseExtended_InvalidJson_ReturnsFalse()
+    {
+        var result = SourceQuoteFileReader.TryParseExtended("{ not valid json", out var parsed);
+
+        Assert.IsFalse(result);
+        Assert.IsNull(parsed);
+    }
+
+    [TestMethod]
+    public void TryParseExtended_CuratedFile_ParsesRealFourConversationsWithStageDirectionAndSoundCue()
+    {
+        var repoRoot    = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var curatedFile = Path.Combine(repoRoot, "data", "sources", "quotinator-curated.json");
+        var json        = File.ReadAllText(curatedFile);
+
+        var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual(4, parsed!.Conversations.Count);
+        Assert.IsGreaterThanOrEqualTo(1, parsed.StageDirections.Count);
+        Assert.IsGreaterThanOrEqualTo(1, parsed.SoundCues.Count);
+        Assert.IsTrue(parsed.Conversations.Any(c => c.Lines.Any(l => l.Type == ConversationLineType.StageDirection)),
+            "At least one conversation should use a stage direction");
+        Assert.IsTrue(parsed.Conversations.Any(c => c.Lines.Any(l => l.Type == ConversationLineType.SoundCue)),
+            "At least one conversation should use a sound cue");
     }
 }

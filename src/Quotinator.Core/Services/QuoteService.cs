@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Quotinator.Core.Models;
 using Quotinator.Core.Import;
 
@@ -22,8 +21,7 @@ public sealed class QuoteService : IQuoteService
             return [];
 
         var json = File.ReadAllText(path);
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        return JsonSerializer.Deserialize<List<SourceQuote>>(json, options) ?? [];
+        return SourceQuoteFileReader.TryParse(json, out var quotes) ? quotes! : [];
     }
 
     /// <inheritdoc/>

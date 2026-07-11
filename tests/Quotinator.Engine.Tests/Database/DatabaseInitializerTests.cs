@@ -1,6 +1,7 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
+using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
@@ -90,9 +91,9 @@ public class DatabaseInitializerTests
         var db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(788, db.QuoteCount,     "Unique quotes");
+        Assert.AreEqual(796, db.QuoteCount,     "Unique quotes");
         Assert.AreEqual(479, db.SourceCount,    "Sources");
-        Assert.AreEqual(2,   db.CharacterCount, "Characters");
+        Assert.AreEqual(7,   db.CharacterCount, "Characters");
         Assert.AreEqual(0,   db.PeopleCount,    "People");
     }
 
@@ -117,10 +118,10 @@ public class DatabaseInitializerTests
         var db    = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(2, db.QuoteCount,     "2 curated quotes");
-        Assert.AreEqual(1, db.SourceCount,    "1 source (Airplane!)");
-        Assert.AreEqual(2, db.CharacterCount, "2 characters (Ted Striker, Dr. Rumack)");
-        Assert.AreEqual(0, db.LastSeedDuplicates.Count);
+        Assert.AreEqual(10, db.QuoteCount,     "10 curated quotes (Airplane!, Holy Grail, Princess Bride, Star Wars)");
+        Assert.AreEqual(4,  db.SourceCount,    "4 sources (Airplane!, Holy Grail, Princess Bride, Star Wars)");
+        Assert.AreEqual(7,  db.CharacterCount, "7 characters across the four sources");
+        Assert.AreEqual(0,  db.LastSeedDuplicates.Count);
     }
 
     /// <summary>No source files configured — database is created but stays empty.</summary>

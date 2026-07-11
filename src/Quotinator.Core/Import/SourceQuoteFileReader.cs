@@ -46,4 +46,46 @@ public static class SourceQuoteFileReader
             return false;
         }
     }
+
+    /// <summary>
+    /// Attempts to parse <paramref name="json"/> as either a bare <see cref="SourceQuote"/> array or the
+    /// full extended object format (<c>{ "quotes": [...], "stageDirections": [...], "soundCues": [...],
+    /// "conversations": [...] }</c>). A bare array yields empty lists for the three extended sections —
+    /// same backward-compatibility rule as <see cref="TryParse"/>. Returns <c>false</c> on invalid JSON
+    /// or any entry missing a required field — never throws.
+    /// </summary>
+    /// <param name="json">Raw file contents to parse.</param>
+    /// <param name="result">The parsed file on success; <c>null</c> on failure.</param>
+    public static bool TryParseExtended(string json, out ParsedSourceFile? result)
+    {
+        try
+        {
+            // Same single shape-sniffing JsonNode.Parse call as TryParse — see its own remarks for why
+            // this is the one permitted exception to the JSON parsing policy. Every section below is
+            // still extracted via JsonSerializer.Deserialize<T>, never manual node walking.
+            var root = JsonNode.Parse(json);
+
+            if (root is JsonArray)
+            {
+                var quotes = JsonSerializer.Deserialize<List<SourceQuote>>(json, Options) ?? [];
+                result = new ParsedSourceFile { Quotes = quotes };
+                return true;
+            }
+
+            var quotesNode = root?["quotes"];
+            result = new ParsedSourceFile
+            {
+                Quotes          = quotesNode is null ? [] : quotesNode.Deserialize<List<SourceQuote>>(Options) ?? [],
+                StageDirections = root?["stageDirections"]?.Deserialize<List<SourceStageDirection>>(Options) ?? [],
+                SoundCues       = root?["soundCues"]?.Deserialize<List<SourceSoundCue>>(Options) ?? [],
+                Conversations   = root?["conversations"]?.Deserialize<List<SourceConversation>>(Options) ?? [],
+            };
+            return true;
+        }
+        catch (JsonException)
+        {
+            result = null;
+            return false;
+        }
+    }
 }
