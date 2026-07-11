@@ -10,7 +10,6 @@ using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Entities;
-using Quotinator.Engine.Repositories;
 using Quotinator.Engine.Services;
 
 namespace Quotinator.Engine.Tests.Services;

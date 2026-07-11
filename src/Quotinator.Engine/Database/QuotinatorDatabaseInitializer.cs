@@ -12,7 +12,6 @@ using Quotinator.Data.Repositories;
 using Quotinator.Engine.Entities;
 using Quotinator.Engine.Helpers;
 using Quotinator.Engine.Queries;
-using Quotinator.Engine.Repositories;
 using Quotinator.Engine.Services;
 
 namespace Quotinator.Engine.Database;
@@ -140,7 +139,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         await connection.ExecuteAsync(Sql.Characters.DeleteAll);
         await connection.ExecuteAsync(Sql.People.DeleteAll);
         await connection.ExecuteAsync(Sql.Sources.DeleteAll);
-        await connection.ExecuteAsync(Sql.ImportBatches.DeleteAll);
+        await connection.ExecuteAsync(Quotinator.Data.Queries.Sql.ImportBatches.DeleteAll);
         await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
     }
 

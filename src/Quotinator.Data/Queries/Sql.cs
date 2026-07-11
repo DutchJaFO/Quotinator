@@ -106,6 +106,31 @@ internal static class Sql
             """;
     }
 
+    /// <summary>
+    /// ImportBatches table. Never interacts with a consumer-defined entity — pure import/seed
+    /// bookkeeping (which batch, when, by what policy, how many records, current lifecycle status),
+    /// the same category as <c>SeedBatch</c>/<c>ManifestPolicy</c> (see ADR 004's
+    /// consumer-entity-interaction test, issue #158).
+    /// </summary>
+    internal static class ImportBatches
+    {
+        // ImportedAt has only whole-second precision, so two batches created within the same second
+        // (routine in tests, and possible in fast-successive real API calls) tie under ORDER BY
+        // ImportedAt DESC alone — SQLite does not guarantee a stable order for ties. ROWID DESC breaks
+        // the tie deterministically in insertion order (a consumer's own strict batch-undo stack may
+        // rely on this ordering being exact, not just "usually right" — found via a genuinely red test).
+        internal const string SelectAll =
+            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 ORDER BY ImportedAt DESC, ROWID DESC;";
+
+        internal const string SelectByType =
+            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC, ROWID DESC;";
+
+        internal const string UpdateRecordCount =
+            "UPDATE ImportBatches SET RecordCount = @count, DateModified = @now WHERE Id = @id;";
+
+        internal const string DeleteAll = "DELETE FROM ImportBatches;";
+    }
+
     /// <summary>System_AuditEntries table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.SystemAuditWriter"/>.</summary>
     internal static class SystemAudit
     {

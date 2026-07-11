@@ -18,7 +18,6 @@ using Quotinator.Data.Database;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Entities;
 using Quotinator.Engine.Helpers;
-using Quotinator.Engine.Repositories;
 using Quotinator.Engine.Services;
 using Quotinator.Api.Middleware;
 using Quotinator.Api.OpenApi;
@@ -303,7 +302,7 @@ builder.Services.AddSingleton<IRestorableRepository<SoundCueEntity>, SqliteResto
 // real Serilog pipeline at the same point in startup as the rest of seeding — not through a
 // separate bootstrap console logger that runs before the "Quotinator starting" banner.
 builder.Services.AddSingleton<IManifestSeedPlanner, ManifestSeedPlanner>();
-builder.Services.AddSingleton<Quotinator.Engine.Repositories.IImportBatchRepository, SqliteImportBatchRepository>();
+builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepository>();
 
 // 5 s timeout: a slow/unreachable upstream must never block startup, reseed, or reset for longer
 // than a brief, bounded check — the updater always falls back to the existing cached/local file.
@@ -341,7 +340,7 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
 
     return new QuotinatorDatabaseInitializer(
         connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
-        sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
+        sp.GetRequiredService<IImportBatchRepository>(),
         sp.GetRequiredService<IImportActionCoordinator>(),
         sp.GetRequiredService<IImportActionService>(),
         sp.GetRequiredService<ISystemAuditWriter>(),
@@ -354,7 +353,7 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
 builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Engine.Services.SqliteQuoteService(connectionFactory));
 builder.Services.AddSingleton<Quotinator.Engine.Services.IQuoteImportService>(sp => new Quotinator.Engine.Services.SqliteQuoteImportService(
     connectionFactory,
-    sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
+    sp.GetRequiredService<IImportBatchRepository>(),
     sp.GetRequiredService<IImportActionCoordinator>(),
     sp.GetRequiredService<IImportActionService>(),
     sp.GetRequiredService<ISystemImportActionReader>(),

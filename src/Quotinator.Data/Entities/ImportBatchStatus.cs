@@ -1,4 +1,4 @@
-namespace Quotinator.Engine.Entities;
+namespace Quotinator.Data.Entities;
 
 /// <summary>Lifecycle state of an <see cref="ImportBatch"/> under the staging model (#154).</summary>
 public enum ImportBatchStatus

@@ -10,7 +10,6 @@ using Quotinator.Data.Repositories;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Entities;
 using Quotinator.Engine.Helpers;
-using Quotinator.Engine.Repositories;
 
 namespace Quotinator.Engine.Services;
 

@@ -9,9 +9,9 @@ namespace Quotinator.Engine.Helpers;
 /// infrastructure handlers (base <see cref="DatabaseConfiguration"/>) and domain enum handlers.
 /// </summary>
 /// <remarks>
-/// <see cref="Quotinator.Data.Import.DuplicateResolutionPolicy"/> is registered by the base class, not
-/// here — it lives in <c>Quotinator.Data.Import</c>, not this project's own domain, same as
-/// <c>ChangeAction</c>/<c>InitiatorType</c>.
+/// <see cref="Quotinator.Data.Import.DuplicateResolutionPolicy"/> and <c>ImportBatchType</c>/
+/// <c>ImportBatchStatus</c> are registered by the base class, not here — they live in
+/// <c>Quotinator.Data</c>, not this project's own domain, same as <c>ChangeAction</c>/<c>InitiatorType</c>.
 /// </remarks>
 public sealed class QuotinatorDapperConfiguration : DatabaseConfiguration
 {
@@ -20,8 +20,6 @@ public sealed class QuotinatorDapperConfiguration : DatabaseConfiguration
     {
         RegisterEnumHandler<QuoteType>();
         RegisterEnumHandler<Genre>();
-        RegisterEnumHandler<ImportBatchType>();
-        RegisterEnumHandler<ImportBatchStatus>();
         RegisterEnumHandler<ConversationLineType>();
     }
 }

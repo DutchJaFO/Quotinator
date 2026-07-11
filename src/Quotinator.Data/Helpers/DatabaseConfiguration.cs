@@ -34,6 +34,13 @@ public abstract class DatabaseConfiguration
         // above, registered here rather than in a consumer's RegisterDomainHandlers().
         RegisterEnumHandler<ImportActionStatus>();
         RegisterEnumHandler<ImportActionKind>();
+        // ImportBatchType/ImportBatchStatus never interact with a consumer-defined entity — pure
+        // import/seed bookkeeping, the same category as DuplicateResolutionPolicy above (see ADR 004's
+        // consumer-entity-interaction test, issue #158). Moved here from a consumer's
+        // RegisterDomainHandlers() for the same reason DuplicateResolutionPolicy was: Quotinator.Data.Tests
+        // (which only calls this base Configure()) needs to read/write an ImportBatch row directly.
+        RegisterEnumHandler<ImportBatchType>();
+        RegisterEnumHandler<ImportBatchStatus>();
         RegisterDomainHandlers();
     }
 

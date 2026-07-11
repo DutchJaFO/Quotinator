@@ -8,14 +8,17 @@ public class SqlBoundaryTests
 {
     /// <summary>
     /// Quotinator.Data must stay domain-agnostic (ADR 004) — this asserts that
-    /// <see cref="Sql"/> contains only generic infrastructure query sets, never a
-    /// Quotinator-domain table (Quotes, Characters, Conversations, etc.), which belong
-    /// in Quotinator.Engine's own Sql class instead.
+    /// <see cref="Sql"/> contains only generic infrastructure query sets, never a query touching a
+    /// consumer-defined entity (Quotes, Characters, Conversations, etc.), which belong in
+    /// Quotinator.Engine's own Sql class instead. <c>ImportBatches</c> stays here — it never
+    /// interacts with a consumer-defined entity (see ADR 004's consumer-entity-interaction test,
+    /// issue #158) — after #157 briefly moved it to Engine on the mistaken assumption that its
+    /// existing (also-misplaced) entity location was correct.
     /// </summary>
     [TestMethod]
     public void Sql_ContainsOnlyGenericInfrastructureQueries()
     {
-        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog" };
+        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches" };
 
         var actual = typeof(Sql)
             .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)

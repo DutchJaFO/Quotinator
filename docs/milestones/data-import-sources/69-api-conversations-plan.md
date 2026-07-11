@@ -1,6 +1,6 @@
 # #69 — API: conversation membership, GET /conversations/{id}, random dedup
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #69
 **Tiers required:** T1, T2
 **Depends on:** #67, #68
@@ -139,7 +139,7 @@ breaking-change note needed — the existing envelope shape was extended, not re
 | 8 | ✅ | `RequestedCount`/`ReturnedCount` reflect a short result when the pool is exhausted by dedup | Unit test | `SqliteQuoteServiceConversationTests.GetRandom_DedupShrinksPool_ReturnedCountLessThanRequested` (+ live T2 evidence below) |
 | 9 | ✅ | `RequestedCount`/`ReturnedCount` are `null` for `/search` (unaffected by this change) | Unit test | Existing `QuoteEndpointsTests` search cases pass unmodified; `FilteredQuoteResult<T>` leaves both fields unset outside `GetRandom` |
 | 10 | ✅ | `README.md`/`addon/DOCS.md` endpoint tables updated | Live | Manual doc review — `/api/v1/conversations/{id}` row added, `/random` description mentions `requestedCount`/`returnedCount`/`embeddedConversation` |
-| 11 | ⬜ | OpenAPI/Scalar reference reflects the new endpoint and fields | Live (T1) | Awaiting user's own Visual Studio build/run per the T1 tier — `GET /scalar/v1`; confirm `/conversations/{id}` and the two new fields appear |
+| 11 | ✅ | OpenAPI/Scalar reference reflects the new endpoint and fields | Live (T1) | Confirmed via the maintainer's own Visual Studio build/run — startup log clean (schema v8, 796 quotes/479 sources/7 characters), `GET /api/v1/quotes/random` and `?genre=comedy` both returned `200` repeatedly with no errors |
 | 12 | ✅ | Docker build succeeds | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; container run confirmed `/api/v1/version` healthy (`schemaVersion: 8`), `GET /api/v1/conversations/{id}` against the real seeded "The Black Knight" conversation (`ce516316-6d19-4244-a7b2-f2eddd125cda`) returned ordered `sound_cue` + 2 `quote` lines, uppercase-cased id resolved, unknown id returned 404 with the localized detail, and `?character=Ted%20Striker`/`?source=Airplane!&n=2` confirmed live dedup (`requestedCount: 2, returnedCount: 1`) with `embeddedConversation` populated |
 
 ---

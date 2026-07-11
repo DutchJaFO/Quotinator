@@ -2,7 +2,7 @@ using Dapper.Contrib.Extensions;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 
-namespace Quotinator.Engine.Entities;
+namespace Quotinator.Data.Entities;
 
 /// <summary>Tracks a discrete group of records introduced into the database together, capturing provenance for all entity rows.</summary>
 [Table("ImportBatches")]

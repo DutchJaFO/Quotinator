@@ -14,7 +14,6 @@ using Quotinator.Engine.Entities;
 using Quotinator.Engine.Helpers;
 using Quotinator.Engine.Models;
 using Quotinator.Engine.Queries;
-using Quotinator.Engine.Repositories;
 
 namespace Quotinator.Engine.Services;
 

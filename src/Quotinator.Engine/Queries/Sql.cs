@@ -421,24 +421,4 @@ internal static class Sql
             "(Id, SoundCueId, Language, Text, DateCreated, DateModified, DateDeleted, IsDeleted) " +
             "VALUES (@Id, @SoundCueId, @Language, @Text, @DateCreated, NULL, NULL, 0);";
     }
-
-    /// <summary>ImportBatches table.</summary>
-    internal static class ImportBatches
-    {
-        // ImportedAt has only whole-second precision, so two batches created within the same second
-        // (routine in tests, and possible in fast-successive real API calls) tie under ORDER BY
-        // ImportedAt DESC alone — SQLite does not guarantee a stable order for ties. ROWID DESC breaks
-        // the tie deterministically in insertion order (#59's strict batch-undo stack relies on this
-        // ordering being exact, not just "usually right" — found via a genuinely red test).
-        internal const string SelectAll =
-            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 ORDER BY ImportedAt DESC, ROWID DESC;";
-
-        internal const string SelectByType =
-            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC, ROWID DESC;";
-
-        internal const string UpdateRecordCount =
-            "UPDATE ImportBatches SET RecordCount = @count, DateModified = @now WHERE Id = @id;";
-
-        internal const string DeleteAll = "DELETE FROM ImportBatches;";
-    }
 }

@@ -1,8 +1,7 @@
+using Quotinator.Data.Entities;
 using Quotinator.Data.Models;
-using Quotinator.Data.Repositories;
-using Quotinator.Engine.Entities;
 
-namespace Quotinator.Engine.Repositories;
+namespace Quotinator.Data.Repositories;
 
 /// <summary>Repository for <see cref="ImportBatch"/> records, extending the base CRUD interface with batch-specific queries.</summary>
 public interface IImportBatchRepository : IRepository<ImportBatch>

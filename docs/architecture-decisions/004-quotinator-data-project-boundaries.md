@@ -3,7 +3,7 @@
 **Status:** Superseded in part by ADR 004-A (Engine layer)  
 **Date:** 2026-06-25  
 **GitHub issue:** #115  
-**Updated:** 2026-06-28 (issue #121 — introduced `Quotinator.Engine`; revised dependency direction); 2026-07-11 (issue #157 — closed the `Sql.cs` placement gap left open by the #121 revision)
+**Updated:** 2026-06-28 (issue #121 — introduced `Quotinator.Engine`; revised dependency direction); 2026-07-11 (issue #157 — closed the `Sql.cs` placement gap left open by the #121 revision; issue #158 — stated the consumer-entity-interaction test as the ADR's governing heuristic, after `ImportBatch` was found misplaced despite being named explicitly in this ADR's own original text)
 
 ---
 
@@ -111,14 +111,50 @@ validated decision" failure mode CLAUDE.md warns about via the `SystemAuditEntry
 **A SQL query string constant follows the same domain/generic split as everything else in this ADR,
 regardless of the fact that it is "just a string, not a Dapper type":** a query naming a
 Quotinator-domain table (`Quotes`, `Sources`, `Characters`, `People`, `Conversations`,
-`ConversationLines`, `StageDirections`, `SoundCues`, and their translation/detail tables,
-`ImportBatches`) is domain-specific SQL and belongs in `Quotinator.Engine/Queries/Sql.cs` —
-`internal static class Sql` in namespace `Quotinator.Engine.Queries` — alongside the entity classes
-that use it. A query touching only generic infrastructure (`Schema`, `Joins`, the `Queries` example,
-and the `System_`-prefixed tables `Quotinator.Data` itself owns — `SystemAudit`, `SystemImportActions`,
-`SystemChangeLog`) stays in `Quotinator.Data/Queries/Sql.cs`. The original "just a string" reasoning
+`ConversationLines`, `StageDirections`, `SoundCues`, and their translation/detail tables) is
+domain-specific SQL and belongs in `Quotinator.Engine/Queries/Sql.cs` — `internal static class Sql`
+in namespace `Quotinator.Engine.Queries` — alongside the entity classes that use it. A query touching
+only generic infrastructure (`Schema`, `Joins`, the `Queries` example, and the tables
+`Quotinator.Data` itself owns outright — `SystemAudit`, `SystemImportActions`, `SystemChangeLog`,
+`ImportBatches`) stays in `Quotinator.Data/Queries/Sql.cs`. The original "just a string" reasoning
 undersold the coupling: a query's `FROM`/`JOIN` clauses hardcode a domain schema shape just as much as
 a Dapper entity class does, even without a compile-time type reference.
+
+**Correction (issue #158):** this revision originally listed `ImportBatches` alongside the genuinely
+domain-specific tables above — wrong, caught immediately afterward in the same investigation.
+`ImportBatches` never interacts with a consumer-defined entity; it is generic import/seed bookkeeping,
+the same category as `SeedBatch`/`ManifestPolicy`. See the next revision below for the test that
+would have caught this the first time.
+
+---
+
+## Revision — issue #158: the consumer-entity-interaction test
+
+This ADR's "What belongs in `Quotinator.Data`" list and the revised boundary table are illustrative
+examples, not an exhaustive checklist to pattern-match against — and treating them as one is exactly
+how they went stale twice: `ImportBatchType` and `IImportBatchRepository` were both named explicitly
+in this ADR's original 2026-06-25 text as Data examples, yet both sat in `Quotinator.Engine` from the
+#121 Engine split onward, undetected until #158, because nobody re-derived the rule from first
+principles — they pattern-matched the existing (wrong) location of the `ImportBatch` entity instead.
+#157 made the identical mistake in the opposite direction days earlier: it moved `Sql.ImportBatches`
+*into* Engine specifically because the entity was already there, again pattern-matching a location
+instead of testing it.
+
+**The governing test, going forward:** a type belongs in `Quotinator.Engine` only if it needs to
+interact with an entity the *consumer* defines — `Quote`, `Source`, `Character`, `Person`,
+`Conversation`, `StageDirection`, `SoundCue`, or any Quotinator-domain enum (`QuoteType`, `Genre`).
+"Interact with" means referencing the type directly, joining against its table, or containing
+business rules that only make sense in terms of it. Everything else — including seeding and the
+import/batch-tracking feature as a whole — is generic convenience infrastructure usable by any future
+consumer with its own schema, and belongs in `Quotinator.Data`, regardless of how "import-flavoured"
+or "seeding-flavoured" it superficially looks. `ImportBatch` bookkeeping (which batch, when, by what
+policy, how many records, current lifecycle status) never names a consumer entity — it belongs in
+Data. `ImportActionPlanner` and `SqliteQuoteImportService`, by contrast, exist specifically to plan
+and write `Quote`/`Source`/`Character`/`Person`/`Conversation` rows — they belong in Engine.
+
+Apply this test *before* looking at where a related or superficially-similar type already lives.
+"What belongs in `Quotinator.Data`" (above) and the revised boundary table remain useful as worked
+examples of applying the test, not as the source of truth themselves.
 
 This also applies to any *code that assembles or executes* domain-specific SQL, not only the string
 constants themselves — found while doing this split: `DatabaseInitializer.TruncateDataAsync`
