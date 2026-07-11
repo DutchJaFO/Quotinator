@@ -47,7 +47,7 @@
       "New `basic-json-array` and `regex-array` converter plugins handle a flat JSON object array or a JSON array of regex-extractable strings respectively, both fully configurable via a manifest entry's `converterOptions` — most new sources no longer need a dedicated converter project",
       "The `csv` converter plugin now supports `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) for CSV files whose header labels don't match Quotinator's own field names, or that have no header at all — previously only exact-matching header names were supported",
       "New database tables lay the groundwork for multi-line conversations — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues`, and their translation tables — allowing quotes, stage directions, and sound cues to be grouped into an ordered exchange; not yet populated by any source file or exposed via the API (issue #67)",
-      "The extended source-file format's `stageDirections`, `soundCues`, and `conversations` sections can now be parsed; not yet wired into seeding or the import endpoint — writing parsed conversations to the database is tracked separately (issue #68)"
+      "Source files can now define reusable stage directions, sound cues, and conversations grouping them together with quotes in order — seeded at startup and importable via `POST /api/v1/import` (JSON only) the same way quotes are, including duplicate detection and undo; not yet exposed via a read endpoint (issue #68)"
     ],
     "changed": [
       "A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before",

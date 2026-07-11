@@ -55,7 +55,8 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         Stream file, string fileName, ImportRequestSettingsDto? settings, bool preview,
         CancellationToken cancellationToken = default)
     {
-        var quotes = await LoadQuotesAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
+        var parsed = await LoadSourceFileAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
+        var quotes = parsed.Quotes;
         var policy = ManifestPolicy.Resolve(ToManifestPolicy(settings?.DuplicateResolution), _configPolicy);
         var effectivePolicy = policy.ForQuotes;
 
@@ -77,7 +78,8 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         {
             conn.Open();
             using var tx = conn.BeginTransaction();
-            actions = await ImportActionPlanner.PlanAsync(conn, valid, batch.Id, effectivePolicy, tx);
+            actions = await ImportActionPlanner.PlanAsync(conn, valid, batch.Id, effectivePolicy, tx,
+                parsed.StageDirections, parsed.SoundCues, parsed.Conversations);
             await _actionCoordinator.StageAsync(actions, conn, tx);
             tx.Commit();
         }
@@ -219,7 +221,14 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         return (valid, errors);
     }
 
-    private async Task<List<SourceQuote>> LoadQuotesAsync(Stream file, string? converterName, JsonElement? converterOptions, CancellationToken cancellationToken)
+    /// <summary>
+    /// #68: full extended parse (quotes plus stageDirections/soundCues/conversations). A converter's
+    /// output is always plain quotes-only JSON (no converter plugin produces the extended object
+    /// shape), so this naturally yields empty extended sections whenever a converter ran — no
+    /// conditional needed; conversations are only ever present when the uploaded file is already in
+    /// Quotinator's own extended format (e.g. re-uploading a curated source file with no converter).
+    /// </summary>
+    private async Task<ParsedSourceFile> LoadSourceFileAsync(Stream file, string? converterName, JsonElement? converterOptions, CancellationToken cancellationToken)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "quotinator-import-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -249,13 +258,13 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             }
 
             var json = await File.ReadAllTextAsync(contentPath, cancellationToken);
-            if (!SourceQuoteFileReader.TryParse(json, out var quotes))
+            if (!SourceQuoteFileReader.TryParseExtended(json, out var parsed))
                 throw new QuoteImportValidationException("File content is not valid JSON in Quotinator's canonical quote schema.");
 
-            if (quotes is null || quotes.Count == 0)
+            if (parsed is null || parsed.Quotes.Count == 0)
                 throw new QuoteImportValidationException("File contained no quotes.");
 
-            return quotes;
+            return parsed;
         }
         finally
         {

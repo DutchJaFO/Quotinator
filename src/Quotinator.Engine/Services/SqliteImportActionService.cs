@@ -28,6 +28,9 @@ public sealed class SqliteImportActionService : IImportActionService
     private readonly IRestorableRepository<Source> _sourceRepository;
     private readonly IRestorableRepository<Character> _characterRepository;
     private readonly IRestorableRepository<Person> _personRepository;
+    private readonly IRestorableRepository<ConversationEntity> _conversationRepository;
+    private readonly IRestorableRepository<StageDirectionEntity> _stageDirectionRepository;
+    private readonly IRestorableRepository<SoundCueEntity> _soundCueRepository;
     private readonly IImportBatchRepository _importBatchRepository;
     private readonly IDbConnectionFactory _factory;
 
@@ -40,18 +43,24 @@ public sealed class SqliteImportActionService : IImportActionService
         IRestorableRepository<Source> sourceRepository,
         IRestorableRepository<Character> characterRepository,
         IRestorableRepository<Person> personRepository,
+        IRestorableRepository<ConversationEntity> conversationRepository,
+        IRestorableRepository<StageDirectionEntity> stageDirectionRepository,
+        IRestorableRepository<SoundCueEntity> soundCueRepository,
         IImportBatchRepository importBatchRepository,
         IDbConnectionFactory factory)
     {
-        _actionReader          = actionReader;
-        _coordinator           = coordinator;
-        _changeLogWriter       = changeLogWriter;
-        _quoteRepository       = quoteRepository;
-        _sourceRepository      = sourceRepository;
-        _characterRepository   = characterRepository;
-        _personRepository      = personRepository;
-        _importBatchRepository = importBatchRepository;
-        _factory               = factory;
+        _actionReader             = actionReader;
+        _coordinator              = coordinator;
+        _changeLogWriter          = changeLogWriter;
+        _quoteRepository          = quoteRepository;
+        _sourceRepository         = sourceRepository;
+        _characterRepository      = characterRepository;
+        _personRepository         = personRepository;
+        _conversationRepository   = conversationRepository;
+        _stageDirectionRepository = stageDirectionRepository;
+        _soundCueRepository       = soundCueRepository;
+        _importBatchRepository    = importBatchRepository;
+        _factory                  = factory;
     }
 
     /// <inheritdoc/>
@@ -177,6 +186,31 @@ public sealed class SqliteImportActionService : IImportActionService
 
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Person))
             await _personRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
+
+        // #68: Conversation/StageDirection/SoundCue ids are explicit-in-file, like Quote's — not
+        // EntityIdentity-derived like Character/Source/Person's — so the same raw-SQL, no-forced-
+        // uppercase approach applies here too, not the repository's Guid-typed path. Each clears its
+        // own detail rows first (ConversationLines/*Translations), same FK-blocking reason as
+        // QuoteGenres/QuoteTranslations above.
+        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Conversation))
+        {
+            await quoteConn.ExecuteAsync(Sql.ConversationLines.DeleteForConversation, new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Conversations"), new { id = action.EntityId });
+        }
+
+        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.StageDirection))
+        {
+            await quoteConn.ExecuteAsync(Sql.ConversationLines.DeleteForStageDirection, new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(Sql.StageDirectionTranslations.DeleteForStageDirection, new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("StageDirections"), new { id = action.EntityId });
+        }
+
+        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.SoundCue))
+        {
+            await quoteConn.ExecuteAsync(Sql.ConversationLines.DeleteForSoundCue, new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(Sql.SoundCueTranslations.DeleteForSoundCue, new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("SoundCues"), new { id = action.EntityId });
+        }
     }
 
     /// <inheritdoc/>
@@ -243,10 +277,18 @@ public sealed class SqliteImportActionService : IImportActionService
 
         var order = new Dictionary<string, int>
         {
-            [ImportActionEntityTypes.Quote]     = 0,
-            [ImportActionEntityTypes.Character] = 1,
-            [ImportActionEntityTypes.Source]    = 2,
-            [ImportActionEntityTypes.Person]    = 2,
+            [ImportActionEntityTypes.Quote]        = 0,
+            [ImportActionEntityTypes.Conversation] = 0,
+            [ImportActionEntityTypes.Character]    = 1,
+            [ImportActionEntityTypes.Source]       = 2,
+            [ImportActionEntityTypes.Person]       = 2,
+            // #68: reversed last — StageDirection/SoundCue's active-reference check (joined through
+            // Conversations, see Sql.StageDirections.CountActiveReferences' remark) needs Conversation
+            // already reversed in this same pass, or it would still see the about-to-be-removed
+            // Conversation's lines as live references and refuse to soft-delete a StageDirection/
+            // SoundCue this batch itself introduced alongside that Conversation.
+            [ImportActionEntityTypes.StageDirection] = 4,
+            [ImportActionEntityTypes.SoundCue]       = 4,
         };
         foreach (var action in actions.OrderBy(a => order.GetValueOrDefault(a.EntityType, 3)))
         {
@@ -274,6 +316,28 @@ public sealed class SqliteImportActionService : IImportActionService
                         break;
                     await _personRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "person", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
+                    break;
+                case ImportActionEntityTypes.Conversation:
+                    // #68: id-keyed like Quote (explicit id-in-file, not EntityIdentity-derived) —
+                    // raw SQL, not the Guid-typed repository path, same reasoning as
+                    // ReverseQuoteActionAsync's Add branch. No active-reference check: nothing else
+                    // carries an FK to a Conversation (see Sql.Conversations' own remark). Its
+                    // ConversationLines are left orphaned, same precedent as QuoteGenres/
+                    // QuoteTranslations on a reversed Quote Add.
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Conversations"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "conversation", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
+                    break;
+                case ImportActionEntityTypes.StageDirection:
+                    if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.StageDirections.CountActiveReferences, action.EntityId))
+                        break;
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("StageDirections"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "stageDirection", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
+                    break;
+                case ImportActionEntityTypes.SoundCue:
+                    if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.SoundCues.CountActiveReferences, action.EntityId))
+                        break;
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("SoundCues"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "soundCue", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 default:
                     throw new InvalidOperationException($"Action '{action.Id}' has an unrecognised EntityType '{action.EntityType}'.");
@@ -485,6 +549,50 @@ public sealed class SqliteImportActionService : IImportActionService
                 await QuoteSeedWriter.InsertGenresAsync(sqliteConnection, resolved, Guid.Parse(resolved.Id), now, sqliteTransaction);
                 break;
             }
+            case ImportActionEntityTypes.StageDirection:
+            {
+                var payload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.IncomingValue!)!;
+                await EnsureStageDirectionExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
+                break;
+            }
+            case ImportActionEntityTypes.SoundCue:
+            {
+                var payload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.IncomingValue!)!;
+                await EnsureSoundCueExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
+                break;
+            }
+            case ImportActionEntityTypes.Conversation:
+            {
+                // Add-only, like StageDirection/SoundCue — no Modify case exists for this entity type
+                // (see ImportActionPlanner.PlanConversationsAsync's remark). Trusts its referenced
+                // Quote/StageDirection/SoundCue rows already applied — see PlanAsync's remark on why
+                // that ordering is safe to rely on here, unlike Character/Quote's defensive re-ensure.
+                var payload = JsonSerializer.Deserialize<ConversationActionPayload>(action.IncomingValue!)!;
+                var inserted = await sqliteConnection.ExecuteAsync(Sql.Conversations.InsertIfNotExists,
+                    new { Id = action.EntityId, Description = payload.Description, ImportBatchId = batchId, DateCreated = now }, sqliteTransaction);
+
+                if (inserted > 0)
+                {
+                    foreach (var line in payload.Lines)
+                    {
+                        await sqliteConnection.ExecuteAsync(Sql.ConversationLines.Insert, new
+                        {
+                            Id               = Guid.NewGuid().ToString(),
+                            ConversationId   = action.EntityId,
+                            Order            = line.Order,
+                            LineType         = line.Type.ToString(),
+                            QuoteId          = line.QuoteId,
+                            StageDirectionId = line.StageDirectionId,
+                            SoundCueId       = line.SoundCueId,
+                            DateCreated      = now,
+                        }, sqliteTransaction);
+                    }
+
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "conversation", action.EntityId, ChangeAction.Created,
+                        oldValue: null, newValue: payload, sqliteConnection, sqliteTransaction);
+                }
+                break;
+            }
             default:
                 throw new InvalidOperationException($"Action '{action.Id}' has an unrecognised EntityType '{action.EntityType}'.");
         }
@@ -531,6 +639,58 @@ public sealed class SqliteImportActionService : IImportActionService
                 oldValue: null, newValue: new { name }, connection, transaction);
     }
 
+    /// <summary>#68: id-keyed like Quote (see <see cref="ImportActionEntityTypes.Conversation"/>'s remark), not natural-key-keyed like the three helpers above — <paramref name="id"/> is the file's own explicit id, used as-is.</summary>
+    private async Task EnsureStageDirectionExistsAsync(
+        SqliteConnection connection, SqliteTransaction transaction, string id, StageDirectionActionPayload payload,
+        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+    {
+        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
+        var inserted = await connection.ExecuteAsync(Sql.StageDirections.InsertIfNotExists,
+            new { Id = id, Text = payload.Text, ImageUrl = payload.ImageUrl, ImportBatchId = batchId, DateCreated = now }, transaction);
+        if (inserted == 0) return;
+
+        foreach (var (language, translation) in payload.Translations)
+        {
+            await connection.ExecuteAsync(Sql.StageDirectionTranslations.Insert, new
+            {
+                Id               = Guid.NewGuid().ToString(),
+                StageDirectionId = id,
+                Language         = language,
+                Text             = translation.Text,
+                DateCreated      = now,
+            }, transaction);
+        }
+
+        await QuoteSeedWriter.LogChangeAsync(changeLog, "stageDirection", id, ChangeAction.Created,
+            oldValue: null, newValue: payload, connection, transaction);
+    }
+
+    /// <summary>#68: id-keyed like <see cref="EnsureStageDirectionExistsAsync"/> — see its remark.</summary>
+    private async Task EnsureSoundCueExistsAsync(
+        SqliteConnection connection, SqliteTransaction transaction, string id, SoundCueActionPayload payload,
+        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+    {
+        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
+        var inserted = await connection.ExecuteAsync(Sql.SoundCues.InsertIfNotExists,
+            new { Id = id, Text = payload.Text, SoundFileUrl = payload.SoundFileUrl, ImageUrl = payload.ImageUrl, ImportBatchId = batchId, DateCreated = now }, transaction);
+        if (inserted == 0) return;
+
+        foreach (var (language, translation) in payload.Translations)
+        {
+            await connection.ExecuteAsync(Sql.SoundCueTranslations.Insert, new
+            {
+                Id          = Guid.NewGuid().ToString(),
+                SoundCueId  = id,
+                Language    = language,
+                Text        = translation.Text,
+                DateCreated = now,
+            }, transaction);
+        }
+
+        await QuoteSeedWriter.LogChangeAsync(changeLog, "soundCue", id, ChangeAction.Created,
+            oldValue: null, newValue: payload, connection, transaction);
+    }
+
     // ── GetPagedAsync helpers ────────────────────────────────────────────────
 
     private async Task<ImportActionSummaryResponse> ToSummaryAsync(SystemImportAction action, Dictionary<string, IReadOnlyList<SystemImportAction>> batchCache)
@@ -559,11 +719,14 @@ public sealed class SqliteImportActionService : IImportActionService
         if (json is null) return null;
         return entityType switch
         {
-            "Quote"     => QuoteFieldMerge.ToFieldMap(JsonSerializer.Deserialize<QuoteActionPayload>(json)!.Fields),
-            "Source"    => ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(json)!),
-            "Character" => ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayload>(json)!),
-            "Person"    => ToFieldMap(JsonSerializer.Deserialize<PersonActionPayload>(json)!),
-            _           => null,
+            "Quote"          => QuoteFieldMerge.ToFieldMap(JsonSerializer.Deserialize<QuoteActionPayload>(json)!.Fields),
+            "Source"         => ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(json)!),
+            "Character"      => ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayload>(json)!),
+            "Person"         => ToFieldMap(JsonSerializer.Deserialize<PersonActionPayload>(json)!),
+            "StageDirection" => ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayload>(json)!),
+            "SoundCue"       => ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayload>(json)!),
+            "Conversation"   => ToFieldMap(JsonSerializer.Deserialize<ConversationActionPayload>(json)!),
+            _                => null,
         };
     }
 
@@ -575,6 +738,15 @@ public sealed class SqliteImportActionService : IImportActionService
 
     private static IReadOnlyDictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name };
+
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(StageDirectionActionPayload payload) =>
+        new Dictionary<string, object?> { ["text"] = payload.Text, ["imageUrl"] = payload.ImageUrl };
+
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(SoundCueActionPayload payload) =>
+        new Dictionary<string, object?> { ["text"] = payload.Text, ["soundFileUrl"] = payload.SoundFileUrl, ["imageUrl"] = payload.ImageUrl };
+
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(ConversationActionPayload payload) =>
+        new Dictionary<string, object?> { ["description"] = payload.Description, ["lineCount"] = payload.Lines.Count };
 
     private static IReadOnlyList<string> ComputeAmbiguousFields(SystemImportAction action)
     {

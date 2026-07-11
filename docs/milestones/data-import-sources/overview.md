@@ -51,7 +51,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#56](https://github.com/DutchJaFO/Quotinator/issues/56) | Audit log (System_ChangeLog) | Waiting for release | T1 ✅ T2 ✅ | [56-audit-log-plan.md](56-audit-log-plan.md) |
 | [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: undo an applied import batch | Waiting for release | T1 ✅ T2 ✅ | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
 | [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Waiting for release | T1 ✅ T2 ✅ | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
-| [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | In progress | T1 ⬜ T2 ⬜ | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
+| [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Waiting for release | T1 ✅ T2 ✅ | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
 | [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | Planning | T1 ⬜ T2 ⬜ | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
 | [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow | Waiting for release | T1 ✅ T2 ✅ | [149-manual-conflict-review-plan.md](149-manual-conflict-review-plan.md) |
 | [#152](https://github.com/DutchJaFO/Quotinator/issues/152) | Review endpoint grouping: split Admin / Quote / Import | Waiting for release | T1 ✅ T2 ✅ | [152-endpoint-grouping-plan.md](152-endpoint-grouping-plan.md) |
@@ -117,7 +117,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 18 | #154 | Unify import, preview, and seeding on one staging engine | Waiting for release |
 | 19 | #59 | Admin: undo an applied import batch | Waiting for release |
 | 20 | #67 | Conversations schema | Waiting for release |
-| 21 | #68 | Curated JSON conversations | In progress |
+| 21 | #68 | Curated JSON conversations | Waiting for release |
 | 22 | #69 | API conversations | Planning |
 | 23 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Waiting for release |
 | 24 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts | Planning |

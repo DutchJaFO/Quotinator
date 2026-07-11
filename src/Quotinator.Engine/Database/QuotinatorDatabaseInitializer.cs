@@ -231,10 +231,11 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         {
             foreach (var seedFile in batch.Files)
             {
-                var fileName    = Path.GetFileName(seedFile.FilePath);
-                var (quotes, _) = LoadQuotesFromFile(seedFile.FilePath);
-                var filePolicy  = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
-                var policy      = filePolicy.ForQuotes;
+                var fileName        = Path.GetFileName(seedFile.FilePath);
+                var (parsed, _)     = LoadSourceFileAsync(seedFile.FilePath);
+                var quotes          = parsed.Quotes;
+                var filePolicy      = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
+                var policy          = filePolicy.ForQuotes;
 
                 Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
                     quotes.Count, fileName, batch.Label);
@@ -245,7 +246,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 IReadOnlyList<SystemImportAction> actions;
                 using (var tx = connection.BeginTransaction())
                 {
-                    actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx);
+                    actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx,
+                        parsed.StageDirections, parsed.SoundCues, parsed.Conversations);
                     await _actionCoordinator.StageAsync(actions, connection, tx);
                     tx.Commit();
                 }
@@ -396,13 +398,25 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
     private (List<SourceQuote> Quotes, SeedFileIssue? Issue) LoadQuotesFromFile(string filePath)
     {
-        if (!File.Exists(filePath)) return ([], SeedFileIssue.Missing);
+        var (parsed, issue) = LoadSourceFileAsync(filePath);
+        return (parsed.Quotes.ToList(), issue);
+    }
+
+    /// <summary>
+    /// #68: full extended parse (quotes plus stageDirections/soundCues/conversations), used by
+    /// <see cref="SeedIfEmptyInternalAsync"/> to plan the three new entity types alongside quotes.
+    /// <see cref="LoadQuotesFromFile"/> wraps this for the two call sites that only need the quotes —
+    /// one parsing implementation, not two.
+    /// </summary>
+    private (ParsedSourceFile Parsed, SeedFileIssue? Issue) LoadSourceFileAsync(string filePath)
+    {
+        if (!File.Exists(filePath)) return (new ParsedSourceFile { Quotes = [] }, SeedFileIssue.Missing);
 
         var json = File.ReadAllText(filePath);
-        if (SourceQuoteFileReader.TryParse(json, out var quotes)) return (quotes!, null);
+        if (SourceQuoteFileReader.TryParseExtended(json, out var parsed)) return (parsed!, null);
 
         Logger.LogWarning("[Database - Seed] {File} is empty or not valid JSON — skipping", Path.GetFileName(filePath));
-        return ([], SeedFileIssue.InvalidJson);
+        return (new ParsedSourceFile { Quotes = [] }, SeedFileIssue.InvalidJson);
     }
 
     private static string TruncateLabel(string text, int maxLen = 60)

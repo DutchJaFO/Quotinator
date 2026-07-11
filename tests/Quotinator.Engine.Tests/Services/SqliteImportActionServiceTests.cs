@@ -50,6 +50,9 @@ public class SqliteImportActionServiceTests
             new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Character>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Person>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory);
 
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
@@ -78,7 +81,11 @@ public class SqliteImportActionServiceTests
         Genres           = genres ?? [],
     };
 
-    private async Task<IReadOnlyList<SystemImportAction>> PlanAndStageAsync(IReadOnlyList<SourceQuote> quotes, Guid batchId, DuplicateResolutionPolicy policy)
+    private async Task<IReadOnlyList<SystemImportAction>> PlanAndStageAsync(
+        IReadOnlyList<SourceQuote> quotes, Guid batchId, DuplicateResolutionPolicy policy,
+        IReadOnlyList<SourceStageDirection>? stageDirections = null,
+        IReadOnlyList<SourceSoundCue>? soundCues = null,
+        IReadOnlyList<SourceConversation>? conversations = null)
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
@@ -90,7 +97,7 @@ public class SqliteImportActionServiceTests
             "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
             new { Id = batchId, now });
 
-        var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy);
+        var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations);
         await _coordinator.StageAsync(actions);
         return actions;
     }
@@ -414,6 +421,97 @@ public class SqliteImportActionServiceTests
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
         await MarkImportBatchAppliedAsync(batchId);
         return batchId;
+    }
+
+    /// <summary>#68: stages+applies+marks-applied a Quote, one StageDirection, and a Conversation whose only line is that StageDirection, in one batch.</summary>
+    private async Task<Guid> StageApplyAndMarkAppliedConversationAsync(string quoteId, string stageDirectionId, string conversationId)
+    {
+        var batchId = Guid.NewGuid();
+        var quote = BuildQuote(quoteId);
+        var stageDirection = new SourceStageDirection { Id = stageDirectionId, Text = "[A stage direction]" };
+        var conversation = new SourceConversation
+        {
+            Id = conversationId,
+            Lines =
+            [
+                new SourceConversationLine { Order = 1, Type = ConversationLineType.StageDirection, StageDirectionId = stageDirectionId },
+                new SourceConversationLine { Order = 2, Type = ConversationLineType.Quote, QuoteId = quoteId },
+            ],
+        };
+        await PlanAndStageAsync([quote], batchId, DuplicateResolutionPolicy.NewestWins, stageDirections: [stageDirection], conversations: [conversation]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+        return batchId;
+    }
+
+    /// <summary>
+    /// #68: reversing a batch that introduced a Conversation and the StageDirection it references
+    /// soft-deletes both — Conversation reverses first (order tier 0, alongside Quote), so
+    /// StageDirection's active-reference check (joined through Conversations) correctly finds no
+    /// live references left by the time it runs (order tier 4).
+    /// </summary>
+    [TestMethod]
+    public async Task ReverseBatchAsync_ConversationAdd_SoftDeletesConversationAndOrphanedStageDirection()
+    {
+        var quoteId          = "d1111111-1111-4111-8111-111111111111";
+        var stageDirectionId = "d2222222-2222-4222-8222-222222222222";
+        var conversationId   = "d3333333-3333-4333-8333-333333333333";
+        var batchId = await StageApplyAndMarkAppliedConversationAsync(quoteId, stageDirectionId, conversationId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE Id = @id AND IsDeleted = 1", new { id = conversationId }));
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE Id = @id AND IsDeleted = 1", new { id = stageDirectionId }));
+    }
+
+    /// <summary>
+    /// A StageDirection reused (not re-Added — Add-detection is by id, so the second batch's own
+    /// action list never contains a StageDirection entry for an id that already exists) by a second
+    /// conversation must survive reversal of that second batch — reversal only ever touches entities
+    /// its own batch actually introduced, never one it merely referenced. Complements
+    /// <see cref="ReverseBatchAsync_ConversationAdd_SoftDeletesConversationAndOrphanedStageDirection"/>,
+    /// which is what actually exercises <c>Sql.StageDirections.CountActiveReferences</c>' join-through-
+    /// Conversations logic (both rows introduced by the same reversed batch).
+    /// </summary>
+    [TestMethod]
+    public async Task ReverseBatchAsync_StageDirectionStillReferencedByAnotherConversation_IsKeptNotSoftDeleted()
+    {
+        var sharedStageDirectionId = "d4444444-4444-4444-8444-444444444444";
+        var quote1Id = "d5555555-5555-4555-8555-555555555555";
+        var quote2Id = "d6666666-6666-4666-8666-666666666666";
+        var conversation1Id = "d7777777-7777-4777-8777-777777777777";
+        var conversation2Id = "d8888888-8888-4888-8888-888888888888";
+
+        await StageApplyAndMarkAppliedConversationAsync(quote1Id, sharedStageDirectionId, conversation1Id);
+
+        // A second batch reuses the same StageDirection id in its own conversation — Add-detection by
+        // id means only the Conversation and Quote are genuinely new here; the StageDirection Add is
+        // skipped (already exists), matching how re-seeding avoids duplicating a reused stage direction.
+        var newerBatchId = Guid.NewGuid();
+        var quote2 = BuildQuote(quote2Id);
+        var conversation2 = new SourceConversation
+        {
+            Id = conversation2Id,
+            Lines =
+            [
+                new SourceConversationLine { Order = 1, Type = ConversationLineType.StageDirection, StageDirectionId = sharedStageDirectionId },
+                new SourceConversationLine { Order = 2, Type = ConversationLineType.Quote, QuoteId = quote2Id },
+            ],
+        };
+        await PlanAndStageAsync([quote2], newerBatchId, DuplicateResolutionPolicy.NewestWins,
+            stageDirections: [new SourceStageDirection { Id = sharedStageDirectionId, Text = "[A stage direction]" }],
+            conversations: [conversation2]);
+        await _service.ApplyBatchAsync(newerBatchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(newerBatchId);
+
+        await _service.ReverseBatchAsync(newerBatchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE Id = @id AND IsDeleted = 1", new { id = conversation2Id }), "Newer conversation is reversed");
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE Id = @id AND IsDeleted = 1", new { id = sharedStageDirectionId }), "StageDirection must survive — still referenced by the older, non-reversed conversation");
     }
 
     [TestMethod]

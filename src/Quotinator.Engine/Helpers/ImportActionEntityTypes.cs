@@ -26,6 +26,20 @@ public static class ImportActionEntityTypes
     /// <summary>A <c>People</c> row.</summary>
     public const string Person = "Person";
 
-    /// <summary>All four values.</summary>
-    public static readonly string[] All = [Quote, Source, Character, Person];
+    /// <summary>
+    /// A <c>Conversations</c> row (#68). Add-only, id-keyed like <see cref="Quote"/> rather than
+    /// natural-key-keyed like <see cref="Source"/>/<see cref="Character"/>/<see cref="Person"/> — a
+    /// conversation's id is explicit in its source file, not <c>EntityIdentity</c>-derived. Its
+    /// <c>ConversationLines</c> travel in the same action's payload, not as their own actions.
+    /// </summary>
+    public const string Conversation = "Conversation";
+
+    /// <summary>A <c>StageDirections</c> row (#68). Add-only, id-keyed — see <see cref="Conversation"/>'s remark.</summary>
+    public const string StageDirection = "StageDirection";
+
+    /// <summary>A <c>SoundCues</c> row (#68). Add-only, id-keyed — see <see cref="Conversation"/>'s remark.</summary>
+    public const string SoundCue = "SoundCue";
+
+    /// <summary>All seven values.</summary>
+    public static readonly string[] All = [Quote, Source, Character, Person, Conversation, StageDirection, SoundCue];
 }

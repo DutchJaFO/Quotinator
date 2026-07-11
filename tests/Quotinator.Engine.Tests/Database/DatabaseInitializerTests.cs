@@ -65,6 +65,9 @@ public class DatabaseInitializerTests
             new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
             coordinator, actionService,
@@ -122,6 +125,69 @@ public class DatabaseInitializerTests
         Assert.AreEqual(4,  db.SourceCount,    "4 sources (Airplane!, Holy Grail, Princess Bride, Star Wars)");
         Assert.AreEqual(7,  db.CharacterCount, "7 characters across the four sources");
         Assert.AreEqual(0,  db.LastSeedDuplicates.Count);
+    }
+
+    /// <summary>
+    /// #68: seeding the curated file writes its four conversations (Airplane!, Holy Grail, Princess
+    /// Bride, Empire Strikes Back) into Conversations/ConversationLines/StageDirections/SoundCues,
+    /// all sharing the file's own ImportBatchId, staged through System_ImportActions like every
+    /// other entity type.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_CuratedFileOnly_SeedsConversationsStageDirectionsAndSoundCues()
+    {
+        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        var db    = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var conversationCount    = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE IsDeleted = 0;");
+        var stageDirectionCount  = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE IsDeleted = 0;");
+        var soundCueCount        = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM SoundCues WHERE IsDeleted = 0;");
+        var conversationLineCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ConversationLines WHERE IsDeleted = 0;");
+
+        Assert.AreEqual(4, conversationCount,     "4 conversations (Airplane!, Holy Grail, Princess Bride, Empire Strikes Back)");
+        Assert.AreEqual(2, stageDirectionCount,   "2 stage directions (Princess Bride, Empire Strikes Back)");
+        Assert.AreEqual(1, soundCueCount,         "1 sound cue (Holy Grail)");
+        Assert.AreEqual(13, conversationLineCount, "2 + 4 + 2 + 5 lines across the four conversations");
+
+        var distinctBatchIds = await conn.QueryAsync<string>(
+            "SELECT DISTINCT ImportBatchId FROM Conversations UNION SELECT DISTINCT ImportBatchId FROM StageDirections UNION SELECT DISTINCT ImportBatchId FROM SoundCues;");
+        Assert.HasCount(1, distinctBatchIds.ToList(), "All conversation-related rows from one file should share one ImportBatchId");
+
+        var actionEntityTypes = await conn.QueryAsync<string>(
+            "SELECT DISTINCT EntityType FROM System_ImportActions WHERE EntityType IN ('Conversation', 'StageDirection', 'SoundCue');");
+        CollectionAssert.AreEquivalent(new[] { "Conversation", "StageDirection", "SoundCue" }, actionEntityTypes.ToList(),
+            "Conversation/StageDirection/SoundCue Add actions must be staged through System_ImportActions like every other entity type");
+    }
+
+    /// <summary>
+    /// #68: reseeding (clear + reimport from source) reproduces the same conversation/stage-direction/
+    /// sound-cue counts, not doubled — exercises the parse-plan-apply path a second time from a clean
+    /// slate. Live re-import-without-clearing dedup (Add-detection by explicit id) is covered
+    /// directly against <c>SqliteQuoteImportService</c> in
+    /// <c>QuoteImportServiceTests.ImportAsync_SameExtendedFormatFileImportedTwice_DoesNotDuplicateConversationOrStageDirection</c>,
+    /// since <see cref="QuotinatorDatabaseInitializer"/>'s own seeding is a no-op once any quote
+    /// already exists (see <see cref="InitialiseAsync_CalledTwice_IsIdempotent"/>) and so cannot
+    /// exercise that scenario itself.
+    /// </summary>
+    [TestMethod]
+    public async Task ReseedAsync_CuratedFileOnly_ReproducesSameConversationCountsNotDoubled()
+    {
+        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        var db    = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        Assert.AreEqual(4, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE IsDeleted = 0;"));
+        Assert.AreEqual(2, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE IsDeleted = 0;"));
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM SoundCues WHERE IsDeleted = 0;"));
+        Assert.AreEqual(13, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ConversationLines WHERE IsDeleted = 0;"));
     }
 
     /// <summary>No source files configured — database is created but stays empty.</summary>
@@ -521,6 +587,9 @@ public class DatabaseInitializerTests
             new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService,

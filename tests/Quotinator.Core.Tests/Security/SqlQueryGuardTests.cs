@@ -72,6 +72,8 @@ public class SqlQueryGuardTests
             "Characters.CountActiveReferences",   // COUNT(*) — #59 reversal reference check
             "People.CountActiveReferences",       // COUNT(*) — #59 reversal reference check
             "Sources.CountActiveReferences",      // COUNT(*) x2 (subqueries) — #59 reversal reference check
+            "StageDirections.CountActiveReferences", // COUNT(*) — #68 reversal reference check
+            "SoundCues.CountActiveReferences",       // COUNT(*) — #68 reversal reference check
         };
 
         var actual = EnumerateSqlConstants()

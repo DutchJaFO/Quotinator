@@ -276,6 +276,12 @@ public class DatabaseInitializer : IDatabaseInitializer
     protected static async Task TruncateDataAsync(SqliteConnection connection)
     {
         await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+        await connection.ExecuteAsync(Sql.ConversationLines.DeleteAll);
+        await connection.ExecuteAsync(Sql.StageDirectionTranslations.DeleteAll);
+        await connection.ExecuteAsync(Sql.SoundCueTranslations.DeleteAll);
+        await connection.ExecuteAsync(Sql.Conversations.DeleteAll);
+        await connection.ExecuteAsync(Sql.StageDirections.DeleteAll);
+        await connection.ExecuteAsync(Sql.SoundCues.DeleteAll);
         await connection.ExecuteAsync(Sql.QuoteGenres.DeleteAll);
         await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteAll);
         await connection.ExecuteAsync(Sql.SourceTranslations.DeleteAll);

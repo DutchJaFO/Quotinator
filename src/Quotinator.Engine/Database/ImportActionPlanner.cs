@@ -26,12 +26,20 @@ internal static class ImportActionPlanner
 {
     /// <summary>
     /// Classifies every row in <paramref name="quotes"/> into <see cref="SystemImportAction"/>
-    /// rows for the Quote itself and any not-yet-existing Source/Character/Person it references.
-    /// Read-only against the database — never writes.
+    /// rows for the Quote itself and any not-yet-existing Source/Character/Person it references,
+    /// then (#68) every not-yet-existing <paramref name="stageDirections"/>/<paramref name="soundCues"/>/
+    /// <paramref name="conversations"/> row, in that order — a Conversation's lines reference the
+    /// other two, and <see cref="Sql.SystemImportActions.SelectAllForBatch"/>'s insertion-order
+    /// guarantee is what lets apply time trust those referenced rows already exist by the time a
+    /// Conversation's own action applies, without needing to defensively re-create them the way
+    /// Quote/Character do for Source. Read-only against the database — never writes.
     /// </summary>
     internal static async Task<IReadOnlyList<SystemImportAction>> PlanAsync(
         SqliteConnection connection, IReadOnlyList<SourceQuote> quotes, Guid batchId,
-        DuplicateResolutionPolicy policy, SqliteTransaction? transaction = null)
+        DuplicateResolutionPolicy policy, SqliteTransaction? transaction = null,
+        IReadOnlyList<SourceStageDirection>? stageDirections = null,
+        IReadOnlyList<SourceSoundCue>? soundCues = null,
+        IReadOnlyList<SourceConversation>? conversations = null)
     {
         var actions        = new List<SystemImportAction>();
         var sourceIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -117,6 +125,10 @@ internal static class ImportActionPlanner
             if (!isPending)
                 seenQuotes[q.Id] = resolved;
         }
+
+        await PlanStageDirectionsAsync(connection, stageDirections ?? [], batchIdStr, actions, now, transaction);
+        await PlanSoundCuesAsync(connection, soundCues ?? [], batchIdStr, actions, now, transaction);
+        await PlanConversationsAsync(connection, conversations ?? [], batchIdStr, actions, now, transaction);
 
         return actions;
     }
@@ -224,6 +236,88 @@ internal static class ImportActionPlanner
 
         return stableId;
     }
+
+    // ── #68: StageDirection/SoundCue/Conversation planning ──────────────────
+    // All three are Add-only and id-keyed (the file supplies an explicit id, like Quote — not a
+    // natural-key-derived EntityIdentity stable id like Source/Character/Person), so planning is
+    // just "does a row with this id already exist" — no Modify/merge semantics.
+
+    private static async Task PlanStageDirectionsAsync(
+        SqliteConnection connection, IReadOnlyList<SourceStageDirection> stageDirections, string batchId,
+        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        foreach (var sd in stageDirections)
+        {
+            var existingId = await connection.ExecuteScalarAsync<Guid?>(Sql.StageDirections.SelectIdById, new { id = sd.Id }, transaction);
+            if (existingId is not null) continue;
+
+            actions.Add(new SystemImportAction
+            {
+                BatchId       = batchId,
+                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType    = ImportActionEntityTypes.StageDirection,
+                EntityId      = sd.Id,
+                IncomingValue = JsonSerializer.Serialize(new StageDirectionActionPayload(sd.Text, sd.ImageUrl, sd.Translations)),
+                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt    = now,
+            });
+        }
+    }
+
+    private static async Task PlanSoundCuesAsync(
+        SqliteConnection connection, IReadOnlyList<SourceSoundCue> soundCues, string batchId,
+        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        foreach (var sc in soundCues)
+        {
+            var existingId = await connection.ExecuteScalarAsync<Guid?>(Sql.SoundCues.SelectIdById, new { id = sc.Id }, transaction);
+            if (existingId is not null) continue;
+
+            actions.Add(new SystemImportAction
+            {
+                BatchId       = batchId,
+                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType    = ImportActionEntityTypes.SoundCue,
+                EntityId      = sc.Id,
+                IncomingValue = JsonSerializer.Serialize(new SoundCueActionPayload(sc.Text, sc.SoundFileUrl, sc.ImageUrl, sc.Translations)),
+                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt    = now,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Planned last, after <see cref="PlanStageDirectionsAsync"/>/<see cref="PlanSoundCuesAsync"/> —
+    /// a Conversation's <see cref="ConversationActionPayload.Lines"/> reference Quote/StageDirection/
+    /// SoundCue ids directly (no id resolution needed, unlike Source/Character/Person), trusting the
+    /// referenced rows are staged earlier in the same batch and — per <see cref="PlanAsync"/>'s own
+    /// remark — will therefore apply first too.
+    /// </summary>
+    private static async Task PlanConversationsAsync(
+        SqliteConnection connection, IReadOnlyList<SourceConversation> conversations, string batchId,
+        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        foreach (var c in conversations)
+        {
+            var existingId = await connection.ExecuteScalarAsync<Guid?>(Sql.Conversations.SelectIdById, new { id = c.Id }, transaction);
+            if (existingId is not null) continue;
+
+            var lines = c.Lines
+                .Select(l => new ConversationLinePayload(l.Order, l.Type, l.QuoteId, l.StageDirectionId, l.SoundCueId))
+                .ToList();
+
+            actions.Add(new SystemImportAction
+            {
+                BatchId       = batchId,
+                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType    = ImportActionEntityTypes.Conversation,
+                EntityId      = c.Id,
+                IncomingValue = JsonSerializer.Serialize(new ConversationActionPayload(c.Description, lines)),
+                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt    = now,
+            });
+        }
+    }
 }
 
 /// <summary>Staged payload for a Quote Add/Modify <see cref="SystemImportAction"/> — the 8 mergeable fields plus the resolved Source/Character/Person ids the applier needs, so it never depends on those actions having run first.</summary>
@@ -256,3 +350,18 @@ internal sealed record CharacterActionPayload(string SourceId, string Name, stri
 
 /// <summary>Staged payload for a Person Add <see cref="SystemImportAction"/>.</summary>
 internal sealed record PersonActionPayload(string Name);
+
+/// <summary>Staged payload for a StageDirection Add <see cref="SystemImportAction"/> (#68).</summary>
+internal sealed record StageDirectionActionPayload(
+    string Text, string? ImageUrl, IReadOnlyDictionary<string, SourceStageDirectionTranslation> Translations);
+
+/// <summary>Staged payload for a SoundCue Add <see cref="SystemImportAction"/> (#68).</summary>
+internal sealed record SoundCueActionPayload(
+    string Text, string? SoundFileUrl, string? ImageUrl, IReadOnlyDictionary<string, SourceSoundCueTranslation> Translations);
+
+/// <summary>One line of a <see cref="ConversationActionPayload"/> — mirrors <see cref="SourceConversationLine"/>.</summary>
+internal sealed record ConversationLinePayload(
+    int Order, ConversationLineType Type, string? QuoteId, string? StageDirectionId, string? SoundCueId);
+
+/// <summary>Staged payload for a Conversation Add <see cref="SystemImportAction"/> (#68) — carries its full ordered line list, not staged as separate actions (see <see cref="ImportActionPlanner.PlanAsync"/>'s remark).</summary>
+internal sealed record ConversationActionPayload(string? Description, IReadOnlyList<ConversationLinePayload> Lines);

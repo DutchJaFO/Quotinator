@@ -1,6 +1,6 @@
 # #68 — Curated JSON: conversations format
 
-**Status:** In progress (step 3)
+**Status:** Waiting for release
 **GitHub issue:** #68
 **Tiers required:** T1, T2
 **Depends on:** #67, #61, #58, #154
@@ -48,16 +48,15 @@ generate or invent quotes" priority — stage direction/sound cue text is a plai
 (the schema's own example, `"[EXT. AIRPORT - DAY]"`, is not verbatim screenplay text either), not a
 quotation, so it doesn't carry the same verification requirement.
 
-**Scope correction 3 (mid-implementation, confirmed with the user):** Section 3 below
-(`ConversationSeedWriter`) turned out to be substantially larger than originally estimated once the
-actual apply/reverse pipeline (`SqliteImportActionService.cs`, ~650 lines) was read in full — it's a
-hand-rolled per-entity-type state machine (planning, dependency ordering, decide, apply, reverse),
-not a simple writer function. The user chose to keep the original "full staging engine integration"
-design rather than descope to a simpler direct-write path. Section 3 now carries a concrete,
-implementation-ready design (informed by reading `ImportActionPlanner.cs` and
-`SqliteImportActionService.cs` end to end) rather than the vague one-paragraph sketch this section
-originally had — but the code itself is **not yet written**; this was deliberately left for a
-follow-up session rather than rushed. See the header's `In progress (step 3)` status.
+**Scope correction 3 (mid-implementation, confirmed with the user):** Section 3 below turned out to
+be substantially larger than originally estimated once the actual apply/reverse pipeline
+(`SqliteImportActionService.cs`, ~650 lines) was read in full — it's a hand-rolled per-entity-type
+state machine (planning, dependency ordering, decide, apply, reverse), not a simple writer function.
+The user chose to keep the original "full staging engine integration" design rather than descope to
+a simpler direct-write path. Implemented in a follow-up session (not the same session the design was
+written in) — see section 3 for what shipped, including two correctness issues the design pass
+hadn't anticipated and only surfaced while implementing (the `SelectAllForBatch` ordering gap and the
+`CountActiveReferences` join bug, both described there).
 
 ---
 
@@ -127,87 +126,112 @@ the extended object shape broke it. Fixed by having `QuoteService.Load` call
 `SourceQuoteFileReader.TryParse` instead — one parsing implementation, not two, per the JSON parsing
 policy; also a correctness fix in its own right, independent of this issue.
 
-### 3. `ConversationSeedWriter` — design (code not yet written)
+### 3. Staging-engine integration
 
-**Status:** ⬜ Not started — full design below, ready to implement in a follow-up session
+**Status:** ✅ Done
 
-Read `ImportActionPlanner.cs` and `SqliteImportActionService.cs` in full before writing this design
-— the actual apply/reverse pipeline is a ~650-line, per-`EntityType` state machine (planning,
-dependency ordering, decide, apply, reverse), not a simple insert function. The design below is
-scoped to reuse as much of that existing machinery as possible.
+Implemented as designed (below is what shipped, not a forward-looking plan). No standalone
+`ConversationSeedWriter` class — the write logic lives directly in `ImportActionPlanner` (planning)
+and `SqliteImportActionService` (apply/reverse), extending both in place rather than adding a
+parallel writer, since (per the design) `Conversation`/`StageDirection`/`SoundCue` reuse the same
+`EnsureXExistsAsync`/switch-dispatch shape those files already had for `Source`/`Character`/`Person`.
 
-**Key simplification found while designing:** `ConversationLines`, `StageDirectionTranslations`, and
-`SoundCueTranslations` do **not** need their own top-level `SystemImportAction` rows. They are detail
-rows of their parent (`Conversation`/`StageDirection`/`SoundCue`) — the same relationship
-`QuoteGenres`/`QuoteTranslations` already have to `Quote` (written alongside the parent's own apply
-step via `QuoteSeedWriter.InsertGenresAsync`, never staged as their own actions). This cuts the new
-`EntityType` surface from 6 down to **3**: `Conversation`, `StageDirection`, `SoundCue`.
+**Key simplification, confirmed while implementing:** `ConversationLines`, `StageDirectionTranslations`,
+and `SoundCueTranslations` do **not** have their own top-level `SystemImportAction` rows — they are
+detail rows of their parent (`Conversation`/`StageDirection`/`SoundCue`), the same relationship
+`QuoteGenres`/`QuoteTranslations` have to `Quote`. This cuts the new `EntityType` surface from 6 down
+to **3**: `Conversation`, `StageDirection`, `SoundCue` (`ImportActionEntityTypes.cs`).
 
 **Identity model differs from Source/Character/Person:** those three use `EntityIdentity`-derived
-stable ids (existence check by natural key — title/name — since the file never supplies an id for
-them). `StageDirection`, `SoundCue`, and `Conversation` all carry an **explicit `id` in the source
-file**, exactly like `Quote` does. So their Add-detection is an id lookup (does a row with this exact
-id already exist?), not a natural-key lookup. All three are **Add-only** — no `Modify`/merge
-semantics, matching `Source`/`Character`/`Person` (never revised once created) rather than `Quote`
-(which has full field-merge conflict resolution). Re-importing the same file with the same ids is a
-no-op (id already exists → skip), which is sufficient today; nothing requires editable stage
-directions/sound cues yet.
+stable ids (always uppercase). `StageDirection`, `SoundCue`, and `Conversation` carry an **explicit
+`id` in the source file**, exactly like `Quote` — so Add-detection is a case-sensitive id lookup
+(`Sql.Conversations.SelectIdById` etc.), and — like `Quote` — every place that writes or hard-deletes
+them uses raw SQL (`RepositorySql.HardDelete`/`SoftDelete("Conversations")` etc.), never the
+`IRestorableRepository<T>.HardDeleteAsync(Guid)`/`SoftDeleteAsync(Guid)` path, which forces uppercase
+comparison and would silently no-op against a lowercase file-supplied id. All three are **Add-only**
+— no `Modify`/merge semantics; re-importing the same ids is a no-op (already exists → skip).
 
-**`ImportActionPlanner.PlanAsync` extension** (or a sibling `ConversationActionPlanner`, called after
-the existing quote-planning loop, sharing the same `batchId`/`policy`/`now`):
-1. For each `SourceStageDirection`: id-lookup against `StageDirections`; if absent, stage an `Add`
-   action (`EntityType = StageDirection`, payload = `{ Text, ImageUrl, Translations }`).
-2. For each `SourceSoundCue`: same pattern (`EntityType = SoundCue`, payload = `{ Text,
-   SoundFileUrl, ImageUrl, Translations }`).
-3. For each `SourceConversation`: id-lookup against `Conversations`; if absent, stage an `Add`
-   action (`EntityType = Conversation`, payload = `{ Description, Lines: [{ Order, Type, QuoteId,
-   StageDirectionId, SoundCueId }] }` — the full line list travels in the Conversation's own
-   payload, not as separate actions). No FK-existence validation needed at plan time — every
-   referenced `QuoteId`/`StageDirectionId`/`SoundCueId` in the curated file is defined in the same
-   file and staged in the same batch; a line referencing an id from a *different* file is out of
-   scope until a real cross-file use case exists (flag as a known gap, not solved here).
+**`ImportActionPlanner`** gained `PlanStageDirectionsAsync`/`PlanSoundCuesAsync`/`PlanConversationsAsync`,
+called from `PlanAsync` after the existing quote-planning loop, in that order (stage directions/sound
+cues before conversations, since a conversation's lines reference them). `PlanAsync`'s signature
+gained three new optional parameters (`stageDirections`, `soundCues`, `conversations`, all
+defaulting to `[]`) rather than a breaking change to existing callers. New payload records:
+`StageDirectionActionPayload`, `SoundCueActionPayload`, `ConversationLinePayload`,
+`ConversationActionPayload` (the last carries the full ordered line list — lines are never staged as
+separate actions).
 
-**`ApplyResolvedActionAsync` extension** (new `case` arms in the existing `switch
-(action.EntityType)`):
-- `StageDirection` / `SoundCue`: `INSERT OR IGNORE` (idempotent, matching
-  `EnsureSourceExistsAsync`'s shape) plus their translation rows (raw SQL loop, matching
-  `QuoteSeedWriter.InsertGenresAsync`'s pattern — new `Sql.StageDirectionTranslations.Insert` /
-  `Sql.SoundCueTranslations.Insert` constants needed), then a `SystemChangeLog` entry
-  (`ChangeAction.Created`).
-- `Conversation`: `INSERT OR IGNORE` the `Conversations` row, then loop its payload's `Lines` and
-  insert each as a `ConversationLines` row (new `Sql.ConversationLines.Insert` constant) — this is
-  where the CHECK constraint from #67 gets exercised for real. Then a `SystemChangeLog` entry.
+**Correctness issue found and fixed while implementing (not anticipated at design time):**
+`Sql.SystemImportActions.SelectAllForBatch` had no `ORDER BY`, so `TryApplyBatchAsync`'s per-action
+apply callback had no guaranteed ordering — the design's claim that "stage directions/sound cues
+apply before conversations because they're planned first" was false; SQLite doesn't promise scan
+order without one. Fixed generically, in `Quotinator.Data` (not entity-type-aware): added
+`ORDER BY rowid ASC`, relying on `WriteManyAsync`'s sequential single-row inserts to preserve
+planning order. This is a real, domain-agnostic improvement (also makes `GetPagedAsync`'s and
+reversal's action ordering deterministic), not a `Quotinator.Engine`-only workaround.
 
-**Ordering:** `ClearStaleAddTargetsAsync` (the #59 stale-row hard-delete pass) needs `Conversation`
-handled **before** `StageDirection`/`SoundCue` (children before parents — a stale `ConversationLines`
-row referencing a stale `StageDirection` would otherwise FK-violate on the `StageDirection`'s
-hard-delete, same reasoning already documented for Quote-before-Character-before-Source). The
-`ReverseAppliedActionsAsync` ordering dictionary needs the same relative order
-(`Conversation = 0`-ish tier, `StageDirection`/`SoundCue` a later tier) — copy the existing
-Quote/Character/Source pattern, don't invent a new scheme.
+**`ApplyResolvedActionAsync`** gained three `case` arms. `StageDirection`/`SoundCue`:
+`INSERT OR IGNORE` via `EnsureStageDirectionExistsAsync`/`EnsureSoundCueExistsAsync`, each inserting
+its translation rows in a loop, then a `SystemChangeLog` entry. `Conversation`: `INSERT OR IGNORE`
+the `Conversations` row, then loop the payload's `Lines` inserting each as a `ConversationLines` row
+(exercising the #67 CHECK constraints for real), then a `SystemChangeLog` entry. Trusts its
+referenced `Quote`/`StageDirection`/`SoundCue` rows already applied (per the ordering fix above) —
+deliberately **not** defensive like `Character`'s Source-ensure, since — unlike a `Source`'s
+title/type — a `Quote`'s full mergeable field set can't practically be denormalized into every
+`Conversation` that references it.
 
-**Repositories:** `Conversations`, `StageDirections`, `SoundCues` need
-`IRestorableRepository<T>` registrations in `Program.cs` (mirroring `Source`/`Character`/`Person` —
-required for `ClearStaleAddTargetsAsync`'s hard-delete and `ReverseAppliedActionsAsync`'s
-soft-delete/restore). `ConversationLines`/`StageDirectionTranslations`/`SoundCueTranslations` do
-**not** get repositories — deleted/reinserted via raw SQL alongside their parent, matching
-`QuoteGenres`/`QuoteTranslations`. This reverses #67's original "no repositories needed yet"
-decision for the three parent entities specifically — that decision was correct at the time (nothing
-consumed them yet); this section is what now consumes them.
+**`ClearStaleAddTargetsAsync`** gained three loops (raw SQL, not repository calls — see the identity
+model note above), each clearing the entity's own detail rows first via new `Sql.cs`
+`DeleteForConversation`/`DeleteForStageDirection`/`DeleteForSoundCue` constants (mirroring
+`QuoteGenres.DeleteForQuote`), then hard-deleting the stale row itself.
 
-**`GetPagedAsync`'s `BuildFields`/`ToFieldMap`** need new cases for `StageDirection`/`SoundCue`/
-`Conversation` payloads (mirroring `SourceActionPayload`'s `ToFieldMap`) so `GET
-/api/v1/import/actions` displays them sensibly. `ComputeAmbiguousFields`/`ComputeRelatedActionIdsAsync`
-need **no change** — both already return `[]`/empty for any `EntityType != Quote`, which is exactly
-right for three more Add-only entity types.
+**`ReverseAppliedActionsAsync`**'s ordering dictionary gained `Conversation = 0` (same tier as
+`Quote`) and `StageDirection`/`SoundCue = 4` (last tier) — `Conversation` must reverse before
+`StageDirection`/`SoundCue` so their active-reference check doesn't still see the about-to-be-removed
+conversation's lines as live. New `case` arms: `Conversation` unconditionally soft-deletes (nothing
+references a Conversation, so no active-reference check — its `ConversationLines` are left orphaned,
+same precedent as `QuoteGenres`/`QuoteTranslations` on a reversed Quote Add); `StageDirection`/
+`SoundCue` check `HasActiveReferencesAsync` first, exactly like `Character`/`Source`/`Person`.
 
-**New `Sql.cs` additions** (each needs a `SqlQueryGuardTests.AssembledQueryCases` entry per the SQL
-centralisation policy): `Conversations.InsertIfNotExists`, `StageDirections.InsertIfNotExists`,
-`SoundCues.InsertIfNotExists`, `ConversationLines.Insert`, `StageDirectionTranslations.Insert`,
-`SoundCueTranslations.Insert`, plus `CountActiveReferences`-style queries for each of the three
-parent entities (needed by `ReverseAppliedActionsAsync`'s "still referenced, don't soft-delete"
-check — `StageDirection`/`SoundCue` are referenced by `ConversationLines`, mirroring how
-`Sql.Characters.CountActiveReferences` checks `Quotes`).
+**Correctness issue found and fixed while implementing:** `Sql.StageDirections.CountActiveReferences`/
+`Sql.SoundCues.CountActiveReferences` originally filtered `ConversationLines.IsDeleted = 0` directly
+— but a `ConversationLines` row is never independently soft-deleted (see the detail-row point above),
+so its own `IsDeleted` flag never reflects whether its *parent* conversation is still live, only the
+parent's own `IsDeleted` does. Without the fix, reversing a conversation would permanently orphan its
+`StageDirection`/`SoundCue` rows as unreversible, since the (never-updated) `ConversationLines.IsDeleted = 0`
+would forever look like an active reference. Fixed by joining through `Conversations` and checking
+*its* `IsDeleted` instead — caught by `ReverseBatchAsync_ConversationAdd_SoftDeletesConversationAndOrphanedStageDirection`
+going red before the fix, not assumed correct.
+
+**Repositories:** registered `IRestorableRepository<ConversationEntity/StageDirectionEntity/SoundCueEntity>`
+in `Program.cs`, mirroring `Source`/`Character`/`Person`'s existing registrations — required for
+`SqliteImportActionService`'s constructor (now 10 dependencies, up from 7) even though, per the
+identity-model note above, the actual hard-delete/soft-delete calls go through raw SQL, not these
+repositories' own `Guid`-typed methods. This reverses #67's original "no repositories needed yet"
+decision for these three entities specifically — correct at the time (nothing consumed them yet);
+this section is what now does.
+
+**`GetPagedAsync`'s `BuildFields`/`ToFieldMap`** gained cases for the three new payload types, so
+`GET /api/v1/import/actions` displays them (`text`/`imageUrl`, `text`/`soundFileUrl`/`imageUrl`,
+`description`/`lineCount` respectively). `ComputeAmbiguousFields`/`ComputeRelatedActionIdsAsync`
+needed no change — both already return empty for any `EntityType != Quote`.
+
+**`Sql.cs` additions**, all picked up automatically by `SqlQueryGuardTests.SqlConstant_PassesAggregateGuard`
+(reflection-driven, no test change needed) — none are dynamic factory methods, so no
+`AssembledQueryCases` entries were needed either: `Conversations.{SelectIdById,InsertIfNotExists,DeleteAll}`,
+`StageDirections.{SelectIdById,InsertIfNotExists,CountActiveReferences,DeleteAll}`,
+`SoundCues.{SelectIdById,InsertIfNotExists,CountActiveReferences,DeleteAll}`,
+`ConversationLines.{Insert,DeleteForConversation,DeleteForStageDirection,DeleteForSoundCue,DeleteAll}`,
+`StageDirectionTranslations.{Insert,DeleteForStageDirection,DeleteAll}`,
+`SoundCueTranslations.{Insert,DeleteForSoundCue,DeleteAll}`. The two new `CountActiveReferences`
+constants (aggregate `COUNT(*)`) were added to `AggregateQueries_MatchDocumentedInventory`'s
+documented inventory. `TruncateDataAsync` (`Quotinator.Data`, used by reseed) gained `DeleteAll`
+calls for all six new tables, in FK-safe child-before-parent order.
+
+**Wired into both write paths**, per the original design goal: `QuotinatorDatabaseInitializer`'s
+`LoadQuotesFromFile` now wraps a new `LoadSourceFileAsync` (full `ParsedSourceFile` parse via
+`TryParseExtended`) so startup seeding plans the extended sections; `SqliteQuoteImportService.ImportAsync`
+does the same for `POST /api/v1/import` (a converter's output is always quotes-only JSON, so this
+naturally yields empty extended sections whenever a converter ran — no conditional needed).
 
 ### 4. Migrate `quotinator-curated.json`
 
@@ -230,10 +254,12 @@ curated-only so the three new sources are genuinely new here).
 **Status:** ⬜ Not started
 
 `docs/data-import.md` already describes `quotinator-curated.json` as using the "(extended format)"
-— was inaccurate (the file was still a flat array) until step 4 above landed; now true. No wording
-change needed. Revisit once step 3 ships: `README.md`/`addon/DOCS.md` may need a line noting
-conversations are seedable, and `docs/data-import.md`'s format table could note which entity types
-are Add-only vs mergeable.
+— accurate now that step 4 has landed; no wording change needed there. Still open: `README.md`/
+`addon/DOCS.md` don't yet mention that conversations are seedable/importable, and
+`docs/data-import.md`'s format table doesn't note which entity types are Add-only (Conversation/
+StageDirection/SoundCue) vs mergeable (Quote). Deferred — not required for #69 (API surface) to
+proceed, and better bundled with #69's own doc updates (new endpoint, new `QuoteResponse` field)
+than done twice.
 
 ---
 
@@ -244,13 +270,16 @@ are Add-only vs mergeable.
 | 1 | ✅ | Extended-format file parses all four sections correctly | Unit test | `SourceQuoteFileReaderTests.TryParseExtended_FullObject_ParsesAllFourSections` |
 | 2 | ✅ | Flat array file still parses with empty conversation sections | Unit test | `SourceQuoteFileReaderTests.TryParseExtended_BareArray_YieldsQuotesAndEmptyExtendedSections` |
 | 3 | ✅ | `quotinator-curated.json` conforms to `source-extended.schema.json` after migration, and its four conversations parse with the expected shape | Unit test | `SourceDataIntegrityTests.SourceFiles_ConformToSchema`; `SourceQuoteFileReaderTests.TryParseExtended_CuratedFile_ParsesRealFourConversationsWithStageDirectionAndSoundCue` |
-| 4 | ⬜ | Seeding a file with all four sections writes rows to `Conversations`/`ConversationLines`/`StageDirections`/`StageDirectionTranslations`/`SoundCues`/`SoundCueTranslations` sharing one `ImportBatchId` | Unit test | New `Quotinator.Engine.Tests` integration test against a real SQLite DB (blocked on step 3) |
-| 5 | ⬜ | Re-seeding the same file does not duplicate a reused `StageDirection`/`SoundCue`/`Conversation` (id already exists → skip) | Unit test | New test: seed twice, assert row count unchanged (blocked on step 3) |
-| 6 | ⬜ | `Conversation`/`StageDirection`/`SoundCue` Add actions are staged through `System_ImportActions` like `Quote`'s | Unit test | New test asserting `System_ImportActions` rows exist with the new `EntityType` values (blocked on step 3) |
-| 7 | ⬜ | An applied batch containing conversations can be reversed (#59) — `Conversation` before `StageDirection`/`SoundCue`, referenced-row protection honoured | Unit test | New test mirroring `ReverseBatchAsync_QuoteAdd_SoftDeletesOrphanedSourceAndCharacter` (blocked on step 3) |
-| 8 | ⬜ | `POST /api/v1/import` can import a file containing conversations | Live (T1) | `curl -F "file=@data/sources/quotinator-curated.json" .../api/v1/import` (blocked on step 3) |
-| 9 | ⬜ | App starts and seeds the migrated curated file without error, including the new conversation tables | Live (T1) | Run `dotnet run --project src/Quotinator.Api`; confirm no startup exception (blocked on step 3) |
-| 10 | ⬜ | Docker build succeeds with the migrated curated file and full seeding | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` (blocked on step 3) |
+| 4 | ✅ | Seeding a file with all four sections writes rows to `Conversations`/`ConversationLines`/`StageDirections`/`StageDirectionTranslations`/`SoundCues`/`SoundCueTranslations` sharing one `ImportBatchId` | Unit test | `DatabaseInitializerTests.InitialiseAsync_CuratedFileOnly_SeedsConversationsStageDirectionsAndSoundCues` |
+| 5 | ✅ | Re-seeding/re-importing the same file does not duplicate a reused `StageDirection`/`SoundCue`/`Conversation` (id already exists → skip) | Unit test | `DatabaseInitializerTests.ReseedAsync_CuratedFileOnly_ReproducesSameConversationCountsNotDoubled`; `QuoteImportServiceTests.ImportAsync_SameExtendedFormatFileImportedTwice_DoesNotDuplicateConversationOrStageDirection` |
+| 6 | ✅ | `Conversation`/`StageDirection`/`SoundCue` Add actions are staged through `System_ImportActions` like `Quote`'s | Unit test | `DatabaseInitializerTests.InitialiseAsync_CuratedFileOnly_SeedsConversationsStageDirectionsAndSoundCues` (asserts the three `EntityType` values are present); `QuoteImportServiceTests.ImportAsync_ExtendedFormatFile_StagesAndAppliesConversationAndStageDirection` |
+| 7 | ✅ | An applied batch containing conversations can be reversed (#59) — `Conversation` before `StageDirection`/`SoundCue`, referenced-row protection honoured | Unit test | `SqliteImportActionServiceTests.ReverseBatchAsync_ConversationAdd_SoftDeletesConversationAndOrphanedStageDirection`; `.ReverseBatchAsync_StageDirectionStillReferencedByAnotherConversation_IsKeptNotSoftDeleted` |
+| 8 | ✅ | `POST /api/v1/import` can import a file containing conversations | Live (T2) | `curl -X POST -H "X-Api-Key: ..." -F "file=@data/sources/quotinator-curated.json" .../api/v1/import` against the built container — `200`, all 4 conversations visible via `GET /import/actions?entityType=Conversation&status=Applied`; re-running the same `curl` a second time still shows exactly the same 4 (same ids, same original `batchId`), confirming live re-import idempotency |
+| 9 | ✅ | App starts and seeds the migrated curated file without error, including the new conversation tables | Live (T1) | Confirmed by the developer running the solution in Visual Studio (Debug build): starts cleanly, `schema is up to date (data v9, app v8)`, serves `/api/v1/quotes/random` successfully. The actual fresh-seed content (`seeding complete — 796 unique quotes`, `Conversations=4, ConversationLines=13, StageDirections=2, SoundCues=1`) was confirmed separately via `docker run` against a fresh container (T2, row 10) — the dev database used for the Visual Studio run above already existed from prior sessions, so it took the incremental-migration path rather than a fresh seed. |
+| 10 | ✅ | Docker build succeeds with the migrated curated file and full seeding | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; `docker run` + `/api/v1/version` returned `"quotes":796,"sources":479,"characters":7`; no errors in container logs |
+
+Full solution: `dotnet build --configuration Release` and `dotnet test --configuration Release` both
+clean — 0 warnings, 0 errors, every project green (Engine.Tests: 131/131 after these additions).
 
 ---
 

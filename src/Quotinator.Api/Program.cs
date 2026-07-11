@@ -290,6 +290,14 @@ builder.Services.AddSingleton<IRestorableRepository<Source>, SqliteRestorableRep
 builder.Services.AddSingleton<IRestorableRepository<Character>, SqliteRestorableRepository<Character>>();
 builder.Services.AddSingleton<IRestorableRepository<Person>, SqliteRestorableRepository<Person>>();
 
+// #68: same rationale as above, for Conversation/StageDirection/SoundCue — needed by
+// SqliteImportActionService's stale-Add-target hard-delete and batch-reversal soft-delete/restore.
+// ConversationLines/StageDirectionTranslations/SoundCueTranslations are detail rows (like
+// QuoteGenres/QuoteTranslations) and never get their own repository.
+builder.Services.AddSingleton<IRestorableRepository<ConversationEntity>, SqliteRestorableRepository<ConversationEntity>>();
+builder.Services.AddSingleton<IRestorableRepository<StageDirectionEntity>, SqliteRestorableRepository<StageDirectionEntity>>();
+builder.Services.AddSingleton<IRestorableRepository<SoundCueEntity>, SqliteRestorableRepository<SoundCueEntity>>();
+
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
 // real Serilog pipeline at the same point in startup as the rest of seeding — not through a

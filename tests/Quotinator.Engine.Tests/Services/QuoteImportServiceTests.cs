@@ -50,6 +50,9 @@ public class QuoteImportServiceTests
             new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Character>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Person>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory);
         var db = new QuotinatorDatabaseInitializer(
             _factory, options, QuotinatorMigrations.All, [], importBatches,
@@ -82,6 +85,9 @@ public class QuoteImportServiceTests
             new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Character>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Person>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory);
         return new SqliteQuoteImportService(
             _factory, importBatches, coordinator, actionService, actionReader,
@@ -454,6 +460,66 @@ public class QuoteImportServiceTests
         var ex = await Assert.ThrowsExactlyAsync<UnknownConverterException>(
             () => service.ImportAsync(JsonStream("irrelevant"), "test.json", settings, preview: false));
         Assert.AreEqual("does-not-exist", ex.ConverterName);
+    }
+
+    // ── #68: conversations via POST /import ────────────────────────────────
+
+    private static string ConversationJson(string conversationId, string quoteId, string stageDirectionId) =>
+        $$"""
+        {
+          "quotes": [{"id":"{{quoteId}}","quote":"A quote.","source":"A Source"}],
+          "stageDirections": [{"id":"{{stageDirectionId}}","text":"[A stage direction]"}],
+          "conversations": [{
+            "id":"{{conversationId}}",
+            "lines":[
+              {"order":1,"type":"stage_direction","stageDirectionId":"{{stageDirectionId}}"},
+              {"order":2,"type":"quote","quoteId":"{{quoteId}}"}
+            ]
+          }]
+        }
+        """;
+
+    [TestMethod]
+    public async Task ImportAsync_ExtendedFormatFile_StagesAndAppliesConversationAndStageDirection()
+    {
+        var service = CreateService();
+        const string conversationId   = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+        const string quoteId          = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+        const string stageDirectionId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+
+        var result = await service.ImportAsync(
+            JsonStream(ConversationJson(conversationId, quoteId, stageDirectionId)), "conversation.json", null, preview: false);
+
+        Assert.AreEqual(0, result.Summary.Errors);
+        Assert.AreEqual(1, await CountAsync("Conversations"));
+        Assert.AreEqual(1, await CountAsync("StageDirections"));
+        Assert.AreEqual(2, await CountAsync("ConversationLines"));
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var actionTypes = (await conn.QueryAsync<string>(
+            "SELECT DISTINCT EntityType FROM System_ImportActions WHERE EntityType IN ('Conversation', 'StageDirection');")).ToList();
+        CollectionAssert.AreEquivalent(new[] { "Conversation", "StageDirection" }, actionTypes);
+    }
+
+    [TestMethod]
+    public async Task ImportAsync_SameExtendedFormatFileImportedTwice_DoesNotDuplicateConversationOrStageDirection()
+    {
+        var service = CreateService();
+        const string conversationId   = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+        const string quoteId          = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+        const string stageDirectionId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+        var json = ConversationJson(conversationId, quoteId, stageDirectionId);
+
+        await service.ImportAsync(JsonStream(json), "first.json", null, preview: false);
+        // NewestWins (this fixture's default policy) re-applies the Quote as a Modify — harmless
+        // here — but Conversation/StageDirection are Add-only and id-keyed, so re-staging the same
+        // ids a second time must detect they already exist and skip, not violate a PK/UNIQUE constraint.
+        await service.ImportAsync(JsonStream(json), "second.json", null, preview: false);
+
+        Assert.AreEqual(1, await CountAsync("Conversations"));
+        Assert.AreEqual(1, await CountAsync("StageDirections"));
+        Assert.AreEqual(2, await CountAsync("ConversationLines"), "Re-importing must not double the line count either");
     }
 
     [TestMethod]

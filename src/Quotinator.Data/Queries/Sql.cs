@@ -304,6 +304,121 @@ internal static class Sql
             "VALUES (@Id, @Title, @Type, @Date, @ImportBatchId, @DateCreated, NULL, NULL, 0, 0, '[]');";
     }
 
+    /// <summary>
+    /// Conversations table (#67/#68). Unlike Source/Character/Person, a Conversation's id is
+    /// explicit in the source file (like Quote), not <c>EntityIdentity</c>-derived from a natural
+    /// key — so existence is checked by id, and there is no <c>CountActiveReferences</c> (nothing
+    /// else carries an FK to a Conversation; its own <c>ConversationLines</c> point away from it,
+    /// not toward it, same as QuoteGenres/QuoteTranslations point away from Quote).
+    /// </summary>
+    internal static class Conversations
+    {
+        internal const string DeleteAll = "DELETE FROM Conversations;";
+        internal const string SelectIdById = "SELECT Id FROM Conversations WHERE Id = @id AND IsDeleted = 0;";
+
+        /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
+        internal const string InsertIfNotExists =
+            "INSERT OR IGNORE INTO Conversations (Id, Description, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
+            "VALUES (@Id, @Description, @ImportBatchId, @DateCreated, NULL, NULL, 0);";
+    }
+
+    /// <summary>
+    /// ConversationLines table (#67/#68) — detail rows of a Conversation, the same relationship
+    /// QuoteGenres/QuoteTranslations have to Quote. Never staged as its own <c>SystemImportAction</c>;
+    /// written alongside its parent Conversation's own apply step.
+    /// </summary>
+    internal static class ConversationLines
+    {
+        internal const string DeleteAll = "DELETE FROM ConversationLines;";
+
+        /// <summary>
+        /// Clears a Conversation's own lines before its stale row is hard-deleted — same pattern as
+        /// <see cref="QuoteGenres.DeleteForQuote"/>/<see cref="QuoteTranslations.DeleteForQuote"/>
+        /// clearing a Quote's detail rows first: the FK to ConversationLines would otherwise block
+        /// the hard-delete (#59's stale-Add-target scenario).
+        /// </summary>
+        internal const string DeleteForConversation = "DELETE FROM ConversationLines WHERE ConversationId = @id;";
+
+        /// <summary>Clears any lines still pointing at a stale StageDirection before its hard-delete — same rationale as <see cref="DeleteForConversation"/>.</summary>
+        internal const string DeleteForStageDirection = "DELETE FROM ConversationLines WHERE StageDirectionId = @id;";
+
+        /// <summary>Clears any lines still pointing at a stale SoundCue before its hard-delete — same rationale as <see cref="DeleteForConversation"/>.</summary>
+        internal const string DeleteForSoundCue = "DELETE FROM ConversationLines WHERE SoundCueId = @id;";
+
+        internal const string Insert =
+            "INSERT OR IGNORE INTO ConversationLines " +
+            "(Id, ConversationId, [Order], LineType, QuoteId, StageDirectionId, SoundCueId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
+            "VALUES (@Id, @ConversationId, @Order, @LineType, @QuoteId, @StageDirectionId, @SoundCueId, @DateCreated, NULL, NULL, 0);";
+    }
+
+    /// <summary>StageDirections table (#67/#68). Explicit-id existence check, like <see cref="Conversations"/> — see its remark.</summary>
+    internal static class StageDirections
+    {
+        internal const string DeleteAll = "DELETE FROM StageDirections;";
+        internal const string SelectIdById = "SELECT Id FROM StageDirections WHERE Id = @id AND IsDeleted = 0;";
+
+        /// <summary>
+        /// Number of active ConversationLines still referencing this StageDirection — see
+        /// <see cref="Characters.CountActiveReferences"/>'s remark for the reversal use case.
+        /// Joins through Conversations rather than filtering <c>ConversationLines.IsDeleted</c>
+        /// directly — a ConversationLines row is never independently soft-deleted (it's a detail row
+        /// of its parent Conversation, same relationship QuoteGenres/QuoteTranslations have to
+        /// Quote), so its own IsDeleted flag never reflects whether its parent conversation is still
+        /// live; only the parent's IsDeleted does.
+        /// </summary>
+        internal const string CountActiveReferences =
+            "SELECT COUNT(*) FROM ConversationLines cl " +
+            "INNER JOIN Conversations c ON c.Id = cl.ConversationId " +
+            "WHERE cl.StageDirectionId = @id AND c.IsDeleted = 0;";
+
+        /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
+        internal const string InsertIfNotExists =
+            "INSERT OR IGNORE INTO StageDirections (Id, Text, ImageUrl, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
+            "VALUES (@Id, @Text, @ImageUrl, @ImportBatchId, @DateCreated, NULL, NULL, 0);";
+    }
+
+    /// <summary>StageDirectionTranslations table (#67/#68) — detail rows of a StageDirection, same relationship as <see cref="QuoteTranslations"/> to Quote.</summary>
+    internal static class StageDirectionTranslations
+    {
+        internal const string DeleteAll = "DELETE FROM StageDirectionTranslations;";
+        internal const string DeleteForStageDirection = "DELETE FROM StageDirectionTranslations WHERE StageDirectionId = @id;";
+
+        internal const string Insert =
+            "INSERT OR IGNORE INTO StageDirectionTranslations " +
+            "(Id, StageDirectionId, Language, Text, DateCreated, DateModified, DateDeleted, IsDeleted) " +
+            "VALUES (@Id, @StageDirectionId, @Language, @Text, @DateCreated, NULL, NULL, 0);";
+    }
+
+    /// <summary>SoundCues table (#67/#68). Explicit-id existence check, like <see cref="Conversations"/> — see its remark.</summary>
+    internal static class SoundCues
+    {
+        internal const string DeleteAll = "DELETE FROM SoundCues;";
+        internal const string SelectIdById = "SELECT Id FROM SoundCues WHERE Id = @id AND IsDeleted = 0;";
+
+        /// <summary>Number of active ConversationLines still referencing this SoundCue — see <see cref="StageDirections.CountActiveReferences"/>'s remark for why this joins through Conversations.</summary>
+        internal const string CountActiveReferences =
+            "SELECT COUNT(*) FROM ConversationLines cl " +
+            "INNER JOIN Conversations c ON c.Id = cl.ConversationId " +
+            "WHERE cl.SoundCueId = @id AND c.IsDeleted = 0;";
+
+        /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
+        internal const string InsertIfNotExists =
+            "INSERT OR IGNORE INTO SoundCues (Id, Text, SoundFileUrl, ImageUrl, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
+            "VALUES (@Id, @Text, @SoundFileUrl, @ImageUrl, @ImportBatchId, @DateCreated, NULL, NULL, 0);";
+    }
+
+    /// <summary>SoundCueTranslations table (#67/#68) — detail rows of a SoundCue, same relationship as <see cref="QuoteTranslations"/> to Quote.</summary>
+    internal static class SoundCueTranslations
+    {
+        internal const string DeleteAll = "DELETE FROM SoundCueTranslations;";
+        internal const string DeleteForSoundCue = "DELETE FROM SoundCueTranslations WHERE SoundCueId = @id;";
+
+        internal const string Insert =
+            "INSERT OR IGNORE INTO SoundCueTranslations " +
+            "(Id, SoundCueId, Language, Text, DateCreated, DateModified, DateDeleted, IsDeleted) " +
+            "VALUES (@Id, @SoundCueId, @Language, @Text, @DateCreated, NULL, NULL, 0);";
+    }
+
     /// <summary>ImportBatches table.</summary>
     internal static class ImportBatches
     {
@@ -416,8 +531,17 @@ internal static class Sql
         /// typed as <c>Guid</c>, which .NET serializes lowercase by default, while stored <c>BatchId</c>
         /// values are always uppercase (<c>Guid.ToString("D").ToUpperInvariant()</c>) — a caller
         /// round-tripping the batch id straight from such a response must still match.
+        /// <c>ORDER BY rowid</c> makes the result deterministic and matches insertion order — the
+        /// same reasoning as <see cref="ImportBatches.SelectAll"/>'s <c>ROWID DESC</c> tie-break, and
+        /// load-bearing for #68: a consumer's <c>applyResolvedAction</c> callback (called once per
+        /// action, in whatever order this query returns) may need one action's row to already exist
+        /// when a later action in the same batch defensively references it — e.g. a Conversation
+        /// applying after the Quote/StageDirection/SoundCue rows its lines point to. Relying on
+        /// insertion order here is only safe because <c>WriteManyAsync</c>
+        /// (<see cref="Repositories.SystemImportActionWriter"/>) inserts sequentially, in the exact
+        /// order a consumer's planner produced — never reordered, never bulk/set-based.
         /// </summary>
-        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportActions WHERE UPPER(BatchId) = UPPER(@batchId);";
+        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportActions WHERE UPPER(BatchId) = UPPER(@batchId) ORDER BY rowid ASC;";
 
         /// <summary>Stages a per-field decision (#154) — Status→Decided, MergedFields holds the decision payload. Idempotent: resubmitting overwrites the prior decision.</summary>
         internal const string MarkDecided =
