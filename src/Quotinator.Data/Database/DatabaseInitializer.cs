@@ -80,26 +80,28 @@ public class DatabaseInitializer : IDatabaseInitializer
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
 
         CREATE TABLE IF NOT EXISTS System_ImportActions (
-            Id              TEXT    NOT NULL PRIMARY KEY,
-            BatchId         TEXT    NOT NULL,
-            ActionType      TEXT    NOT NULL
-                            CHECK (ActionType IN ('Add', 'Modify')),
-            EntityType      TEXT    NOT NULL,
-            EntityId        TEXT    NOT NULL,
-            ExistingBatchId TEXT,
-            ExistingValue   TEXT,
-            IncomingValue   TEXT    NOT NULL,
-            AppliedPolicy   TEXT,
-            Status          TEXT    NOT NULL
-                            CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded')),
-            MergedFields    TEXT,
-            DetectedAt      TEXT    NOT NULL,
-            AppliedAt       TEXT,
-            DiscardedAt     TEXT,
-            DateCreated     TEXT    NOT NULL,
-            DateModified    TEXT,
-            DateDeleted     TEXT,
-            IsDeleted       INTEGER NOT NULL DEFAULT 0
+            Id                 TEXT    NOT NULL PRIMARY KEY,
+            BatchId            TEXT    NOT NULL,
+            ActionType         TEXT    NOT NULL
+                               CHECK (ActionType IN ('Add', 'Modify')),
+            EntityType         TEXT    NOT NULL,
+            EntityId           TEXT    NOT NULL,
+            ExistingBatchId    TEXT,
+            ExistingValue      TEXT,
+            IncomingValue      TEXT    NOT NULL,
+            AppliedPolicy      TEXT,
+            Status             TEXT    NOT NULL
+                               CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked')),
+            MergedFields       TEXT,
+            MarkCompletenessAs TEXT
+                               CHECK (MarkCompletenessAs IS NULL OR MarkCompletenessAs IN ('Incomplete', 'NeedsReview', 'Complete')),
+            DetectedAt         TEXT    NOT NULL,
+            AppliedAt          TEXT,
+            DiscardedAt        TEXT,
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_BatchId ON System_ImportActions (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_Status ON System_ImportActions (Status);

@@ -1,4 +1,5 @@
 using System.Data;
+using Quotinator.Data.Entities;
 
 namespace Quotinator.Data.Repositories;
 
@@ -27,8 +28,10 @@ public interface ISystemImportActionWriter
     /// <c>Pending</c> to <c>Decided</c> and stores <paramref name="decisionsJson"/> in
     /// <c>MergedFields</c>. Nothing is written to any domain table. Idempotent — calling again for the
     /// same action overwrites the prior decision (the "change your mind before apply" path).
+    /// <paramref name="markCompletenessAs"/> (#165) is always written, including <c>null</c> —
+    /// resubmitting a decide call without the override clears a previously-set one.
     /// </summary>
-    Task MarkDecidedAsync(Guid id, string decisionsJson, IDbConnection connection, IDbTransaction? transaction = null);
+    Task MarkDecidedAsync(Guid id, string decisionsJson, CompletenessStatus? markCompletenessAs, IDbConnection connection, IDbTransaction? transaction = null);
 
     /// <summary>
     /// Reverts a staged decision back to <c>Pending</c> and clears the stored decision

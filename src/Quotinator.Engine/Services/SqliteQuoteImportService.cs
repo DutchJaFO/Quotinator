@@ -78,7 +78,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             conn.Open();
             using var tx = conn.BeginTransaction();
             actions = await ImportActionPlanner.PlanAsync(conn, valid, batch.Id, effectivePolicy, tx,
-                parsed.StageDirections, parsed.SoundCues, parsed.Conversations);
+                parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations);
             await _actionCoordinator.StageAsync(actions, conn, tx);
             tx.Commit();
         }

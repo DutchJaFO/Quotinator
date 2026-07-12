@@ -25,12 +25,21 @@ internal static class Sql
 
         internal const string Insert =
             "INSERT OR IGNORE INTO Quotes " +
-            "(Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, IsComplete, NoValueKnown) " +
-            "VALUES (@Id, @QuoteText, @OriginalLanguage, @SourceId, @CharacterId, @PersonId, @ImportBatchId, @DateCreated, NULL, NULL, 0, 0, '[]');";
+            "(Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @QuoteText, @OriginalLanguage, @SourceId, @CharacterId, @PersonId, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
 
-        // Deliberately excludes IsComplete/NoValueKnown from the SET list (per #55) — an existing row
-        // being rewritten by newest-wins must never reset a human's completed review or confirmed
-        // "no value known" markers. Only a genuinely new row (see Insert above) gets the false/[] defaults.
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state; also used to read a fresh Add's just-inserted defaults.</summary>
+        internal const string SelectCompletenessById =
+            "SELECT CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id;";
+
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        internal const string UpdateCompletenessById =
+            "UPDATE Quotes SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+
+        // Deliberately excludes CompletenessStatus/NoValueKnown from the SET list (per #55/#165) — an
+        // existing row being rewritten by newest-wins must never reset a human's completed review or
+        // confirmed "no value known" markers. Only a genuinely new row (see Insert above) gets the
+        // Incomplete/[] defaults.
         internal const string UpdateOnNewestWins =
             "UPDATE Quotes SET QuoteText=@text, OriginalLanguage=@lang, SourceId=@sid, " +
             "CharacterId=@cid, PersonId=@pid, ImportBatchId=@batchId, DateModified=@mod WHERE Id=@id;";
@@ -201,8 +210,8 @@ internal static class Sql
         // planning-time lookup) idempotently — OR IGNORE lets two concurrently-applied batches that
         // both staged an Add for the same not-yet-existing Character land safely.
         internal const string InsertIfNotExists =
-            "INSERT OR IGNORE INTO Characters (Id, SourceId, Name, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, IsComplete, NoValueKnown) " +
-            "VALUES (@Id, @SourceId, @Name, @ImportBatchId, @DateCreated, NULL, NULL, 0, 0, '[]');";
+            "INSERT OR IGNORE INTO Characters (Id, SourceId, Name, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @SourceId, @Name, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
     }
 
     /// <summary>People table.</summary>
@@ -218,8 +227,8 @@ internal static class Sql
 
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
         internal const string InsertIfNotExists =
-            "INSERT OR IGNORE INTO People (Id, Name, DateOfBirth, DateOfDeath, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, IsComplete, NoValueKnown) " +
-            "VALUES (@Id, @Name, NULL, NULL, @ImportBatchId, @DateCreated, NULL, NULL, 0, 0, '[]');";
+            "INSERT OR IGNORE INTO People (Id, Name, DateOfBirth, DateOfDeath, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @Name, NULL, NULL, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
     }
 
     /// <summary>Sources table.</summary>
@@ -229,6 +238,22 @@ internal static class Sql
         internal const string DeleteAll   = "DELETE FROM Sources;";
         internal const string SelectIdByTitleAndType =
             "SELECT Id FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
+
+        /// <summary>#162's id-first lookup for an explicit <c>sources[]</c> entry — a row already migrated to the explicit-id model. Distinct from <see cref="SelectIdByTitleAndType"/>'s natural-key fallback.</summary>
+        internal const string SelectExistingById =
+            "SELECT Title, Type, Date, CompletenessStatus FROM Sources WHERE Id = @id AND IsDeleted = 0;";
+
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        internal const string SelectCompletenessById =
+            "SELECT CompletenessStatus, NoValueKnown FROM Sources WHERE Id = @id;";
+
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        internal const string UpdateCompletenessById =
+            "UPDATE Sources SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+
+        /// <summary>#162's Modify apply — writes an id-matched Source's corrected Title/Type/Date. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that.</summary>
+        internal const string UpdateFieldsById =
+            "UPDATE Sources SET Title = @title, Type = @type, Date = @date, DateModified = @dateModified WHERE Id = @id;";
 
         /// <summary>
         /// Number of active (non-deleted) rows still referencing this Source — sums both direct
@@ -241,8 +266,8 @@ internal static class Sql
 
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
         internal const string InsertIfNotExists =
-            "INSERT OR IGNORE INTO Sources (Id, Title, Type, Date, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, IsComplete, NoValueKnown) " +
-            "VALUES (@Id, @Title, @Type, @Date, @ImportBatchId, @DateCreated, NULL, NULL, 0, 0, '[]');";
+            "INSERT OR IGNORE INTO Sources (Id, Title, Type, Date, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @Title, @Type, @Date, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
     }
 
     /// <summary>

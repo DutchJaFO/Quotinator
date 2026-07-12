@@ -88,17 +88,19 @@ public class SourceQuoteFileReaderTests
 
         Assert.IsTrue(result);
         Assert.AreEqual(1, parsed!.Quotes.Count);
+        Assert.AreEqual(0, parsed.Sources.Count);
         Assert.AreEqual(0, parsed.StageDirections.Count);
         Assert.AreEqual(0, parsed.SoundCues.Count);
         Assert.AreEqual(0, parsed.Conversations.Count);
     }
 
     [TestMethod]
-    public void TryParseExtended_FullObject_ParsesAllFourSections()
+    public void TryParseExtended_FullObject_ParsesAllFiveSections()
     {
         var json = """
             {
               "quotes": [{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello","source":"World"}],
+              "sources": [{"id":"55555555-5555-5555-5555-555555555555","title":"World","type":"movie","date":"1994"}],
               "stageDirections": [{"id":"22222222-2222-2222-2222-222222222222","text":"[EXT. AIRPORT - DAY]"}],
               "soundCues": [{"id":"33333333-3333-3333-3333-333333333333","text":"[rimshot]"}],
               "conversations": [{
@@ -116,6 +118,10 @@ public class SourceQuoteFileReaderTests
 
         Assert.IsTrue(result);
         Assert.AreEqual(1, parsed!.Quotes.Count);
+        Assert.AreEqual(1, parsed.Sources.Count);
+        Assert.AreEqual("World", parsed.Sources[0].Title);
+        Assert.AreEqual(QuoteType.Movie, parsed.Sources[0].Type);
+        Assert.AreEqual("1994", parsed.Sources[0].Date);
         Assert.AreEqual(1, parsed.StageDirections.Count);
         Assert.AreEqual("[EXT. AIRPORT - DAY]", parsed.StageDirections[0].Text);
         Assert.AreEqual(1, parsed.SoundCues.Count);
@@ -140,7 +146,8 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(0, parsed!.StageDirections.Count);
+        Assert.AreEqual(0, parsed!.Sources.Count);
+        Assert.AreEqual(0, parsed.StageDirections.Count);
         Assert.AreEqual(0, parsed.SoundCues.Count);
         Assert.AreEqual(0, parsed.Conversations.Count);
     }

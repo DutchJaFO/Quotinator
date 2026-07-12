@@ -216,20 +216,27 @@ public static class QuotinatorMigrations
         ALTER TABLE ImportBatches ADD COLUMN ConflictPolicy TEXT NOT NULL DEFAULT 'skip';
         """;
 
-    // Adds IsComplete (human-set "reviewed and satisfied" flag) and NoValueKnown (JSON array of
-    // field names confirmed to have no findable value) to all four entity tables, per #55. Both
-    // columns default false/'[]' for pre-existing rows on upgrade — correct, since no row predating
-    // this migration has ever been reviewed. #64's UPDATE paths (Sql.Quotes.UpdateOnNewestWins and
-    // the GetOrCreate* "found existing" paths) deliberately never reference these columns, so an
-    // existing row's values survive every reseed/reimport untouched.
+    // Adds CompletenessStatus (3-state: Incomplete/NeedsReview/Complete — #165) and NoValueKnown
+    // (JSON array of field names confirmed to have no findable value) to all four entity tables,
+    // per #55/#165. Originally a plain IsComplete BIT (#55); revised to the 3-state enum before ever
+    // shipping (#165, verified against release tags — safe to edit in place, nothing to migrate
+    // forward from). Both columns default 'Incomplete'/'[]' for pre-existing rows on upgrade —
+    // correct, since no row predating this migration has ever been reviewed. #64's UPDATE paths
+    // (Sql.Quotes.UpdateOnNewestWins and the GetOrCreate* "found existing" paths) deliberately never
+    // reference these columns, so an existing row's values survive every reseed/reimport untouched.
+    // CompletenessStatus is enum-backed, so it gets a CHECK constraint per ADR 008.
     private const string Migration006_RecordCompleteness = """
-        ALTER TABLE Quotes     ADD COLUMN IsComplete BIT NOT NULL DEFAULT 0;
+        ALTER TABLE Quotes     ADD COLUMN CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+            CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete'));
         ALTER TABLE Quotes     ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
-        ALTER TABLE Sources    ADD COLUMN IsComplete BIT NOT NULL DEFAULT 0;
+        ALTER TABLE Sources    ADD COLUMN CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+            CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete'));
         ALTER TABLE Sources    ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
-        ALTER TABLE Characters ADD COLUMN IsComplete BIT NOT NULL DEFAULT 0;
+        ALTER TABLE Characters ADD COLUMN CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+            CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete'));
         ALTER TABLE Characters ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
-        ALTER TABLE People     ADD COLUMN IsComplete BIT NOT NULL DEFAULT 0;
+        ALTER TABLE People     ADD COLUMN CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+            CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete'));
         ALTER TABLE People     ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
         """;
 
@@ -258,26 +265,40 @@ public static class QuotinatorMigrations
     // table) and the two translation tables, which use a synthetic Id + UNIQUE(EntityId, Language)
     // rather than a composite primary key — matching QuoteTranslations/SourceTranslations/
     // CharacterTranslations, not a new shape.
+    //
+    // Conversations/StageDirections/SoundCues also gain CompletenessStatus/NoValueKnown inline here
+    // (#165) — unlike Quotes/Sources/Characters/People (which already existed by migration006 and
+    // needed a later ALTER), these three tables are created fresh in this very migration, so the
+    // columns are added directly rather than via a follow-up ALTER. ConversationLines and the two
+    // translation tables are child/junction rows, not their own reviewable content entities, so they
+    // don't get the columns — matching Source/Character/Person's own "entity, not its translation
+    // row" scope from #55.
     private const string Migration008_Conversations = """
         CREATE TABLE IF NOT EXISTS Conversations (
-            Id            TEXT    PRIMARY KEY,
-            Description   TEXT,
-            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
-            DateCreated   TEXT    NOT NULL,
-            DateModified  TEXT,
-            DateDeleted   TEXT,
-            IsDeleted     INTEGER NOT NULL DEFAULT 0
+            Id                 TEXT    PRIMARY KEY,
+            Description        TEXT,
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS StageDirections (
-            Id            TEXT    PRIMARY KEY,
-            Text          TEXT    NOT NULL,
-            ImageUrl      TEXT,
-            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
-            DateCreated   TEXT    NOT NULL,
-            DateModified  TEXT,
-            DateDeleted   TEXT,
-            IsDeleted     INTEGER NOT NULL DEFAULT 0
+            Id                 TEXT    PRIMARY KEY,
+            Text               TEXT    NOT NULL,
+            ImageUrl           TEXT,
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS StageDirectionTranslations (
@@ -293,15 +314,18 @@ public static class QuotinatorMigrations
         );
 
         CREATE TABLE IF NOT EXISTS SoundCues (
-            Id            TEXT    PRIMARY KEY,
-            Text          TEXT    NOT NULL,
-            SoundFileUrl  TEXT,
-            ImageUrl      TEXT,
-            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
-            DateCreated   TEXT    NOT NULL,
-            DateModified  TEXT,
-            DateDeleted   TEXT,
-            IsDeleted     INTEGER NOT NULL DEFAULT 0
+            Id                 TEXT    PRIMARY KEY,
+            Text               TEXT    NOT NULL,
+            SoundFileUrl       TEXT,
+            ImageUrl           TEXT,
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS SoundCueTranslations (
@@ -350,12 +374,16 @@ public static class QuotinatorMigrations
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
     // ImportBatches using the final widened CHECK constraint (migration004), ImportBatches.
     // ConflictPolicy (migration005's ALTER TABLE ADD COLUMN, also always appends, so it's listed
-    // last too) present with the same 'skip' default backfill value, IsComplete/NoValueKnown
-    // (migration006's ALTER TABLE ADD COLUMN, appended last again) on the four entity tables, and
+    // last too) present with the same 'skip' default backfill value, CompletenessStatus/NoValueKnown
+    // (migration006's ALTER TABLE ADD COLUMN, appended last again, revised from a plain IsComplete
+    // BIT to the 3-state enum by #165 before ever shipping) on the four entity tables, and
     // ImportBatches.Status/AppliedAt (migration007's ALTER TABLE ADD COLUMN, appended last) with the
     // same 'Applied' default backfill value, and migration008's Conversations/ConversationLines/
     // StageDirections/StageDirectionTranslations/SoundCues/SoundCueTranslations tables verbatim
-    // (all created via CREATE TABLE, so no column-ordering caveat applies to them).
+    // (all created via CREATE TABLE, so no column-ordering caveat applies to them) — Conversations/
+    // StageDirections/SoundCues also carry CompletenessStatus/NoValueKnown inline (#165), added
+    // directly to migration008 rather than via a later ALTER since these three tables didn't exist
+    // before it.
     // Deliberately omits migration002's DELETE FROM QuoteGenres (data-repair for pre-existing bad
     // data — nothing to repair on a fresh database) and migration003's pre-seed INSERTs (WHERE
     // EXISTS-guarded, always a no-op before any quote has been seeded). Kept in sync with
@@ -390,7 +418,8 @@ public static class QuotinatorMigrations
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
             ImportBatchId TEXT   REFERENCES ImportBatches(Id),
-            IsComplete   BIT     NOT NULL DEFAULT 0,
+            CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+                         CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]',
             UNIQUE (Title, Type)
         );
@@ -416,7 +445,8 @@ public static class QuotinatorMigrations
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
             ImportBatchId TEXT   REFERENCES ImportBatches(Id),
-            IsComplete   BIT     NOT NULL DEFAULT 0,
+            CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+                         CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]',
             UNIQUE (SourceId, Name)
         );
@@ -443,7 +473,8 @@ public static class QuotinatorMigrations
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
             ImportBatchId TEXT   REFERENCES ImportBatches(Id),
-            IsComplete   BIT     NOT NULL DEFAULT 0,
+            CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+                         CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]'
         );
 
@@ -459,7 +490,8 @@ public static class QuotinatorMigrations
             DateDeleted      TEXT,
             IsDeleted        INTEGER NOT NULL DEFAULT 0,
             ImportBatchId    TEXT    REFERENCES ImportBatches(Id),
-            IsComplete       BIT     NOT NULL DEFAULT 0,
+            CompletenessStatus TEXT  NOT NULL DEFAULT 'Incomplete'
+                             CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown     TEXT    NOT NULL DEFAULT '[]'
         );
 
@@ -490,24 +522,30 @@ public static class QuotinatorMigrations
         );
 
         CREATE TABLE IF NOT EXISTS Conversations (
-            Id            TEXT    PRIMARY KEY,
-            Description   TEXT,
-            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
-            DateCreated   TEXT    NOT NULL,
-            DateModified  TEXT,
-            DateDeleted   TEXT,
-            IsDeleted     INTEGER NOT NULL DEFAULT 0
+            Id                 TEXT    PRIMARY KEY,
+            Description        TEXT,
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS StageDirections (
-            Id            TEXT    PRIMARY KEY,
-            Text          TEXT    NOT NULL,
-            ImageUrl      TEXT,
-            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
-            DateCreated   TEXT    NOT NULL,
-            DateModified  TEXT,
-            DateDeleted   TEXT,
-            IsDeleted     INTEGER NOT NULL DEFAULT 0
+            Id                 TEXT    PRIMARY KEY,
+            Text               TEXT    NOT NULL,
+            ImageUrl           TEXT,
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS StageDirectionTranslations (
@@ -523,15 +561,18 @@ public static class QuotinatorMigrations
         );
 
         CREATE TABLE IF NOT EXISTS SoundCues (
-            Id            TEXT    PRIMARY KEY,
-            Text          TEXT    NOT NULL,
-            SoundFileUrl  TEXT,
-            ImageUrl      TEXT,
-            ImportBatchId TEXT    REFERENCES ImportBatches(Id),
-            DateCreated   TEXT    NOT NULL,
-            DateModified  TEXT,
-            DateDeleted   TEXT,
-            IsDeleted     INTEGER NOT NULL DEFAULT 0
+            Id                 TEXT    PRIMARY KEY,
+            Text               TEXT    NOT NULL,
+            SoundFileUrl       TEXT,
+            ImageUrl           TEXT,
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS SoundCueTranslations (

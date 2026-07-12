@@ -26,26 +26,28 @@ public class SystemImportActionWriterReaderTests
         conn.Open();
         conn.Execute("""
             CREATE TABLE System_ImportActions (
-                Id              TEXT    NOT NULL PRIMARY KEY,
-                BatchId         TEXT    NOT NULL,
-                ActionType      TEXT    NOT NULL
-                                CHECK (ActionType IN ('Add', 'Modify')),
-                EntityType      TEXT    NOT NULL,
-                EntityId        TEXT    NOT NULL,
-                ExistingBatchId TEXT,
-                ExistingValue   TEXT,
-                IncomingValue   TEXT    NOT NULL,
-                AppliedPolicy   TEXT,
-                Status          TEXT    NOT NULL
-                                CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded')),
-                MergedFields    TEXT,
-                DetectedAt      TEXT    NOT NULL,
-                AppliedAt       TEXT,
-                DiscardedAt     TEXT,
-                DateCreated     TEXT    NOT NULL,
-                DateModified    TEXT,
-                DateDeleted     TEXT,
-                IsDeleted       INTEGER NOT NULL DEFAULT 0
+                Id                 TEXT    NOT NULL PRIMARY KEY,
+                BatchId            TEXT    NOT NULL,
+                ActionType         TEXT    NOT NULL
+                                   CHECK (ActionType IN ('Add', 'Modify')),
+                EntityType         TEXT    NOT NULL,
+                EntityId           TEXT    NOT NULL,
+                ExistingBatchId    TEXT,
+                ExistingValue      TEXT,
+                IncomingValue      TEXT    NOT NULL,
+                AppliedPolicy      TEXT,
+                Status             TEXT    NOT NULL
+                                   CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked')),
+                MergedFields       TEXT,
+                MarkCompletenessAs TEXT
+                                   CHECK (MarkCompletenessAs IS NULL OR MarkCompletenessAs IN ('Incomplete', 'NeedsReview', 'Complete')),
+                DetectedAt         TEXT    NOT NULL,
+                AppliedAt          TEXT,
+                DiscardedAt        TEXT,
+                DateCreated        TEXT    NOT NULL,
+                DateModified       TEXT,
+                DateDeleted        TEXT,
+                IsDeleted          INTEGER NOT NULL DEFAULT 0
             );
             """);
 
@@ -154,7 +156,7 @@ public class SystemImportActionWriterReaderTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        await _writer.MarkDecidedAsync(entry.Id, """{"date":{"choice":"Replace"}}""", conn);
+        await _writer.MarkDecidedAsync(entry.Id, """{"date":{"choice":"Replace"}}""", null, conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -169,8 +171,8 @@ public class SystemImportActionWriterReaderTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        await _writer.MarkDecidedAsync(entry.Id, "\"first\"", conn);
-        await _writer.MarkDecidedAsync(entry.Id, "\"second\"", conn);
+        await _writer.MarkDecidedAsync(entry.Id, "\"first\"", null, conn);
+        await _writer.MarkDecidedAsync(entry.Id, "\"second\"", null, conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -185,7 +187,7 @@ public class SystemImportActionWriterReaderTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        await _writer.MarkDecidedAsync(entry.Id, "\"decision\"", conn);
+        await _writer.MarkDecidedAsync(entry.Id, "\"decision\"", null, conn);
         await _writer.ClearDecisionAsync(entry.Id, conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);

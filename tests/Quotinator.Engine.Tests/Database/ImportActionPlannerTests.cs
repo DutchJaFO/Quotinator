@@ -228,4 +228,112 @@ public class ImportActionPlannerTests
             "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, DateCreated) VALUES (@Id, 'Original text', 'en', @SourceId, @now)",
             new { Id = id, SourceId = sourceId, now });
     }
+
+    // ── #162: PlanSourcesAsync ────────────────────────────────────────────────
+
+    private static SourceEntry BuildSourceEntry(string id, string title = "Casablanca", Core.Models.QuoteType type = Core.Models.QuoteType.Movie, string? date = "1942") => new()
+    {
+        Id    = id,
+        Title = title,
+        Type  = type,
+        Date  = date,
+    };
+
+    private static async Task SeedExplicitSourceAsync(SqliteConnection conn, string id, string title = "Casablanca", string type = "Movie", string? date = "1942", string completenessStatus = "Incomplete")
+    {
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Sources (Id, Title, Type, Date, CompletenessStatus, DateCreated) VALUES (@Id, @Title, @Type, @Date, @CompletenessStatus, @now)",
+            new { Id = id, Title = title, Type = type, Date = date, CompletenessStatus = completenessStatus, now });
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_IdMatchFound_TitleDiffers_StagesModifyAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "c1111111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(id, title: "Casablanca (1942)")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
+        Assert.IsNotNull(sourceAction.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_IdMatchFound_NothingChanged_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "c2111111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", type: "Movie", date: "1942");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(id, title: "Casablanca", type: Core.Models.QuoteType.Movie, date: "1942")]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Nothing differs — silent reuse, no action staged");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoIdMatch_FallsBackToNaturalKey_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        // A pre-existing row found only by natural key (Title+Type) — never declared an explicit id before.
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
+            new { Id = Guid.NewGuid(), now });
+
+        var newFileId = "c3111111-1111-4111-8111-111111111111";
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(newFileId, title: "Casablanca", type: Core.Models.QuoteType.Movie)]);
+
+        Assert.AreEqual(0, actions.Count, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#162 scope boundary)");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoMatchAtAll_StagesAddWithFileId()
+    {
+        using var conn = await OpenConnectionAsync();
+        var newFileId = "c4111111-1111-4111-8111-111111111111";
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(newFileId, title: "A Brand New Film")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Add, sourceAction.ActionType.Parsed);
+        Assert.AreEqual(newFileId, sourceAction.EntityId, "Add uses the file's own declared id, not an EntityIdentity-derived stable id");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_CompleteStatus_StagesBlockedNotModify()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "c5111111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", completenessStatus: "Complete");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(id, title: "Casablanca (Corrected)")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Blocked, sourceAction.Status.Parsed, "A Complete row must never silently accept a Modify");
+        Assert.IsNull(sourceAction.MergedFields, "Nothing is resolved yet for a Blocked action");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_QuoteReferencesExplicitlyDeclaredSource_ResolvesToItsId()
+    {
+        using var conn = await OpenConnectionAsync();
+        var newFileId = "c6111111-1111-4111-8111-111111111111";
+        var quote = BuildQuote("c7111111-1111-4111-8111-111111111111", source: "A Brand New Film");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(newFileId, title: "A Brand New Film")]);
+
+        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Source"), "Only one Source Add — the quote must resolve to the same row the sources[] section staged, not a second one");
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        Assert.AreEqual(newFileId, payload.SourceId);
+    }
 }

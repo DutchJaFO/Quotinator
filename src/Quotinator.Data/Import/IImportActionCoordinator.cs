@@ -36,9 +36,13 @@ public interface IImportActionCoordinator
     /// <see cref="SystemImportAction.MergedFields"/>. Nothing is written to any domain table.
     /// Idempotent — calling again for the same action overwrites the prior decision.
     /// </summary>
+    /// <paramref name="markCompletenessAs"/> (#165) optionally sets the target record's completeness
+    /// status directly when this decision is later applied — recorded now, consumed by the caller's
+    /// own <c>applyResolvedAction</c> callback at apply time. Always overwrites any previously-set
+    /// value, including with <c>null</c>, on a repeated decide call for the same action.
     /// <exception cref="ImportActionNotFoundException"><paramref name="actionId"/> does not exist.</exception>
     /// <exception cref="ImportActionStateException">The action is already <see cref="ImportActionStatus.Applied"/> or <see cref="ImportActionStatus.Discarded"/>.</exception>
-    Task DecideAsync(Guid actionId, string decisionsJson, IDbConnection? connection = null, IDbTransaction? transaction = null);
+    Task DecideAsync(Guid actionId, string decisionsJson, CompletenessStatus? markCompletenessAs = null, IDbConnection? connection = null, IDbTransaction? transaction = null);
 
     /// <summary>
     /// Reverts a staged decision back to <see cref="ImportActionStatus.Pending"/> and clears the
@@ -50,13 +54,15 @@ public interface IImportActionCoordinator
 
     /// <summary>
     /// Attempts to apply every action sharing <paramref name="batchId"/>. If any are still
-    /// <see cref="ImportActionStatus.Pending"/> (no decision recorded), returns their ids and applies
-    /// nothing. Otherwise, in one transaction: for every <see cref="ImportActionStatus.Decided"/>
-    /// action, invokes <paramref name="applyResolvedAction"/> (the caller-supplied domain-specific
-    /// step), then marks the action <see cref="ImportActionStatus.Applied"/>. Commits once, for the
-    /// whole batch, only after every action's callback has completed without throwing.
+    /// <see cref="ImportActionStatus.Pending"/> or <see cref="ImportActionStatus.Blocked"/> (#165 —
+    /// no decision recorded, or held for completeness review), returns their ids and applies nothing
+    /// — a <c>Blocked</c> action holds the entire batch, not just itself. Otherwise, in one
+    /// transaction: for every <see cref="ImportActionStatus.Decided"/> action, invokes
+    /// <paramref name="applyResolvedAction"/> (the caller-supplied domain-specific step), then marks
+    /// the action <see cref="ImportActionStatus.Applied"/>. Commits once, for the whole batch, only
+    /// after every action's callback has completed without throwing.
     /// </summary>
-    /// <returns><c>null</c> if the whole batch was applied; otherwise the ids still <see cref="ImportActionStatus.Pending"/>.</returns>
+    /// <returns><c>null</c> if the whole batch was applied; otherwise the ids still <see cref="ImportActionStatus.Pending"/> or <see cref="ImportActionStatus.Blocked"/>.</returns>
     Task<IReadOnlyList<Guid>?> TryApplyBatchAsync(
         string batchId,
         Func<SystemImportAction, IDbConnection, IDbTransaction, Task> applyResolvedAction,

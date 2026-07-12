@@ -37,6 +37,7 @@ internal static class ImportActionPlanner
     internal static async Task<IReadOnlyList<SystemImportAction>> PlanAsync(
         SqliteConnection connection, IReadOnlyList<SourceQuote> quotes, Guid batchId,
         DuplicateResolutionPolicy policy, SqliteTransaction? transaction = null,
+        IReadOnlyList<SourceEntry>? sources = null,
         IReadOnlyList<SourceStageDirection>? stageDirections = null,
         IReadOnlyList<SourceSoundCue>? soundCues = null,
         IReadOnlyList<SourceConversation>? conversations = null)
@@ -49,6 +50,11 @@ internal static class ImportActionPlanner
 
         var batchIdStr = batchId.ToString("D").ToUpperInvariant();
         var now        = DateTime.UtcNow;
+
+        // #162: explicit Source declarations are planned before quotes resolve — a quote may
+        // reference a source this same file also declares explicitly, mirroring the existing
+        // conversations/stageDirections/soundCues ordering.
+        await PlanSourcesAsync(connection, sources ?? [], batchIdStr, policy, sourceIndex, actions, now, transaction);
 
         foreach (var q in quotes)
         {
@@ -237,6 +243,114 @@ internal static class ImportActionPlanner
         return stableId;
     }
 
+    /// <summary>Same key names as <see cref="Quotinator.Engine.Services.SqliteImportActionService"/>'s own private overload — must stay in sync, both feed the same decide-time <c>FieldMergeResolver</c> field-name vocabulary.</summary>
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
+        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date };
+
+    // ── #162: explicit Source planning ───────────────────────────────────────
+    // Unlike ResolveSourceAsync (natural-key match only, never compares Date/Title/Type once
+    // matched), a declared sources[] entry is matched by its own explicit id first — decoupling
+    // matching from content, so Title/Type/Date can all be freely corrected once a Source has
+    // adopted this model.
+
+    private static async Task PlanSourcesAsync(
+        SqliteConnection connection, IReadOnlyList<SourceEntry> sources, string batchId,
+        DuplicateResolutionPolicy policy, Dictionary<string, string> sourceIndex,
+        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        foreach (var s in sources)
+        {
+            var typeStr = s.Type.ToString();
+            var existing = await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                Sql.Sources.SelectExistingById, new { id = s.Id }, transaction);
+
+            if (existing is { } row)
+            {
+                var existingPayload = new SourceActionPayload(row.Title, row.Type, row.Date);
+                var incomingPayload = new SourceActionPayload(s.Title, typeStr, s.Date);
+                var existingFields  = ToFieldMap(existingPayload);
+                var incomingFields  = ToFieldMap(incomingPayload);
+
+                // The corrected Title/Type is what a same-batch quote referencing this Source should
+                // resolve to — indexed regardless of whether this ends up changed/blocked/unchanged.
+                sourceIndex[$"{s.Title}|{typeStr}"] = s.Id;
+
+                var changedFields = new HashSet<string>(
+                    existingFields.Where(kv => !Equals(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                if (CompletenessGuard.ShouldBlock(currentStatus, changedFields))
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.Source,
+                        EntityId      = s.Id,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                var resolved    = policy switch
+                {
+                    DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
+                        new SourceActionPayload((string)mergeResult!.MergedFields["title"]!, (string)mergeResult.MergedFields["type"]!, (string?)mergeResult.MergedFields["date"]),
+                    DuplicateResolutionPolicy.Skip => existingPayload,
+                    _ => incomingPayload,
+                };
+
+                var isPending = policy == DuplicateResolutionPolicy.Review;
+                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchId,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType    = ImportActionEntityTypes.Source,
+                    EntityId      = s.Id,
+                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
+
+            // Falls back to natural-key: a not-yet-migrated row (or a converter-driven file with no
+            // sources section at all) — Title/Type correction isn't available on it yet (see #162's
+            // scope boundary); nothing to stage here either way, since a quote referencing this same
+            // title/type will find it via ResolveSourceAsync's own natural-key lookup as today.
+            var matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
+                Sql.Sources.SelectIdByTitleAndType, new { title = s.Title, type = typeStr }, transaction);
+            if (matchesByKey is not null) continue;
+
+            // Indexed so a same-batch quote referencing this exact title/type resolves to this same
+            // new row, instead of ResolveSourceAsync independently deriving its own EntityIdentity
+            // stable id (which would differ from this file-declared id).
+            sourceIndex[$"{s.Title}|{typeStr}"] = s.Id;
+
+            actions.Add(new SystemImportAction
+            {
+                BatchId       = batchId,
+                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType    = ImportActionEntityTypes.Source,
+                EntityId      = s.Id,
+                IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(s.Title, typeStr, s.Date)),
+                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt    = now,
+            });
+        }
+    }
+
     // ── #68: StageDirection/SoundCue/Conversation planning ──────────────────
     // All three are Add-only and id-keyed (the file supplies an explicit id, like Quote — not a
     // natural-key-derived EntityIdentity stable id like Source/Character/Person), so planning is
@@ -336,8 +450,8 @@ internal sealed class QuoteActionPayload
     public string? PersonId { get; init; }
 }
 
-/// <summary>Staged payload for a Source Add <see cref="SystemImportAction"/>.</summary>
-internal sealed record SourceActionPayload(string Title, string Type);
+/// <summary>Staged payload for a Source Add/Modify <see cref="SystemImportAction"/> (#162 adds <see cref="Date"/>).</summary>
+internal sealed record SourceActionPayload(string Title, string Type, string? Date = null);
 
 /// <summary>
 /// Staged payload for a Character Add <see cref="SystemImportAction"/>. Carries the owning Source's

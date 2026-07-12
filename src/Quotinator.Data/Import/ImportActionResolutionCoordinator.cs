@@ -38,7 +38,7 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
     }
 
     /// <inheritdoc/>
-    public async Task DecideAsync(Guid actionId, string decisionsJson, IDbConnection? connection = null, IDbTransaction? transaction = null)
+    public async Task DecideAsync(Guid actionId, string decisionsJson, CompletenessStatus? markCompletenessAs = null, IDbConnection? connection = null, IDbTransaction? transaction = null)
     {
         var action = await _reader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
         if (action.Status.Parsed == ImportActionStatus.Applied || action.Status.Parsed == ImportActionStatus.Discarded)
@@ -46,13 +46,13 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
 
         if (connection is not null)
         {
-            await _writer.MarkDecidedAsync(actionId, decisionsJson, connection, transaction);
+            await _writer.MarkDecidedAsync(actionId, decisionsJson, markCompletenessAs, connection, transaction);
             return;
         }
 
         using var conn = _factory.CreateConnection();
         conn.Open();
-        await _writer.MarkDecidedAsync(actionId, decisionsJson, conn);
+        await _writer.MarkDecidedAsync(actionId, decisionsJson, markCompletenessAs, conn);
     }
 
     /// <inheritdoc/>
@@ -81,7 +81,13 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
     {
         var actions = await _reader.GetAllForBatchAsync(batchId);
 
-        var pending = actions.Where(a => a.Status.Parsed == ImportActionStatus.Pending).Select(a => a.Id).ToList();
+        // Blocked (#165) holds the whole batch exactly like Pending — a row a human has marked
+        // Complete must never be silently modified, and that protection must not be bypassable just
+        // because the rest of the batch happens to be ready.
+        var pending = actions
+            .Where(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked)
+            .Select(a => a.Id)
+            .ToList();
         if (pending.Count > 0)
             return pending;
 

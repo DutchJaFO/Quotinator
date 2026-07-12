@@ -16,30 +16,34 @@ public static class ImportActionMigrations
     /// maintained entirely by this project's own coordinator logic, not by any consuming project's
     /// schema — so per ADR 008 both carry a matching CHECK constraint from creation. This migration
     /// has never been applied to any real database (only ephemeral test databases), so the CHECK was
-    /// added directly here rather than via a separate follow-up migration.
+    /// added directly here rather than via a separate follow-up migration. Same reasoning applies to
+    /// <c>Blocked</c> (#165) and <c>MarkCompletenessAs</c> (#165) being added directly here rather
+    /// than via a follow-up migration.
     /// </summary>
     public const string CreateImportActionsTable = """
         CREATE TABLE IF NOT EXISTS System_ImportActions (
-            Id              TEXT    NOT NULL PRIMARY KEY,
-            BatchId         TEXT    NOT NULL,
-            ActionType      TEXT    NOT NULL
-                            CHECK (ActionType IN ('Add', 'Modify')),
-            EntityType      TEXT    NOT NULL,
-            EntityId        TEXT    NOT NULL,
-            ExistingBatchId TEXT,
-            ExistingValue   TEXT,
-            IncomingValue   TEXT    NOT NULL,
-            AppliedPolicy   TEXT,
-            Status          TEXT    NOT NULL
-                            CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded')),
-            MergedFields    TEXT,
-            DetectedAt      TEXT    NOT NULL,
-            AppliedAt       TEXT,
-            DiscardedAt     TEXT,
-            DateCreated     TEXT    NOT NULL,
-            DateModified    TEXT,
-            DateDeleted     TEXT,
-            IsDeleted       INTEGER NOT NULL DEFAULT 0
+            Id                 TEXT    NOT NULL PRIMARY KEY,
+            BatchId            TEXT    NOT NULL,
+            ActionType         TEXT    NOT NULL
+                               CHECK (ActionType IN ('Add', 'Modify')),
+            EntityType         TEXT    NOT NULL,
+            EntityId           TEXT    NOT NULL,
+            ExistingBatchId    TEXT,
+            ExistingValue      TEXT,
+            IncomingValue      TEXT    NOT NULL,
+            AppliedPolicy      TEXT,
+            Status             TEXT    NOT NULL
+                               CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked')),
+            MergedFields       TEXT,
+            MarkCompletenessAs TEXT
+                               CHECK (MarkCompletenessAs IS NULL OR MarkCompletenessAs IN ('Incomplete', 'NeedsReview', 'Complete')),
+            DetectedAt         TEXT    NOT NULL,
+            AppliedAt          TEXT,
+            DiscardedAt        TEXT,
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_BatchId ON System_ImportActions (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_Status ON System_ImportActions (Status);

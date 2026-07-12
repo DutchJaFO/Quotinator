@@ -194,20 +194,24 @@ public class QuoteImportServiceTests
         Assert.AreEqual("merge-theirs", result.Conflicts.Single().AppliedPolicy, "Response-facing wire value must be kebab-case, matching every other DuplicateResolutionPolicy JSON value in this API");
     }
 
-    // ── #55: IsComplete / NoValueKnown ──────────────────────────────────────
+    // ── #55/#165: CompletenessStatus / NoValueKnown ──────────────────────────
 
     [TestMethod]
-    public async Task ImportAsync_FreshDatabase_DefaultsIsCompleteFalseAndNoValueKnownEmpty()
+    public async Task ImportAsync_FreshDatabase_NoValueKnownEmptyAndCompletenessAlreadyNeedsReview()
     {
         var service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: false);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var (isComplete, noValueKnown) = await conn.QuerySingleAsync<(long IsComplete, string NoValueKnown)>(
-            "SELECT IsComplete, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+        var (completenessStatus, noValueKnown) = await conn.QuerySingleAsync<(string CompletenessStatus, string NoValueKnown)>(
+            "SELECT CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
 
-        Assert.AreEqual(0L, isComplete, "A brand-new row must default IsComplete to false");
+        // #165: nothing currently populates NoValueKnown with real per-field markers at creation, so
+        // it's always empty for a brand-new row — which CompletenessGuard.ComputeNextStatus correctly
+        // treats the same as "every field just got filled in," transitioning straight to NeedsReview
+        // rather than sitting as Incomplete forever with nothing to ever trigger a later transition.
+        Assert.AreEqual("NeedsReview", completenessStatus);
         Assert.AreEqual("[]", noValueKnown, "A brand-new row must default NoValueKnown to an empty JSON array");
     }
 
@@ -224,7 +228,7 @@ public class QuoteImportServiceTests
         {
             conn.Open();
             await conn.ExecuteAsync(
-                "UPDATE Quotes SET IsComplete = 1, NoValueKnown = '[\"date\"]' WHERE Id = @id",
+                "UPDATE Quotes SET CompletenessStatus = 'Complete', NoValueKnown = '[\"date\"]' WHERE Id = @id",
                 new { id = SharedId });
         }
 
@@ -235,10 +239,10 @@ public class QuoteImportServiceTests
 
         using var conn2 = new SqliteConnection($"Data Source={_dbPath}");
         conn2.Open();
-        var (isComplete, noValueKnown) = await conn2.QuerySingleAsync<(long IsComplete, string NoValueKnown)>(
-            "SELECT IsComplete, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+        var (completenessStatus, noValueKnown) = await conn2.QuerySingleAsync<(string CompletenessStatus, string NoValueKnown)>(
+            "SELECT CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
 
-        Assert.AreEqual(1L, isComplete, "A human's completed review must survive a re-import that rewrites the row");
+        Assert.AreEqual("Complete", completenessStatus, "A human's completed review must survive a re-import that rewrites the row");
         Assert.AreEqual("[\"date\"]", noValueKnown, "Confirmed no-value-known markers must survive a re-import that rewrites the row");
     }
 

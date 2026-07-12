@@ -61,6 +61,15 @@ public sealed class SystemImportAction : RecordBase
 
     /// <summary>UTC timestamp when the owning batch was discarded. Null unless discarded.</summary>
     public DateTime? DiscardedAt { get; init; }
+
+    /// <summary>
+    /// Optional explicit completeness-status override recorded at decide time. When set, applying
+    /// this action writes this value directly onto the target row's own <c>CompletenessStatus</c>
+    /// column, regardless of its current value. When null, the entity-specific applier falls back to
+    /// <see cref="Import.CompletenessGuard.ComputeNextStatus"/>. Entity-agnostic — same column
+    /// regardless of <see cref="EntityType"/>.
+    /// </summary>
+    public SafeValue<CompletenessStatus?> MarkCompletenessAs { get; init; } = SafeValue<CompletenessStatus?>.Empty;
 }
 
 /// <summary>
@@ -80,7 +89,15 @@ public enum ImportActionStatus
     Applied,
 
     /// <summary>The owning batch was discarded — this action was never written anywhere.</summary>
-    Discarded
+    Discarded,
+
+    /// <summary>
+    /// The target row's <c>CompletenessStatus</c> is <c>Complete</c> and this action would modify a
+    /// protected field — held for explicit human review. Behaves like <see cref="Pending"/> for
+    /// whole-batch apply purposes (see <see cref="Import.ImportActionResolutionCoordinator.TryApplyBatchAsync"/>),
+    /// but is a distinct, filterable status so a caller can tell the two apart.
+    /// </summary>
+    Blocked
 }
 
 /// <summary>

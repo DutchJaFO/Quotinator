@@ -82,6 +82,7 @@ public class SqliteImportActionServiceTests
 
     private async Task<IReadOnlyList<SystemImportAction>> PlanAndStageAsync(
         IReadOnlyList<SourceQuote> quotes, Guid batchId, DuplicateResolutionPolicy policy,
+        IReadOnlyList<SourceEntry>? sources = null,
         IReadOnlyList<SourceStageDirection>? stageDirections = null,
         IReadOnlyList<SourceSoundCue>? soundCues = null,
         IReadOnlyList<SourceConversation>? conversations = null)
@@ -96,7 +97,7 @@ public class SqliteImportActionServiceTests
             "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
             new { Id = batchId, now });
 
-        var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations);
+        var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations);
         await _coordinator.StageAsync(actions);
         return actions;
     }
@@ -147,6 +148,56 @@ public class SqliteImportActionServiceTests
         var found = await _actionReader.GetByIdAsync(quoteAction.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
         Assert.IsNotNull(found.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_MarkCompletenessAsProvided_OverridesAutoCompute()
+    {
+        var id = "31211111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+
+        var actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var batchId = quoteAction.BatchId;
+
+        await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
+        {
+            QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+            MarkCompletenessAs = CompletenessStatus.Complete,
+        });
+        await _service.ApplyBatchAsync(batchId);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var completenessStatus = await conn.ExecuteScalarAsync<string>("SELECT CompletenessStatus FROM Quotes WHERE Id = @id", new { id });
+        Assert.AreEqual("Complete", completenessStatus, "The decide-time override must win at apply, regardless of the row's prior status");
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnchanged()
+    {
+        var id = "31311111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            conn.Open();
+            await conn.ExecuteAsync("UPDATE Quotes SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id });
+        }
+
+        var actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var batchId = quoteAction.BatchId;
+
+        await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
+        {
+            QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+        await _service.ApplyBatchAsync(batchId);
+
+        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        verifyConn.Open();
+        var completenessStatus = await verifyConn.ExecuteScalarAsync<string>("SELECT CompletenessStatus FROM Quotes WHERE Id = @id", new { id });
+        Assert.AreEqual("Complete", completenessStatus, "Omitting the override must never reset an already-Complete row back to Incomplete/NeedsReview");
     }
 
     [TestMethod]
@@ -674,7 +725,7 @@ public class SqliteImportActionServiceTests
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             conn.Open();
-            await conn.ExecuteAsync("UPDATE Quotes SET IsComplete = 1 WHERE Id = @id", new { id });
+            await conn.ExecuteAsync("UPDATE Quotes SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id });
         }
 
         var batchId = await StageApplyAndMarkAppliedAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
@@ -683,8 +734,8 @@ public class SqliteImportActionServiceTests
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         verifyConn.Open();
-        var isComplete = await verifyConn.ExecuteScalarAsync<bool>("SELECT IsComplete FROM Quotes WHERE Id = @id", new { id });
-        Assert.IsTrue(isComplete, "Reversal must never reset IsComplete/NoValueKnown — ExistingValue's snapshot never captured them");
+        var completenessStatus = await verifyConn.ExecuteScalarAsync<string>("SELECT CompletenessStatus FROM Quotes WHERE Id = @id", new { id });
+        Assert.AreEqual("Complete", completenessStatus, "Reversal must never reset CompletenessStatus/NoValueKnown — ExistingValue's snapshot never captured them");
     }
 
     [TestMethod]
@@ -800,5 +851,101 @@ public class SqliteImportActionServiceTests
 
         Assert.IsTrue(rows.Any(r => r.EntityType == "quote" && r.Action == "SoftDelete"));
         Assert.IsTrue(rows.Any(r => r.EntityType == "source" && r.Action == "SoftDelete"));
+    }
+
+    // ── #162 — Source decidability ───────────────────────────────────────────
+
+    private async Task SeedExplicitSourceAsync(string id, string title = "Casablanca", string type = "Movie", string? date = "1942")
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Sources (Id, Title, Type, Date, DateCreated) VALUES (@Id, @Title, @Type, @Date, @now)",
+            new { Id = id, Title = title, Type = type, Date = date, now });
+    }
+
+    [TestMethod]
+    public async Task DecideImportAction_SourceEntityType_AcceptsTitleTypeDateDecisions()
+    {
+        var id = "c8111111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(id, title: "Casablanca");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [new SourceEntry { Id = id, Title = "Casablanca (1942)", Type = QuoteType.Movie, Date = "1942-11-26" }]);
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Pending, sourceAction.Status.Parsed, "Review policy leaves the Modify pending");
+
+        await _service.DecideAsync(sourceAction.Id, new ConflictDecisionRequest
+        {
+            SourceTitle = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+            SourceType  = new FieldDecision { Choice = FieldResolutionChoice.Keep },
+            SourceDate  = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+
+        var found = await _actionReader.GetByIdAsync(sourceAction.Id);
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
+        Assert.IsNotNull(found.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_SourceModify_WritesResolvedFields()
+    {
+        var id = "c9111111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(id, title: "Casablanca", date: "1942");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [new SourceEntry { Id = id, Title = "Casablanca (1942)", Type = QuoteType.Movie, Date = "1942-11-26" }]);
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed, "NewestWins resolves immediately");
+
+        var result = await _service.ApplyBatchAsync(sourceAction.BatchId);
+        Assert.IsNull(result);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (title, date) = await conn.QuerySingleAsync<(string Title, string Date)>(
+            "SELECT Title, Date FROM Sources WHERE Id = @id", new { id });
+        Assert.AreEqual("Casablanca (1942)", title);
+        Assert.AreEqual("1942-11-26", date);
+    }
+
+    [TestMethod]
+    public async Task ReverseAppliedActionsAsync_SourceModify_RestoresExistingValue()
+    {
+        var id = "ca111111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(id, title: "Casablanca", date: "1942");
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            sources: [new SourceEntry { Id = id, Title = "Casablanca (Corrected)", Type = QuoteType.Movie, Date = "1942-11-26" }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (title, date) = await conn.QuerySingleAsync<(string Title, string Date)>(
+            "SELECT Title, Date FROM Sources WHERE Id = @id", new { id });
+        Assert.AreEqual("Casablanca", title, "Reversal must restore the pre-Modify title");
+        Assert.AreEqual("1942", date, "Reversal must restore the pre-Modify date");
+    }
+
+    [TestMethod]
+    public async Task ReverseAppliedActionsAsync_SourceAdd_StillSoftDeletesIfUnreferenced()
+    {
+        var newFileId = "cb111111-1111-4111-8111-111111111111";
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            sources: [new SourceEntry { Id = newFileId, Title = "A Brand New Film", Type = QuoteType.Movie }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE Id = @id AND IsDeleted = 1", new { id = newFileId }));
     }
 }

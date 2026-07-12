@@ -161,31 +161,34 @@ public class ConflictResolutionTests
         CollectionAssert.AreEquivalent(new[] { "Drama" }, genres);
     }
 
-    // ── #55: IsComplete / NoValueKnown ──────────────────────────────────────
+    // ── #55/#165: CompletenessStatus / NoValueKnown ──────────────────────────
 
     [TestMethod]
-    public async Task Seed_FreshQuote_DefaultsIsCompleteFalseAndNoValueKnownEmpty()
+    public async Task Seed_FreshQuote_NoValueKnownEmptyAndCompletenessAlreadyNeedsReview()
     {
         var batch = new SeedBatch([new SeedFile(WriteFirstFile(), null)], new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
         await CreateInitializer([batch]).InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var (isComplete, noValueKnown) = await conn.QuerySingleAsync<(long IsComplete, string NoValueKnown)>(
-            "SELECT IsComplete, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+        var (completenessStatus, noValueKnown) = await conn.QuerySingleAsync<(string CompletenessStatus, string NoValueKnown)>(
+            "SELECT CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
 
-        Assert.AreEqual(0L, isComplete, "A brand-new row must default IsComplete to false");
+        // #165: see QuoteImportServiceTests's sibling test for why NeedsReview, not Incomplete, is
+        // the correct expectation here — nothing populates NoValueKnown with real markers yet, so an
+        // empty list at creation is indistinguishable from "every field just got filled in."
+        Assert.AreEqual("NeedsReview", completenessStatus);
         Assert.AreEqual("[]", noValueKnown, "A brand-new row must default NoValueKnown to an empty JSON array");
     }
 
     /// <summary>
     /// Regression guard for the exact production statement #64's conflict engine (and the live
     /// import service) uses to rewrite an existing row on newest-wins/merge-ours/merge-theirs — it
-    /// must never include IsComplete/NoValueKnown in its SET list, or a human's completed review
-    /// would be silently reset on every reseed/reimport that happens to touch that quote again.
+    /// must never include CompletenessStatus/NoValueKnown in its SET list, or a human's completed
+    /// review would be silently reset on every reseed/reimport that happens to touch that quote again.
     /// </summary>
     [TestMethod]
-    public async Task UpdateOnNewestWins_NeverResetsIsCompleteOrNoValueKnown()
+    public async Task UpdateOnNewestWins_NeverResetsCompletenessStatusOrNoValueKnown()
     {
         var batch = new SeedBatch([new SeedFile(WriteFirstFile(), null)], new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
         await CreateInitializer([batch]).InitialiseAsync();
@@ -194,7 +197,7 @@ public class ConflictResolutionTests
         conn.Open();
 
         await conn.ExecuteAsync(
-            "UPDATE Quotes SET IsComplete = 1, NoValueKnown = '[\"date\"]' WHERE Id = @id",
+            "UPDATE Quotes SET CompletenessStatus = 'Complete', NoValueKnown = '[\"date\"]' WHERE Id = @id",
             new { id = SharedId });
 
         var sourceId = await conn.ExecuteScalarAsync<string>("SELECT SourceId FROM Quotes WHERE Id = @id", new { id = SharedId });
@@ -211,11 +214,11 @@ public class ConflictResolutionTests
             id      = SharedId
         });
 
-        var (quoteText, isComplete, noValueKnown) = await conn.QuerySingleAsync<(string QuoteText, long IsComplete, string NoValueKnown)>(
-            "SELECT QuoteText, IsComplete, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+        var (quoteText, completenessStatus, noValueKnown) = await conn.QuerySingleAsync<(string QuoteText, string CompletenessStatus, string NoValueKnown)>(
+            "SELECT QuoteText, CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
 
         Assert.AreEqual("Rewritten by a later reseed", quoteText, "The statement must still update the fields it's meant to");
-        Assert.AreEqual(1L, isComplete, "IsComplete must survive an UpdateOnNewestWins rewrite unchanged");
+        Assert.AreEqual("Complete", completenessStatus, "CompletenessStatus must survive an UpdateOnNewestWins rewrite unchanged");
         Assert.AreEqual("[\"date\"]", noValueKnown, "NoValueKnown must survive an UpdateOnNewestWins rewrite unchanged");
     }
 

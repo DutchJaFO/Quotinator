@@ -86,6 +86,27 @@ public sealed class SqliteImportActionService : IImportActionService
     public async Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
     {
         var action = await _actionReader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
+
+        if (action.EntityType == ImportActionEntityTypes.Source && action.ActionType.Parsed == ImportActionKind.Modify)
+        {
+            var existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayload>(action.ExistingValue!)!;
+            var incomingSourcePayload = JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!;
+
+            var existingSourceFields = ToFieldMap(existingSourcePayload);
+            var incomingSourceFields = ToFieldMap(incomingSourcePayload);
+            var sourceDecisions      = ToSourceDecisionMap(request);
+
+            var sourceResult = FieldMergeResolver.ResolveWithDecisions(existingSourceFields, incomingSourceFields, sourceDecisions);
+
+            var resolvedSourcePayload = new SourceActionPayload(
+                (string)sourceResult.MergedFields["title"]!,
+                (string)sourceResult.MergedFields["type"]!,
+                (string?)sourceResult.MergedFields["date"]);
+
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSourcePayload), request.MarkCompletenessAs);
+            return;
+        }
+
         if (action.EntityType != ImportActionEntityTypes.Quote)
             throw new ImportActionNotDecidableException(actionId, action.EntityType);
 
@@ -110,7 +131,7 @@ public sealed class SqliteImportActionService : IImportActionService
             PersonId    = incomingPayload.PersonId,
         };
 
-        await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPayload));
+        await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPayload), request.MarkCompletenessAs);
     }
 
     /// <inheritdoc/>
@@ -173,21 +194,25 @@ public sealed class SqliteImportActionService : IImportActionService
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotes"), new { id = action.EntityId });
         }
 
-        // Character/Source/Person Add ids are always freshly computed via EntityIdentity (never a
+        // Character/Person Add ids are always freshly computed via EntityIdentity (never a
         // natural-key lookup result — a natural-key match means "already exists", which is a Modify,
         // never an Add), and EntityIdentity.StableId always uppercases — safe to use the repository's
         // Guid-typed API here.
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Character))
             await _characterRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
 
+        // #162: unlike Character/Person, a Source Add's id is no longer always EntityIdentity-derived
+        // — an explicit sources[] entry supplies its own file-authored id, which is not guaranteed to
+        // be uppercase the way EntityIdentity.StableId is. Raw SQL, not the Guid-typed repository
+        // path, same reasoning as Conversation/StageDirection/SoundCue below.
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Source))
-            await _sourceRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Sources"), new { id = action.EntityId });
 
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Person))
             await _personRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
 
         // #68: Conversation/StageDirection/SoundCue ids are explicit-in-file, like Quote's — not
-        // EntityIdentity-derived like Character/Source/Person's — so the same raw-SQL, no-forced-
+        // EntityIdentity-derived like Character/Person's — so the same raw-SQL, no-forced-
         // uppercase approach applies here too, not the repository's Guid-typed path. Each clears its
         // own detail rows first (ConversationLines/*Translations), same FK-blocking reason as
         // QuoteGenres/QuoteTranslations above.
@@ -304,10 +329,29 @@ public sealed class SqliteImportActionService : IImportActionService
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "character", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Source:
+                    if (action.ActionType.Parsed == ImportActionKind.Modify)
+                    {
+                        // #162: a Modify reversal restores the prior field values — it never deletes
+                        // anything, so no active-reference check is needed (unlike an Add reversal).
+                        var existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayload>(action.ExistingValue!)!;
+                        await sqliteConnection.ExecuteAsync(Sql.Sources.UpdateFieldsById, new
+                        {
+                            title = existingSourcePayload.Title,
+                            type  = existingSourcePayload.Type,
+                            date  = existingSourcePayload.Date,
+                            dateModified = now,
+                            id    = action.EntityId,
+                        }, sqliteTransaction);
+                        await QuoteSeedWriter.LogChangeAsync(changeLog, "source", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingSourcePayload, sqliteConnection, sqliteTransaction);
+                        break;
+                    }
                     var sourceRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Sources.CountActiveReferences, action.EntityId);
                     if (sourceRefs)
                         break;
-                    await _sourceRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow);
+                    // #162: raw SQL, not the Guid-typed repository path — see ClearStaleAddTargetsAsync's
+                    // remark; a Source Add's id may now be an explicit, not-necessarily-uppercase
+                    // file-authored id, not always an EntityIdentity-derived one.
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Sources"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "source", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Person:
@@ -447,8 +491,29 @@ public sealed class SqliteImportActionService : IImportActionService
         {
             case ImportActionEntityTypes.Source:
             {
-                var payload = JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!;
-                await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Title, payload.Type, batchId, now, changeLog);
+                var isSourceAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                if (isSourceAdd)
+                {
+                    var payload = JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!;
+                    await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Title, payload.Type, batchId, now, changeLog, payload.Date);
+                }
+                else
+                {
+                    var payload = JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields
+                        ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
+                    await sqliteConnection.ExecuteAsync(Sql.Sources.UpdateFieldsById, new
+                    {
+                        title = payload.Title,
+                        type  = payload.Type,
+                        date  = payload.Date,
+                        dateModified = now,
+                        id    = action.EntityId,
+                    }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "source", action.EntityId, ChangeAction.Modified,
+                        oldValue: action.ExistingValue, newValue: payload, sqliteConnection, sqliteTransaction);
+                }
+
+                await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Sources.SelectCompletenessById, Sql.Sources.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
                 break;
             }
             case ImportActionEntityTypes.Character:
@@ -498,8 +563,11 @@ public sealed class SqliteImportActionService : IImportActionService
                 };
 
                 // Defensive: same ordering caveat as Character above — this Quote's Source/Character/
-                // Person actions may not have applied yet.
-                await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, payload.SourceId, resolved.Source, resolved.Type.ToString(), batchId, now, changeLog);
+                // Person actions may not have applied yet. resolved.Date is the quote-level "date
+                // associated with the source" field (SourceQuote.Date's own doc comment) — the same
+                // value a Source's own explicit sources[] entry would carry, for a Source that only
+                // this quote ever introduces.
+                await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, payload.SourceId, resolved.Source, resolved.Type.ToString(), batchId, now, changeLog, resolved.Date);
                 if (payload.CharacterId is not null)
                     await EnsureCharacterExistsAsync(sqliteConnection, sqliteTransaction, payload.CharacterId, payload.SourceId, resolved.Character!, batchId, now, changeLog);
                 if (payload.PersonId is not null)
@@ -546,6 +614,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 }
 
                 await QuoteSeedWriter.InsertGenresAsync(sqliteConnection, resolved, Guid.Parse(resolved.Id), now, sqliteTransaction);
+                await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Quotes.SelectCompletenessById, Sql.Quotes.UpdateCompletenessById, resolved.Id, action.MarkCompletenessAs.Parsed, now);
                 break;
             }
             case ImportActionEntityTypes.StageDirection:
@@ -597,6 +666,29 @@ public sealed class SqliteImportActionService : IImportActionService
         }
     }
 
+    // ── Completeness (#165) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Persists the row's <c>CompletenessStatus</c> after an apply — <paramref name="markCompletenessAs"/>
+    /// (the decide-time override, if any) always wins; otherwise falls back to
+    /// <see cref="CompletenessGuard.ComputeNextStatus"/> against the row's own current state. Callers
+    /// pass their own <c>SelectCompletenessById</c>/<c>UpdateCompletenessById</c> query pair (one per
+    /// entity table) — this method itself has no table-specific knowledge.
+    /// </summary>
+    private static async Task ApplyCompletenessAsync(
+        SqliteConnection connection, SqliteTransaction transaction,
+        string selectCompletenessSql, string updateCompletenessSql,
+        string id, CompletenessStatus? markCompletenessAs, string now)
+    {
+        var row = await connection.QuerySingleAsync<(SafeValue<CompletenessStatus?> CompletenessStatus, IReadOnlyList<string> NoValueKnown)>(
+            selectCompletenessSql, new { id }, transaction);
+        var current = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+        var next = markCompletenessAs ?? CompletenessGuard.ComputeNextStatus(current, row.NoValueKnown);
+
+        if (next != current)
+            await connection.ExecuteAsync(updateCompletenessSql, new { completenessStatus = next.ToString(), dateModified = now, id }, transaction);
+    }
+
     // ── Idempotent ensure-exists helpers ────────────────────────────────────
     // Each is INSERT OR IGNORE keyed by a precomputed stable/real id, so calling any of these more
     // than once (from a dependent entity's own defensive check, or a concurrently-applied batch
@@ -604,14 +696,14 @@ public sealed class SqliteImportActionService : IImportActionService
 
     private async Task EnsureSourceExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, string title, string type,
-        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog, string? date = null)
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
         var inserted = await connection.ExecuteAsync(Sql.Sources.InsertIfNotExists,
-            new { Id = id, Title = title, Type = type, Date = (string?)null, ImportBatchId = batchId, DateCreated = now }, transaction);
+            new { Id = id, Title = title, Type = type, Date = date, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "source", id, ChangeAction.Created,
-                oldValue: null, newValue: new { title, type }, connection, transaction);
+                oldValue: null, newValue: new { title, type, date }, connection, transaction);
     }
 
     private async Task EnsureCharacterExistsAsync(
@@ -730,7 +822,7 @@ public sealed class SqliteImportActionService : IImportActionService
     }
 
     private static IReadOnlyDictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
-        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type };
+        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date };
 
     private static IReadOnlyDictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["sourceId"] = payload.SourceId };
@@ -749,13 +841,31 @@ public sealed class SqliteImportActionService : IImportActionService
 
     private static IReadOnlyList<string> ComputeAmbiguousFields(SystemImportAction action)
     {
-        if (action.EntityType != ImportActionEntityTypes.Quote || action.Status.Parsed != ImportActionStatus.Pending)
+        if (action.Status.Parsed != ImportActionStatus.Pending)
             return [];
 
-        var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
-        var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.IncomingValue!)!;
-        var existing = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
-        var incoming = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
+        IReadOnlyDictionary<string, object?> existing;
+        IReadOnlyDictionary<string, object?> incoming;
+
+        switch (action.EntityType)
+        {
+            case ImportActionEntityTypes.Quote:
+            {
+                var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
+                var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.IncomingValue!)!;
+                existing = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
+                incoming = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
+                break;
+            }
+            case ImportActionEntityTypes.Source:
+            {
+                existing = ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!);
+                break;
+            }
+            default:
+                return [];
+        }
 
         try
         {
@@ -812,6 +922,23 @@ public sealed class SqliteImportActionService : IImportActionService
 
         if (request.Genres is not null)
             map["genres"] = new FieldMergeDecision(request.Genres.Choice, request.Genres.Value);
+
+        return map;
+    }
+
+    private static Dictionary<string, FieldMergeDecision> ToSourceDecisionMap(ConflictDecisionRequest request)
+    {
+        var map = new Dictionary<string, FieldMergeDecision>();
+
+        void Add(string field, FieldDecision? decision)
+        {
+            if (decision is null) return;
+            map[field] = new FieldMergeDecision(decision.Choice, decision.Value);
+        }
+
+        Add("title", request.SourceTitle);
+        Add("type", request.SourceType);
+        Add("date", request.SourceDate);
 
         return map;
     }

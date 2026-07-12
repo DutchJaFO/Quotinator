@@ -123,6 +123,8 @@
     <File Path="docs/milestones/data-import-sources/154-import-staging-plan.md" />
     <File Path="docs/milestones/data-import-sources/157-sql-domain-engine-split-plan.md" />
     <File Path="docs/milestones/data-import-sources/158-importbatch-to-data-plan.md" />
+    <File Path="docs/milestones/data-import-sources/162-source-explicit-id-plan.md" />
+    <File Path="docs/milestones/data-import-sources/165-completeness-review-model-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/">
     <File Path="docs/milestones/v1-7-0/overview.md" />

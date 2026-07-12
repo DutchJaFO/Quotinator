@@ -12,6 +12,11 @@
       "description": "Canonical quote entries. Same schema as source-flat.schema.json.",
       "items": { "$ref": "#/$defs/quote" }
     },
+    "sources": {
+      "type": "array",
+      "description": "Optional explicit Source declarations (#162) — an author-assigned id decoupling matching from Title/Type/Date content, so all three become correctable. A quote's own 'source' field stays a title string either way; this section is purely additive context a file may also provide.",
+      "items": { "$ref": "#/$defs/source" }
+    },
     "stageDirections": {
       "type": "array",
       "description": "Reusable scene-setting and action descriptions that appear in conversations.",
@@ -68,6 +73,17 @@
             }
           }
         }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["id", "title", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id":    { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "title": { "type": "string", "minLength": 1 },
+        "type":  { "type": "string", "enum": ["movie", "tv", "anime", "book", "person"] },
+        "date":  { "type": ["string", "null"] }
       }
     },
     "stageDirection": {

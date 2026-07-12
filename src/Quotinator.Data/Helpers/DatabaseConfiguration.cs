@@ -41,6 +41,9 @@ public abstract class DatabaseConfiguration
         // (which only calls this base Configure()) needs to read/write an ImportBatch row directly.
         RegisterEnumHandler<ImportBatchType>();
         RegisterEnumHandler<ImportBatchStatus>();
+        // CompletenessStatus (#165) is assigned/transitioned entirely by this project's own
+        // CompletenessGuard — same category as ImportActionStatus above, not a consumer's domain enum.
+        RegisterEnumHandler<CompletenessStatus>();
         RegisterDomainHandlers();
     }
 

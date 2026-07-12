@@ -173,7 +173,7 @@ internal static class Sql
 
         // Column list shared by every SELECT below.
         private const string SelectColumns =
-            "Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, AppliedAt, DiscardedAt";
+            "Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, MarkCompletenessAs, DetectedAt, AppliedAt, DiscardedAt";
 
         /// <summary>Paginated action listing, newest first, with optional filters.</summary>
         internal static string SelectPaged(bool filterBatchId, bool filterStatus, bool filterEntityType = false)
@@ -204,9 +204,14 @@ internal static class Sql
         /// </summary>
         internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportActions WHERE UPPER(BatchId) = UPPER(@batchId) ORDER BY rowid ASC;";
 
-        /// <summary>Stages a per-field decision (#154) — Status→Decided, MergedFields holds the decision payload. Idempotent: resubmitting overwrites the prior decision.</summary>
+        /// <summary>
+        /// Stages a per-field decision (#154) — Status→Decided, MergedFields holds the decision
+        /// payload. Idempotent: resubmitting overwrites the prior decision.
+        /// <c>MarkCompletenessAs</c> (#165) is always written, including <c>NULL</c> — resubmitting
+        /// a decide call without the override must clear a previously-set one, not leave it stale.
+        /// </summary>
         internal const string MarkDecided =
-            "UPDATE System_ImportActions SET Status = @status, MergedFields = @mergedFields, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE System_ImportActions SET Status = @status, MergedFields = @mergedFields, MarkCompletenessAs = @markCompletenessAs, DateModified = @dateModified WHERE Id = @id;";
 
         /// <summary>Reverts a staged decision back to Pending (#154's undo-before-apply) — clears MergedFields.</summary>
         internal const string ClearDecision =

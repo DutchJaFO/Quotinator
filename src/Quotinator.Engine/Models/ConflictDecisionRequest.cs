@@ -1,3 +1,5 @@
+using Quotinator.Data.Entities;
+
 namespace Quotinator.Engine.Models;
 
 /// <summary>
@@ -31,4 +33,22 @@ public sealed class ConflictDecisionRequest
 
     /// <summary>Decision for the genre list.</summary>
     public GenresFieldDecision? Genres { get; init; }
+
+    /// <summary>Decision for a Source action's title (#162).</summary>
+    public FieldDecision? SourceTitle { get; init; }
+
+    /// <summary>Decision for a Source action's type (#162).</summary>
+    public FieldDecision? SourceType { get; init; }
+
+    /// <summary>Decision for a Source action's date (#162).</summary>
+    public FieldDecision? SourceDate { get; init; }
+
+    /// <summary>
+    /// Optional, entity-agnostic override (#165) — when supplied, applying this decision sets the
+    /// target record's <see cref="CompletenessStatus"/> directly (most usefully <c>Complete</c>),
+    /// regardless of its current value. Available on every decide call, for any entity type, not
+    /// only when resolving a <c>Blocked</c> action. When omitted, the target's completeness status
+    /// is instead computed automatically at apply time.
+    /// </summary>
+    public CompletenessStatus? MarkCompletenessAs { get; init; }
 }

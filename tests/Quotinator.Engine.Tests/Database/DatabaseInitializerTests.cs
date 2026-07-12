@@ -878,7 +878,7 @@ public class DatabaseInitializerTests
     /// all migrations and then deleting version rows) — migration 4 rebuilds the ImportBatches table
     /// from scratch, which would silently discard migration 5/6's ADD COLUMN effects if they were
     /// physically present, masking a genuine version/schema mismatch instead of exercising a real
-    /// version-3 replay. Migrations 6+ (e.g. #55's IsComplete/NoValueKnown) ALTER tables that are
+    /// version-3 replay. Migrations 6+ (e.g. #55/#165's CompletenessStatus/NoValueKnown) ALTER tables that are
     /// never rebuilt, so replaying them a second time on top of already-applied columns would throw
     /// "duplicate column name" — a real bug in the old delete-then-replay technique, not a bug in
     /// the migrations themselves.

@@ -33,26 +33,28 @@ public class ImportActionResolutionCoordinatorTests
         conn.Open();
         conn.Execute("""
             CREATE TABLE System_ImportActions (
-                Id              TEXT    NOT NULL PRIMARY KEY,
-                BatchId         TEXT    NOT NULL,
-                ActionType      TEXT    NOT NULL
-                                CHECK (ActionType IN ('Add', 'Modify')),
-                EntityType      TEXT    NOT NULL,
-                EntityId        TEXT    NOT NULL,
-                ExistingBatchId TEXT,
-                ExistingValue   TEXT,
-                IncomingValue   TEXT    NOT NULL,
-                AppliedPolicy   TEXT,
-                Status          TEXT    NOT NULL
-                                CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded')),
-                MergedFields    TEXT,
-                DetectedAt      TEXT    NOT NULL,
-                AppliedAt       TEXT,
-                DiscardedAt     TEXT,
-                DateCreated     TEXT    NOT NULL,
-                DateModified    TEXT,
-                DateDeleted     TEXT,
-                IsDeleted       INTEGER NOT NULL DEFAULT 0
+                Id                 TEXT    NOT NULL PRIMARY KEY,
+                BatchId            TEXT    NOT NULL,
+                ActionType         TEXT    NOT NULL
+                                   CHECK (ActionType IN ('Add', 'Modify')),
+                EntityType         TEXT    NOT NULL,
+                EntityId           TEXT    NOT NULL,
+                ExistingBatchId    TEXT,
+                ExistingValue      TEXT,
+                IncomingValue      TEXT    NOT NULL,
+                AppliedPolicy      TEXT,
+                Status             TEXT    NOT NULL
+                                   CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked')),
+                MergedFields       TEXT,
+                MarkCompletenessAs TEXT
+                                   CHECK (MarkCompletenessAs IS NULL OR MarkCompletenessAs IN ('Incomplete', 'NeedsReview', 'Complete')),
+                DetectedAt         TEXT    NOT NULL,
+                AppliedAt          TEXT,
+                DiscardedAt        TEXT,
+                DateCreated        TEXT    NOT NULL,
+                DateModified       TEXT,
+                DateDeleted        TEXT,
+                IsDeleted          INTEGER NOT NULL DEFAULT 0
             );
             """);
 
@@ -90,6 +92,18 @@ public class ImportActionResolutionCoordinatorTests
         EntityId      = Guid.NewGuid().ToString(),
         IncomingValue = "{}",
         Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+        DetectedAt    = DateTime.UtcNow,
+    };
+
+    private static SystemImportAction BuildBlockedModify(string batchId) => new()
+    {
+        BatchId       = batchId,
+        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+        EntityType    = "Widget",
+        EntityId      = Guid.NewGuid().ToString(),
+        ExistingValue = "{}",
+        IncomingValue = "{}",
+        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
         DetectedAt    = DateTime.UtcNow,
     };
 
@@ -239,6 +253,73 @@ public class ImportActionResolutionCoordinatorTests
 
         var found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed, "A failed apply must not leave the action marked Applied.");
+    }
+
+    [TestMethod]
+    public async Task TryApplyBatchAsync_BlockedActionInBatch_HoldsEntireBatch()
+    {
+        var decided = BuildDecidedAdd("BATCH-1");
+        var blocked = BuildBlockedModify("BATCH-1");
+        await _writer.WriteAsync(decided);
+        await _writer.WriteAsync(blocked);
+
+        var callbackInvocations = 0;
+        var result = await _coordinator.TryApplyBatchAsync("BATCH-1", (_, _, _) =>
+        {
+            callbackInvocations++;
+            return Task.CompletedTask;
+        });
+
+        Assert.IsNotNull(result);
+        CollectionAssert.AreEqual(new[] { blocked.Id }, result!.ToList());
+        Assert.AreEqual(0, callbackInvocations, "A Blocked action must hold the whole batch, including otherwise-ready actions.");
+
+        var stillDecided = await _reader.GetByIdAsync(decided.Id);
+        Assert.AreEqual(ImportActionStatus.Decided, stillDecided!.Status.Parsed, "An unrelated Decided action must not apply while a Blocked action shares its batch.");
+    }
+
+    [TestMethod]
+    public async Task TryApplyBatchAsync_BlockedActionResolved_UnrelatedActionsThenApply()
+    {
+        var decided = BuildDecidedAdd("BATCH-1");
+        var blocked = BuildBlockedModify("BATCH-1");
+        await _writer.WriteAsync(decided);
+        await _writer.WriteAsync(blocked);
+        await _coordinator.DecideAsync(blocked.Id, "\"resolved\"");
+
+        var appliedIds = new List<Guid>();
+        var result = await _coordinator.TryApplyBatchAsync("BATCH-1", (action, _, _) =>
+        {
+            appliedIds.Add(action.Id);
+            return Task.CompletedTask;
+        });
+
+        Assert.IsNull(result, "Once the Blocked action is decided, the rest of the batch must apply normally.");
+        CollectionAssert.AreEquivalent(new[] { decided.Id, blocked.Id }, appliedIds);
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_MarkCompletenessAsProvided_PersistsOnTheAction()
+    {
+        var entry = BuildPendingModify("BATCH-1");
+        await _writer.WriteAsync(entry);
+
+        await _coordinator.DecideAsync(entry.Id, "\"decision\"", CompletenessStatus.Complete);
+
+        var found = await _reader.GetByIdAsync(entry.Id);
+        Assert.AreEqual(CompletenessStatus.Complete, found!.MarkCompletenessAs.Parsed);
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_MarkCompletenessAsOmitted_StaysNull()
+    {
+        var entry = BuildPendingModify("BATCH-1");
+        await _writer.WriteAsync(entry);
+
+        await _coordinator.DecideAsync(entry.Id, "\"decision\"");
+
+        var found = await _reader.GetByIdAsync(entry.Id);
+        Assert.IsNull(found!.MarkCompletenessAs.Parsed);
     }
 
     [TestMethod]
