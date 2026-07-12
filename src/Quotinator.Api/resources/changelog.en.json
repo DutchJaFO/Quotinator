@@ -2,6 +2,15 @@
   "language": "en",
   "sourceLanguage": "en",
   "machineTranslated": false,
+  "unreleased": {
+    "cves": ["CVE-2026-49451"],
+    "highlights": [
+      "Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected."
+    ],
+    "fixed": [
+      "CVE-2026-49451: `Microsoft.OpenApi` (transitive via `Microsoft.AspNetCore.OpenApi`) had a stack-overflow vulnerability when parsing OpenAPI documents with circular schema references; Quotinator only generates its own OpenAPI document and never parses untrusted ones, so the vulnerable path was unreachable — patched to 2.7.5 via a direct package override regardless"
+    ]
+  },
   "releases": [
     {
       "version": "1.7.2",
