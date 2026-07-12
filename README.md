@@ -1,5 +1,13 @@
 # Quotinator 🎬
 
+![CI](https://github.com/DutchJaFO/Quotinator/actions/workflows/ci.yml/badge.svg)
+![CodeQL](https://github.com/DutchJaFO/Quotinator/actions/workflows/codeql.yml/badge.svg)
+![License](https://img.shields.io/github/license/DutchJaFO/Quotinator)
+![Release](https://img.shields.io/github/v/release/DutchJaFO/Quotinator)
+![.NET](https://img.shields.io/badge/dotnet-10-512BD4)
+![Supports amd64 Architecture](https://img.shields.io/badge/amd64-yes-green.svg)
+![Supports aarch64 Architecture](https://img.shields.io/badge/aarch64-yes-green.svg)
+
 > *"I'll be back... with a quote."*
 
 A self-hosted quote REST API with MCP support, built in C# / ASP.NET Core, deployable as a Docker container. Designed for homelab and self-hosted environments — serves real, verified quotes from films, books, and famous people over a clean REST API, with a Blazor management frontend and MCP tool support for AI assistants.
@@ -164,6 +172,14 @@ The interactive API reference (Scalar) is available at `/scalar/v1` and the raw 
 The web UI includes a language selector in the navbar. It overrides the browser's automatic language detection (English, Deutsch, Nederlands) and persists the choice as a cookie for one year. Selecting "Auto-detect" clears the override and returns to browser language detection.
 
 ---
+
+## Home Assistant Add-on
+
+Quotinator can be installed directly as a Home Assistant add-on. Click the button below to open your Home Assistant instance's app store with this repository pre-filled:
+
+[![Open your Home Assistant instance and show the app store with this repository pre-filled.](https://my.home-assistant.io/badges/supervisor_store.svg)](https://my.home-assistant.io/redirect/supervisor_store/?repository_url=https%3A%2F%2Fgithub.com%2FDutchJaFO%2FQuotinator)
+
+Then find **Quotinator** in the store and click **Install**. See [`addon/DOCS.md`](addon/DOCS.md) for configuration options once installed.
 
 ## Docker
 
