@@ -63,10 +63,10 @@ public class ImportActionPlannerTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private static SourceQuote BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null) => new()
+    private static SourceQuote BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null, string quoteText = "Here's looking at you, kid.") => new()
     {
         Id               = id,
-        QuoteText        = "Here's looking at you, kid.",
+        QuoteText        = quoteText,
         OriginalLanguage = "en",
         Source           = source,
         Character        = character,
@@ -180,6 +180,35 @@ public class ImportActionPlannerTests
     }
 
     [TestMethod]
+    public async Task PlanAsync_QuoteAlreadyComplete_ChangedFields_StagesBlockedNotModify()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "41211111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(conn, id, completenessStatus: "Complete");
+
+        var quote = BuildQuote(id, source: "Casablanca", quoteText: "A different line entirely.");
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Blocked, quoteAction.Status.Parsed, "A Complete quote must never silently accept a Modify");
+        Assert.IsNull(quoteAction.MergedFields, "Nothing is resolved yet for a Blocked action");
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_QuoteAlreadyComplete_SkipPolicy_DoesNotBlock()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "41311111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(conn, id, completenessStatus: "Complete");
+
+        var quote = BuildQuote(id, source: "Casablanca", quoteText: "A different line entirely.");
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Skip);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
+    }
+
+    [TestMethod]
     public async Task PlanAsync_TwoQuotesInSameBatchReferencingSameNewSource_StagesOnlyOneSourceAddAction()
     {
         using var conn = await OpenConnectionAsync();
@@ -219,14 +248,14 @@ public class ImportActionPlannerTests
         Assert.AreEqual(sourceId1, sourceId2, "Same title+type must always produce the same stable id, across independent PlanAsync calls");
     }
 
-    private static async Task SeedExistingQuoteAsync(SqliteConnection conn, string id)
+    private static async Task SeedExistingQuoteAsync(SqliteConnection conn, string id, string completenessStatus = "Incomplete")
     {
         var now      = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         var sourceId = Guid.NewGuid();
         await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
         await conn.ExecuteAsync(
-            "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, DateCreated) VALUES (@Id, 'Original text', 'en', @SourceId, @now)",
-            new { Id = id, SourceId = sourceId, now });
+            "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, CompletenessStatus, DateCreated) VALUES (@Id, 'Original text', 'en', @SourceId, @CompletenessStatus, @now)",
+            new { Id = id, SourceId = sourceId, CompletenessStatus = completenessStatus, now });
     }
 
     // ── #162: PlanSourcesAsync ────────────────────────────────────────────────
@@ -319,6 +348,20 @@ public class ImportActionPlannerTests
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionStatus.Blocked, sourceAction.Status.Parsed, "A Complete row must never silently accept a Modify");
         Assert.IsNull(sourceAction.MergedFields, "Nothing is resolved yet for a Blocked action");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_CompleteSource_SkipPolicy_DoesNotBlock()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "c5211111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", completenessStatus: "Complete");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Skip,
+            sources: [BuildSourceEntry(id, title: "Casablanca (Corrected)")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
     }
 
     [TestMethod]

@@ -218,8 +218,8 @@ internal static class QuoteSeedWriter
         }
     }
 
-    /// <summary>Result of <see cref="TryGetExistingFieldsAsync"/> — the existing quote's field map plus the batch that originally created it.</summary>
-    internal readonly record struct ExistingQuoteFields(IReadOnlyDictionary<string, object?> Fields, string? ImportBatchId);
+    /// <summary>Result of <see cref="TryGetExistingFieldsAsync"/> — the existing quote's field map, the batch that originally created it, and its current completeness status.</summary>
+    internal readonly record struct ExistingQuoteFields(IReadOnlyDictionary<string, object?> Fields, string? ImportBatchId, CompletenessStatus CompletenessStatus);
 
     /// <summary>
     /// Looks up an existing quote by Id and returns its current field values as a
@@ -250,7 +250,7 @@ internal static class QuoteSeedWriter
             ["genres"]           = genres,
         };
 
-        return new ExistingQuoteFields(fields, row.ImportBatchId);
+        return new ExistingQuoteFields(fields, row.ImportBatchId, row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete);
     }
 
     /// <summary>Maps a raw upstream <c>type</c> value to the DB enum's string name (e.g. <c>"Movie"</c>), used as part of the source dedup index key.</summary>
@@ -281,5 +281,6 @@ internal static class QuoteSeedWriter
         public string? Character { get; init; }
         public string? Author { get; init; }
         public string? ImportBatchId { get; init; }
+        public SafeValue<CompletenessStatus?> CompletenessStatus { get; init; } = SafeValue<CompletenessStatus?>.Empty;
     }
 }

@@ -86,7 +86,11 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         // Matches the pre-#154 summary contract exactly: Skip and Review both never write, so both
         // count as "skipped" here (Review is additionally left Pending, awaiting a manual decision).
         var imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
+        // #168: a Blocked action has no AppliedPolicy (nothing decided yet), so "is not (Skip or
+        // Review)" is true for it too — must be excluded explicitly, or a held/unwritten Blocked
+        // action gets miscounted as a genuine update.
         var updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
+                                       && a.Status.Parsed != ImportActionStatus.Blocked
                                        && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
         var skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
@@ -140,7 +144,11 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         var actions = await _actionReader.GetAllForBatchAsync(batchIdStr);
 
         var imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
+        // #168: a Blocked action has no AppliedPolicy (nothing decided yet), so "is not (Skip or
+        // Review)" is true for it too — must be excluded explicitly, or a held/unwritten Blocked
+        // action gets miscounted as a genuine update.
         var updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
+                                       && a.Status.Parsed != ImportActionStatus.Blocked
                                        && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
         var skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
@@ -186,7 +194,11 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         var entries = new List<ImportConflictEntry>();
         foreach (var action in actions)
         {
-            if (action.EntityType != ImportActionEntityTypes.Quote || action.ActionType.Parsed != ImportActionKind.Modify)
+            // #168: a Blocked Quote action (like a Blocked Source action) has no AppliedPolicy yet —
+            // nothing has been decided. It's surfaced to callers via PendingActionIds, not this legacy
+            // per-Quote conflicts list, which only ever covers a resolved-or-pending policy decision.
+            if (action.EntityType != ImportActionEntityTypes.Quote || action.ActionType.Parsed != ImportActionKind.Modify
+                || action.Status.Parsed == ImportActionStatus.Blocked)
                 continue;
 
             var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;

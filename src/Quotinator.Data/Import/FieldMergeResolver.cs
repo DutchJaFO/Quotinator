@@ -154,7 +154,15 @@ public static class FieldMergeResolver
         _ => false
     };
 
-    private static bool ValuesEqual(object? a, object? b)
+    /// <summary>
+    /// Compares two field values for equality, treating list/array-valued fields (e.g. <c>genres</c>)
+    /// by sequence content rather than reference identity — <see cref="List{T}"/> doesn't override
+    /// <see cref="object.Equals(object)"/>, so two equal-content-but-different-instance lists would
+    /// otherwise compare unequal. Used both for merge resolution and for any changed-field diff a
+    /// caller computes outside this class (e.g. <c>ImportActionPlanner</c>'s completeness-blocking
+    /// check, #168).
+    /// </summary>
+    public static bool ValuesEqual(object? a, object? b)
     {
         if (a is IEnumerable ea && a is not string && b is IEnumerable eb && b is not string)
             return ea.Cast<object?>().SequenceEqual(eb.Cast<object?>());

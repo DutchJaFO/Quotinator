@@ -188,6 +188,17 @@ public class SqliteImportActionServiceTests
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         var batchId = quoteAction.BatchId;
 
+        // #168: a changed field on a Complete row must stage Blocked, not Pending — even under
+        // Review, which would otherwise have staged Pending regardless of completeness.
+        Assert.AreEqual(ImportActionStatus.Blocked, quoteAction.Status.Parsed, "A Complete quote's changed field must block, not silently stage as Pending/Modify");
+
+        using (var preDecideConn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            preDecideConn.Open();
+            var textBeforeDecide = await preDecideConn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id", new { id });
+            Assert.AreEqual("Original text", textBeforeDecide, "The overwrite itself must not have happened yet — only staged, not applied");
+        }
+
         await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
         {
             QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
@@ -198,6 +209,8 @@ public class SqliteImportActionServiceTests
         verifyConn.Open();
         var completenessStatus = await verifyConn.ExecuteScalarAsync<string>("SELECT CompletenessStatus FROM Quotes WHERE Id = @id", new { id });
         Assert.AreEqual("Complete", completenessStatus, "Omitting the override must never reset an already-Complete row back to Incomplete/NeedsReview");
+        var textAfterApply = await verifyConn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id", new { id });
+        Assert.AreEqual("Here's looking at you, kid.", textAfterApply, "An explicit human decision on the Blocked action must still apply once made");
     }
 
     [TestMethod]
@@ -717,6 +730,12 @@ public class SqliteImportActionServiceTests
         Assert.AreEqual(originalBatchId, restoredBatchId, "Reversal must restore ImportBatchId to the batch that actually owns the restored content, not the batch being reversed");
     }
 
+    /// <summary>
+    /// #168: a `Complete` row's Modify can no longer reach Applied at all (it stages `Blocked`
+    /// instead) — so this test now uses `NeedsReview`, the highest completeness status a genuine
+    /// Modify can still reach. The scenario it protects (reversal must not clobber completeness
+    /// flags via the `ExistingValue` snapshot restore) is unaffected by which non-`Complete` status is used.
+    /// </summary>
     [TestMethod]
     public async Task ReverseBatchAsync_QuoteModify_PreservesCompletenessFlags()
     {
@@ -725,7 +744,7 @@ public class SqliteImportActionServiceTests
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             conn.Open();
-            await conn.ExecuteAsync("UPDATE Quotes SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id });
+            await conn.ExecuteAsync("UPDATE Quotes SET CompletenessStatus = 'NeedsReview' WHERE Id = @id", new { id });
         }
 
         var batchId = await StageApplyAndMarkAppliedAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
@@ -735,7 +754,7 @@ public class SqliteImportActionServiceTests
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         verifyConn.Open();
         var completenessStatus = await verifyConn.ExecuteScalarAsync<string>("SELECT CompletenessStatus FROM Quotes WHERE Id = @id", new { id });
-        Assert.AreEqual("Complete", completenessStatus, "Reversal must never reset CompletenessStatus/NoValueKnown — ExistingValue's snapshot never captured them");
+        Assert.AreEqual("NeedsReview", completenessStatus, "Reversal must never reset CompletenessStatus/NoValueKnown — ExistingValue's snapshot never captured them");
     }
 
     [TestMethod]

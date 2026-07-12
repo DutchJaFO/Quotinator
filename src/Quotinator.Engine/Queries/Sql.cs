@@ -103,7 +103,8 @@ internal static class Sql
                    s.Type,
                    c.Name  AS Character,
                    p.Name  AS Author,
-                   q.ImportBatchId
+                   q.ImportBatchId,
+                   q.CompletenessStatus
                FROM   Quotes          q
                JOIN   Sources         s ON s.Id = q.SourceId    AND s.IsDeleted = 0
                LEFT JOIN Characters   c ON c.Id = q.CharacterId AND c.IsDeleted = 0

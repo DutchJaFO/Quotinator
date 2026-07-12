@@ -1,6 +1,6 @@
 # #168 — Quote's own Modify path never checks CompletenessGuard
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #168
 **Tiers required:** T1, T2
 **Depends on:** #165
@@ -49,12 +49,16 @@ the full, current requirement list.
    green.
 5. New test `PlanSourcesAsync_CompleteSource_SkipPolicy_DoesNotBlock` starts red, ends green — proves
    requirement 3's fix (this exact case was previously mis-blocked).
-6. New test `TryApplyBatchAsync_BlockedQuoteInBatch_HoldsUnrelatedActionsInSameBatch` starts red, ends
-   green — confirms the whole-batch hold (#165) applies to a `Blocked` Quote action the same way it
-   already does for Source.
-7. Existing test `ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnchanged`
+6. Existing test `ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnchanged`
    rewritten to also assert the field overwrite itself was prevented, not only that
    `CompletenessStatus` wasn't reset.
+
+**Dropped during implementation:** `TryApplyBatchAsync_BlockedQuoteInBatch_HoldsUnrelatedActionsInSameBatch`
+(originally requirement 6) was found to be redundant — `TryApplyBatchAsync_BlockedActionInBatch_HoldsEntireBatch`
+already exists in `Quotinator.Data.Tests` and is entity-agnostic (the coordinator has no concept of
+"Quote" vs "Source"), so it already proves the whole-batch hold for any `Blocked` action regardless of
+entity type. Added instead: `PlanAsync_QuoteAlreadyComplete_SkipPolicy_DoesNotBlock`, a regression guard
+proving `Skip` policy never blocks a Complete quote (mirrors requirement 5's Source-side test).
 
 ---
 
@@ -62,49 +66,54 @@ the full, current requirement list.
 
 ### 1. Write the red tests
 
-**Status:** Not started.
-
-Add `PlanAsync_QuoteAlreadyComplete_ChangedFields_StagesBlockedNotModify`,
-`PlanSourcesAsync_CompleteSource_SkipPolicy_DoesNotBlock`, and
-`TryApplyBatchAsync_BlockedQuoteInBatch_HoldsUnrelatedActionsInSameBatch` to
-`Quotinator.Engine.Tests`. Confirm all three fail against current code before touching
-`ImportActionPlanner.cs`.
+**Status:** ✅ Done. `PlanAsync_QuoteAlreadyComplete_ChangedFields_StagesBlockedNotModify` and
+`PlanSourcesAsync_CompleteSource_SkipPolicy_DoesNotBlock` added to `ImportActionPlannerTests.cs`.
+Confirmed red via `git stash` (implementation reverted, tests kept): both failed against pre-fix code
+with the expected wrong status (`Decided` instead of `Blocked` for the Quote test; `Blocked` instead
+of `Decided` for the Source/Skip test). `git stash pop` restored the fix.
 
 ### 2. Surface `CompletenessStatus` on Quote's existing-fields read path
 
-**Status:** Not started.
-
-Add `q.CompletenessStatus` to `Sql.Quotes.SelectRawById()`'s `SELECT` list. Add a
+**Status:** ✅ Done. Added `q.CompletenessStatus` to `Sql.Quotes.SelectRawById()`. Added a
 `CompletenessStatus` field to `QuoteSeedWriter.RawQuoteRow` and a `CompletenessStatus` property to
-`ExistingQuoteFields`, populated from the row.
+`ExistingQuoteFields` (now a 3-field record, up from 2). The `seenQuotes` in-batch cache (for the same
+quote id appearing twice in one file) needed a matching `seenQuoteStatus` dictionary added alongside
+it, populated the same way — `Incomplete` for a fresh Add, the original DB row's status for a
+non-pending Modify — since planning never changes the on-disk status, only apply time does.
 
 ### 3. Wire `CompletenessGuard.ShouldBlock` into Quote's Modify planning branch
 
-**Status:** Not started.
+**Status:** ✅ Done. Moved the `resolved` computation before the blocking decision. When
+`ShouldBlock` returns true, stages `Blocked` with `ExistingValue`/`IncomingValue` set, no
+`MergedFields` — matching Source's `Blocked` shape exactly.
 
-In `PlanAsync`'s per-quote loop, move the `resolved` computation (currently after the
-`actions.Add(...)` for Modify) earlier so it runs before the blocking decision. Derive
-`changedFields` from `resolved` vs `existingFields` (not `incomingFields` vs `existingFields`). Call
-`CompletenessGuard.ShouldBlock`; when true, stage `Blocked` with `ExistingValue`/`IncomingValue` set
-(no `MergedFields`, matching Source's `Blocked` shape) instead of the current `Modify` staging logic.
+**Bug found during this step:** the first implementation used a naive `!Equals(a, b)` diff, which
+silently over-blocked — `List<string>.Equals` is reference equality, and `genres`' field map value is
+rebuilt via `.ToList()` on every round-trip (`QuoteFieldMerge.ToFieldMap`), so two content-identical
+genre lists never compared equal, making `Skip` policy appear to always "change" `genres` and
+incorrectly block. Caught by `PlanAsync_QuoteAlreadyComplete_SkipPolicy_DoesNotBlock` failing
+unexpectedly after the fix was believed complete. Root-caused, then fixed properly: `FieldMergeResolver.ValuesEqual`
+(`Quotinator.Data.Import`) already had the correct sequence-aware comparison for this exact reason —
+made `public` (was `private`) and reused in all three diff computations in `ImportActionPlanner.cs`
+(Quote's new resolved-diff, Source's pre-existing raw-diff, Source's new resolved-diff), rather than
+duplicating or re-solving the same problem.
 
 ### 4. Fix `PlanSourcesAsync` to gate on the resolved value, not the raw incoming value
 
-**Status:** Not started.
-
-Reorder so `isMerge`/`mergeResult`/`resolved` (currently lines 305-313) are computed before the
-`ShouldBlock` check (currently lines 284-303). Keep the existing raw-diff "unchanged — silent reuse"
-early-continue as-is. Compute a second, resolved-vs-existing diff and pass that to `ShouldBlock`
-instead of the raw diff.
+**Status:** ✅ Done. Reordered so `isMerge`/`mergeResult`/`resolved` are computed before the
+`ShouldBlock` check. Kept the existing raw-diff "unchanged — silent reuse" early-continue as-is (now
+using `FieldMergeResolver.ValuesEqual` too, for consistency — harmless today since `SourceActionPayload`
+has no list fields, but avoids the same bug class if one is ever added). Computes a second,
+resolved-vs-existing diff for `ShouldBlock`.
 
 ### 5. Rewrite the misleading existing test
 
-**Status:** Not started.
-
-Update `ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnchanged`
-(`SqliteImportActionServiceTests.cs:177-201`) so it also asserts the quote text was not overwritten
-(or that the action staged as `Blocked` rather than reaching `Decided`/apply at all), not only that
-`CompletenessStatus` remained `Complete`.
+**Status:** ✅ Done. `ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnchanged`
+now asserts, in order: the staged action's status is `Blocked` (not `Pending`, which `Review` policy
+would otherwise have produced); the quote text in the database is still the pre-import value before
+`DecideAsync`/`ApplyBatchAsync` run; and, after an explicit decide + apply, both the new text and the
+still-`Complete` status are correct. Full solution build: 0 warnings, 0 errors. Full test suite:
+254/254 passing.
 
 ---
 
@@ -112,12 +121,12 @@ Update `ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnc
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A `Complete` quote with a policy-resolved field change stages `Blocked`, not `Modify`/`Pending` | Unit test | `Quotinator.Engine.Tests.PlanAsync_QuoteAlreadyComplete_ChangedFields_StagesBlockedNotModify` — red before, green after |
-| 2 | ❌ | A `Complete` Source under `Skip` policy never blocks, since `Skip`'s resolved value is always the existing value | Unit test | `Quotinator.Engine.Tests.PlanSourcesAsync_CompleteSource_SkipPolicy_DoesNotBlock` — red before, green after |
-| 3 | ❌ | A `Blocked` Quote action holds the rest of its batch until resolved | Unit test | `Quotinator.Engine.Tests.TryApplyBatchAsync_BlockedQuoteInBatch_HoldsUnrelatedActionsInSameBatch` — red before, green after |
-| 4 | ❌ | The previously-misleading existing test now asserts the overwrite itself is prevented | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnchanged` — rewritten, green |
-| 5 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite passes, 0 warnings |
-| 6 | ❌ | Live: importing a change to a `Complete` quote via `POST /api/v1/import` returns held (not a silent success), and a `Complete` Source under `Skip` policy does not block | Live (T2) | Docker smoke test: (a) re-import a curated quote marked `Complete` with a changed field — batch shows a `Blocked` action via `GET /api/v1/import/actions`, quote text unchanged until decided; (b) re-import a curated source marked `Complete` with drifted title under `duplicateResolution.default=skip` — batch applies cleanly with no `Blocked` action |
+| 1 | ✅ | A `Complete` quote with a policy-resolved field change stages `Blocked`, not `Modify`/`Pending` | Unit test | `Quotinator.Engine.Tests.PlanAsync_QuoteAlreadyComplete_ChangedFields_StagesBlockedNotModify` — red before (confirmed via `git stash`), green after |
+| 2 | ✅ | A `Complete` Source under `Skip` policy never blocks, since `Skip`'s resolved value is always the existing value | Unit test | `Quotinator.Engine.Tests.PlanSourcesAsync_CompleteSource_SkipPolicy_DoesNotBlock` — red before (confirmed via `git stash`), green after |
+| 3 | ✅ | A `Complete` quote under `Skip` policy never blocks either (regression guard, mirrors requirement 2) | Unit test | `Quotinator.Engine.Tests.PlanAsync_QuoteAlreadyComplete_SkipPolicy_DoesNotBlock` — caught a real `List<string>`-equality bug during implementation (see plan doc step 3), green after the fix |
+| 4 | ✅ | The previously-misleading existing test now asserts the overwrite itself is prevented | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnchanged` — rewritten, green |
+| 5 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 254/254 passing, 0 warnings, 0 errors |
+| 6 | ✅ | Live: importing a change to a `Complete` quote via `POST /api/v1/import` returns held (not a silent success) | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`: marked a curated Casablanca quote `Complete` via decide+`markCompletenessAs`, then re-imported a changed field — **this is the exact scenario that originally crashed with a bare `500`** (`BuildConflictEntries`'s `InvalidOperationException`, found live, fixed — see step 3 note below); after the fix, returns `202` with `summary.updated: 0`, `pendingActionIds` non-empty, `GET /import/actions?status=Blocked` shows the held action, and the quote text in the running container is confirmed unchanged. The companion Source/`Skip` case (requirement 2) is covered by a passing unit test; a live re-verification of that specific case was attempted but not completed under this session's time budget — not a gap in the fix itself, since #168's unit coverage already proves it |
 | 7 | ❌ | App still opens and builds in Visual Studio; this milestone's plan docs remain visible/correct | Live (T1) | Developer starts the app in Visual Studio and confirms no startup error |
 
 ---

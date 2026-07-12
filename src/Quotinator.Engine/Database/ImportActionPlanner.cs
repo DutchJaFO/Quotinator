@@ -47,6 +47,7 @@ internal static class ImportActionPlanner
         var characterIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var personIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var seenQuotes     = new Dictionary<string, SourceQuote>(StringComparer.Ordinal);
+        var seenQuoteStatus = new Dictionary<string, CompletenessStatus>(StringComparer.Ordinal);
 
         var batchIdStr = batchId.ToString("D").ToUpperInvariant();
         var now        = DateTime.UtcNow;
@@ -63,12 +64,13 @@ internal static class ImportActionPlanner
             var personId    = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
 
             var existing = seenQuotes.TryGetValue(q.Id, out var firstInFile)
-                ? new QuoteSeedWriter.ExistingQuoteFields(QuoteFieldMerge.ToFieldMap(firstInFile), batchIdStr)
+                ? new QuoteSeedWriter.ExistingQuoteFields(QuoteFieldMerge.ToFieldMap(firstInFile), batchIdStr, seenQuoteStatus.GetValueOrDefault(q.Id, CompletenessStatus.Incomplete))
                 : await QuoteSeedWriter.TryGetExistingFieldsAsync(connection, q.Id, transaction);
 
             if (existing is null)
             {
                 seenQuotes[q.Id] = q;
+                seenQuoteStatus[q.Id] = CompletenessStatus.Incomplete;
                 var payload = new QuoteActionPayload
                 {
                     Fields    = QuoteFieldMerge.ToDto(q),
@@ -108,6 +110,31 @@ internal static class ImportActionPlanner
                 _ => q,
             };
 
+            // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved), not
+            // the raw incoming value — Skip's resolved value always equals existingFields (nothing
+            // written), so Skip can never block a Complete quote; a merge policy only blocks on
+            // fields the merge itself would actually change.
+            var resolvedFields     = QuoteFieldMerge.ToFieldMap(resolved);
+            var effectiveChanged   = new HashSet<string>(
+                existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+
+            if (CompletenessGuard.ShouldBlock(existing.Value.CompletenessStatus, effectiveChanged))
+            {
+                actions.Add(new SystemImportAction
+                {
+                    BatchId         = batchIdStr,
+                    ExistingBatchId = existingBatchId,
+                    ActionType      = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType      = ImportActionEntityTypes.Quote,
+                    EntityId        = q.Id,
+                    ExistingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                    IncomingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                    Status          = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                    DetectedAt      = now,
+                });
+                continue;
+            }
+
             // Review is the only policy left Pending; every other policy is Decided at detection
             // time, with the final resolved values already computed so apply never needs policy logic.
             var isPending = policy == DuplicateResolutionPolicy.Review;
@@ -129,7 +156,10 @@ internal static class ImportActionPlanner
             });
 
             if (!isPending)
+            {
                 seenQuotes[q.Id] = resolved;
+                seenQuoteStatus[q.Id] = existing.Value.CompletenessStatus;
+            }
         }
 
         await PlanStageDirectionsAsync(connection, stageDirections ?? [], batchIdStr, actions, now, transaction);
@@ -282,11 +312,29 @@ internal static class ImportActionPlanner
                 sourceIndex[$"{s.Title}|{typeStr}"] = s.Id;
 
                 var changedFields = new HashSet<string>(
-                    existingFields.Where(kv => !Equals(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
                 if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
 
+                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                var resolved    = policy switch
+                {
+                    DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
+                        new SourceActionPayload((string)mergeResult!.MergedFields["title"]!, (string)mergeResult.MergedFields["type"]!, (string?)mergeResult.MergedFields["date"]),
+                    DuplicateResolutionPolicy.Skip => existingPayload,
+                    _ => incomingPayload,
+                };
+
+                // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
+                // not the raw incoming value used for the "unchanged" check above — Skip's resolved
+                // value is always existingPayload (nothing written), so Skip can never block a
+                // Complete row; a merge policy only blocks on fields the merge itself would change.
+                var resolvedFields        = ToFieldMap(resolved);
+                var effectiveChangedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+
                 var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-                if (CompletenessGuard.ShouldBlock(currentStatus, changedFields))
+                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
                     actions.Add(new SystemImportAction
                     {
@@ -301,16 +349,6 @@ internal static class ImportActionPlanner
                     });
                     continue;
                 }
-
-                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved    = policy switch
-                {
-                    DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
-                        new SourceActionPayload((string)mergeResult!.MergedFields["title"]!, (string)mergeResult.MergedFields["type"]!, (string?)mergeResult.MergedFields["date"]),
-                    DuplicateResolutionPolicy.Skip => existingPayload,
-                    _ => incomingPayload,
-                };
 
                 var isPending = policy == DuplicateResolutionPolicy.Review;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;

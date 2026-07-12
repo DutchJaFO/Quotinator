@@ -215,9 +215,17 @@ public class QuoteImportServiceTests
         Assert.AreEqual("[]", noValueKnown, "A brand-new row must default NoValueKnown to an empty JSON array");
     }
 
+    /// <summary>
+    /// #168: prior to that fix, this test asserted the opposite of what it's named — a `Complete` row
+    /// was silently rewritten by any non-Skip/Review policy, and only the completeness columns
+    /// themselves were checked as "surviving." Rewritten to assert what "survives reimport unchanged"
+    /// actually requires: the row itself, not only its completeness bookkeeping, must be untouched
+    /// until a human decides the held action. `MergeOurs` is deliberately excluded from this DataRow
+    /// set — see <see cref="ImportAsync_ExistingRowMarkedComplete_MergeOursPolicy_NeverBlocksSinceExistingWins"/>
+    /// for why it behaves differently.
+    /// </summary>
     [TestMethod]
     [DataRow(DuplicateResolutionPolicy.NewestWins)]
-    [DataRow(DuplicateResolutionPolicy.MergeOurs)]
     [DataRow(DuplicateResolutionPolicy.MergeTheirs)]
     public async Task ImportAsync_ExistingRowMarkedComplete_SurvivesReimportUnchanged(DuplicateResolutionPolicy policy)
     {
@@ -235,15 +243,47 @@ public class QuoteImportServiceTests
         var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = policy } };
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false);
 
-        Assert.AreEqual(1, result.Summary.Updated, "The duplicate must still be resolved (row rewritten), not skipped");
+        Assert.AreEqual(0, result.Summary.Updated, "A Complete row's field change must be held, not silently applied, regardless of policy");
+        Assert.AreEqual(1, result.PendingActionIds.Count, "The held action must be surfaced as pending/blocked");
 
         using var conn2 = new SqliteConnection($"Data Source={_dbPath}");
         conn2.Open();
-        var (completenessStatus, noValueKnown) = await conn2.QuerySingleAsync<(string CompletenessStatus, string NoValueKnown)>(
-            "SELECT CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+        var (quoteText, completenessStatus, noValueKnown) = await conn2.QuerySingleAsync<(string QuoteText, string CompletenessStatus, string NoValueKnown)>(
+            "SELECT QuoteText, CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
 
-        Assert.AreEqual("Complete", completenessStatus, "A human's completed review must survive a re-import that rewrites the row");
-        Assert.AreEqual("[\"date\"]", noValueKnown, "Confirmed no-value-known markers must survive a re-import that rewrites the row");
+        Assert.AreEqual("Original.", quoteText, "The row itself must be untouched — this is what 'survives reimport unchanged' actually means");
+        Assert.AreEqual("Complete", completenessStatus, "A human's completed review must survive a held re-import attempt");
+        Assert.AreEqual("[\"date\"]", noValueKnown, "Confirmed no-value-known markers must survive a held re-import attempt");
+    }
+
+    /// <summary>
+    /// #168: <c>MergeOurs</c> resolves any true conflict (both sides non-empty and differing) by
+    /// keeping the existing value — so against a <c>Complete</c> row, the resolved write is always
+    /// identical to what's already there. Nothing would actually change, so <c>ShouldBlock</c>
+    /// correctly never triggers; this is not a gap, it's `MergeOurs`'s own semantics already
+    /// protecting a human-confirmed value on every conflicting field.
+    /// </summary>
+    [TestMethod]
+    public async Task ImportAsync_ExistingRowMarkedComplete_MergeOursPolicy_NeverBlocksSinceExistingWins()
+    {
+        var service = CreateService();
+        await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false);
+
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            conn.Open();
+            await conn.ExecuteAsync("UPDATE Quotes SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = SharedId });
+        }
+
+        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
+        var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false);
+
+        Assert.AreEqual(0, result.PendingActionIds.Count, "MergeOurs keeps the existing value on every conflicting field, so there is nothing to hold");
+
+        using var conn2 = new SqliteConnection($"Data Source={_dbPath}");
+        conn2.Open();
+        var quoteText = await conn2.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id", new { id = SharedId });
+        Assert.AreEqual("Original.", quoteText, "MergeOurs must keep the existing (Complete) value, not the incoming one");
     }
 
     /// <summary>
