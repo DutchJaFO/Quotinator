@@ -1,6 +1,6 @@
 # #168 — Quote's own Modify path never checks CompletenessGuard
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #168
 **Tiers required:** T1, T2
 **Depends on:** #165
@@ -127,7 +127,7 @@ still-`Complete` status are correct. Full solution build: 0 warnings, 0 errors. 
 | 4 | ✅ | The previously-misleading existing test now asserts the overwrite itself is prevented | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnchanged` — rewritten, green |
 | 5 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 254/254 passing, 0 warnings, 0 errors |
 | 6 | ✅ | Live: importing a change to a `Complete` quote via `POST /api/v1/import` returns held (not a silent success) | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`: marked a curated Casablanca quote `Complete` via decide+`markCompletenessAs`, then re-imported a changed field — **this is the exact scenario that originally crashed with a bare `500`** (`BuildConflictEntries`'s `InvalidOperationException`, found live, fixed — see step 3 note below); after the fix, returns `202` with `summary.updated: 0`, `pendingActionIds` non-empty, `GET /import/actions?status=Blocked` shows the held action, and the quote text in the running container is confirmed unchanged. The companion Source/`Skip` case (requirement 2) is covered by a passing unit test; a live re-verification of that specific case was attempted but not completed under this session's time budget — not a gap in the fix itself, since #168's unit coverage already proves it |
-| 7 | ❌ | App still opens and builds in Visual Studio; this milestone's plan docs remain visible/correct | Live (T1) | Developer starts the app in Visual Studio and confirms no startup error |
+| 7 | ✅ | App still opens and builds in Visual Studio; this milestone's plan docs remain visible/correct | Live (T1) | Developer confirmed: app starts cleanly in Visual Studio (v1.7.2, schema v8/data v10, 796 quotes 479 sources 7 characters 0 people); `POST /api/v1/admin/database/reset` and `.../reseed` both completed successfully (`200`) with identical pre/post counts and no errors — only the pre-existing, expected dummy-file JSON warnings appeared |
 
 ---
 

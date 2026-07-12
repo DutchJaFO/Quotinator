@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-12 14:55 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-12 18:12 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -89,6 +89,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The legacy in-memory `QuoteService` duplicated the source-file parser's logic instead of reusing it, and broke once a source file used the extended object format; now reuses the shared parser. This code path is not reachable in the running application — nothing has registered it since the SQLite migration — but it remains covered by its own test suite (issue #68)
 - Quote, source, character, and conversation SQL queries had been living inside the generic data-access library instead of the Quotinator-specific project since before that split existed — a purely internal code-organisation fix with no behaviour change (issue #157)
 - Import-batch tracking (which file was imported, when, and by what policy) had also ended up in the Quotinator-specific project instead of the generic data-access library it actually belongs in — another purely internal code-organisation fix with no behaviour change (issue #158)
+- A quote confirmed fully reviewed could still have its fields silently changed by a later import — only a Source correction was actually held for review as intended; both are now correctly held. A Source correction under a policy that keeps the existing value on conflict no longer holds unnecessarily when nothing would actually change (issue #168)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`
