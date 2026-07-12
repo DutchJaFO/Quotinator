@@ -64,9 +64,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#170](https://github.com/DutchJaFO/Quotinator/issues/170) | ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions" | Planning | T1 ⬜ T2 ⬜ | [170-not-decidable-wording-plan.md](170-not-decidable-wording-plan.md) |
 | [#171](https://github.com/DutchJaFO/Quotinator/issues/171) | StageDirection: Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [171-stagedirection-modify-plan.md](171-stagedirection-modify-plan.md) |
 | [#172](https://github.com/DutchJaFO/Quotinator/issues/172) | SoundCue: Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [172-soundcue-modify-plan.md](172-soundcue-modify-plan.md) |
-| [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | Planning | Not yet assessed | No plan doc yet |
-| [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: from per-Source to global identity (ADR + migration) | Planning | Not yet assessed | No plan doc yet |
-| [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | Not yet assessed | No plan doc yet |
+| [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | Planning | T1 ⬜ T2 ⬜ | [173-person-modify-plan.md](173-person-modify-plan.md) |
+| [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: from per-Source to global identity (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
+| [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
 | [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Planning | Not yet assessed | No plan doc yet |
 | [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning | Not yet assessed | No plan doc yet — decomposed out of #153 |
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning | Not yet assessed | No plan doc yet — deferred out of #149 |
