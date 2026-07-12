@@ -822,7 +822,7 @@ public class DatabaseInitializerTests
             new { id = Guid.NewGuid().ToString(), soundCueId, now }));
     }
 
-    /// <summary><see cref="ConversationLineType"/> round-trips through Dapper as a real enum, not an int — the <see cref="Data.Helpers.SafeEnumHandler{TEnum}"/> pattern already used for <see cref="ImportBatchType"/>/<see cref="ImportBatchStatus"/>.</summary>
+    /// <summary><see cref="ConversationLineType"/> round-trips through Dapper as a real enum, not an int — the <see cref="Data.Helpers.SafeEnumHandler{TEnum}"/> pattern already used for <see cref="Data.Entities.ImportBatchType"/>/<see cref="Data.Entities.ImportBatchStatus"/>.</summary>
     [TestMethod]
     public async Task ConversationLineType_RoundTripsThroughDapper()
     {
