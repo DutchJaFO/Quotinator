@@ -10,4 +10,6 @@ Summary of all CVEs this project has been alerted to. See [`docs/workflow/cve.md
 
 ## Archived
 
-*(none yet)*
+| CVE | Package | Version range | Status | Projects | Issue |
+|-----|---------|---------------|--------|----------|-------|
+| CVE-2026-49451 | `Microsoft.OpenApi` | >= 2.0.0-preview11, <= 2.7.4 | Closed | [Api](../../src/Quotinator.Api/CVE/archived/CVE-2026-49451.md) | N/A |

@@ -9,6 +9,15 @@
     "fixed": "Behoben",
     "removed": "Entfernt"
   },
+  "unreleased": {
+    "cves": ["CVE-2026-49451"],
+    "highlights": [
+      "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen."
+    ],
+    "fixed": [
+      "CVE-2026-49451: `Microsoft.OpenApi` (transitiv über `Microsoft.AspNetCore.OpenApi`) hatte eine Stack-Overflow-Schwachstelle beim Parsen von OpenAPI-Dokumenten mit zirkulären Schemaverweisen; Quotinator generiert nur sein eigenes OpenAPI-Dokument und parst niemals nicht vertrauenswürdige Dokumente, daher war der verwundbare Pfad unerreichbar — trotzdem auf 2.7.5 gepatcht über eine direkte Paket-Überschreibung"
+    ]
+  },
   "releases": [
     {
       "version": "1.7.2",
