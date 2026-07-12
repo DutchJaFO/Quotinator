@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-11 19:05 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-12 14:23 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - An applied import can now be undone through a new endpoint — reversing everything it added or changed, as long as no newer import has happened since.
 - Adding a new quote source in CSV or JSON format usually no longer requires writing any code — a manifest entry with simple field-mapping options is now enough for most formats.
 - Multi-line exchanges — a back-and-forth between characters, with stage directions and sound cues in between — can now be fetched as a single ordered conversation, and a random quote that's part of one no longer shows up on its own without the rest of the exchange.
+- A source's title, type, or release date can now be corrected after the fact — for example fixing a typo in a film title, or filling in a missing year — without creating a duplicate entry.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -41,7 +42,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New `POST /api/v1/import` endpoint imports a single source file (JSON, or CSV via a new converter plugin), reusing the same duplicate-detection engine as startup seeding — supports a per-request `duplicateResolution` override and an optional `converter` selection
 - New `POST /api/v1/import/preview` endpoint runs the identical import pipeline but rolls back every write, so conflicts and errors can be reviewed before committing
 - Manifest file entries (`data/sources/manifest.json` and user import manifests) can now declare their own `duplicateResolution` override, taking priority over the manifest-wide and configured defaults
-- Quotes, sources, characters, and people now have an `IsComplete` flag and a `NoValueKnown` list of confirmed-empty fields in the database, laying the groundwork for future data-quality tooling; not yet exposed via the API or management UI, and never reset when an existing record is rewritten by a duplicate-resolution policy
+- Quotes, sources, characters, people, conversations, stage directions, and sound cues now have a completeness status (not yet reviewed / looks complete / confirmed complete) and a `NoValueKnown` list of confirmed-empty fields in the database, laying the groundwork for future data-quality tooling; not yet exposed via the API or management UI beyond the import decide flow below, and never reset when an existing record is rewritten by a duplicate-resolution policy
+- Deciding a staged import action can now also set the affected record's completeness status directly (most commonly confirming it's fully reviewed), applied together with the rest of that decision
+- A record confirmed fully reviewed can no longer be silently overwritten by a later import — any attempt is held for explicit review instead, and holds the entire import batch (not just the affected record) until resolved
+- Source records declared in a source file's `sources` section can now carry their own stable identifier, decoupling which row an import matches from that row's title/type/date — so a later correction updates the existing record instead of creating a duplicate
+- `POST /api/v1/import/actions/{id}/decide` now also accepts decisions for a staged Source correction (title, type, date), not only quotes
 - A new internal change log records every quote, source, and character created or modified during seeding and import, including which import batch introduced it — laying the groundwork for a future change-history view; not yet exposed via the API or management UI
 - New `GET /api/v1/import/actions` endpoint lists staged import actions (quotes, sources, characters, people), paginated, filterable by status, import batch, and entity type — showing which fields still need a decision and how related actions in the same batch connect to each other
 - New `POST /api/v1/import/actions/{id}/decide` and `.../undo` endpoints stage or revert a per-field keep/replace/custom-value decision for one staged action
@@ -65,6 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Internal audit and duplicate-conflict records now carry the same creation/modification tracking as every other database record, for consistency; existing installations upgrade automatically on next startup with no action needed
 - Import endpoints (`POST /api/v1/import`, `.../import/preview`) moved out from under `/api/v1/quotes` into their own `/api/v1/import` route group, all under a new `Import` OpenAPI tag
 - `POST /api/v1/import` and `.../import/preview` now return `200` when everything applies (or would apply) cleanly, or `202` when any row needs a decision, instead of always returning `200`
+- `GET /api/v1/import/actions`'s `status` filter now also accepts `blocked`, for an action held because it would have modified a record confirmed fully reviewed
 - `POST /api/v1/import/preview` now stages a real, inspectable batch instead of rolling back its writes — nothing is written either way, but the staged batch can be reviewed afterward via `GET /api/v1/import/actions?batchId=`
 - The bundled `NikhilNamal17/popular-movie-quotes` and `vilaboim/movie-quotes` sources now use the new generic `basic-json-array`/`regex-array` converters, configured via `converterOptions` in `data/sources/manifest.json` instead of dedicated per-source code — output is unchanged, same quote ids and content
 

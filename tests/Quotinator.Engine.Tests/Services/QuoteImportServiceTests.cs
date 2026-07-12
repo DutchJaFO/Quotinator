@@ -251,9 +251,9 @@ public class QuoteImportServiceTests
     /// action (a <c>sources[]</c> correction against an already-<c>Complete</c> row) must report
     /// <c>PendingActionIds</c> non-empty and must genuinely hold the whole batch — an unrelated
     /// brand-new quote sharing the same batch must not be written either. The bug this guards against:
-    /// <see cref="ImportResultResponse"/> originally only reflected Quote-specific <c>Conflicts</c>,
-    /// so a batch held purely by a Source Blocked action silently reported success with nothing
-    /// actually applied.
+    /// <c>ImportResultResponse</c> originally only reflected Quote-specific <c>Conflicts</c>, so a
+    /// batch held purely by a Source Blocked action silently reported success with nothing actually
+    /// applied.
     /// </summary>
     [TestMethod]
     public async Task ImportAsync_BlockedSourceInBatch_PendingActionIdsNonEmptyAndWholeBatchHeld()

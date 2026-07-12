@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -23,7 +23,8 @@
       "Ein Import, der noch überprüft werden muss, kann jetzt später abgeschlossen werden, indem auf seinen Batch verwiesen wird, ohne die Datei erneut hochzuladen.",
       "Ein angewendeter Import kann jetzt über einen neuen Endpunkt rückgängig gemacht werden — alles, was hinzugefügt oder geändert wurde, wird zurückgenommen, sofern seitdem kein neuerer Import stattgefunden hat.",
       "Eine neue Zitatquelle im CSV- oder JSON-Format hinzuzufügen erfordert jetzt meist keinen eigenen Code mehr — ein Manifesteintrag mit einfachen Feldzuordnungsoptionen genügt nun für die meisten Formate.",
-      "Mehrzeilige Dialoge — ein Hin und Her zwischen Charakteren, mit Regieanweisungen und Toncues dazwischen — können jetzt als eine einzige geordnete Konversation abgerufen werden, und ein zufälliges Zitat, das Teil davon ist, erscheint nicht mehr allein ohne den Rest des Dialogs."
+      "Mehrzeilige Dialoge — ein Hin und Her zwischen Charakteren, mit Regieanweisungen und Toncues dazwischen — können jetzt als eine einzige geordnete Konversation abgerufen werden, und ein zufälliges Zitat, das Teil davon ist, erscheint nicht mehr allein ohne den Rest des Dialogs.",
+      "Titel, Typ oder Erscheinungsdatum einer Quelle können jetzt nachträglich korrigiert werden — etwa ein Tippfehler in einem Filmtitel oder ein fehlendes Jahr — ohne dass ein doppelter Eintrag entsteht."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -43,7 +44,11 @@
       "Neuer Endpunkt `POST /api/v1/import` importiert eine einzelne Quelldatei (JSON oder, über ein neues Konverter-Plugin, CSV) und verwendet dabei dieselbe Duplikaterkennung wie beim Seeding zum Start — unterstützt eine Überschreibung von `duplicateResolution` pro Anfrage und eine optionale `converter`-Auswahl",
       "Neuer Endpunkt `POST /api/v1/import/preview` führt dieselbe Importpipeline aus, macht aber jede Schreiboperation rückgängig, sodass Konflikte und Fehler vor dem eigentlichen Übernehmen geprüft werden können",
       "Manifest-Dateieinträge (`data/sources/manifest.json` und Benutzer-Import-Manifeste) können nun eine eigene `duplicateResolution`-Überschreibung angeben, die Vorrang vor den manifestweiten und konfigurierten Standardwerten hat",
-      "Zitate, Quellen, Charaktere und Personen haben jetzt ein `IsComplete`-Kennzeichen und eine `NoValueKnown`-Liste bestätigt leerer Felder in der Datenbank, als Grundlage für künftige Datenqualitäts-Werkzeuge; noch nicht über die API oder die Verwaltungsoberfläche zugänglich, und wird nie zurückgesetzt, wenn ein bestehender Datensatz durch eine Konfliktlösungsrichtlinie überschrieben wird",
+      "Zitate, Quellen, Charaktere, Personen, Konversationen, Regieanweisungen und Toncues haben jetzt einen Vollständigkeitsstatus (noch nicht überprüft / wirkt vollständig / bestätigt vollständig) und eine `NoValueKnown`-Liste bestätigt leerer Felder in der Datenbank, als Grundlage für künftige Datenqualitäts-Werkzeuge; noch nicht über die API oder die Verwaltungsoberfläche zugänglich, außer über den unten beschriebenen Entscheidungsablauf beim Import, und wird nie zurückgesetzt, wenn ein bestehender Datensatz durch eine Konfliktlösungsrichtlinie überschrieben wird",
+      "Beim Entscheiden über eine gestaffelte Importaktion kann jetzt auch der Vollständigkeitsstatus des betroffenen Datensatzes direkt festgelegt werden (meist um zu bestätigen, dass er vollständig überprüft wurde), zusammen mit dem Rest dieser Entscheidung angewendet",
+      "Ein als vollständig überprüft bestätigter Datensatz kann nicht mehr stillschweigend durch einen späteren Import überschrieben werden — jeder Versuch wird stattdessen zur ausdrücklichen Überprüfung zurückgehalten und hält den gesamten Import-Batch (nicht nur den betroffenen Datensatz) zurück, bis dies gelöst ist",
+      "Quelleinträge, die im `sources`-Abschnitt einer Quelldatei angegeben werden, können jetzt eine eigene stabile Kennung tragen, wodurch entkoppelt wird, welche Zeile ein Import zuordnet, von Titel/Typ/Datum dieser Zeile — sodass eine spätere Korrektur den bestehenden Datensatz aktualisiert, statt ein Duplikat zu erzeugen",
+      "`POST /api/v1/import/actions/{id}/decide` akzeptiert jetzt auch Entscheidungen für eine gestaffelte Quellkorrektur (Titel, Typ, Datum), nicht nur für Zitate",
       "Ein neues internes Änderungsprotokoll erfasst jedes Zitat, jede Quelle und jeden Charakter, der beim Seeding oder Import erstellt oder geändert wurde, einschließlich des Import-Batches, der es eingeführt hat — als Grundlage für eine zukünftige Änderungsverlaufsansicht; noch nicht über die API oder die Verwaltungsoberfläche zugänglich",
       "Neuer Endpunkt `GET /api/v1/import/actions` listet gestaffelte Importaktionen (Zitate, Quellen, Charaktere, Personen) paginiert auf, filterbar nach Status, Import-Batch und Entitätstyp — zeigt, welche Felder noch eine Entscheidung benötigen und wie zusammenhängende Aktionen im selben Batch miteinander verknüpft sind",
       "Neue Endpunkte `POST /api/v1/import/actions/{id}/decide` und `.../undo` legen eine Entscheidung pro Feld (behalten/ersetzen/eigener Wert) für eine gestaffelte Aktion fest oder machen sie rückgängig",
@@ -67,6 +72,7 @@
       "Interne Audit- und Duplikatkonflikt-Datensätze verfügen jetzt über dieselbe Erstellungs-/Änderungsverfolgung wie jeder andere Datenbankeintrag, aus Konsistenzgründen; bestehende Installationen werden beim nächsten Start automatisch aktualisiert, ohne dass eine Aktion erforderlich ist",
       "Import-Endpunkte (`POST /api/v1/import`, `.../import/preview`) wurden von unter `/api/v1/quotes` in eine eigene `/api/v1/import`-Routengruppe verschoben, alle unter einem neuen `Import`-OpenAPI-Tag",
       "`POST /api/v1/import` und `.../import/preview` geben jetzt `200` zurück, wenn alles sauber angewendet wird (oder würde), oder `202`, wenn eine Zeile eine Entscheidung benötigt, statt immer `200` zurückzugeben",
+      "Der `status`-Filter von `GET /api/v1/import/actions` akzeptiert jetzt auch `blocked`, für eine Aktion, die zurückgehalten wird, weil sie einen als vollständig überprüft bestätigten Datensatz ändern würde",
       "`POST /api/v1/import/preview` staffelt jetzt einen echten, einsehbaren Batch, anstatt seine Schreibvorgänge rückgängig zu machen — in beiden Fällen wird nichts geschrieben, aber der gestaffelte Batch kann anschließend über `GET /api/v1/import/actions?batchId=` überprüft werden",
       "Die gebündelten Quellen `NikhilNamal17/popular-movie-quotes` und `vilaboim/movie-quotes` verwenden jetzt die neuen generischen Konverter `basic-json-array`/`regex-array`, konfiguriert über `converterOptions` in `data/sources/manifest.json` statt über eigenen Code pro Quelle — die Ausgabe ist unverändert, dieselben Zitat-Ids und Inhalte"
     ],

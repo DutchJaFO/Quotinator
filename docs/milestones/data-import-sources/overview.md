@@ -57,8 +57,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#158](https://github.com/DutchJaFO/Quotinator/issues/158) | ImportBatch entity/repository/enums live in Quotinator.Engine instead of Quotinator.Data | Waiting for release | T2 ✅ | [158-importbatch-to-data-plan.md](158-importbatch-to-data-plan.md) |
 | [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow | Waiting for release | T1 ✅ T2 ✅ | [149-manual-conflict-review-plan.md](149-manual-conflict-review-plan.md) |
 | [#152](https://github.com/DutchJaFO/Quotinator/issues/152) | Review endpoint grouping: split Admin / Quote / Import | Waiting for release | T1 ✅ T2 ✅ | [152-endpoint-grouping-plan.md](152-endpoint-grouping-plan.md) |
-| [#165](https://github.com/DutchJaFO/Quotinator/issues/165) | Generalize record completeness to a 3-state model and hard-block modifying completed rows | Planning | Not yet assessed | [165-completeness-review-model-plan.md](165-completeness-review-model-plan.md) |
-| [#162](https://github.com/DutchJaFO/Quotinator/issues/162) | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Planning | Not yet assessed | [162-source-explicit-id-plan.md](162-source-explicit-id-plan.md) |
+| [#165](https://github.com/DutchJaFO/Quotinator/issues/165) | Generalize record completeness to a 3-state model and hard-block modifying completed rows | Waiting for release | T1 ✅ T2 ✅ | [165-completeness-review-model-plan.md](165-completeness-review-model-plan.md) |
+| [#162](https://github.com/DutchJaFO/Quotinator/issues/162) | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Waiting for release | T1 ✅ T2 ✅ | [162-source-explicit-id-plan.md](162-source-explicit-id-plan.md) |
 | [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning | Not yet assessed | No plan doc yet — decomposed out of #153 |
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning | Not yet assessed | No plan doc yet — deferred out of #149 |
 | [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Waiting for release | T1 ✅ T2 ✅ | [154-import-staging-plan.md](154-import-staging-plan.md) |
@@ -132,8 +132,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 23 | #157 | Sql.cs mixes domain-specific SQL into domain-agnostic Quotinator.Data | Waiting for release |
 | 24 | #158 | ImportBatch entity/repository/enums live in Quotinator.Engine instead of Quotinator.Data | Waiting for release |
 | 25 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Waiting for release |
-| 26 | #165 | Generalize record completeness to a 3-state model and hard-block modifying completed rows | Planning |
-| 27 | #162 | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Planning |
+| 26 | #165 | Generalize record completeness to a 3-state model and hard-block modifying completed rows | Waiting for release |
+| 27 | #162 | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Waiting for release |
 | 28 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
 | 29 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
 | 30 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
