@@ -483,7 +483,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(0, legacyCount, "The legacy SchemaVersion table must no longer exist after the rename");
         Assert.AreEqual(1, preservedRow, "The pre-existing version-history row must survive the rename, not be wiped");
-        Assert.AreEqual(9, db2.DataSchemaVersion, "Data migrations 2-9 (the rename, System_ImportConflicts, System_ChangeLog, both RecordBase retrofits, ExistingBatchId, System_ImportActions, and the Status CHECK constraint) should all have replayed after the legacy rename");
+        Assert.AreEqual(10, db2.DataSchemaVersion, "Data migrations 2-10 (the rename, System_ImportConflicts, System_ChangeLog, both RecordBase retrofits, ExistingBatchId, System_ImportActions, the Status CHECK constraint, and Blocked/MarkCompletenessAs) should all have replayed after the legacy rename");
     }
 
     /// <summary>Data migration 2 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
@@ -865,7 +865,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(9, db.DataSchemaVersion);
+        Assert.AreEqual(10, db.DataSchemaVersion);
         Assert.AreEqual(8, db.SchemaVersion);
     }
 
@@ -893,8 +893,8 @@ public class DatabaseInitializerTests
         var db2 = CreateInitializer([]);
         await db2.InitialiseAsync();
 
-        Assert.AreEqual(8, db2.SchemaVersion,     "All five remaining App migrations (4, 5, 6, 7, and 8) should have replayed");
-        Assert.AreEqual(9, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
+        Assert.AreEqual(8, db2.SchemaVersion,      "All five remaining App migrations (4, 5, 6, 7, and 8) should have replayed");
+        Assert.AreEqual(10, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
     }
 
     /// <summary>

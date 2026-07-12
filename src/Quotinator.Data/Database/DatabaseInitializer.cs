@@ -33,6 +33,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 7, Sql = ImportConflictMigrations.AddExistingBatchId },
         new SchemaMigration { Version = 8, Sql = ImportActionMigrations.CreateImportActionsTable },
         new SchemaMigration { Version = 9, Sql = ImportConflictMigrations.AddStatusCheckConstraint },
+        new SchemaMigration { Version = 10, Sql = ImportActionMigrations.AddBlockedStatusAndMarkCompletenessAs },
     ];
 
     // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and

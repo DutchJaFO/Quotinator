@@ -145,6 +145,78 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
+    /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
+    /// for <c>System_ImportActions</c> (added by #154's Data-owned migration 8, widened by #165's
+    /// migration 10 to add <c>Blocked</c>/<c>MarkCompletenessAs</c>).
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemImportActionsSchema()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync();
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync();
+
+        var schemaA = await DumpTableSchemaAsync(connA, "System_ImportActions");
+        var schemaB = await DumpTableSchemaAsync(connB, "System_ImportActions");
+
+        CollectionAssert.AreEqual(schemaB, schemaA,
+            "System_ImportActions schema differs between Data's baseline and incremental paths — " +
+            "update DataBaselineSql to match DataOwnedMigrations' final result.");
+    }
+
+    /// <summary>
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural
+    /// round-trip closes that gap for <c>System_ImportActions.Status</c>'s <c>Blocked</c> value and
+    /// <c>MarkCompletenessAs</c>'s constraint, for both the baseline and incremental paths.
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameImportActionsCheckConstraintValues()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync();
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync();
+
+        foreach (var conn in new[] { connA, connB })
+        {
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            var id  = Guid.NewGuid().ToString();
+
+            await conn.ExecuteAsync(
+                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Blocked', 'Complete', @now, @now);",
+                new { id, now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'NotARealStatus', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Pending', 'NotARealCompletenessValue', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+        }
+    }
+
+    /// <summary>
     /// PRAGMA table_info/index_list do not capture CHECK constraint text, so a baseline that silently
     /// dropped a value from <c>InitiatedByType</c>'s or <c>Action</c>'s constraint (or introduced a
     /// typo) would pass the structural schema comparison above undetected. This behavioural round-trip
@@ -200,9 +272,81 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync();
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(9, dataRows,
+        Assert.AreEqual(10, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(9, db.DataSchemaVersion);
+        Assert.AreEqual(10, db.DataSchemaVersion);
+    }
+
+    /// <summary>
+    /// Regression guard, found live: a database that already migrated through Data-version 9 (the
+    /// shape #154's <c>System_ImportActions</c> had before #165) must correctly pick up migration 10
+    /// (<c>Blocked</c>/<c>MarkCompletenessAs</c>) on its next startup — not silently skip it because
+    /// <c>System_SchemaVersion</c> already recorded a version number. #165 initially edited migration
+    /// 8's own SQL text in place instead of adding a new migration, which passed every existing test
+    /// (all of which start from a genuinely empty database) but broke on a developer's own real,
+    /// already-migrated-to-v9 database — the version-9 row meant migration 8's changed text never
+    /// re-ran, so the widened CHECK/new column silently never appeared. This test manually seeds a
+    /// database at exactly that pre-#165 v9 shape (not via the current code's migration list — that
+    /// would trivially "pass" against whatever the current migration list happens to say) and proves
+    /// the upgrade path actually works.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_ExistingDatabaseAtDataVersion9_UpgradesSystemImportActionsWithBlockedAndMarkCompletenessAs()
+    {
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        using var temp = new TempDatabase(
+        [
+            "CREATE TABLE System_SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);",
+            $"INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (9, '{now}');",
+            // Pre-#165 shape (migration 8's original text) — no Blocked, no MarkCompletenessAs.
+            """
+            CREATE TABLE System_ImportActions (
+                Id              TEXT    NOT NULL PRIMARY KEY,
+                BatchId         TEXT    NOT NULL,
+                ActionType      TEXT    NOT NULL
+                                CHECK (ActionType IN ('Add', 'Modify')),
+                EntityType      TEXT    NOT NULL,
+                EntityId        TEXT    NOT NULL,
+                ExistingBatchId TEXT,
+                ExistingValue   TEXT,
+                IncomingValue   TEXT    NOT NULL,
+                AppliedPolicy   TEXT,
+                Status          TEXT    NOT NULL
+                                CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded')),
+                MergedFields    TEXT,
+                DetectedAt      TEXT    NOT NULL,
+                AppliedAt       TEXT,
+                DiscardedAt     TEXT,
+                DateCreated     TEXT    NOT NULL,
+                DateModified    TEXT,
+                DateDeleted     TEXT,
+                IsDeleted       INTEGER NOT NULL DEFAULT 0
+            );
+            """,
+            // Enough of the other Data-owned tables (System_AuditEntries, System_ImportConflicts,
+            // System_ChangeLog) to satisfy AnyTableExists's "not a genuinely empty database" check —
+            // exact shape doesn't matter here, only System_ImportActions is under test.
+            "CREATE TABLE System_AuditEntries (Id TEXT NOT NULL PRIMARY KEY);",
+        ]);
+        var db = CreateBareInitializer(temp.DbPath, []);
+
+        await db.InitialiseAsync();
+
+        Assert.AreEqual(10, db.DataSchemaVersion, "Migration 10 must have applied on top of the existing v9 database");
+
+        using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
+        await conn.OpenAsync();
+
+        var id = Guid.NewGuid().ToString();
+        await conn.ExecuteAsync(
+            "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
+            "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Blocked', 'Complete', @now, @now);",
+            new { id, now });
+
+        var (status, markCompletenessAs) = await conn.QuerySingleAsync<(string Status, string MarkCompletenessAs)>(
+            "SELECT Status, MarkCompletenessAs FROM System_ImportActions WHERE Id = @id;", new { id });
+        Assert.AreEqual("Blocked", status);
+        Assert.AreEqual("Complete", markCompletenessAs);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

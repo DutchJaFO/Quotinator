@@ -23,6 +23,22 @@ what it builds.
 (latest: `v1.7.2`) and isn't merged to `main` yet — only present on the feature branch this work is
 happening on. It can be edited in place; nothing needs migrating forward from a released shape.
 
+**Correction found via T1:** the same "never shipped in a release tag" reasoning was initially applied
+to `ImportActionMigrations.CreateImportActionsTable` (Data-owned migration 8, #154) too, and edited in
+place to add `Blocked`/`MarkCompletenessAs` directly. That was wrong — "never in a release tag" is not
+the same test as "never applied to a real database." The developer's own local development database
+had already run migration 8 in its original form (recorded as Data-version 9 in `System_SchemaVersion`),
+so the in-place edit changed what a *fresh* database gets without changing what that *already-migrated*
+database gets — the migration runner compares version numbers, not migration content, so it silently
+never re-ran the changed SQL. This surfaced immediately on the developer's first live T1 run
+(`POST /admin/database/reset` → `SQLite Error 1: 'table System_ImportActions has no column named
+MarkCompletenessAs'`) since Reset never wipes/replays Data-owned migration history (see CLAUDE.md's
+"No exception-based migration recovery" section). Fixed by reverting `CreateImportActionsTable` to its
+original text and adding it as a proper new migration 10
+(`ImportActionMigrations.AddBlockedStatusAndMarkCompletenessAs`, rebuild-under-temp-name for the
+`Status` CHECK widening, plain column addition for `MarkCompletenessAs`) — the correct, additive
+approach `Migration006` above didn't need only because it was genuinely never applied anywhere.
+
 Key decisions made during planning (see #162's issue history for the full back-and-forth):
 
 1. Modifying a `Complete` row must always block the **entire batch**, not just the one affected
@@ -108,11 +124,13 @@ recomputed.
 
 **Status:** ✅ Done — implemented and unit-tested; T1/T2 verification pending
 
-1. `ImportActionStatus` (`Quotinator.Data.Entities`) gains `Blocked`. New migration widening
-   `System_ImportActions.Status`'s CHECK constraint (Data-owned migration, rebuild-under-temp-name
-   pattern per `database-conventions.md`'s `Migration004_ImportBatchTypeUserSeed` precedent) + update
-   the fresh-database baseline schema in the same commit. Same migration also adds `MarkCompletenessAs`
-   (§5) to `System_ImportActions` — same table, same commit.
+1. `ImportActionStatus` (`Quotinator.Data.Entities`) gains `Blocked`. New Data-owned migration 10
+   (`ImportActionMigrations.AddBlockedStatusAndMarkCompletenessAs`) widens `System_ImportActions.Status`'s
+   CHECK constraint (rebuild-under-temp-name pattern per `database-conventions.md`'s
+   `Migration004_ImportBatchTypeUserSeed` precedent) and adds `MarkCompletenessAs` (§5) — same table,
+   same migration. See the "Correction found via T1" note above: this is a genuine new migration, not
+   an in-place edit of migration 8 (the first implementation attempt did edit migration 8 in place,
+   which broke on a developer's already-migrated local database — fixed before this landed).
 2. `ImportActionResolutionCoordinator.TryApplyBatchAsync` (`Quotinator.Data.Import`) — the guard that
    currently blocks the whole batch only on `Status == Pending` widens to `Status is Pending or
    Blocked`. A batch containing even one unresolved `Blocked` action holds entirely — nothing in it
@@ -173,16 +191,16 @@ every other decided field.
 | 1 | ✅ | `CompletenessGuard.ShouldBlock` returns true only when status is `Complete` | Unit test | `CompletenessGuardTests.ShouldBlock_StatusComplete_ChangedFieldsPresent_ReturnsTrue` + 3 negative cases |
 | 2 | ✅ | `CompletenessGuard.ComputeNextStatus` transitions `Incomplete → NeedsReview` whenever `NoValueKnown` is empty afterward — including a fresh row that was empty from the start | Unit test | `CompletenessGuardTests.ComputeNextStatus_IncompleteWithEmptyNoValueKnown_TransitionsToNeedsReview` + `..._FreshRowFullySpecifiedAtCreation_AlsoTransitionsToNeedsReview` |
 | 3 | ✅ | `ComputeNextStatus` never demotes an already-`Complete` status | Unit test | `CompletenessGuardTests.ComputeNextStatus_Complete_NeverDemoted` |
-| 4 | ✅ | `Blocked` status accepted by the widened CHECK constraint | Unit test | Covered by `ImportActionResolutionCoordinatorTests`'s `Blocked`-status test fixtures inserting/querying the real schema; no separate migration test needed since the table was never shipped (edited in place) |
-| 5 | ✅ | Baseline schema and incremental replay produce identical `CompletenessStatus`/`NoValueKnown`/`Blocked` schema across all affected tables | Unit test | `Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema`, `Baseline_And_IncrementalReplay_AcceptSameCheckConstraintValues` (both passing against the revised schema) |
+| 4 | ✅ | `Blocked` status accepted by the widened CHECK constraint; a database already at Data-version 9 upgrades correctly (not silently skipped) | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameImportActionsCheckConstraintValues`, `.InitialiseAsync_ExistingDatabaseAtDataVersion9_UpgradesSystemImportActionsWithBlockedAndMarkCompletenessAs` (the latter is the direct regression test for the T1-discovered bug in the "Correction found via T1" note above) |
+| 5 | ✅ | Baseline schema and incremental replay produce identical `CompletenessStatus`/`NoValueKnown`/`Blocked` schema across all affected tables | Unit test | Consumer-side (`Quotes`/`Sources`/`Characters`/`People`/`Conversations`/`StageDirections`/`SoundCues`): `DatabaseInitializerTests.Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema`, `.AcceptSameCheckConstraintValues`. Data-side (`System_ImportActions`): `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemImportActionsSchema`, `.AcceptSameImportActionsCheckConstraintValues` (both newly added alongside the migration-10 fix) |
 | 6 | ✅ | A `Blocked` action anywhere in a batch prevents the whole batch from applying, including unrelated ready actions | Unit test | `ImportActionResolutionCoordinatorTests.TryApplyBatchAsync_BlockedActionInBatch_HoldsEntireBatch` |
 | 7 | ✅ | Once the `Blocked` action is decided, the rest of the batch (previously held) applies normally | Unit test | `ImportActionResolutionCoordinatorTests.TryApplyBatchAsync_BlockedActionResolved_UnrelatedActionsThenApply` |
 | 8 | ✅ | `MarkCompletenessAs` provided at decide time overrides auto-compute at apply time | Unit test | `SqliteImportActionServiceTests.ApplyBatchAsync_MarkCompletenessAsProvided_OverridesAutoCompute` |
 | 9 | ✅ | `MarkCompletenessAs` omitted falls back to `ComputeNextStatus` | Unit test | `QuoteImportServiceTests.ImportAsync_FreshDatabase_NoValueKnownEmptyAndCompletenessAlreadyNeedsReview`, `ConflictResolutionTests.Seed_FreshQuote_NoValueKnownEmptyAndCompletenessAlreadyNeedsReview` — confirm a real Add (no `MarkCompletenessAs` override) genuinely reaches `NeedsReview` via auto-compute, not just that the override path works |
 | 10 | ✅ | Quote's own apply path respects an already-`Complete` status when `MarkCompletenessAs` is omitted | Unit test | `SqliteImportActionServiceTests.ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnchanged` |
 | 11 | ✅ | Decide endpoint accepts and persists `MarkCompletenessAs`, visible after apply | Unit test | `ImportActionResolutionCoordinatorTests.DecideAsync_MarkCompletenessAsProvided_PersistsOnTheAction` (Data layer) + `SqliteImportActionServiceTests.ApplyBatchAsync_MarkCompletenessAsProvided_OverridesAutoCompute` (Engine layer, end to end through `ConflictDecisionRequest`) |
-| 12 | ✅ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release` → all 9 projects passing, 1150 tests total (Api.Tests 251, Engine.Tests 273, Data.Tests 364) |
-| 13 | ❌ | T1 — full stage → decide (with/without `MarkCompletenessAs`) → apply cycle; a `Complete` row's field genuinely cannot be silently overwritten | Live | Developer's own Visual Studio pass |
+| 12 | ✅ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release` → all 9 projects passing, 1153 tests total (Api.Tests 251, Engine.Tests 273, Data.Tests 367) |
+| 13 | ❌ | T1 — full stage → decide (with/without `MarkCompletenessAs`) → apply cycle; a `Complete` row's field genuinely cannot be silently overwritten | Live | Developer's own Visual Studio pass. First attempt hit the migration bug in the "Correction found via T1" note above (`POST /admin/database/reset` → `SQLite Error 1: no column named MarkCompletenessAs`); fixed, needs a re-run to confirm |
 | 14 | ❌ | T2 — same cycle in Docker | Live | Per `CLAUDE.md`'s smoke-test checklist, extended with a `Complete`-status batch-hold scenario |
 
 ---
