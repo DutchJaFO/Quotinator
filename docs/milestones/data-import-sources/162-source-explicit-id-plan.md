@@ -1,6 +1,6 @@
 # #162 — Source: explicit file-carried id, decoupling matching from Title/Type/Date content
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #162
 **Tiers required:** T1, T2
 **Depends on:** #165, #149, #154, #67/#68 (identity-model precedent)
@@ -24,6 +24,25 @@ rounds of scrutiny:
 3. The "never silently overwrite a reviewed record" mechanism this exposed turned out to be a genuine
    cross-entity concern, not Source-specific — split out into #165, which this issue now depends on
    and only consumes.
+
+**Correction found via T2:** `ResolveSourceAsync`'s natural-key branch (unchanged by this issue —
+pre-existing #154 code) reads a matched Source id through `Guid?`-typed Dapper mapping, then calls
+`.ToString("D").ToUpperInvariant()` on it. That was always safe before this issue: every Source id was
+either `Guid.NewGuid()`-based (written via the `GuidHandler`-typed repository path, always normalized
+to uppercase on write) or `EntityIdentity`-derived (also always uppercase by construction), so
+re-casing was a harmless no-op. A `sources[]` entry's explicit, file-authored id breaks that
+assumption — `Guid` has no memory of original string casing, so `ToString("D")` always renders
+lowercase *regardless of what's actually stored*, meaning a lowercase-authored id's natural-key match
+got silently rewritten to a different string than the real row's id. The Quote's own defensive
+`EnsureSourceExistsAsync` call then created a second, duplicate Source row using that wrong-cased id —
+found live via T2 (a two-batch scenario: create via `sources[]`, correct via a second import), not by
+any unit test, since every existing test exercised either a single-`PlanAsync`-call scenario or a
+`Guid.NewGuid()`-seeded row (both cases where the bug is invisible). Fixed by reading the natural-key
+match as a raw string (`ExecuteScalarAsync<string?>`), preserving whatever case is actually stored —
+same "raw SQL, not the Guid-typed path" principle already applied to Conversation/StageDirection/
+SoundCue's own explicit ids. Regression test:
+`SqliteImportActionServiceTests.ApplyBatchAsync_LowercaseExplicitSourceId_SecondBatchCorrection_NeverCreatesDuplicateRow`
+(confirmed red without the fix, green with it).
 
 ---
 
@@ -117,8 +136,8 @@ decidable entity type alongside Quote. `Quotinator.slnx` — add `SourceEntry.cs
 | 10 | ✅ | Reversing a Source Modify restores `ExistingValue`'s fields | Unit test | `ReverseAppliedActionsAsync_SourceModify_RestoresExistingValue` |
 | 11 | ✅ | Reversing a Source Add still soft-deletes if unreferenced (regression) | Unit test | `ReverseAppliedActionsAsync_SourceAdd_StillSoftDeletesIfUnreferenced` — this test went red first and caught a real, separate bug: `ClearStaleAddTargetsAsync`'s and `ReverseAppliedActionsAsync`'s Source hard-delete/soft-delete paths used the Guid-typed repository API (which uppercases via `GuidHandler`), an assumption that only held while every Source Add id was `EntityIdentity`-derived (always uppercase). An explicit file-authored `sources[]` id is not guaranteed to be uppercase, so the WHERE clause silently matched zero rows. Fixed by switching both paths to the same raw-SQL approach already used for Conversation/StageDirection/SoundCue's own explicit ids |
 | 12 | ✅ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release` → all 9 projects passing, 1150 tests total |
-| 13 | ❌ | T1 — a curated file with a corrected Source `Title` stages/decides/applies a Modify; a `Complete` Source's field cannot be silently overwritten | Live | Developer's own Visual Studio pass |
-| 14 | ❌ | T2 — same cycle in Docker | Live | Per `CLAUDE.md`'s smoke-test checklist, extended with an explicit-`sources`-entry Title-correction scenario |
+| 13 | ✅ | T1 — the migration upgrade path (shared with #165, see its own plan doc) | Live | Developer's own Visual Studio pass, confirmed clean upgrade |
+| 14 | ✅ | T2 — a curated file with a corrected Source `Title` stages/decides/applies a Modify via `sources[]`; a `Complete` Source's field cannot be silently overwritten | Live | `docker build` + live curl cycle against `quotinator:local`: staged and applied an explicit-`sources[]` Title correction (confirmed via direct DB inspection: exactly one Source row, correctly updated); found and fixed the natural-key-matching case-sensitivity bug described in "Correction found via T2" above in the process. Then confirmed the `Complete`-status whole-batch-hold scenario (shared with #165's own T2 row) |
 
 ---
 

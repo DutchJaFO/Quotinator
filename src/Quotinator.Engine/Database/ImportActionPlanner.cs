@@ -147,13 +147,19 @@ internal static class ImportActionPlanner
         var key     = $"{q.Source}|{typeStr}";
         if (index.TryGetValue(key, out var existing)) return existing;
 
-        var existingId = await connection.ExecuteScalarAsync<Guid?>(
+        // #162: raw string, not Guid?-typed — a natural-key-matched row's id may now be an explicit,
+        // not-necessarily-uppercase file-authored id (from a sources[] entry), not only a
+        // Guid.NewGuid()/EntityIdentity-derived one. Guid has no memory of original string casing —
+        // ToString("D") always renders lowercase regardless of what was actually stored — so
+        // round-tripping through Guid? and re-casing would silently produce a different string than
+        // the real row's id, exactly the bug ClearStaleAddTargetsAsync's own remarks warn about for
+        // Quote ids.
+        var existingId = await connection.ExecuteScalarAsync<string?>(
             Sql.Sources.SelectIdByTitleAndType, new { title = q.Source, type = typeStr }, transaction);
         if (existingId is { } foundId)
         {
-            var idStr = foundId.ToString("D").ToUpperInvariant();
-            index[key] = idStr;
-            return idStr;
+            index[key] = foundId;
+            return foundId;
         }
 
         var stableId = EntityIdentity.SourceId(q.Source, typeStr);

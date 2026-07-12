@@ -23,6 +23,14 @@ public sealed class ImportResultResponse
     /// <summary>Every conflict detected during this import, regardless of which policy resolved it.</summary>
     public IReadOnlyList<ImportConflictEntry> Conflicts { get; init; } = [];
 
+    /// <summary>
+    /// Ids of every staged action (any entity type — Quote, Source, etc.) still <c>Pending</c> or
+    /// <c>Blocked</c> after this call. Non-empty means the batch was not (fully) applied — the
+    /// authoritative "did this actually succeed" signal, unlike <see cref="Conflicts"/> (Quote-only,
+    /// predates #165's <c>Blocked</c> status and non-Quote decidable entities).
+    /// </summary>
+    public IReadOnlyList<Guid> PendingActionIds { get; init; } = [];
+
     /// <summary>Rows that failed validation and were skipped without aborting the rest of the file.</summary>
     public IReadOnlyList<ImportRowError> Errors { get; init; } = [];
 }

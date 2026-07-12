@@ -91,6 +91,11 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         var skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
 
+        IReadOnlyList<Guid> pendingActionIds = actions
+            .Where(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked)
+            .Select(a => a.Id)
+            .ToList();
+
         if (!preview)
         {
             var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, cancellationToken);
@@ -100,6 +105,10 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                 batch.AppliedAt = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
                 batch.RecordCount = imported + updated;
                 await _importBatches.UpdateAsync(batch);
+            }
+            else
+            {
+                pendingActionIds = applyResult.PendingActionIds;
             }
         }
 
@@ -116,8 +125,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                 Skipped  = skipped,
                 Errors   = errors.Count
             },
-            Conflicts = BuildConflictEntries(actions),
-            Errors    = errors
+            Conflicts        = BuildConflictEntries(actions),
+            PendingActionIds = pendingActionIds,
+            Errors           = errors
         };
     }
 
@@ -137,12 +147,17 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         var totalQuotes = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote);
 
         var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, cancellationToken);
+        IReadOnlyList<Guid> pendingActionIds = [];
         if (applyResult is null)
         {
             batch.Status      = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Applied.ToString(), ImportBatchStatus.Applied);
             batch.AppliedAt   = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
             batch.RecordCount = imported + updated;
             await _importBatches.UpdateAsync(batch);
+        }
+        else
+        {
+            pendingActionIds = applyResult.PendingActionIds;
         }
 
         return new ImportResultResponse
@@ -158,8 +173,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                 Skipped  = skipped,
                 Errors   = 0
             },
-            Conflicts = BuildConflictEntries(actions),
-            Errors    = []
+            Conflicts        = BuildConflictEntries(actions),
+            PendingActionIds = pendingActionIds,
+            Errors           = []
         };
     }
 

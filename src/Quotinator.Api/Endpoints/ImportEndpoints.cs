@@ -369,13 +369,16 @@ internal static class ImportEndpoints
         }
     }
 
-    // 202 tells the caller up front that the batch has unresolved conflicts it must adjust the file
-    // or decide via /import/actions before the batch can be applied — 200 means everything staged
-    // cleanly (and, for a non-preview call, was actually applied).
+    // 202 tells the caller up front that the batch has unresolved actions (any entity type — Quote,
+    // Source, etc. — Pending or Blocked) it must adjust the file or decide via /import/actions before
+    // the batch can be applied — 200 means everything staged cleanly (and, for a non-preview call,
+    // was actually applied). PendingActionIds (#165) is the authoritative signal — Conflicts alone
+    // only ever covered Quote Modify actions and has no concept of Blocked or non-Quote entities, so
+    // checking it in isolation would silently report 200 for a batch that Source's Blocked status
+    // held from applying.
     private static IResult ToStatusCodeResult(ImportResultResponse result)
     {
-        var hasPending = result.Conflicts.Any(c => c.Status == "pending");
-        return hasPending
+        return result.PendingActionIds.Count > 0
             ? Results.Json(result, statusCode: StatusCodes.Status202Accepted)
             : Results.Ok(result);
     }

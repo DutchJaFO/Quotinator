@@ -8,6 +8,7 @@ using Quotinator.Api.Tests.Fakes;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
@@ -127,6 +128,34 @@ public class ImportActionEndpointsTests
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
         Assert.AreEqual(actionId, fake.LastDecidedActionId);
         Assert.AreEqual(FieldResolutionChoice.Replace, fake.LastDecisionRequest!.QuoteText!.Choice);
+    }
+
+    /// <summary>
+    /// #165: regression guard, found live via T2 — <c>CompletenessStatus</c> initially had no
+    /// <c>[JsonConverter]</c>, so a real HTTP request with <c>"markCompletenessAs":"complete"</c>
+    /// failed model binding with a bare 400 before ever reaching the service. Every other test here
+    /// round-trips <see cref="ConflictDecisionRequest"/> via real <c>PostAsJsonAsync</c> JSON too, but
+    /// none of them set a non-null <c>MarkCompletenessAs</c>, so none caught it.
+    /// </summary>
+    [TestMethod]
+    public async Task DecideAction_WithMarkCompletenessAs_DeserializesAndForwards()
+    {
+        var fake = new FakeImportActionService();
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var actionId = Guid.NewGuid();
+        var request = new ConflictDecisionRequest
+        {
+            SourceTitle = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+            MarkCompletenessAs = CompletenessStatus.Complete,
+        };
+
+        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{actionId}/decide", request);
+
+        Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.AreEqual(CompletenessStatus.Complete, fake.LastDecisionRequest!.MarkCompletenessAs);
     }
 
     [TestMethod]

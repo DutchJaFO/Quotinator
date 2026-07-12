@@ -246,6 +246,58 @@ public class QuoteImportServiceTests
         Assert.AreEqual("[\"date\"]", noValueKnown, "Confirmed no-value-known markers must survive a re-import that rewrites the row");
     }
 
+    /// <summary>
+    /// #165 regression guard, found live via T2: importing a batch containing a <c>Blocked</c> Source
+    /// action (a <c>sources[]</c> correction against an already-<c>Complete</c> row) must report
+    /// <c>PendingActionIds</c> non-empty and must genuinely hold the whole batch — an unrelated
+    /// brand-new quote sharing the same batch must not be written either. The bug this guards against:
+    /// <see cref="ImportResultResponse"/> originally only reflected Quote-specific <c>Conflicts</c>,
+    /// so a batch held purely by a Source Blocked action silently reported success with nothing
+    /// actually applied.
+    /// </summary>
+    [TestMethod]
+    public async Task ImportAsync_BlockedSourceInBatch_PendingActionIdsNonEmptyAndWholeBatchHeld()
+    {
+        var service = CreateService();
+        const string sourceId = "bbbbbbbb-2222-4222-8222-222222222222";
+
+        var firstFile = """
+            {
+              "quotes": [{"id":"__SHARED_ID__","quote":"Original.","source":"T2 Regression Movie","type":"movie","originalLanguage":"en","genres":[],"translations":{}}],
+              "sources": [{"id":"__SOURCE_ID__","title":"T2 Regression Movie","type":"movie"}]
+            }
+            """
+            .Replace("__SHARED_ID__", SharedId).Replace("__SOURCE_ID__", sourceId);
+        await service.ImportAsync(JsonStream(firstFile), "first.json", null, preview: false);
+
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            conn.Open();
+            await conn.ExecuteAsync("UPDATE Sources SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = sourceId });
+        }
+
+        var unrelatedQuoteId = "dddddddd-4444-4444-8444-444444444444";
+        var secondFile = """
+            {
+              "quotes": [
+                {"id":"__SHARED_ID__","quote":"Original.","source":"T2 Regression Movie","type":"movie","originalLanguage":"en","genres":[],"translations":{}},
+                {"id":"__UNRELATED_ID__","quote":"An unrelated new quote.","source":"T2 Unrelated Movie","type":"movie","originalLanguage":"en","genres":[],"translations":{}}
+              ],
+              "sources": [{"id":"__SOURCE_ID__","title":"T2 Regression Movie (Corrected)","type":"movie"}]
+            }
+            """
+            .Replace("__SHARED_ID__", SharedId).Replace("__SOURCE_ID__", sourceId).Replace("__UNRELATED_ID__", unrelatedQuoteId);
+        var result = await service.ImportAsync(JsonStream(secondFile), "second.json", null, preview: false);
+
+        Assert.IsTrue(result.PendingActionIds.Count > 0, "A Blocked Source action must be reflected in PendingActionIds");
+
+        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        verifyConn.Open();
+        var unrelatedQuoteCount = await verifyConn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Quotes WHERE Id = @id", new { id = unrelatedQuoteId });
+        Assert.AreEqual(0, unrelatedQuoteCount, "The whole batch must be held — an unrelated quote sharing the batch must not be written either");
+    }
+
     [TestMethod]
     public async Task ImportAsync_Review_BehavesLikeSkip()
     {

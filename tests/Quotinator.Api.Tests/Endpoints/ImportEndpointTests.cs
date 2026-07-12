@@ -185,6 +185,38 @@ public class ImportEndpointTests
                         IncomingValue = new Dictionary<string, object?>(),
                     }
                 ],
+                PendingActionIds = [Guid.NewGuid()],
+            }
+        };
+        using var factory = CreateFactory(TestKey, service);
+        var response = await CreateClientWithKey(factory).PostAsync(path, BuildForm());
+
+        Assert.AreEqual(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
+    /// <summary>
+    /// #165 regression guard, found live via T2: a batch held by a <c>Blocked</c> Source action
+    /// produces an empty <c>Conflicts</c> list (that field only ever covered Quote Modify actions),
+    /// so checking <c>Conflicts</c> alone silently reported <c>200</c> even though nothing in the
+    /// batch had actually applied. <c>PendingActionIds</c> is the fix — populated from every held
+    /// action regardless of entity type, so it must drive the status code on its own, independent of
+    /// <c>Conflicts</c>.
+    /// </summary>
+    [TestMethod]
+    [DataRow("/api/v1/import")]
+    [DataRow("/api/v1/import/preview")]
+    public async Task Import_PendingActionIdsNonEmptyButConflictsEmpty_Returns202(string path)
+    {
+        var service = new FakeQuoteImportService
+        {
+            ReturnResult = new Quotinator.Core.Models.ImportResultResponse
+            {
+                BatchId          = Guid.NewGuid(),
+                Preview          = path.EndsWith("preview"),
+                ConflictPolicy   = "newest-wins",
+                Summary          = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 1, Updated = 0, Skipped = 0, Errors = 0 },
+                Conflicts        = [],
+                PendingActionIds = [Guid.NewGuid()],
             }
         };
         using var factory = CreateFactory(TestKey, service);
@@ -316,6 +348,7 @@ public class ImportEndpointTests
                         IncomingValue = new Dictionary<string, object?>(),
                     }
                 ],
+                PendingActionIds = [Guid.NewGuid()],
             }
         };
         using var factory = CreateFactory(TestKey, service);

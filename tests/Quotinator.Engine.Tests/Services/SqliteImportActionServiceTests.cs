@@ -948,4 +948,43 @@ public class SqliteImportActionServiceTests
         conn.Open();
         Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE Id = @id AND IsDeleted = 1", new { id = newFileId }));
     }
+
+    /// <summary>
+    /// Regression guard, found live via T2: a lowercase, explicit file-authored Source id (from a
+    /// <c>sources[]</c> entry, added in one import batch alongside a quote that references it) must
+    /// resolve to the exact same row on a later, separate import batch that corrects that Source's
+    /// Title — not a second, duplicate row. The bug: <c>ResolveSourceAsync</c>'s natural-key lookup
+    /// read the matched id through <c>Guid?</c>-typed Dapper mapping and then force-uppercased it
+    /// (<c>foundId.ToString("D").ToUpperInvariant()</c>) — safe before #162, when every Source id was
+    /// either <c>Guid.NewGuid()</c>-based or <c>EntityIdentity</c>-derived, both always stored
+    /// uppercase. A lowercase file-authored id broke that assumption: <c>Guid</c> has no memory of
+    /// original string casing, so re-casing the natural-key match produced a string that didn't match
+    /// the actual stored row, and the Quote's own defensive <c>EnsureSourceExistsAsync</c> call
+    /// silently created a second Source row with the wrong-cased id.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyBatchAsync_LowercaseExplicitSourceId_SecondBatchCorrection_NeverCreatesDuplicateRow()
+    {
+        var sourceId = "bbbbbbbb-2222-4222-8222-222222222222";
+        var quoteId  = "cc111111-1111-4111-8111-111111111111";
+        var quote    = BuildQuote(quoteId, source: "T2 Regression Movie", character: null);
+
+        var batch1 = Guid.NewGuid();
+        await PlanAndStageAsync([quote], batch1, DuplicateResolutionPolicy.NewestWins,
+            sources: [new SourceEntry { Id = sourceId, Title = "T2 Regression Movie", Type = QuoteType.Movie }]);
+        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant());
+
+        var batch2 = Guid.NewGuid();
+        await PlanAndStageAsync([quote], batch2, DuplicateResolutionPolicy.NewestWins,
+            sources: [new SourceEntry { Id = sourceId, Title = "T2 Regression Movie (Corrected)", Type = QuoteType.Movie }]);
+        await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE Title LIKE 'T2 Regression Movie%'");
+        Assert.AreEqual(1, count, "Must be exactly one Source row — the correction must have found and updated the original, not created a second one");
+
+        var title = await conn.ExecuteScalarAsync<string>("SELECT Title FROM Sources WHERE Id = @id", new { id = sourceId });
+        Assert.AreEqual("T2 Regression Movie (Corrected)", title);
+    }
 }

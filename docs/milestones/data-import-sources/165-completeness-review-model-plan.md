@@ -1,6 +1,6 @@
 # #165 — Generalize record completeness to a 3-state model and hard-block modifying completed rows
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #165
 **Tiers required:** T1, T2
 **Depends on:** #55 (unshipped — edited in place), #154
@@ -38,6 +38,33 @@ original text and adding it as a proper new migration 10
 (`ImportActionMigrations.AddBlockedStatusAndMarkCompletenessAs`, rebuild-under-temp-name for the
 `Status` CHECK widening, plain column addition for `MarkCompletenessAs`) — the correct, additive
 approach `Migration006` above didn't need only because it was genuinely never applied anywhere.
+
+**Two corrections found via T2** (live Docker smoke testing, not unit tests — see each fix's own
+regression test for why the unit suite didn't already catch it):
+
+1. **`CompletenessStatus` had no `[JsonConverter]`.** Every other enum this project accepts from
+   request JSON (`FieldResolutionChoice`, `QuoteType`, etc.) carries
+   `[JsonConverter(typeof(JsonStringEnumConverter))]` directly on the enum declaration —
+   `CompletenessStatus` was missed. A real `POST /import/actions/{id}/decide` call with
+   `"markCompletenessAs":"complete"` failed model binding with a bare `400` before ever reaching the
+   service. Every existing unit test constructed `ConflictDecisionRequest` directly in C# (bypassing
+   JSON entirely) or never set `MarkCompletenessAs` to a non-null value in a real
+   `PostAsJsonAsync` round-trip, so none exercised the actual wire format. Fixed by adding the
+   attribute to `src/Quotinator.Data/Entities/CompletenessStatus.cs`; regression test:
+   `ImportActionEndpointsTests.DecideAction_WithMarkCompletenessAs_DeserializesAndForwards`.
+2. **`POST /import`'s `200`/`202` decision only ever checked the legacy, Quote-only `Conflicts` list**
+   (`ImportEndpoints.ToStatusCodeResult`), which predates `Blocked` and has no concept of a non-Quote
+   entity type. A batch held entirely by a `Blocked` Source action produced an *empty* `Conflicts`
+   list, so the endpoint reported `200` with `imported`/`updated` counts as if everything succeeded —
+   while the coordinator had correctly refused to apply anything. Fixed by adding
+   `ImportResultResponse.PendingActionIds` (populated from the actual staged/apply-attempt actions,
+   any entity type, `Pending` or `Blocked`) and switching `ToStatusCodeResult` to check that instead.
+   Regression tests: `ImportEndpointTests.Import_PendingActionIdsNonEmptyButConflictsEmpty_Returns202`
+   (endpoint-level, empty `Conflicts` alone must still 202) and
+   `QuoteImportServiceTests.ImportAsync_BlockedSourceInBatch_PendingActionIdsNonEmptyAndWholeBatchHeld`
+   (engine-level, reproduces the exact live scenario: a `Blocked` Source correction alongside an
+   unrelated brand-new quote in the same batch — confirms both the correct `PendingActionIds` and that
+   the unrelated quote was never written).
 
 Key decisions made during planning (see #162's issue history for the full back-and-forth):
 
@@ -199,9 +226,9 @@ every other decided field.
 | 9 | ✅ | `MarkCompletenessAs` omitted falls back to `ComputeNextStatus` | Unit test | `QuoteImportServiceTests.ImportAsync_FreshDatabase_NoValueKnownEmptyAndCompletenessAlreadyNeedsReview`, `ConflictResolutionTests.Seed_FreshQuote_NoValueKnownEmptyAndCompletenessAlreadyNeedsReview` — confirm a real Add (no `MarkCompletenessAs` override) genuinely reaches `NeedsReview` via auto-compute, not just that the override path works |
 | 10 | ✅ | Quote's own apply path respects an already-`Complete` status when `MarkCompletenessAs` is omitted | Unit test | `SqliteImportActionServiceTests.ApplyBatchAsync_QuoteAlreadyComplete_MarkCompletenessAsOmitted_StatusUnchanged` |
 | 11 | ✅ | Decide endpoint accepts and persists `MarkCompletenessAs`, visible after apply | Unit test | `ImportActionResolutionCoordinatorTests.DecideAsync_MarkCompletenessAsProvided_PersistsOnTheAction` (Data layer) + `SqliteImportActionServiceTests.ApplyBatchAsync_MarkCompletenessAsProvided_OverridesAutoCompute` (Engine layer, end to end through `ConflictDecisionRequest`) |
-| 12 | ✅ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release` → all 9 projects passing, 1153 tests total (Api.Tests 251, Engine.Tests 273, Data.Tests 367) |
-| 13 | ❌ | T1 — full stage → decide (with/without `MarkCompletenessAs`) → apply cycle; a `Complete` row's field genuinely cannot be silently overwritten | Live | Developer's own Visual Studio pass. First attempt hit the migration bug in the "Correction found via T1" note above (`POST /admin/database/reset` → `SQLite Error 1: no column named MarkCompletenessAs`); fixed, needs a re-run to confirm |
-| 14 | ❌ | T2 — same cycle in Docker | Live | Per `CLAUDE.md`'s smoke-test checklist, extended with a `Complete`-status batch-hold scenario |
+| 12 | ✅ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release` → all 9 projects passing, 1158 tests total |
+| 13 | ✅ | T1 — the migration upgrade path specifically (`POST /admin/database/reset` against an existing v9 database) | Live | Developer's own Visual Studio pass, confirmed clean `v9 → v10` upgrade after the migration fix. Full stage→decide→apply cycle through `markCompletenessAs` itself was exercised via T2 instead (below), not re-run separately under T1 |
+| 14 | ✅ | T2 — full stage → decide (with `markCompletenessAs`) → apply cycle in Docker; a `Complete` row's field genuinely cannot be silently overwritten, and the whole batch is genuinely held (not just falsely reported as held) | Live | `docker build` + live curl cycle against `quotinator:local`: staged a Source Title correction, decided it with `markCompletenessAs:"complete"`, applied — then staged a second correction to the now-`Complete` row alongside an unrelated new quote in the same batch. Found and fixed two more bugs in the process (see "Two corrections found via T2" above) before the full cycle passed: `202` returned correctly, the unrelated quote was confirmed absent (`404`) proving the whole batch was genuinely held, and the original correction's Title was confirmed unchanged |
 
 ---
 

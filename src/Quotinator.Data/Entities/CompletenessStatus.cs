@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Quotinator.Data.Entities;
 
 /// <summary>
@@ -5,6 +7,7 @@ namespace Quotinator.Data.Entities;
 /// this project's own <see cref="Import.CompletenessGuard"/> logic assigns and transitions between —
 /// per ADR 008, backed by a matching SQL CHECK constraint wherever it's used as a column type.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum CompletenessStatus
 {
     /// <summary>Nothing known yet — the default for every newly created row.</summary>
