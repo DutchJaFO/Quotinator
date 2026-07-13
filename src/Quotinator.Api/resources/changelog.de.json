@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -24,7 +24,8 @@
       "Ein angewendeter Import kann jetzt über einen neuen Endpunkt rückgängig gemacht werden — alles, was hinzugefügt oder geändert wurde, wird zurückgenommen, sofern seitdem kein neuerer Import stattgefunden hat.",
       "Eine neue Zitatquelle im CSV- oder JSON-Format hinzuzufügen erfordert jetzt meist keinen eigenen Code mehr — ein Manifesteintrag mit einfachen Feldzuordnungsoptionen genügt nun für die meisten Formate.",
       "Mehrzeilige Dialoge — ein Hin und Her zwischen Charakteren, mit Regieanweisungen und Toncues dazwischen — können jetzt als eine einzige geordnete Konversation abgerufen werden, und ein zufälliges Zitat, das Teil davon ist, erscheint nicht mehr allein ohne den Rest des Dialogs.",
-      "Titel, Typ oder Erscheinungsdatum einer Quelle können jetzt nachträglich korrigiert werden — etwa ein Tippfehler in einem Filmtitel oder ein fehlendes Jahr — ohne dass ein doppelter Eintrag entsteht."
+      "Titel, Typ oder Erscheinungsdatum einer Quelle können jetzt nachträglich korrigiert werden — etwa ein Tippfehler in einem Filmtitel oder ein fehlendes Jahr — ohne dass ein doppelter Eintrag entsteht.",
+      "Regieanweisungen und Toncues, die in mehrzeiligen Konversationen verwendet werden, können jetzt ebenfalls nachträglich korrigiert werden, genau wie die Angaben einer Quelle es bereits konnten."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -63,7 +64,8 @@
       "Quelldateien können jetzt wiederverwendbare Regieanweisungen, Toncues und Konversationen definieren, die Zitate in einer bestimmten Reihenfolge gruppieren — beim Start eingelesen und über `POST /api/v1/import` (nur JSON) importierbar, genau wie Zitate, einschließlich Duplikaterkennung und Rückgängigmachen; noch nicht über einen Lese-Endpunkt verfügbar (Issue #68)",
       "Neuer Endpunkt `GET /api/v1/conversations/{id}` liefert eine vollständige, geordnete Konversation zurück — Zitate, Regieanweisungen und Toncues in Reihenfolge, mit Unterstützung für `?lang=` und Rückfall auf die Originalsprache (Issue #69)",
       "Zitatantworten enthalten jetzt ein Feld `conversations`, das angibt, zu welcher Konversation bzw. welchen Konversationen ein Zitat gehört, an welcher Position und mit der Gesamtzeilenzahl der Konversation; fehlt vollständig, wenn ein Zitat zu keiner Konversation gehört (Issue #69)",
-      "`GET /api/v1/quotes/random` bettet jetzt die vollständige Konversation ein, wenn ein ausgewähltes Zitat dazugehört, und schließt für den Rest der Anfrage jedes andere Zitat aus derselben Konversation aus; die Antwort meldet jetzt `requestedCount` und `returnedCount`, sodass ein durch diese Deduplizierung verursachtes Defizit sichtbar wird (Issue #69)"
+      "`GET /api/v1/quotes/random` bettet jetzt die vollständige Konversation ein, wenn ein ausgewähltes Zitat dazugehört, und schließt für den Rest der Anfrage jedes andere Zitat aus derselben Konversation aus; die Antwort meldet jetzt `requestedCount` und `returnedCount`, sodass ein durch diese Deduplizierung verursachtes Defizit sichtbar wird (Issue #69)",
+      "`stageDirections[]`/`soundCues[]`-Einträge mit einer Id, die mit einer bestehenden Zeile übereinstimmt, können jetzt eine `Modify`-Aktion auslösen, anstatt nur jemals neu hinzugefügt zu werden — derselbe richtlinienbasierte Abgleich, dieselbe Sperrung über die Vollständigkeitsprüfung und derselbe Entscheidungs-/Rückgängig-Ablauf, den Quellenkorrekturen bereits verwenden"
     ],
     "changed": [
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",
@@ -91,7 +93,8 @@
       "Der veraltete In-Memory-`QuoteService` duplizierte die Parserlogik des Quelldatei-Lesers, anstatt sie wiederzuverwenden, und brach ab, sobald eine Quelldatei das erweiterte Objektformat verwendete; verwendet jetzt den gemeinsamen Parser. Dieser Codepfad ist in der laufenden Anwendung nicht erreichbar — seit der SQLite-Migration registriert ihn nichts mehr —, wird aber weiterhin von seiner eigenen Testsuite abgedeckt (Issue #68)",
       "Zitat-, Quellen-, Charakter- und Konversations-SQL-Abfragen befanden sich schon vor dieser Trennung in der generischen Datenzugriffsbibliothek statt im Quotinator-spezifischen Projekt — eine rein interne Code-Organisationskorrektur ohne Verhaltensänderung (Issue #157)",
       "Die Nachverfolgung von Importbatches (welche Datei wann und mit welcher Richtlinie importiert wurde) befand sich ebenfalls im Quotinator-spezifischen Projekt, gehört aber eigentlich in die generische Datenzugriffsbibliothek — eine weitere rein interne Code-Organisationskorrektur ohne Verhaltensänderung (Issue #158)",
-      "Ein als vollständig geprüft bestätigtes Zitat konnte durch einen späteren Import trotzdem stillschweigend geändert werden — nur eine Quellenkorrektur wurde tatsächlich wie vorgesehen zur Prüfung zurückgehalten; beide werden jetzt korrekt zurückgehalten. Eine Quellenkorrektur unter einer Richtlinie, die den bestehenden Wert bei einem Konflikt beibehält, wird nicht mehr unnötig zurückgehalten, wenn sich dadurch tatsächlich nichts ändern würde (Issue #168)"
+      "Ein als vollständig geprüft bestätigtes Zitat konnte durch einen späteren Import trotzdem stillschweigend geändert werden — nur eine Quellenkorrektur wurde tatsächlich wie vorgesehen zur Prüfung zurückgehalten; beide werden jetzt korrekt zurückgehalten. Eine Quellenkorrektur unter einer Richtlinie, die den bestehenden Wert bei einem Konflikt beibehält, wird nicht mehr unnötig zurückgehalten, wenn sich dadurch tatsächlich nichts ändern würde (Issue #168)",
+      "Die Meldung von `ImportActionNotDecidableException` und die API-Beschreibung von `POST /import/actions/{id}/decide` nannten explizit `Quote`/`Source` und behaupteten, andere Entitätstypen seien immer bereits entschieden — beide Aussagen waren veraltet, seit Quellenkorrekturen selbst verfügbar wurden; allgemeiner formuliert, damit die Meldung korrekt bleibt, während weitere Entitätstypen korrigierbar werden"
     ],
     "removed": [
       "Die Konvertornamen `nikhilnamal17` und `vilaboim` existieren nicht mehr — ein benutzerdefinierter Manifesteintrag, der einen von beiden namentlich referenziert, muss auf `basic-json-array`/`regex-array` mit den entsprechenden `converterOptions` aktualisiert werden"

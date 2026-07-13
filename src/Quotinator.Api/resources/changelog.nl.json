@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -24,7 +24,8 @@
       "Een toegepaste import kan nu ongedaan worden gemaakt via een nieuw eindpunt — dit maakt alles ongedaan wat is toegevoegd of gewijzigd, zolang er sindsdien geen nieuwere import heeft plaatsgevonden.",
       "Een nieuwe citaatbron toevoegen in CSV- of JSON-formaat vereist meestal geen code meer — een manifestvermelding met eenvoudige veldtoewijzingsopties volstaat nu voor de meeste formaten.",
       "Meerregelige dialogen — een heen-en-weer tussen personages, met regieaanwijzingen en geluidscues ertussen — kunnen nu als één geordende conversatie worden opgevraagd, en een willekeurig citaat dat daar deel van uitmaakt verschijnt niet langer los zonder de rest van de dialoog.",
-      "De titel, het type of de releasedatum van een bron kunnen nu achteraf worden gecorrigeerd — bijvoorbeeld een typefout in een filmtitel of een ontbrekend jaartal — zonder dat er een dubbele vermelding ontstaat."
+      "De titel, het type of de releasedatum van een bron kunnen nu achteraf worden gecorrigeerd — bijvoorbeeld een typefout in een filmtitel of een ontbrekend jaartal — zonder dat er een dubbele vermelding ontstaat.",
+      "Regieaanwijzingen en geluidscues die in meerregelige dialogen worden gebruikt, kunnen nu ook achteraf worden gecorrigeerd, op dezelfde manier als de gegevens van een bron dat al konden."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -63,7 +64,8 @@
       "Bronbestanden kunnen nu herbruikbare regieaanwijzingen, geluidscues en conversaties definiëren die samen met quotes in volgorde worden gegroepeerd — ingelezen bij het opstarten en te importeren via `POST /api/v1/import` (alleen JSON) op dezelfde manier als quotes, inclusief detectie van duplicaten en ongedaan maken; nog niet beschikbaar via een leeseindpunt (issue #68)",
       "Nieuw eindpunt `GET /api/v1/conversations/{id}` geeft een volledige, geordende conversatie terug — quotes, regieaanwijzingen en geluidscues in volgorde, met ondersteuning voor `?lang=` en terugval naar de oorspronkelijke taal (issue #69)",
       "Citaatresponsen bevatten nu een veld `conversations` dat aangeeft tot welke conversatie(s) een citaat behoort, de positie erin en het totale aantal regels van die conversatie; dit veld ontbreekt volledig als een citaat tot geen enkele conversatie behoort (issue #69)",
-      "`GET /api/v1/quotes/random` toont nu de volledige conversatie wanneer een gekozen citaat daar deel van uitmaakt, en sluit voor de rest van de aanvraag elk ander citaat uit diezelfde conversatie uit; de respons rapporteert nu `requestedCount` en `returnedCount`, zodat een tekort door deze deduplicatie zichtbaar is (issue #69)"
+      "`GET /api/v1/quotes/random` toont nu de volledige conversatie wanneer een gekozen citaat daar deel van uitmaakt, en sluit voor de rest van de aanvraag elk ander citaat uit diezelfde conversatie uit; de respons rapporteert nu `requestedCount` en `returnedCount`, zodat een tekort door deze deduplicatie zichtbaar is (issue #69)",
+      "`stageDirections[]`/`soundCues[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten in plaats van alleen ooit te worden toegevoegd — hetzelfde op beleid gebaseerde verschil, blokkering via de volledigheidscontrole, en beslissings-/terugdraaiproces dat broncorrecties al gebruiken"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
@@ -91,7 +93,8 @@
       "De verouderde in-memory `QuoteService` dupliceerde de parserlogica van de bronbestandslezer in plaats van deze te hergebruiken, en liep vast zodra een bronbestand het uitgebreide objectformaat gebruikte; hergebruikt nu de gedeelde parser. Dit codepad is niet bereikbaar in de draaiende applicatie — niets registreert het meer sinds de SQLite-migratie — maar wordt nog steeds gedekt door zijn eigen testsuite (issue #68)",
       "Citaat-, bron-, personage- en conversatie-SQL-query's stonden al sinds vóór die scheiding bestond in de generieke gegevenstoegangsbibliotheek in plaats van in het Quotinator-specifieke project — een zuiver interne code-organisatiecorrectie zonder gedragswijziging (issue #157)",
       "De registratie van importbatches (welk bestand is geïmporteerd, wanneer, en met welk beleid) stond ook in het Quotinator-specifieke project terwijl deze eigenlijk in de generieke gegevenstoegangsbibliotheek thuishoort — weer een zuiver interne code-organisatiecorrectie zonder gedragswijziging (issue #158)",
-      "Een citaat dat als volledig gecontroleerd was bevestigd, kon nog steeds stilzwijgend worden gewijzigd door een latere import — alleen een broncorrectie werd daadwerkelijk vastgehouden voor controle zoals bedoeld; beide worden nu correct vastgehouden. Een broncorrectie onder een beleid dat de bestaande waarde behoudt bij een conflict wordt niet langer onnodig vastgehouden wanneer er feitelijk niets zou veranderen (issue #168)"
+      "Een citaat dat als volledig gecontroleerd was bevestigd, kon nog steeds stilzwijgend worden gewijzigd door een latere import — alleen een broncorrectie werd daadwerkelijk vastgehouden voor controle zoals bedoeld; beide worden nu correct vastgehouden. Een broncorrectie onder een beleid dat de bestaande waarde behoudt bij een conflict wordt niet langer onnodig vastgehouden wanneer er feitelijk niets zou veranderen (issue #168)",
+      "Het bericht van `ImportActionNotDecidableException` en de API-beschrijving van `POST /import/actions/{id}/decide` noemden specifiek `Quote`/`Source` en beweerden dat andere entiteitstypen altijd al beslist waren — beide waren verouderd sinds broncorrecties zelf beschikbaar kwamen; algemener geformuleerd zodat het bericht accuraat blijft naarmate meer entiteitstypen corrigeerbaar worden"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"
