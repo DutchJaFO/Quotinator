@@ -62,8 +62,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#168](https://github.com/DutchJaFO/Quotinator/issues/168) | Quote's own Modify path never checks CompletenessGuard — a Complete quote can be silently overwritten by import | Waiting for release | T1 ✅ T2 ✅ | [168-quote-completeness-guard-plan.md](168-quote-completeness-guard-plan.md) |
 | [#169](https://github.com/DutchJaFO/Quotinator/issues/169) | Research: "universe/setting" concept linking Source and Character | Planning | None (research) | [169-universe-setting-research-plan.md](169-universe-setting-research-plan.md) |
 | [#170](https://github.com/DutchJaFO/Quotinator/issues/170) | ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions" | Waiting for release | T1 ✅ T2 ✅ | [170-not-decidable-wording-plan.md](170-not-decidable-wording-plan.md) |
-| [#171](https://github.com/DutchJaFO/Quotinator/issues/171) | StageDirection: Modify/decidability | In progress | T1 ⬜ T2 ✅ | [171-stagedirection-modify-plan.md](171-stagedirection-modify-plan.md) |
-| [#172](https://github.com/DutchJaFO/Quotinator/issues/172) | SoundCue: Modify/decidability | In progress | T1 ⬜ T2 ✅ | [172-soundcue-modify-plan.md](172-soundcue-modify-plan.md) |
+| [#171](https://github.com/DutchJaFO/Quotinator/issues/171) | StageDirection: Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [171-stagedirection-modify-plan.md](171-stagedirection-modify-plan.md) |
+| [#172](https://github.com/DutchJaFO/Quotinator/issues/172) | SoundCue: Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [172-soundcue-modify-plan.md](172-soundcue-modify-plan.md) |
 | [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | Planning | T1 ⬜ T2 ⬜ | [173-person-modify-plan.md](173-person-modify-plan.md) |
 | [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: from per-Source to global identity (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
@@ -157,8 +157,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 28 | #168 | Quote's own Modify path never checks CompletenessGuard | Waiting for release |
 | 29 | #169 | Research: "universe/setting" concept linking Source and Character | Planning |
 | 30 | #170 | ImportActionNotDecidableException stale wording fix | Waiting for release |
-| 31 | #171 | StageDirection: Modify/decidability | In progress |
-| 32 | #172 | SoundCue: Modify/decidability | In progress |
+| 31 | #171 | StageDirection: Modify/decidability | Waiting for release |
+| 32 | #172 | SoundCue: Modify/decidability | Waiting for release |
 | 33 | #173 | Person: explicit id, Modify/decidability | Planning |
 | 34 | #174 | Character: from per-Source to global identity (ADR + migration) | Planning |
 | 35 | #175 | Character: explicit id, Modify/decidability | Planning |

@@ -1,6 +1,6 @@
 # #171 — StageDirection: Modify/decidability
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #171
 **Tiers required:** T1, T2
 **Depends on:** #162, #165, #168 (all shipped — this issue builds on their pattern, not literally blocked by them being merged to main yet)
@@ -196,7 +196,7 @@ in the new `ReverseBatchAsync_StageDirectionModify_RestoresExistingValue` test, 
 | 6 | ✅ | Reversing a StageDirection Modify restores `ExistingValue`'s fields, leaves translation rows untouched | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.ReverseBatchAsync_StageDirectionModify_RestoresExistingValue` |
 | 7 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 1,183/1,183 passing, 0 warnings, 0 errors |
 | 8 | ✅ | Live: a `Complete` StageDirection's field cannot be silently overwritten via re-import; a correctable one can be Modified/decided/reversed end to end through `POST /api/v1/import` | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`: imported a `stageDirections[]` entry, decided a Pending Modify with `markCompletenessAs: Complete` (`ambiguousFields` correctly reported `["text"]` beforehand), re-imported a changed `text` under `review` policy — confirmed the resulting action was `Blocked` (`GET /import/actions?status=Blocked`) and the on-disk `Text` was unchanged. Separately, single-shot corrected a non-`Complete` StageDirection's `text` (`newest-wins`, nothing pending), confirmed the write landed via `Quotinator.Tools.DbInspector`, then `POST /import/actions/reverse?batchId=...` (preview + real) and confirmed the pre-correction `text` was restored. Note: the two-phase decide→`/import/actions/apply` path never marks `ImportBatches.Status = Applied` — a pre-existing, entity-agnostic gap in the shared coordinator (unrelated to this issue's own StageDirection/SoundCue logic), so this row's reverse check used the single-shot direct-apply path instead, matching `CLAUDE.md`'s own T2 "Reverse (undo)" checklist precedent. Flagged separately as a follow-up task, not fixed here. |
-| 9 | ❌ | App still opens and builds in Visual Studio | Live (T1) | Developer's own Visual Studio pass — confirms clean startup, schema/migration state unaffected (this issue adds no new migration, only new query text and C# branches) |
+| 9 | ✅ | App still opens and builds in Visual Studio | Live (T1) | Developer confirmed clean startup in Visual Studio (schema v8/data v10, multiple `GET /api/v1/quotes/random` → 200, no errors) |
 
 ---
 

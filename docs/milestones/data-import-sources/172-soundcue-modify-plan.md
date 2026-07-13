@@ -1,6 +1,6 @@
 # #172 — SoundCue: Modify/decidability
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #172
 **Tiers required:** T1, T2
 **Depends on:** #162, #165, #168 (shipped patterns this builds on); benefits from #171 landing first (shared sub-problem)
@@ -246,7 +246,7 @@ correction was silently included.
 | 8 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 1,183/1,183 passing, 0 warnings, 0 errors |
 | 9 | ✅ | Build clean | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s) |
 | 10 | ✅ | Live: a `sources`-style correction to a SoundCue's `text`/`soundFileUrl`/`imageUrl` via `soundCues[]` stages/decides/applies a `Modify`, and a `Complete` SoundCue's field cannot be silently overwritten | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`: imported a `soundCues[]` entry, decided a Pending Modify with `markCompletenessAs: Complete` (`ambiguousFields` correctly reported `["text"]` beforehand), re-imported a changed `text` under `review` policy — confirmed the resulting action was `Blocked` (`GET /import/actions?status=Blocked`) and the on-disk `Text` was unchanged. Separately, single-shot corrected a non-`Complete` SoundCue's `text`, confirmed the write landed via `Quotinator.Tools.DbInspector`, then reversed it (preview + real) and confirmed the pre-correction `text` was restored. Note: the two-phase decide→`/import/actions/apply` path never marks `ImportBatches.Status = Applied` — a pre-existing, entity-agnostic gap in the shared coordinator (unrelated to this issue's own logic), so this row's reverse check used the single-shot direct-apply path instead. Flagged separately as a follow-up task, not fixed here. |
-| 11 | ❌ | App still opens and builds in Visual Studio | Live (T1) | Developer's own Visual Studio pass — confirms clean startup, schema/migration state unaffected (this issue adds no new migration, only new query text and C# branches) |
+| 11 | ✅ | App still opens and builds in Visual Studio | Live (T1) | Developer confirmed clean startup in Visual Studio (schema v8/data v10, multiple `GET /api/v1/quotes/random` → 200, no errors) |
 
 ---
 
