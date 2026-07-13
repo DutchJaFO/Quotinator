@@ -69,6 +69,8 @@ Every bug fix must be accompanied by tests that close the gap the bug exposed. T
 **Mandatory steps (in this order):**
 
 1. **Reproduce the bug with a failing test before writing any fix.** A test that was green before the bug existed and is now red proves the bug is real and gives you a clear pass/fail gate. If a unit test is not possible (e.g. the bug only manifests in a deployed HA add-on), document the exact steps and observed output that reproduce it.
+
+   **Negative/absence assertions need a canary, not just a red-before-fix run.** A test of the form "X is not present" (e.g. a message no longer contains a specific string) can go red-then-green against the real bug while still being weak — it never proves the thing that's supposed to be present instead (e.g. an interpolated parameter) actually is. For any assertion shaped like "doesn't contain / isn't present / never happens": after the real fix is green, deliberately mutate the fixed code to reintroduce a *plausible* variant of the bug (e.g. drop a string interpolation entirely and hardcode a value instead), confirm the test fails with a clear assertion message, then revert the mutation (`git checkout` the file — never leave it in) and reconfirm green. This is on top of the red-before-fix run in step 1, not a replacement for it — it validates the test's sensitivity, not the fix's correctness.
 2. **Write the fix.** The test must turn green.
 3. **Check for related coverage gaps.** A bug often reveals an untested code path, not just one missing assertion. Ask: what other inputs or states could trigger the same class of failure? Add tests for those too.
 4. **All tests from steps 1–3 must be committed in the same PR as the fix.** A fix without a regression test is incomplete.
