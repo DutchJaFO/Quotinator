@@ -1,6 +1,6 @@
 # #171 — StageDirection: Modify/decidability
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #171
 **Tiers required:** T1, T2
 **Depends on:** #162, #165, #168 (all shipped — this issue builds on their pattern, not literally blocked by them being merged to main yet)
@@ -84,7 +84,13 @@
 
 ### 1. Write the red tests
 
-**Status:** Not started.
+**Status:** ✅ Done. Implemented together with #172 (shared "single-row, translations-adjacent"
+sub-problem, per the developer's direction to do both at once). All 6 tests added to
+`ImportActionPlannerTests.cs` (4 planning tests) and `SqliteImportActionServiceTests.cs` (decide +
+reverse tests). Confirmed red before implementation: 4 genuinely red (Modify/Blocked/Skip behaviour
+didn't exist), 2 (`NothingChanged_NoActionStaged`) already passed — expected, since the pre-#171 bare
+existence check already skipped on any id match regardless of whether fields changed, same
+characteristic as `PlanSourcesAsync`'s own equivalent test.
 
 Add the six tests from the issue's "Expected tests" table to `Quotinator.Engine.Tests`
 (`ImportActionPlannerTests.cs` for the four planning tests, `SqliteImportActionServiceTests.cs` for the
@@ -94,7 +100,7 @@ or via `git stash` once the implementation exists, per this project's red-before
 
 ### 2. Add `Sql.StageDirections` query set
 
-**Status:** Not started.
+**Status:** ✅ Done — matches the plan exactly.
 
 Add `SelectExistingById` (`SELECT Text, ImageUrl, CompletenessStatus FROM StageDirections WHERE Id =
 @id AND IsDeleted = 0;`), `UpdateFieldsById` (updates `Text`, `ImageUrl`, `DateModified`), `SelectCompletenessById`
@@ -104,7 +110,9 @@ WHERE Id = @id;`) — same shapes as `Sql.Sources`' equivalents (`Sql.cs:244-257
 
 ### 3. Rewrite `PlanStageDirectionsAsync`
 
-**Status:** Not started.
+**Status:** ✅ Done — mirrors `PlanSourcesAsync`'s id-match branch field for field, including local
+`ToFieldMap(StageDirectionActionPayload)` overload and the #168-correct resolved-before-block
+ordering.
 
 Add a `DuplicateResolutionPolicy policy` parameter; update the `PlanAsync` call site (`ImportActionPlanner.cs:165`)
 to pass it. Inside the existing `foreach`, after the current `SelectIdById` lookup: if found, branch
@@ -116,7 +124,7 @@ field). If not found, keep the existing `Add` path unchanged.
 
 ### 4. Split `ApplyResolvedActionAsync`'s StageDirection case on `ActionType`
 
-**Status:** Not started.
+**Status:** ✅ Done.
 
 `Add` keeps calling `EnsureStageDirectionExistsAsync` as today. `Modify` deserializes `MergedFields`,
 calls `Sql.StageDirections.UpdateFieldsById`, logs the change via `QuoteSeedWriter.LogChangeAsync`, then
@@ -126,7 +134,7 @@ action.EntityId, action.MarkCompletenessAs.Parsed, now)` — mirrors Source's ca
 
 ### 5. Add StageDirection's `DecideAsync` branch
 
-**Status:** Not started.
+**Status:** ✅ Done.
 
 Add an `EntityType == StageDirection && ActionType == Modify` branch before the existing `!= Quote`
 rejection (`SqliteImportActionService.cs:110`), alongside the Source branch already there. New
@@ -136,7 +144,8 @@ rejection (`SqliteImportActionService.cs:110`), alongside the Source branch alre
 
 ### 6. Add StageDirection to `ComputeAmbiguousFields`
 
-**Status:** Not started.
+**Status:** ✅ Done — confirmed live via T2: a Pending Modify with a genuinely ambiguous `text` field
+correctly reported `"ambiguousFields":["text"]`.
 
 Add a `case ImportActionEntityTypes.StageDirection:` alongside the existing `Source` case
 (`SqliteImportActionService.cs:860-865`), deserializing `StageDirectionActionPayload` and building field
@@ -145,7 +154,8 @@ only).
 
 ### 7. Split `ReverseAppliedActionsAsync`'s StageDirection case on `ActionType`
 
-**Status:** Not started.
+**Status:** ✅ Done — confirmed live via T2 (single-shot apply/reverse cycle restored pre-correction
+text).
 
 `Modify`: deserialize `ExistingValue`, call `Sql.StageDirections.UpdateFieldsById` to restore `Text`/
 `ImageUrl`, log the change, `break` before the reference-count check. `Add`: keep today's
@@ -154,7 +164,8 @@ Source's split (`SqliteImportActionService.cs:331-347`).
 
 ### 8. Add `ConflictDecisionRequest` properties
 
-**Status:** Not started.
+**Status:** ✅ Done — added alongside #172's SoundCue properties in the same commit (`StageDirectionText`,
+`StageDirectionImageUrl`, then `SoundCueText`, `SoundCueSoundFileUrl`, `SoundCueImageUrl`).
 
 Add `StageDirectionText`, `StageDirectionImageUrl` (both nullable `FieldDecision?`), placed after the
 existing `SourceTitle`/`SourceType`/`SourceDate` properties (`ConflictDecisionRequest.cs:37-44`), each
@@ -163,7 +174,8 @@ pattern but referencing `#171`.
 
 ### 9. Confirm translations are untouched
 
-**Status:** Not started.
+**Status:** ✅ Done — `ReverseBatchAsync_StageDirectionModify_RestoresExistingValue` seeds a
+`StageDirectionTranslations` row before the Modify+reversal cycle and asserts it survives untouched.
 
 No production change needed beyond what step 3's payload construction already does (empty
 `Translations` dict on Modify's `ExistingValue`/`IncomingValue`/`MergedFields`) — verified by asserting,
@@ -176,14 +188,15 @@ in the new `ReverseBatchAsync_StageDirectionModify_RestoresExistingValue` test, 
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | An id-matched StageDirection with a `text` diff stages `Modify`, not silently reused | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanStageDirectionsAsync_IdMatchFound_TextDiffers_StagesModifyAction` |
-| 2 | ❌ | An id-matched StageDirection with nothing changed stages nothing (silent reuse) | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanStageDirectionsAsync_IdMatchFound_NothingChanged_NoActionStaged` |
-| 3 | ❌ | A `Complete`-status id-matched StageDirection with a policy-resolved field change stages `Blocked`, not `Modify` | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanStageDirectionsAsync_CompleteStatus_StagesBlockedNotModify` |
-| 4 | ❌ | A `Complete`-status StageDirection under `Skip` policy never blocks (resolved value is always the existing value) | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanStageDirectionsAsync_CompleteStatus_SkipPolicy_DoesNotBlock` |
-| 5 | ❌ | Decide endpoint accepts StageDirection `text`/`imageUrl` field decisions | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.DecideAsync_StageDirectionModify_ResolvesFieldDecisions` |
-| 6 | ❌ | Reversing a StageDirection Modify restores `ExistingValue`'s fields, leaves translation rows untouched | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.ReverseBatchAsync_StageDirectionModify_RestoresExistingValue` |
-| 7 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 8 | ❌ | Live: a `Complete` StageDirection's field cannot be silently overwritten via re-import; a correctable one can be Modified/decided/reversed end to end through `POST /api/v1/import` | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`, matching #168's row 6 style: import a file with an explicit `stageDirections[]` entry, decide it `Complete` via `markCompletenessAs`, re-import a changed `text`/`imageUrl` for the same id under `Review` policy — confirm the resulting action is `Blocked` (not `Pending`) and the on-disk `Text`/`ImageUrl` are unchanged; separately, stage/decide/apply a `text` correction on a non-`Complete` StageDirection, confirm the write lands, then `POST /import/actions/reverse?batchId=...` and confirm the pre-correction `text`/`imageUrl` are restored and any existing translation row for that StageDirection is untouched throughout |
+| 1 | ✅ | An id-matched StageDirection with a `text` diff stages `Modify`, not silently reused | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanStageDirectionsAsync_IdMatchFound_TextDiffers_StagesModifyAction` |
+| 2 | ✅ | An id-matched StageDirection with nothing changed stages nothing (silent reuse) | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanStageDirectionsAsync_IdMatchFound_NothingChanged_NoActionStaged` |
+| 3 | ✅ | A `Complete`-status id-matched StageDirection with a policy-resolved field change stages `Blocked`, not `Modify` | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanStageDirectionsAsync_CompleteStatus_StagesBlockedNotModify` |
+| 4 | ✅ | A `Complete`-status StageDirection under `Skip` policy never blocks (resolved value is always the existing value) | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanStageDirectionsAsync_CompleteStatus_SkipPolicy_DoesNotBlock` |
+| 5 | ✅ | Decide endpoint accepts StageDirection `text`/`imageUrl` field decisions | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.DecideAsync_StageDirectionModify_ResolvesFieldDecisions` |
+| 6 | ✅ | Reversing a StageDirection Modify restores `ExistingValue`'s fields, leaves translation rows untouched | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.ReverseBatchAsync_StageDirectionModify_RestoresExistingValue` |
+| 7 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 1,183/1,183 passing, 0 warnings, 0 errors |
+| 8 | ✅ | Live: a `Complete` StageDirection's field cannot be silently overwritten via re-import; a correctable one can be Modified/decided/reversed end to end through `POST /api/v1/import` | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`: imported a `stageDirections[]` entry, decided a Pending Modify with `markCompletenessAs: Complete` (`ambiguousFields` correctly reported `["text"]` beforehand), re-imported a changed `text` under `review` policy — confirmed the resulting action was `Blocked` (`GET /import/actions?status=Blocked`) and the on-disk `Text` was unchanged. Separately, single-shot corrected a non-`Complete` StageDirection's `text` (`newest-wins`, nothing pending), confirmed the write landed via `Quotinator.Tools.DbInspector`, then `POST /import/actions/reverse?batchId=...` (preview + real) and confirmed the pre-correction `text` was restored. Note: the two-phase decide→`/import/actions/apply` path never marks `ImportBatches.Status = Applied` — a pre-existing, entity-agnostic gap in the shared coordinator (unrelated to this issue's own StageDirection/SoundCue logic), so this row's reverse check used the single-shot direct-apply path instead, matching `CLAUDE.md`'s own T2 "Reverse (undo)" checklist precedent. Flagged separately as a follow-up task, not fixed here. |
+| 9 | ❌ | App still opens and builds in Visual Studio | Live (T1) | Developer's own Visual Studio pass — confirms clean startup, schema/migration state unaffected (this issue adds no new migration, only new query text and C# branches) |
 
 ---
 
@@ -195,3 +208,9 @@ Razor/migration surface; see #168's own Notes section and the process-gap discus
 This issue's six new tests must be confirmed red before implementation, per this project's red-before-green
 policy (`feedback_red_green_required` in memory) — applies here the same way #168's step 1 confirmed its
 two new tests red via `git stash` before the fix landed.
+
+**Implemented together with #172**, per the developer's direction — the two entities share the same
+"single-row, translations-adjacent" sub-problem, so the shape was written once and applied to both in
+the same pass. See #172's plan doc for the parallel implementation notes and the pre-existing
+`ImportBatches.Status` reversal gap found (and flagged as a separate follow-up) during this issue's own
+T2 verification.

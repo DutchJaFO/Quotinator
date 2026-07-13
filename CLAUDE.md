@@ -790,6 +790,36 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    ```
    Must return `404` (unknown batch) even with zero body/`Content-Type` — proves `batchId` mode never attempts to read the request body at all.
 
+   **StageDirection/SoundCue Modify/decidability** (#171/#172) — both entities were Add-only before
+   these issues; this proves a `Complete` row blocks a silent overwrite, and a correctable row can be
+   Modified/decided/reversed end to end. Create a small fixture (one quote is required — `POST /import`
+   rejects a file with none):
+   ```bash
+   cat > .claude/temp/smoke-171-172.json <<'EOF'
+   {
+     "quotes": [{"id":"f0000001-0000-4000-8000-000000000001","quote":"Smoke test filler quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+     "stageDirections": [{"id":"f0000002-0000-4000-8000-000000000002","text":"A shot rings out.","imageUrl":null,"translations":{}}],
+     "soundCues": [{"id":"f0000003-0000-4000-8000-000000000003","text":"Distant thunder.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
+   }
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+   ```
+   Must return `200` with both rows added (check via `Quotinator.Tools.DbInspector` — `SELECT Id, Text, CompletenessStatus FROM StageDirections WHERE Id = 'f0000002-...'`). Re-import the same ids with a
+   changed `text` under `{"duplicateResolution":{"default":"review"}}` — must stage a `Pending` `Modify`
+   action for each (`GET /import/actions?status=pending`) with `ambiguousFields: ["text"]`. Decide each
+   with `{"stageDirectionText":{"choice":"replace"},"markCompletenessAs":"Complete"}` /
+   `{"soundCueText":{"choice":"replace"},"markCompletenessAs":"Complete"}`, then
+   `POST /import/actions/apply?batchId=...` — confirm the corrected text and `CompletenessStatus: Complete`
+   via DbInspector. Re-import the same ids again with another changed `text` under `review` policy — must
+   now stage `Blocked`, not `Pending` (`GET /import/actions?status=Blocked`), and the on-disk text must be
+   unchanged — proves a `Complete` row can no longer be silently overwritten. Finally, exercise
+   correct/apply/reverse on a still-correctable row: single-shot re-import a changed `text` under
+   `newest-wins` (nothing pending, applies immediately, `ImportBatches.Status` set to `Applied` by this
+   direct-apply path — the two-phase decide→apply path used above does **not** set it, a known
+   pre-existing gap, see #171/#172's plan docs), confirm the write via DbInspector, then
+   `POST /import/actions/reverse?batchId=...` (`preview=true` first, then for real) and confirm the
+   pre-correction text is restored via DbInspector.
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle

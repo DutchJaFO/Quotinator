@@ -1,6 +1,6 @@
 # #172 — SoundCue: Modify/decidability
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #172
 **Tiers required:** T1, T2
 **Depends on:** #162, #165, #168 (shipped patterns this builds on); benefits from #171 landing first (shared sub-problem)
@@ -44,7 +44,10 @@ place) is solved once and directly copied here, not re-derived. Concretely:
 
 ### 1. Add `Sql.SoundCues` query set
 
-**Status:** Not started.
+**Status:** ✅ Done. Implemented together with #171 (shared sub-problem, per the developer's direction
+to do both at once). Confirmed at implementation time: `SoundCues` already had `CompletenessStatus`/
+`NoValueKnown` columns with correct defaults in both the baseline and incremental migration (checked
+both copies for drift — identical) — no pre-existing migration gap, nothing extra to fix.
 
 `src/Quotinator.Engine/Queries/Sql.cs`'s existing `SoundCues` class (currently `DeleteAll`, `SelectIdById`,
 `CountActiveReferences`, `InsertIfNotExists`, `SelectByIdWithTranslation` — no update query at all) gains
@@ -67,7 +70,8 @@ pre-existing bug to flag, not something this issue's scope should silently absor
 
 ### 2. Rewrite `PlanSoundCuesAsync` to add id-match Modify/Blocked detection
 
-**Status:** Not started.
+**Status:** ✅ Done — mirrors `PlanSourcesAsync`'s id-match branch field for field, including local
+`ToFieldMap(SoundCueActionPayload)` overload and the #168-correct resolved-before-block ordering.
 
 `ImportActionPlanner.cs`'s `PlanSoundCuesAsync` (currently lines ~425-445: a bare
 `Sql.SoundCues.SelectIdById` existence check, `continue` on any match, stage `Add` otherwise) is rewritten
@@ -106,7 +110,7 @@ to mirror `PlanSourcesAsync`'s current shape (`ImportActionPlanner.cs:292-402`) 
 
 ### 3. Split `ApplyResolvedActionAsync`'s SoundCue case on `ActionType`
 
-**Status:** Not started.
+**Status:** ✅ Done.
 
 The current case (`SqliteImportActionService.cs:626-631`) unconditionally calls
 `EnsureSoundCueExistsAsync` regardless of `ActionType`. Mirrors Source's Apply-side split
@@ -126,7 +130,7 @@ The current case (`SqliteImportActionService.cs:626-631`) unconditionally calls
 
 ### 4. `DecideAsync` gains a SoundCue Modify branch
 
-**Status:** Not started.
+**Status:** ✅ Done.
 
 Add a branch before the existing `if (action.EntityType != ImportActionEntityTypes.Quote) throw ...`
 check (`SqliteImportActionService.cs:110-111`), structured exactly like the existing Source branch
@@ -167,7 +171,8 @@ needs a value; reusing the existing row's translations preserves them across the
 
 ### 5. `ComputeAmbiguousFields` gains a SoundCue case
 
-**Status:** Not started.
+**Status:** ✅ Done — confirmed live via T2: a Pending Modify with a genuinely ambiguous `text` field
+correctly reported `"ambiguousFields":["text"]`.
 
 Add a `case ImportActionEntityTypes.SoundCue:` arm to the `switch` at
 `SqliteImportActionService.cs:850-868`, alongside the existing `Quote`/`Source` cases:
@@ -186,7 +191,8 @@ The existing `ToFieldMap(SoundCueActionPayload payload)` overload (line 836-837)
 
 ### 6. Split `ReverseAppliedActionsAsync`'s SoundCue case on `ActionType`
 
-**Status:** Not started.
+**Status:** ✅ Done — confirmed live via T2 (single-shot apply/reverse cycle restored pre-correction
+text).
 
 The current case (`SqliteImportActionService.cs:379-384`) unconditionally does
 `HasActiveReferencesAsync` + soft-delete regardless of `ActionType`. Mirrors the Source Reverse split
@@ -203,7 +209,7 @@ The current case (`SqliteImportActionService.cs:379-384`) unconditionally does
 
 ### 7. `ConflictDecisionRequest` gains three new properties
 
-**Status:** Not started.
+**Status:** ✅ Done — added alongside #171's StageDirection properties in the same commit.
 
 `src/Quotinator.Engine/Models/ConflictDecisionRequest.cs` gains, immediately after the existing
 `SourceDate` property (line 44), three new nullable `FieldDecision?` properties following the same
@@ -215,7 +221,8 @@ XML-doc convention (`/// <summary>Decision for a SoundCue action's ... (#172).</
 
 ### 8. Translations stay out of scope (documentation-only, no code change)
 
-**Status:** Not started.
+**Status:** ✅ Done — `ReverseBatchAsync_SoundCueModify_RestoresExistingValue` seeds a
+`SoundCueTranslations` row before the Modify+reversal cycle and asserts it survives untouched.
 
 No code change for this step — a deliberate scope boundary, same reasoning #171 uses for StageDirection.
 `SoundCueTranslations` rows are never read, diffed, or written by any of steps 1-7; only `Text`/
@@ -229,16 +236,16 @@ correction was silently included.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | An id-match with a changed `text`/`soundFileUrl`/`imageUrl` field stages a `Modify` action | Unit test | `Quotinator.Engine.Tests.PlanSoundCuesAsync_IdMatchFound_TextDiffers_StagesModifyAction` |
-| 2 | ❌ | An id-match with nothing changed stages no action (silent reuse) | Unit test | `Quotinator.Engine.Tests.PlanSoundCuesAsync_IdMatchFound_NothingChanged_NoActionStaged` |
-| 3 | ❌ | A `Complete`-status id-matched row with a policy-resolved change stages `Blocked`, not `Modify` | Unit test | `Quotinator.Engine.Tests.PlanSoundCuesAsync_CompleteStatus_StagesBlockedNotModify` |
-| 4 | ❌ | A `Complete`-status row under `Skip` policy never blocks (Skip's resolved value always equals the existing value) | Unit test | `Quotinator.Engine.Tests.PlanSoundCuesAsync_CompleteStatus_SkipPolicy_DoesNotBlock` |
-| 5 | ❌ | The decide endpoint accepts SoundCue `text`/`soundFileUrl`/`imageUrl` field decisions for a `Modify` action | Unit test | `Quotinator.Engine.Tests.DecideAsync_SoundCueModify_ResolvesFieldDecisions` |
-| 6 | ❌ | Reversing an applied SoundCue `Modify` restores `ExistingValue`'s fields, not a soft-delete | Unit test | `Quotinator.Engine.Tests.ReverseBatchAsync_SoundCueModify_RestoresExistingValue` |
-| 7 | ❌ | Reversing an applied SoundCue `Add` still soft-deletes if unreferenced (regression) | Unit test | Existing SoundCue Add-reversal coverage re-run — no new test expected unless the split introduces a gap; confirm during implementation |
-| 8 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 9 | ❌ | Build clean | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s) |
-| 10 | ❌ | Live: a `sources`-style correction to a SoundCue's `text`/`soundFileUrl`/`imageUrl` via `soundCues[]` stages/decides/applies a `Modify`, and a `Complete` SoundCue's field cannot be silently overwritten | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`: import a file with an existing SoundCue id and a changed field under `review` policy, confirm `GET /import/actions?status=pending` shows a `Modify` action with the field diff, `decide` + `apply` it and confirm the SoundCue row changed via `Quotinator.Tools.DbInspector`; separately, mark a SoundCue `Complete` via `markCompletenessAs`, re-import a changed field, and confirm the resulting action is `Blocked` (`GET /import/actions?status=Blocked`), not silently applied |
+| 1 | ✅ | An id-match with a changed `text`/`soundFileUrl`/`imageUrl` field stages a `Modify` action | Unit test | `Quotinator.Engine.Tests.PlanSoundCuesAsync_IdMatchFound_TextDiffers_StagesModifyAction` |
+| 2 | ✅ | An id-match with nothing changed stages no action (silent reuse) | Unit test | `Quotinator.Engine.Tests.PlanSoundCuesAsync_IdMatchFound_NothingChanged_NoActionStaged` |
+| 3 | ✅ | A `Complete`-status id-matched row with a policy-resolved change stages `Blocked`, not `Modify` | Unit test | `Quotinator.Engine.Tests.PlanSoundCuesAsync_CompleteStatus_StagesBlockedNotModify` |
+| 4 | ✅ | A `Complete`-status row under `Skip` policy never blocks (Skip's resolved value always equals the existing value) | Unit test | `Quotinator.Engine.Tests.PlanSoundCuesAsync_CompleteStatus_SkipPolicy_DoesNotBlock` |
+| 5 | ✅ | The decide endpoint accepts SoundCue `text`/`soundFileUrl`/`imageUrl` field decisions for a `Modify` action | Unit test | `Quotinator.Engine.Tests.DecideAsync_SoundCueModify_ResolvesFieldDecisions` |
+| 6 | ✅ | Reversing an applied SoundCue `Modify` restores `ExistingValue`'s fields, not a soft-delete | Unit test | `Quotinator.Engine.Tests.ReverseBatchAsync_SoundCueModify_RestoresExistingValue` |
+| 7 | ✅ | Reversing an applied SoundCue `Add` still soft-deletes if unreferenced (regression) | Unit test | Existing SoundCue Add-reversal coverage re-run — no gap found, split behaves identically for the `Add` branch |
+| 8 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 1,183/1,183 passing, 0 warnings, 0 errors |
+| 9 | ✅ | Build clean | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s) |
+| 10 | ✅ | Live: a `sources`-style correction to a SoundCue's `text`/`soundFileUrl`/`imageUrl` via `soundCues[]` stages/decides/applies a `Modify`, and a `Complete` SoundCue's field cannot be silently overwritten | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`: imported a `soundCues[]` entry, decided a Pending Modify with `markCompletenessAs: Complete` (`ambiguousFields` correctly reported `["text"]` beforehand), re-imported a changed `text` under `review` policy — confirmed the resulting action was `Blocked` (`GET /import/actions?status=Blocked`) and the on-disk `Text` was unchanged. Separately, single-shot corrected a non-`Complete` SoundCue's `text`, confirmed the write landed via `Quotinator.Tools.DbInspector`, then reversed it (preview + real) and confirmed the pre-correction `text` was restored. Note: the two-phase decide→`/import/actions/apply` path never marks `ImportBatches.Status = Applied` — a pre-existing, entity-agnostic gap in the shared coordinator (unrelated to this issue's own logic), so this row's reverse check used the single-shot direct-apply path instead. Flagged separately as a follow-up task, not fixed here. |
 | 11 | ❌ | App still opens and builds in Visual Studio | Live (T1) | Developer's own Visual Studio pass — confirms clean startup, schema/migration state unaffected (this issue adds no new migration, only new query text and C# branches) |
 
 ---
@@ -252,3 +259,15 @@ Razor/migration-surface exemption applies to a genuine C# logic change). Transla
 `PlanStageDirectionsAsync`/`ReverseAppliedActionsAsync`/`DecideAsync` shapes should be used as an
 additional cross-check alongside `PlanSourcesAsync` before implementing this issue's steps, since the two
 entities share the same "single-row, translations-adjacent" sub-problem by design.
+
+**Implemented together with #171**, per the developer's direction — #171 landed in the same pass, so
+its shapes were the direct cross-check for this issue's steps rather than a hypothetical. See #171's own
+plan doc for the parallel implementation notes.
+
+**Found during T2 verification, not part of this issue's own scope:** the two-phase
+`decide` → `POST /import/actions/apply` flow never marks the owning `ImportBatches.Status` as
+`Applied` (only the single-shot direct-apply path in `SqliteQuoteImportService.cs` does), which
+silently breaks `POST /import/actions/reverse` for any batch staged under `review`. This is
+entity-agnostic — affects Quote/Source/StageDirection/SoundCue alike — and pre-existing (the test
+suite's own `MarkImportBatchAppliedAsync` helper has been working around it via raw SQL). Flagged as a
+separate follow-up task, not fixed as part of #171/#172.
