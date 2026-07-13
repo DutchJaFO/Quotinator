@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 176],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -25,7 +25,8 @@
       "Een nieuwe citaatbron toevoegen in CSV- of JSON-formaat vereist meestal geen code meer — een manifestvermelding met eenvoudige veldtoewijzingsopties volstaat nu voor de meeste formaten.",
       "Meerregelige dialogen — een heen-en-weer tussen personages, met regieaanwijzingen en geluidscues ertussen — kunnen nu als één geordende conversatie worden opgevraagd, en een willekeurig citaat dat daar deel van uitmaakt verschijnt niet langer los zonder de rest van de dialoog.",
       "De titel, het type of de releasedatum van een bron kunnen nu achteraf worden gecorrigeerd — bijvoorbeeld een typefout in een filmtitel of een ontbrekend jaartal — zonder dat er een dubbele vermelding ontstaat.",
-      "Regieaanwijzingen en geluidscues die in meerregelige dialogen worden gebruikt, kunnen nu ook achteraf worden gecorrigeerd, op dezelfde manier als de gegevens van een bron dat al konden."
+      "Regieaanwijzingen en geluidscues die in meerregelige dialogen worden gebruikt, kunnen nu ook achteraf worden gecorrigeerd, op dezelfde manier als de gegevens van een bron dat al konden.",
+      "De beschrijving van een conversatie kan nu ook achteraf worden gecorrigeerd; de regels waaruit de conversatie zelf bestaat blijven ongewijzigd."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -65,7 +66,8 @@
       "Nieuw eindpunt `GET /api/v1/conversations/{id}` geeft een volledige, geordende conversatie terug — quotes, regieaanwijzingen en geluidscues in volgorde, met ondersteuning voor `?lang=` en terugval naar de oorspronkelijke taal (issue #69)",
       "Citaatresponsen bevatten nu een veld `conversations` dat aangeeft tot welke conversatie(s) een citaat behoort, de positie erin en het totale aantal regels van die conversatie; dit veld ontbreekt volledig als een citaat tot geen enkele conversatie behoort (issue #69)",
       "`GET /api/v1/quotes/random` toont nu de volledige conversatie wanneer een gekozen citaat daar deel van uitmaakt, en sluit voor de rest van de aanvraag elk ander citaat uit diezelfde conversatie uit; de respons rapporteert nu `requestedCount` en `returnedCount`, zodat een tekort door deze deduplicatie zichtbaar is (issue #69)",
-      "`stageDirections[]`/`soundCues[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten in plaats van alleen ooit te worden toegevoegd — hetzelfde op beleid gebaseerde verschil, blokkering via de volledigheidscontrole, en beslissings-/terugdraaiproces dat broncorrecties al gebruiken"
+      "`stageDirections[]`/`soundCues[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten in plaats van alleen ooit te worden toegevoegd — hetzelfde op beleid gebaseerde verschil, blokkering via de volledigheidscontrole, en beslissings-/terugdraaiproces dat broncorrecties al gebruiken",
+      "`conversations[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten voor alleen het veld `description` — `lines` worden door dit pad nooit vergeleken, gelezen of geschreven; dat blijft een aparte, nog niet geplande toekomstige kwestie"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",

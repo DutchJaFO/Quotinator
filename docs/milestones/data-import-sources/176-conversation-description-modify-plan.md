@@ -1,6 +1,6 @@
 # #176 — Conversation: Description-field Modify/decidability
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #176
 **Tiers required:** T1, T2
 **Depends on:** #162, #165, #168 (shipped patterns this builds on); not technically blocked by #170-#175 but sequenced last among the entity-Modify issues
@@ -102,7 +102,7 @@
 
 ### 1. Write the red tests
 
-**Status:** Not started.
+**Status:** ✅ Done. 7 tests added; confirmed red before implementation (per red-before-green policy).
 
 Add the seven tests from the issue's "Expected tests" table: the five `PlanConversationsAsync_*` tests
 to `Quotinator.Engine.Tests/Database/ImportActionPlannerTests.cs`, and `DecideAsync_ConversationModify_ResolvesDescriptionDecision`
@@ -113,7 +113,7 @@ this project's red-before-green policy.
 
 ### 2. Add `Sql.Conversations` query additions
 
-**Status:** Not started.
+**Status:** ✅ Done — matches the plan exactly.
 
 Add `SelectExistingById` (`SELECT Description, CompletenessStatus FROM Conversations WHERE Id = @id
 AND IsDeleted = 0;`), `UpdateDescriptionById` (`UPDATE Conversations SET Description = @description,
@@ -124,7 +124,7 @@ as `Sql.Sources`'/the not-yet-landed `Sql.StageDirections`' equivalents (`Sql.cs
 
 ### 3. Add the id-match Modify branch to `PlanConversationsAsync`
 
-**Status:** Not started.
+**Status:** ✅ Done — mirrors `PlanSourcesAsync`'s id-match branch; `lines` never diffed.
 
 Add a `DuplicateResolutionPolicy policy` parameter; update the `PlanAsync` call site
 (`ImportActionPlanner.cs:167`) to pass it. Inside the existing `foreach`, replace the current
@@ -143,7 +143,7 @@ unchanged.
 
 ### 4. Add the `Modify` branch to `ApplyResolvedActionAsync`'s Conversation case
 
-**Status:** Not started.
+**Status:** ✅ Done.
 
 Split the existing case (`SqliteImportActionService.cs:632-663`) on `action.ActionType.Parsed`. `Add`
 keeps today's `InsertIfNotExists` + line-insert loop unchanged. `Modify` deserializes `MergedFields`
@@ -156,7 +156,7 @@ touched by the Modify branch — no `ConversationLines` read, insert, or delete 
 
 ### 5. Add Conversation's `DecideAsync` branch
 
-**Status:** Not started.
+**Status:** ✅ Done.
 
 Add an `EntityType == Conversation && ActionType == Modify` branch before the existing `!= Quote`
 rejection (`SqliteImportActionService.cs:110`), alongside the Source branch already there
@@ -171,7 +171,7 @@ to `_coordinator.DecideAsync`.
 
 ### 6. Add Conversation to `ComputeAmbiguousFields`
 
-**Status:** Not started.
+**Status:** ✅ Done — confirmed live via T2: `"ambiguousFields":["description"]` reported correctly.
 
 Add a `case ImportActionEntityTypes.Conversation:` alongside the existing `Source` case
 (`SqliteImportActionService.cs:860-865`), deserializing `ConversationActionPayload` and building a
@@ -181,7 +181,7 @@ offered to `FieldMergeResolver.ResolveWithDecisions` as something requiring a de
 
 ### 7. Split `ReverseAppliedActionsAsync`'s Conversation case on `ActionType`
 
-**Status:** Not started.
+**Status:** ✅ Done — confirmed live via T2 (single-shot apply/reverse cycle restored description, lines untouched).
 
 `Modify`: deserialize `ExistingValue`, call `Sql.Conversations.UpdateDescriptionById` to restore
 `Description`, log the change, `break` before the soft-delete code. `Add`: keep today's unconditional
@@ -192,7 +192,7 @@ either way, since nothing FKs to a Conversation (confirmed via the absence of
 
 ### 8. Add `ConflictDecisionRequest.ConversationDescription`
 
-**Status:** Not started.
+**Status:** ✅ Done.
 
 Add `ConversationDescription` (nullable `FieldDecision?`), placed after the existing
 `SourceTitle`/`SourceType`/`SourceDate` properties (`ConflictDecisionRequest.cs:37-44`), with a doc
@@ -205,16 +205,16 @@ pattern but referencing `#176`.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | An id-matched Conversation with a `description` diff stages `Modify`, not silently reused | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanConversationsAsync_IdMatchFound_DescriptionDiffers_StagesModifyAction` |
-| 2 | ❌ | An id-matched Conversation with nothing changed stages nothing (silent reuse) | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanConversationsAsync_IdMatchFound_NothingChanged_NoActionStaged` |
-| 3 | ❌ | An id-matched Conversation's `lines` are never read, diffed, or included in the staged Modify payload | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanConversationsAsync_IdMatchFound_LinesNeverDiffed` |
-| 4 | ❌ | A `Complete`-status id-matched Conversation with a policy-resolved `description` change stages `Blocked`, not `Modify` | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanConversationsAsync_CompleteStatus_StagesBlockedNotModify` |
-| 5 | ❌ | A `Complete`-status Conversation under `Skip` policy never blocks (resolved value is always the existing value) | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanConversationsAsync_CompleteStatus_SkipPolicy_DoesNotBlock` |
-| 6 | ❌ | Decide endpoint accepts a Conversation `description` field decision | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.DecideAsync_ConversationModify_ResolvesDescriptionDecision` |
-| 7 | ❌ | Reversing a Conversation Modify restores `ExistingValue`'s `description` only, never touches `lines` | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.ReverseBatchAsync_ConversationModify_RestoresDescriptionOnly` |
-| 8 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 9 | ❌ | Live: a `Complete` Conversation's `description` cannot be silently overwritten via re-import; a correctable one can be Modified/decided/reversed end to end through `POST /api/v1/import`, with `lines` never affected | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`, matching #168's row 6 style: import a file with an explicit `conversations[]` entry, decide it `Complete` via `markCompletenessAs`, re-import a changed `description` for the same id under `Review` policy — confirm the resulting action is `Blocked` (not `Pending`) and the on-disk `Description` is unchanged; separately, stage/decide/apply a `description` correction on a non-`Complete` Conversation, confirm the write lands and its `lines`/`ConversationLines` rows are byte-for-byte unchanged (via `GET /api/v1/conversations/{id}` or `Quotinator.Tools.DbInspector`), then `POST /import/actions/reverse?batchId=...` and confirm the pre-correction `description` is restored and the same `lines` remain untouched throughout |
-| 10 | ❌ | App still opens and builds in Visual Studio | Live (T1) | Developer confirms app starts cleanly in Visual Studio with no errors after this change |
+| 1 | ✅ | An id-matched Conversation with a `description` diff stages `Modify`, not silently reused | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanConversationsAsync_IdMatchFound_DescriptionDiffers_StagesModifyAction` |
+| 2 | ✅ | An id-matched Conversation with nothing changed stages nothing (silent reuse) | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanConversationsAsync_IdMatchFound_NothingChanged_NoActionStaged` |
+| 3 | ✅ | An id-matched Conversation's `lines` are never read, diffed, or included in the staged Modify payload | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanConversationsAsync_IdMatchFound_LinesNeverDiffed` |
+| 4 | ✅ | A `Complete`-status id-matched Conversation with a policy-resolved `description` change stages `Blocked`, not `Modify` | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanConversationsAsync_CompleteStatus_StagesBlockedNotModify` |
+| 5 | ✅ | A `Complete`-status Conversation under `Skip` policy never blocks (resolved value is always the existing value) | Unit test | `Quotinator.Engine.Tests.ImportActionPlannerTests.PlanConversationsAsync_CompleteStatus_SkipPolicy_DoesNotBlock` |
+| 6 | ✅ | Decide endpoint accepts a Conversation `description` field decision | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.DecideAsync_ConversationModify_ResolvesDescriptionDecision` |
+| 7 | ✅ | Reversing a Conversation Modify restores `ExistingValue`'s `description` only, never touches `lines` | Unit test | `Quotinator.Engine.Tests.SqliteImportActionServiceTests.ReverseBatchAsync_ConversationModify_RestoresDescriptionOnly` |
+| 8 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 1,194/1,194 passing, 0 warnings, 0 errors |
+| 9 | ✅ | Live: a `Complete` Conversation's `description` cannot be silently overwritten via re-import; a correctable one can be Modified/decided/reversed end to end through `POST /api/v1/import`, with `lines` never affected | Live (T2) | Docker smoke test: imported a `conversations[]` entry, decided a Pending Modify with `markCompletenessAs: Complete` (`ambiguousFields` correctly reported `["description"]`), re-imported a changed `description` under `review` — confirmed the resulting action was `Blocked` and `GET /api/v1/conversations/{id}` showed the on-disk description and lines unchanged. Separately, single-shot corrected a non-`Complete` Conversation's `description`, confirmed the write via `GET /api/v1/conversations/{id}`, then reversed it and confirmed the pre-correction description was restored with lines still intact throughout. Used the single-shot path for reverse due to the pre-existing #177 `ImportBatches.Status` gap. |
+| 10 | ✅ | App still opens and builds in Visual Studio | Live (T1) | Developer confirmed clean startup in Visual Studio, multiple `GET /api/v1/quotes/random` → 200, no errors |
 
 ---
 
