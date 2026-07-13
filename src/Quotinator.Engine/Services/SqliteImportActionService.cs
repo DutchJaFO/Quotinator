@@ -107,6 +107,47 @@ public sealed class SqliteImportActionService : IImportActionService
             return;
         }
 
+        if (action.EntityType == ImportActionEntityTypes.StageDirection && action.ActionType.Parsed == ImportActionKind.Modify)
+        {
+            var existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.ExistingValue!)!;
+            var incomingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.IncomingValue!)!;
+
+            var existingStageDirectionFields = ToFieldMap(existingStageDirectionPayload);
+            var incomingStageDirectionFields = ToFieldMap(incomingStageDirectionPayload);
+            var stageDirectionDecisions      = ToStageDirectionDecisionMap(request);
+
+            var stageDirectionResult = FieldMergeResolver.ResolveWithDecisions(existingStageDirectionFields, incomingStageDirectionFields, stageDirectionDecisions);
+
+            var resolvedStageDirectionPayload = new StageDirectionActionPayload(
+                (string)stageDirectionResult.MergedFields["text"]!,
+                (string?)stageDirectionResult.MergedFields["imageUrl"],
+                existingStageDirectionPayload.Translations);
+
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedStageDirectionPayload), request.MarkCompletenessAs);
+            return;
+        }
+
+        if (action.EntityType == ImportActionEntityTypes.SoundCue && action.ActionType.Parsed == ImportActionKind.Modify)
+        {
+            var existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.ExistingValue!)!;
+            var incomingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.IncomingValue!)!;
+
+            var existingSoundCueFields = ToFieldMap(existingSoundCuePayload);
+            var incomingSoundCueFields = ToFieldMap(incomingSoundCuePayload);
+            var soundCueDecisions      = ToSoundCueDecisionMap(request);
+
+            var soundCueResult = FieldMergeResolver.ResolveWithDecisions(existingSoundCueFields, incomingSoundCueFields, soundCueDecisions);
+
+            var resolvedSoundCuePayload = new SoundCueActionPayload(
+                (string)soundCueResult.MergedFields["text"]!,
+                (string?)soundCueResult.MergedFields["soundFileUrl"],
+                (string?)soundCueResult.MergedFields["imageUrl"],
+                existingSoundCuePayload.Translations);
+
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSoundCuePayload), request.MarkCompletenessAs);
+            return;
+        }
+
         if (action.EntityType != ImportActionEntityTypes.Quote)
             throw new ImportActionNotDecidableException(actionId, action.EntityType);
 
@@ -371,12 +412,43 @@ public sealed class SqliteImportActionService : IImportActionService
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "conversation", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.StageDirection:
+                    if (action.ActionType.Parsed == ImportActionKind.Modify)
+                    {
+                        // #171: a Modify reversal restores the prior field values — it never deletes
+                        // anything, so no active-reference check is needed (unlike an Add reversal).
+                        var existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.ExistingValue!)!;
+                        await sqliteConnection.ExecuteAsync(Sql.StageDirections.UpdateFieldsById, new
+                        {
+                            text = existingStageDirectionPayload.Text,
+                            imageUrl = existingStageDirectionPayload.ImageUrl,
+                            dateModified = now,
+                            id = action.EntityId,
+                        }, sqliteTransaction);
+                        await QuoteSeedWriter.LogChangeAsync(changeLog, "stageDirection", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingStageDirectionPayload, sqliteConnection, sqliteTransaction);
+                        break;
+                    }
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.StageDirections.CountActiveReferences, action.EntityId))
                         break;
                     await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("StageDirections"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "stageDirection", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.SoundCue:
+                    if (action.ActionType.Parsed == ImportActionKind.Modify)
+                    {
+                        // #172: a Modify reversal restores the prior field values — it never deletes
+                        // anything, so no active-reference check is needed (unlike an Add reversal).
+                        var existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.ExistingValue!)!;
+                        await sqliteConnection.ExecuteAsync(Sql.SoundCues.UpdateFieldsById, new
+                        {
+                            text = existingSoundCuePayload.Text,
+                            soundFileUrl = existingSoundCuePayload.SoundFileUrl,
+                            imageUrl = existingSoundCuePayload.ImageUrl,
+                            dateModified = now,
+                            id = action.EntityId,
+                        }, sqliteTransaction);
+                        await QuoteSeedWriter.LogChangeAsync(changeLog, "soundCue", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingSoundCuePayload, sqliteConnection, sqliteTransaction);
+                        break;
+                    }
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.SoundCues.CountActiveReferences, action.EntityId))
                         break;
                     await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("SoundCues"), new { now, id = action.EntityId }, sqliteTransaction);
@@ -619,14 +691,55 @@ public sealed class SqliteImportActionService : IImportActionService
             }
             case ImportActionEntityTypes.StageDirection:
             {
-                var payload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.IncomingValue!)!;
-                await EnsureStageDirectionExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
+                var isStageDirectionAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                if (isStageDirectionAdd)
+                {
+                    var payload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.IncomingValue!)!;
+                    await EnsureStageDirectionExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
+                }
+                else
+                {
+                    var payload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.MergedFields
+                        ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
+                    await sqliteConnection.ExecuteAsync(Sql.StageDirections.UpdateFieldsById, new
+                    {
+                        text = payload.Text,
+                        imageUrl = payload.ImageUrl,
+                        dateModified = now,
+                        id = action.EntityId,
+                    }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "stageDirection", action.EntityId, ChangeAction.Modified,
+                        oldValue: action.ExistingValue, newValue: payload, sqliteConnection, sqliteTransaction);
+                }
+
+                await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.StageDirections.SelectCompletenessById, Sql.StageDirections.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
                 break;
             }
             case ImportActionEntityTypes.SoundCue:
             {
-                var payload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.IncomingValue!)!;
-                await EnsureSoundCueExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
+                var isSoundCueAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                if (isSoundCueAdd)
+                {
+                    var payload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.IncomingValue!)!;
+                    await EnsureSoundCueExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
+                }
+                else
+                {
+                    var payload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.MergedFields
+                        ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
+                    await sqliteConnection.ExecuteAsync(Sql.SoundCues.UpdateFieldsById, new
+                    {
+                        text = payload.Text,
+                        soundFileUrl = payload.SoundFileUrl,
+                        imageUrl = payload.ImageUrl,
+                        dateModified = now,
+                        id = action.EntityId,
+                    }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "soundCue", action.EntityId, ChangeAction.Modified,
+                        oldValue: action.ExistingValue, newValue: payload, sqliteConnection, sqliteTransaction);
+                }
+
+                await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.SoundCues.SelectCompletenessById, Sql.SoundCues.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
                 break;
             }
             case ImportActionEntityTypes.Conversation:
@@ -863,6 +976,18 @@ public sealed class SqliteImportActionService : IImportActionService
                 incoming = ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!);
                 break;
             }
+            case ImportActionEntityTypes.StageDirection:
+            {
+                existing = ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayload>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayload>(action.IncomingValue!)!);
+                break;
+            }
+            case ImportActionEntityTypes.SoundCue:
+            {
+                existing = ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayload>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayload>(action.IncomingValue!)!);
+                break;
+            }
             default:
                 return [];
         }
@@ -939,6 +1064,39 @@ public sealed class SqliteImportActionService : IImportActionService
         Add("title", request.SourceTitle);
         Add("type", request.SourceType);
         Add("date", request.SourceDate);
+
+        return map;
+    }
+
+    private static Dictionary<string, FieldMergeDecision> ToStageDirectionDecisionMap(ConflictDecisionRequest request)
+    {
+        var map = new Dictionary<string, FieldMergeDecision>();
+
+        void Add(string field, FieldDecision? decision)
+        {
+            if (decision is null) return;
+            map[field] = new FieldMergeDecision(decision.Choice, decision.Value);
+        }
+
+        Add("text", request.StageDirectionText);
+        Add("imageUrl", request.StageDirectionImageUrl);
+
+        return map;
+    }
+
+    private static Dictionary<string, FieldMergeDecision> ToSoundCueDecisionMap(ConflictDecisionRequest request)
+    {
+        var map = new Dictionary<string, FieldMergeDecision>();
+
+        void Add(string field, FieldDecision? decision)
+        {
+            if (decision is null) return;
+            map[field] = new FieldMergeDecision(decision.Choice, decision.Value);
+        }
+
+        Add("text", request.SoundCueText);
+        Add("soundFileUrl", request.SoundCueSoundFileUrl);
+        Add("imageUrl", request.SoundCueImageUrl);
 
         return map;
     }

@@ -357,6 +357,22 @@ internal static class Sql
         internal const string DeleteAll = "DELETE FROM StageDirections;";
         internal const string SelectIdById = "SELECT Id FROM StageDirections WHERE Id = @id AND IsDeleted = 0;";
 
+        /// <summary>#171's id-first lookup for an explicit <c>stageDirections[]</c> entry — mirrors <see cref="Sources.SelectExistingById"/>.</summary>
+        internal const string SelectExistingById =
+            "SELECT Text, ImageUrl, CompletenessStatus FROM StageDirections WHERE Id = @id AND IsDeleted = 0;";
+
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        internal const string SelectCompletenessById =
+            "SELECT CompletenessStatus, NoValueKnown FROM StageDirections WHERE Id = @id;";
+
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        internal const string UpdateCompletenessById =
+            "UPDATE StageDirections SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+
+        /// <summary>#171's Modify apply — writes an id-matched StageDirection's corrected Text/ImageUrl. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that.</summary>
+        internal const string UpdateFieldsById =
+            "UPDATE StageDirections SET Text = @text, ImageUrl = @imageUrl, DateModified = @dateModified WHERE Id = @id;";
+
         /// <summary>
         /// Number of active ConversationLines still referencing this StageDirection — see
         /// <see cref="Characters.CountActiveReferences"/>'s remark for the reversal use case.
@@ -413,6 +429,22 @@ internal static class Sql
     {
         internal const string DeleteAll = "DELETE FROM SoundCues;";
         internal const string SelectIdById = "SELECT Id FROM SoundCues WHERE Id = @id AND IsDeleted = 0;";
+
+        /// <summary>#172's id-first lookup for an explicit <c>soundCues[]</c> entry — mirrors <see cref="Sources.SelectExistingById"/>.</summary>
+        internal const string SelectExistingById =
+            "SELECT Text, SoundFileUrl, ImageUrl, CompletenessStatus FROM SoundCues WHERE Id = @id AND IsDeleted = 0;";
+
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        internal const string SelectCompletenessById =
+            "SELECT CompletenessStatus, NoValueKnown FROM SoundCues WHERE Id = @id;";
+
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        internal const string UpdateCompletenessById =
+            "UPDATE SoundCues SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+
+        /// <summary>#172's Modify apply — writes an id-matched SoundCue's corrected Text/SoundFileUrl/ImageUrl. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that.</summary>
+        internal const string UpdateFieldsById =
+            "UPDATE SoundCues SET Text = @text, SoundFileUrl = @soundFileUrl, ImageUrl = @imageUrl, DateModified = @dateModified WHERE Id = @id;";
 
         /// <summary>Number of active ConversationLines still referencing this SoundCue — see <see cref="StageDirections.CountActiveReferences"/>'s remark for why this joins through Conversations.</summary>
         internal const string CountActiveReferences =

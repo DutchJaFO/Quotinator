@@ -1006,4 +1006,141 @@ public class SqliteImportActionServiceTests
         var title = await conn.ExecuteScalarAsync<string>("SELECT Title FROM Sources WHERE Id = @id", new { id = sourceId });
         Assert.AreEqual("T2 Regression Movie (Corrected)", title);
     }
+
+    // ── #171 — StageDirection decidability ───────────────────────────────────
+
+    private async Task SeedExplicitStageDirectionAsync(string id, string text = "A shot rings out.", string? imageUrl = null, string completenessStatus = "Incomplete")
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO StageDirections (Id, Text, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @ImageUrl, @CompletenessStatus, @now)",
+            new { Id = id, Text = text, ImageUrl = imageUrl, CompletenessStatus = completenessStatus, now });
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_StageDirectionModify_ResolvesFieldDecisions()
+    {
+        var id = "e1111111-1111-4111-8111-111111111111";
+        await SeedExplicitStageDirectionAsync(id, text: "A shot rings out.");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            stageDirections: [new SourceStageDirection { Id = id, Text = "A single shot rings out.", ImageUrl = "https://example.com/still.jpg" }]);
+        var action = actions.Single(a => a.EntityType == "StageDirection");
+        Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, "Review policy leaves the Modify pending");
+
+        await _service.DecideAsync(action.Id, new ConflictDecisionRequest
+        {
+            StageDirectionText     = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+            StageDirectionImageUrl = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+
+        var found = await _actionReader.GetByIdAsync(action.Id);
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
+        Assert.IsNotNull(found.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task ReverseBatchAsync_StageDirectionModify_RestoresExistingValue()
+    {
+        var id = "e2111111-1111-4111-8111-111111111111";
+        await SeedExplicitStageDirectionAsync(id, text: "A shot rings out.", imageUrl: "https://example.com/original.jpg");
+        using (var seedConn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await seedConn.OpenAsync();
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            await seedConn.ExecuteAsync(
+                "INSERT INTO StageDirectionTranslations (Id, StageDirectionId, Language, Text, DateCreated) VALUES (@Id, @StageDirectionId, 'nl', 'Er klinkt een schot.', @now)",
+                new { Id = Guid.NewGuid().ToString(), StageDirectionId = id, now });
+        }
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            stageDirections: [new SourceStageDirection { Id = id, Text = "A different action entirely.", ImageUrl = "https://example.com/corrected.jpg" }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (text, imageUrl) = await conn.QuerySingleAsync<(string Text, string ImageUrl)>(
+            "SELECT Text, ImageUrl FROM StageDirections WHERE Id = @id", new { id });
+        Assert.AreEqual("A shot rings out.", text, "Reversal must restore the pre-Modify text");
+        Assert.AreEqual("https://example.com/original.jpg", imageUrl, "Reversal must restore the pre-Modify image URL");
+
+        var translationText = await conn.ExecuteScalarAsync<string>(
+            "SELECT Text FROM StageDirectionTranslations WHERE StageDirectionId = @id AND Language = 'nl'", new { id });
+        Assert.AreEqual("Er klinkt een schot.", translationText, "Translations are out of scope for Modify — must survive untouched");
+    }
+
+    // ── #172 — SoundCue decidability ─────────────────────────────────────────
+
+    private async Task SeedExplicitSoundCueAsync(string id, string text = "Distant thunder.", string? soundFileUrl = null, string? imageUrl = null, string completenessStatus = "Incomplete")
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO SoundCues (Id, Text, SoundFileUrl, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @SoundFileUrl, @ImageUrl, @CompletenessStatus, @now)",
+            new { Id = id, Text = text, SoundFileUrl = soundFileUrl, ImageUrl = imageUrl, CompletenessStatus = completenessStatus, now });
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_SoundCueModify_ResolvesFieldDecisions()
+    {
+        var id = "e3111111-1111-4111-8111-111111111111";
+        await SeedExplicitSoundCueAsync(id, text: "Distant thunder.");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            soundCues: [new SourceSoundCue { Id = id, Text = "Rolling thunder.", SoundFileUrl = "https://example.com/thunder.mp3", ImageUrl = "https://example.com/storm.jpg" }]);
+        var action = actions.Single(a => a.EntityType == "SoundCue");
+        Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, "Review policy leaves the Modify pending");
+
+        await _service.DecideAsync(action.Id, new ConflictDecisionRequest
+        {
+            SoundCueText         = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+            SoundCueSoundFileUrl = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+            SoundCueImageUrl     = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+
+        var found = await _actionReader.GetByIdAsync(action.Id);
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
+        Assert.IsNotNull(found.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task ReverseBatchAsync_SoundCueModify_RestoresExistingValue()
+    {
+        var id = "e4111111-1111-4111-8111-111111111111";
+        await SeedExplicitSoundCueAsync(id, text: "Distant thunder.", soundFileUrl: "https://example.com/original.mp3");
+        using (var seedConn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await seedConn.OpenAsync();
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            await seedConn.ExecuteAsync(
+                "INSERT INTO SoundCueTranslations (Id, SoundCueId, Language, Text, DateCreated) VALUES (@Id, @SoundCueId, 'nl', 'Ver gerommel van de donder.', @now)",
+                new { Id = Guid.NewGuid().ToString(), SoundCueId = id, now });
+        }
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            soundCues: [new SourceSoundCue { Id = id, Text = "A completely different sound.", SoundFileUrl = "https://example.com/corrected.mp3" }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (text, soundFileUrl) = await conn.QuerySingleAsync<(string Text, string SoundFileUrl)>(
+            "SELECT Text, SoundFileUrl FROM SoundCues WHERE Id = @id", new { id });
+        Assert.AreEqual("Distant thunder.", text, "Reversal must restore the pre-Modify text");
+        Assert.AreEqual("https://example.com/original.mp3", soundFileUrl, "Reversal must restore the pre-Modify sound file URL");
+
+        var translationText = await conn.ExecuteScalarAsync<string>(
+            "SELECT Text FROM SoundCueTranslations WHERE SoundCueId = @id AND Language = 'nl'", new { id });
+        Assert.AreEqual("Ver gerommel van de donder.", translationText, "Translations are out of scope for Modify — must survive untouched");
+    }
 }

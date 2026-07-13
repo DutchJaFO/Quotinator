@@ -43,6 +43,21 @@ public sealed class ConflictDecisionRequest
     /// <summary>Decision for a Source action's date (#162).</summary>
     public FieldDecision? SourceDate { get; init; }
 
+    /// <summary>Decision for a StageDirection action's text (#171).</summary>
+    public FieldDecision? StageDirectionText { get; init; }
+
+    /// <summary>Decision for a StageDirection action's image URL (#171).</summary>
+    public FieldDecision? StageDirectionImageUrl { get; init; }
+
+    /// <summary>Decision for a SoundCue action's text (#172).</summary>
+    public FieldDecision? SoundCueText { get; init; }
+
+    /// <summary>Decision for a SoundCue action's sound file URL (#172).</summary>
+    public FieldDecision? SoundCueSoundFileUrl { get; init; }
+
+    /// <summary>Decision for a SoundCue action's image URL (#172).</summary>
+    public FieldDecision? SoundCueImageUrl { get; init; }
+
     /// <summary>
     /// Optional, entity-agnostic override (#165) — when supplied, applying this decision sets the
     /// target record's <see cref="CompletenessStatus"/> directly (most usefully <c>Complete</c>),

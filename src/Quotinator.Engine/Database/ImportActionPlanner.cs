@@ -162,8 +162,8 @@ internal static class ImportActionPlanner
             }
         }
 
-        await PlanStageDirectionsAsync(connection, stageDirections ?? [], batchIdStr, actions, now, transaction);
-        await PlanSoundCuesAsync(connection, soundCues ?? [], batchIdStr, actions, now, transaction);
+        await PlanStageDirectionsAsync(connection, stageDirections ?? [], batchIdStr, policy, actions, now, transaction);
+        await PlanSoundCuesAsync(connection, soundCues ?? [], batchIdStr, policy, actions, now, transaction);
         await PlanConversationsAsync(connection, conversations ?? [], batchIdStr, actions, now, transaction);
 
         return actions;
@@ -282,6 +282,14 @@ internal static class ImportActionPlanner
     /// <summary>Same key names as <see cref="Quotinator.Engine.Services.SqliteImportActionService"/>'s own private overload — must stay in sync, both feed the same decide-time <c>FieldMergeResolver</c> field-name vocabulary.</summary>
     private static IReadOnlyDictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
         new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date };
+
+    /// <summary>Same key names as <see cref="Quotinator.Engine.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#171).</summary>
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(StageDirectionActionPayload payload) =>
+        new Dictionary<string, object?> { ["text"] = payload.Text, ["imageUrl"] = payload.ImageUrl };
+
+    /// <summary>Same key names as <see cref="Quotinator.Engine.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#172).</summary>
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(SoundCueActionPayload payload) =>
+        new Dictionary<string, object?> { ["text"] = payload.Text, ["soundFileUrl"] = payload.SoundFileUrl, ["imageUrl"] = payload.ImageUrl };
 
     // ── #162: explicit Source planning ───────────────────────────────────────
     // Unlike ResolveSourceAsync (natural-key match only, never compares Date/Title/Type once
@@ -402,12 +410,76 @@ internal static class ImportActionPlanner
 
     private static async Task PlanStageDirectionsAsync(
         SqliteConnection connection, IReadOnlyList<SourceStageDirection> stageDirections, string batchId,
-        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        DuplicateResolutionPolicy policy, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var sd in stageDirections)
         {
-            var existingId = await connection.ExecuteScalarAsync<Guid?>(Sql.StageDirections.SelectIdById, new { id = sd.Id }, transaction);
-            if (existingId is not null) continue;
+            var existing = await connection.QuerySingleOrDefaultAsync<(string Text, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                Sql.StageDirections.SelectExistingById, new { id = sd.Id }, transaction);
+
+            if (existing is { } row)
+            {
+                var emptyTranslations = new Dictionary<string, SourceStageDirectionTranslation>();
+                var existingPayload = new StageDirectionActionPayload(row.Text, row.ImageUrl, emptyTranslations);
+                var incomingPayload = new StageDirectionActionPayload(sd.Text, sd.ImageUrl, emptyTranslations);
+                var existingFields  = ToFieldMap(existingPayload);
+                var incomingFields  = ToFieldMap(incomingPayload);
+
+                var changedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                var resolved    = policy switch
+                {
+                    DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
+                        new StageDirectionActionPayload((string)mergeResult!.MergedFields["text"]!, (string?)mergeResult.MergedFields["imageUrl"], emptyTranslations),
+                    DuplicateResolutionPolicy.Skip => existingPayload,
+                    _ => incomingPayload,
+                };
+
+                // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
+                // not the raw incoming value used for the "unchanged" check above.
+                var resolvedFields        = ToFieldMap(resolved);
+                var effectiveChangedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+
+                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.StageDirection,
+                        EntityId      = sd.Id,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                var isPending = policy == DuplicateResolutionPolicy.Review;
+                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchId,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType    = ImportActionEntityTypes.StageDirection,
+                    EntityId      = sd.Id,
+                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
 
             actions.Add(new SystemImportAction
             {
@@ -424,12 +496,76 @@ internal static class ImportActionPlanner
 
     private static async Task PlanSoundCuesAsync(
         SqliteConnection connection, IReadOnlyList<SourceSoundCue> soundCues, string batchId,
-        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        DuplicateResolutionPolicy policy, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var sc in soundCues)
         {
-            var existingId = await connection.ExecuteScalarAsync<Guid?>(Sql.SoundCues.SelectIdById, new { id = sc.Id }, transaction);
-            if (existingId is not null) continue;
+            var existing = await connection.QuerySingleOrDefaultAsync<(string Text, string? SoundFileUrl, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                Sql.SoundCues.SelectExistingById, new { id = sc.Id }, transaction);
+
+            if (existing is { } row)
+            {
+                var emptyTranslations = new Dictionary<string, SourceSoundCueTranslation>();
+                var existingPayload = new SoundCueActionPayload(row.Text, row.SoundFileUrl, row.ImageUrl, emptyTranslations);
+                var incomingPayload = new SoundCueActionPayload(sc.Text, sc.SoundFileUrl, sc.ImageUrl, emptyTranslations);
+                var existingFields  = ToFieldMap(existingPayload);
+                var incomingFields  = ToFieldMap(incomingPayload);
+
+                var changedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                var resolved    = policy switch
+                {
+                    DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
+                        new SoundCueActionPayload((string)mergeResult!.MergedFields["text"]!, (string?)mergeResult.MergedFields["soundFileUrl"], (string?)mergeResult.MergedFields["imageUrl"], emptyTranslations),
+                    DuplicateResolutionPolicy.Skip => existingPayload,
+                    _ => incomingPayload,
+                };
+
+                // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
+                // not the raw incoming value used for the "unchanged" check above.
+                var resolvedFields        = ToFieldMap(resolved);
+                var effectiveChangedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+
+                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.SoundCue,
+                        EntityId      = sc.Id,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                var isPending = policy == DuplicateResolutionPolicy.Review;
+                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchId,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType    = ImportActionEntityTypes.SoundCue,
+                    EntityId      = sc.Id,
+                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
 
             actions.Add(new SystemImportAction
             {

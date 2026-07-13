@@ -379,4 +379,155 @@ public class ImportActionPlannerTests
         var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(newFileId, payload.SourceId);
     }
+
+    // ── #171: PlanStageDirectionsAsync ───────────────────────────────────────
+
+    private static SourceStageDirection BuildStageDirectionEntry(string id, string text = "A shot rings out.", string? imageUrl = null) => new()
+    {
+        Id       = id,
+        Text     = text,
+        ImageUrl = imageUrl,
+    };
+
+    private static async Task SeedExplicitStageDirectionAsync(SqliteConnection conn, string id, string text = "A shot rings out.", string? imageUrl = null, string completenessStatus = "Incomplete")
+    {
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO StageDirections (Id, Text, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @ImageUrl, @CompletenessStatus, @now)",
+            new { Id = id, Text = text, ImageUrl = imageUrl, CompletenessStatus = completenessStatus, now });
+    }
+
+    [TestMethod]
+    public async Task PlanStageDirectionsAsync_IdMatchFound_TextDiffers_StagesModifyAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d1111111-1111-4111-8111-111111111111";
+        await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            stageDirections: [BuildStageDirectionEntry(id, text: "A single shot rings out in the distance.")]);
+
+        var action = actions.Single(a => a.EntityType == "StageDirection");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed);
+        Assert.IsNotNull(action.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task PlanStageDirectionsAsync_IdMatchFound_NothingChanged_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d2111111-1111-4111-8111-111111111111";
+        await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.", imageUrl: "https://example.com/still.jpg");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            stageDirections: [BuildStageDirectionEntry(id, text: "A shot rings out.", imageUrl: "https://example.com/still.jpg")]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "StageDirection"), "Nothing differs — silent reuse, no action staged");
+    }
+
+    [TestMethod]
+    public async Task PlanStageDirectionsAsync_CompleteStatus_StagesBlockedNotModify()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d3111111-1111-4111-8111-111111111111";
+        await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.", completenessStatus: "Complete");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            stageDirections: [BuildStageDirectionEntry(id, text: "A different action entirely.")]);
+
+        var action = actions.Single(a => a.EntityType == "StageDirection");
+        Assert.AreEqual(ImportActionStatus.Blocked, action.Status.Parsed, "A Complete row must never silently accept a Modify");
+        Assert.IsNull(action.MergedFields, "Nothing is resolved yet for a Blocked action");
+    }
+
+    [TestMethod]
+    public async Task PlanStageDirectionsAsync_CompleteStatus_SkipPolicy_DoesNotBlock()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d4111111-1111-4111-8111-111111111111";
+        await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.", completenessStatus: "Complete");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Skip,
+            stageDirections: [BuildStageDirectionEntry(id, text: "A different action entirely.")]);
+
+        var action = actions.Single(a => a.EntityType == "StageDirection");
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
+    }
+
+    // ── #172: PlanSoundCuesAsync ──────────────────────────────────────────────
+
+    private static SourceSoundCue BuildSoundCueEntry(string id, string text = "Distant thunder.", string? soundFileUrl = null, string? imageUrl = null) => new()
+    {
+        Id           = id,
+        Text         = text,
+        SoundFileUrl = soundFileUrl,
+        ImageUrl     = imageUrl,
+    };
+
+    private static async Task SeedExplicitSoundCueAsync(SqliteConnection conn, string id, string text = "Distant thunder.", string? soundFileUrl = null, string? imageUrl = null, string completenessStatus = "Incomplete")
+    {
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO SoundCues (Id, Text, SoundFileUrl, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @SoundFileUrl, @ImageUrl, @CompletenessStatus, @now)",
+            new { Id = id, Text = text, SoundFileUrl = soundFileUrl, ImageUrl = imageUrl, CompletenessStatus = completenessStatus, now });
+    }
+
+    [TestMethod]
+    public async Task PlanSoundCuesAsync_IdMatchFound_TextDiffers_StagesModifyAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d5111111-1111-4111-8111-111111111111";
+        await SeedExplicitSoundCueAsync(conn, id, text: "Distant thunder.");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            soundCues: [BuildSoundCueEntry(id, text: "Rolling thunder in the distance.")]);
+
+        var action = actions.Single(a => a.EntityType == "SoundCue");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed);
+        Assert.IsNotNull(action.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task PlanSoundCuesAsync_IdMatchFound_NothingChanged_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d6111111-1111-4111-8111-111111111111";
+        await SeedExplicitSoundCueAsync(conn, id, text: "Distant thunder.", soundFileUrl: "https://example.com/thunder.mp3");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            soundCues: [BuildSoundCueEntry(id, text: "Distant thunder.", soundFileUrl: "https://example.com/thunder.mp3")]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "SoundCue"), "Nothing differs — silent reuse, no action staged");
+    }
+
+    [TestMethod]
+    public async Task PlanSoundCuesAsync_CompleteStatus_StagesBlockedNotModify()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d7111111-1111-4111-8111-111111111111";
+        await SeedExplicitSoundCueAsync(conn, id, text: "Distant thunder.", completenessStatus: "Complete");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            soundCues: [BuildSoundCueEntry(id, text: "A completely different sound.")]);
+
+        var action = actions.Single(a => a.EntityType == "SoundCue");
+        Assert.AreEqual(ImportActionStatus.Blocked, action.Status.Parsed, "A Complete row must never silently accept a Modify");
+        Assert.IsNull(action.MergedFields, "Nothing is resolved yet for a Blocked action");
+    }
+
+    [TestMethod]
+    public async Task PlanSoundCuesAsync_CompleteStatus_SkipPolicy_DoesNotBlock()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d8111111-1111-4111-8111-111111111111";
+        await SeedExplicitSoundCueAsync(conn, id, text: "Distant thunder.", completenessStatus: "Complete");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Skip,
+            soundCues: [BuildSoundCueEntry(id, text: "A completely different sound.")]);
+
+        var action = actions.Single(a => a.EntityType == "SoundCue");
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
+    }
 }
