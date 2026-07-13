@@ -61,7 +61,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#162](https://github.com/DutchJaFO/Quotinator/issues/162) | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Waiting for release | T1 ✅ T2 ✅ | [162-source-explicit-id-plan.md](162-source-explicit-id-plan.md) |
 | [#168](https://github.com/DutchJaFO/Quotinator/issues/168) | Quote's own Modify path never checks CompletenessGuard — a Complete quote can be silently overwritten by import | Waiting for release | T1 ✅ T2 ✅ | [168-quote-completeness-guard-plan.md](168-quote-completeness-guard-plan.md) |
 | [#169](https://github.com/DutchJaFO/Quotinator/issues/169) | Research: "universe/setting" concept linking Source and Character | Planning | None (research) | [169-universe-setting-research-plan.md](169-universe-setting-research-plan.md) |
-| [#170](https://github.com/DutchJaFO/Quotinator/issues/170) | ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions" | In progress | T1 ⬜ T2 ✅ | [170-not-decidable-wording-plan.md](170-not-decidable-wording-plan.md) |
+| [#170](https://github.com/DutchJaFO/Quotinator/issues/170) | ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions" | Waiting for release | T1 ✅ T2 ✅ | [170-not-decidable-wording-plan.md](170-not-decidable-wording-plan.md) |
 | [#171](https://github.com/DutchJaFO/Quotinator/issues/171) | StageDirection: Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [171-stagedirection-modify-plan.md](171-stagedirection-modify-plan.md) |
 | [#172](https://github.com/DutchJaFO/Quotinator/issues/172) | SoundCue: Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [172-soundcue-modify-plan.md](172-soundcue-modify-plan.md) |
 | [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | Planning | T1 ⬜ T2 ⬜ | [173-person-modify-plan.md](173-person-modify-plan.md) |
@@ -154,7 +154,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 27 | #162 | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Waiting for release |
 | 28 | #168 | Quote's own Modify path never checks CompletenessGuard | Waiting for release |
 | 29 | #169 | Research: "universe/setting" concept linking Source and Character | Planning |
-| 30 | #170 | ImportActionNotDecidableException stale wording fix | In progress |
+| 30 | #170 | ImportActionNotDecidableException stale wording fix | Waiting for release |
 | 31 | #171 | StageDirection: Modify/decidability | Planning |
 | 32 | #172 | SoundCue: Modify/decidability | Planning |
 | 33 | #173 | Person: explicit id, Modify/decidability | Planning |

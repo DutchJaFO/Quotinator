@@ -1,6 +1,6 @@
 # #170 — ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions"
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #170
 **Tiers required:** T1, T2
 
@@ -128,7 +128,7 @@ repeats the stale wording being replaced.
 | 4 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 1,162/1,162 passing (up from 1,161), 0 warnings, 0 errors, re-confirmed after the two additional fixes in step 5 |
 | 5 | ✅ | No leftover reference to the stale wording anywhere in the repo, including differently-worded variants | Live | `grep -rn "only 'Quote'\|only Quote actions\|always staged already-Decided" src/ tests/` — no matches; broader sweep also caught and fixed `IImportActionService.DecideAsync`'s doc comment and `ImportEndpoints.cs`'s `[Description]` attribute, both worded differently from the three original strings; `README.md`/`addon/DOCS.md` already accurate |
 | 6 | ✅ | Live: the reworded English error message is actually returned by the API for a real not-decidable action, and the smoke-test steps are themselves proven sensitive to the bug (canary-verified against a pre-fix build, per direct developer instruction) | Live (T2) | Docker smoke test: imported a fresh quote (stages a Source `Add`, already `Decided`), then `POST /api/v1/import/actions/{id}/decide` against that Add action's id — returned `422` with the new generic wording, no "Quote"-specific text. Canary: rebuilt the identical image from `a4ec145` (the commit immediately before the fix, via an isolated `git worktree`) and ran the *exact same* repro steps — confirmed the old `"only Quote actions support a decision"` text actually appears there, proving these smoke-test steps would have caught the original bug rather than happening to already avoid it. Canary container/image/worktree torn down afterward. |
-| 7 | ❌ | App still opens and builds in Visual Studio | Live (T1) | Developer confirms the app starts cleanly in Visual Studio after the change |
+| 7 | ✅ | App still opens and builds in Visual Studio | Live (T1) | Developer confirmed clean startup in Visual Studio (schema v8/data v10, source refresh succeeding, multiple `GET /api/v1/quotes/random` → 200, no errors) |
 
 ---
 
