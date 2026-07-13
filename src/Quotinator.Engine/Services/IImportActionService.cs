@@ -24,9 +24,12 @@ public interface IImportActionService
     Task<ImportActionPageResponse> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Stages a decision for one Quote action. Validates immediately — a genuinely ambiguous field
-    /// left undecided throws before anything is stored. Throws <see cref="ImportActionNotDecidableException"/>
-    /// for a Source/Character/Person action (always already-Decided; never a valid decide target).
+    /// Stages a decision for one action of a currently-decidable entity type and <c>ActionType</c>
+    /// (today: Quote, and Source Modify — see <see cref="ImportActionNotDecidableException"/>'s own
+    /// doc comment for which combination is current, since it changes as more entities gain
+    /// decidability). Validates immediately — a genuinely ambiguous field left undecided throws
+    /// before anything is stored. Throws <see cref="ImportActionNotDecidableException"/> for any
+    /// action whose entity type/<c>ActionType</c> combination isn't currently decidable.
     /// </summary>
     Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default);
 

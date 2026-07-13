@@ -1,6 +1,6 @@
 # #170 — ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions"
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #170
 **Tiers required:** T1, T2
 
@@ -31,7 +31,8 @@
 
 ### 1. Write the red test
 
-**Status:** Not started.
+**Status:** ✅ Done. `ImportActionNotDecidableExceptionTests.cs` created; test confirmed red against
+current code (`actual: true` — message does contain "Quote").
 
 Add `ImportActionNotDecidableException_Message_DoesNotNameASpecificEntityType` to
 `tests/Quotinator.Engine.Tests/Services/` (new file `ImportActionNotDecidableExceptionTests.cs`, mirroring
@@ -45,7 +46,8 @@ making any fix.
 
 ### 2. Reword the exception's class doc comment and constructor message
 
-**Status:** Not started.
+**Status:** ✅ Done. Summary and message both generic now — no entity type named as the exception,
+`entityType`/`actionId` still interpolated.
 
 In `src/Quotinator.Engine/Services/ImportActionNotDecidableException.cs`:
 - Rewrite the `<summary>` to state the rule generically — the exception is thrown when the action's
@@ -58,7 +60,7 @@ In `src/Quotinator.Engine/Services/ImportActionNotDecidableException.cs`:
 
 ### 3. Update `UI.en-GB.json`'s `ErrorImportActionNotDecidable` key
 
-**Status:** Not started.
+**Status:** ✅ Done.
 
 Reword the English baseline string to match step 2's generic phrasing (still using the existing `{0}`
 placeholder for the entity type). This becomes the source-of-truth wording for the `de`/`nl` translations
@@ -66,7 +68,7 @@ in the next step.
 
 ### 4. Update `UI.de.json` and `UI.nl.json` in lockstep
 
-**Status:** Not started.
+**Status:** ✅ Done — both translated and updated in the same commit as step 3.
 
 Translate the reworded English string into German and Dutch, matching this project's changelog-lockstep
 convention (CLAUDE.md's Localisation section: "every key that exists in `UI.en-GB.json` must exist
@@ -75,7 +77,28 @@ same commit as step 3, not deferred.
 
 ### 5. Verify no other call site or test still asserts the old wording
 
-**Status:** Not started.
+**Status:** ✅ Done, expanded beyond the original scope. The original three-exact-string grep
+(`"only 'Quote'"`, `"only Quote actions"`, `"always staged already-Decided"`) returned no matches,
+but a broader sweep (prompted by a direct question on whether "only the exception" was really the
+full scope) found two more instances of the same stale claim in *different* wording that the narrow
+grep missed:
+
+- `IImportActionService.DecideAsync`'s own XML doc comment (the actual doc source —
+  `SqliteImportActionService.DecideAsync`'s implementation only has `/// <inheritdoc/>`): "Throws
+  `ImportActionNotDecidableException` for a Source/Character/Person action (always already-Decided;
+  never a valid decide target)." Reworded to state the rule generically, matching the exception's
+  own new wording.
+- `ImportEndpoints.cs`'s `[Description]` attribute on the `POST /import/actions/{id}/decide` route —
+  the text that actually feeds the OpenAPI spec and Scalar UI, arguably the most user-facing of all
+  three locations found in this issue: "Only `Quote` actions can be decided — Source/Character/Person
+  actions are always already-Decided... so targeting one returns `422`." Reworded generically. Also
+  checked `README.md`/`addon/DOCS.md`'s own decide-endpoint rows per CLAUDE.md's "Keeping API
+  documentation in sync" rule — both already said "Quote or Source action," already accurate, no
+  change needed there.
+
+A final broader grep (`only.{0,3}Quote|Quote.{0,10}only`) across all of `src/` confirmed no further
+instances — the remaining hits are unrelated (`yearFrom`/`yearTo` "only quotes" filter descriptions,
+an unrelated `GetOrCreateSourceAsync` method in `QuoteSeedWriter.cs`, changelog prose).
 
 Grep the repo for the literal strings `"only 'Quote'"`, `"only Quote actions"`, and `"always staged
 already-Decided"` to confirm no other file (test assertions, other doc comments) still depends on or
@@ -87,11 +110,11 @@ repeats the stale wording being replaced.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Exception message no longer names `'Quote'` as the only decidable entity type | Unit test | `Quotinator.Engine.Tests.Services.ImportActionNotDecidableExceptionTests.ImportActionNotDecidableException_Message_DoesNotNameASpecificEntityType` — red before the fix, green after |
-| 2 | ❌ | Class doc comment no longer claims Source is "always staged already-Decided" | Live | Manual review of `src/Quotinator.Engine/Services/ImportActionNotDecidableException.cs`'s `<summary>` — confirm the Source-specific claim is removed and replaced with generic wording |
-| 3 | ❌ | `UI.en-GB.json`, `UI.de.json`, `UI.nl.json` all update the `ErrorImportActionNotDecidable` key in the same commit, none left stale | Unit test | `dotnet test --filter TranslationCompleteness` passes (all three locale files have a non-empty key); manual diff review confirms all three wordings were actually changed together, not just `en-GB.json` |
-| 4 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — all tests passing, 0 warnings, 0 errors |
-| 5 | ❌ | No leftover reference to the stale wording anywhere in the repo | Live | `grep -rn "only 'Quote'\|only Quote actions\|always staged already-Decided" src/ tests/` returns no matches |
+| 1 | ✅ | Exception message no longer names `'Quote'` as the only decidable entity type | Unit test | `Quotinator.Engine.Tests.Services.ImportActionNotDecidableExceptionTests.ImportActionNotDecidableException_Message_DoesNotNameASpecificEntityType` — confirmed red before the fix, green after |
+| 2 | ✅ | Class doc comment no longer claims Source is "always staged already-Decided" | Live | Manual review of `src/Quotinator.Engine/Services/ImportActionNotDecidableException.cs`'s `<summary>` — Source-specific claim removed, replaced with generic wording |
+| 3 | ✅ | `UI.en-GB.json`, `UI.de.json`, `UI.nl.json` all update the `ErrorImportActionNotDecidable` key in the same commit, none left stale | Unit test | `dotnet test --filter TranslationCompleteness` — 2/2 passing; manual diff review confirms all three wordings changed together |
+| 4 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 1,162/1,162 passing (up from 1,161), 0 warnings, 0 errors, re-confirmed after the two additional fixes in step 5 |
+| 5 | ✅ | No leftover reference to the stale wording anywhere in the repo, including differently-worded variants | Live | `grep -rn "only 'Quote'\|only Quote actions\|always staged already-Decided" src/ tests/` — no matches; broader sweep also caught and fixed `IImportActionService.DecideAsync`'s doc comment and `ImportEndpoints.cs`'s `[Description]` attribute, both worded differently from the three original strings; `README.md`/`addon/DOCS.md` already accurate |
 | 6 | ❌ | Live: the reworded English error message is actually returned by the API for a real not-decidable action | Live (T2) | Docker smoke test: stage an already-`Decided` (or non-`Quote`, non-decidable) action and call `POST /api/v1/import/actions/<id>/decide` against it — response body's error `detail` shows the new generic wording, not the old `'Quote'`-specific text |
 | 7 | ❌ | App still opens and builds in Visual Studio | Live (T1) | Developer confirms the app starts cleanly in Visual Studio after the change |
 

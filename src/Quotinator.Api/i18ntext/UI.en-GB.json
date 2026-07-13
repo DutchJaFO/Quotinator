@@ -60,7 +60,7 @@
   "ErrorImportActionNotFound": "No import action exists with that id.",
   "ErrorImportActionAlreadyResolved": "This import action has already been applied or discarded and can no longer be decided.",
   "ErrorImportActionNotDecided": "This import action has no staged decision to undo.",
-  "ErrorImportActionNotDecidable": "This import action is a '{0}' action and cannot be manually decided — only Quote actions support a decision.",
+  "ErrorImportActionNotDecidable": "This import action is a '{0}' action and cannot be manually decided — this action's entity type does not currently support a Modify decision.",
   "ErrorImportActionAmbiguousFieldsUnresolved": "The following fields are ambiguous and need an explicit decision: {0}.",
   "ErrorImportActionBatchNotFullyDecided": "Not every action in this batch has a decision yet. Decide the remaining actions before applying.",
   "ErrorImportActionBatchInvalidState": "This batch cannot be discarded — it has already been applied, already been discarded, or has no staged actions.",

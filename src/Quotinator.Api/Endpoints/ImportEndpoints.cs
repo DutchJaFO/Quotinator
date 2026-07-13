@@ -175,15 +175,16 @@ internal static class ImportEndpoints
         .WithName("DecideImportAction")
         .WithSummary("Stage a per-field decision for one staged action")
         .WithDescription(
-            "Records a per-field keep/replace/custom decision for one staged Quote action — git-merge-" +
-            "style: an explicit decision always wins for that field, even if it wasn't actually " +
-            "ambiguous. A field left out auto-resolves (empty-side wins, equal values keep existing); " +
-            "a field that is genuinely ambiguous (both sides non-empty and differ) with no decision " +
-            "returns `422`. Only `Quote` actions can be decided — Source/Character/Person actions are " +
-            "always already-Decided (an Add is never ambiguous), so targeting one returns `422`. " +
-            "Nothing is written to any domain table yet — call `POST /import/actions/apply` once " +
-            "every action in the batch has been decided. Calling this again for the same action " +
-            "overwrites the prior decision. Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
+            "Records a per-field keep/replace/custom decision for one staged action of a currently-" +
+            "decidable entity type — git-merge-style: an explicit decision always wins for that " +
+            "field, even if it wasn't actually ambiguous. A field left out auto-resolves (empty-side " +
+            "wins, equal values keep existing); a field that is genuinely ambiguous (both sides " +
+            "non-empty and differ) with no decision returns `422`. An entity type/action combination " +
+            "that isn't currently decidable (e.g. an Add action — never ambiguous — or an entity type " +
+            "not yet supporting Modify decisions) returns `422` if targeted. Nothing is written to " +
+            "any domain table yet — call `POST /import/actions/apply` once every action in the batch " +
+            "has been decided. Calling this again for the same action overwrites the prior decision. " +
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
 
         adminGroup.MapPost("/actions/{id}/undo", async (
             string id,
