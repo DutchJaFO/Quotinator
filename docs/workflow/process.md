@@ -28,6 +28,26 @@ This does not apply to an individual step section's own `**Status:**` line (e.g.
 
 **`In progress` requires actual outstanding code/doc work.** Before setting or leaving an issue at `In progress`, check whether every step section and every verification row in its plan doc is already ✅. If they are, the issue is `Waiting for release` even if its Tiers column still shows an unverified tier (e.g. `T3 ⬜`) — Tiers and Status are separate axes. This matters specifically for T3: T3 verification (live HA supervisor) can only happen after a beta tag exists, so a T3-only gap is never something more code work can close right now. Calling that `In progress` implies work that doesn't exist. Re-check this whenever you review or update a plan doc's header status, not just when you first set it.
 
+### Issue lifecycle
+
+Every issue moves through exactly these four phases, in order — the status word above **is** the
+phase name. Each phase has its own entry criteria and its own steps/checklist; do not treat "working
+an issue" as one undifferentiated block of work, and do not defer a phase's steps to a later phase
+just because they're documented near each other.
+
+| Phase (status) | Entry criteria | Steps documented in | Checklist in |
+|---|---|---|---|
+| `Planning` | Issue filed, milestone assigned | "Working on an issue" → Planning, below | `checklist.md` → "Planning an issue" |
+| `In progress` | Verification checklist exists in the plan doc | "Working on an issue" → Implementation, below | `checklist.md` → "Implementing an issue" |
+| `Waiting for release` | Every plan-doc verification row is ✅ | "Completing an issue" → Waiting for release, below | `checklist.md` → "Before closing an issue" → Waiting for release |
+| `Released` | Tag pushed, fix confirmed in the release artefact | "Completing an issue" → Released, below | `checklist.md` → "Before closing an issue" → Released |
+
+A phase's own steps run **as soon as that phase's entry criteria are met** — they do not wait for the
+next phase's gate. This is what "Completing an issue" below means by "two phases, not one flat list,"
+and it applies the same way to Planning/Implementation: don't bundle scope-checking work into the
+implementation phase's steps, and don't defer implementation-phase step-status updates until the whole
+issue looks done.
+
 **The same "don't duplicate what git already tracks" principle applies to ADR headers.** An ADR's
 `Updated:` field (see `docs/architecture-decisions/README.md`) holds one date, never an accumulated
 parenthetical log of every issue that touched the file — that log is exactly what `git log` on the
@@ -138,6 +158,11 @@ At the start of every session working on a milestone:
 
 ## Working on an issue
 
+An issue's own two working phases — see "Issue lifecycle" above. Planning ends and Implementation
+begins once the plan doc's verification checklist exists and the issue's status moves to `In progress`.
+
+### Planning
+
 1. Read the full issue spec: `gh issue view <N>`
 2. Read the plan doc.
 3. **Cross-check the spec against the current authoritative sources — do this before writing any code.**
@@ -199,8 +224,17 @@ At the start of every session working on a milestone:
    failing unit test that demonstrates the bug, or document the exact steps and observed
    output that prove it exists. The fix is complete only when that test passes or those
    steps no longer reproduce the bug.
-6. Implement. Update each step section's `**Status:**` line as work progresses.
-7. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each documented verification step against the actual code.
+
+### Implementation
+
+1. Write every test named in the plan doc's verification checklist first and confirm each one is
+   genuinely red against current code, per the red-before-green rule above.
+2. Implement. Update each step section's `**Status:**` line as work progresses — this is the per-step
+   record; there is no separate "what's left" list to maintain elsewhere.
+3. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each
+   documented verification step against the actual code. Every row in the plan doc's verification
+   table should now be ✅ — if it is, the issue has reached the `Waiting for release` phase (see
+   "Completing an issue" below); if any row is still ❌, implementation continues.
 
 An issue is done only when every requirement in its GitHub spec is met and verified against actual code. Partial implementation means the issue stays open.
 
@@ -293,25 +327,37 @@ as an explicit decision on a specific proposed resolution.
 
 ## Completing an issue
 
-An issue may only be closed when **all** of the following are true:
+An issue may only be **closed** when **all** of the following are true (see `issue-closure.md`'s
+two-gate rule for the full criteria):
 
 - Every requirement in the GitHub issue spec is implemented and tested, **or** any deferred requirements are documented via a comment on the issue (see Scope changes above)
 - All related/blocking issues it depends on are themselves closed
 - All changes are merged to `main`
-- The changes are included in a tagged release
+- The changes are included in a **tagged release, and the fix is confirmed working in the appropriate release artefact** — a pushed tag and green CI are preconditions, not the confirmation itself (`issue-closure.md`'s Gate 2)
 
-**Timing on feature branches:** while working on a feature branch, an issue can reach "spec complete, all tests green" status before the PR is merged. Do not run `gh issue close` at that point. The issue stays open until the PR is merged to `main`. Once merged, verify one final time that the main branch is green, then close.
+**Timing on feature branches:** while working on a feature branch, an issue can reach "spec complete, all tests green" status before the PR is merged. Do not run `gh issue close` at that point. The issue stays open until the PR is merged to `main`. Once merged, an issue is `Waiting for release` — it stays open until a tag ships and the artefact confirmation above happens, then close.
 
-Steps:
+**Two phases, not one flat list.** The first group of steps below happens as soon as verification is genuinely complete — it does not wait for a release, and skipping straight to "closing work" risks leaving these undone for a long time. The second group is gated on the release criteria above.
 
-1. Update the plan doc status to `Complete`.
-2. Update the status column in `overview.md`.
-3. Re-verify the order of operations table — a completed issue may unblock others or change the correct sequence. Update the table if needed before picking the next issue.
-4. **Tick every checkbox in the GitHub issue's own "Definition of done" section** — each one should already correspond to a ✅ row in the plan doc's Verification table; ticking is a mechanical sync, not a new judgment call. There is no per-checkbox `gh` command for this: fetch the current body (`gh issue view <N> --json body -q .body`), replace each remaining `- [ ]` with `- [x]`, and write it back (`gh issue edit <N> --body-file -` or `--body "<full updated body>"`). A box that cannot honestly be ticked means the issue is not actually done — resolve that before proceeding, not by leaving the box unchecked and closing anyway.
-5. **After the PR is merged to `main`:** close on GitHub:
+### Waiting for release
+
+Do these immediately once the plan doc's Verification table is all ✅ — regardless of release timing:
+
+1. Update the plan doc status to `Waiting for release` (the fixed status vocabulary is `Planning` / `In progress` / `Waiting for release` / `Released` — see "Where information lives" above; there is no `Complete` value).
+2. Update the status column in `overview.md` to match.
+3. Re-verify the order of operations table — a soon-to-ship issue may unblock others or change the correct sequence. Update the table if needed before picking the next issue.
+4. **Tick every checkbox in the GitHub issue's own "Definition of done" section** — each one should already correspond to a ✅ row in the plan doc's Verification table; ticking is a mechanical sync, not a new judgment call. There is no per-checkbox `gh` command for this: fetch the current body (`gh issue view <N> --json body -q .body`), replace each remaining `- [ ]` with `- [x]`, and write it back (`gh issue edit <N> --body-file -` or `--body "<full updated body>"`). A box that cannot honestly be ticked means the issue is not actually done — resolve that before proceeding, not by leaving the box unchecked and closing anyway. The one checkbox that stays unticked at this point is "Findings summarised in a closing comment" — that becomes true only once the `Released` phase's close step below actually happens.
+
+### Released
+
+Do these once the tag is pushed and the artefact confirmation criteria above are met:
+
+1. Add the issue's changelog entry (see "Changelog" below) and confirm the release actually shipped it.
+2. Show the user the closing comment (the same verification table, reproduced in full) and get explicit approval, then close on GitHub:
    ```
    gh issue close <N> --comment "<short note on what was done>"
    ```
+3. Update the plan doc status to `Released` and update `overview.md` to match.
 
 ---
 

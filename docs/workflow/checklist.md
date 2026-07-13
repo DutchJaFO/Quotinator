@@ -58,7 +58,47 @@ A short flat per-issue index list of plan-doc links at the end is optional but e
 
 ---
 
+## Planning an issue
+
+Covers the `Planning` phase — see `process.md` → "Working on an issue" → Planning for the full detail
+behind each item.
+
+- [ ] Read the full issue spec: `gh issue view <N>`
+- [ ] Read the plan doc (or confirm one is being created now)
+- [ ] **Cross-check the spec against current authoritative sources before writing any code** — in order: `docs/architecture-decisions/` (ADRs), JSON schemas (`schemas/`), generator/script behaviour, C# models, project documentation. Raise any mismatch to the user and get explicit confirmation on scope before proceeding — never silently assume a gap is in-scope or out-of-scope.
+- [ ] Check the dependency map in `overview.md` — verify all blocking issues are fully complete before starting
+- [ ] **Verification checklist created in the plan doc** — one entry per requirement in the spec, each naming either the exact unit test (class + method) to be written, or the exact live command and expected output. Status is its own column; `#` is plain sequential integers, never lettered.
+- [ ] **Plan doc steps are numbered sections** (`### N. <title>`), each with `**Status:**` as the first line — never a flat checklist
+- [ ] For bug fixes: the plan identifies what the red test/reproduction will be before any fix is written
+- [ ] Issue status set to `Planning` in both the plan doc header and `overview.md` while this work is in progress
+
+---
+
+## Implementing an issue
+
+Covers the `In progress` phase — see `process.md` → "Working on an issue" → Implementation for the
+full detail behind each item.
+
+- [ ] Every test named in the plan doc's verification checklist is written first and confirmed red against current code before any production code changes
+- [ ] Issue status set to `In progress` in both the plan doc header and `overview.md` (use `In progress (step N)` in the plan doc header while a specific step is active)
+- [ ] Each plan-doc step's `**Status:**` line is updated as work on that step progresses — this is the only place step progress is tracked, no separate list
+- [ ] Implementation makes each red test green, without weakening the test to pass
+- [ ] Before considering implementation done: re-read every requirement in the GitHub issue spec and execute each documented verification step against the actual code — not just the tests, the live commands too
+- [ ] Once every verification-table row is ✅, move to `checklist.md` → "Before closing an issue" → "Waiting for release" — do not leave these items for later
+
+---
+
 ## Before closing an issue
+
+Two phases — `Waiting for release` happens as soon as verification is genuinely complete (does not
+wait for a release); `Released` is gated on a tagged, artefact-confirmed release. Do not defer
+`Waiting for release` items to closing time; sync them immediately so the plan doc, `overview.md`, and
+the GitHub issue always reflect current reality. See `process.md` → "Issue lifecycle" for how these two
+fit alongside the earlier `Planning`/`In progress` phases.
+
+### Waiting for release
+
+Once the plan doc's Verification table is all ✅:
 
 - [ ] Verify all blocking/related issues in the dependency map are fully closed first
 - [ ] Re-read the **full** issue spec: `gh issue view <N>`
@@ -70,18 +110,24 @@ A short flat per-issue index list of plan-doc links at the end is optional but e
 - [ ] All unit tests named in the table pass (green)
 - [ ] All live commands have been run and produced the expected output (green)
 - [ ] **User manual test** — user starts the app in Visual Studio and confirms it starts without error. For documentation/content issues: user reads or views every item listed in the verification table and confirms each one explicitly.
-- [ ] No requirement is still unconfirmed — if anything is unverified, the issue stays open
-- [ ] **Definition of done checkboxes ticked** — every box in the GitHub issue's own "Definition of done" section reflects the (already-verified) plan doc Verification table; see `process.md` → "Completing an issue" for the `gh issue edit` mechanics. A box that can't honestly be ticked means the issue isn't done yet.
+- [ ] No requirement is still unconfirmed — if anything is unverified, the issue stays open and none of the remaining `Waiting for release` items apply yet
+- [ ] **Definition of done checkboxes ticked** — every box in the GitHub issue's own "Definition of done" section reflects the (already-verified) plan doc Verification table, except "Findings summarised in a closing comment" which stays unticked until the `Released` phase's close step actually happens; see `process.md` → "Completing an issue" for the `gh issue edit` mechanics. A box that can't honestly be ticked means the issue isn't done yet.
 - [ ] **Process gap check** — did anything about how this issue was worked diverge from documented process, or expose something the docs never covered? If so, resolve per `process.md` → "Process gap discovery" (fix the doc if it's a genuine gap; otherwise no doc change, just note it) before considering this issue's closing complete.
-- [ ] **Changelog updated** — add the issue number to `unreleased.issues` in `changelog.en.json`; add at least one entry to `added`, `changed`, or `fixed`; add a `highlights` entry if the change is user-facing; update `nl.json` and `de.json` lockstep; regenerate `CHANGELOG.md` and `addon/CHANGELOG.md` via `scripts/changelog.csx`. This is part of closing — not a separate PR.
-- [ ] **PR merged to `main`** — do not run `gh issue close` while still on the feature branch; the issue stays open until the merge lands
-- [ ] Confirm all changes are merged to `main` and included in a tagged release
-- [ ] **Release issue-list** — every release entry whose work traces back to this issue must carry the issue number in its `issues[]` array, including hotfix releases. If a release is already tagged, add the number to the matching entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep) and regenerate.
-- [ ] Update the plan doc status to `Complete` (or note "no plan doc — by decision" if none exists)
-- [ ] Update the status column in `overview.md`
+- [ ] Update the plan doc status to `Waiting for release` (or note "no plan doc — by decision" if none exists)
+- [ ] Update the status column in `overview.md` to `Waiting for release`
 - [ ] Re-verify the order of operations table — update if this issue's completion changes the correct sequence
+
+### Released
+
+Once the tag is pushed and the fix is confirmed in the release artefact:
+
+- [ ] **PR merged to `main`** — do not run `gh issue close` while still on the feature branch; the issue stays open until the merge lands
+- [ ] Confirm all changes are merged to `main` and included in a tagged release, and the fix is confirmed working in the appropriate artefact (Docker smoke-test, HA add-on, or user content review) — a pushed tag and green CI alone are not the confirmation (`issue-closure.md`'s Gate 2)
+- [ ] **Changelog updated** — add the issue number to `unreleased.issues` in `changelog.en.json`; add at least one entry to `added`, `changed`, or `fixed`; add a `highlights` entry if the change is user-facing; update `nl.json` and `de.json` lockstep; regenerate `CHANGELOG.md` and `addon/CHANGELOG.md` via `scripts/changelog.csx`. This is part of closing — not a separate PR.
+- [ ] **Release issue-list** — every release entry whose work traces back to this issue must carry the issue number in its `issues[]` array, including hotfix releases. If a release is already tagged, add the number to the matching entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep) and regenerate.
 - [ ] **User confirms closure** — show the user the closing comment and verification table and wait for explicit approval before running `gh issue close`
 - [ ] Close: `gh issue close <N> --comment "<verification table>"`
+- [ ] Update the plan doc status to `Released` and update the status column in `overview.md` to match
 
 ---
 
