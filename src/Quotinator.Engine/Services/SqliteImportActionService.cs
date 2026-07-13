@@ -148,6 +148,25 @@ public sealed class SqliteImportActionService : IImportActionService
             return;
         }
 
+        if (action.EntityType == ImportActionEntityTypes.Conversation && action.ActionType.Parsed == ImportActionKind.Modify)
+        {
+            var existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.ExistingValue!)!;
+            var incomingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.IncomingValue!)!;
+
+            var existingConversationFields = new Dictionary<string, object?> { ["description"] = existingConversationPayload.Description };
+            var incomingConversationFields = new Dictionary<string, object?> { ["description"] = incomingConversationPayload.Description };
+            var conversationDecisions      = new Dictionary<string, FieldMergeDecision>();
+            if (request.ConversationDescription is { } cd)
+                conversationDecisions["description"] = new FieldMergeDecision(cd.Choice, cd.Value);
+
+            var conversationResult = FieldMergeResolver.ResolveWithDecisions(existingConversationFields, incomingConversationFields, conversationDecisions);
+
+            var resolvedConversationPayload = new ConversationActionPayload((string?)conversationResult.MergedFields["description"], []);
+
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedConversationPayload), request.MarkCompletenessAs);
+            return;
+        }
+
         if (action.EntityType != ImportActionEntityTypes.Quote)
             throw new ImportActionNotDecidableException(actionId, action.EntityType);
 
@@ -402,6 +421,21 @@ public sealed class SqliteImportActionService : IImportActionService
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "person", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Conversation:
+                    if (action.ActionType.Parsed == ImportActionKind.Modify)
+                    {
+                        // #176: a Modify reversal restores the prior Description only — it never
+                        // touches Lines and never deletes anything, so no active-reference check is
+                        // needed (unlike an Add reversal).
+                        var existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.ExistingValue!)!;
+                        await sqliteConnection.ExecuteAsync(Sql.Conversations.UpdateDescriptionById, new
+                        {
+                            description = existingConversationPayload.Description,
+                            dateModified = now,
+                            id = action.EntityId,
+                        }, sqliteTransaction);
+                        await QuoteSeedWriter.LogChangeAsync(changeLog, "conversation", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingConversationPayload, sqliteConnection, sqliteTransaction);
+                        break;
+                    }
                     // #68: id-keyed like Quote (explicit id-in-file, not EntityIdentity-derived) —
                     // raw SQL, not the Guid-typed repository path, same reasoning as
                     // ReverseQuoteActionAsync's Add branch. No active-reference check: nothing else
@@ -744,10 +778,25 @@ public sealed class SqliteImportActionService : IImportActionService
             }
             case ImportActionEntityTypes.Conversation:
             {
-                // Add-only, like StageDirection/SoundCue — no Modify case exists for this entity type
-                // (see ImportActionPlanner.PlanConversationsAsync's remark). Trusts its referenced
-                // Quote/StageDirection/SoundCue rows already applied — see PlanAsync's remark on why
-                // that ordering is safe to rely on here, unlike Character/Quote's defensive re-ensure.
+                if (action.ActionType.Parsed == ImportActionKind.Modify)
+                {
+                    var modifyPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.MergedFields
+                        ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
+                    await sqliteConnection.ExecuteAsync(Sql.Conversations.UpdateDescriptionById, new
+                    {
+                        description = modifyPayload.Description,
+                        dateModified = now,
+                        id = action.EntityId,
+                    }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "conversation", action.EntityId, ChangeAction.Modified,
+                        oldValue: action.ExistingValue, newValue: modifyPayload, sqliteConnection, sqliteTransaction);
+                    await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Conversations.SelectCompletenessById, Sql.Conversations.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
+                    break;
+                }
+
+                // Trusts its referenced Quote/StageDirection/SoundCue rows already applied — see
+                // PlanAsync's remark on why that ordering is safe to rely on here, unlike
+                // Character/Quote's defensive re-ensure.
                 var payload = JsonSerializer.Deserialize<ConversationActionPayload>(action.IncomingValue!)!;
                 var inserted = await sqliteConnection.ExecuteAsync(Sql.Conversations.InsertIfNotExists,
                     new { Id = action.EntityId, Description = payload.Description, ImportBatchId = batchId, DateCreated = now }, sqliteTransaction);
@@ -771,6 +820,7 @@ public sealed class SqliteImportActionService : IImportActionService
 
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "conversation", action.EntityId, ChangeAction.Created,
                         oldValue: null, newValue: payload, sqliteConnection, sqliteTransaction);
+                    await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Conversations.SelectCompletenessById, Sql.Conversations.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
                 }
                 break;
             }
@@ -986,6 +1036,14 @@ public sealed class SqliteImportActionService : IImportActionService
             {
                 existing = ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayload>(action.ExistingValue!)!);
                 incoming = ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayload>(action.IncomingValue!)!);
+                break;
+            }
+            case ImportActionEntityTypes.Conversation:
+            {
+                var existingPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.ExistingValue!)!;
+                var incomingPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.IncomingValue!)!;
+                existing = new Dictionary<string, object?> { ["description"] = existingPayload.Description };
+                incoming = new Dictionary<string, object?> { ["description"] = incomingPayload.Description };
                 break;
             }
             default:

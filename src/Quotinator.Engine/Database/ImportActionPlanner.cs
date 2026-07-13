@@ -164,7 +164,7 @@ internal static class ImportActionPlanner
 
         await PlanStageDirectionsAsync(connection, stageDirections ?? [], batchIdStr, policy, actions, now, transaction);
         await PlanSoundCuesAsync(connection, soundCues ?? [], batchIdStr, policy, actions, now, transaction);
-        await PlanConversationsAsync(connection, conversations ?? [], batchIdStr, actions, now, transaction);
+        await PlanConversationsAsync(connection, conversations ?? [], batchIdStr, policy, actions, now, transaction);
 
         return actions;
     }
@@ -587,14 +587,80 @@ internal static class ImportActionPlanner
     /// referenced rows are staged earlier in the same batch and — per <see cref="PlanAsync"/>'s own
     /// remark — will therefore apply first too.
     /// </summary>
+    private static IReadOnlyDictionary<string, object?> ToConversationFieldMap(ConversationActionPayload payload) =>
+        new Dictionary<string, object?> { ["description"] = payload.Description };
+
     private static async Task PlanConversationsAsync(
         SqliteConnection connection, IReadOnlyList<SourceConversation> conversations, string batchId,
-        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        DuplicateResolutionPolicy policy, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var c in conversations)
         {
-            var existingId = await connection.ExecuteScalarAsync<Guid?>(Sql.Conversations.SelectIdById, new { id = c.Id }, transaction);
-            if (existingId is not null) continue;
+            var existing = await connection.QuerySingleOrDefaultAsync<(string? Description, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                Sql.Conversations.SelectExistingById, new { id = c.Id }, transaction);
+
+            if (existing is { } row)
+            {
+                var existingPayload = new ConversationActionPayload(row.Description, []);
+                var incomingPayload = new ConversationActionPayload(c.Description, []);
+                var existingFields  = ToConversationFieldMap(existingPayload);
+                var incomingFields  = ToConversationFieldMap(incomingPayload);
+
+                var changedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                var resolved    = policy switch
+                {
+                    DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
+                        new ConversationActionPayload((string?)mergeResult!.MergedFields["description"], []),
+                    DuplicateResolutionPolicy.Skip => existingPayload,
+                    _ => incomingPayload,
+                };
+
+                // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
+                // not the raw incoming value used for the "unchanged" check above.
+                var resolvedFields        = ToConversationFieldMap(resolved);
+                var effectiveChangedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+
+                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.Conversation,
+                        EntityId      = c.Id,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                var isPending = policy == DuplicateResolutionPolicy.Review;
+                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchId,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType    = ImportActionEntityTypes.Conversation,
+                    EntityId      = c.Id,
+                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
 
             var lines = c.Lines
                 .Select(l => new ConversationLinePayload(l.Order, l.Type, l.QuoteId, l.StageDirectionId, l.SoundCueId))

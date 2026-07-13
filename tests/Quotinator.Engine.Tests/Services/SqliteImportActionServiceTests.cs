@@ -1143,4 +1143,60 @@ public class SqliteImportActionServiceTests
             "SELECT Text FROM SoundCueTranslations WHERE SoundCueId = @id AND Language = 'nl'", new { id });
         Assert.AreEqual("Ver gerommel van de donder.", translationText, "Translations are out of scope for Modify — must survive untouched");
     }
+
+    // ── #176 — Conversation decidability ─────────────────────────────────────
+
+    private async Task SeedExplicitConversationAsync(string id, string? description = "A tense standoff.", string completenessStatus = "Incomplete")
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Conversations (Id, Description, CompletenessStatus, DateCreated) VALUES (@Id, @Description, @CompletenessStatus, @now)",
+            new { Id = id, Description = description, CompletenessStatus = completenessStatus, now });
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_ConversationModify_ResolvesDescriptionDecision()
+    {
+        var id = "e5111111-1111-4111-8111-111111111176";
+        await SeedExplicitConversationAsync(id, description: "A tense standoff.");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            conversations: [new SourceConversation { Id = id, Description = "A tense standoff in the saloon.", Lines = [] }]);
+        var action = actions.Single(a => a.EntityType == "Conversation");
+        Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, "Review policy leaves the Modify pending");
+
+        await _service.DecideAsync(action.Id, new ConflictDecisionRequest
+        {
+            ConversationDescription = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+
+        var found = await _actionReader.GetByIdAsync(action.Id);
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
+        Assert.IsNotNull(found.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task ReverseBatchAsync_ConversationModify_RestoresDescriptionOnly()
+    {
+        var id = "e6111111-1111-4111-8111-111111111176";
+        await SeedExplicitConversationAsync(id, description: "A tense standoff.");
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            conversations: [new SourceConversation { Id = id, Description = "A completely different scene.", Lines = [] }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var description = await conn.ExecuteScalarAsync<string>("SELECT Description FROM Conversations WHERE Id = @id", new { id });
+        Assert.AreEqual("A tense standoff.", description, "Reversal must restore the pre-Modify description");
+
+        var lineCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ConversationLines WHERE ConversationId = @id", new { id });
+        Assert.AreEqual(0, lineCount, "Lines are never touched by a Modify reversal");
+    }
 }

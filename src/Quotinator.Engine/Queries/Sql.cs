@@ -297,6 +297,22 @@ internal static class Sql
         internal const string InsertIfNotExists =
             "INSERT OR IGNORE INTO Conversations (Id, Description, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
             "VALUES (@Id, @Description, @ImportBatchId, @DateCreated, NULL, NULL, 0);";
+
+        /// <summary>#176's id-first lookup for an explicit <c>conversations[]</c> entry — mirrors <see cref="Sources.SelectExistingById"/>. Never selects <c>lines</c> — out of scope for Modify.</summary>
+        internal const string SelectExistingById =
+            "SELECT Description, CompletenessStatus FROM Conversations WHERE Id = @id AND IsDeleted = 0;";
+
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        internal const string SelectCompletenessById =
+            "SELECT CompletenessStatus, NoValueKnown FROM Conversations WHERE Id = @id;";
+
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        internal const string UpdateCompletenessById =
+            "UPDATE Conversations SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+
+        /// <summary>#176's Modify apply — writes an id-matched Conversation's corrected Description only. Never touches Lines/CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for the latter.</summary>
+        internal const string UpdateDescriptionById =
+            "UPDATE Conversations SET Description = @description, DateModified = @dateModified WHERE Id = @id;";
     }
 
     /// <summary>

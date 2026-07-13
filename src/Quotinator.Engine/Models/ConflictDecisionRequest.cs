@@ -58,6 +58,9 @@ public sealed class ConflictDecisionRequest
     /// <summary>Decision for a SoundCue action's image URL (#172).</summary>
     public FieldDecision? SoundCueImageUrl { get; init; }
 
+    /// <summary>Decision for a Conversation action's description (#176).</summary>
+    public FieldDecision? ConversationDescription { get; init; }
+
     /// <summary>
     /// Optional, entity-agnostic override (#165) — when supplied, applying this decision sets the
     /// target record's <see cref="CompletenessStatus"/> directly (most usefully <c>Complete</c>),

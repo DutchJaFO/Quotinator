@@ -530,4 +530,99 @@ public class ImportActionPlannerTests
         var action = actions.Single(a => a.EntityType == "SoundCue");
         Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
     }
+
+    // ── #176: PlanConversationsAsync ─────────────────────────────────────────
+
+    private static SourceConversation BuildConversationEntry(string id, string? description = "A tense standoff.") => new()
+    {
+        Id          = id,
+        Description = description,
+        Lines       = [],
+    };
+
+    private static async Task SeedExplicitConversationAsync(SqliteConnection conn, string id, string? description = "A tense standoff.", string completenessStatus = "Incomplete")
+    {
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Conversations (Id, Description, CompletenessStatus, DateCreated) VALUES (@Id, @Description, @CompletenessStatus, @now)",
+            new { Id = id, Description = description, CompletenessStatus = completenessStatus, now });
+    }
+
+    [TestMethod]
+    public async Task PlanConversationsAsync_IdMatchFound_DescriptionDiffers_StagesModifyAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d9111111-1111-4111-8111-111111111176";
+        await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            conversations: [BuildConversationEntry(id, description: "A tense standoff in the saloon.")]);
+
+        var action = actions.Single(a => a.EntityType == "Conversation");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed);
+        Assert.IsNotNull(action.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task PlanConversationsAsync_IdMatchFound_NothingChanged_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "da111111-1111-4111-8111-111111111176";
+        await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            conversations: [BuildConversationEntry(id, description: "A tense standoff.")]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Conversation"), "Nothing differs — silent reuse, no action staged");
+    }
+
+    [TestMethod]
+    public async Task PlanConversationsAsync_IdMatchFound_LinesNeverDiffed()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "db111111-1111-4111-8111-111111111176";
+        await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.");
+
+        var entry = new SourceConversation
+        {
+            Id          = id,
+            Description = "A tense standoff in the saloon.",
+            Lines       = [new SourceConversationLine { Order = 0, Type = Core.Models.ConversationLineType.Quote, QuoteId = "11111111-1111-4111-8111-111111111111" }],
+        };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, conversations: [entry]);
+
+        var action = actions.Single(a => a.EntityType == "Conversation");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<ConversationActionPayload>(action.MergedFields!)!;
+        Assert.AreEqual(0, merged.Lines.Count, "Lines are never read or included in a Modify payload — out of scope for this issue");
+    }
+
+    [TestMethod]
+    public async Task PlanConversationsAsync_CompleteStatus_StagesBlockedNotModify()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "dc111111-1111-4111-8111-111111111176";
+        await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.", completenessStatus: "Complete");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            conversations: [BuildConversationEntry(id, description: "A completely different scene.")]);
+
+        var action = actions.Single(a => a.EntityType == "Conversation");
+        Assert.AreEqual(ImportActionStatus.Blocked, action.Status.Parsed, "A Complete row must never silently accept a Modify");
+        Assert.IsNull(action.MergedFields, "Nothing is resolved yet for a Blocked action");
+    }
+
+    [TestMethod]
+    public async Task PlanConversationsAsync_CompleteStatus_SkipPolicy_DoesNotBlock()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "dd111111-1111-4111-8111-111111111176";
+        await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.", completenessStatus: "Complete");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Skip,
+            conversations: [BuildConversationEntry(id, description: "A completely different scene.")]);
+
+        var action = actions.Single(a => a.EntityType == "Conversation");
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
+    }
 }
