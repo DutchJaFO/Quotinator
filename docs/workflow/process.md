@@ -347,12 +347,13 @@ Do these immediately once the plan doc's Verification table is all ✅ — regar
 2. Update the status column in `overview.md` to match.
 3. Re-verify the order of operations table — a soon-to-ship issue may unblock others or change the correct sequence. Update the table if needed before picking the next issue.
 4. **Tick every checkbox in the GitHub issue's own "Definition of done" section** — each one should already correspond to a ✅ row in the plan doc's Verification table; ticking is a mechanical sync, not a new judgment call. There is no per-checkbox `gh` command for this: fetch the current body (`gh issue view <N> --json body -q .body`), replace each remaining `- [ ]` with `- [x]`, and write it back (`gh issue edit <N> --body-file -` or `--body "<full updated body>"`). A box that cannot honestly be ticked means the issue is not actually done — resolve that before proceeding, not by leaving the box unchecked and closing anyway. The one checkbox that stays unticked at this point is "Findings summarised in a closing comment" — that becomes true only once the `Released` phase's close step below actually happens.
+5. **Add the issue's changelog entry to the `unreleased` section** of `changelog.en.json` (+ `nl.json`/`de.json` lockstep) — this is the whole point of a Keep a Changelog `[Unreleased]` section: entries accumulate as work completes so promoting them at release time is a rename, not a writing exercise. Do not wait for the tag. See "Pre-Push Checklist" in `CLAUDE.md` for the exact format.
 
 ### Released
 
 Do these once the tag is pushed and the artefact confirmation criteria above are met:
 
-1. Add the issue's changelog entry (see "Changelog" below) and confirm the release actually shipped it.
+1. Confirm the release actually included this issue's already-added `unreleased` entry — promote it as part of the release-tagging step (see `CLAUDE.md`'s Pre-Push Checklist), not written fresh here.
 2. Show the user the closing comment (the same verification table, reproduced in full) and get explicit approval, then close on GitHub:
    ```
    gh issue close <N> --comment "<short note on what was done>"
