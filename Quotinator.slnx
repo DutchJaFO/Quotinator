@@ -134,6 +134,8 @@
     <File Path="docs/milestones/data-import-sources/175-character-modify-plan.md" />
     <File Path="docs/milestones/data-import-sources/176-conversation-description-modify-plan.md" />
     <File Path="docs/milestones/data-import-sources/169-universe-setting-research-plan.md" />
+    <File Path="docs/milestones/data-import-sources/163-bulk-decide-file-plan.md" />
+    <File Path="docs/milestones/data-import-sources/153-declarative-conflict-resolution-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/">
     <File Path="docs/milestones/v1-7-0/overview.md" />

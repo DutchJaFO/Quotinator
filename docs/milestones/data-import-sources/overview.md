@@ -68,8 +68,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: from per-Source to global identity (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
 | [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
-| [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning | Not yet assessed | No plan doc yet — decomposed out of #153 |
-| [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning | Not yet assessed | No plan doc yet — deferred out of #149 |
+| [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning | T1 ⬜ T2 ⬜ | [163-bulk-decide-file-plan.md](163-bulk-decide-file-plan.md) |
+| [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning | T1 ⬜ T2 ⬜ | [153-declarative-conflict-resolution-plan.md](153-declarative-conflict-resolution-plan.md) |
 | [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Waiting for release | T1 ✅ T2 ✅ | [154-import-staging-plan.md](154-import-staging-plan.md) |
 | [#155](https://github.com/DutchJaFO/Quotinator/issues/155) | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning | Not yet assessed | No plan doc yet — deferred to just before milestone close |
 
