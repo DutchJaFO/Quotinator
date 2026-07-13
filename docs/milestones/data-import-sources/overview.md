@@ -72,6 +72,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning | T1 ⬜ T2 ⬜ | [153-declarative-conflict-resolution-plan.md](153-declarative-conflict-resolution-plan.md) |
 | [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Waiting for release | T1 ✅ T2 ✅ | [154-import-staging-plan.md](154-import-staging-plan.md) |
 | [#155](https://github.com/DutchJaFO/Quotinator/issues/155) | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning | T1 ⬜ T2 ⬜ | [155-migration-review-plan.md](155-migration-review-plan.md) |
+| [#177](https://github.com/DutchJaFO/Quotinator/issues/177) | ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 
 ---
 
@@ -117,6 +118,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #153 (declarative conflict-resolution file, Phase 2) → deferred out of #149; requires #149 (decide/undo/apply machinery and FieldMergeResolver to build on), #154's staging model, and #163 (Phase 1 — generalizes the per-action decisions #163's file format produces into persistent per-source rules)
 #154 (unify import/preview/seeding on one staging engine) → emerged while planning #59; requires #149 (IConflictResolutionCoordinator, System_ImportConflicts as the template) and #56 (audit log); unblocks #59 (redefined), #162, #163, and #153
 #155 (migration review before milestone close) → independent of the others; should be done last, immediately before this milestone closes
+#177 (ImportBatches.Status never set to Applied via staged apply, breaking reversal) → found live via T2 during #171/#172 implementation (2026-07-13); entity-agnostic, no dependencies; should land before #155's migration review since #155 exercises the full apply/reverse surface
 ```
 
 ---
@@ -164,6 +166,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 37 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
 | 38 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
 | 39 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
+| 40 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |
 
 ---
 
