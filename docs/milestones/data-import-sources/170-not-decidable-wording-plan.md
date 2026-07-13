@@ -31,8 +31,20 @@
 
 ### 1. Write the red test
 
-**Status:** ✅ Done. `ImportActionNotDecidableExceptionTests.cs` created; test confirmed red against
-current code (`actual: true` — message does contain "Quote").
+**Status:** ✅ Done, strengthened after initial review. `ImportActionNotDecidableExceptionTests.cs`
+created; test confirmed red against current code (`actual: true` — message does contain "Quote").
+The original single-case version only asserted the message *didn't* contain "Quote" — that alone
+doesn't prove `entityType` is actually interpolated into the message; a bug that silently dropped
+the parameter entirely (e.g. a hardcoded generic string with no interpolation at all) would still
+have passed it. Strengthened to a `[DataRow("Source")]`/`[DataRow("Character")]` parameterized test
+that also asserts the message contains the actual `entityType`/`actionId` values passed in, and that
+`ActionId`/`EntityType` properties round-trip correctly — proving the parameter is genuinely used,
+not just absent from a static string. **Canary-verified per direct developer instruction**: temporarily
+mutated the constructor to a fully hardcoded message with no interpolation at all (simulating exactly
+the bug class this strengthened test exists to catch), confirmed both `DataRow` cases fail with a
+clear assertion message ("expected substring: 'Character' / actual: 'Import action cannot be
+manually decided...'"), then reverted via `git checkout` and reconfirmed green — proves the test is a
+genuine, sensitive red/green gate, not just logically reasoned to be one.
 
 Add `ImportActionNotDecidableException_Message_DoesNotNameASpecificEntityType` to
 `tests/Quotinator.Engine.Tests/Services/` (new file `ImportActionNotDecidableExceptionTests.cs`, mirroring
@@ -110,7 +122,7 @@ repeats the stale wording being replaced.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ✅ | Exception message no longer names `'Quote'` as the only decidable entity type | Unit test | `Quotinator.Engine.Tests.Services.ImportActionNotDecidableExceptionTests.ImportActionNotDecidableException_Message_DoesNotNameASpecificEntityType` — confirmed red before the fix, green after |
+| 1 | ✅ | Exception message no longer names `'Quote'` as the only decidable entity type, and genuinely reports the actual `entityType`/`actionId` passed in (not a hardcoded string) | Unit test | `Quotinator.Engine.Tests.Services.ImportActionNotDecidableExceptionTests.ImportActionNotDecidableException_Message_DoesNotNameASpecificEntityType` (`[DataRow("Source")]`/`[DataRow("Character")]`) — confirmed red before the fix, green after |
 | 2 | ✅ | Class doc comment no longer claims Source is "always staged already-Decided" | Live | Manual review of `src/Quotinator.Engine/Services/ImportActionNotDecidableException.cs`'s `<summary>` — Source-specific claim removed, replaced with generic wording |
 | 3 | ✅ | `UI.en-GB.json`, `UI.de.json`, `UI.nl.json` all update the `ErrorImportActionNotDecidable` key in the same commit, none left stale | Unit test | `dotnet test --filter TranslationCompleteness` — 2/2 passing; manual diff review confirms all three wordings changed together |
 | 4 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 1,162/1,162 passing (up from 1,161), 0 warnings, 0 errors, re-confirmed after the two additional fixes in step 5 |
