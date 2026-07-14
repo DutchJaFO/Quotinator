@@ -64,7 +64,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#170](https://github.com/DutchJaFO/Quotinator/issues/170) | ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions" | Waiting for release | T1 ✅ T2 ✅ | [170-not-decidable-wording-plan.md](170-not-decidable-wording-plan.md) |
 | [#171](https://github.com/DutchJaFO/Quotinator/issues/171) | StageDirection: Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [171-stagedirection-modify-plan.md](171-stagedirection-modify-plan.md) |
 | [#172](https://github.com/DutchJaFO/Quotinator/issues/172) | SoundCue: Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [172-soundcue-modify-plan.md](172-soundcue-modify-plan.md) |
-| [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | In progress | T1 ⬜ T2 ✅ | [173-person-modify-plan.md](173-person-modify-plan.md) |
+| [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | Waiting for release | T1 ✅ T2 ✅ | [173-person-modify-plan.md](173-person-modify-plan.md) |
 | [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: from per-Source to global identity (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
 | [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
@@ -158,7 +158,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 29 | #170 | ImportActionNotDecidableException stale wording fix | Waiting for release |
 | 30 | #171 | StageDirection: Modify/decidability | Waiting for release |
 | 31 | #172 | SoundCue: Modify/decidability | Waiting for release |
-| 32 | #173 | Person: explicit id, Modify/decidability | In progress |
+| 32 | #173 | Person: explicit id, Modify/decidability | Waiting for release |
 | 33 | #169 | Research: "universe/setting" concept linking Source and Character | Planning |
 | 34 | #174 | Character: from per-Source to global identity (ADR + migration) | Planning |
 | 35 | #175 | Character: explicit id, Modify/decidability | Planning |

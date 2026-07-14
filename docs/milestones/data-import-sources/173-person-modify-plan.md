@@ -1,6 +1,6 @@
 # #173 — Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #173
 **Tiers required:** T1, T2
 **Depends on:** #162, #165, #168 (shipped patterns this builds on)
@@ -271,7 +271,7 @@ referencing `#173`.
 | 11 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 1,208/1,208 passing, 0 warnings, 0 errors |
 | 12 | ✅ | Build clean | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s) |
 | 13 | ✅ | Live: a `people[]` correction to a Person's `name`/`dateOfBirth`/`dateOfDeath` stages/decides/applies a `Modify`, and a `Complete` Person's field cannot be silently overwritten | Live (T2) | Docker smoke test: imported a `people[]` entry, decided a Pending Modify with `markCompletenessAs: Complete`, re-imported a changed field under `review` — confirmed the resulting action was `Blocked`. Separately, single-shot Add/reverse/re-Add cycle on a lowercase-id Person: first attempt (pre-reversal-fix image) staged the re-Add as `Modify` against a still-present row — proved the reversal's soft-delete was silently no-op'ing (case mismatch); after fixing the reversal path too (see Notes), the re-Add genuinely staged as `Add` and the row's `IsDeleted` flag was confirmed `1` before the re-Add, `0` after — a real red/green distinction, not an assumption |
-| 14 | ❌ | App still opens and builds in Visual Studio | Live (T1) | Developer's own Visual Studio pass — confirms clean startup; this issue adds no new migration (both `DateOfBirth`/`DateOfDeath` columns already exist), only new query text, a new schema section, and new C# branches |
+| 14 | ✅ | App still opens and builds in Visual Studio | Live (T1) | Developer confirmed clean startup in Visual Studio, multiple `GET /api/v1/quotes/random` (including `type` filters) → 200, no errors |
 
 ---
 
