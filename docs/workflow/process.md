@@ -80,18 +80,24 @@ Content differs by commit type:
   Revision — issue #N` body section does for the document itself.
 
 **Draft, review, then commit — every time, no exceptions.** Before running `git commit`, write the
-full intended commit message to `.claude/temp/commit-draft.md` and show it for review. Only run the
-actual commit after explicit approval, via `git commit -F .claude/temp/commit-draft.md` so the
-reviewed text and the committed text are identical by construction. The `commit-msg` hook
-(`scripts/hooks/commit-msg`) enforces the mechanics of this — it blocks any non-merge commit whose
-message doesn't exactly match `.claude/temp/commit-draft.md` — but it cannot verify the review itself
-happened, only that the draft-then-commit sequence was followed. A `post-commit` hook
-(`scripts/hooks/post-commit`) automatically deletes `.claude/temp/commit-draft.md` right after a
-successful commit, so a leftover draft can't silently satisfy the `commit-msg` hook for a later,
-unrelated, unreviewed commit — this is automated, not something to remember by hand. The same
-draft-then-review rule applies to GitHub issue text (`gh issue create`/`gh issue edit`): write the
-draft to a file, show it, get approval, then run the command against that file, then delete the draft
-file the same way. There is no equivalent client-side hook for `gh` issue commands — neither the
+full intended commit message to `.claude/temp/commit-draft.md` **and paste that same text directly
+into the chat response** — the developer must be able to read the full draft in the conversation
+itself, without opening a file or expanding a tool result. A `Read` tool call on the draft file does
+not satisfy this: its output renders as a tool result, not as the assistant's own message text, and
+has already been treated as "not really shown" once a developer had to say so explicitly (2026-07-14,
+issue #175's body edit — the assistant `Read` the draft instead of pasting it, which is exactly the
+gap this sentence exists to close). Only run the actual commit after explicit approval, via `git
+commit -F .claude/temp/commit-draft.md` so the reviewed text and the committed text are identical by
+construction. The `commit-msg` hook (`scripts/hooks/commit-msg`) enforces the mechanics of this — it
+blocks any non-merge commit whose message doesn't exactly match `.claude/temp/commit-draft.md` — but
+it cannot verify the review itself happened, only that the draft-then-commit sequence was followed. A
+`post-commit` hook (`scripts/hooks/post-commit`) automatically deletes `.claude/temp/commit-draft.md`
+right after a successful commit, so a leftover draft can't silently satisfy the `commit-msg` hook for
+a later, unrelated, unreviewed commit — this is automated, not something to remember by hand. The
+same draft-then-review rule applies to GitHub issue text (`gh issue create`/`gh issue edit`): write
+the draft to a file, paste its full text directly into the chat response (same rule as above — not
+merely readable via a tool call), get approval, then run the command against that file, then delete
+the draft file the same way. There is no equivalent client-side hook for `gh` issue commands — neither the
 review gate nor the cleanup — so that whole side is enforced by discipline, not tooling.
 
 ## Folder and file naming
