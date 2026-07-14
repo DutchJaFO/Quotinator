@@ -268,3 +268,18 @@ Other open questions surfaced during investigation, not resolved here (flagged p
 - Whether "flags a rule as invalid/stale" (item 4) means the rule is held for human review via a new
   status surfaced on an existing or new endpoint, or something else — the issue does not specify the
   user-facing mechanics of a stale flag, only that reapplying a stale rule silently must not happen.
+
+**Considered and rejected (2026-07-14), while scoping #179's Series/Universe schema:** generalizing
+this issue's declarative rule-file mechanism to also cover curator-only enrichment injection (a rule
+kind that always sets a field value regardless of what the incoming import provides, for fields no
+upstream source has at all — e.g. a `Series`/`Universe` tag on a Source). Rejected as unnecessary
+complexity: a hand-authored curated overlay file (same pattern as `quotinator-curated.json`), imported
+alongside the bundled sources on every startup, already solves this via #162's existing Source
+Modify/decidability path with zero new mechanism, since the overlay file is persistent rather than
+regenerated from upstream. `FieldResolutionChoice.Custom` (`FieldMergeResolver.cs:108`) already lets a
+decision-maker set an arbitrary value during conflict resolution — the gap this idea would have closed
+(a field with no incoming value to compare against at all, so no conflict is ever staged) isn't a real
+gap once the overlay file itself provides an explicit value, since that then produces a genuine
+incoming-vs-existing Modify to decide. This issue's scope remains recurring conflict resolution only,
+unchanged from its original text. See #179's plan doc Background and #169's closing comment for the
+full reasoning.

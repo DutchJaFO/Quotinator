@@ -60,12 +60,13 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#165](https://github.com/DutchJaFO/Quotinator/issues/165) | Generalize record completeness to a 3-state model and hard-block modifying completed rows | Waiting for release | T1 ✅ T2 ✅ | [165-completeness-review-model-plan.md](165-completeness-review-model-plan.md) |
 | [#162](https://github.com/DutchJaFO/Quotinator/issues/162) | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Waiting for release | T1 ✅ T2 ✅ | [162-source-explicit-id-plan.md](162-source-explicit-id-plan.md) |
 | [#168](https://github.com/DutchJaFO/Quotinator/issues/168) | Quote's own Modify path never checks CompletenessGuard — a Complete quote can be silently overwritten by import | Waiting for release | T1 ✅ T2 ✅ | [168-quote-completeness-guard-plan.md](168-quote-completeness-guard-plan.md) |
-| [#169](https://github.com/DutchJaFO/Quotinator/issues/169) | Research: "universe/setting" concept linking Source and Character | Planning | None (research) | [169-universe-setting-research-plan.md](169-universe-setting-research-plan.md) |
 | [#170](https://github.com/DutchJaFO/Quotinator/issues/170) | ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions" | Waiting for release | T1 ✅ T2 ✅ | [170-not-decidable-wording-plan.md](170-not-decidable-wording-plan.md) |
 | [#171](https://github.com/DutchJaFO/Quotinator/issues/171) | StageDirection: Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [171-stagedirection-modify-plan.md](171-stagedirection-modify-plan.md) |
 | [#172](https://github.com/DutchJaFO/Quotinator/issues/172) | SoundCue: Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [172-soundcue-modify-plan.md](172-soundcue-modify-plan.md) |
 | [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | Waiting for release | T1 ✅ T2 ✅ | [173-person-modify-plan.md](173-person-modify-plan.md) |
-| [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: from per-Source to global identity (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
+| [#169](https://github.com/DutchJaFO/Quotinator/issues/169) | Research: "universe/setting" concept linking Source and Character | Released | None (research) | [169-universe-setting-research-plan.md](169-universe-setting-research-plan.md) |
+| [#179](https://github.com/DutchJaFO/Quotinator/issues/179) | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | Planning | T1 ⬜ T2 ⬜ | [179-series-universe-schema-plan.md](179-series-universe-schema-plan.md) |
+| [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
 | [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
 | [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning | T1 ⬜ T2 ⬜ | [163-bulk-decide-file-plan.md](163-bulk-decide-file-plan.md) |
@@ -110,8 +111,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #171 (StageDirection Modify/decidability) → requires #162/#165/#168 (done); lowest-risk of the entity-Modify issues (already has explicit id, no linkage question); recommended first among the entity issues
 #172 (SoundCue Modify/decidability) → requires #162/#165/#168 (done); benefits from #171 landing first (identical shape, shared translations-in-place sub-problem solved once)
 #173 (Person: explicit id, Modify/decidability) → requires #162/#165/#168 (done); already global (no SourceId), simplest identity-entity issue; its "global entity, Name-keyed" Modify shape is the direct template for #175
-#169 (research: universe/setting concept) → raised while scoping #174's Character merge algorithm (2026-07-12); no dependencies; not a hard block for #174, but sequenced directly before it (not earlier) so its findings are fresh when #174's merge-algorithm ADR is actually written, without arbitrarily gating #170-#173 on a research issue they have nothing to do with
-#174 (Character: from per-Source to global identity, ADR + migration) → requires #162/#165/#168 (done); sequenced after #173 (reuses its proven global-entity shape) and #169 (reads its findings, if any, for the merge-algorithm ADR); does not itself add Modify — unblocks #175
+#169 (research: universe/setting concept) → raised while scoping #174's Character merge algorithm (2026-07-12); closed 2026-07-14 with outcome "New issues in the current milestone + Architecture decision required" — its original "Not feasible/rejected" draft conclusion was corrected by the developer (conflated "not tagged in the schema" with "doesn't exist in the data"; the bundled dataset already contains real multi-Source franchises); unblocked #179
+#179 (Series/Universe schema: link related Sources, Character↔Source many-to-many identity) → filed directly from #169's corrected findings (2026-07-14); lands the Universe→Series→Source hierarchy, the CharacterSources join replacing Character.SourceId, and the Source.Type-as-identity-anchor invariant, with zero data-merging risk of its own (existing Characters rows reshaped 1:1); requires #162/#165/#168 (done); unblocks #174
+#174 (Character: migrate to global identity via new Series/Universe schema, ADR + migration) → rewritten 2026-07-14 to depend on #179 instead of copying Person's shape (that approach was found concretely wrong — see #169's closing comment); requires #179 (structural schema) in addition to #162/#165/#168 (done); owns the actual merge algorithm within #179's structural boundary — unblocks #175
 #175 (Character: explicit id, Modify/decidability) → requires #174 (must land first — building Modify on the old per-Source model would be throwaway work); structurally a near-copy of #173 once Character is global
 #176 (Conversation: Description-field Modify/decidability) → requires #162/#165/#168 (done); not technically blocked by #170-#175, sequenced last so its (smallest) additions have every other entity's now-proven pattern in place as precedent; line-editing explicitly deferred to a separate future issue
 #163 (bulk-decide via file export/import, Phase 1 of #153) → decomposed out of #153 while planning it; requires #162 (so more than Quote rows are decidable) and #149/#154's existing decide machinery; unblocks #153 (Phase 2)
@@ -159,14 +161,15 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 30 | #171 | StageDirection: Modify/decidability | Waiting for release |
 | 31 | #172 | SoundCue: Modify/decidability | Waiting for release |
 | 32 | #173 | Person: explicit id, Modify/decidability | Waiting for release |
-| 33 | #169 | Research: "universe/setting" concept linking Source and Character | Planning |
-| 34 | #174 | Character: from per-Source to global identity (ADR + migration) | Planning |
-| 35 | #175 | Character: explicit id, Modify/decidability | Planning |
-| 36 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
-| 37 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
-| 38 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
-| 39 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |
-| 40 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
+| 33 | #169 | Research: "universe/setting" concept linking Source and Character | Released |
+| 34 | #179 | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | Planning |
+| 35 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
+| 36 | #175 | Character: explicit id, Modify/decidability | Planning |
+| 37 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
+| 38 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
+| 39 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
+| 40 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |
+| 41 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
 
 ---
 
