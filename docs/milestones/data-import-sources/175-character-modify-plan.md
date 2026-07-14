@@ -141,11 +141,26 @@ pattern the existing two arms already use.
 
 **Status:** Not started.
 
-Split the existing `case ImportActionEntityTypes.Character` block on `action.ActionType`: `Add`
-keeps the current active-reference-check-then-soft-delete behaviour unchanged; `Modify` restores
-`Name` via `Sql.Characters.UpdateFieldsById` from `ExistingValue`, with no active-reference check
-(a Modify reversal never deletes anything) — same shape as the existing Source `Modify` branch in
-this same method.
+Split the existing `case ImportActionEntityTypes.Character` block on `action.ActionType`: `Modify`
+restores `Name` via `Sql.Characters.UpdateFieldsById` from `ExistingValue`, with no active-reference
+check (a Modify reversal never deletes anything) — same shape as the existing Source `Modify` branch
+in this same method.
+
+**`Add` is *not* unchanged — it also needs the raw-SQL, case-preserving fix.** #173's own plan doc
+originally said the same thing this step used to say ("keep today's soft-delete-if-unreferenced
+behaviour unchanged") and was wrong: found live via T2 that
+`_personRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow)` has the identical
+case-sensitivity bug as `ClearStaleAddTargetsAsync` (step 9) — `GuidHandler` force-uppercases the
+parameter before binding, so it silently matches zero rows against a lowercase-stored explicit id,
+and the reversal becomes a no-op that looks like it worked. Switch this branch to
+`sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Characters"), new { now, id = action.EntityId }, sqliteTransaction)`
+— the same raw-SQL pattern Source's own `Add` reversal already uses — from the start, rather than
+finding the gap the hard way via this issue's own T2 pass. See
+`173-person-modify-plan.md`'s Notes for the full incident writeup. That doc also notes a unit test
+can pass "accidentally" if only one of the two call sites is fixed — a soft-deleted-but-not-really
+row still looks id-matchable via a plain `SELECT ... WHERE Id = @id`, so a stale-cleanup test can
+silently mask a broken reversal underneath it. Write/verify both this issue's own reversal test and
+its `ClearStaleAddTargetsAsync` test together, not independently, so neither can mask the other.
 
 ### 9. `ClearStaleAddTargetsAsync` raw-SQL fix and `ConflictDecisionRequest.CharacterName`
 
@@ -160,10 +175,18 @@ foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.C
 
 This is the Guid-typed repository path — safe today only because every Character Add id is
 currently `EntityIdentity`-derived (always uppercase by construction). An explicit `characters[]`
-id is file-authored and not guaranteed uppercase, the same gap #162 found and fixed for Source (see
-that plan doc's "Correction found via T2" section) and #173 is expected to fix for Person. Switch
-to the raw-SQL, case-preserving pattern already used for Source/Conversation/StageDirection/
-SoundCue: `quoteConn.ExecuteAsync(RepositorySql.HardDelete("Characters"), new { id = action.EntityId })`.
+id is file-authored and not guaranteed uppercase, the same gap #162 found and fixed for Source and
+#173 has now actually fixed for Person (`SqliteImportActionService.cs`'s `ClearStaleAddTargetsAsync`
+Person branch, committed `8756b37`). Switch to the raw-SQL, case-preserving pattern already used for
+Source/Conversation/StageDirection/SoundCue/Person:
+`quoteConn.ExecuteAsync(RepositorySql.HardDelete("Characters"), new { id = action.EntityId })`.
+
+**This is one of two call sites with the identical bug, not the only one — see step 8 above.** #173
+originally scoped only this one (`ClearStaleAddTargetsAsync`) and found the second
+(`ReverseAppliedActionsAsync`'s `Add` branch) live via T2, after the first fix alone had already
+made its own `ClearStaleAddTargetsAsync` unit test pass — for the wrong reason, since the reversal
+silently no-op'd and left the row not-actually-stale. Apply both fixes together for Character from
+the start.
 
 Add `CharacterName` (nullable `FieldDecision?`) to `ConflictDecisionRequest.cs`, alongside the
 existing `SourceTitle`/`SourceType`/`SourceDate` properties, and wire it into `ToDecisionMap`'s
@@ -184,9 +207,10 @@ Character-specific decision-map builder used by step 6/7 above.
 | 7 | ❌ | Decide endpoint accepts a Character `Modify` field decision | Unit test | `Quotinator.Engine.Tests.DecideAsync_CharacterModify_ResolvesFieldDecisions` |
 | 8 | ❌ | Reversing a Character `Modify` restores `ExistingValue`'s `Name` | Unit test | `Quotinator.Engine.Tests.ReverseBatchAsync_CharacterModify_RestoresExistingValue` |
 | 9 | ❌ | A lowercase-authored explicit Character id hard-deletes correctly on stale-Add cleanup | Unit test | `Quotinator.Engine.Tests.ClearStaleAddTargetsAsync_CharacterExplicitLowercaseId_HardDeletesCorrectly` |
-| 10 | ❌ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release` → all projects passing |
-| 11 | ❌ | Live: a `characters[]` correction is staged/decided/applied via `POST /api/v1/import`, and a `Complete` Character's `name` cannot be silently overwritten | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`, same shape as #162's own T2 row: stage/decide/apply an explicit-`characters[]` `Modify`; separately confirm a `Complete` Character under `Skip` policy is not blocked |
-| 12 | ❌ | App still opens and builds in Visual Studio after the schema/migration surface from #174 this issue builds on | Live (T1) | Developer's own Visual Studio pass — app starts cleanly, database reset/reseed both succeed |
+| 10 | ❌ | A lowercase-authored explicit Character id soft-deletes correctly when its `Add` action is reversed (the second of #173's two-call-site case-sensitivity fix — see step 8) | Unit test | `Quotinator.Engine.Tests.ReverseBatchAsync_CharacterAdd_ExplicitLowercaseId_SoftDeletesCorrectly` |
+| 11 | ❌ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release` → all projects passing |
+| 12 | ❌ | Live: a `characters[]` correction is staged/decided/applied via `POST /api/v1/import`, and a `Complete` Character's `name` cannot be silently overwritten | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`, same shape as #162's own T2 row: stage/decide/apply an explicit-`characters[]` `Modify`; separately confirm a `Complete` Character under `Skip` policy is not blocked; additionally, exercise a lowercase-id Add → reverse → re-add cycle live and confirm the row's `IsDeleted` flag actually flips (not just assumed) between steps, matching #173's own T2 canary for this exact bug class |
+| 13 | ❌ | App still opens and builds in Visual Studio after the schema/migration surface from #174 this issue builds on | Live (T1) | Developer's own Visual Studio pass — app starts cleanly, database reset/reseed both succeed |
 
 ---
 
@@ -203,9 +227,12 @@ issue's own design work — it was deliberately not decided during planning"). T
 the intended shape assuming #174 lands as scoped (global, `Name`-keyed, no `SourceId`) — revisit
 this plan doc's specifics if #174's actual implementation differs from that assumption.
 
-This plan doc was also written before #173 (Person: explicit id, Modify/decidability) landed or
-produced its own plan doc. Per #175's own issue body, #173 is meant to be the direct template for
-#175 once Character is global — `PlanCharactersAsync` (step 4) and the Add/Modify splits in steps
-5/6/7/8 should be re-checked against #173's actual implementation once it exists, and reconciled
-with any naming/shape decisions made there, rather than assumed to match this doc's projection
-exactly.
+**Reconciled against #173's actual shipped implementation (2026-07-14), now that it exists.** This
+plan doc's original projection matches what #173 actually shipped on every point already checked:
+`PlanPeopleAsync`'s id-match/natural-key-fallback/`personIndex`-threading shape (direct template for
+`PlanCharactersAsync`, step 4), `ConflictDecisionRequest`'s per-field-decision naming convention
+(`PersonName`/`PersonDateOfBirth`/`PersonDateOfDeath` → this issue's own `CharacterName`), the
+`ToPersonDecisionMap`/`ToFieldMap` helper pattern, plain-`string?` payload fields (never `SafeValue`,
+matching `Source.Date`'s convention), and the `ApplyCompletenessAsync` wiring in the `Modify` apply
+branch (step 5). **The one place the projection was wrong is steps 8/9 above** — the case-sensitivity
+fix needed at two call sites, not the one originally listed. That gap is now closed in this doc.

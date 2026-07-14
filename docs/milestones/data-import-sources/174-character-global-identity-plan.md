@@ -230,3 +230,11 @@ risk profile:
   mergeable field, not just a display value — so the ADR's decision on what `SourceId`/`SourceTitle`/
   `SourceType` mean post-migration also determines whether decide-time field merging for Character
   loses a field entirely, which is a slightly larger blast radius than "drop a column."
+
+**Not this issue's concern, but relevant context for whoever picks up #175 next:** #173 (Person)
+found that its `_personRepository`-based Add-reversal and stale-Add-cleanup code paths were both on
+the Guid-typed repository API, which silently no-ops against a lowercase, file-authored explicit id
+(`GuidHandler` force-uppercases before comparing). This issue doesn't introduce an explicit Character
+id itself, so it isn't exposed — but #175 (which does) inherits the identical exposure at the
+identical two call sites, and its own plan doc has been updated accordingly (see
+`175-character-modify-plan.md`'s steps 8/9). No action needed here.
