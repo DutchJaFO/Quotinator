@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 176],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -26,7 +26,8 @@
       "Meerregelige dialogen — een heen-en-weer tussen personages, met regieaanwijzingen en geluidscues ertussen — kunnen nu als één geordende conversatie worden opgevraagd, en een willekeurig citaat dat daar deel van uitmaakt verschijnt niet langer los zonder de rest van de dialoog.",
       "De titel, het type of de releasedatum van een bron kunnen nu achteraf worden gecorrigeerd — bijvoorbeeld een typefout in een filmtitel of een ontbrekend jaartal — zonder dat er een dubbele vermelding ontstaat.",
       "Regieaanwijzingen en geluidscues die in meerregelige dialogen worden gebruikt, kunnen nu ook achteraf worden gecorrigeerd, op dezelfde manier als de gegevens van een bron dat al konden.",
-      "De beschrijving van een conversatie kan nu ook achteraf worden gecorrigeerd; de regels waaruit de conversatie zelf bestaat blijven ongewijzigd."
+      "De beschrijving van een conversatie kan nu ook achteraf worden gecorrigeerd; de regels waaruit de conversatie zelf bestaat blijven ongewijzigd.",
+      "De naam, geboortedatum en overlijdensdatum van een persoon kunnen nu ook achteraf worden gecorrigeerd; geboorte- en overlijdensdatum kunnen nu voor het eerst voor een persoon worden ingesteld."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -67,7 +68,8 @@
       "Citaatresponsen bevatten nu een veld `conversations` dat aangeeft tot welke conversatie(s) een citaat behoort, de positie erin en het totale aantal regels van die conversatie; dit veld ontbreekt volledig als een citaat tot geen enkele conversatie behoort (issue #69)",
       "`GET /api/v1/quotes/random` toont nu de volledige conversatie wanneer een gekozen citaat daar deel van uitmaakt, en sluit voor de rest van de aanvraag elk ander citaat uit diezelfde conversatie uit; de respons rapporteert nu `requestedCount` en `returnedCount`, zodat een tekort door deze deduplicatie zichtbaar is (issue #69)",
       "`stageDirections[]`/`soundCues[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten in plaats van alleen ooit te worden toegevoegd — hetzelfde op beleid gebaseerde verschil, blokkering via de volledigheidscontrole, en beslissings-/terugdraaiproces dat broncorrecties al gebruiken",
-      "`conversations[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten voor alleen het veld `description` — `lines` worden door dit pad nooit vergeleken, gelezen of geschreven; dat blijft een aparte, nog niet geplande toekomstige kwestie"
+      "`conversations[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten voor alleen het veld `description` — `lines` worden door dit pad nooit vergeleken, gelezen of geschreven; dat blijft een aparte, nog niet geplande toekomstige kwestie",
+      "`people[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten in plaats van alleen ooit te worden toegevoegd — hetzelfde op beleid gebaseerde verschil en dezelfde blokkering via de volledigheidscontrole die broncorrecties, regieaanwijzingen, geluidscues en conversaties al gebruiken; dit is ook het eerste pad dat ooit de velden `dateOfBirth`/`dateOfDeath` van een persoon schrijft, voorheen altijd `null`"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",

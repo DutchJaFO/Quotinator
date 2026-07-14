@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 176],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -26,7 +26,8 @@
       "Mehrzeilige Dialoge — ein Hin und Her zwischen Charakteren, mit Regieanweisungen und Toncues dazwischen — können jetzt als eine einzige geordnete Konversation abgerufen werden, und ein zufälliges Zitat, das Teil davon ist, erscheint nicht mehr allein ohne den Rest des Dialogs.",
       "Titel, Typ oder Erscheinungsdatum einer Quelle können jetzt nachträglich korrigiert werden — etwa ein Tippfehler in einem Filmtitel oder ein fehlendes Jahr — ohne dass ein doppelter Eintrag entsteht.",
       "Regieanweisungen und Toncues, die in mehrzeiligen Konversationen verwendet werden, können jetzt ebenfalls nachträglich korrigiert werden, genau wie die Angaben einer Quelle es bereits konnten.",
-      "Die Beschreibung einer Konversation kann jetzt ebenfalls nachträglich korrigiert werden; die Zeilen, aus denen die Konversation selbst besteht, bleiben unverändert."
+      "Die Beschreibung einer Konversation kann jetzt ebenfalls nachträglich korrigiert werden; die Zeilen, aus denen die Konversation selbst besteht, bleiben unverändert.",
+      "Name, Geburtsdatum und Todesdatum einer Person können jetzt ebenfalls nachträglich korrigiert werden; Geburts- und Todesdatum können jetzt erstmals für eine Person gesetzt werden."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -67,7 +68,8 @@
       "Zitatantworten enthalten jetzt ein Feld `conversations`, das angibt, zu welcher Konversation bzw. welchen Konversationen ein Zitat gehört, an welcher Position und mit der Gesamtzeilenzahl der Konversation; fehlt vollständig, wenn ein Zitat zu keiner Konversation gehört (Issue #69)",
       "`GET /api/v1/quotes/random` bettet jetzt die vollständige Konversation ein, wenn ein ausgewähltes Zitat dazugehört, und schließt für den Rest der Anfrage jedes andere Zitat aus derselben Konversation aus; die Antwort meldet jetzt `requestedCount` und `returnedCount`, sodass ein durch diese Deduplizierung verursachtes Defizit sichtbar wird (Issue #69)",
       "`stageDirections[]`/`soundCues[]`-Einträge mit einer Id, die mit einer bestehenden Zeile übereinstimmt, können jetzt eine `Modify`-Aktion auslösen, anstatt nur jemals neu hinzugefügt zu werden — derselbe richtlinienbasierte Abgleich, dieselbe Sperrung über die Vollständigkeitsprüfung und derselbe Entscheidungs-/Rückgängig-Ablauf, den Quellenkorrekturen bereits verwenden",
-      "`conversations[]`-Einträge mit einer Id, die mit einer bestehenden Zeile übereinstimmt, können jetzt eine `Modify`-Aktion nur für das Feld `description` auslösen — `lines` werden von diesem Pfad nie verglichen, gelesen oder geschrieben; das bleibt ein separates, noch nicht geplantes zukünftiges Thema"
+      "`conversations[]`-Einträge mit einer Id, die mit einer bestehenden Zeile übereinstimmt, können jetzt eine `Modify`-Aktion nur für das Feld `description` auslösen — `lines` werden von diesem Pfad nie verglichen, gelesen oder geschrieben; das bleibt ein separates, noch nicht geplantes zukünftiges Thema",
+      "`people[]`-Einträge mit einer Id, die mit einer bestehenden Zeile übereinstimmt, können jetzt eine `Modify`-Aktion auslösen, anstatt nur jemals neu hinzugefügt zu werden — derselbe richtlinienbasierte Abgleich und dieselbe Sperrung über die Vollständigkeitsprüfung, die Quellen-, Regieanweisungs-, Toncue- und Konversationskorrekturen bereits verwenden; dies ist außerdem der erste Pfad, der jemals die Felder `dateOfBirth`/`dateOfDeath` einer Person schreibt, zuvor immer `null`"
     ],
     "changed": [
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",

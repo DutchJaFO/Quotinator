@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-13 21:54 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-14 19:32 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A source's title, type, or release date can now be corrected after the fact — for example fixing a typo in a film title, or filling in a missing year — without creating a duplicate entry.
 - Stage directions and sound cues used in multi-line conversations can now be corrected after the fact too, the same way a source's details already could.
 - A conversation's description can now be corrected after the fact too; the lines that make up the conversation itself are unaffected.
+- A person's name, date of birth, and date of death can now be corrected after the fact too; date of birth and date of death can now actually be set for a person for the first time.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -66,6 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `GET /api/v1/quotes/random` now embeds the full conversation when a selected quote belongs to one, and excludes every other quote from that same conversation for the rest of the request; the response now reports `requestedCount` and `returnedCount` so a shortfall caused by this deduplication is visible (issue #69)
 - `stageDirections[]`/`soundCues[]` entries with an id matching an existing row can now stage a `Modify` action instead of only ever being added once — the same policy-resolved diff, completeness-guard blocking, and decide/reverse workflow Source corrections already use
 - `conversations[]` entries with an id matching an existing row can now stage a `Modify` action for their `description` field only — `lines` are never diffed, read, or written by this path, that remains a separate, not-yet-scoped future issue
+- `people[]` entries with an id matching an existing row can now stage a `Modify` action instead of only ever being added once — the same policy-resolved diff and completeness-guard blocking Source/StageDirection/SoundCue/Conversation corrections already use; this is also the first path that ever writes a Person's `dateOfBirth`/`dateOfDeath` fields, previously always left `null`
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before

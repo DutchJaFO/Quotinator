@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 176],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.",
@@ -19,7 +19,8 @@
       "Multi-line exchanges — a back-and-forth between characters, with stage directions and sound cues in between — can now be fetched as a single ordered conversation, and a random quote that's part of one no longer shows up on its own without the rest of the exchange.",
       "A source's title, type, or release date can now be corrected after the fact — for example fixing a typo in a film title, or filling in a missing year — without creating a duplicate entry.",
       "Stage directions and sound cues used in multi-line conversations can now be corrected after the fact too, the same way a source's details already could.",
-      "A conversation's description can now be corrected after the fact too; the lines that make up the conversation itself are unaffected."
+      "A conversation's description can now be corrected after the fact too; the lines that make up the conversation itself are unaffected.",
+      "A person's name, date of birth, and date of death can now be corrected after the fact too; date of birth and date of death can now actually be set for a person for the first time."
     ],
     "added": [
       "A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)",
@@ -60,7 +61,8 @@
       "Quote responses now include a `conversations` field listing which conversation(s) a quote belongs to, its position, and the conversation's total line count; omitted entirely for a quote that belongs to no conversation (issue #69)",
       "`GET /api/v1/quotes/random` now embeds the full conversation when a selected quote belongs to one, and excludes every other quote from that same conversation for the rest of the request; the response now reports `requestedCount` and `returnedCount` so a shortfall caused by this deduplication is visible (issue #69)",
       "`stageDirections[]`/`soundCues[]` entries with an id matching an existing row can now stage a `Modify` action instead of only ever being added once — the same policy-resolved diff, completeness-guard blocking, and decide/reverse workflow Source corrections already use",
-      "`conversations[]` entries with an id matching an existing row can now stage a `Modify` action for their `description` field only — `lines` are never diffed, read, or written by this path, that remains a separate, not-yet-scoped future issue"
+      "`conversations[]` entries with an id matching an existing row can now stage a `Modify` action for their `description` field only — `lines` are never diffed, read, or written by this path, that remains a separate, not-yet-scoped future issue",
+      "`people[]` entries with an id matching an existing row can now stage a `Modify` action instead of only ever being added once — the same policy-resolved diff and completeness-guard blocking Source/StageDirection/SoundCue/Conversation corrections already use; this is also the first path that ever writes a Person's `dateOfBirth`/`dateOfDeath` fields, previously always left `null`"
     ],
     "changed": [
       "A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before",
