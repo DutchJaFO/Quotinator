@@ -3,7 +3,8 @@
 **Status:** Planning
 **GitHub issue:** #153
 **Tiers required:** T1, T2
-**Depends on:** #149, #154, #163 (per `overview.md`'s dependency map)
+**Depends on:** #149, #154, #163 (per `overview.md`'s dependency map), and #181 for the rule-file
+format itself (see Scope note below)
 
 ---
 
@@ -22,6 +23,18 @@ CustomValue)` row shape is real code, not just issue-body prose. Steps below are
 genuinely blocked work (rule generation, which consumes #163's decided-action shape directly) comes
 last, and the parts that can be designed independently of #163 (rule storage location, staleness
 detection, lookup/apply wiring) come first.
+
+**Superseded in part by #181 (filed 2026-07-15):** #181 ships a minimal, hand-authored version of
+exactly the "parts that can be designed independently of #163" named above — a per-source rule-file
+format, its manifest reference, and lookup/auto-apply wiring into `ImportActionPlanner.PlanAsync`
+(this plan doc's own Step 2 and Step 6, below) — scoped down to the two currently-bundled sources
+(`vilaboim`, `NikhilNamal17`) with hand-written rules rather than machine-generated ones. **When this
+issue is eventually implemented, it builds Step 5's generation, Step 4's staleness detection, and
+Step 6's endpoint on top of #181's already-shipped rule-file format — it does not re-design or
+replace that format.** Steps 2 and 6 below should be read as "confirm #181's shipped shape still
+fits" rather than "design from scratch." `PlanAsync_MatchingRuleExists_AutoResolvesWithoutPending`
+and `PlanAsync_NoMatchingRule_StagesPendingAsToday` (this issue's own Expected tests table) are
+shipped by #181 already — this issue inherits them as regression guards, not fresh tests to write.
 
 ---
 
@@ -97,10 +110,14 @@ unrelated identity scheme. Decide this **after** reading #163's shipped code, no
 
 ### 2. Rule file storage location and manifest reference
 
-**Status:** Not started.
+**Status:** Superseded by #181 — confirm its shipped shape still fits rather than designing fresh.
 
 Per item 2, the rule file lives alongside the file it governs, not a new separate location. This is
-independently designable now (does not depend on #163):
+independently designable now (does not depend on #163). **#181 already ships this**: one rule file
+per source (`vilaboim`'s and `NikhilNamal17`'s own), a manifest reference alongside each, hand-
+authored rather than generated. What's below is the original preliminary design reasoning, kept for
+context on the open placement question (`SourceImportSettingsDto` vs. file-entry-only) that #181's
+implementation actually resolved — check its shipped code for the answer before re-deciding:
 
 - Extend `ManifestFileEntryDto` (`src/Quotinator.Data/Import/ManifestFileEntryDto.cs`) with a new
   optional property, analogous in spirit to its existing `duplicateResolution` override — but this is
@@ -186,7 +203,9 @@ to place it next to.
 
 ### 6. Rule lookup and auto-apply during staging
 
-**Status:** Not started.
+**Status:** Superseded by #181 — the non-staleness-aware lookup/apply wiring is already shipped;
+this step's remaining scope once #153 itself is implemented is adding staleness-awareness on top of
+what #181 built, not writing the lookup from scratch.
 
 Wires into `ImportActionPlanner.PlanAsync`'s existing Quote Modify branch
 (`src/Quotinator.Engine/Database/ImportActionPlanner.cs:96-140`): today, a `Review`-policy duplicate

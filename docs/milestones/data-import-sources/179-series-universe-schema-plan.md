@@ -52,7 +52,11 @@ set `SeriesId` on existing Source ids via #162's already-shipped Source Modify/d
 Being persistent rather than regenerated from upstream, it survives `Quotinator__AutoUpdateSources`
 refreshes automatically. An early idea to generalize #153's declarative rule-file mechanism to cover
 this was considered and explicitly rejected as overcomplicating a problem the curated-overlay pattern
-already solves — #153 was left untouched.
+already solves — #153 was left untouched. Filed separately as **#180** ("Populate Series/Universe
+data via curated overlay file (review-only, staged)"), mirroring this milestone's `#67` → `#68`
+schema-then-population precedent — #180 must use `duplicateResolution: review` for its own manifest
+entry (not the bundled-seeding default of `skip`), so any genuine conflict against an already-curated
+value stages for a human decision instead of resolving silently.
 
 ---
 
@@ -218,6 +222,6 @@ scoping to consolidate rows safely) belongs entirely to #174, which depends on t
 first. See `174-character-global-identity-plan.md` for that work.
 
 Populating `Series`/`Universe` data on existing Sources is out of scope for this issue and needs no
-new mechanism — see Background above. Do not add a new "enrichment rule" concept to #153 for this;
-that idea was raised and explicitly rejected as overcomplicating a problem the curated-overlay-file
-pattern (reusing #162's Modify path) already solves.
+new mechanism — see Background above and #180. Do not add a new "enrichment rule" concept to #153 for
+this; that idea was raised and explicitly rejected as overcomplicating a problem the curated-overlay-
+file pattern (reusing #162's Modify path) already solves.

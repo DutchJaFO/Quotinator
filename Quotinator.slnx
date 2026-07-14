@@ -131,11 +131,13 @@
     <File Path="docs/milestones/data-import-sources/172-soundcue-modify-plan.md" />
     <File Path="docs/milestones/data-import-sources/173-person-modify-plan.md" />
     <File Path="docs/milestones/data-import-sources/179-series-universe-schema-plan.md" />
+    <File Path="docs/milestones/data-import-sources/180-series-universe-population-plan.md" />
     <File Path="docs/milestones/data-import-sources/174-character-global-identity-plan.md" />
     <File Path="docs/milestones/data-import-sources/175-character-modify-plan.md" />
     <File Path="docs/milestones/data-import-sources/176-conversation-description-modify-plan.md" />
     <File Path="docs/milestones/data-import-sources/169-universe-setting-research-plan.md" />
     <File Path="docs/milestones/data-import-sources/163-bulk-decide-file-plan.md" />
+    <File Path="docs/milestones/data-import-sources/181-minimal-conflict-resolution-rule-file-plan.md" />
     <File Path="docs/milestones/data-import-sources/153-declarative-conflict-resolution-plan.md" />
     <File Path="docs/milestones/data-import-sources/155-migration-review-plan.md" />
   </Folder>
