@@ -139,6 +139,26 @@ public class SourceQuoteFileReaderTests
     }
 
     [TestMethod]
+    public void SourceQuoteFileReader_PeopleSection_ParsesCorrectly()
+    {
+        var json = """
+            {
+              "quotes": [{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello","source":"World"}],
+              "people": [{"id":"66666666-6666-6666-6666-666666666666","name":"Ada Lovelace","dateOfBirth":"1815-12-10","dateOfDeath":"1852-11-27"}]
+            }
+            """;
+
+        var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual(1, parsed!.People.Count);
+        Assert.AreEqual("66666666-6666-6666-6666-666666666666", parsed.People[0].Id);
+        Assert.AreEqual("Ada Lovelace", parsed.People[0].Name);
+        Assert.AreEqual("1815-12-10", parsed.People[0].DateOfBirth);
+        Assert.AreEqual("1852-11-27", parsed.People[0].DateOfDeath);
+    }
+
+    [TestMethod]
     public void TryParseExtended_ObjectWithNoExtendedSections_YieldsEmptyLists()
     {
         var json = """{"quotes":[]}""";

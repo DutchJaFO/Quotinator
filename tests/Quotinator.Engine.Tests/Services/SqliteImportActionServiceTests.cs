@@ -85,7 +85,8 @@ public class SqliteImportActionServiceTests
         IReadOnlyList<SourceEntry>? sources = null,
         IReadOnlyList<SourceStageDirection>? stageDirections = null,
         IReadOnlyList<SourceSoundCue>? soundCues = null,
-        IReadOnlyList<SourceConversation>? conversations = null)
+        IReadOnlyList<SourceConversation>? conversations = null,
+        IReadOnlyList<PersonEntry>? people = null)
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
@@ -97,7 +98,7 @@ public class SqliteImportActionServiceTests
             "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
             new { Id = batchId, now });
 
-        var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations);
+        var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations, people: people);
         await _coordinator.StageAsync(actions);
         return actions;
     }
@@ -1198,5 +1199,118 @@ public class SqliteImportActionServiceTests
 
         var lineCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ConversationLines WHERE ConversationId = @id", new { id });
         Assert.AreEqual(0, lineCount, "Lines are never touched by a Modify reversal");
+    }
+
+    // ── #173 — Person decidability + explicit id ─────────────────────────────
+
+    private async Task SeedExplicitPersonAsync(string id, string name = "Ada Lovelace", string? dateOfBirth = "1815-12-10", string? dateOfDeath = "1852-11-27", string completenessStatus = "Incomplete")
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO People (Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @DateOfBirth, @DateOfDeath, @CompletenessStatus, @now)",
+            new { Id = id, Name = name, DateOfBirth = dateOfBirth, DateOfDeath = dateOfDeath, CompletenessStatus = completenessStatus, now });
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_PersonModify_WritesDateOfBirthAndDateOfDeath()
+    {
+        var id = "e7111111-1111-4111-8111-111111111173";
+        await SeedExplicitPersonAsync(id, name: "Ada Lovelace", dateOfBirth: null, dateOfDeath: null);
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [new PersonEntry { Id = id, Name = "Ada Lovelace", DateOfBirth = "1815-12-10", DateOfDeath = "1852-11-27" }]);
+        var action = actions.Single(a => a.EntityType == "Person");
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "NewestWins resolves immediately");
+
+        var result = await _service.ApplyBatchAsync(action.BatchId);
+        Assert.IsNull(result);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (dob, dod) = await conn.QuerySingleAsync<(string DateOfBirth, string DateOfDeath)>(
+            "SELECT DateOfBirth, DateOfDeath FROM People WHERE Id = @id", new { id });
+        Assert.AreEqual("1815-12-10", dob);
+        Assert.AreEqual("1852-11-27", dod);
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_PersonModify_ResolvesFieldDecisions()
+    {
+        var id = "e8111111-1111-4111-8111-111111111173";
+        await SeedExplicitPersonAsync(id, name: "Ada Lovelace");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            people: [new PersonEntry { Id = id, Name = "Augusta Ada King", DateOfBirth = "1815-12-10", DateOfDeath = "1852-11-27" }]);
+        var action = actions.Single(a => a.EntityType == "Person");
+        Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, "Review policy leaves the Modify pending");
+
+        await _service.DecideAsync(action.Id, new ConflictDecisionRequest
+        {
+            PersonName          = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+            PersonDateOfBirth   = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+            PersonDateOfDeath   = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+
+        var found = await _actionReader.GetByIdAsync(action.Id);
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
+        Assert.IsNotNull(found.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task ReverseBatchAsync_PersonModify_RestoresExistingValue()
+    {
+        var id = "e9111111-1111-4111-8111-111111111173";
+        await SeedExplicitPersonAsync(id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27");
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            people: [new PersonEntry { Id = id, Name = "A Completely Different Name", DateOfBirth = "1900-01-01", DateOfDeath = "1980-01-01" }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (name, dob, dod) = await conn.QuerySingleAsync<(string Name, string DateOfBirth, string DateOfDeath)>(
+            "SELECT Name, DateOfBirth, DateOfDeath FROM People WHERE Id = @id", new { id });
+        Assert.AreEqual("Ada Lovelace", name, "Reversal must restore the pre-Modify name");
+        Assert.AreEqual("1815-12-10", dob, "Reversal must restore the pre-Modify date of birth");
+        Assert.AreEqual("1852-11-27", dod, "Reversal must restore the pre-Modify date of death");
+    }
+
+    /// <summary>
+    /// Regression guard for #173's required <c>ClearStaleAddTargetsAsync</c> fix: a soft-deleted
+    /// Person row at a lowercase, explicit file-authored id must actually be hard-deleted before a
+    /// fresh Add re-applies at the same id — the old <c>_personRepository.HardDeleteAsync(Guid.Parse(...))</c>
+    /// path force-uppercases via <c>GuidHandler</c> and silently matches zero rows against a
+    /// lowercase-stored id, leaving <c>INSERT OR IGNORE</c> to no-op against the still-present stale row.
+    /// </summary>
+    [TestMethod]
+    public async Task ClearStaleAddTargetsAsync_PersonExplicitLowercaseId_HardDeletesCorrectly()
+    {
+        var id = "ea111111-1111-4111-8111-111111111173"; // lowercase, explicit file-authored id
+
+        var batch1 = Guid.NewGuid();
+        await PlanAndStageAsync([], batch1, DuplicateResolutionPolicy.NewestWins,
+            people: [new PersonEntry { Id = id, Name = "Original Name" }]);
+        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batch1);
+        await _service.ReverseBatchAsync(batch1.ToString("D").ToUpperInvariant()); // soft-deletes the lowercase-id row
+
+        var batch2 = Guid.NewGuid();
+        await PlanAndStageAsync([], batch2, DuplicateResolutionPolicy.NewestWins,
+            people: [new PersonEntry { Id = id, Name = "Fresh Name After Undo" }]);
+        var result = await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant());
+        Assert.IsNull(result);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (name, isDeleted) = await conn.QuerySingleAsync<(string Name, int IsDeleted)>(
+            "SELECT Name, IsDeleted FROM People WHERE Id = @id", new { id });
+        Assert.AreEqual(0, isDeleted, "The stale soft-deleted row must be hard-deleted, letting the fresh Add actually insert");
+        Assert.AreEqual("Fresh Name After Undo", name);
     }
 }

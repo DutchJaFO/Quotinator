@@ -531,6 +531,98 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
     }
 
+    // ── #173: PlanPeopleAsync ─────────────────────────────────────────────────
+
+    private static PersonEntry BuildPersonEntry(string id, string name = "Ada Lovelace", string? dateOfBirth = "1815-12-10", string? dateOfDeath = "1852-11-27") => new()
+    {
+        Id          = id,
+        Name        = name,
+        DateOfBirth = dateOfBirth,
+        DateOfDeath = dateOfDeath,
+    };
+
+    private static async Task SeedExplicitPersonAsync(SqliteConnection conn, string id, string name = "Ada Lovelace", string? dateOfBirth = "1815-12-10", string? dateOfDeath = "1852-11-27", string completenessStatus = "Incomplete")
+    {
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO People (Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @DateOfBirth, @DateOfDeath, @CompletenessStatus, @now)",
+            new { Id = id, Name = name, DateOfBirth = dateOfBirth, DateOfDeath = dateOfDeath, CompletenessStatus = completenessStatus, now });
+    }
+
+    [TestMethod]
+    public async Task PlanPeopleAsync_IdMatchFound_NameDiffers_StagesModifyAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e1111111-1111-4111-8111-111111111173";
+        await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [BuildPersonEntry(id, name: "Augusta Ada King, Countess of Lovelace")]);
+
+        var action = actions.Single(a => a.EntityType == "Person");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed);
+        Assert.IsNotNull(action.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task PlanPeopleAsync_IdMatchFound_NothingChanged_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e2111111-1111-4111-8111-111111111173";
+        await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [BuildPersonEntry(id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27")]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Person"), "Nothing differs — silent reuse, no action staged");
+    }
+
+    [TestMethod]
+    public async Task PlanPeopleAsync_NoIdMatch_FallsBackToNaturalKey_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        // A pre-existing row found only by natural key (Name) — never declared an explicit id before.
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync("INSERT INTO People (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
+            new { Id = Guid.NewGuid(), now });
+
+        var newFileId = "e3111111-1111-4111-8111-111111111173";
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [BuildPersonEntry(newFileId, name: "Ada Lovelace")]);
+
+        Assert.AreEqual(0, actions.Count, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#173 scope boundary, same as #162's)");
+    }
+
+    [TestMethod]
+    public async Task PlanPeopleAsync_CompleteStatus_StagesBlockedNotModify()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e4111111-1111-4111-8111-111111111173";
+        await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", completenessStatus: "Complete");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [BuildPersonEntry(id, name: "A completely different name")]);
+
+        var action = actions.Single(a => a.EntityType == "Person");
+        Assert.AreEqual(ImportActionStatus.Blocked, action.Status.Parsed, "A Complete row must never silently accept a Modify");
+        Assert.IsNull(action.MergedFields, "Nothing is resolved yet for a Blocked action");
+    }
+
+    [TestMethod]
+    public async Task PlanPeopleAsync_CompleteStatus_SkipPolicy_DoesNotBlock()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e5111111-1111-4111-8111-111111111173";
+        await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", completenessStatus: "Complete");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Skip,
+            people: [BuildPersonEntry(id, name: "A completely different name")]);
+
+        var action = actions.Single(a => a.EntityType == "Person");
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
+    }
+
     // ── #176: PlanConversationsAsync ─────────────────────────────────────────
 
     private static SourceConversation BuildConversationEntry(string id, string? description = "A tense standoff.") => new()

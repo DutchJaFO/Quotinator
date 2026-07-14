@@ -17,6 +17,11 @@
       "description": "Optional explicit Source declarations (#162) — an author-assigned id decoupling matching from Title/Type/Date content, so all three become correctable. A quote's own 'source' field stays a title string either way; this section is purely additive context a file may also provide.",
       "items": { "$ref": "#/$defs/source" }
     },
+    "people": {
+      "type": "array",
+      "description": "Optional explicit Person declarations (#173) — an author-assigned id decoupling matching from Name content, so Name/dateOfBirth/dateOfDeath all become correctable. A quote's own 'author' field stays a name string either way; this section is purely additive context a file may also provide.",
+      "items": { "$ref": "#/$defs/person" }
+    },
     "stageDirections": {
       "type": "array",
       "description": "Reusable scene-setting and action descriptions that appear in conversations.",
@@ -84,6 +89,17 @@
         "title": { "type": "string", "minLength": 1 },
         "type":  { "type": "string", "enum": ["movie", "tv", "anime", "book", "person"] },
         "date":  { "type": ["string", "null"] }
+      }
+    },
+    "person": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id":          { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "name":        { "type": "string", "minLength": 1 },
+        "dateOfBirth": { "type": ["string", "null"] },
+        "dateOfDeath": { "type": ["string", "null"] }
       }
     },
     "stageDirection": {

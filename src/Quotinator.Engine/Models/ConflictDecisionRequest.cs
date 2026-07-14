@@ -61,6 +61,15 @@ public sealed class ConflictDecisionRequest
     /// <summary>Decision for a Conversation action's description (#176).</summary>
     public FieldDecision? ConversationDescription { get; init; }
 
+    /// <summary>Decision for a Person action's name (#173).</summary>
+    public FieldDecision? PersonName { get; init; }
+
+    /// <summary>Decision for a Person action's date of birth (#173).</summary>
+    public FieldDecision? PersonDateOfBirth { get; init; }
+
+    /// <summary>Decision for a Person action's date of death (#173).</summary>
+    public FieldDecision? PersonDateOfDeath { get; init; }
+
     /// <summary>
     /// Optional, entity-agnostic override (#165) — when supplied, applying this decision sets the
     /// target record's <see cref="CompletenessStatus"/> directly (most usefully <c>Complete</c>),

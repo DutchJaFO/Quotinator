@@ -9,6 +9,9 @@ public sealed class ParsedSourceFile
     /// <summary>Explicit Source declarations (#162). Empty for a flat-format file or a file with no <c>sources</c> section.</summary>
     public IReadOnlyList<SourceEntry> Sources { get; init; } = [];
 
+    /// <summary>Explicit Person declarations (#173). Empty for a flat-format file or a file with no <c>people</c> section.</summary>
+    public IReadOnlyList<PersonEntry> People { get; init; } = [];
+
     /// <summary>Reusable stage directions. Empty for a flat-format file.</summary>
     public IReadOnlyList<SourceStageDirection> StageDirections { get; init; } = [];
 

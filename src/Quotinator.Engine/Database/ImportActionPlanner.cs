@@ -40,7 +40,8 @@ internal static class ImportActionPlanner
         IReadOnlyList<SourceEntry>? sources = null,
         IReadOnlyList<SourceStageDirection>? stageDirections = null,
         IReadOnlyList<SourceSoundCue>? soundCues = null,
-        IReadOnlyList<SourceConversation>? conversations = null)
+        IReadOnlyList<SourceConversation>? conversations = null,
+        IReadOnlyList<PersonEntry>? people = null)
     {
         var actions        = new List<SystemImportAction>();
         var sourceIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -56,6 +57,10 @@ internal static class ImportActionPlanner
         // reference a source this same file also declares explicitly, mirroring the existing
         // conversations/stageDirections/soundCues ordering.
         await PlanSourcesAsync(connection, sources ?? [], batchIdStr, policy, sourceIndex, actions, now, transaction);
+
+        // #173: same reasoning as Source above — a quote's author may reference a person this same
+        // file also declares explicitly via people[].
+        await PlanPeopleAsync(connection, people ?? [], batchIdStr, policy, personIndex, actions, now, transaction);
 
         foreach (var q in quotes)
         {
@@ -403,6 +408,116 @@ internal static class ImportActionPlanner
         }
     }
 
+    /// <summary>Same key names as <see cref="Quotinator.Engine.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#173).</summary>
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
+        new Dictionary<string, object?> { ["name"] = payload.Name, ["dateOfBirth"] = payload.DateOfBirth, ["dateOfDeath"] = payload.DateOfDeath };
+
+    // ── #173: explicit Person planning ───────────────────────────────────────
+    // Same shape as PlanSourcesAsync — id-first lookup, natural-key fallback for a not-yet-migrated
+    // row, personIndex populated in both branches so a same-batch quote's author resolves to the
+    // declared row instead of independently deriving its own EntityIdentity stable id (the #162
+    // test-7a-shaped threading risk).
+
+    private static async Task PlanPeopleAsync(
+        SqliteConnection connection, IReadOnlyList<PersonEntry> people, string batchId,
+        DuplicateResolutionPolicy policy, Dictionary<string, string> personIndex,
+        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        foreach (var p in people)
+        {
+            var existing = await connection.QuerySingleOrDefaultAsync<(string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                Sql.People.SelectExistingById, new { id = p.Id }, transaction);
+
+            if (existing is { } row)
+            {
+                var existingPayload = new PersonActionPayload(row.Name, row.DateOfBirth, row.DateOfDeath);
+                var incomingPayload = new PersonActionPayload(p.Name, p.DateOfBirth, p.DateOfDeath);
+                var existingFields  = ToFieldMap(existingPayload);
+                var incomingFields  = ToFieldMap(incomingPayload);
+
+                personIndex[p.Name] = p.Id;
+
+                var changedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                var resolved    = policy switch
+                {
+                    DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
+                        new PersonActionPayload((string)mergeResult!.MergedFields["name"]!, (string?)mergeResult.MergedFields["dateOfBirth"], (string?)mergeResult.MergedFields["dateOfDeath"]),
+                    DuplicateResolutionPolicy.Skip => existingPayload,
+                    _ => incomingPayload,
+                };
+
+                // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
+                // not the raw incoming value used for the "unchanged" check above.
+                var resolvedFields        = ToFieldMap(resolved);
+                var effectiveChangedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+
+                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.Person,
+                        EntityId      = p.Id,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                var isPending = policy == DuplicateResolutionPolicy.Review;
+                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchId,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType    = ImportActionEntityTypes.Person,
+                    EntityId      = p.Id,
+                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
+
+            // Falls back to natural-key: a not-yet-migrated row found only by Name — Name/DateOfBirth/
+            // DateOfDeath correction isn't available on it yet (#173's scope boundary, same as #162's).
+            var matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
+                Sql.People.SelectIdByName, new { name = p.Name }, transaction);
+            if (matchesByKey is not null)
+            {
+                personIndex[p.Name] = matchesByKey.Value.ToString("D").ToUpperInvariant();
+                continue;
+            }
+
+            personIndex[p.Name] = p.Id;
+
+            actions.Add(new SystemImportAction
+            {
+                BatchId       = batchId,
+                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType    = ImportActionEntityTypes.Person,
+                EntityId      = p.Id,
+                IncomingValue = JsonSerializer.Serialize(new PersonActionPayload(p.Name, p.DateOfBirth, p.DateOfDeath)),
+                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt    = now,
+            });
+        }
+    }
+
     // ── #68: StageDirection/SoundCue/Conversation planning ──────────────────
     // All three are Add-only and id-keyed (the file supplies an explicit id, like Quote — not a
     // natural-key-derived EntityIdentity stable id like Source/Character/Person), so planning is
@@ -709,7 +824,7 @@ internal sealed record SourceActionPayload(string Title, string Type, string? Da
 internal sealed record CharacterActionPayload(string SourceId, string Name, string SourceTitle, string SourceType);
 
 /// <summary>Staged payload for a Person Add <see cref="SystemImportAction"/>.</summary>
-internal sealed record PersonActionPayload(string Name);
+internal sealed record PersonActionPayload(string Name, string? DateOfBirth = null, string? DateOfDeath = null);
 
 /// <summary>Staged payload for a StageDirection Add <see cref="SystemImportAction"/> (#68).</summary>
 internal sealed record StageDirectionActionPayload(

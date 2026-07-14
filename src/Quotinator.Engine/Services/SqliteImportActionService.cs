@@ -167,6 +167,26 @@ public sealed class SqliteImportActionService : IImportActionService
             return;
         }
 
+        if (action.EntityType == ImportActionEntityTypes.Person && action.ActionType.Parsed == ImportActionKind.Modify)
+        {
+            var existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayload>(action.ExistingValue!)!;
+            var incomingPersonPayload = JsonSerializer.Deserialize<PersonActionPayload>(action.IncomingValue!)!;
+
+            var existingPersonFields = ToFieldMap(existingPersonPayload);
+            var incomingPersonFields = ToFieldMap(incomingPersonPayload);
+            var personDecisions      = ToPersonDecisionMap(request);
+
+            var personResult = FieldMergeResolver.ResolveWithDecisions(existingPersonFields, incomingPersonFields, personDecisions);
+
+            var resolvedPersonPayload = new PersonActionPayload(
+                (string)personResult.MergedFields["name"]!,
+                (string?)personResult.MergedFields["dateOfBirth"],
+                (string?)personResult.MergedFields["dateOfDeath"]);
+
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPersonPayload), request.MarkCompletenessAs);
+            return;
+        }
+
         if (action.EntityType != ImportActionEntityTypes.Quote)
             throw new ImportActionNotDecidableException(actionId, action.EntityType);
 
@@ -268,8 +288,10 @@ public sealed class SqliteImportActionService : IImportActionService
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Source))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Sources"), new { id = action.EntityId });
 
+        // #173: a people[] entry supplies its own file-authored id, not guaranteed to be uppercase —
+        // raw SQL, not the Guid-typed repository path, same fix #162 made for Source above.
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Person))
-            await _personRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("People"), new { id = action.EntityId });
 
         // #68: Conversation/StageDirection/SoundCue ids are explicit-in-file, like Quote's — not
         // EntityIdentity-derived like Character/Person's — so the same raw-SQL, no-forced-
@@ -415,9 +437,28 @@ public sealed class SqliteImportActionService : IImportActionService
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "source", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Person:
+                    if (action.ActionType.Parsed == ImportActionKind.Modify)
+                    {
+                        // #173: a Modify reversal restores the prior field values — it never deletes
+                        // anything, so no active-reference check is needed (unlike an Add reversal).
+                        var existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayload>(action.ExistingValue!)!;
+                        await sqliteConnection.ExecuteAsync(Sql.People.UpdateFieldsById, new
+                        {
+                            name = existingPersonPayload.Name,
+                            dateOfBirth = existingPersonPayload.DateOfBirth,
+                            dateOfDeath = existingPersonPayload.DateOfDeath,
+                            dateModified = now,
+                            id = action.EntityId,
+                        }, sqliteTransaction);
+                        await QuoteSeedWriter.LogChangeAsync(changeLog, "person", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingPersonPayload, sqliteConnection, sqliteTransaction);
+                        break;
+                    }
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.People.CountActiveReferences, action.EntityId))
                         break;
-                    await _personRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow);
+                    // #173: raw SQL, not the Guid-typed repository path — a people[] Add's id may now
+                    // be an explicit, not-necessarily-uppercase file-authored id, same fix #162 made
+                    // for Source (SqliteImportActionService.cs's Source case above).
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("People"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "person", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Conversation:
@@ -634,8 +675,29 @@ public sealed class SqliteImportActionService : IImportActionService
             }
             case ImportActionEntityTypes.Person:
             {
-                var payload = JsonSerializer.Deserialize<PersonActionPayload>(action.IncomingValue!)!;
-                await EnsurePersonExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog);
+                var isPersonAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                if (isPersonAdd)
+                {
+                    var payload = JsonSerializer.Deserialize<PersonActionPayload>(action.IncomingValue!)!;
+                    await EnsurePersonExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog);
+                }
+                else
+                {
+                    var payload = JsonSerializer.Deserialize<PersonActionPayload>(action.MergedFields
+                        ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
+                    await sqliteConnection.ExecuteAsync(Sql.People.UpdateFieldsById, new
+                    {
+                        name = payload.Name,
+                        dateOfBirth = payload.DateOfBirth,
+                        dateOfDeath = payload.DateOfDeath,
+                        dateModified = now,
+                        id = action.EntityId,
+                    }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "person", action.EntityId, ChangeAction.Modified,
+                        oldValue: action.ExistingValue, newValue: payload, sqliteConnection, sqliteTransaction);
+                }
+
+                await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.People.SelectCompletenessById, Sql.People.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
                 break;
             }
             case ImportActionEntityTypes.Quote:
@@ -991,7 +1053,7 @@ public sealed class SqliteImportActionService : IImportActionService
         new Dictionary<string, object?> { ["name"] = payload.Name, ["sourceId"] = payload.SourceId };
 
     private static IReadOnlyDictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
-        new Dictionary<string, object?> { ["name"] = payload.Name };
+        new Dictionary<string, object?> { ["name"] = payload.Name, ["dateOfBirth"] = payload.DateOfBirth, ["dateOfDeath"] = payload.DateOfDeath };
 
     private static IReadOnlyDictionary<string, object?> ToFieldMap(StageDirectionActionPayload payload) =>
         new Dictionary<string, object?> { ["text"] = payload.Text, ["imageUrl"] = payload.ImageUrl };
@@ -1024,6 +1086,12 @@ public sealed class SqliteImportActionService : IImportActionService
             {
                 existing = ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(action.ExistingValue!)!);
                 incoming = ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!);
+                break;
+            }
+            case ImportActionEntityTypes.Person:
+            {
+                existing = ToFieldMap(JsonSerializer.Deserialize<PersonActionPayload>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<PersonActionPayload>(action.IncomingValue!)!);
                 break;
             }
             case ImportActionEntityTypes.StageDirection:
@@ -1122,6 +1190,23 @@ public sealed class SqliteImportActionService : IImportActionService
         Add("title", request.SourceTitle);
         Add("type", request.SourceType);
         Add("date", request.SourceDate);
+
+        return map;
+    }
+
+    private static Dictionary<string, FieldMergeDecision> ToPersonDecisionMap(ConflictDecisionRequest request)
+    {
+        var map = new Dictionary<string, FieldMergeDecision>();
+
+        void Add(string field, FieldDecision? decision)
+        {
+            if (decision is null) return;
+            map[field] = new FieldMergeDecision(decision.Choice, decision.Value);
+        }
+
+        Add("name", request.PersonName);
+        Add("dateOfBirth", request.PersonDateOfBirth);
+        Add("dateOfDeath", request.PersonDateOfDeath);
 
         return map;
     }

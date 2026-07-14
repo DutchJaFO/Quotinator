@@ -222,6 +222,22 @@ internal static class Sql
         internal const string DeleteAll   = "DELETE FROM People;";
         internal const string SelectIdByName = "SELECT Id FROM People WHERE Name = @name AND IsDeleted = 0;";
 
+        /// <summary>#173's id-first lookup for an explicit <c>people[]</c> entry — mirrors <see cref="Sources.SelectExistingById"/>.</summary>
+        internal const string SelectExistingById =
+            "SELECT Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM People WHERE Id = @id AND IsDeleted = 0;";
+
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        internal const string SelectCompletenessById =
+            "SELECT CompletenessStatus, NoValueKnown FROM People WHERE Id = @id;";
+
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        internal const string UpdateCompletenessById =
+            "UPDATE People SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+
+        /// <summary>#173's Modify apply — writes an id-matched Person's corrected Name/DateOfBirth/DateOfDeath. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that.</summary>
+        internal const string UpdateFieldsById =
+            "UPDATE People SET Name = @name, DateOfBirth = @dateOfBirth, DateOfDeath = @dateOfDeath, DateModified = @dateModified WHERE Id = @id;";
+
         /// <summary>Number of active (non-deleted) Quotes still referencing this Person — see <see cref="Characters.CountActiveReferences"/>'s remark.</summary>
         internal const string CountActiveReferences =
             "SELECT COUNT(*) FROM Quotes WHERE PersonId = @id AND IsDeleted = 0;";
