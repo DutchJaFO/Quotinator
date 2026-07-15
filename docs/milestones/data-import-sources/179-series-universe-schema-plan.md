@@ -1,6 +1,6 @@
 # #179 — Series/Universe schema: link related Sources, and Character↔Source many-to-many identity
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #179
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -255,7 +255,7 @@ already exercised during T2 (new Character on an existing Source; same-named Cha
 | 5 | ✅ | Fresh-database baseline and incremental replay produce an identical schema, including `CharacterSources` data shape | Unit test | `Universe`/`Series`/`CharacterSources` added to `EngineDomainTables`, exercised by the existing shared `Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema` test (matches this milestone's established Conversations/#67 precedent — no separately-named test, see Notes); plus new `SeriesUniverseTables_AllHaveRecordBaseColumns` — both passing |
 | 6 | ✅ | Existing Character lookup/insert/reference-count behaviour is unchanged in meaning after the mechanism change | Unit test | Existing `ImportActionPlanner`/`SqliteImportActionService` Character tests pass with mechanism-only changes (one fixture updated to seed via `CharacterSources` instead of a `Characters.SourceId` column) |
 | 7 | ✅ | No regression | Unit test | Full solution: 1214 tests across all 9 test projects, all green; `dotnet build --configuration Release` — 0 warnings, 0 errors |
-| 8 | ⬜ | Migration applies cleanly against a database matching the last published release's schema, not just from-empty | Live (T1) | Awaiting developer confirmation in Visual Studio |
+| 8 | ✅ | App starts and runs correctly in Visual Studio | Live (T1) | Developer confirmed: fresh database took the baseline path cleanly (schema v9, data v10), seeded correctly (796 quotes/479 sources/7 characters/0 people, matching expected counts), server started, multiple `GET /api/v1/quotes/random` → 200, `GET /api/v1/import/actions` → 200. (Verifying this migration specifically against a database matching the *last published release's* schema, per ADR 009, is that ADR's own milestone-closing gate — tracked as #155, not this issue's own scope; the original wording here mis-scoped it.) |
 | 9 | ✅ | Live import behaviour is correct post-migration | Live (T2) | Docker smoke test: fresh seed reaches schema v9 cleanly (796 quotes/479 sources/7 characters, 7 `CharacterSources` links, 1:1 as expected); imported a new quote with a new Character on an existing Source — confirmed a new `CharacterSources` link created; imported a same-named Character under a *different* Source — confirmed two separate Character rows (today's per-Source matching correctly unchanged in meaning; cross-Source reuse is #174's job, not this one's) |
 
 ---

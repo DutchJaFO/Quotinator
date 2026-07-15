@@ -65,7 +65,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#172](https://github.com/DutchJaFO/Quotinator/issues/172) | SoundCue: Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [172-soundcue-modify-plan.md](172-soundcue-modify-plan.md) |
 | [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | Waiting for release | T1 ✅ T2 ✅ | [173-person-modify-plan.md](173-person-modify-plan.md) |
 | [#169](https://github.com/DutchJaFO/Quotinator/issues/169) | Research: "universe/setting" concept linking Source and Character | Released | None (research) | [169-universe-setting-research-plan.md](169-universe-setting-research-plan.md) |
-| [#179](https://github.com/DutchJaFO/Quotinator/issues/179) | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | In progress | T1 ⬜ T2 ✅ | [179-series-universe-schema-plan.md](179-series-universe-schema-plan.md) |
+| [#179](https://github.com/DutchJaFO/Quotinator/issues/179) | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | Waiting for release | T1 ✅ T2 ✅ | [179-series-universe-schema-plan.md](179-series-universe-schema-plan.md) |
 | [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | Planning | T1 ⬜ T2 ⬜ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
 | [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
@@ -166,7 +166,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 31 | #172 | SoundCue: Modify/decidability | Waiting for release |
 | 32 | #173 | Person: explicit id, Modify/decidability | Waiting for release |
 | 33 | #169 | Research: "universe/setting" concept linking Source and Character | Released |
-| 34 | #179 | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | In progress |
+| 34 | #179 | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | Waiting for release |
 | 35 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Planning |
 | 36 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
 | 37 | #175 | Character: explicit id, Modify/decidability | Planning |
