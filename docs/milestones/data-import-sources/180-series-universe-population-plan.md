@@ -47,33 +47,71 @@ update, not continuous traffic, unlike a third-party source refreshed on a timer
 
 ## Steps
 
-### 1. Design the overlay file's shape and location
+**Scope correction (2026-07-15):** starting Step 1 surfaced that #179 shipped the database schema
+only and deliberately left the JSON import path unwired (confirmed by reading
+`schemas/source-extended.schema.json`'s `source` def — only `id`/`title`/`type`/`date`, no Series
+field at all — and `SourceEntry.cs`/`SourceActionPayload`/`PlanSourcesAsync`, none of which mention
+`SeriesId`). Steps 1-2 below replace the originally-planned single "design the file" step with the
+actual wiring work, sized the same as #171/#172/#173's shape. **Confirmed with the developer:** the
+overlay file references a Series by its **name** (a `seriesName` string field), never a raw id — the
+database itself links `Sources.SeriesId` by id, but ids throughout this project's import files are
+always generated from one or more identifying properties (the existing pattern for `quote.source`
+resolving to a Source id, `quote.author` resolving to a Person id, and the already-confirmed
+name-only matching for the `series[]`/`universe[]` sections themselves); the importer resolves
+`seriesName` to the matching Series' id at import time, the same way it already resolves a quote's
+`source` title to a Source id.
+
+### 1. Schema, entry classes, and stable-id derivation
 
 **Status:** Not started.
 
-Decide whether this is a new file (e.g. `data/sources/quotinator-series-universe.json`) or an
-addition to the existing `quotinator-curated.json` — check whether `quotinator-curated.json`'s
-existing schema/shape (per `schemas/source-flat.schema.json`/`source-extended.schema.json`) can
-represent "set `SeriesId` on an existing Source id" without a quote payload attached, or whether a
-Source-only file needs its own schema. If a new file, it needs its own manifest entry (step 2); if an
-addition to the existing curated file, its existing manifest entry's `duplicateResolution` must be
-confirmed still appropriate for the file's now-mixed purpose (quote curation + Source enrichment) —
-do not silently widen `quotinator-curated.json`'s existing policy without checking whether that
-affects its current quote-curation behaviour too.
+- Add `series[]` and `universe[]` sections to `schemas/source-extended.schema.json` — each entry has
+  only a `name` (no explicit `id`, matching the earlier confirmed name-only-matching decision).
+- Add a nullable `seriesName` string field to the `source` def in the same schema.
+- Add `SeriesEntry.cs`/`UniverseEntry.cs` under `src/Quotinator.Core/Import/` (mirrors
+  `PersonEntry.cs`'s shape: a plain DTO with `[JsonPropertyName]`-mapped properties).
+- Add `SeriesName` to `SourceEntry.cs`.
+- Add `EntityIdentity.SeriesId(string name)` / `EntityIdentity.UniverseId(string name)`, mirroring
+  `EntityIdentity.PersonId(string name)`'s single-part `StableId("series"|"universe", name)` shape.
 
-### 2. Add the manifest entry with an explicit `review` policy
+### 2. Reader wiring, Sql query sets, and planner logic
+
+**Status:** Not started.
+
+- `ParsedSourceFile`/`SourceQuoteFileReader` wiring for the two new top-level sections.
+- New `Sql.Series`/`Sql.Universe` query sets (select-existing-by-id, select-id-by-name natural key,
+  insert) — mirrors the existing `Sql.People`/`Sql.Sources` shape.
+- `PlanSeriesAsync`/`PlanUniverseAsync` in `ImportActionPlanner`, wired into `PlanAsync` — **Add-only**,
+  no Modify/decidability: Series/Universe have only a `Name`, and renaming one is not part of this
+  issue's spec.
+- Extend `SourceActionPayload` with a `SeriesName` field alongside `Title`/`Type`/`Date`; wire it into
+  `ToFieldMap`, the changed-fields diff, and `CompletenessGuard.ShouldBlock` in `PlanSourcesAsync` —
+  same treatment `dateOfBirth` got for `PersonActionPayload` in #173. A `seriesName` that doesn't
+  resolve to any known Series (misspelled, or the `series[]` section omits it) is itself an Add for
+  that Series (staged via step 2's `PlanSeriesAsync` in the same batch) rather than an error — the
+  Series is created if it doesn't exist yet, consistent with a quote's own `source`/`author` fields
+  never requiring the referenced Source/Person to pre-exist.
+- `SqliteImportActionService`: Add-apply for Series/Universe rows; extend the existing Source
+  Modify-apply path to write `SeriesId` (resolved from `seriesName`); add a `SourceSeriesName`
+  decidability property to `ConflictDecisionRequest`, mirroring `PersonDateOfBirth`.
+
+### 3. Add the manifest entry with an explicit `review` policy
 
 **Status:** Not started.
 
 `data/sources/manifest.json`'s per-file `duplicateResolution` override (see `ManifestPolicy.Resolve`,
 `src/Quotinator.Data/Import/ManifestPolicy.cs:39-48`) is set to `review` for this file specifically —
 confirmed via a test that this file's resolved policy is `review`, not the bundled-seeding default of
-`skip`, independent of whether the top-level manifest default ever changes.
+`skip`, independent of whether the top-level manifest default ever changes. This issue's overlay data
+is a new standalone file (e.g. `data/sources/quotinator-series-universe.json`) with `quotes: []` and
+populated `sources`/`series`/`universe` sections — kept separate from `quotinator-curated.json` so
+that file's own existing `duplicateResolution` policy (governing its quote-curation purpose) is never
+touched or reinterpreted for a second, unrelated purpose.
 
-### 3. Populate initial Series/Universe data
+### 4. Populate initial Series/Universe data
 
 **Status:** Reviewed and confirmed with the developer (2026-07-15); not yet implemented — depends on
-#179 having shipped `Universe`/`Series`/`Source.SeriesId` (done).
+#179 having shipped `Universe`/`Series`/`Source.SeriesId` (done) and this issue's own Steps 1-2.
 
 Content confirmed for the initial pass, identified from all 476 distinct Source titles across the
 three bundled files:
@@ -108,7 +146,7 @@ merged with it today (see #182). Both rows get `SeriesId = "The Lord of the Ring
 membership is accurate despite the underlying duplicate — the Series will show two "Fellowship of
 the Ring" entries until #182 eventually resolves the duplicate itself.
 
-### 4. Verify staged-conflict behaviour
+### 5. Verify staged-conflict behaviour
 
 **Status:** Not started.
 
@@ -120,10 +158,10 @@ the Ring" entries until #182 eventually resolves the duplicate itself.
 - Policy-resolution case: confirm this file's resolved policy is genuinely `review`, not inherited
   from the bundled default — `SeedSeriesUniverseOverlay_ManifestEntry_ResolvesReviewPolicyNotBundledDefaultSkip`.
 
-### 5. Documentation
+### 6. Documentation
 
-**Status:** Not started. `README.md`/`SOURCES.md` updated if a new bundled data file is introduced
-by step 1's decision, per this project's existing convention for documenting bundled sources.
+**Status:** Not started. `README.md`/`SOURCES.md` updated for the new bundled data file (step 3's
+new standalone file), per this project's existing convention for documenting bundled sources.
 
 ---
 
@@ -131,12 +169,15 @@ by step 1's decision, per this project's existing convention for documenting bun
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A non-conflicting overlay import applies cleanly | Unit test | `Quotinator.Engine.Tests.SeedSeriesUniverseOverlay_NoExistingSeriesId_AppliesCleanly` — starts red |
-| 2 | ❌ | A conflicting overlay import stages `Pending`, never silently resolves | Unit test | `Quotinator.Engine.Tests.SeedSeriesUniverseOverlay_ConflictingExistingSeriesId_StagesPendingNotAutoResolved` — starts red |
-| 3 | ❌ | This file's manifest entry resolves to `review`, not the bundled default of `skip` | Unit test | `Quotinator.Engine.Tests.SeedSeriesUniverseOverlay_ManifestEntry_ResolvesReviewPolicyNotBundledDefaultSkip` — starts red |
-| 4 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 5 | ❌ | T1 — app starts in Visual Studio, overlay file seeds without error, `Series`/`Universe` visible via `Quotinator.Tools.DbInspector` | Live (T1) | Developer to confirm in Visual Studio once implemented |
-| 6 | ❌ | T2 — Docker smoke test: seed with the overlay file present, confirm `SeriesId` set on the expected Sources; edit the file to introduce a conflict, restart, confirm a `Pending` action is staged (not silently applied) | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + `Quotinator.Tools.DbInspector`/`GET /import/actions?status=pending` |
+| 1 | ❌ | `series[]`/`universe[]` sections and Source's `seriesName` field parse per schema | Unit test | `Quotinator.Core.Tests.SourceQuoteFileReader_SeriesAndUniverseSections_ParseIntoEntries` — starts red |
+| 2 | ❌ | A `series[]`/`universe[]` entry with no matching existing row stages an `Add` | Unit test | `Quotinator.Engine.Tests.ImportActionPlanner_NewSeriesName_StagesAddAction` / `..._NewUniverseName_StagesAddAction` — starts red |
+| 3 | ❌ | A Source's `seriesName` resolves to the matching Series and is treated as a Modify field with the same decidability/CompletenessGuard treatment as Title/Type/Date | Unit test | `Quotinator.Engine.Tests.ImportActionPlanner_SourceSeriesNameChanged_StagesModifyAction` / `..._CompleteSourceSeriesNameChanged_StagesBlocked` — starts red |
+| 4 | ❌ | A non-conflicting overlay import applies cleanly | Unit test | `Quotinator.Engine.Tests.SeedSeriesUniverseOverlay_NoExistingSeriesId_AppliesCleanly` — starts red |
+| 5 | ❌ | A conflicting overlay import stages `Pending`, never silently resolves | Unit test | `Quotinator.Engine.Tests.SeedSeriesUniverseOverlay_ConflictingExistingSeriesId_StagesPendingNotAutoResolved` — starts red |
+| 6 | ❌ | This file's manifest entry resolves to `review`, not the bundled default of `skip` | Unit test | `Quotinator.Engine.Tests.SeedSeriesUniverseOverlay_ManifestEntry_ResolvesReviewPolicyNotBundledDefaultSkip` — starts red |
+| 7 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 8 | ❌ | T1 — app starts in Visual Studio, overlay file seeds without error, `Series`/`Universe` visible via `Quotinator.Tools.DbInspector` | Live (T1) | Developer to confirm in Visual Studio once implemented |
+| 9 | ❌ | T2 — Docker smoke test: seed with the overlay file present, confirm `SeriesId` set on the expected Sources; edit the file to introduce a conflict, restart, confirm a `Pending` action is staged (not silently applied) | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + `Quotinator.Tools.DbInspector`/`GET /import/actions?status=pending` |
 
 ---
 
