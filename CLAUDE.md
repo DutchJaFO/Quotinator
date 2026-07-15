@@ -820,6 +820,69 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    `POST /import/actions/reverse?batchId=...` (`preview=true` first, then for real) and confirm the
    pre-correction text is restored via DbInspector.
 
+   **Person: explicit id, Modify/decidability, dateOfBirth/dateOfDeath** (#173) — Person was Add-only
+   before this issue and never had a write path for `dateOfBirth`/`dateOfDeath`; this proves both a
+   `Complete` Person blocks a silent overwrite and a correctable Person can be Modified/decided end to
+   end, plus exercises the lowercase-explicit-id reversal fix found live during this issue's own T2
+   pass. Create a small fixture (one quote is required):
+   ```bash
+   cat > .claude/temp/smoke-173.json <<'EOF'
+   {
+     "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"A #173 smoke test filler quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":"Smoke Test Person","type":"movie","genres":[],"translations":{}}],
+     "people": [{"id":"f0000005-0000-4000-8000-000000000005","name":"Smoke Test Person","dateOfBirth":"1950-01-01","dateOfDeath":null}]
+   }
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+   ```
+   Must return `200` with the Person added (check via `Quotinator.Tools.DbInspector` — `SELECT Id,
+   Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM People WHERE Id = 'f0000005-...'` — note
+   the id is deliberately lowercase, as a file-authored explicit id always is). Re-import the same id
+   with a changed `dateOfBirth` under `{"duplicateResolution":{"default":"review"}}` — must stage a
+   `Pending` `Modify` action (`GET /import/actions?status=pending`) with `ambiguousFields:
+   ["dateOfBirth"]`. Decide with `{"personDateOfBirth":{"choice":"replace"},"markCompletenessAs":
+   "Complete"}`, then `POST /import/actions/apply?batchId=...` — confirm the corrected `DateOfBirth`
+   and `CompletenessStatus: Complete` via DbInspector. Re-import the same id again with another changed
+   `dateOfBirth` under `review` policy — must now stage `Blocked`, not `Pending`
+   (`GET /import/actions?status=Blocked`), and the on-disk value must be unchanged — proves a
+   `Complete` Person can no longer be silently overwritten. Finally, exercise the lowercase-id
+   reversal path: single-shot re-import a changed `dateOfBirth` under `newest-wins` (nothing pending,
+   applies immediately), confirm the write via DbInspector, then `POST /import/actions/reverse?
+   batchId=...` (`preview=true` first, then for real) — confirm via DbInspector that `IsDeleted` on
+   the `People` row genuinely flips to `1` (this is the case-sensitivity regression found live during
+   #173's own T2 pass: a Guid-typed repository call silently force-uppercases before comparing,
+   matching zero rows against a lowercase-stored id, so the row would otherwise stay visibly present
+   with `IsDeleted = 0` despite the endpoint reporting success). Re-import the exact same fixture one
+   more time — must stage as a fresh `Add` (not `Modify`, which would mean the reversal silently
+   no-op'd and the row was never truly gone), and `IsDeleted` must be back to `0` afterward.
+
+   **Series/Universe schema, Character↔Source many-to-many identity** (#179) — Character no longer
+   has a `SourceId` column; a Character's Source links live in `CharacterSources` instead, and today's
+   matching remains per-Source in meaning (only the mechanism changed — reusing a Character across
+   Sources is #174's job, not this one's). This proves both halves live: a brand-new Character on an
+   existing Source creates exactly one new `CharacterSources` link, and the same Character *name*
+   under a *different* Source still creates a separate row (no premature cross-Source reuse).
+   ```bash
+   cat > .claude/temp/smoke-179.json <<'EOF'
+   {"quotes": [{"id":"a0000001-0000-4000-8000-000000000001","quote":"A #179 smoke test line.","originalLanguage":"en","source":"Airplane!","date":"1980","character":"Striker (Smoke Test)","author":null,"type":"movie","genres":[],"translations":{}}]}
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-179.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+   ```
+   Must return `200`. Confirm via `Quotinator.Tools.DbInspector` — `SELECT COUNT(*) FROM
+   CharacterSources;` must have increased by exactly 1, and `SELECT c.Name, s.Title FROM Characters c
+   JOIN CharacterSources cs ON cs.CharacterId = c.Id JOIN Sources s ON s.Id = cs.SourceId WHERE
+   c.Name = 'Striker (Smoke Test)';` must show one row linking to `Airplane!`. Then re-import the same
+   character name under a different Source:
+   ```bash
+   cat > .claude/temp/smoke-179b.json <<'EOF'
+   {"quotes": [{"id":"a0000002-0000-4000-8000-000000000002","quote":"A second #179 smoke test line, same character, different source.","originalLanguage":"en","source":"Monty Python and the Holy Grail","date":"1975","character":"Striker (Smoke Test)","author":null,"type":"movie","genres":[],"translations":{}}]}
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-179b.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+   ```
+   Must return `200`. `SELECT COUNT(*) FROM Characters WHERE Name = 'Striker (Smoke Test)';` must now
+   be `2` — a *second*, separate Character row, each linked to its own Source via `CharacterSources`
+   — proving today's per-Source matching genuinely survived the mechanism change unchanged, not
+   silently reused across Sources.
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle
