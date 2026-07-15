@@ -173,7 +173,7 @@ any new identity/merge behaviour (that's #174's job). Confirmed-so-far call site
 - `Sql.Characters.InsertIfNotExists` (`Sql.cs:213-215`) — drops `SourceId` from the `INSERT`
   statement's column list; the corresponding `CharacterSources` row insert is a separate statement
   added alongside it (both must succeed together — same transaction).
-- `Sql.Characters.CountActiveReferences` and `Sql.Sources.CountActiveReferences` (`Sql.cs:264-266`)
+- `Sql.Characters.CountActiveReferences` and `Sql.Sources.CountActiveReferences` (`Sql.cs:280-282`)
   — `Sources.CountActiveReferences`'s Character-counting half currently assumes `Characters.SourceId`
   as a column; rewritten to join through `CharacterSources`. Behaviour preserved (a Source is still
   "referenced" by every Character currently linked to it) — no semantic change, just a mechanism
