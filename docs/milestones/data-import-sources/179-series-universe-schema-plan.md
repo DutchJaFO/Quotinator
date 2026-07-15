@@ -1,9 +1,9 @@
 # #179 — Series/Universe schema: link related Sources, and Character↔Source many-to-many identity
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #179
 **Tiers required:** T1, T2
-**Depends on:** none technically, but corrects #174's original approach and #174 now depends on this issue
+**Depends on:** none
 
 ---
 
@@ -64,7 +64,10 @@ value stages for a human decision instead of resolving silently.
 
 ### 1. Write the ADR documenting the structural decision
 
-**Status:** Not started.
+**Status:** Done. `docs/architecture-decisions/011-series-universe-hierarchy-and-character-source-identity.md`
+written exactly per the content list below, added to the README index. Also opportunistically fixed
+a pre-existing, unrelated gap found while editing that index: ADR 010 had never been added to
+`Quotinator.slnx` either — added both 010 and 011 in the same edit.
 
 Location: `docs/architecture-decisions/NNN-<short-title>.md`, next sequential number after the
 current highest (010 as of this writing — confirm the actual next-free number at implementation
@@ -87,7 +90,13 @@ this step formalises it, it does not reopen it):
 
 ### 2. Write the red tests
 
-**Status:** Not started.
+**Status:** Done. All four named tests written and confirmed red against pre-migration code
+(`no such table: CharacterSources` / `Characters.SourceId must be dropped` failures), plus one
+extra: `SeriesUniverseTables_AllHaveRecordBaseColumns` (mirroring the `ConversationTables_
+AllHaveRecordBaseColumns` precedent from #67). All five now pass. The suggested "zero row
+consolidation" coverage is folded into `Migration_SeriesUniverseSchema_
+PopulatesCharacterSources1to1FromExistingSourceId` itself (asserts exactly one link row and that
+the source Character row is neither merged nor deleted), rather than a separate test.
 
 At minimum the four listed in the GitHub issue (`Migration_SeriesUniverseSchema_
 AddsUniverseAndSeriesTables`, `Migration_SeriesUniverseSchema_PopulatesCharacterSources1to1From
@@ -99,7 +108,13 @@ literally zero row consolidation (row-count-before equals `CharacterSources`-row
 
 ### 3. Design and write the migration
 
-**Status:** Not started.
+**Status:** Done. `Migration009_SeriesUniverseSchema` added as `QuotinatorMigrations.All`'s 9th
+entry, following the sequence below almost exactly as planned. One decision this step deferred to
+implementation time is now resolved: soft-deleted `Characters` rows **do** get backfilled into
+`CharacterSources` too (no `IsDeleted` filter on the backfill `SELECT`), preserving reversibility as
+anticipated. `CharacterSources.Id` values are generated in SQL itself via the standard
+`upper(hex(randomblob(N)))` idiom (SQLite has no native UUID function), formatted to match this
+project's stored-uppercase-hyphenated-GUID convention.
 
 New entry at the end of `QuotinatorMigrations.All` (`src/Quotinator.Engine/Database/
 QuotinatorMigrations.cs`) — currently 8 entries (`Migration001_InitialSchema` through
@@ -140,7 +155,16 @@ Order matters: step 4 (populate `CharacterSources`) must run **before** step 6 (
 
 ### 4. Update the fresh-database baseline and schema-drift test
 
-**Status:** Not started.
+**Status:** Done. Baseline updated exactly as described: `Characters` loses `SourceId`/`UNIQUE
+(SourceId, Name)`; `Universe`, `Series`, `CharacterSources` added; `Sources` gains `SeriesId`,
+appended last to match `ALTER TABLE`'s column-ordering convention already used throughout this
+file. Per this milestone's established Conversations/#67 precedent, **no separately-named
+`Baseline_And_IncrementalReplay_ProduceIdenticalSeriesUniverseSchema` test was created** — the three
+new tables were added to the existing shared `EngineDomainTables` list, already exercised by
+`Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema` (confirmed: #67 and #173 both used
+this same pattern, not a per-feature test, despite their own plan docs naming one). The GitHub
+issue's Expected Tests table names this test; the shared test is the actual implementation of that
+requirement.
 
 `QuotinatorMigrations.BaselineSchema`'s `Characters` table definition (`QuotinatorMigrations.cs:
 439-452`) currently carries `SourceId TEXT NOT NULL REFERENCES Sources(Id)` and `UNIQUE (SourceId,
@@ -157,9 +181,27 @@ data-migration surface than #174's will, but the same category of check still ap
 
 ### 5. Audit call sites reading `Character.SourceId` (structural-shape half only)
 
-**Status:** Not started. This issue's own audit is narrower than #174's — it only needs to keep the
-codebase *compiling and passing existing tests* against the new `CharacterSources` shape, not decide
-any new identity/merge behaviour (that's #174's job). Confirmed-so-far call sites:
+**Status:** Done, plus one call site this list did not anticipate. This issue's own audit is
+narrower than #174's — it only needs to keep the codebase *compiling and passing existing tests*
+against the new `CharacterSources` shape, not decide any new identity/merge behaviour (that's
+#174's job). Every call site listed below was fixed exactly as described. Two things this step's own
+list missed, found live via the full test suite:
+
+- **`ClearStaleAddTargetsAsync`'s Character branch** (`SqliteImportActionService.cs`) hard-deleted a
+  stale `Characters` row directly, without first removing its `CharacterSources` link row(s) — since
+  `CharacterSources.CharacterId` is now a real FK, this violated the constraint. Caught by two
+  existing regression tests (`ApplyResolvedActionAsync_ReAddAfterSoftDelete_
+  ResurrectsSoftDeletedRow`, `ReverseBatchAsync_ThenReImport_QuoteWithGenres_
+  ResurrectsWithoutForeignKeyViolation`). Fixed with a new `Sql.CharacterSources.DeleteForCharacter`
+  constant, called before the hard-delete — mirrors the existing `QuoteGenres`/`QuoteTranslations`
+  pattern for Quote's own hard-delete.
+- **Dead code removed**: `QuoteSeedWriter.GetOrCreateCharacterAsync` had zero callers anywhere in
+  `src/`/`tests/` and still referenced `Character.SourceId` directly — a pre-#154 leftover from the
+  old direct-write seeding loop. Deleted rather than updated. Its two equally-dead siblings
+  (`GetOrCreateSourceAsync`, `GetOrCreatePersonAsync`) were left alone as out of scope and flagged
+  separately for cleanup.
+
+Confirmed-so-far call sites (all fixed as planned):
 
 - `Sql.Characters.SelectIdBySourceAndName` (`Sql.cs:199-200`) — the query itself still works as a
   read against the old column shape only if `SourceId` still exists; once step 3's migration drops
@@ -188,9 +230,17 @@ any new identity/merge behaviour (that's #174's job). Confirmed-so-far call site
 
 ### 6. Documentation
 
-**Status:** Not started. `README.md`/`addon/DOCS.md` are unaffected unless this issue adds a new
-endpoint (it doesn't — pure schema). No action expected here beyond confirming that at
-implementation time.
+**Status:** Done. `README.md`/`addon/DOCS.md` correctly needed no changes (no new endpoint). But this
+step's own framing was too narrow — it only considered the endpoint-table docs and missed CLAUDE.md's
+separate, independent "living" T2 smoke-test checklist (Pre-Push Checklist step 6), which grows for
+any issue introducing new verifiable behaviour regardless of whether an endpoint was added (matching
+#171/#172's own precedent, which also added no endpoint but still got a section). Caught only when
+directly asked "why was step 6 not done, we added new content" — added a "Series/Universe schema,
+Character↔Source many-to-many identity (#179)" section to CLAUDE.md covering the two live scenarios
+already exercised during T2 (new Character on an existing Source; same-named Character on a
+*different* Source correctly still creating a separate row). While checking, found the same gap on
+**#173** — its own smoke-test section was never added either; flagged separately, not fixed here
+(out of scope for this commit).
 
 ---
 
@@ -198,15 +248,15 @@ implementation time.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Structural decision (hierarchy shape, `CharacterSources` join, `Source.Type` anchor invariant) documented | Doc | New ADR under `docs/architecture-decisions/` — exact number/filename not yet known |
-| 2 | ❌ | `Universe`/`Series` tables added; `Source.SeriesId` added | Unit test | `Quotinator.Engine.Tests.Migration_SeriesUniverseSchema_AddsUniverseAndSeriesTables` — starts red |
-| 3 | ❌ | Every existing `Characters` row gets exactly one `CharacterSources` row from its current `SourceId`, zero merging | Unit test | `Quotinator.Engine.Tests.Migration_SeriesUniverseSchema_PopulatesCharacterSources1to1FromExistingSourceId` — starts red |
-| 4 | ❌ | `Characters.SourceId` and its old `UNIQUE (SourceId, Name)` constraint are dropped | Unit test | `Quotinator.Engine.Tests.Migration_SeriesUniverseSchema_DropsCharactersSourceIdColumn` — starts red |
-| 5 | ❌ | Fresh-database baseline and incremental replay produce an identical schema, including `CharacterSources` data shape | Unit test | `Quotinator.Engine.Tests.Baseline_And_IncrementalReplay_ProduceIdenticalSeriesUniverseSchema` — starts red |
-| 6 | ❌ | Existing Character lookup/insert/reference-count behaviour is unchanged in meaning after the mechanism change | Unit test | Existing `ImportActionPlanner`/`SqliteImportActionService` Character tests still pass unmodified in behaviour (mechanism-only change) |
-| 7 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 8 | ❌ | Migration applies cleanly against a database matching the last published release's schema, not just from-empty | Live (T1) | Per ADR 009: reconstruct or check out the last released tag's schema, run this migration against it, confirm no drift; developer confirms app opens and runs correctly in Visual Studio afterward |
-| 9 | ❌ | Live import behaviour is unchanged post-migration (no new duplicates, no lost Character-Source links) | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .` — import a quote referencing an existing Character/Source pair, confirm behaviour matches pre-migration (via `Quotinator.Tools.DbInspector` inspecting `CharacterSources`) |
+| 1 | ✅ | Structural decision (hierarchy shape, `CharacterSources` join, `Source.Type` anchor invariant) documented | Doc | `docs/architecture-decisions/011-series-universe-hierarchy-and-character-source-identity.md` |
+| 2 | ✅ | `Universe`/`Series` tables added; `Source.SeriesId` added | Unit test | `Quotinator.Engine.Tests.Migration_SeriesUniverseSchema_AddsUniverseAndSeriesTables` — passing |
+| 3 | ✅ | Every existing `Characters` row gets exactly one `CharacterSources` row from its current `SourceId`, zero merging | Unit test | `Quotinator.Engine.Tests.Migration_SeriesUniverseSchema_PopulatesCharacterSources1to1FromExistingSourceId` — passing |
+| 4 | ✅ | `Characters.SourceId` and its old `UNIQUE (SourceId, Name)` constraint are dropped | Unit test | `Quotinator.Engine.Tests.Migration_SeriesUniverseSchema_DropsCharactersSourceIdColumn` — passing |
+| 5 | ✅ | Fresh-database baseline and incremental replay produce an identical schema, including `CharacterSources` data shape | Unit test | `Universe`/`Series`/`CharacterSources` added to `EngineDomainTables`, exercised by the existing shared `Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema` test (matches this milestone's established Conversations/#67 precedent — no separately-named test, see Notes); plus new `SeriesUniverseTables_AllHaveRecordBaseColumns` — both passing |
+| 6 | ✅ | Existing Character lookup/insert/reference-count behaviour is unchanged in meaning after the mechanism change | Unit test | Existing `ImportActionPlanner`/`SqliteImportActionService` Character tests pass with mechanism-only changes (one fixture updated to seed via `CharacterSources` instead of a `Characters.SourceId` column) |
+| 7 | ✅ | No regression | Unit test | Full solution: 1214 tests across all 9 test projects, all green; `dotnet build --configuration Release` — 0 warnings, 0 errors |
+| 8 | ⬜ | Migration applies cleanly against a database matching the last published release's schema, not just from-empty | Live (T1) | Awaiting developer confirmation in Visual Studio |
+| 9 | ✅ | Live import behaviour is correct post-migration | Live (T2) | Docker smoke test: fresh seed reaches schema v9 cleanly (796 quotes/479 sources/7 characters, 7 `CharacterSources` links, 1:1 as expected); imported a new quote with a new Character on an existing Source — confirmed a new `CharacterSources` link created; imported a same-named Character under a *different* Source — confirmed two separate Character rows (today's per-Source matching correctly unchanged in meaning; cross-Source reuse is #174's job, not this one's) |
 
 ---
 
@@ -225,3 +275,19 @@ Populating `Series`/`Universe` data on existing Sources is out of scope for this
 new mechanism — see Background above and #180. Do not add a new "enrichment rule" concept to #153 for
 this; that idea was raised and explicitly rejected as overcomplicating a problem the curated-overlay-
 file pattern (reusing #162's Modify path) already solves.
+
+**Implementation findings not already covered by a Step above (2026-07-15):**
+
+- **Pre-existing test-environment cruft, not a code bug**: `Quotinator.Api.Tests`' `bin/` output
+  directory had accumulated a real, gitignored `quotinatordata.db` file (with backups spanning
+  2026-07-05 through today) that predated consistent adoption of the `NoOpDatabaseInitializer` test
+  pattern across all endpoint test classes. It sat at a schema version that didn't cleanly extend to
+  v9, surfacing only because this was the first migration added in a while. Deleted per this
+  project's own documented recovery procedure for a genuine version/schema mismatch (no source data
+  lost — gitignored build output only).
+- **Test data-fidelity gap found and fixed**: `ImportBatchesTests.CreateV2DatabaseAsync`'s
+  hand-crafted stub `Characters` table (`Id`, `IsDeleted` only) didn't match what a real historical
+  database would have had at that point (`Id`, `SourceId`, `Name`, `DateCreated`, `DateModified`,
+  `DateDeleted`, `IsDeleted`, per `Migration001_InitialSchema`) — this migration's own backfill
+  step needs `SourceId`/`DateCreated` to exist when replaying from that simulated state. Fixed by
+  widening the stub to match Migration001's real shape.

@@ -33,3 +33,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 008 | [008-enum-backed-columns-require-check-constraints.md](008-enum-backed-columns-require-check-constraints.md) | Enum-backed database columns require a matching CHECK constraint |
 | 009 | [009-verify-migrations-against-last-released-schema.md](009-verify-migrations-against-last-released-schema.md) | Migrations must be verified against the last published release's schema |
 | 010 | [010-repository-is-csharp-only.md](010-repository-is-csharp-only.md) | Repository is C#-only; tooling scripts follow the same rule as application code |
+| 011 | [011-series-universe-hierarchy-and-character-source-identity.md](011-series-universe-hierarchy-and-character-source-identity.md) | Series/Universe hierarchy and Character↔Source many-to-many identity |

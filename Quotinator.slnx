@@ -90,6 +90,8 @@
     <File Path="docs/architecture-decisions/007-cs1591-on-test-projects.md" />
     <File Path="docs/architecture-decisions/008-enum-backed-columns-require-check-constraints.md" />
     <File Path="docs/architecture-decisions/009-verify-migrations-against-last-released-schema.md" />
+    <File Path="docs/architecture-decisions/010-repository-is-csharp-only.md" />
+    <File Path="docs/architecture-decisions/011-series-universe-hierarchy-and-character-source-identity.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
