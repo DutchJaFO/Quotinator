@@ -18,6 +18,9 @@ public sealed class Source : RecordBase
     /// <summary>Publication or release date. Imprecise ISO 8601 text (e.g. "1994", "1994-06"). Separate from audit timestamps.</summary>
     public SafeValue<DateTime?> Date { get; init; } = SafeDateValue.Empty;
 
+    /// <summary>The series this source belongs to, if any (#179). A standalone source has none.</summary>
+    public Guid? SeriesId { get; init; }
+
     /// <summary>The import batch that introduced this record. Null for records predating provenance tracking.</summary>
     public Guid? ImportBatchId { get; init; }
 

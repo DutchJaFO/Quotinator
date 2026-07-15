@@ -84,7 +84,11 @@ public class ImportBatchesTests
         await conn.ExecuteAsync("INSERT INTO System_ConsumerSchemaVersion VALUES (2, '2025-01-01 00:00:00')");
         await conn.ExecuteAsync("CREATE TABLE Quotes (Id TEXT PRIMARY KEY, QuoteText TEXT NOT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0)");
         await conn.ExecuteAsync("CREATE TABLE Sources (Id TEXT PRIMARY KEY, IsDeleted INTEGER NOT NULL DEFAULT 0)");
-        await conn.ExecuteAsync("CREATE TABLE Characters (Id TEXT PRIMARY KEY, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        // #179's Migration009 reads Characters.SourceId/DateCreated (before dropping the column) and
+        // Characters.Name/DateModified/DateDeleted/IsDeleted (rebuilding the table) — this stub must
+        // carry the same base columns Migration001 actually created, or migration replay from this
+        // simulated v2 state fails with "no such column" once it reaches Migration009.
+        await conn.ExecuteAsync("CREATE TABLE Characters (Id TEXT PRIMARY KEY, SourceId TEXT, Name TEXT NOT NULL DEFAULT '', DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
         await conn.ExecuteAsync("CREATE TABLE People (Id TEXT PRIMARY KEY, IsDeleted INTEGER NOT NULL DEFAULT 0)");
         await conn.ExecuteAsync("CREATE TABLE QuoteGenres (Id TEXT PRIMARY KEY, QuoteId TEXT NOT NULL, Genre TEXT NOT NULL)");
         await conn.ExecuteAsync("INSERT INTO Quotes (Id, QuoteText) VALUES ('TEST-QUOTE-ID', 'Existing test quote')");
@@ -145,14 +149,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>App schema migration version is bumped to 8 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>App schema migration version is bumped to 9 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(8, db.SchemaVersion, "SchemaVersion should be 8 after Migration008");
+        Assert.AreEqual(9, db.SchemaVersion, "SchemaVersion should be 9 after Migration009");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────

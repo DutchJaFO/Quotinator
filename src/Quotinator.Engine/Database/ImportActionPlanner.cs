@@ -819,7 +819,10 @@ internal sealed record SourceActionPayload(string Title, string Type, string? Da
 /// own title/type (denormalized, not just its id) so the applier can defensively ensure the Source
 /// row exists before inserting the Character — <c>System_ImportActions</c> rows apply in whatever
 /// order the coordinator returns them (no cross-entity-type ordering guarantee), and
-/// <c>Characters.SourceId</c> is a real foreign key.
+/// <c>CharacterSources.SourceId</c> (#179) is a real foreign key. This payload still carries a
+/// single <c>SourceId</c> per Character, unchanged by #179 — Character's many-to-many relationship
+/// to Source is #174's concern, not this one's (#179 only changes the storage mechanism, not the
+/// matching/payload shape).
 /// </summary>
 internal sealed record CharacterActionPayload(string SourceId, string Name, string SourceTitle, string SourceType);
 

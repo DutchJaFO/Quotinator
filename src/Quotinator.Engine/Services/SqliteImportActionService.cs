@@ -279,7 +279,14 @@ public sealed class SqliteImportActionService : IImportActionService
         // never an Add), and EntityIdentity.StableId always uppercases — safe to use the repository's
         // Guid-typed API here.
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Character))
+        {
+            // #179: CharacterSources carries a real FK to Characters(Id) — its link row(s) must be
+            // removed first, or the hard-delete below violates the FK (found live via this exact
+            // regression: ApplyResolvedActionAsync_ReAddAfterSoftDelete_ResurrectsSoftDeletedRow /
+            // ReverseBatchAsync_ThenReImport_QuoteWithGenres_ResurrectsWithoutForeignKeyViolation).
+            await quoteConn.ExecuteAsync(Sql.CharacterSources.DeleteForCharacter, new { id = action.EntityId });
             await _characterRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
+        }
 
         // #162: unlike Character/Person, a Source Add's id is no longer always EntityIdentity-derived
         // — an explicit sources[] entry supplies its own file-authored id, which is not guaranteed to
@@ -666,9 +673,9 @@ public sealed class SqliteImportActionService : IImportActionService
             case ImportActionEntityTypes.Character:
             {
                 var payload = JsonSerializer.Deserialize<CharacterActionPayload>(action.IncomingValue!)!;
-                // Defensive: Characters.SourceId is a real FK, but System_ImportActions rows apply in
-                // whatever order the coordinator returns them — this action's own Source may not have
-                // applied yet. Idempotent, so re-running it here is safe either way.
+                // Defensive: CharacterSources.SourceId (#179) is a real FK, but System_ImportActions
+                // rows apply in whatever order the coordinator returns them — this action's own
+                // Source may not have applied yet. Idempotent, so re-running it here is safe either way.
                 await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, payload.SourceId, payload.SourceTitle, payload.SourceType, batchId, now, changeLog);
                 await EnsureCharacterExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.SourceId, payload.Name, batchId, now, changeLog);
                 break;
@@ -937,10 +944,15 @@ public sealed class SqliteImportActionService : IImportActionService
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
         var inserted = await connection.ExecuteAsync(Sql.Characters.InsertIfNotExists,
-            new { Id = id, SourceId = sourceId, Name = name, ImportBatchId = batchId, DateCreated = now }, transaction);
+            new { Id = id, Name = name, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "character", id, ChangeAction.Created,
                 oldValue: null, newValue: new { name }, connection, transaction);
+
+        // #179: Character<->Source is many-to-many via CharacterSources — always ensured alongside
+        // the Character row itself, whether the Character was just inserted or already existed.
+        await connection.ExecuteAsync(Sql.CharacterSources.InsertIfNotExists,
+            new { Id = Guid.NewGuid().ToString(), CharacterId = id, SourceId = sourceId, DateCreated = now }, transaction);
     }
 
     private async Task EnsurePersonExistsAsync(

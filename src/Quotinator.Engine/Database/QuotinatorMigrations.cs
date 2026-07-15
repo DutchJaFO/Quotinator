@@ -25,6 +25,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 6, Sql = Migration006_RecordCompleteness },
         new SchemaMigration { Version = 7, Sql = Migration007_ImportBatchStagingStatus },
         new SchemaMigration { Version = 8, Sql = Migration008_Conversations },
+        new SchemaMigration { Version = 9, Sql = Migration009_SeriesUniverseSchema },
     ];
 
     /// <summary>
@@ -369,6 +370,96 @@ public static class QuotinatorMigrations
         CREATE INDEX IF NOT EXISTS IX_SoundCueTranslations_SoundCueId            ON SoundCueTranslations(SoundCueId);
         """;
 
+    // #179/ADR 011: Universe -> Series -> Source hierarchy, and Character<->Source becomes
+    // many-to-many via CharacterSources, replacing Characters.SourceId's single required FK.
+    // Zero data merging — every existing Characters row (including soft-deleted ones, to preserve
+    // full history/reversibility) gets exactly one CharacterSources row carrying its current
+    // SourceId, before the column is dropped. CharacterSources.Id is generated in SQL (SQLite has
+    // no native UUID function) via the standard randomblob()/hex() idiom, formatted to match this
+    // project's stored-uppercase-hyphenated-GUID convention (GuidHandler.cs) even though nothing
+    // outside this migration ever looks a CharacterSources row up by its own Id (only by the
+    // CharacterId/SourceId pair) — consistency avoids ever needing to reason about a mixed-case
+    // exception later. Characters.SourceId and its UNIQUE(SourceId, Name) constraint are then
+    // dropped via the rebuild-under-temporary-name pattern (SQLite cannot ALTER a UNIQUE constraint
+    // or drop a column participating in one in place) — see Migration004_ImportBatchTypeUserSeed for
+    // the same pattern. No new uniqueness constraint is added to Characters here; that depends on
+    // the merge key #174's own ADR decides.
+    private const string Migration009_SeriesUniverseSchema = """
+        CREATE TABLE IF NOT EXISTS Universe (
+            Id                 TEXT    PRIMARY KEY,
+            Name               TEXT    NOT NULL UNIQUE,
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS Series (
+            Id                 TEXT    PRIMARY KEY,
+            Name               TEXT    NOT NULL UNIQUE,
+            UniverseId         TEXT    REFERENCES Universe(Id),
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS CharacterSources (
+            Id           TEXT    PRIMARY KEY,
+            CharacterId  TEXT    NOT NULL REFERENCES Characters(Id),
+            SourceId     TEXT    NOT NULL REFERENCES Sources(Id),
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (CharacterId, SourceId)
+        );
+
+        INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated, IsDeleted)
+        SELECT
+            upper(hex(randomblob(4))) || '-' || upper(hex(randomblob(2))) || '-' ||
+            upper(hex(randomblob(2))) || '-' || upper(hex(randomblob(2))) || '-' ||
+            upper(hex(randomblob(6))),
+            Id, SourceId, DateCreated, 0
+        FROM Characters;
+
+        ALTER TABLE Sources ADD COLUMN SeriesId TEXT REFERENCES Series(Id);
+
+        CREATE TABLE IF NOT EXISTS Characters_New (
+            Id                 TEXT    PRIMARY KEY,
+            Name               TEXT    NOT NULL,
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0,
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]'
+        );
+
+        INSERT INTO Characters_New (Id, Name, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown)
+        SELECT Id, Name, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown
+        FROM Characters;
+
+        DROP TABLE Characters;
+
+        ALTER TABLE Characters_New RENAME TO Characters;
+
+        CREATE INDEX IF NOT EXISTS IX_CharacterSources_CharacterId ON CharacterSources(CharacterId);
+        CREATE INDEX IF NOT EXISTS IX_CharacterSources_SourceId    ON CharacterSources(SourceId);
+        CREATE INDEX IF NOT EXISTS IX_Series_UniverseId            ON Series(UniverseId);
+        CREATE INDEX IF NOT EXISTS IX_Sources_SeriesId              ON Sources(SeriesId);
+        """;
+
     // Consolidated schema for a genuinely fresh database — the union of migrations 1-8's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
@@ -383,11 +474,17 @@ public static class QuotinatorMigrations
     // (all created via CREATE TABLE, so no column-ordering caveat applies to them) — Conversations/
     // StageDirections/SoundCues also carry CompletenessStatus/NoValueKnown inline (#165), added
     // directly to migration008 rather than via a later ALTER since these three tables didn't exist
-    // before it.
+    // before it. Migration009's Universe/Series/CharacterSources tables and Sources.SeriesId (#179,
+    // ADR 011) are also included verbatim — SeriesId is an ALTER TABLE ADD COLUMN on Sources, so it
+    // is listed last on that table to match column order, same as every other ALTER-appended column
+    // above. Characters no longer carries SourceId or UNIQUE(SourceId, Name) — both dropped by
+    // migration009's rebuild.
     // Deliberately omits migration002's DELETE FROM QuoteGenres (data-repair for pre-existing bad
     // data — nothing to repair on a fresh database) and migration003's pre-seed INSERTs (WHERE
-    // EXISTS-guarded, always a no-op before any quote has been seeded). Kept in sync with
-    // migrations 1-8 by DatabaseInitializerTests' schema-drift comparison.
+    // EXISTS-guarded, always a no-op before any quote has been seeded), and migration009's
+    // CharacterSources backfill INSERT (nothing to backfill on a fresh database — Characters is
+    // always empty at baseline time). Kept in sync with migrations 1-9 by DatabaseInitializerTests'
+    // schema-drift comparison.
     private const string BaselineSchema = """
         CREATE TABLE IF NOT EXISTS ImportBatches (
             Id           TEXT    PRIMARY KEY,
@@ -407,6 +504,33 @@ public static class QuotinatorMigrations
             AppliedAt    TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS Universe (
+            Id                 TEXT    PRIMARY KEY,
+            Name               TEXT    NOT NULL UNIQUE,
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS Series (
+            Id                 TEXT    PRIMARY KEY,
+            Name               TEXT    NOT NULL UNIQUE,
+            UniverseId         TEXT    REFERENCES Universe(Id),
+            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+
         CREATE TABLE IF NOT EXISTS Sources (
             Id           TEXT    PRIMARY KEY,
             Title        TEXT    NOT NULL,
@@ -421,6 +545,7 @@ public static class QuotinatorMigrations
             CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
                          CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]',
+            SeriesId     TEXT    REFERENCES Series(Id),
             UNIQUE (Title, Type)
         );
 
@@ -438,7 +563,6 @@ public static class QuotinatorMigrations
 
         CREATE TABLE IF NOT EXISTS Characters (
             Id           TEXT    PRIMARY KEY,
-            SourceId     TEXT    NOT NULL REFERENCES Sources(Id),
             Name         TEXT    NOT NULL,
             DateCreated  TEXT    NOT NULL,
             DateModified TEXT,
@@ -447,8 +571,7 @@ public static class QuotinatorMigrations
             ImportBatchId TEXT   REFERENCES ImportBatches(Id),
             CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
                          CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
-            NoValueKnown TEXT    NOT NULL DEFAULT '[]',
-            UNIQUE (SourceId, Name)
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]'
         );
 
         CREATE TABLE IF NOT EXISTS CharacterTranslations (
@@ -461,6 +584,17 @@ public static class QuotinatorMigrations
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
             UNIQUE (CharacterId, Language)
+        );
+
+        CREATE TABLE IF NOT EXISTS CharacterSources (
+            Id           TEXT    PRIMARY KEY,
+            CharacterId  TEXT    NOT NULL REFERENCES Characters(Id),
+            SourceId     TEXT    NOT NULL REFERENCES Sources(Id),
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (CharacterId, SourceId)
         );
 
         CREATE TABLE IF NOT EXISTS People (
@@ -614,5 +748,9 @@ public static class QuotinatorMigrations
         CREATE INDEX IF NOT EXISTS IX_ConversationLines_SoundCueId               ON ConversationLines(SoundCueId);
         CREATE INDEX IF NOT EXISTS IX_StageDirectionTranslations_StageDirectionId ON StageDirectionTranslations(StageDirectionId);
         CREATE INDEX IF NOT EXISTS IX_SoundCueTranslations_SoundCueId            ON SoundCueTranslations(SoundCueId);
+        CREATE INDEX IF NOT EXISTS IX_CharacterSources_CharacterId ON CharacterSources(CharacterId);
+        CREATE INDEX IF NOT EXISTS IX_CharacterSources_SourceId    ON CharacterSources(SourceId);
+        CREATE INDEX IF NOT EXISTS IX_Series_UniverseId            ON Series(UniverseId);
+        CREATE INDEX IF NOT EXISTS IX_Sources_SeriesId              ON Sources(SeriesId);
         """;
 }

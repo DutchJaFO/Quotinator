@@ -95,44 +95,6 @@ internal static class QuoteSeedWriter
     }
 
     /// <summary>
-    /// Gets the existing Character row for <paramref name="q"/>'s name within <paramref name="sourceId"/>,
-    /// or inserts a new one. Returns <c>null</c> when <paramref name="q"/> has no character. Checks the
-    /// database on a cache miss — see <see cref="GetOrCreateSourceAsync"/> for why.
-    /// </summary>
-    internal static async Task<Guid?> GetOrCreateCharacterAsync(
-        SqliteConnection connection, SourceQuote q, Guid sourceId, Dictionary<string, Guid> index, Guid importBatchId,
-        ChangeLogContext changeLog, SqliteTransaction? transaction = null)
-    {
-        if (string.IsNullOrWhiteSpace(q.Character)) return null;
-
-        var key = $"{sourceId}|{q.Character}";
-        if (index.TryGetValue(key, out var existing)) return existing;
-
-        var existingId = await connection.ExecuteScalarAsync<Guid?>(
-            Sql.Characters.SelectIdBySourceAndName, new { sourceId, name = q.Character }, transaction);
-        if (existingId is { } foundId)
-        {
-            index[key] = foundId;
-            return foundId;
-        }
-
-        var id = Guid.NewGuid();
-        await connection.InsertAsync(new Character
-        {
-            Id            = id,
-            SourceId      = sourceId,
-            Name          = q.Character,
-            ImportBatchId = importBatchId
-        }, transaction);
-
-        await LogChangeAsync(changeLog, "character", id.ToString(), ChangeAction.Created,
-            oldValue: null, newValue: new { name = q.Character }, connection, transaction);
-
-        index[key] = id;
-        return id;
-    }
-
-    /// <summary>
     /// Gets the existing Person row for <paramref name="q"/>'s author name, or inserts a new one.
     /// Returns <c>null</c> when <paramref name="q"/> has no author. Checks the database on a cache
     /// miss — see <see cref="GetOrCreateSourceAsync"/> for why.

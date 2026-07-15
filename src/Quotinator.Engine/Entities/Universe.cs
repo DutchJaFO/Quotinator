@@ -4,12 +4,12 @@ using Quotinator.Data.Models;
 
 namespace Quotinator.Engine.Entities;
 
-/// <summary>A fictional character who delivers a quote. May appear in multiple Sources — see <see cref="CharacterSourceEntity"/> (#179).</summary>
-[Table("Characters")]
-public sealed class Character : RecordBase
+/// <summary>A fictional world or franchise spanning one or more Series (e.g. "Middle Earth").</summary>
+[Table("Universe")]
+public sealed class UniverseEntity : RecordBase
 {
-    /// <summary>The character's name in the source's original language.</summary>
-    public string Name     { get; init; } = string.Empty;
+    /// <summary>The universe's name. Unique.</summary>
+    public string Name { get; init; } = string.Empty;
 
     /// <summary>The import batch that introduced this record. Null for records predating provenance tracking.</summary>
     public Guid? ImportBatchId { get; init; }
@@ -20,6 +20,6 @@ public sealed class Character : RecordBase
     /// </summary>
     public SafeValue<CompletenessStatus?> CompletenessStatus { get; init; } = SafeValue<CompletenessStatus?>.Empty;
 
-    /// <summary>Field names confirmed to have no findable value. Kept for consistency with the other three entity types even though <see cref="Name"/> currently has no such candidate.</summary>
+    /// <summary>Field names confirmed to have no findable value.</summary>
     public IReadOnlyList<string> NoValueKnown { get; init; } = [];
 }

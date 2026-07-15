@@ -128,8 +128,11 @@ public class ImportActionPlannerTests
         var realPersonId    = Guid.NewGuid();
         await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
             new { Id = realSourceId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
-        await conn.ExecuteAsync("INSERT INTO Characters (Id, SourceId, Name, DateCreated) VALUES (@Id, @SourceId, 'Rick Blaine', @now)",
-            new { Id = realCharacterId, SourceId = realSourceId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
+        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, DateCreated) VALUES (@Id, 'Rick Blaine', @now)",
+            new { Id = realCharacterId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
+        // #179: Character<->Source is many-to-many via CharacterSources, not a Characters.SourceId column.
+        await conn.ExecuteAsync("INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+            new { Id = Guid.NewGuid(), CharacterId = realCharacterId, SourceId = realSourceId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
         await conn.ExecuteAsync("INSERT INTO People (Id, Name, DateCreated) VALUES (@Id, 'Someone', @now)",
             new { Id = realPersonId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
 

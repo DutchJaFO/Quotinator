@@ -196,8 +196,16 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Characters WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Characters;";
+
+        /// <summary>
+        /// #179: Character is no longer scoped by a SourceId column — the same per-Source match is
+        /// preserved in meaning, only in mechanism, via the CharacterSources join. #174 is where the
+        /// matching key itself changes to something Source-independent.
+        /// </summary>
         internal const string SelectIdBySourceAndName =
-            "SELECT Id FROM Characters WHERE SourceId = @sourceId AND Name = @name AND IsDeleted = 0;";
+            "SELECT c.Id FROM Characters c " +
+            "JOIN CharacterSources cs ON cs.CharacterId = c.Id " +
+            "WHERE cs.SourceId = @sourceId AND c.Name = @name AND c.IsDeleted = 0 AND cs.IsDeleted = 0;";
 
         /// <summary>
         /// Number of active (non-deleted) Quotes still referencing this Character — used by #59's
@@ -209,10 +217,24 @@ internal static class Sql
 
         // #154's applier resolves an already-staged EntityId (a stable id or a real one from
         // planning-time lookup) idempotently — OR IGNORE lets two concurrently-applied batches that
-        // both staged an Add for the same not-yet-existing Character land safely.
+        // both staged an Add for the same not-yet-existing Character land safely. #179 drops SourceId
+        // from this table — the caller inserts the corresponding CharacterSources row separately, in
+        // the same transaction, via CharacterSources.InsertIfNotExists.
         internal const string InsertIfNotExists =
-            "INSERT OR IGNORE INTO Characters (Id, SourceId, Name, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
-            "VALUES (@Id, @SourceId, @Name, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+            "INSERT OR IGNORE INTO Characters (Id, Name, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @Name, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+    }
+
+    /// <summary>CharacterSources join table (#179) — a Character may appear in multiple Sources.</summary>
+    internal static class CharacterSources
+    {
+        /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale, and always inserted alongside it in the same transaction.</summary>
+        internal const string InsertIfNotExists =
+            "INSERT OR IGNORE INTO CharacterSources (Id, CharacterId, SourceId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
+            "VALUES (@Id, @CharacterId, @SourceId, @DateCreated, NULL, NULL, 0);";
+
+        /// <summary>CharacterSources carries a real FK to Characters(Id) — a stale Character's link rows must be removed before the Character itself is hard-deleted, or the delete violates the FK (same pattern as <see cref="QuoteGenres.DeleteForQuote"/>/<see cref="QuoteTranslations.DeleteForQuote"/>).</summary>
+        internal const string DeleteForCharacter = "DELETE FROM CharacterSources WHERE CharacterId = @id;";
     }
 
     /// <summary>People table.</summary>
@@ -274,12 +296,15 @@ internal static class Sql
 
         /// <summary>
         /// Number of active (non-deleted) rows still referencing this Source — sums both direct
-        /// Quotes and Characters, since a Character can outlive the specific Quote that introduced it
+        /// Quotes and Characters linked via CharacterSources (#179 — a Character may now be linked to
+        /// multiple Sources, so this counts links to THIS Source specifically, not all of a
+        /// Character's links), since a Character can outlive the specific Quote that introduced it
         /// (see <see cref="Characters.CountActiveReferences"/>'s remark for the reversal use case).
         /// </summary>
         internal const string CountActiveReferences =
             "SELECT (SELECT COUNT(*) FROM Quotes WHERE SourceId = @id AND IsDeleted = 0) " +
-            "+ (SELECT COUNT(*) FROM Characters WHERE SourceId = @id AND IsDeleted = 0);";
+            "+ (SELECT COUNT(*) FROM CharacterSources cs JOIN Characters c ON c.Id = cs.CharacterId " +
+            "   WHERE cs.SourceId = @id AND cs.IsDeleted = 0 AND c.IsDeleted = 0);";
 
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
         internal const string InsertIfNotExists =
