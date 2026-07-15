@@ -72,14 +72,41 @@ confirmed via a test that this file's resolved policy is `review`, not the bundl
 
 ### 3. Populate initial Series/Universe data
 
-**Status:** Not started. Depends on #179 having shipped `Universe`/`Series`/`Source.SeriesId`.
+**Status:** Reviewed and confirmed with the developer (2026-07-15); not yet implemented — depends on
+#179 having shipped `Universe`/`Series`/`Source.SeriesId` (done).
 
-Actual content: identify Sources in the bundled/curated datasets that belong to known franchises
-(the examples already used throughout #169/#179/#174's planning — Lord of the Rings, The Hobbit,
-Star Wars, Terminator) and assign `Series`/`Universe` values accordingly. Scope of the initial pass
-(all identifiable franchises vs. a representative subset) is an implementation-time judgement call,
-not fixed by this plan doc — the mechanism being correct matters more than exhaustive initial
-coverage, since more can be added to this same file later without any process change.
+Content confirmed for the initial pass, identified from all 476 distinct Source titles across the
+three bundled files:
+
+- **Star Wars** (Universe) → Series "Star Wars": all 10 Star Wars-titled Sources.
+- **Middle Earth** (Universe) → Series "The Lord of the Rings" (4 Sources — see the typo note below
+  for one of them) and Series "The Hobbit" (3 Sources, including one whose title is missing its
+  subtitle but is confirmed to be the movie, not the book).
+- **Wizarding World** (Universe) → Series "Harry Potter": all 8 Harry Potter-titled Sources.
+- **Marvel Cinematic Universe** (Universe) → Series "The Avengers" (6), "Captain America" (2), "Iron
+  Man" (3), plus trivial single-entry Series for "Spider-Man: Homecoming", "Captain Marvel", "Black
+  Panther", "Guardians of the Galaxy" — each becomes a genuine multi-entry Series automatically once
+  a sequel's Source is imported; the trivial Series exists only because `Source` can currently reach
+  `Universe` solely through `Series` (see Notes below).
+- **Batman** (Universe) → Series "Batman (1989)" (2: *Batman*, *Batman & Robin*), Series "The Dark
+  Knight Trilogy" (3: *Batman begins*, *The Dark Knight*, *Dark Knight Rises*), plus trivial
+  single-entry Series for "Batman v Superman: Dawn of Justice" and "The Dark Knight Returns".
+- **Standalone franchise Series** (no broader Universe): Terminator (2), John Wick (3), Jurassic Park
+  (2), Back to the Future (2), Fast & Furious (4), Frozen (2), The Godfather (4), Naruto (2),
+  Rocky/Creed (4), X-Men (2), Deadpool (2).
+- **Deferred, not populated in this pass**: non-MCU Spider-Man (*Spider Man*/*Spiderman* are very
+  likely the same Raimi film duplicated — needs #182's resolution before a Series can be staged
+  confidently; *Spider-Man: Into the Spider-Verse* is deliberately multiversal by premise, forcing it
+  into a single "Spider-Man" universe would be an unwarranted editorial call). Pirates of the
+  Caribbean (only one distinct film present in the bundled data despite being a real multi-film
+  series — will resolve automatically once a sequel is imported, nothing to populate yet).
+
+**Known duplicate to populate around, not fix here**: `Lord Of The Ring - The Fellowships Of The
+Ring` (a confirmed typo of `The Lord of the Rings: The Fellowship of the Ring`, both 2001, both
+`type: movie`) computes to a different `Sources` id than the correctly-titled row and cannot be
+merged with it today (see #182). Both rows get `SeriesId = "The Lord of the Rings"` so Series
+membership is accurate despite the underlying duplicate — the Series will show two "Fellowship of
+the Ring" entries until #182 eventually resolves the duplicate itself.
 
 ### 4. Verify staged-conflict behaviour
 
@@ -124,3 +151,27 @@ input to #174's eventual merge algorithm, but this issue only needs #179's schem
 
 Any recurring-conflict automation is explicitly out of scope — see Background. Do not build a
 bespoke auto-resolution mechanism here; #153 is the tracked issue for that, whenever it lands.
+
+**Findings from the franchise-identification review pass (2026-07-15), not captured by a Step above:**
+
+- **`Source` can only reach `Universe` through `Series` — there is no direct `Source.UniverseId`.**
+  This is fine for anything in a named sub-series, but a Source that's only loosely/thematically part
+  of a Universe (no named sub-series of its own — e.g. `BATMAN V SUPERMAN: DAWN OF JUSTICE`) needs a
+  trivial, single-Source Series invented purely to carry the link. Confirmed with the developer as
+  the accepted workaround for this pass rather than a schema change on top of #179 (already shipped,
+  T1+T2 verified) — a genuine `Source.UniverseId` would be real new scope, not something to fold in
+  here. Revisit only if the trivial-Series pattern becomes unwieldy at a larger scale.
+- **A `Source` can only ever belong to one `Universe`** (the chain is single-valued at both levels:
+  one `Series` per `Source`, one `Universe` per `Series`). No genuine case in the bundled data
+  currently needs a Source in two Universes at once — noted as a known limitation to revisit if one
+  is found, not filed as an issue yet.
+- **Source aliases and a title/subtitle concept are a real, separate gap** — `Source.Title` is the
+  only identifier today, with no mechanism for "this is the same Source under a different valid
+  title" (e.g. `Dr. Strangelove` vs. its own full subtitle) or for franchises that distinguish
+  installments by subtitle rather than numeral (`The Hobbit: The Desolation of Smaug`, no "Part 2").
+  Confirmed this isn't a hypothetical: `Lord Of The Ring - The Fellowships Of The Ring` is a live
+  instance in our own bundled data (see Step 3). Filed as **#182** ("Merge/consolidate entities whose
+  computed id was affected by a data mistake"), in the Data Enrichment milestone (not Data Import &
+  Sources — the triggering cause is upstream data quality, matching #147's own milestone placement).
+  #180 does not wait on #182 or attempt to solve it — see Step 3 for how the known duplicate is
+  populated around instead of fixed.
