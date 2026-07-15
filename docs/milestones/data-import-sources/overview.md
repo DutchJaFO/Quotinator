@@ -66,6 +66,13 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | Waiting for release | T1 ✅ T2 ✅ | [173-person-modify-plan.md](173-person-modify-plan.md) |
 | [#169](https://github.com/DutchJaFO/Quotinator/issues/169) | Research: "universe/setting" concept linking Source and Character | Released | None (research) | [169-universe-setting-research-plan.md](169-universe-setting-research-plan.md) |
 | [#179](https://github.com/DutchJaFO/Quotinator/issues/179) | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | Waiting for release | T1 ✅ T2 ✅ | [179-series-universe-schema-plan.md](179-series-universe-schema-plan.md) |
+| [#183](https://github.com/DutchJaFO/Quotinator/issues/183) | List-endpoint shared infrastructure: generic paginated repository capability, PageResponse, pagination/not-found helpers, filter convention | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
+| [#184](https://github.com/DutchJaFO/Quotinator/issues/184) | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
+| [#185](https://github.com/DutchJaFO/Quotinator/issues/185) | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
+| [#186](https://github.com/DutchJaFO/Quotinator/issues/186) | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
+| [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
+| [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
+| [#189](https://github.com/DutchJaFO/Quotinator/issues/189) | Conversations: GET /api/v1/conversations list endpoint | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | Planning | T1 ⬜ T2 ⬜ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
 | [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
@@ -114,8 +121,15 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #172 (SoundCue Modify/decidability) → requires #162/#165/#168 (done); benefits from #171 landing first (identical shape, shared translations-in-place sub-problem solved once)
 #173 (Person: explicit id, Modify/decidability) → requires #162/#165/#168 (done); already global (no SourceId), simplest identity-entity issue; its "global entity, Name-keyed" Modify shape is the direct template for #175
 #169 (research: universe/setting concept) → raised while scoping #174's Character merge algorithm (2026-07-12); closed 2026-07-14 with outcome "New issues in the current milestone + Architecture decision required" — its original "Not feasible/rejected" draft conclusion was corrected by the developer (conflated "not tagged in the schema" with "doesn't exist in the data"; the bundled dataset already contains real multi-Source franchises); unblocked #179
-#179 (Series/Universe schema: link related Sources, Character↔Source many-to-many identity) → filed directly from #169's corrected findings (2026-07-14); lands the Universe→Series→Source hierarchy, the CharacterSources join replacing Character.SourceId, and the Source.Type-as-identity-anchor invariant, with zero data-merging risk of its own (existing Characters rows reshaped 1:1); requires #162/#165/#168 (done); unblocks #174 and #180
-#180 (Populate Series/Universe data via curated overlay file, review-only, staged) → filed 2026-07-15 while verifying the import pipeline stays two-stage ahead of upcoming data-enrichment work; requires #179 (needs Universe/Series/Source.SeriesId to exist); explicitly does not build recurring-conflict automation of its own — that remains #153's job; independent of #174
+#179 (Series/Universe schema: link related Sources, Character↔Source many-to-many identity) → filed directly from #169's corrected findings (2026-07-14); lands the Universe→Series→Source hierarchy, the CharacterSources join replacing Character.SourceId, and the Source.Type-as-identity-anchor invariant, with zero data-merging risk of its own (existing Characters rows reshaped 1:1); requires #162/#165/#168 (done); unblocks #174, #180, and #185/#187/#188 (Character/Series/Universe need #179's schema to exist before they can be listed)
+#183 (list-endpoint shared infrastructure) → filed 2026-07-15 while scoping #180's "list Series/Universe by id" follow-on need; extracts a generic `IListableRepository<T>` (extending the existing `IRepository<T>`/`IRestorableRepository<T>` pattern), a generic `PageResponse<T>`, and shared pagination/not-found helpers so #184-#189 don't each re-derive the same shape; no dependency on #179 or #180 itself — pure infrastructure; unblocks #184, #185, #186, #187, #188, #189
+#184 (masterdata: Sources list+byId) → requires #183; independent of #179/#180 (Source predates the Series/Universe schema and only exposes `SeriesId` as an already-nullable field)
+#185 (masterdata: Characters list+byId) → requires #183 and #179 (response shape depends on the `CharacterSources` join table #179 introduced)
+#186 (masterdata: People list+byId) → requires #183; independent of #179/#180
+#187 (masterdata: Series list+byId) → requires #183 and #179 (Series table itself); gives #180's overlay-file work its first way to verify results via the API rather than DbInspector only
+#188 (masterdata: Universe list+byId) → requires #183 and #179 (Universe table itself); same #180 verification benefit as #187
+#189 (Conversations: GET / list endpoint) → requires #183; independent of #179/#180; fills the gap where Conversations has `GET /{id}` but no list endpoint
+#180 (Populate Series/Universe data via curated overlay file, review-only, staged) → filed 2026-07-15 while verifying the import pipeline stays two-stage ahead of upcoming data-enrichment work; requires #179 (needs Universe/Series/Source.SeriesId to exist); explicitly does not build recurring-conflict automation of its own — that remains #153's job; independent of #174; independent of #183-#189 (does not require the list endpoints to exist, though #187/#188 make its results easier to verify once both land)
 #174 (Character: migrate to global identity via new Series/Universe schema, ADR + migration) → rewritten 2026-07-14 to depend on #179 instead of copying Person's shape (that approach was found concretely wrong — see #169's closing comment); requires #179 (structural schema) in addition to #162/#165/#168 (done); owns the actual merge algorithm within #179's structural boundary — unblocks #175
 #175 (Character: explicit id, Modify/decidability) → requires #174 (must land first — building Modify on the old per-Source model would be throwaway work); structurally a near-copy of #173 once Character is global
 #176 (Conversation: Description-field Modify/decidability) → requires #162/#165/#168 (done); not technically blocked by #170-#175, sequenced last so its (smallest) additions have every other entity's now-proven pattern in place as precedent; line-editing explicitly deferred to a separate future issue
@@ -167,15 +181,22 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 32 | #173 | Person: explicit id, Modify/decidability | Waiting for release |
 | 33 | #169 | Research: "universe/setting" concept linking Source and Character | Released |
 | 34 | #179 | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | Waiting for release |
-| 35 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Planning |
-| 36 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
-| 37 | #175 | Character: explicit id, Modify/decidability | Planning |
-| 38 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
-| 39 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
-| 40 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload | Planning |
-| 41 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
-| 42 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |
-| 43 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
+| 35 | #183 | List-endpoint shared infrastructure: generic paginated repository capability, PageResponse, pagination/not-found helpers, filter convention | Planning |
+| 36 | #184 | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Planning |
+| 37 | #185 | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Planning |
+| 38 | #186 | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Planning |
+| 39 | #187 | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning |
+| 40 | #188 | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Planning |
+| 41 | #189 | Conversations: GET /api/v1/conversations list endpoint | Planning |
+| 42 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Planning |
+| 43 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
+| 44 | #175 | Character: explicit id, Modify/decidability | Planning |
+| 45 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
+| 46 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
+| 47 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload | Planning |
+| 48 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
+| 49 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |
+| 50 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
 
 ---
 
