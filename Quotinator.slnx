@@ -135,6 +135,11 @@
     <File Path="docs/milestones/data-import-sources/173-person-modify-plan.md" />
     <File Path="docs/milestones/data-import-sources/179-series-universe-schema-plan.md" />
     <File Path="docs/milestones/data-import-sources/180-series-universe-population-plan.md" />
+    <File Path="docs/milestones/data-import-sources/183-list-endpoint-infrastructure-plan.md" />
+    <File Path="docs/milestones/data-import-sources/193-listable-repository-plan.md" />
+    <File Path="docs/milestones/data-import-sources/194-numeric-param-schema-plan.md" />
+    <File Path="docs/milestones/data-import-sources/195-pagination-contract-plan.md" />
+    <File Path="docs/milestones/data-import-sources/196-masterdata-conventions-plan.md" />
     <File Path="docs/milestones/data-import-sources/174-character-global-identity-plan.md" />
     <File Path="docs/milestones/data-import-sources/175-character-modify-plan.md" />
     <File Path="docs/milestones/data-import-sources/176-conversation-description-modify-plan.md" />
