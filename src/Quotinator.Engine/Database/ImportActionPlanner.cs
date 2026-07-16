@@ -334,11 +334,16 @@ internal static class ImportActionPlanner
                         ? found.ToString("D").ToUpperInvariant()
                         : null;
 
-            var existing = await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
-                Sql.Sources.SelectExistingById, new { id = s.Id }, transaction);
+            // #162's correction shape: an entry carrying an explicit id is matched by it first. An
+            // entry omitting one (#180's enrichment shape) skips straight to the natural-key path below.
+            var existing = s.Id is { } explicitId
+                ? await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                    Sql.Sources.SelectExistingById, new { id = explicitId }, transaction)
+                : null;
 
             if (existing is { } row)
             {
+                var matchedId       = s.Id!; // Non-null by construction: `existing` is only set when s.Id is.
                 var existingPayload = new SourceActionPayload(row.Title, row.Type, row.Date, row.SeriesId);
                 var incomingPayload = new SourceActionPayload(s.Title, typeStr, s.Date, incomingSeriesId);
                 var existingFields  = ToFieldMap(existingPayload);
@@ -346,7 +351,7 @@ internal static class ImportActionPlanner
 
                 // The corrected Title/Type is what a same-batch quote referencing this Source should
                 // resolve to — indexed regardless of whether this ends up changed/blocked/unchanged.
-                sourceIndex[$"{s.Title}|{typeStr}"] = s.Id;
+                sourceIndex[$"{s.Title}|{typeStr}"] = matchedId;
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
@@ -378,7 +383,7 @@ internal static class ImportActionPlanner
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                         EntityType    = ImportActionEntityTypes.Source,
-                        EntityId      = s.Id,
+                        EntityId      = matchedId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
                         Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
@@ -395,7 +400,7 @@ internal static class ImportActionPlanner
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                     EntityType    = ImportActionEntityTypes.Source,
-                    EntityId      = s.Id,
+                    EntityId      = matchedId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
                     MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
@@ -406,25 +411,90 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            // Falls back to natural-key: a not-yet-migrated row (or a converter-driven file with no
-            // sources section at all) — Title/Type correction isn't available on it yet (see #162's
-            // scope boundary); nothing to stage here either way, since a quote referencing this same
-            // title/type will find it via ResolveSourceAsync's own natural-key lookup as today.
-            var matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
-                Sql.Sources.SelectIdByTitleAndType, new { title = s.Title, type = typeStr }, transaction);
-            if (matchesByKey is not null) continue;
+            // Falls back to natural-key (title+type): either the entry omits an explicit id (#180's
+            // enrichment shape) or it carries one that matches no row yet (a not-yet-migrated row —
+            // #162's scope boundary).
+            var existingByKey = await connection.QuerySingleOrDefaultAsync<(string Id, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                Sql.Sources.SelectExistingByTitleAndType, new { title = s.Title, type = typeStr }, transaction);
+
+            if (existingByKey is { } keyRow)
+            {
+                // Indexed to the row's REAL id — a same-batch quote referencing this title/type must
+                // resolve to the existing row, never to this entry's own (possibly absent) id.
+                sourceIndex[$"{s.Title}|{typeStr}"] = keyRow.Id;
+
+                // #180: seriesId is the ONLY field diffable here. Title/Type are the lookup key, so
+                // they cannot differ by construction (correcting them is exactly what #162's explicit
+                // id exists for). Date is carried through from the existing row on BOTH sides — an
+                // entry that never mentions a date must never reset one, and the resolved payload
+                // feeds Sql.Sources.UpdateFieldsById, which writes Date unconditionally. (A file
+                // cannot currently distinguish "date omitted" from "date: null" at all — see this
+                // issue's own Notes; carrying the existing value through sidesteps that entirely on
+                // this path, since a natural-key entry has no business setting a date anyway.)
+                if (s.SeriesName is null || FieldMergeResolver.ValuesEqual(keyRow.SeriesId, incomingSeriesId))
+                    continue; // Nothing to enrich, or already points at this Series — silent reuse.
+
+                var keyExistingPayload = new SourceActionPayload(s.Title, typeStr, keyRow.Date, keyRow.SeriesId);
+                var keyIncomingPayload = new SourceActionPayload(s.Title, typeStr, keyRow.Date, incomingSeriesId);
+                var keyExistingFields  = ToFieldMap(keyExistingPayload);
+                var keyIncomingFields  = ToFieldMap(keyIncomingPayload);
+
+                var keyCurrentStatus = keyRow.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                if (CompletenessGuard.ShouldBlock(keyCurrentStatus, new HashSet<string> { "seriesId" }))
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.Source,
+                        EntityId      = keyRow.Id,
+                        ExistingValue = JsonSerializer.Serialize(keyExistingPayload),
+                        IncomingValue = JsonSerializer.Serialize(keyIncomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                var keyIsPending = policy == DuplicateResolutionPolicy.Review;
+                var keyStatus    = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchId,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType    = ImportActionEntityTypes.Source,
+                    EntityId      = keyRow.Id,
+                    ExistingValue = JsonSerializer.Serialize(keyExistingPayload),
+                    IncomingValue = JsonSerializer.Serialize(keyIncomingPayload),
+                    // Skip means "existing row wins, untouched" — resolve to the existing payload, so
+                    // an apply writes today's values back unchanged rather than the incoming SeriesId.
+                    MergedFields  = keyIsPending ? null : JsonSerializer.Serialize(
+                        policy == DuplicateResolutionPolicy.Skip ? keyExistingPayload : keyIncomingPayload),
+                    AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                    Status        = new SafeValue<ImportActionStatus?>(keyStatus.ToString(), keyStatus),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
+
+            // No match by id or natural key — a genuine Add. With no explicit id in the file, the
+            // EntityIdentity-derived stable id is used: the same value ResolveSourceAsync would
+            // independently compute for a quote referencing this same title/type, so both resolve to
+            // one row rather than two.
+            var addId = s.Id ?? EntityIdentity.SourceId(s.Title, typeStr);
 
             // Indexed so a same-batch quote referencing this exact title/type resolves to this same
             // new row, instead of ResolveSourceAsync independently deriving its own EntityIdentity
-            // stable id (which would differ from this file-declared id).
-            sourceIndex[$"{s.Title}|{typeStr}"] = s.Id;
+            // stable id (which would differ from a file-declared id).
+            sourceIndex[$"{s.Title}|{typeStr}"] = addId;
 
             actions.Add(new SystemImportAction
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.Source,
-                EntityId      = s.Id,
+                EntityId      = addId,
                 IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(s.Title, typeStr, s.Date, incomingSeriesId)),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,

@@ -285,6 +285,20 @@ internal static class Sql
             "SELECT Id FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
 
         /// <summary>
+        /// #180's natural-key lookup for a <c>sources[]</c> entry that omits an explicit id (the
+        /// enrichment shape — see <see cref="Quotinator.Core.Import.SourceEntry"/>'s remarks). Returns
+        /// the matched row's real id plus the two fields that path needs: <c>SeriesId</c> (the only
+        /// field it diffs) and <c>Date</c> (carried through unchanged, so an entry that never mentions
+        /// a date can't reset one). Title/Type are the lookup key here, so they are never re-read —
+        /// they cannot differ by construction. Case-sensitive on Title/Type, matching
+        /// <see cref="SelectIdByTitleAndType"/> exactly: these are free-text natural-key values, not
+        /// identifiers, and loosening them would silently merge two genuinely distinct Sources (see
+        /// #182 for that class of problem).
+        /// </summary>
+        internal const string SelectExistingByTitleAndType =
+            "SELECT Id, Date, SeriesId, CompletenessStatus FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
+
+        /// <summary>
         /// #162's id-first lookup for an explicit <c>sources[]</c> entry — a row already migrated to
         /// the explicit-id model. Distinct from <see cref="SelectIdByTitleAndType"/>'s natural-key
         /// fallback. SeriesId added by #180.

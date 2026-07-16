@@ -2,535 +2,384 @@
   "quotes": [],
   "sources": [
     {
-      "id": "E045807F-6B4F-6D4C-AD32-86FF625750B2",
       "title": "Back to the future",
       "type": "movie",
-      "date": "1958",
       "seriesName": "Back to the Future"
     },
     {
-      "id": "CCAE7642-7C22-DA4A-862C-3431D4CBFC5E",
       "title": "Back to the Future Part II",
       "type": "movie",
-      "date": "1989",
       "seriesName": "Back to the Future"
     },
     {
-      "id": "BEAB97D2-FC1F-464E-BF5A-29CBD46CBF6B",
       "title": "Batman",
       "type": "movie",
-      "date": "1989",
       "seriesName": "Batman (1989)"
     },
     {
-      "id": "953FB1D4-A1FA-8742-9DE7-99565169600D",
       "title": "Batman & Robin",
       "type": "movie",
-      "date": "1997",
       "seriesName": "Batman (1989)"
     },
     {
-      "id": "2E0EB335-AB69-9340-8197-A2566445876A",
       "title": "BATMAN V SUPERMAN: DAWN OF JUSTICE",
       "type": "movie",
-      "date": "2016",
       "seriesName": "Batman v Superman: Dawn of Justice"
     },
     {
-      "id": "01C452A7-E9C2-AC45-AC12-31207BEB570A",
       "title": "Black Panther",
       "type": "movie",
-      "date": "2018",
       "seriesName": "Black Panther"
     },
     {
-      "id": "17121770-18B8-894C-9E08-5CCC5CD556D5",
       "title": "Captain America: Civil War",
       "type": "movie",
-      "date": "2016",
       "seriesName": "Captain America"
     },
     {
-      "id": "2D06C4A5-2C98-2846-96E1-0AFA03E5C697",
       "title": "Captain America: The Winter Soldier",
       "type": "movie",
-      "date": "2014",
       "seriesName": "Captain America"
     },
     {
-      "id": "3C895760-5B57-8F44-B916-D2CEDDF9F856",
       "title": "Captain Marvel",
       "type": "movie",
-      "date": "2013",
       "seriesName": "Captain Marvel"
     },
     {
-      "id": "C5565810-D616-C24C-B0AB-7880A7337EDB",
       "title": "Deadpool",
       "type": "movie",
-      "date": "2016",
       "seriesName": "Deadpool"
     },
     {
-      "id": "60F806C4-C863-E148-B134-8EB46F54209E",
       "title": "Deadpool 2",
       "type": "movie",
-      "date": "2018",
       "seriesName": "Deadpool"
     },
     {
-      "id": "4F83CF6A-3141-7443-90CE-1F1F7FB2EB97",
       "title": "Furious 7",
       "type": "movie",
-      "date": "2015",
       "seriesName": "Fast & Furious"
     },
     {
-      "id": "792C1330-FE51-6742-84C0-D83832769FCF",
       "title": "The Fast and The Furious",
       "type": "movie",
-      "date": "2001",
       "seriesName": "Fast & Furious"
     },
     {
-      "id": "3A608D7B-E132-5E45-AE4D-F5FFCF6E7BB2",
       "title": "The Fast and The Furious 8",
       "type": "movie",
-      "date": "2013",
       "seriesName": "Fast & Furious"
     },
     {
-      "id": "D6191A34-276B-C14B-92C8-D4949BE3D110",
       "title": "The Fast and The Furious: Tokyo Drift",
       "type": "movie",
-      "date": "2006",
       "seriesName": "Fast & Furious"
     },
     {
-      "id": "B5E4AEB9-5A7A-A841-B046-C3E492FE063F",
       "title": "Frozen",
       "type": "movie",
-      "date": "2013",
       "seriesName": "Frozen"
     },
     {
-      "id": "967EE454-5161-7E41-96C0-9146B6CE895F",
       "title": "Frozen II",
       "type": "movie",
-      "date": "2019",
       "seriesName": "Frozen"
     },
     {
-      "id": "4E662844-9C3D-F34B-83DB-F9676ADF590C",
       "title": "Guardians of the Galaxy",
       "type": "movie",
-      "date": "2014",
       "seriesName": "Guardians of the Galaxy"
     },
     {
-      "id": "DF76C306-92C6-F044-A1FD-63921BCC8BDD",
       "title": "Harry Potter and the Chamber of Secrets",
       "type": "movie",
-      "date": "2002",
       "seriesName": "Harry Potter"
     },
     {
-      "id": "44F30626-F4BA-794C-A85A-BBDE47B0B3C7",
       "title": "Harry Potter and the Deathly Hallows",
       "type": "movie",
-      "date": "2010",
       "seriesName": "Harry Potter"
     },
     {
-      "id": "248C5400-D688-7740-8D05-4DCCED828862",
       "title": "Harry Potter and the Goblet of Fire",
       "type": "movie",
-      "date": "2005",
       "seriesName": "Harry Potter"
     },
     {
-      "id": "304A4669-17C2-5249-BF97-B894B2E52E35",
       "title": "Harry Potter and the Half-Blood Prince",
       "type": "movie",
-      "date": "2009",
       "seriesName": "Harry Potter"
     },
     {
-      "id": "F56D40BB-89F4-2E4A-9001-9643E76CC4C6",
       "title": "Harry potter and the Order of the Phoenix",
       "type": "movie",
-      "date": "2007",
       "seriesName": "Harry Potter"
     },
     {
-      "id": "5802C2EE-FECD-224F-B759-3DA56BB91229",
       "title": "Harry Potter and the Philosopher's Stone",
       "type": "movie",
-      "date": "2001",
       "seriesName": "Harry Potter"
     },
     {
-      "id": "B7B7451F-60B1-A341-955B-2E406ECE579D",
       "title": "Harry Potter and the Prisoner of Azkaban",
       "type": "movie",
-      "date": "2004",
       "seriesName": "Harry Potter"
     },
     {
-      "id": "50F2A0C2-E923-9A44-B088-8D0B0B181971",
       "title": "Harry Potter and the Sorcerer's Stone",
       "type": "movie",
-      "date": "2001",
       "seriesName": "Harry Potter"
     },
     {
-      "id": "F31004F6-EA30-FB4F-9790-A819B42A95B1",
       "title": "Iron Man",
       "type": "movie",
-      "date": "2008",
       "seriesName": "Iron Man"
     },
     {
-      "id": "633D0B28-A371-ED49-ACC7-A11CD8D72BA3",
       "title": "John Wick",
       "type": "movie",
-      "date": "2014",
       "seriesName": "John Wick"
     },
     {
-      "id": "E12DCCE6-B779-EA49-BF55-D83D32A73EF8",
       "title": "John Wick 2",
       "type": "movie",
-      "date": "2017",
       "seriesName": "John Wick"
     },
     {
-      "id": "5ECC6F87-7E16-9442-9240-318ED3AE101F",
       "title": "John Wick 3: Parabellum",
       "type": "movie",
-      "date": "2019",
       "seriesName": "John Wick"
     },
     {
-      "id": "FB4BA4B7-9C17-8848-BF40-94139A501168",
       "title": "Jurassic Park",
       "type": "movie",
-      "date": "1993",
       "seriesName": "Jurassic Park"
     },
     {
-      "id": "F2FA8227-0E8C-C949-8802-ABBAD83EAD4E",
       "title": "Naruto",
       "type": "anime",
-      "date": "1997",
       "seriesName": "Naruto"
     },
     {
-      "id": "D1096F02-E2AC-5546-8563-C1D93DD26ED7",
       "title": "Naruto Shippuden",
       "type": "anime",
-      "date": "2007",
       "seriesName": "Naruto"
     },
     {
-      "id": "65CADB19-D210-3145-8057-D8396CA4A243",
       "title": "Naruto Shippuden",
       "type": "movie",
-      "date": "2007",
       "seriesName": "Naruto"
     },
     {
-      "id": "82FA4AB4-CD56-C547-814D-748647B19CBC",
       "title": "Adonis, Creed II",
       "type": "movie",
-      "date": "2018",
       "seriesName": "Rocky"
     },
     {
-      "id": "0606855B-E0AB-8548-9EA9-D5642F649348",
       "title": "Creed 2",
       "type": "movie",
-      "date": "2018",
       "seriesName": "Rocky"
     },
     {
-      "id": "3296F186-E0F4-184D-AD57-B5CCB83CDAA9",
       "title": "Rocky",
       "type": "movie",
-      "date": "1976",
       "seriesName": "Rocky"
     },
     {
-      "id": "177BDB0F-739E-D544-ABA7-8081074A7F7E",
       "title": "Rocky Balboa",
       "type": "movie",
-      "date": "2006",
       "seriesName": "Rocky"
     },
     {
-      "id": "80F9DA0B-1924-6746-BDDC-43446CA9D80A",
       "title": "Spider-Man: Homecoming",
       "type": "movie",
-      "date": "2017",
       "seriesName": "Spider-Man: Homecoming"
     },
     {
-      "id": "62A47A51-6F4A-B54B-92F4-B5273BE69FCC",
       "title": "Star Wars",
       "type": "movie",
-      "date": "1977",
       "seriesName": "Star Wars"
     },
     {
-      "id": "C560FD14-4C67-D946-B54C-A98C1D6387FA",
       "title": "Star Wars Episode 6 : Return Of The Jedi",
       "type": "movie",
-      "date": "1983",
       "seriesName": "Star Wars"
     },
     {
-      "id": "BF2F62AF-C73E-814C-AFD3-6CCCE46EBF5F",
       "title": "Star Wars Episode IV - A New Hope",
       "type": "movie",
-      "date": "1977",
       "seriesName": "Star Wars"
     },
     {
-      "id": "D4E1DC71-AAF8-CE4F-B18A-2E7D1F1AB97A",
       "title": "Star Wars, Empire Strikes Back",
       "type": "movie",
-      "date": "1980",
       "seriesName": "Star Wars"
     },
     {
-      "id": "196AFD3A-F7F4-4A46-A6B0-F26E1B42D390",
       "title": "Star Wars: Episode I – The Phantom Menace",
       "type": "movie",
-      "date": "1999",
       "seriesName": "Star Wars"
     },
     {
-      "id": "3207E507-15B7-8447-AC78-415888E21A32",
       "title": "Star Wars: Episode III – Revenge of the Sith",
       "type": "movie",
-      "date": "2005",
       "seriesName": "Star Wars"
     },
     {
-      "id": "3E72279B-187D-CC49-94E7-83E63335F56D",
       "title": "Star Wars: Episode V - The Empire Strikes Back",
       "type": "movie",
-      "date": "1980",
       "seriesName": "Star Wars"
     },
     {
-      "id": "96EE4BAC-B3BB-0C4A-B038-8272C01CE850",
       "title": "Star Wars: Episode VII - The Force Awakens",
       "type": "movie",
-      "date": "2015",
       "seriesName": "Star Wars"
     },
     {
-      "id": "100ADD00-7960-5A41-9785-56A29F1A9368",
       "title": "Star Wars: Return of Jedi",
       "type": "movie",
-      "date": "1983",
       "seriesName": "Star Wars"
     },
     {
-      "id": "FC881C90-4A8A-A440-AB4F-2928D21EEDB0",
       "title": "Star Wars: The Force Awakens",
       "type": "movie",
-      "date": "2015",
       "seriesName": "Star Wars"
     },
     {
-      "id": "4F85E235-E1B4-D946-8C05-93F3E2EA150B",
       "title": "Terminator 2: Judgment Day",
       "type": "movie",
-      "date": "1991",
       "seriesName": "Terminator"
     },
     {
-      "id": "E8950F92-61BF-D94A-95B6-6D30B2FA2F67",
       "title": "The Terminator",
       "type": "movie",
-      "date": "1984",
       "seriesName": "Terminator"
     },
     {
-      "id": "B2E525B5-06DB-F540-B36F-941C428AB178",
       "title": "Avengers - Age of Ultron",
       "type": "movie",
-      "date": "2015",
       "seriesName": "The Avengers"
     },
     {
-      "id": "1FBA6121-29C5-E046-9AD7-77536753C46E",
       "title": "Avengers : Infinity War",
       "type": "movie",
-      "date": "2018",
       "seriesName": "The Avengers"
     },
     {
-      "id": "C4773A98-A801-0D41-93FB-8FDA88133D29",
       "title": "Avengers: Endgame",
       "type": "movie",
-      "date": "2019",
       "seriesName": "The Avengers"
     },
     {
-      "id": "75B5C024-56F2-304E-81AF-59C7D636FD81",
       "title": "Avengers: Infinity War",
       "type": "movie",
-      "date": "2018",
       "seriesName": "The Avengers"
     },
     {
-      "id": "E097D690-06FC-7A4E-90C9-0AB351EB6EF2",
       "title": "Marvel's The Avengers",
       "type": "movie",
-      "date": "2012",
       "seriesName": "The Avengers"
     },
     {
-      "id": "15BD6E2C-662F-E841-9D15-45153AD55AC7",
       "title": "The Avengers",
       "type": "movie",
-      "date": "2012",
       "seriesName": "The Avengers"
     },
     {
-      "id": "8AD1CF98-1A64-F44D-B6D9-33CD05507589",
       "title": "Batman: The Dark Knight Returns",
       "type": "movie",
-      "date": "2013",
       "seriesName": "The Dark Knight Returns"
     },
     {
-      "id": "0CB85EB0-9342-514A-925E-38CA7604E0B8",
       "title": "Batman begins",
       "type": "movie",
-      "date": "2005",
       "seriesName": "The Dark Knight Trilogy"
     },
     {
-      "id": "17681915-CFDA-FA43-8429-339A250E9004",
       "title": "Batman: The Dark Knight",
       "type": "movie",
-      "date": "2008",
       "seriesName": "The Dark Knight Trilogy"
     },
     {
-      "id": "9DA2186D-592C-1442-859E-2E20D370E331",
       "title": "Dark Knight Rises",
       "type": "movie",
-      "date": "2012",
       "seriesName": "The Dark Knight Trilogy"
     },
     {
-      "id": "B2D93DC0-7501-904D-BCC4-CB04BE068BE3",
       "title": "The Dark Knight",
       "type": "movie",
-      "date": "2008",
       "seriesName": "The Dark Knight Trilogy"
     },
     {
-      "id": "B93849E4-1ACA-C549-8852-9934E48A50E5",
       "title": "The Godfather",
       "type": "movie",
-      "date": "1972",
       "seriesName": "The Godfather"
     },
     {
-      "id": "AE6D0353-C365-2C48-BC8C-3848D1261069",
       "title": "The Godfather II",
       "type": "movie",
-      "date": "1974",
       "seriesName": "The Godfather"
     },
     {
-      "id": "F229CFA0-0B33-6D44-BEC6-A459B2C53A3F",
       "title": "The Godfather III",
       "type": "movie",
-      "date": "1990",
       "seriesName": "The Godfather"
     },
     {
-      "id": "E9BD7CCF-E849-E042-9A01-E4D5384EF765",
       "title": "The Godfather Part II",
       "type": "movie",
-      "date": null,
       "seriesName": "The Godfather"
     },
     {
-      "id": "00A8756A-3AE0-DC4C-A698-96FF3922CCC6",
       "title": "The Hobbit",
       "type": "movie",
-      "date": "2012",
       "seriesName": "The Hobbit"
     },
     {
-      "id": "AE3F4B42-35B7-B44E-95EB-56671A47F1CF",
       "title": "The Hobbit: The Battle of Five Armies",
       "type": "movie",
-      "date": "2014",
       "seriesName": "The Hobbit"
     },
     {
-      "id": "EC6CAD8E-C309-A840-B988-53224F0D2261",
       "title": "The Hobbit: The Desolation of Smaug",
       "type": "movie",
-      "date": "2013",
       "seriesName": "The Hobbit"
     },
     {
-      "id": "AF3FA942-F3AD-EA41-BEC3-316E908A2684",
       "title": "Lord Of The Ring - The Fellowships Of The Ring",
       "type": "movie",
-      "date": "2001",
       "seriesName": "The Lord of the Rings"
     },
     {
-      "id": "5D1214A3-BF44-D844-9948-2AC1748C7F25",
       "title": "The Lord of the Rings: Return of the King",
       "type": "movie",
-      "date": "2003",
       "seriesName": "The Lord of the Rings"
     },
     {
-      "id": "F175F217-EC59-0A4D-8730-D25062E8C263",
       "title": "The Lord of the Rings: The Fellowship of the Ring",
       "type": "movie",
-      "date": "2001",
       "seriesName": "The Lord of the Rings"
     },
     {
-      "id": "78B731F4-7706-A745-A0D3-E17ABC9245B7",
       "title": "The Lord of the Rings: The Two Towers",
       "type": "movie",
-      "date": "2002",
       "seriesName": "The Lord of the Rings"
     },
     {
-      "id": "05C35998-52B0-7043-A45D-2EAF6E8794C9",
       "title": "X-men",
       "type": "movie",
-      "date": "2000",
       "seriesName": "X-Men"
     },
     {
-      "id": "4AE79BCB-9BE9-4E46-A012-1982A2780919",
       "title": "X-Men: Days of Future Past",
       "type": "movie",
-      "date": "2015",
       "seriesName": "X-Men"
     }
   ],
   "series": [
     {
-      "name": "Back to the Future",
-      "universeName": null
+      "name": "Back to the Future"
     },
     {
       "name": "Batman (1989)",
@@ -553,16 +402,13 @@
       "universeName": "Marvel Cinematic Universe"
     },
     {
-      "name": "Deadpool",
-      "universeName": null
+      "name": "Deadpool"
     },
     {
-      "name": "Fast & Furious",
-      "universeName": null
+      "name": "Fast & Furious"
     },
     {
-      "name": "Frozen",
-      "universeName": null
+      "name": "Frozen"
     },
     {
       "name": "Guardians of the Galaxy",
@@ -577,20 +423,16 @@
       "universeName": "Marvel Cinematic Universe"
     },
     {
-      "name": "John Wick",
-      "universeName": null
+      "name": "John Wick"
     },
     {
-      "name": "Jurassic Park",
-      "universeName": null
+      "name": "Jurassic Park"
     },
     {
-      "name": "Naruto",
-      "universeName": null
+      "name": "Naruto"
     },
     {
-      "name": "Rocky",
-      "universeName": null
+      "name": "Rocky"
     },
     {
       "name": "Spider-Man: Homecoming",
@@ -601,8 +443,7 @@
       "universeName": "Star Wars"
     },
     {
-      "name": "Terminator",
-      "universeName": null
+      "name": "Terminator"
     },
     {
       "name": "The Avengers",
@@ -617,8 +458,7 @@
       "universeName": "Batman"
     },
     {
-      "name": "The Godfather",
-      "universeName": null
+      "name": "The Godfather"
     },
     {
       "name": "The Hobbit",
@@ -629,8 +469,7 @@
       "universeName": "Middle Earth"
     },
     {
-      "name": "X-Men",
-      "universeName": null
+      "name": "X-Men"
     }
   ],
   "universe": [

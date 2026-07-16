@@ -92,13 +92,14 @@
     },
     "source": {
       "type": "object",
-      "required": ["id", "title", "type"],
+      "required": ["title", "type"],
       "additionalProperties": false,
+      "description": "Two shapes. CORRECTION (#162): include 'id' — the Source is matched by that explicit id, so title/type/date can all be corrected. ENRICHMENT (#180): omit 'id' — the Source is matched by natural key (title + type), which makes those two the lookup key rather than correctable values; only 'seriesName' is applied on this path. Omit any property you do not intend to set: a property present with a null value means 'reset this to null', not 'leave it alone'.",
       "properties": {
-        "id":         { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive. A file authoring a Source id that must match an already-existing, EntityIdentity-derived row (#154) needs uppercase specifically, since that row's id is always stored uppercase and Sources' id-matching queries are case-sensitive (#180) — unlike this pattern, which accepts either case." },
+        "id":         { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive (#180). Optional — omit it to match by natural key (title + type) instead, which is the right shape for a curated overlay file that only enriches Sources this project already generated ids for." },
         "title":      { "type": "string", "minLength": 1 },
         "type":       { "type": "string", "enum": ["movie", "tv", "anime", "book", "person"] },
-        "date":       { "type": ["string", "null"] },
+        "date":       { "type": ["string", "null"], "description": "Publication or release date. Only meaningful alongside an explicit 'id' — a natural-key-matched entry never sets it. Omit entirely unless you intend to set it." },
         "seriesName": { "type": ["string", "null"], "description": "Name of the Series (#180) this Source belongs to, if any. Resolved to a Series id at import time — never a raw id, matching how a quote's own 'source'/'author' fields are text, not ids." }
       }
     },

@@ -101,7 +101,8 @@ public sealed class SqliteImportActionService : IImportActionService
             var resolvedSourcePayload = new SourceActionPayload(
                 (string)sourceResult.MergedFields["title"]!,
                 (string)sourceResult.MergedFields["type"]!,
-                (string?)sourceResult.MergedFields["date"]);
+                (string?)sourceResult.MergedFields["date"],
+                (string?)sourceResult.MergedFields["seriesId"]);
 
             await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSourcePayload), request.MarkCompletenessAs);
             return;
@@ -1139,7 +1140,7 @@ public sealed class SqliteImportActionService : IImportActionService
     }
 
     private static IReadOnlyDictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
-        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date };
+        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId };
 
     private static IReadOnlyDictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["sourceId"] = payload.SourceId };

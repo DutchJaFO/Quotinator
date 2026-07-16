@@ -263,12 +263,20 @@ public class ImportActionPlannerTests
 
     // ── #162: PlanSourcesAsync ────────────────────────────────────────────────
 
-    private static SourceEntry BuildSourceEntry(string id, string title = "Casablanca", Core.Models.QuoteType type = Core.Models.QuoteType.Movie, string? date = "1942", string? seriesName = null) => new()
+    private static SourceEntry BuildSourceEntry(string? id, string title = "Casablanca", Core.Models.QuoteType type = Core.Models.QuoteType.Movie, string? date = "1942", string? seriesName = null) => new()
     {
         Id         = id,
         Title      = title,
         Type       = type,
         Date       = date,
+        SeriesName = seriesName,
+    };
+
+    /// <summary>#180: an enrichment-shaped entry — no explicit id (matched by natural key), no date (not intended to be set), just the Series link.</summary>
+    private static SourceEntry BuildEnrichmentEntry(string title = "Casablanca", Core.Models.QuoteType type = Core.Models.QuoteType.Movie, string? seriesName = "The Hobbit") => new()
+    {
+        Title      = title,
+        Type       = type,
         SeriesName = seriesName,
     };
 
@@ -388,6 +396,105 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
         var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
         Assert.AreEqual(seriesId, merged.SeriesId);
+    }
+
+    // ── #180: enrichment-shaped sources[] entry (no explicit id, no date) ───────
+    // A curated overlay file exists to set seriesName on Sources the quote files already created.
+    // It must not have to author a generated id, and must not have to state a date it has no
+    // intention of setting — so an entry omitting both is matched by natural key (title+type) and
+    // stages a Modify diffing seriesId ONLY. Title/Type can't be corrections on this path (they ARE
+    // the lookup key — that's exactly what #162's explicit id exists for), and Date is carried
+    // through from the existing row unchanged on both sides of the diff, which is what encodes
+    // "don't touch it" without the file needing to express absent-vs-null (see Notes).
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoExplicitId_NaturalKeyMatch_SeriesNameSet_StagesModify()
+    {
+        using var conn = await OpenConnectionAsync();
+        var seriesId = await SeedExistingSeriesAsync(conn, "The Hobbit");
+        await SeedExplicitSourceAsync(conn, "cc111111-1111-4111-8111-111111111111", title: "Casablanca", date: "1942", seriesId: null);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "The Hobbit")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed, "A natural-key match must stage a Modify, not be silently skipped");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        Assert.AreEqual(seriesId, merged.SeriesId);
+    }
+
+    /// <summary>
+    /// The core of #180's second design point: an entry that omits `date` must never reset the
+    /// existing row's date. The resolved payload feeds Sql.Sources.UpdateFieldsById, which writes
+    /// Date unconditionally — so a null here would silently wipe a real date on every apply.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoExplicitId_OmittedDate_PreservesExistingDate()
+    {
+        using var conn = await OpenConnectionAsync();
+        await SeedExistingSeriesAsync(conn, "The Hobbit");
+        await SeedExplicitSourceAsync(conn, "cd111111-1111-4111-8111-111111111111", title: "Casablanca", date: "1942", seriesId: null);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "The Hobbit")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        Assert.AreEqual("1942", merged.Date, "An omitted date must carry the existing row's value through, never null it out");
+        Assert.AreEqual("Casablanca", merged.Title, "Title is the lookup key on this path — never a correction");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoExplicitId_NaturalKeyMatch_NoSeriesName_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        await SeedExplicitSourceAsync(conn, "ce111111-1111-4111-8111-111111111111", title: "Casablanca", date: "1942");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: null)]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Nothing to enrich and nothing to correct — unchanged from #162's own natural-key behaviour");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoExplicitId_AlreadyTagged_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var seriesId = await SeedExistingSeriesAsync(conn, "The Hobbit");
+        await SeedExplicitSourceAsync(conn, "cf111111-1111-4111-8111-111111111111", title: "Casablanca", seriesId: seriesId);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "The Hobbit")]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Already points at this Series — a true no-op, nothing staged even under Review");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoExplicitId_NoMatchAtAll_StagesAddWithComputedId()
+    {
+        using var conn = await OpenConnectionAsync();
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildEnrichmentEntry(title: "A Brand New Film", seriesName: null)]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Add, sourceAction.ActionType.Parsed);
+        Assert.AreEqual(Quotinator.Core.Import.EntityIdentity.SourceId("A Brand New Film", "Movie"), sourceAction.EntityId,
+            "With no explicit id in the file, an Add uses the EntityIdentity-derived stable id — the same one ResolveSourceAsync would compute for a quote referencing this title");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoExplicitId_CompleteStatus_SeriesNameSet_StagesBlocked()
+    {
+        using var conn = await OpenConnectionAsync();
+        await SeedExistingSeriesAsync(conn, "The Hobbit");
+        await SeedExplicitSourceAsync(conn, "d0111111-1111-4111-8111-111111111111", title: "Casablanca", completenessStatus: "Complete", seriesId: null);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "The Hobbit")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Blocked, sourceAction.Status.Parsed, "CompletenessGuard applies on the natural-key path too — a Complete row is never silently enriched");
     }
 
     /// <summary>#180 spec requirement 3: a genuine SeriesId disagreement under Review policy stages Pending, never silently resolves.</summary>

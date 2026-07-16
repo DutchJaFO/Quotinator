@@ -4,16 +4,26 @@ using Quotinator.Core.Models;
 namespace Quotinator.Core.Import;
 
 /// <summary>
-/// An explicit Source declaration deserialized from a Quotinator source file's <c>sources</c> section
-/// (#162). Decouples matching from content — a Source found by <see cref="Id"/> can have its
-/// <see cref="Title"/>/<see cref="Type"/>/<see cref="Date"/> corrected, unlike a Source only ever
-/// discovered implicitly through a quote's own title string, which is matched by natural key.
+/// A Source declaration deserialized from a Quotinator source file's <c>sources</c> section. Two
+/// shapes, distinguished by whether <see cref="Id"/> is present:
+/// <list type="bullet">
+/// <item><b>Correction</b> (#162, <see cref="Id"/> set) — matched by that explicit id, decoupling
+/// matching from content, so <see cref="Title"/>/<see cref="Type"/>/<see cref="Date"/> can all be
+/// corrected.</item>
+/// <item><b>Enrichment</b> (#180, <see cref="Id"/> omitted) — matched by natural key
+/// (<see cref="Title"/> + <see cref="Type"/>), which by definition makes those two the lookup key
+/// rather than correctable values. Only <see cref="SeriesName"/> is diffed on this path. Exists so a
+/// curated overlay file never has to author an id this project generates for itself.</item>
+/// </list>
 /// </summary>
 public sealed class SourceEntry
 {
-    /// <summary>Unique identifier (UUID v4). Assigned at authoring time and never changes.</summary>
+    /// <summary>
+    /// Unique identifier (UUID v4). Assigned at authoring time and never changes. Omit it to match by
+    /// natural key instead — see this class's own remarks for the two shapes.
+    /// </summary>
     [JsonPropertyName("id")]
-    public required string Id { get; init; }
+    public string? Id { get; init; }
 
     /// <summary>The title of the source in its original language.</summary>
     [JsonPropertyName("title")]

@@ -86,7 +86,9 @@ public class SqliteImportActionServiceTests
         IReadOnlyList<SourceStageDirection>? stageDirections = null,
         IReadOnlyList<SourceSoundCue>? soundCues = null,
         IReadOnlyList<SourceConversation>? conversations = null,
-        IReadOnlyList<PersonEntry>? people = null)
+        IReadOnlyList<PersonEntry>? people = null,
+        IReadOnlyList<SeriesEntry>? series = null,
+        IReadOnlyList<UniverseEntry>? universe = null)
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
@@ -98,7 +100,7 @@ public class SqliteImportActionServiceTests
             "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
             new { Id = batchId, now });
 
-        var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations, people: people);
+        var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations, people: people, series: series, universe: universe);
         await _coordinator.StageAsync(actions);
         return actions;
     }
@@ -928,6 +930,41 @@ public class SqliteImportActionServiceTests
             "SELECT Title, Date FROM Sources WHERE Id = @id", new { id });
         Assert.AreEqual("Casablanca (1942)", title);
         Assert.AreEqual("1942-11-26", date);
+    }
+
+    /// <summary>
+    /// #180 regression guard, found live via T2: <c>DecideAsync</c>'s Source branch reconstructed
+    /// <see cref="SourceActionPayload"/> with only Title/Type/Date, silently dropping SeriesId to its
+    /// default null even though <c>FieldMergeResolver</c> had already resolved it correctly — every
+    /// decided Source SeriesId Modify applied as null. This is the one test in the whole suite that
+    /// exercises the full plan → stage → decide → apply → verify-on-disk pipeline for SeriesId; the
+    /// planner-level and Blocked/Pending-only tests elsewhere never actually apply the resolved value.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyBatchAsync_SourceSeriesIdDecided_WritesResolvedSeriesId()
+    {
+        var id = "cb111111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(id, title: "Casablanca");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [new SourceEntry { Id = id, Title = "Casablanca", Type = QuoteType.Movie, SeriesName = "Test Series" }],
+            series: [new SeriesEntry { Name = "Test Series" }]);
+        var sourceAction = actions.Single(a => a.EntityType == "Source" && a.ActionType.Parsed == ImportActionKind.Modify);
+        var seriesAction = actions.Single(a => a.EntityType == "Series");
+        Assert.AreEqual(ImportActionStatus.Pending, sourceAction.Status.Parsed, "First-time SeriesId fill under Review still stages Pending");
+
+        await _service.DecideAsync(sourceAction.Id, new ConflictDecisionRequest
+        {
+            SourceSeriesId = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+
+        var result = await _service.ApplyBatchAsync(sourceAction.BatchId);
+        Assert.IsNull(result, "Every action in the batch (the Series Add and the now-Decided Source Modify) must apply cleanly");
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var storedSeriesId = await conn.QuerySingleAsync<string?>("SELECT SeriesId FROM Sources WHERE Id = @id", new { id });
+        Assert.AreEqual(seriesAction.EntityId, storedSeriesId, "The resolved SeriesId must actually be written to the Sources row, not silently dropped to null");
     }
 
     [TestMethod]

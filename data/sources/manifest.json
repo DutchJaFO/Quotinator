@@ -9,13 +9,6 @@
       "name": "quotinator/curated"
     },
     {
-      "file": "quotinator-series-universe.json",
-      "name": "quotinator/series-universe",
-      "duplicateResolution": {
-        "default": "review"
-      }
-    },
-    {
       "file": "NikhilNamal17_popular-movie-quotes.json",
       "name": "NikhilNamal17/popular-movie-quotes",
       "github": {
@@ -48,6 +41,13 @@
           "quote": 1,
           "source": 2
         }
+      }
+    },
+    {
+      "file": "quotinator-series-universe.json",
+      "name": "quotinator/series-universe",
+      "duplicateResolution": {
+        "default": "review"
       }
     }
   ]
