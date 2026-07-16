@@ -179,6 +179,160 @@ If the new issue blocks the current issue:
 
 ---
 
+## Splitting an issue into sub-issues
+
+GitHub tracks parent/child issue relationships natively — this is a real link, not a checklist
+convention: the parent shows completion progress, and each sub-issue remains a full issue with its own
+label, milestone, plan doc, tests, and Definition of done.
+
+Limits: **100 sub-issues per parent, 8 levels of nesting**. Sub-issues may live in another repository.
+
+### When to split
+
+Split when an issue's requirements cannot be reviewed, verified, or delivered as one unit. Signals,
+any one of which is usually enough:
+
+- **Requirements span layers that fail independently** — e.g. a `Quotinator.Data` repository capability
+  and a `Quotinator.Api` response contract land, break, and get reviewed separately.
+- **Requirements have different dependencies** — if requirement 6 must land before requirement 4 but
+  requirement 1 depends on neither, they are not one unit of work.
+- **A pre-existing bug got folded into an enhancement** — the bug needs its own red test and its own
+  `bug` label; burying it inside an enhancement's requirement list hides it from the bug's own
+  reporting and makes "was this fixed?" unanswerable without reading the parent.
+- **The verification checklist would not fit one plan doc coherently** — if the plan doc's Steps read
+  as several unrelated sequences, they are several issues.
+
+Do **not** split merely because an issue is long. A single coherent concern with ten tightly-coupled
+requirements is still one issue. The test is independence, not size.
+
+### Parent (tracking) issue shape
+
+A parent issue carries no implementation of its own. Its body is the shared context every sub-issue
+would otherwise repeat, plus the map:
+
+```
+## Background
+
+Why this body of work exists. Shared context, findings, and measurements the sub-issues all rely on —
+recorded once here rather than duplicated into each.
+
+## Sub-issues
+
+| # | Scope | Depends on |
+|---|---|---|
+| #NNN | One line: what this sub-issue delivers | — |
+
+State the dependency reason where one exists — "B must land before C because ..." — not just the edge.
+
+## Scope boundary
+
+What is deliberately NOT in this body of work, and which issue owns it instead.
+
+## Definition of done
+
+- [ ] Every sub-issue listed above is closed
+- [ ] Findings summarised in a closing comment
+```
+
+This is the **only** permitted deviation from the "Definition of done is copied verbatim" rule above,
+and it exists because a parent has no code of its own — the red-to-green gate lives on each sub-issue,
+where the code actually is. A parent issue still carries exactly one type label, chosen for the body of
+work as a whole.
+
+### Sub-issue shape
+
+A sub-issue is an ordinary issue: full template for its own type (`bug` / `enhancement` / `research`),
+its own `Definition of done` copied verbatim, its own plan doc, its own verification checklist. It
+does not inherit or reference the parent's Definition of done.
+
+Keep each sub-issue readable alone. Link the parent for shared context rather than restating it, but
+state enough that a reader picking up only that sub-issue knows what they are building and why.
+
+### Mechanics
+
+```bash
+# Create a new issue already parented
+gh issue create --parent 183 --title "..." --body-file draft.md --milestone "..." --label enhancement
+
+# Adopt an existing issue as a sub-issue (either direction)
+gh issue edit 190 --parent 183
+gh issue edit 183 --add-sub-issue 190,191
+
+# Detach
+gh issue edit 190 --remove-parent
+gh issue edit 183 --remove-sub-issue 190
+```
+
+Requires `gh` 2.94.0 or later.
+
+### Plan docs
+
+**Each sub-issue gets an ordinary plan doc** — numbered Steps, a Verification checklist, the usual
+header — named as usual (`{issue-number}-{safe-slug}-plan.md`) and added to `Quotinator.slnx`. Nothing
+special applies to them.
+
+**A parent gets a plan doc too, but shaped like a miniature `overview.md`, not like an issue plan.** A
+parent has no Steps and no verification of its own — its content is the map. Mirror `overview.md`'s
+structure (`checklist.md` → "Overview template") scoped to this body of work, omitting the sections
+that only make sense at milestone level (tier definitions, PR merge plan):
+
+```
+# #NNN — <title>
+
+**Status:** <Planning | In progress | Waiting for release | Released>
+**GitHub issue:** #NNN
+**Depends on:** <issues outside this parent, or none>
+
+---
+
+## Description
+
+One paragraph: what this body of work delivers and why it is one body of work.
+
+---
+
+## Sub-issue list
+
+| # | Title | Status | Tiers | Plan doc |
+|---|-------|--------|-------|----------|
+| [#NNN](url) | Title | Planning | T1 ⬜ T2 ⬜ | [NNN-slug-plan.md](NNN-slug-plan.md) |
+
+---
+
+## Dependency map
+
+#X → requires #Y; unblocks #Z — with the reason, not just the edge.
+
+---
+
+## Order of operations
+
+| # | Issue | Title | Status |
+|---|-------|-------|--------|
+| 1 | #NNN | Title | Planning |
+```
+
+The same rules that govern `overview.md` govern this doc: **status only, never detail**. Every
+requirement, finding, and tier-verification narrative belongs in the sub-issue's own plan doc — the
+parent plan doc never restates it. Status uses the same four-word vocabulary, and the parent's own
+Status is derived from its sub-issues: `In progress` while any is, `Waiting for release` once all are.
+
+### overview.md
+
+- **`overview.md` lists every sub-issue individually** in the Issue List and Order-of-operations
+  tables — they are the units of work that get scheduled, verified, and closed. List the parent too,
+  linking its plan doc, so the grouping is discoverable.
+- **The dependency map records the sub-issues' real dependencies**, not the parent's. A downstream
+  issue depends on the specific sub-issue that unblocks it, not on the parent as a whole.
+
+### Closing
+
+Sub-issues close individually under the normal two-gate rule (`process.md § Completing an issue`). The
+parent closes only once every sub-issue is closed, with a closing comment summarising the body of work
+as a whole rather than repeating each sub-issue's own findings.
+
+---
+
 ## Relationship to the milestone workflow
 
 The verification checklist table format, red-to-green rule, and bug-must-be-red-first requirement are defined in `process.md § Working on an issue`. This document does not repeat them — it defines what goes into the GitHub issue itself before a plan doc is created.

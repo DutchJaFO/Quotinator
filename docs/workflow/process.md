@@ -125,7 +125,10 @@ Examples:
 3. Map dependencies between issues.
 4. Decide on an order of operations.
 5. Create `docs/milestones/{slug}/overview.md` (see `checklist.md` for the template).
-6. Create a per-issue plan doc for every issue in the milestone.
+6. Create a per-issue plan doc for every issue in the milestone. A parent (tracking) issue gets one
+   too, but shaped like a miniature `overview.md` — a sub-issue list, dependency map, and order of
+   operations, with no Steps or Verification checklist of its own. See `issues.md` → "Splitting an
+   issue into sub-issues".
 7. Commit the milestone folder to `main`.
 
 ### Step 2 — Create the feature branch
