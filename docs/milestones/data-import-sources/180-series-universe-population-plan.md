@@ -63,7 +63,8 @@ name-only matching for the `series[]`/`universe[]` sections themselves); the imp
 
 ### 1. Schema, entry classes, and stable-id derivation
 
-**Status:** Done.
+**Status:** Done. `source.id` was additionally made **optional** (see the design correction below
+Step 2) — `required` is now `["title", "type"]`, and `SourceEntry.Id` is `string?`.
 
 - Add `series[]` and `universe[]` sections to `schemas/source-extended.schema.json` — a `universe[]`
   entry has only a `name` (no explicit `id`, matching the earlier confirmed name-only-matching
@@ -82,6 +83,40 @@ name-only matching for the `series[]`/`universe[]` sections themselves); the imp
 **Status:** Done. `SourceActionPayload.SeriesId` and `ConflictDecisionRequest.SourceSeriesId` are
 resolved-id fields (not the file's own `seriesName` text), matching how `SourceActionPayload.Title`
 etc. already carry resolved values, not raw file text.
+
+**Design correction (2026-07-16), from developer review of the first overlay-file draft.** Two rules
+the draft violated, both stated directly:
+
+> import files should not provide values for properties it does not intent to set. Setting Date to
+> 'null' implies you want to reset it.
+>
+> given that Id's for sources are generated we should not ask users to add them to files if we can
+> avoid it
+
+The draft carried a computed `id` and an explicit `date` on all 75 entries — the first is friction
+this project can generate for itself, and the second actively means "reset the date," which is not
+what an enrichment file intends. Neither was fixable in the file alone:
+
+- `SourceEntry.Id` was `required`, and `PlanSourcesAsync`'s natural-key fallback staged **nothing**
+  (an unconditional `continue` — #162's documented scope boundary), so simply dropping the ids would
+  have silently discarded every `seriesName`.
+- `SourceEntry.Date` is `string?`, so an absent `date` and an explicit `"date": null` both deserialize
+  to `null` — the file genuinely could not express "don't touch this" (see Notes; this is a
+  pre-existing, cross-cutting gap, filed separately).
+
+**Resolution:** `sources[]` now has two shapes, distinguished by whether `id` is present —
+*correction* (#162, explicit id, Title/Type/Date all correctable, unchanged) and *enrichment* (#180,
+id omitted, matched by natural key). The enrichment path stages a Modify that diffs **`seriesId`
+only**: Title/Type are the lookup key on that path so they cannot be corrections by construction
+(that is precisely what #162's explicit id exists for), and `Date` is read from the existing row and
+carried through on *both* sides of the diff — which encodes "don't touch it" without needing the
+absent-vs-null distinction at all. A no-match entry still stages an Add, using
+`EntityIdentity.SourceId(title, type)` when the file omits an id — the same value `ResolveSourceAsync`
+independently computes for a quote referencing that title/type, so both resolve to one row.
+
+New: `Sql.Sources.SelectExistingByTitleAndType` (returns the matched row's real id + Date + SeriesId +
+CompletenessStatus). `CompletenessGuard` applies on this path too — a `Complete` row is never silently
+enriched.
 
 - `ParsedSourceFile`/`SourceQuoteFileReader` wiring for the two new top-level sections.
 - New `Sql.Series`/`Sql.Universe` query sets (select-existing-by-id, select-id-by-name natural key,
@@ -118,9 +153,11 @@ touched or reinterpreted for a second, unrelated purpose.
 ### 4. Populate initial Series/Universe data
 
 **Status:** Done. Implemented as `data/sources/quotinator-series-universe.json` — 75 `sources[]`
-entries (each with a computed `EntityIdentity.SourceId(title, type)`-matching `id`, extracted
-programmatically from the three bundled files rather than hand-typed, to avoid a Unicode-mismatch
-class of bug found live during this step — see Notes), 26 `series[]` entries, 5 `universe[]` entries.
+entries, 26 `series[]` entries, 5 `universe[]` entries. Every entry is in the *enrichment* shape per
+Step 2's design correction: `{ title, type, seriesName }` only — no generated id to hand-author, and
+no property the file does not intend to set (no `date`; no `universeName` on a standalone series).
+Titles were extracted programmatically from the three bundled files rather than hand-typed, to avoid
+a Unicode-mismatch class of bug found live during this step — see Notes.
 
 Content, identified from all matching Source titles across the three bundled files (re-extracted and
 re-verified while implementing, correcting two count errors from the original review pass — noted
@@ -213,9 +250,12 @@ entry plus the schema-table row) both updated.
 | 5 | ✅ | Re-seeding identical, already-applied overlay content is a true no-op | Unit test | `SeedSeriesUniverseOverlay_AlreadyTagged_NoActionStaged` |
 | 6 | ✅ | This file's manifest entry resolves to `review`, not the bundled default of `skip` | Unit test | `Quotinator.Data.Tests.ManifestSeedPlannerTests.PlanSeed_SeriesUniverseOverlayEntry_ResolvesReviewNotBundledDefaultSkip` |
 | 7 | ✅ | A lowercase file-authored Source id matches an uppercase (`EntityIdentity`-derived) existing row — case-insensitive by default (Sources'/People's id-matching queries fixed) | Unit test | `PlanSourcesAsync_LowercaseFileId_MatchesUppercaseStoredId_StagesModifyNotDuplicateAdd` |
-| 8 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 9 | ⬜ | T1 — app starts in Visual Studio, overlay file seeds without error, `Series`/`Universe` visible via `Quotinator.Tools.DbInspector` | Live (T1) | Developer to confirm in Visual Studio |
-| 10 | ⬜ | T2 — Docker smoke test: seed with the overlay file present, confirm ~75 `Pending` Source actions are staged (per Step 5's design correction — not silently applied), decide+apply one, confirm its `SeriesId` is set | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + `Quotinator.Tools.DbInspector`/`GET /import/actions?status=pending` |
+| 8 | ✅ | Deciding and applying a Source SeriesId Modify actually writes the resolved value to the `Sources` row, not just to the staged action | Unit test | `Quotinator.Engine.Tests.Services.SqliteImportActionServiceTests.ApplyBatchAsync_SourceSeriesIdDecided_WritesResolvedSeriesId` — see Notes for the two live bugs this test was added to guard |
+| 9 | ✅ | An entry omitting its id is matched by natural key and stages a `seriesId`-only Modify — never a duplicate `Add`, and never a silent skip | Unit test | `PlanSourcesAsync_NoExplicitId_NaturalKeyMatch_SeriesNameSet_StagesModify` / `..._NoSeriesName_NoActionStaged` / `..._AlreadyTagged_NoActionStaged` / `..._NoMatchAtAll_StagesAddWithComputedId` / `..._CompleteStatus_SeriesNameSet_StagesBlocked` |
+| 10 | ✅ | An entry omitting `date` never resets the existing row's date | Unit test | `PlanSourcesAsync_NoExplicitId_OmittedDate_PreservesExistingDate` |
+| 11 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 12 | ⬜ | T1 — app starts in Visual Studio, overlay file seeds without error, `Series`/`Universe` visible via `Quotinator.Tools.DbInspector` | Live (T1) | Developer to confirm in Visual Studio |
+| 13 | ✅ | T2 — Docker smoke test: seed with the overlay file present, confirm all 75 Source actions stage `Pending` `Modify` under Review with only `seriesId` differing (not silently applied, not `Add`), decide+apply all, confirm `SeriesId` set on exactly 75 rows via a checkpointed DB copy | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + full decide/apply cycle + `Quotinator.Tools.DbInspector` — 479 sources / 75 tagged confirmed; see Notes for the three bugs this pass caught |
 
 ---
 
@@ -231,7 +271,69 @@ input to #174's eventual merge algorithm, but this issue only needs #179's schem
 Any recurring-conflict automation is explicitly out of scope — see Background. Do not build a
 bespoke auto-resolution mechanism here; #153 is the tracked issue for that, whenever it lands.
 
-**Findings from implementation (2026-07-16), not captured by a Step above:**
+**Deferred gaps found during implementation, not fixed here:**
+
+- **An import file cannot express "leave this property alone."** Every optional field on every entry
+  DTO is a plain nullable (`SourceEntry.Date`, `PersonEntry.DateOfBirth`/`DateOfDeath`,
+  `SourceStageDirection.ImageUrl`, `SourceSoundCue.SoundFileUrl`/`ImageUrl`,
+  `SourceConversation.Description`), so an absent property and an explicit `null` both deserialize to
+  `null` — indistinguishable. Per the developer's rule ("import files should not provide values for
+  properties it does not intent to set; setting Date to 'null' implies you want to reset it"), those
+  two must mean different things: absent = don't touch, null = reset. This is **pre-existing and
+  cross-cutting** — it predates #180 and affects five entities across #162/#171/#172/#173/#176; #180
+  is simply the first file to hit it. Confirmed with the developer that #180 sidesteps it (the
+  enrichment path carries the existing Date through on both sides of the diff, so no entry on that
+  path can reset anything) rather than widening scope to change five shipped entities' Modify
+  behaviour. Filed as **#190**, which also owns removing this issue's now-redundant
+  carry-the-Date-through workaround once the general mechanism lands.
+- **`Source.Date` is never populated from a quote's own `date`.** `ResolveSourceAsync`
+  (`ImportActionPlanner.cs`) constructs `new SourceActionPayload(q.Source, typeStr)` with only two
+  arguments, so a Source discovered implicitly through a quote always gets `Date = null` even when
+  the quote itself carries a year (NikhilNamal17's converter maps `year` → `date` on every quote).
+  Verified live during T2: all 479 seeded Sources have `Date IS NULL`, while 741 of 841 quotes across
+  the three bundled files do carry a date (453 distinct source keys; 16 of them with quotes that
+  disagree on the value). Pre-existing, unrelated to #180's own changes, and not fixed here — filed
+  as **#191**. Its 16 conflicting cases are expected to get an authoritative answer during the Data
+  Enrichment milestone rather than being tie-broken from upstream values.
+
+**Findings from the T2 Docker pass (2026-07-16), all fixed, not captured by a Step above:**
+
+- **`manifest.json` file order mattered and was originally wrong.** `quotinator-series-universe.json`
+  was listed right after `quotinator-curated.json`, before `NikhilNamal17_popular-movie-quotes.json`/
+  `vilaboim_movie-quotes.json` — the two files that actually establish most of the 75 target Sources
+  via natural-key resolution. With that ordering, most of the overlay's `sources[]` entries staged as
+  a fresh `Add` (nothing existed yet) rather than a `Modify`. Combined with this project's
+  batch-apply-atomicity contract (a batch with any `Pending` action stays wholly unapplied until every
+  action in it is decided), the safe `Add`/`Series`/`Universe` actions sat staged-but-unapplied while
+  the batch waited on its one genuinely `Pending` Source. By the time that one action was later
+  decided and the batch applied, the *other* 74 Sources had already been independently created by
+  NikhilNamal17/vilaboim's own later-processed natural-key resolution — so the overlay's own deferred
+  `Add` attempts hit `INSERT OR IGNORE` against an already-existing row and silently no-opped, losing
+  the SeriesId assignment entirely for all 74. **Fixed by moving `quotinator-series-universe.json` to
+  the end of `manifest.json`'s file list** — every target Source now already exists by the time the
+  overlay runs, so all 75 entries take the well-behaved `Modify` path (which has a real `UPDATE`, not
+  an ignore-on-conflict `INSERT`) instead of a racy `Add`. Confirmed live: all 75 now stage `Pending`
+  under Review (matching the design correction below), and after deciding and applying all of them,
+  `Sources.SeriesId` is set on all 75, verified via a gracefully-stopped (WAL-checkpointed) database
+  copy — a plain live copy while the container was still running under WAL mode showed 0, which was
+  correctly *not* trusted as ground truth without checking a checkpointed copy first (per this
+  project's "never assume WAL lag, verify causally" rule).
+- **Two duplicated payload-reconstruction sites silently dropped `SeriesId` to null**, found only by
+  actually deciding and applying a Source SeriesId action end-to-end (no prior unit test exercised
+  that full path — the planner-level tests only checked staging, and the DB-integration tests only
+  checked Pending status, never decide→apply→verify-on-disk):
+  - `SqliteImportActionService.DecideAsync`'s Source branch reconstructed `SourceActionPayload` with
+    only 3 of 4 positional constructor args (`Title`, `Type`, `Date`), silently defaulting `SeriesId`
+    to `null` even though `FieldMergeResolver` had already resolved the correct value.
+  - `SqliteImportActionService`'s own private `ToFieldMap(SourceActionPayload)` overload — a second,
+    independent copy of `ImportActionPlanner`'s own `ToFieldMap`, each carrying an explicit doc-comment
+    warning that they "must stay in sync" — was never updated when `SeriesId` was added, so
+    `FieldMergeResolver.ResolveWithDecisions` never even saw a `seriesId` key to resolve.
+  Both fixed directly. New regression test:
+  `SqliteImportActionServiceTests.ApplyBatchAsync_SourceSeriesIdDecided_WritesResolvedSeriesId` —
+  the one test in the suite that exercises the full plan → stage → decide → apply → verify-on-disk
+  pipeline for `SeriesId`, closing a real coverage gap (every other `SeriesId` test stopped at either
+  "staged correctly" or "Pending status correct," never reaching the actual write).
 
 - **Sources'/People's id-matching queries were case-sensitive** (`SelectExistingById`,
   `SelectCompletenessById`, `UpdateCompletenessById`, `UpdateFieldsById`, `CountActiveReferences`),

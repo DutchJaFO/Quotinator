@@ -73,7 +73,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#189](https://github.com/DutchJaFO/Quotinator/issues/189) | Conversations: GET /api/v1/conversations list endpoint | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
-| [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | In progress | T1 ⬜ T2 ⬜ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
+| [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | In progress | T1 ⬜ T2 ✅ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
+| [#190](https://github.com/DutchJaFO/Quotinator/issues/190) | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
+| [#191](https://github.com/DutchJaFO/Quotinator/issues/191) | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
 | [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
@@ -130,6 +132,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #188 (masterdata: Universe list+byId) → requires #183 and #179 (Universe table itself); same #180 verification benefit as #187
 #189 (Conversations: GET / list endpoint) → requires #183; independent of #179/#180; fills the gap where Conversations has `GET /{id}` but no list endpoint
 #180 (Populate Series/Universe data via curated overlay file, review-only, staged) → filed 2026-07-15 while verifying the import pipeline stays two-stage ahead of upcoming data-enrichment work; requires #179 (needs Universe/Series/Source.SeriesId to exist); explicitly does not build recurring-conflict automation of its own — that remains #153's job; independent of #174; independent of #183-#189 (does not require the list endpoints to exist, though #187/#188 make its results easier to verify once both land)
+#190 (import files cannot express "leave this property alone") → found while implementing #180 (2026-07-16), whose overlay file is the first bundled file wanting to set one property and touch nothing else; pre-existing and cross-cutting, affecting every optional field on SourceEntry/PersonEntry/SourceStageDirection/SourceSoundCue/SourceConversation (#162/#171/#172/#173/#176) — #180 sidesteps it on its own enrichment path rather than changing five shipped entities' Modify behaviour, so nothing blocks on this; once it lands, #180's carry-the-existing-Date-through workaround becomes redundant and should be removed
+#191 (Sources.Date never populated) → found live via T2 during #180 (2026-07-16); ResolveSourceAsync drops the quote's own date, so all 479 seeded Sources are null-dated despite 741/841 quotes carrying one; independent of #180 (which never sets a date) and of #190 (which governs what a *file* may say, not what an implicitly-created Source inherits); the 16 conflicting-date cases it documents are expected to get an authoritative answer in the Data Enrichment milestone, so this issue should not invent a tie-break rule that would be immediately superseded — see its own scope-note comment
 #174 (Character: migrate to global identity via new Series/Universe schema, ADR + migration) → rewritten 2026-07-14 to depend on #179 instead of copying Person's shape (that approach was found concretely wrong — see #169's closing comment); requires #179 (structural schema) in addition to #162/#165/#168 (done); owns the actual merge algorithm within #179's structural boundary — unblocks #175
 #175 (Character: explicit id, Modify/decidability) → requires #174 (must land first — building Modify on the old per-Source model would be throwaway work); structurally a near-copy of #173 once Character is global
 #176 (Conversation: Description-field Modify/decidability) → requires #162/#165/#168 (done); not technically blocked by #170-#175, sequenced last so its (smallest) additions have every other entity's now-proven pattern in place as precedent; line-editing explicitly deferred to a separate future issue
@@ -189,14 +193,16 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 40 | #188 | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Planning |
 | 41 | #189 | Conversations: GET /api/v1/conversations list endpoint | Planning |
 | 42 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | In progress |
-| 43 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
-| 44 | #175 | Character: explicit id, Modify/decidability | Planning |
-| 45 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
-| 46 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
-| 47 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload | Planning |
-| 48 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
-| 49 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |
-| 50 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
+| 43 | #190 | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Planning |
+| 44 | #191 | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Planning |
+| 45 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
+| 46 | #175 | Character: explicit id, Modify/decidability | Planning |
+| 47 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
+| 48 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
+| 49 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload | Planning |
+| 50 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
+| 51 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |
+| 52 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
 
 ---
 
