@@ -73,7 +73,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#189](https://github.com/DutchJaFO/Quotinator/issues/189) | Conversations: GET /api/v1/conversations list endpoint | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
-| [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | Planning | T1 ⬜ T2 ⬜ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
+| [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | In progress | T1 ⬜ T2 ⬜ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
 | [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
 | [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
@@ -188,7 +188,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 39 | #187 | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning |
 | 40 | #188 | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Planning |
 | 41 | #189 | Conversations: GET /api/v1/conversations list endpoint | Planning |
-| 42 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Planning |
+| 42 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | In progress |
 | 43 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
 | 44 | #175 | Character: explicit id, Modify/decidability | Planning |
 | 45 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |

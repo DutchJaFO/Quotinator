@@ -87,6 +87,7 @@ Quotinator/
 Quotinator's quote data lives in `data/sources/` — one JSON file per dataset, normalised to the canonical schema. The bundled sources are:
 
 - **`quotinator-curated.json`** — manually verified entries with enriched metadata (character names, genres, conversations)
+- **`quotinator-series-universe.json`** — curated Series/Universe groupings for Sources already present in the other bundled files (e.g. linking Star Wars films into a "Star Wars" Series/Universe); carries no quotes of its own
 - **[vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes)** — AFI Top 100 movie quotes (~99 entries)
 - **[NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes)** — popular movie, TV, and anime quotes (~732 entries)
 

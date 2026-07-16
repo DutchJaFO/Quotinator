@@ -44,7 +44,7 @@ Three schemas in `schemas/` define and validate the import file formats. They ar
 |---|---|
 | `schemas/manifest.schema.json` | `data/sources/manifest.json` and `data/imports/manifest.json` — ordered list of source files |
 | `schemas/source-flat.schema.json` | External source files in `data/sources/` — flat JSON array of canonical quote objects |
-| `schemas/source-extended.schema.json` | `data/sources/quotinator-curated.json` and user import files — object with `quotes`, `stageDirections`, `soundCues`, `conversations` |
+| `schemas/source-extended.schema.json` | `data/sources/quotinator-curated.json`, `data/sources/quotinator-series-universe.json`, and user import files — object with `quotes`, `sources`, `people`, `stageDirections`, `soundCues`, `conversations`, `series`, `universe` |
 | `schemas/upstream-quoted-string.schema.json` | `tests/Quotinator.Api.Tests/Solution/Fixtures/vilaboim_raw.json` — raw upstream format used by [vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes) |
 | `schemas/upstream-object-array.schema.json` | `tests/Quotinator.Api.Tests/Solution/Fixtures/nikhilnamal17_raw.json` — raw upstream format used by [NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes) |
 
@@ -91,6 +91,14 @@ The `data/sources/` directory contains one JSON file per dataset, normalised to 
 - **Contents:** Manually verified entries not sourced from the datasets above. Includes quotes with enriched metadata (character names, genres, conversation groupings), books, and famous people.
 
 All entries must be accurately attributed and verified before adding. Do not add quotes of uncertain origin or attribution.
+
+---
+
+## quotinator/series-universe
+
+- **File:** `data/sources/quotinator-series-universe.json`
+- **Schema:** `schemas/source-extended.schema.json`
+- **Contents:** Curated Series/Universe groupings (#180) linking related Sources already present in the datasets above — e.g. grouping the numbered Star Wars films into a "Star Wars" Series within a "Star Wars" Universe. Carries no `quotes` of its own; every entry is a `sources[]`/`series[]`/`universe[]` declaration. Imported under a `review` duplicate-resolution policy (see `data/sources/manifest.json`) so a disagreement with an already-decided value is never silently overwritten.
 
 ---
 
