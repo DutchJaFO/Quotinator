@@ -1065,4 +1065,93 @@ public class DatabaseInitializerTests
         }
     }
 
+    // ── #180: curated series/universe overlay — end-to-end through the real bundled-seed path ──
+    // Unlike SqliteQuoteImportService.ImportAsync (the live POST /import endpoint), the bundled
+    // seed path's own LoadSourceFileAsync has no "at least one quote" requirement — appropriate
+    // here since this overlay file's whole purpose is Source/Series/Universe enrichment with an
+    // intentionally empty quotes[] section, matching data/sources/quotinator-series-universe.json's
+    // own real shape.
+    //
+    // Confirmed with the developer (2026-07-16): under this file's Review policy, PlanSourcesAsync's
+    // changed-field check has no "empty-existing-side is not a real conflict" special case (that
+    // logic exists in FieldMergeResolver for MergeOurs/MergeTheirs and decide-time auto-resolution,
+    // but not for the Review "should this even go Pending" gate) — so a first-time null-to-value
+    // SeriesId fill stages Pending exactly like a genuine disagreement does. This is accepted as-is
+    // for #180, matching the plan doc's original "a human decides" intent, at the cost of a fresh
+    // install staging one Pending action per Source the overlay touches (see the real
+    // data/sources/quotinator-series-universe.json's ~75 entries) until each is decided and applied.
+
+    /// <summary>A Source with no existing SeriesId still stages a Pending action under this file's Review policy — the review gate has no first-time-fill exception, so nothing is silently applied.</summary>
+    [TestMethod]
+    public async Task SeedSeriesUniverseOverlay_NoExistingSeriesId_StagesPendingUnderReviewPolicy()
+    {
+        var sourceId = Quotinator.Core.Import.EntityIdentity.SourceId("Test Movie", "Movie");
+        var quotesFile = Path.Combine(_tempDir, "quotes.json");
+        File.WriteAllText(quotesFile, """[{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello there.","source":"Test Movie","type":"movie"}]""");
+        var overlayFile = Path.Combine(_tempDir, "overlay.json");
+        File.WriteAllText(overlayFile, $$"""
+            {
+              "quotes": [],
+              "sources": [{"id":"{{sourceId}}","title":"Test Movie","type":"movie","seriesName":"Test Series"}],
+              "series": [{"name":"Test Series"}]
+            }
+            """);
+
+        var batch = new SeedBatch(
+            [new SeedFile(quotesFile, null), new SeedFile(overlayFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
+            ManifestPolicy.HardcodedDefault, "overlay-test");
+        var db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var pendingCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM System_ImportActions WHERE EntityType = 'Source' AND Status = 'Pending';");
+        Assert.AreEqual(1, pendingCount, "Review policy stages Pending for any changed field, including a first-time null-to-value SeriesId fill");
+
+        var seriesId = await conn.ExecuteScalarAsync<string?>(
+            "SELECT SeriesId FROM Sources WHERE Id = @id;", new { id = sourceId });
+        Assert.IsNull(seriesId, "Nothing applied yet — SeriesId stays null until the Pending action is decided and applied");
+    }
+
+    /// <summary>Re-seeding the exact same overlay content a second time is a true no-op — SeriesId already matches, so nothing is staged at all.</summary>
+    [TestMethod]
+    public async Task SeedSeriesUniverseOverlay_AlreadyTagged_NoActionStaged()
+    {
+        var sourceId = Quotinator.Core.Import.EntityIdentity.SourceId("Test Movie", "Movie");
+        var quotesFile = Path.Combine(_tempDir, "quotes.json");
+        File.WriteAllText(quotesFile, """[{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello there.","source":"Test Movie","type":"movie"}]""");
+        var overlayFile = Path.Combine(_tempDir, "overlay.json");
+        File.WriteAllText(overlayFile, $$"""
+            {
+              "quotes": [],
+              "sources": [{"id":"{{sourceId}}","title":"Test Movie","type":"movie","seriesName":"Test Series"}],
+              "series": [{"name":"Test Series"}]
+            }
+            """);
+
+        var batch = new SeedBatch(
+            [new SeedFile(quotesFile, null), new SeedFile(overlayFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins))],
+            ManifestPolicy.HardcodedDefault, "overlay-test-seed");
+        var db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var seriesId = await conn.ExecuteScalarAsync<string?>("SELECT SeriesId FROM Sources WHERE Id = @id;", new { id = sourceId });
+        Assert.IsNotNull(seriesId, "Sanity check — NewestWins applies immediately, so SeriesId must already be set before the second pass");
+
+        var reapplyBatchId = Guid.NewGuid();
+        using (var reapplyConn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await reapplyConn.OpenAsync();
+            var actions = await Quotinator.Engine.Database.ImportActionPlanner.PlanAsync(
+                (SqliteConnection)reapplyConn, [], reapplyBatchId, DuplicateResolutionPolicy.Review,
+                sources: [new Quotinator.Core.Import.SourceEntry { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Models.QuoteType.Movie, SeriesName = "Test Series" }]);
+
+            Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Identical content — no change, no action staged at all");
+        }
+    }
+
 }

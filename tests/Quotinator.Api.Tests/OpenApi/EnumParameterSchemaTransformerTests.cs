@@ -69,7 +69,7 @@ public class EnumParameterSchemaTransformerTests
     public async Task EntityType_OnImportActions_PatchedToEnum()
     {
         var schema = await TransformAndGetSchema(ScalarParam("entityType"), "api/v1/import/actions");
-        CollectionAssert.AreEquivalent(new[] { "Quote", "Source", "Character", "Person", "Conversation", "StageDirection", "SoundCue" },
+        CollectionAssert.AreEquivalent(new[] { "Quote", "Source", "Character", "Person", "Conversation", "StageDirection", "SoundCue", "Series", "Universe" },
             schema!.Enum!.Select(v => v!.ToString()).ToArray());
     }
 

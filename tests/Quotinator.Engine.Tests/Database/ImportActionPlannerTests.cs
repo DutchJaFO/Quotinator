@@ -263,20 +263,166 @@ public class ImportActionPlannerTests
 
     // ── #162: PlanSourcesAsync ────────────────────────────────────────────────
 
-    private static SourceEntry BuildSourceEntry(string id, string title = "Casablanca", Core.Models.QuoteType type = Core.Models.QuoteType.Movie, string? date = "1942") => new()
+    private static SourceEntry BuildSourceEntry(string id, string title = "Casablanca", Core.Models.QuoteType type = Core.Models.QuoteType.Movie, string? date = "1942", string? seriesName = null) => new()
     {
-        Id    = id,
-        Title = title,
-        Type  = type,
-        Date  = date,
+        Id         = id,
+        Title      = title,
+        Type       = type,
+        Date       = date,
+        SeriesName = seriesName,
     };
 
-    private static async Task SeedExplicitSourceAsync(SqliteConnection conn, string id, string title = "Casablanca", string type = "Movie", string? date = "1942", string completenessStatus = "Incomplete")
+    private static async Task SeedExplicitSourceAsync(SqliteConnection conn, string id, string title = "Casablanca", string type = "Movie", string? date = "1942", string completenessStatus = "Incomplete", string? seriesId = null)
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Sources (Id, Title, Type, Date, CompletenessStatus, DateCreated) VALUES (@Id, @Title, @Type, @Date, @CompletenessStatus, @now)",
-            new { Id = id, Title = title, Type = type, Date = date, CompletenessStatus = completenessStatus, now });
+            "INSERT INTO Sources (Id, Title, Type, Date, SeriesId, CompletenessStatus, DateCreated) VALUES (@Id, @Title, @Type, @Date, @SeriesId, @CompletenessStatus, @now)",
+            new { Id = id, Title = title, Type = type, Date = date, SeriesId = seriesId, CompletenessStatus = completenessStatus, now });
+    }
+
+    // ── #180: PlanUniverseAsync / PlanSeriesAsync / Source.SeriesId ─────────────
+
+    private static UniverseEntry BuildUniverseEntry(string name = "Middle Earth") => new() { Name = name };
+
+    private static SeriesEntry BuildSeriesEntry(string name = "The Lord of the Rings", string? universeName = null) => new()
+    {
+        Name         = name,
+        UniverseName = universeName,
+    };
+
+    private static async Task<string> SeedExistingSeriesAsync(SqliteConnection conn, string name = "The Lord of the Rings", string? universeId = null)
+    {
+        var id  = Guid.NewGuid().ToString("D").ToUpperInvariant();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Series (Id, Name, UniverseId, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @UniverseId, 'Incomplete', @now)",
+            new { Id = id, Name = name, UniverseId = universeId, now });
+        return id;
+    }
+
+    [TestMethod]
+    public async Task PlanUniverseAsync_NoMatchAtAll_StagesAddAction()
+    {
+        using var conn = await OpenConnectionAsync();
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            universe: [BuildUniverseEntry("Middle Earth")]);
+
+        var universeAction = actions.Single(a => a.EntityType == "Universe");
+        Assert.AreEqual(ImportActionKind.Add, universeAction.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, universeAction.Status.Parsed);
+    }
+
+    [TestMethod]
+    public async Task PlanUniverseAsync_ExistingByName_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, 'Middle Earth', 'Incomplete', @now)",
+            new { Id = Guid.NewGuid().ToString("D").ToUpperInvariant(), now });
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            universe: [BuildUniverseEntry("Middle Earth")]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Universe"), "Already exists by name — silently reused, no action staged");
+    }
+
+    [TestMethod]
+    public async Task PlanSeriesAsync_NoMatchAtAll_StagesAddAction()
+    {
+        using var conn = await OpenConnectionAsync();
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            series: [BuildSeriesEntry("The Lord of the Rings")]);
+
+        var seriesAction = actions.Single(a => a.EntityType == "Series");
+        Assert.AreEqual(ImportActionKind.Add, seriesAction.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed);
+    }
+
+    [TestMethod]
+    public async Task PlanSeriesAsync_UniverseNameResolvesToSameBatchUniverseAdd_PayloadCarriesUniverseId()
+    {
+        using var conn = await OpenConnectionAsync();
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            series: [BuildSeriesEntry("The Lord of the Rings", universeName: "Middle Earth")],
+            universe: [BuildUniverseEntry("Middle Earth")]);
+
+        var universeAction = actions.Single(a => a.EntityType == "Universe");
+        var seriesAction   = actions.Single(a => a.EntityType == "Series");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.IncomingValue!)!;
+        Assert.AreEqual(universeAction.EntityId, payload.UniverseId, "Series' Add payload must carry the same-batch Universe Add's own stable id");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_SeriesNameResolvesToSameBatchSeriesAdd_PayloadCarriesSeriesId()
+    {
+        using var conn = await OpenConnectionAsync();
+        var sourceFileId = "c8111111-1111-4111-8111-111111111111";
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(sourceFileId, title: "A Brand New Film", seriesName: "The Lord of the Rings")],
+            series: [BuildSeriesEntry("The Lord of the Rings")]);
+
+        var seriesAction = actions.Single(a => a.EntityType == "Series");
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        Assert.AreEqual(seriesAction.EntityId, payload.SeriesId, "Source's Add payload must carry the same-batch Series Add's own stable id");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_SeriesNameChanged_StagesModifyAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "c9111111-1111-4111-8111-111111111111";
+        var seriesId = await SeedExistingSeriesAsync(conn, "The Hobbit");
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", seriesId: null);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(id, title: "Casablanca", seriesName: "The Hobbit")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        Assert.AreEqual(seriesId, merged.SeriesId);
+    }
+
+    /// <summary>#180 spec requirement 3: a genuine SeriesId disagreement under Review policy stages Pending, never silently resolves.</summary>
+    [TestMethod]
+    public async Task PlanSourcesAsync_ReviewPolicy_SeriesNameChanged_StagesPendingNotAutoResolved()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "cb111111-1111-4111-8111-111111111111";
+        var originalSeriesId = await SeedExistingSeriesAsync(conn, "Original Series");
+        await SeedExistingSeriesAsync(conn, "Edited Series");
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", seriesId: originalSeriesId);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [BuildSourceEntry(id, title: "Casablanca", seriesName: "Edited Series")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Pending, sourceAction.Status.Parsed, "A genuine SeriesId disagreement under review policy must stage Pending, not silently resolve");
+        Assert.IsNull(sourceAction.MergedFields, "Nothing is resolved yet for a Pending action");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_CompleteStatus_SeriesNameChanged_StagesBlockedNotModify()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "ca111111-1111-4111-8111-111111111111";
+        await SeedExistingSeriesAsync(conn, "The Hobbit");
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", completenessStatus: "Complete", seriesId: null);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(id, title: "Casablanca", seriesName: "The Hobbit")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Blocked, sourceAction.Status.Parsed, "A Complete row must never silently accept a Modify, including a SeriesId-only change");
+        Assert.IsNull(sourceAction.MergedFields, "Nothing is resolved yet for a Blocked action");
     }
 
     [TestMethod]
@@ -293,6 +439,28 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed);
         Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
         Assert.IsNotNull(sourceAction.MergedFields);
+    }
+
+    /// <summary>
+    /// #180 case-sensitivity fix: a lowercase file-authored id must still match an existing row
+    /// whose id was stored uppercase (the EntityIdentity convention). Before the fix, this case
+    /// mismatch fell through to the natural-key fallback — which searches by the INCOMING title, not
+    /// the existing row's — found nothing, and staged a phantom duplicate Add instead of the intended
+    /// Modify.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSourcesAsync_LowercaseFileId_MatchesUppercaseStoredId_StagesModifyNotDuplicateAdd()
+    {
+        using var conn = await OpenConnectionAsync();
+        var uppercaseId = "CB111111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(conn, uppercaseId, title: "Casablanca");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(uppercaseId.ToLowerInvariant(), title: "Casablanca (Corrected)")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed, "Must match the existing row by id (case-insensitively), not stage a duplicate Add");
+        Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
     }
 
     [TestMethod]

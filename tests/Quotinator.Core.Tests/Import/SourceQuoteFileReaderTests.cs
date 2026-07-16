@@ -170,6 +170,32 @@ public class SourceQuoteFileReaderTests
         Assert.AreEqual(0, parsed.StageDirections.Count);
         Assert.AreEqual(0, parsed.SoundCues.Count);
         Assert.AreEqual(0, parsed.Conversations.Count);
+        Assert.AreEqual(0, parsed.Series.Count);
+        Assert.AreEqual(0, parsed.Universe.Count);
+    }
+
+    [TestMethod]
+    public void SourceQuoteFileReader_SeriesAndUniverseSections_ParseIntoEntries()
+    {
+        var json = """
+            {
+              "quotes": [{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello","source":"World"}],
+              "sources": [{"id":"77777777-7777-7777-7777-777777777777","title":"World","type":"movie","seriesName":"World Series"}],
+              "series": [{"name":"World Series","universeName":"World Universe"}],
+              "universe": [{"name":"World Universe"}]
+            }
+            """;
+
+        var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual(1, parsed!.Series.Count);
+        Assert.AreEqual("World Series", parsed.Series[0].Name);
+        Assert.AreEqual("World Universe", parsed.Series[0].UniverseName);
+        Assert.AreEqual(1, parsed.Universe.Count);
+        Assert.AreEqual("World Universe", parsed.Universe[0].Name);
+        Assert.AreEqual(1, parsed.Sources.Count);
+        Assert.AreEqual("World Series", parsed.Sources[0].SeriesName);
     }
 
     [TestMethod]

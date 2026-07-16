@@ -43,6 +43,9 @@ public sealed class ConflictDecisionRequest
     /// <summary>Decision for a Source action's date (#162).</summary>
     public FieldDecision? SourceDate { get; init; }
 
+    /// <summary>Decision for a Source action's Series link (#180) — the resolved Series id, not the file's own <c>seriesName</c> text.</summary>
+    public FieldDecision? SourceSeriesId { get; init; }
+
     /// <summary>Decision for a StageDirection action's text (#171).</summary>
     public FieldDecision? StageDirectionText { get; init; }
 

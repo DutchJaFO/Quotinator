@@ -50,6 +50,7 @@
   <Folder Name="/data/sources/">
     <File Path="data/sources/manifest.json" />
     <File Path="data/sources/quotinator-curated.json" />
+    <File Path="data/sources/quotinator-series-universe.json" />
     <File Path="data/sources/vilaboim_movie-quotes.json" />
     <File Path="data/sources/NikhilNamal17_popular-movie-quotes.json" />
   </Folder>

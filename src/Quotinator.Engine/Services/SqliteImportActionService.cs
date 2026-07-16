@@ -300,6 +300,17 @@ public sealed class SqliteImportActionService : IImportActionService
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Person))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("People"), new { id = action.EntityId });
 
+        // #180: Series/Universe entries have no explicit-id file section (matched by Name only, like
+        // Character/Person implicitly), so their Add id is always EntityIdentity-derived (always
+        // uppercase) — the Guid-typed repository path would be safe here too, but raw SQL is used for
+        // consistency with Sql.Series/Sql.Universe's own no-repository query set (#183/#187/#188 are
+        // where a real IRestorableRepository<SeriesEntity>/<UniverseEntity> gets introduced).
+        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Series))
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Series"), new { id = action.EntityId });
+
+        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Universe))
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Universe"), new { id = action.EntityId });
+
         // #68: Conversation/StageDirection/SoundCue ids are explicit-in-file, like Quote's — not
         // EntityIdentity-derived like Character/Person's — so the same raw-SQL, no-forced-
         // uppercase approach applies here too, not the repository's Guid-typed path. Each clears its
@@ -395,6 +406,11 @@ public sealed class SqliteImportActionService : IImportActionService
             [ImportActionEntityTypes.Character]    = 1,
             [ImportActionEntityTypes.Source]       = 2,
             [ImportActionEntityTypes.Person]       = 2,
+            // #180: reversed after Source (whose SeriesId may still point at it) and Universe after
+            // Series (whose UniverseId may still point at it) — same active-reference-respecting
+            // ordering reasoning as StageDirection/SoundCue below, one level shallower.
+            [ImportActionEntityTypes.Series]         = 3,
+            [ImportActionEntityTypes.Universe]       = 4,
             // #68: reversed last — StageDirection/SoundCue's active-reference check (joined through
             // Conversations, see Sql.StageDirections.CountActiveReferences' remark) needs Conversation
             // already reversed in this same pass, or it would still see the about-to-be-removed
@@ -428,6 +444,7 @@ public sealed class SqliteImportActionService : IImportActionService
                             title = existingSourcePayload.Title,
                             type  = existingSourcePayload.Type,
                             date  = existingSourcePayload.Date,
+                            seriesId = existingSourcePayload.SeriesId,
                             dateModified = now,
                             id    = action.EntityId,
                         }, sqliteTransaction);
@@ -467,6 +484,22 @@ public sealed class SqliteImportActionService : IImportActionService
                     // for Source (SqliteImportActionService.cs's Source case above).
                     await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("People"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "person", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
+                    break;
+                case ImportActionEntityTypes.Series:
+                    // #180: Add-only, no Modify branch — a Series is never anything but soft-deleted
+                    // on reversal, guarded by the same active-reference check as Source/Person's own
+                    // Add branch (a Source this same batch didn't touch may still point at it).
+                    if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Series.CountActiveReferences, action.EntityId))
+                        break;
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Series"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "series", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
+                    break;
+                case ImportActionEntityTypes.Universe:
+                    // #180: Add-only, no Modify branch — see Series' remark above.
+                    if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Universe.CountActiveReferences, action.EntityId))
+                        break;
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Universe"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "universe", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Conversation:
                     if (action.ActionType.Parsed == ImportActionKind.Modify)
@@ -649,7 +682,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 if (isSourceAdd)
                 {
                     var payload = JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!;
-                    await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Title, payload.Type, batchId, now, changeLog, payload.Date);
+                    await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Title, payload.Type, batchId, now, changeLog, payload.Date, payload.SeriesId);
                 }
                 else
                 {
@@ -660,6 +693,7 @@ public sealed class SqliteImportActionService : IImportActionService
                         title = payload.Title,
                         type  = payload.Type,
                         date  = payload.Date,
+                        seriesId = payload.SeriesId,
                         dateModified = now,
                         id    = action.EntityId,
                     }, sqliteTransaction);
@@ -705,6 +739,27 @@ public sealed class SqliteImportActionService : IImportActionService
                 }
 
                 await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.People.SelectCompletenessById, Sql.People.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
+                break;
+            }
+            case ImportActionEntityTypes.Universe:
+            {
+                // #180: Add-only — no Modify branch exists, unlike Source/Person above.
+                var payload = JsonSerializer.Deserialize<UniverseActionPayload>(action.IncomingValue!)!;
+                await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog);
+                await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Universe.SelectCompletenessById, Sql.Universe.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
+                break;
+            }
+            case ImportActionEntityTypes.Series:
+            {
+                // #180: Add-only — no Modify branch exists, unlike Source/Person above.
+                var payload = JsonSerializer.Deserialize<SeriesActionPayload>(action.IncomingValue!)!;
+                // Defensive: Series.UniverseId (#179) is a real FK, but System_ImportActions rows
+                // apply in whatever order the coordinator returns them — this action's own Universe
+                // may not have applied yet. Idempotent, so re-running it here is safe either way.
+                if (payload.UniverseId is not null)
+                    await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, payload.UniverseId, payload.Name, batchId, now, changeLog);
+                await EnsureSeriesExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, payload.UniverseId, batchId, now, changeLog);
+                await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Series.SelectCompletenessById, Sql.Series.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
                 break;
             }
             case ImportActionEntityTypes.Quote:
@@ -928,14 +983,39 @@ public sealed class SqliteImportActionService : IImportActionService
 
     private async Task EnsureSourceExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, string title, string type,
-        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog, string? date = null)
+        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog, string? date = null, string? seriesId = null)
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
+        // #180: seriesId defaults to null — every defensive call site (Character/Quote's own "ensure
+        // the referenced Source exists" checks) has no Series context of its own; only a genuine
+        // Source Add action (which does) passes one.
         var inserted = await connection.ExecuteAsync(Sql.Sources.InsertIfNotExists,
-            new { Id = id, Title = title, Type = type, Date = date, ImportBatchId = batchId, DateCreated = now }, transaction);
+            new { Id = id, Title = title, Type = type, Date = date, SeriesId = seriesId, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "source", id, ChangeAction.Created,
-                oldValue: null, newValue: new { title, type, date }, connection, transaction);
+                oldValue: null, newValue: new { title, type, date, seriesId }, connection, transaction);
+    }
+
+    private async Task EnsureSeriesExistsAsync(
+        SqliteConnection connection, SqliteTransaction transaction, string id, string name, string? universeId,
+        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+    {
+        var inserted = await connection.ExecuteAsync(Sql.Series.InsertIfNotExists,
+            new { Id = id, Name = name, UniverseId = universeId, ImportBatchId = batchId, DateCreated = now }, transaction);
+        if (inserted > 0)
+            await QuoteSeedWriter.LogChangeAsync(changeLog, "series", id, ChangeAction.Created,
+                oldValue: null, newValue: new { name, universeId }, connection, transaction);
+    }
+
+    private async Task EnsureUniverseExistsAsync(
+        SqliteConnection connection, SqliteTransaction transaction, string id, string name,
+        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+    {
+        var inserted = await connection.ExecuteAsync(Sql.Universe.InsertIfNotExists,
+            new { Id = id, Name = name, ImportBatchId = batchId, DateCreated = now }, transaction);
+        if (inserted > 0)
+            await QuoteSeedWriter.LogChangeAsync(changeLog, "universe", id, ChangeAction.Created,
+                oldValue: null, newValue: new { name }, connection, transaction);
     }
 
     private async Task EnsureCharacterExistsAsync(
@@ -1202,6 +1282,7 @@ public sealed class SqliteImportActionService : IImportActionService
         Add("title", request.SourceTitle);
         Add("type", request.SourceType);
         Add("date", request.SourceDate);
+        Add("seriesId", request.SourceSeriesId);
 
         return map;
     }

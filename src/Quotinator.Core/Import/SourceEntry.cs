@@ -27,4 +27,11 @@ public sealed class SourceEntry
     /// <summary>Publication or release date. Imprecise ISO 8601 text (e.g. "1994", "1994-06"). Null when unknown.</summary>
     [JsonPropertyName("date")]
     public string? Date { get; init; }
+
+    /// <summary>
+    /// Name of the Series (#180) this Source belongs to, if any. Resolved to a Series id at import
+    /// time — never a raw id, matching how a quote's own <c>source</c>/<c>author</c> fields are text.
+    /// </summary>
+    [JsonPropertyName("seriesName")]
+    public string? SeriesName { get; init; }
 }

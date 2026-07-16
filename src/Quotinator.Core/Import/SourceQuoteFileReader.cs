@@ -49,10 +49,11 @@ public static class SourceQuoteFileReader
 
     /// <summary>
     /// Attempts to parse <paramref name="json"/> as either a bare <see cref="SourceQuote"/> array or the
-    /// full extended object format (<c>{ "quotes": [...], "sources": [...], "stageDirections": [...],
-    /// "soundCues": [...], "conversations": [...] }</c>). A bare array yields empty lists for the four
-    /// extended sections — same backward-compatibility rule as <see cref="TryParse"/>. Returns
-    /// <c>false</c> on invalid JSON or any entry missing a required field — never throws.
+    /// full extended object format (<c>{ "quotes": [...], "sources": [...], "people": [...],
+    /// "stageDirections": [...], "soundCues": [...], "conversations": [...], "series": [...],
+    /// "universe": [...] }</c>). A bare array yields empty lists for every extended section — same
+    /// backward-compatibility rule as <see cref="TryParse"/>. Returns <c>false</c> on invalid JSON or
+    /// any entry missing a required field — never throws.
     /// </summary>
     /// <param name="json">Raw file contents to parse.</param>
     /// <param name="result">The parsed file on success; <c>null</c> on failure.</param>
@@ -81,6 +82,8 @@ public static class SourceQuoteFileReader
                 StageDirections = root?["stageDirections"]?.Deserialize<List<SourceStageDirection>>(Options) ?? [],
                 SoundCues       = root?["soundCues"]?.Deserialize<List<SourceSoundCue>>(Options) ?? [],
                 Conversations   = root?["conversations"]?.Deserialize<List<SourceConversation>>(Options) ?? [],
+                Series          = root?["series"]?.Deserialize<List<SeriesEntry>>(Options) ?? [],
+                Universe        = root?["universe"]?.Deserialize<List<UniverseEntry>>(Options) ?? [],
             };
             return true;
         }

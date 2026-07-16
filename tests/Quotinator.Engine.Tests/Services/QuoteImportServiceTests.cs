@@ -338,6 +338,7 @@ public class QuoteImportServiceTests
         Assert.AreEqual(0, unrelatedQuoteCount, "The whole batch must be held — an unrelated quote sharing the batch must not be written either");
     }
 
+
     [TestMethod]
     public async Task ImportAsync_Review_BehavesLikeSkip()
     {

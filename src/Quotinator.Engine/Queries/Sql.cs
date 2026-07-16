@@ -244,25 +244,31 @@ internal static class Sql
         internal const string DeleteAll   = "DELETE FROM People;";
         internal const string SelectIdByName = "SELECT Id FROM People WHERE Name = @name AND IsDeleted = 0;";
 
-        /// <summary>#173's id-first lookup for an explicit <c>people[]</c> entry — mirrors <see cref="Sources.SelectExistingById"/>.</summary>
+        /// <summary>
+        /// #173's id-first lookup for an explicit <c>people[]</c> entry — mirrors
+        /// <see cref="Sources.SelectExistingById"/>. Case-insensitive (#180 fix, same reasoning as
+        /// <see cref="Sources.SelectExistingById"/>'s remark) — Person shares the identical exposure:
+        /// an <c>EntityIdentity</c>-derived (always uppercase) row later referenced by an explicit
+        /// <c>people[]</c> entry whose file-authored id casing isn't guaranteed to match.
+        /// </summary>
         internal const string SelectExistingById =
-            "SELECT Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM People WHERE Id = @id AND IsDeleted = 0;";
+            "SELECT Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM People WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 0;";
 
-        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string SelectCompletenessById =
-            "SELECT CompletenessStatus, NoValueKnown FROM People WHERE Id = @id;";
+            "SELECT CompletenessStatus, NoValueKnown FROM People WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string UpdateCompletenessById =
-            "UPDATE People SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE People SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>#173's Modify apply — writes an id-matched Person's corrected Name/DateOfBirth/DateOfDeath. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that.</summary>
+        /// <summary>#173's Modify apply — writes an id-matched Person's corrected Name/DateOfBirth/DateOfDeath. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string UpdateFieldsById =
-            "UPDATE People SET Name = @name, DateOfBirth = @dateOfBirth, DateOfDeath = @dateOfDeath, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE People SET Name = @name, DateOfBirth = @dateOfBirth, DateOfDeath = @dateOfDeath, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>Number of active (non-deleted) Quotes still referencing this Person — see <see cref="Characters.CountActiveReferences"/>'s remark.</summary>
+        /// <summary>Number of active (non-deleted) Quotes still referencing this Person — see <see cref="Characters.CountActiveReferences"/>'s remark. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string CountActiveReferences =
-            "SELECT COUNT(*) FROM Quotes WHERE PersonId = @id AND IsDeleted = 0;";
+            "SELECT COUNT(*) FROM Quotes WHERE UPPER(PersonId) = UPPER(@id) AND IsDeleted = 0;";
 
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
         internal const string InsertIfNotExists =
@@ -278,21 +284,33 @@ internal static class Sql
         internal const string SelectIdByTitleAndType =
             "SELECT Id FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
 
-        /// <summary>#162's id-first lookup for an explicit <c>sources[]</c> entry — a row already migrated to the explicit-id model. Distinct from <see cref="SelectIdByTitleAndType"/>'s natural-key fallback.</summary>
+        /// <summary>
+        /// #162's id-first lookup for an explicit <c>sources[]</c> entry — a row already migrated to
+        /// the explicit-id model. Distinct from <see cref="SelectIdByTitleAndType"/>'s natural-key
+        /// fallback. SeriesId added by #180.
+        ///
+        /// Case-insensitive (this project's GUID/enum parameter binding rule, CLAUDE.md) — a
+        /// file-authored id referencing an already-existing, <c>EntityIdentity</c>-derived row (which
+        /// is always stored uppercase) must match regardless of which case the file itself uses.
+        /// Found live while authoring #180's curated overlay file: a case mismatch here silently
+        /// matches nothing, mirroring the exact class of bug this project has already hit and fixed
+        /// piecemeal for GUID-typed query/route parameters — applied here on the same "case-insensitive
+        /// by default" principle, not waited for a second live report first.
+        /// </summary>
         internal const string SelectExistingById =
-            "SELECT Title, Type, Date, CompletenessStatus FROM Sources WHERE Id = @id AND IsDeleted = 0;";
+            "SELECT Title, Type, Date, SeriesId, CompletenessStatus FROM Sources WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 0;";
 
-        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string SelectCompletenessById =
-            "SELECT CompletenessStatus, NoValueKnown FROM Sources WHERE Id = @id;";
+            "SELECT CompletenessStatus, NoValueKnown FROM Sources WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string UpdateCompletenessById =
-            "UPDATE Sources SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE Sources SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>#162's Modify apply — writes an id-matched Source's corrected Title/Type/Date. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that.</summary>
+        /// <summary>#162's Modify apply — writes an id-matched Source's corrected Title/Type/Date/SeriesId (SeriesId added by #180). Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string UpdateFieldsById =
-            "UPDATE Sources SET Title = @title, Type = @type, Date = @date, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE Sources SET Title = @title, Type = @type, Date = @date, SeriesId = @seriesId, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
 
         /// <summary>
         /// Number of active (non-deleted) rows still referencing this Source — sums both direct
@@ -300,16 +318,73 @@ internal static class Sql
         /// multiple Sources, so this counts links to THIS Source specifically, not all of a
         /// Character's links), since a Character can outlive the specific Quote that introduced it
         /// (see <see cref="Characters.CountActiveReferences"/>'s remark for the reversal use case).
+        /// Case-insensitive — see <see cref="SelectExistingById"/>'s remark.
         /// </summary>
         internal const string CountActiveReferences =
-            "SELECT (SELECT COUNT(*) FROM Quotes WHERE SourceId = @id AND IsDeleted = 0) " +
+            "SELECT (SELECT COUNT(*) FROM Quotes WHERE UPPER(SourceId) = UPPER(@id) AND IsDeleted = 0) " +
             "+ (SELECT COUNT(*) FROM CharacterSources cs JOIN Characters c ON c.Id = cs.CharacterId " +
-            "   WHERE cs.SourceId = @id AND cs.IsDeleted = 0 AND c.IsDeleted = 0);";
+            "   WHERE UPPER(cs.SourceId) = UPPER(@id) AND cs.IsDeleted = 0 AND c.IsDeleted = 0);";
+
+        /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale. SeriesId (nullable) added by #180, resolved by name at planning time.</summary>
+        internal const string InsertIfNotExists =
+            "INSERT OR IGNORE INTO Sources (Id, Title, Type, Date, SeriesId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @Title, @Type, @Date, @SeriesId, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+    }
+
+    /// <summary>
+    /// Series table (#179 schema, #180 JSON wiring). Add-only from the import path — a Series has
+    /// only a Name, so there is no Modify/decidability surface the way Source/Person have.
+    /// </summary>
+    internal static class Series
+    {
+        internal const string CountActive = "SELECT COUNT(*) FROM Series WHERE IsDeleted = 0;";
+        internal const string DeleteAll   = "DELETE FROM Series;";
+        internal const string SelectIdByName = "SELECT Id FROM Series WHERE Name = @name AND IsDeleted = 0;";
+
+        /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale. UniverseId (nullable) is resolved by name at planning time, same as Sources.SeriesId.</summary>
+        internal const string InsertIfNotExists =
+            "INSERT OR IGNORE INTO Series (Id, Name, UniverseId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @Name, @UniverseId, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+
+        /// <summary>Number of active (non-deleted) Sources still referencing this Series — see <see cref="Characters.CountActiveReferences"/>'s remark.</summary>
+        internal const string CountActiveReferences =
+            "SELECT COUNT(*) FROM Sources WHERE SeriesId = @id AND IsDeleted = 0;";
+
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
+        internal const string SelectCompletenessById =
+            "SELECT CompletenessStatus, NoValueKnown FROM Series WHERE UPPER(Id) = UPPER(@id);";
+
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
+        internal const string UpdateCompletenessById =
+            "UPDATE Series SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
+    }
+
+    /// <summary>
+    /// Universe table (#179 schema, #180 JSON wiring). Add-only from the import path — a Universe has
+    /// only a Name, so there is no Modify/decidability surface the way Source/Person have.
+    /// </summary>
+    internal static class Universe
+    {
+        internal const string CountActive = "SELECT COUNT(*) FROM Universe WHERE IsDeleted = 0;";
+        internal const string DeleteAll   = "DELETE FROM Universe;";
+        internal const string SelectIdByName = "SELECT Id FROM Universe WHERE Name = @name AND IsDeleted = 0;";
 
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
         internal const string InsertIfNotExists =
-            "INSERT OR IGNORE INTO Sources (Id, Title, Type, Date, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
-            "VALUES (@Id, @Title, @Type, @Date, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+            "INSERT OR IGNORE INTO Universe (Id, Name, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @Name, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+
+        /// <summary>Number of active (non-deleted) Series still referencing this Universe — see <see cref="Characters.CountActiveReferences"/>'s remark.</summary>
+        internal const string CountActiveReferences =
+            "SELECT COUNT(*) FROM Series WHERE UniverseId = @id AND IsDeleted = 0;";
+
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
+        internal const string SelectCompletenessById =
+            "SELECT CompletenessStatus, NoValueKnown FROM Universe WHERE UPPER(Id) = UPPER(@id);";
+
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
+        internal const string UpdateCompletenessById =
+            "UPDATE Universe SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
     }
 
     /// <summary>

@@ -384,6 +384,32 @@ public class ManifestSeedPlannerTests
         Assert.AreEqual(DuplicateResolutionPolicy.MergeTheirs, files.Single().Policy?.Default);
     }
 
+    /// <summary>#180: the curated series/universe overlay file's own manifest entry must resolve to
+    /// Review, not the bundled top-level default (Skip) — a silently-applied Skip would mean a
+    /// genuine Source/Series/Universe field disagreement between two pieces of first-party data is
+    /// never surfaced to a human.</summary>
+    [TestMethod]
+    public void PlanSeed_SeriesUniverseOverlayEntry_ResolvesReviewNotBundledDefaultSkip()
+    {
+        WriteFile("quotinator-series-universe.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["duplicateResolution"] = new JsonObject { ["default"] = "skip" },
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "quotinator-series-universe.json",
+                ["name"] = "quotinator/series-universe",
+                ["duplicateResolution"] = new JsonObject { ["default"] = "review" }
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, topLevelPolicy) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.AreEqual(DuplicateResolutionPolicy.Skip, topLevelPolicy.Default, "Sanity check — the bundled top-level default really is Skip in this scenario");
+        Assert.AreEqual(DuplicateResolutionPolicy.Review, files.Single().Policy?.Default, "The file's own override must win over the bundled default");
+    }
+
     [TestMethod]
     public void PlanSeed_FileEntryOmitsDuplicateResolution_SeedFilePolicyIsNull()
     {

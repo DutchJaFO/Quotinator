@@ -41,22 +41,32 @@ internal static class ImportActionPlanner
         IReadOnlyList<SourceStageDirection>? stageDirections = null,
         IReadOnlyList<SourceSoundCue>? soundCues = null,
         IReadOnlyList<SourceConversation>? conversations = null,
-        IReadOnlyList<PersonEntry>? people = null)
+        IReadOnlyList<PersonEntry>? people = null,
+        IReadOnlyList<SeriesEntry>? series = null,
+        IReadOnlyList<UniverseEntry>? universe = null)
     {
         var actions        = new List<SystemImportAction>();
         var sourceIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var characterIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var personIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var seriesIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var universeIndex  = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var seenQuotes     = new Dictionary<string, SourceQuote>(StringComparer.Ordinal);
         var seenQuoteStatus = new Dictionary<string, CompletenessStatus>(StringComparer.Ordinal);
 
         var batchIdStr = batchId.ToString("D").ToUpperInvariant();
         var now        = DateTime.UtcNow;
 
+        // #180: Universe then Series are planned before Source — a declared series[] entry's own
+        // universeName must resolve against an already-built universe index, and a sources[] entry's
+        // seriesName must resolve against an already-built series index.
+        await PlanUniverseAsync(connection, universe ?? [], batchIdStr, universeIndex, actions, now, transaction);
+        await PlanSeriesAsync(connection, series ?? [], batchIdStr, universeIndex, seriesIndex, actions, now, transaction);
+
         // #162: explicit Source declarations are planned before quotes resolve — a quote may
         // reference a source this same file also declares explicitly, mirroring the existing
         // conversations/stageDirections/soundCues ordering.
-        await PlanSourcesAsync(connection, sources ?? [], batchIdStr, policy, sourceIndex, actions, now, transaction);
+        await PlanSourcesAsync(connection, sources ?? [], batchIdStr, policy, sourceIndex, seriesIndex, actions, now, transaction);
 
         // #173: same reasoning as Source above — a quote's author may reference a person this same
         // file also declares explicitly via people[].
@@ -284,9 +294,9 @@ internal static class ImportActionPlanner
         return stableId;
     }
 
-    /// <summary>Same key names as <see cref="Quotinator.Engine.Services.SqliteImportActionService"/>'s own private overload — must stay in sync, both feed the same decide-time <c>FieldMergeResolver</c> field-name vocabulary.</summary>
+    /// <summary>Same key names as <see cref="Quotinator.Engine.Services.SqliteImportActionService"/>'s own private overload — must stay in sync, both feed the same decide-time <c>FieldMergeResolver</c> field-name vocabulary. <c>seriesId</c> added by #180.</summary>
     private static IReadOnlyDictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
-        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date };
+        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId };
 
     /// <summary>Same key names as <see cref="Quotinator.Engine.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#171).</summary>
     private static IReadOnlyDictionary<string, object?> ToFieldMap(StageDirectionActionPayload payload) =>
@@ -305,18 +315,32 @@ internal static class ImportActionPlanner
     private static async Task PlanSourcesAsync(
         SqliteConnection connection, IReadOnlyList<SourceEntry> sources, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> sourceIndex,
-        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        Dictionary<string, string> seriesIndex, List<SystemImportAction> actions, DateTime now,
+        SqliteTransaction? transaction)
     {
         foreach (var s in sources)
         {
             var typeStr = s.Type.ToString();
-            var existing = await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+
+            // #180: seriesName resolves via the same-batch index first (populated by PlanSeriesAsync,
+            // which must run before this method), falling back to a DB lookup for a Series declared
+            // in an earlier batch. A seriesName with no match anywhere resolves to null — silently
+            // dropped, same as PlanSeriesAsync's own dangling-universeName treatment.
+            string? incomingSeriesId = null;
+            if (s.SeriesName is { } seriesName)
+                incomingSeriesId = seriesIndex.TryGetValue(seriesName, out var indexed)
+                    ? indexed
+                    : await connection.ExecuteScalarAsync<Guid?>(Sql.Series.SelectIdByName, new { name = seriesName }, transaction) is { } found
+                        ? found.ToString("D").ToUpperInvariant()
+                        : null;
+
+            var existing = await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.Sources.SelectExistingById, new { id = s.Id }, transaction);
 
             if (existing is { } row)
             {
-                var existingPayload = new SourceActionPayload(row.Title, row.Type, row.Date);
-                var incomingPayload = new SourceActionPayload(s.Title, typeStr, s.Date);
+                var existingPayload = new SourceActionPayload(row.Title, row.Type, row.Date, row.SeriesId);
+                var incomingPayload = new SourceActionPayload(s.Title, typeStr, s.Date, incomingSeriesId);
                 var existingFields  = ToFieldMap(existingPayload);
                 var incomingFields  = ToFieldMap(incomingPayload);
 
@@ -333,7 +357,7 @@ internal static class ImportActionPlanner
                 var resolved    = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
-                        new SourceActionPayload((string)mergeResult!.MergedFields["title"]!, (string)mergeResult.MergedFields["type"]!, (string?)mergeResult.MergedFields["date"]),
+                        new SourceActionPayload((string)mergeResult!.MergedFields["title"]!, (string)mergeResult.MergedFields["type"]!, (string?)mergeResult.MergedFields["date"], (string?)mergeResult.MergedFields["seriesId"]),
                     DuplicateResolutionPolicy.Skip => existingPayload,
                     _ => incomingPayload,
                 };
@@ -401,7 +425,7 @@ internal static class ImportActionPlanner
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.Source,
                 EntityId      = s.Id,
-                IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(s.Title, typeStr, s.Date)),
+                IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(s.Title, typeStr, s.Date, incomingSeriesId)),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
             });
@@ -512,6 +536,88 @@ internal static class ImportActionPlanner
                 EntityType    = ImportActionEntityTypes.Person,
                 EntityId      = p.Id,
                 IncomingValue = JsonSerializer.Serialize(new PersonActionPayload(p.Name, p.DateOfBirth, p.DateOfDeath)),
+                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt    = now,
+            });
+        }
+    }
+
+    // ── #180: explicit Universe/Series planning ──────────────────────────────
+    // Add-only, natural-key-keyed by Name — no explicit id in the file (unlike Source/Person), since
+    // EntityIdentity.SeriesId/UniverseId derives it from the name alone. No Modify/merge semantics:
+    // a Universe/Series entry that already exists by name is simply reused (indexed for a dependent
+    // Series/Source to resolve against), never diffed or re-staged.
+
+    private static async Task PlanUniverseAsync(
+        SqliteConnection connection, IReadOnlyList<UniverseEntry> universes, string batchId,
+        Dictionary<string, string> universeIndex, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        foreach (var u in universes)
+        {
+            var matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
+                Sql.Universe.SelectIdByName, new { name = u.Name }, transaction);
+            if (matchesByKey is not null)
+            {
+                universeIndex[u.Name] = matchesByKey.Value.ToString("D").ToUpperInvariant();
+                continue;
+            }
+
+            var stableId = EntityIdentity.UniverseId(u.Name);
+            universeIndex[u.Name] = stableId;
+
+            actions.Add(new SystemImportAction
+            {
+                BatchId       = batchId,
+                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType    = ImportActionEntityTypes.Universe,
+                EntityId      = stableId,
+                IncomingValue = JsonSerializer.Serialize(new UniverseActionPayload(u.Name)),
+                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt    = now,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Resolves a declared <c>series[]</c> entry's <c>universeName</c> against <paramref name="universeIndex"/>
+    /// — populated by <see cref="PlanUniverseAsync"/>, which must run first in <see cref="PlanAsync"/>.
+    /// A <c>universeName</c> with no matching entry in the file's own <c>universe[]</c> section and no
+    /// existing DB row resolves to <c>null</c> (silently dropped, not an error) — #180's spec does not
+    /// require validating a dangling reference; a future issue can add that if it becomes a real need.
+    /// </summary>
+    private static async Task PlanSeriesAsync(
+        SqliteConnection connection, IReadOnlyList<SeriesEntry> series, string batchId,
+        Dictionary<string, string> universeIndex, Dictionary<string, string> seriesIndex,
+        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        foreach (var s in series)
+        {
+            var matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
+                Sql.Series.SelectIdByName, new { name = s.Name }, transaction);
+            if (matchesByKey is not null)
+            {
+                seriesIndex[s.Name] = matchesByKey.Value.ToString("D").ToUpperInvariant();
+                continue;
+            }
+
+            string? universeId = null;
+            if (s.UniverseName is { } universeName)
+                universeId = universeIndex.TryGetValue(universeName, out var indexed)
+                    ? indexed
+                    : await connection.ExecuteScalarAsync<Guid?>(Sql.Universe.SelectIdByName, new { name = universeName }, transaction) is { } found
+                        ? found.ToString("D").ToUpperInvariant()
+                        : null;
+
+            var stableId = EntityIdentity.SeriesId(s.Name);
+            seriesIndex[s.Name] = stableId;
+
+            actions.Add(new SystemImportAction
+            {
+                BatchId       = batchId,
+                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType    = ImportActionEntityTypes.Series,
+                EntityId      = stableId,
+                IncomingValue = JsonSerializer.Serialize(new SeriesActionPayload(s.Name, universeId)),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
             });
@@ -811,8 +917,14 @@ internal sealed class QuoteActionPayload
     public string? PersonId { get; init; }
 }
 
-/// <summary>Staged payload for a Source Add/Modify <see cref="SystemImportAction"/> (#162 adds <see cref="Date"/>).</summary>
-internal sealed record SourceActionPayload(string Title, string Type, string? Date = null);
+/// <summary>Staged payload for a Source Add/Modify <see cref="SystemImportAction"/> (#162 adds <see cref="Date"/>; #180 adds <see cref="SeriesId"/> — a resolved id, not the file's own <c>seriesName</c> text).</summary>
+internal sealed record SourceActionPayload(string Title, string Type, string? Date = null, string? SeriesId = null);
+
+/// <summary>Staged payload for a Series Add <see cref="SystemImportAction"/> (#180). <see cref="UniverseId"/> is a resolved id, not the file's own <c>universeName</c> text.</summary>
+internal sealed record SeriesActionPayload(string Name, string? UniverseId = null);
+
+/// <summary>Staged payload for a Universe Add <see cref="SystemImportAction"/> (#180).</summary>
+internal sealed record UniverseActionPayload(string Name);
 
 /// <summary>
 /// Staged payload for a Character Add <see cref="SystemImportAction"/>. Carries the owning Source's

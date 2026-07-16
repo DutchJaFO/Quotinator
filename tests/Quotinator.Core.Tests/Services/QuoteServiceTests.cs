@@ -15,13 +15,19 @@ public class QuoteServiceTests
                        .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
             : [];
 
-    /// <summary>Each committed source file exists, is valid JSON, and contains at least one quote.</summary>
+    /// <summary>
+    /// Each committed source file exists, is valid JSON, and contains at least one quote — except
+    /// quotinator-series-universe.json (#180), whose entire purpose is Source/Series/Universe
+    /// enrichment with a deliberately empty quotes[] section.
+    /// </summary>
     [TestMethod]
     public void Load_EachSourceFile_ReturnsQuotes()
     {
         Assert.IsTrue(Directory.Exists(SourcesDir), $"data/sources/ not found at: {SourcesDir}");
 
-        var files = SourceFiles.ToList();
+        var files = SourceFiles
+            .Where(f => !Path.GetFileName(f).Equals("quotinator-series-universe.json", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         Assert.IsTrue(files.Count > 0, "data/sources/ contains no JSON source files");
 
         foreach (var file in files)

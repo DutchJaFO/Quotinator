@@ -36,6 +36,16 @@
       "type": "array",
       "description": "Ordered groupings of quotes, stage directions, and sound cues.",
       "items": { "$ref": "#/$defs/conversation" }
+    },
+    "series": {
+      "type": "array",
+      "description": "Optional explicit Series declarations (#180) — a direct continuity of Sources within a Universe. Matched by name only; no explicit id, since the id is generated from the name.",
+      "items": { "$ref": "#/$defs/series" }
+    },
+    "universe": {
+      "type": "array",
+      "description": "Optional explicit Universe declarations (#180) — a fictional world or franchise spanning one or more Series. Matched by name only; no explicit id, since the id is generated from the name.",
+      "items": { "$ref": "#/$defs/universe" }
     }
   },
   "$defs": {
@@ -85,10 +95,28 @@
       "required": ["id", "title", "type"],
       "additionalProperties": false,
       "properties": {
-        "id":    { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
-        "title": { "type": "string", "minLength": 1 },
-        "type":  { "type": "string", "enum": ["movie", "tv", "anime", "book", "person"] },
-        "date":  { "type": ["string", "null"] }
+        "id":         { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive. A file authoring a Source id that must match an already-existing, EntityIdentity-derived row (#154) needs uppercase specifically, since that row's id is always stored uppercase and Sources' id-matching queries are case-sensitive (#180) — unlike this pattern, which accepts either case." },
+        "title":      { "type": "string", "minLength": 1 },
+        "type":       { "type": "string", "enum": ["movie", "tv", "anime", "book", "person"] },
+        "date":       { "type": ["string", "null"] },
+        "seriesName": { "type": ["string", "null"], "description": "Name of the Series (#180) this Source belongs to, if any. Resolved to a Series id at import time — never a raw id, matching how a quote's own 'source'/'author' fields are text, not ids." }
+      }
+    },
+    "series": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name":         { "type": "string", "minLength": 1 },
+        "universeName": { "type": ["string", "null"], "description": "Name of the Universe (#180) this Series belongs to, if any. Resolved to a Universe id at import time, same as Source.seriesName." }
+      }
+    },
+    "universe": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 }
       }
     },
     "person": {

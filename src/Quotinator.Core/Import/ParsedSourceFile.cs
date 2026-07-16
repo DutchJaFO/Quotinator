@@ -20,4 +20,10 @@ public sealed class ParsedSourceFile
 
     /// <summary>Ordered groupings of quotes, stage directions, and sound cues. Empty for a flat-format file.</summary>
     public IReadOnlyList<SourceConversation> Conversations { get; init; } = [];
+
+    /// <summary>Explicit Series declarations (#180). Empty for a flat-format file or a file with no <c>series</c> section.</summary>
+    public IReadOnlyList<SeriesEntry> Series { get; init; } = [];
+
+    /// <summary>Explicit Universe declarations (#180). Empty for a flat-format file or a file with no <c>universe</c> section.</summary>
+    public IReadOnlyList<UniverseEntry> Universe { get; init; } = [];
 }
