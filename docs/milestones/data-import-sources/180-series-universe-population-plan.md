@@ -1,6 +1,6 @@
 # #180 — Populate Series/Universe data via curated overlay file (review-only, staged)
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #180
 **Tiers required:** T1, T2
 **Depends on:** #179 (Series/Universe schema)
@@ -254,7 +254,7 @@ entry plus the schema-table row) both updated.
 | 9 | ✅ | An entry omitting its id is matched by natural key and stages a `seriesId`-only Modify — never a duplicate `Add`, and never a silent skip | Unit test | `PlanSourcesAsync_NoExplicitId_NaturalKeyMatch_SeriesNameSet_StagesModify` / `..._NoSeriesName_NoActionStaged` / `..._AlreadyTagged_NoActionStaged` / `..._NoMatchAtAll_StagesAddWithComputedId` / `..._CompleteStatus_SeriesNameSet_StagesBlocked` |
 | 10 | ✅ | An entry omitting `date` never resets the existing row's date | Unit test | `PlanSourcesAsync_NoExplicitId_OmittedDate_PreservesExistingDate` |
 | 11 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 12 | ⬜ | T1 — app starts in Visual Studio, overlay file seeds without error, `Series`/`Universe` visible via `Quotinator.Tools.DbInspector` | Live (T1) | Developer to confirm in Visual Studio |
+| 12 | ✅ | T1 — app starts in Visual Studio, the overlay file seeds without error, and stages its actions `Pending` rather than silently applying | Live (T1) | Confirmed by the developer 2026-07-16. Startup log: `importing 0 quotes from quotinator-series-universe.json` → `left staged awaiting review — batch 2FEBAED1-A29A-467C-AC3E-B1E02DCC4D05, 75 action(s) pending a decision`, and the file order confirms the manifest reorder (curated → NikhilNamal17 → vilaboim → series-universe last). 75 matches T2 exactly. **Requires a reseed** (`POST /api/v1/admin/database/reseed`) on an existing dev database — `SeedIfEmptyAsync` short-circuits once any quote exists, so a first run against an accumulated database silently exercises none of this |
 | 13 | ✅ | T2 — Docker smoke test: seed with the overlay file present, confirm all 75 Source actions stage `Pending` `Modify` under Review with only `seriesId` differing (not silently applied, not `Add`), decide+apply all, confirm `SeriesId` set on exactly 75 rows via a checkpointed DB copy | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + full decide/apply cycle + `Quotinator.Tools.DbInspector` — 479 sources / 75 tagged confirmed; see Notes for the three bugs this pass caught |
 
 ---
@@ -272,6 +272,16 @@ Any recurring-conflict automation is explicitly out of scope — see Background.
 bespoke auto-resolution mechanism here; #153 is the tracked issue for that, whenever it lands.
 
 **Deferred gaps found during implementation, not fixed here:**
+
+- **Nothing reads the data this issue populates.** `QuoteResponse` carries no `series`/`universe`
+  field and no endpoint filters on either, so a consumer cannot see or use a Source's Series/Universe
+  from a quote at all — #179 built the schema, #180 fills it, and the read path was never scoped by
+  either. Raised by the developer on first seeing a live quote response during T1 review (2026-07-16).
+  Filed as **#192**, which depends on #183 for the filter-parameter convention rather than inventing
+  its own. This is worth knowing when judging #180's own value: on its own it is a data-population
+  issue whose output is only observable via `Quotinator.Tools.DbInspector` or (once they land) the
+  masterdata list endpoints (#187/#188) — #192 is what makes it reachable from the quote API that
+  motivated #169 in the first place.
 
 - **An import file cannot express "leave this property alone."** Every optional field on every entry
   DTO is a plain nullable (`SourceEntry.Date`, `PersonEntry.DateOfBirth`/`DateOfDeath`,
