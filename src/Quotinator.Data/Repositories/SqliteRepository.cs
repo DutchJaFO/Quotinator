@@ -14,7 +14,7 @@ namespace Quotinator.Data.Repositories;
 /// recursion must be avoided (e.g. <see cref="SystemAuditWriter"/>).
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
-public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T> where T : RecordBase
+public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, IListableRepository<T> where T : RecordBase
 {
     private readonly ISystemAuditWriter _auditWriter;
     private readonly ICallerContext     _callerContext;
@@ -89,6 +89,33 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T> where
         conn.Open();
         await conn.ExecuteAsync(RepositorySql.SoftDelete(TableName), param);
         await _auditWriter.WriteAsync(BuildEntry(AuditOperation.SoftDelete, id), conn);
+    }
+
+    /// <inheritdoc/>
+    public async Task<(IReadOnlyList<T> Items, int TotalCount)> GetPageAsync(
+        int page, int pageSize, IReadOnlyList<SortColumn>? orderBy = null, IUnitOfWork? unitOfWork = null)
+    {
+        if (orderBy is { Count: > 0 })
+            foreach (var col in orderBy)
+                if (!ValidColumnNames.Contains(col.Name))
+                    throw new ArgumentException($"'{col.Name}' is not a valid column on {typeof(T).Name}.", nameof(orderBy));
+
+        var limit  = pageSize == 0 ? -1 : pageSize;
+        var offset = pageSize == 0 ? 0  : (page - 1) * pageSize;
+        var param  = new { limit, offset };
+        var sql    = RepositorySql.SelectPage(TableName, orderBy);
+
+        if (unitOfWork is SqliteUnitOfWork uow)
+        {
+            var total = await uow.Connection.ExecuteScalarAsync<int>(RepositorySql.CountActive(TableName), transaction: uow.Transaction);
+            var rows  = await uow.Connection.QueryAsync<T>(sql, param, uow.Transaction);
+            return (rows.ToList(), total);
+        }
+        using var conn = Factory.CreateConnection();
+        conn.Open();
+        var totalCount = await conn.ExecuteScalarAsync<int>(RepositorySql.CountActive(TableName));
+        var items      = await conn.QueryAsync<T>(sql, param);
+        return (items.ToList(), totalCount);
     }
 
     /// <inheritdoc/>

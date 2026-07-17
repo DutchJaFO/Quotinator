@@ -24,6 +24,17 @@ public abstract class SqliteRepositoryBase<T> where T : class
         ?? throw new InvalidOperationException(
             $"{typeof(T).Name} must carry a [Table(\"..\")] attribute from Dapper.Contrib.Extensions.");
 
+    // Property names double as column names for every entity today — no [Column] remapping exists
+    // anywhere in the codebase. [Write(false)]/[Computed] properties are excluded because Dapper.Contrib
+    // never persists them, so they are not real columns a query could sort by.
+    /// <summary>Column names <typeparamref name="T"/> actually persists — used to validate a caller-supplied sort column before it reaches SQL.</summary>
+    protected static readonly HashSet<string> ValidColumnNames = new(
+        typeof(T).GetProperties()
+            .Where(p => p.GetCustomAttribute<WriteAttribute>()?.Write != false
+                     && p.GetCustomAttribute<ComputedAttribute>() is null)
+            .Select(p => p.Name),
+        StringComparer.Ordinal);
+
     /// <summary>Initialises the base with the connection factory.</summary>
     protected SqliteRepositoryBase(IDbConnectionFactory factory)
     {

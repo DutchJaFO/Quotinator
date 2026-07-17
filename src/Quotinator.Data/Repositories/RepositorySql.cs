@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Quotinator.Data.Repositories;
 
 /// <summary>SQL factory methods for <see cref="SqliteRepository{T}"/> and <see cref="SqliteRestorableRepository{T}"/>.</summary>
@@ -8,6 +10,9 @@ namespace Quotinator.Data.Repositories;
 /// </remarks>
 internal static class RepositorySql
 {
+    private static readonly Regex IdentifierPattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
+    private static readonly IReadOnlyList<SortColumn> DefaultOrderBy = [new SortColumn("DateCreated")];
+
     /// <summary>Selects an active record by primary key.</summary>
     internal static string SelectById(string tableName)
         => $"SELECT * FROM {tableName} WHERE Id = @id AND IsDeleted = 0";
@@ -53,4 +58,33 @@ internal static class RepositorySql
     /// </summary>
     internal static string SelectByIds(string tableName)
         => $"SELECT * FROM [{tableName}] WHERE [Id] IN @ids AND [IsDeleted] = 0";
+
+    /// <summary>
+    /// Selects a page of active records, ordered by <paramref name="orderBy"/> (defaulting to
+    /// <c>DateCreated</c> ascending when <see langword="null"/> or empty) with <c>Id</c> always
+    /// appended last as a tiebreaker, so no row is ever repeated or skipped across pages.
+    /// </summary>
+    /// <remarks>
+    /// Each <see cref="SortColumn.Name"/> must be a bare identifier. Unlike <paramref name="tableName"/>
+    /// — auto-derived from <c>[Table]</c> via reflection, structurally impossible for user input to
+    /// reach — <see cref="SortColumn.Name"/> is an explicit argument at each call site, so it gets its
+    /// own guard here. Whether the name is an actual column on the entity is validated separately, by
+    /// the caller (<see cref="SqliteRepository{T}.GetPageAsync"/>), which knows <c>T</c> and can check
+    /// against <see cref="SqliteRepositoryBase{T}.ValidColumnNames"/> — this method only knows
+    /// <paramref name="tableName"/> as a string and cannot make that check itself.
+    /// </remarks>
+    internal static string SelectPage(string tableName, IReadOnlyList<SortColumn>? orderBy = null)
+    {
+        var columns = orderBy is { Count: > 0 } ? orderBy : DefaultOrderBy;
+        foreach (var col in columns)
+            if (!IdentifierPattern.IsMatch(col.Name))
+                throw new ArgumentException($"'{col.Name}' is not a valid column identifier.", nameof(orderBy));
+
+        var clause = string.Join(", ", columns.Select(c => c.Descending ? $"{c.Name} DESC" : c.Name));
+        return $"SELECT * FROM {tableName} WHERE IsDeleted = 0 ORDER BY {clause}, Id LIMIT @limit OFFSET @offset";
+    }
+
+    /// <summary>Counts active (non-deleted) records in the table.</summary>
+    internal static string CountActive(string tableName)
+        => $"SELECT COUNT(*) FROM {tableName} WHERE IsDeleted = 0";
 }

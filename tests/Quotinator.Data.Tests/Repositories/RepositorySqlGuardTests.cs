@@ -35,6 +35,11 @@ public class RepositorySqlGuardTests
             ["SelectByForeignKey",   RepositorySql.SelectByForeignKey(t, "ParentId")],
             ["SelectJunctionRow",    RepositorySql.SelectJunctionRow(t, "LeftId", "RightId")],
             ["SelectByIds",          RepositorySql.SelectByIds(t)],
+            ["SelectPage(default order)", RepositorySql.SelectPage(t)],
+            ["SelectPage(single column)", RepositorySql.SelectPage(t, [new SortColumn("Label")])],
+            ["SelectPage(descending)",    RepositorySql.SelectPage(t, [new SortColumn("Label", Descending: true)])],
+            ["SelectPage(multi-column)",  RepositorySql.SelectPage(t, [new SortColumn("Label"), new SortColumn("DateCreated", Descending: true)])],
+            ["CountActive",               RepositorySql.CountActive(t)],
 
             // Audit factory methods — all four filter-flag combinations.
             ["SystemAudit.SelectPaged(false,false)", Sql.SystemAudit.SelectPaged(false, false)],

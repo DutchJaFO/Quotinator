@@ -297,6 +297,18 @@ builder.Services.AddSingleton<IRestorableRepository<ConversationEntity>, SqliteR
 builder.Services.AddSingleton<IRestorableRepository<StageDirectionEntity>, SqliteRestorableRepository<StageDirectionEntity>>();
 builder.Services.AddSingleton<IRestorableRepository<SoundCueEntity>, SqliteRestorableRepository<SoundCueEntity>>();
 
+// #193: listable-repository capability, needed by #184-#189's masterdata list endpoints.
+// SeriesEntity/UniverseEntity get their first repository of any kind here; the other four resolve to
+// their existing IRestorableRepository<T> singleton above — a second interface binding onto the same
+// object (SqliteRestorableRepository<T> already implements IListableRepository<T> transitively, since
+// it extends SqliteRepository<T>), not a second instance.
+builder.Services.AddSingleton<IListableRepository<SeriesEntity>, SqliteRepository<SeriesEntity>>();
+builder.Services.AddSingleton<IListableRepository<UniverseEntity>, SqliteRepository<UniverseEntity>>();
+builder.Services.AddSingleton<IListableRepository<Source>>(sp => (IListableRepository<Source>)sp.GetRequiredService<IRestorableRepository<Source>>());
+builder.Services.AddSingleton<IListableRepository<Character>>(sp => (IListableRepository<Character>)sp.GetRequiredService<IRestorableRepository<Character>>());
+builder.Services.AddSingleton<IListableRepository<Person>>(sp => (IListableRepository<Person>)sp.GetRequiredService<IRestorableRepository<Person>>());
+builder.Services.AddSingleton<IListableRepository<ConversationEntity>>(sp => (IListableRepository<ConversationEntity>)sp.GetRequiredService<IRestorableRepository<ConversationEntity>>());
+
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
 // real Serilog pipeline at the same point in startup as the rest of seeding — not through a
