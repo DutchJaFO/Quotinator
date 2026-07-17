@@ -48,9 +48,18 @@ red before implementation.
 **Status:** Not started.
 
 Add `SelectPage(tableName)` and the generic count alongside the existing `SelectById`/`SoftDelete`/
-`SelectDeleted`/`Restore`/`HardDelete`/`Purge`. Table names come from the `[Table]` attribute and are
-interpolated — safe for the reason `RepositorySql`'s own class remarks already document (developer
--controlled metadata, not user input; SQLite cannot parameterise identifiers).
+`SelectDeleted`/`Restore`/`HardDelete`/`Purge`/`SelectByForeignKey`/`SelectJunctionRow`/`SelectByIds`.
+Table names come from the `[Table]` attribute and are interpolated — safe for the reason
+`RepositorySql`'s own class remarks already document (developer-controlled metadata, not user input;
+SQLite cannot parameterise identifiers).
+
+Manually add both new methods to `RepositorySqlCases()` in
+`tests/Quotinator.Data.Tests/Repositories/RepositorySqlGuardTests.cs`. **This is not automatic**:
+`RepositorySql`'s methods return interpolated strings, not `const` fields, so they are structurally
+invisible to `SqlQueryGuardTests`'s reflection-based matrix (which only walks
+`Quotinator.Data.Queries.Sql`'s nested `const string` fields). `RepositorySql`'s own guard is a
+separate, manually-hardcoded list — a new factory method here ships with zero guard coverage unless
+it is added to that list by hand.
 
 The `ORDER BY` must be stable, or `LIMIT`/`OFFSET` can repeat or skip a row across pages — SQLite
 gives no ordering guarantee without one.
@@ -108,7 +117,7 @@ Full suite green, 0 warnings. T1/T2 confirm the app still starts with the new re
 | 6 | ❌ | A page beyond the last returns empty items with the correct total | Unit test | `GetPageAsync_PageBeyondLastPage_ReturnsEmptyItemsWithCorrectTotal` — starts red. At this layer an out-of-range page is legitimately empty; #195 turns it into a 422 |
 | 7 | ❌ | Order is stable across pages — no row repeated or skipped | Unit test | `GetPageAsync_StableOrderAcrossPages_NoRowRepeatedOrSkipped` — starts red |
 | 8 | ❌ | `TotalCount` reports all active rows, ignoring paging | Unit test | `GetPageAsync_TotalCountIgnoresPaging_ReportsAllActiveRows` — starts red |
-| 9 | ❌ | The new factory methods are covered by the SQL aggregate guard | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests` — reflected matrix picks them up automatically; confirm the documented aggregate inventory still matches |
+| 9 | ❌ | The new factory methods are covered by `RepositorySql`'s own guard | Unit test | `Quotinator.Data.Tests.Repositories.RepositorySqlGuardTests` — manually add `SelectPage` and the new count method to `RepositorySqlCases()`; **not** picked up by `SqlQueryGuardTests`'s reflected matrix, which only walks `Quotinator.Data.Queries.Sql`'s `const string` fields and cannot see `RepositorySql`'s interpolated-string methods |
 | 10 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
 | 11 | ❌ | T1 — app starts in Visual Studio with the new DI registrations resolving | Live (T1) | Developer to confirm in Visual Studio |
 | 12 | ❌ | T2 — container starts and serves traffic with the new registrations | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + `curl -s http://localhost:8080/api/v1/health` |
