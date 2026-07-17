@@ -93,7 +93,7 @@ public class EnumParameterSchemaTransformerTests
         // GetAll is registered as group.MapGet("/", GetAll), which reports RelativePath
         // "api/v1/quotes/" (trailing slash) rather than the bare "api/v1/quotes" the other
         // two /quotes paths use — this silently broke both this transformer and the
-        // pre-existing YearParameterSchemaTransformer until caught live.
+        // pre-existing NumericParameterSchemaTransformer until caught live.
         var schema = await TransformAndGetSchema(ArrayParam("type"), "api/v1/quotes/");
         CollectionAssert.AreEquivalent(new[] { "movie", "tv", "anime", "book", "person" },
             ((OpenApiSchema)schema!.Items!).Enum!.Select(v => v!.ToString()).ToArray());

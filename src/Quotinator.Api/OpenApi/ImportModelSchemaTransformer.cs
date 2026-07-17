@@ -8,7 +8,7 @@ namespace Quotinator.Api.OpenApi;
 
 /// <summary>
 /// Two schema corrections for the import endpoints' response models, mirroring
-/// <see cref="YearParameterSchemaTransformer"/>'s "the real type is more specific than what the
+/// <see cref="NumericParameterSchemaTransformer"/>'s "the real type is more specific than what the
 /// generator inferred" pattern — applied to response bodies instead of query parameters.
 /// </summary>
 /// <remarks>

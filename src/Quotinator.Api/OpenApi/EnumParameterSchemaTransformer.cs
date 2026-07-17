@@ -12,7 +12,7 @@ namespace Quotinator.Api.OpenApi;
 /// <para>
 /// <c>type</c>, <c>field</c>, <c>status</c>, and <c>entityType</c> are validated against a fixed
 /// vocabulary but bound as <c>string</c>/<c>string[]</c> in the handler signature — same reasoning
-/// as <see cref="YearParameterSchemaTransformer"/>, so the generator infers an unconstrained schema.
+/// as <see cref="NumericParameterSchemaTransformer"/>, so the generator infers an unconstrained schema.
 /// </para>
 /// <para>
 /// Values are derived from their actual source of truth in every case
@@ -57,7 +57,7 @@ internal sealed class EnumParameterSchemaTransformer : IOpenApiOperationTransfor
     /// <inheritdoc/>
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
     {
-        var path = (context.Description.RelativePath ?? string.Empty).TrimEnd('/');
+        var path = ScopedPath.From(context.Description.RelativePath);
         if (!EnumParamsByPath.TryGetValue(path, out var paramMap))
             return Task.CompletedTask;
 

@@ -149,7 +149,7 @@ internal static class QuoteEndpoints
         IQuoteService service,
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        [Description("Number of quotes to return (1–100). Omit for a single random quote.")] string? n = null,
+        [Description("Number of quotes to return (1–100). Omit for a single random quote."), DefaultValue(QueryParamDefaults.RandomCount)] string? n = null,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null,
         [Description("Filter by source type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
         [Description("Filter by genre tag (repeatable, e.g. `sci-fi`, `drama`). Multiple values use OR logic.")] string[]? genre = null,
@@ -165,7 +165,7 @@ internal static class QuoteEndpoints
 
         if (ValidateCommon(localizer, lang) is { } err) return err;
 
-        var count = 1;
+        var count = QueryParamDefaults.RandomCount;
         if (n is not null && (!int.TryParse(n, out count) || count < 1 || count > 100))
             return Results.Problem(
                 detail: localizer[ApiMessages.RandomNOutOfRange],
@@ -241,7 +241,7 @@ internal static class QuoteEndpoints
         IApiLocalizer localizer,
         ILogger<Log> logger,
         [Description("Search term. Matched case-insensitively against the selected field (or all fields when `field` is omitted).")] string? q = null,
-        [Description("Maximum number of results to return (1–100)."), DefaultValue(20)] string? limit = null,
+        [Description("Maximum number of results to return (1–100)."), DefaultValue(QueryParamDefaults.SearchLimit)] string? limit = null,
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
         [Description("Filter by genre tag (repeatable, e.g. `sci-fi`, `drama`). Multiple values use OR logic.")] string[]? genre = null,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null,
@@ -265,7 +265,7 @@ internal static class QuoteEndpoints
                 detail: localizer[ApiMessages.SearchQueryTooLong],
                 statusCode: StatusCodes.Status400BadRequest);
 
-        var limitValue = 20;
+        var limitValue = QueryParamDefaults.SearchLimit;
         if (limit is not null && (!int.TryParse(limit, out limitValue) || limitValue < 1 || limitValue > 100))
             return Results.Problem(
                 detail: localizer[ApiMessages.LimitOutOfRange],
@@ -315,8 +315,8 @@ internal static class QuoteEndpoints
         IQuoteService service,
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        [Description("Page number, 1-based."), DefaultValue(1)] string? page = null,
-        [Description("Number of quotes per page (1–100)."), DefaultValue(20)] string? pageSize = null,
+        [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
+        [Description("Number of quotes per page (1–100)."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
         [Description("Filter by genre tag (repeatable, e.g. `sci-fi`, `drama`). Multiple values use OR logic.")] string[]? genre = null,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null,
@@ -329,13 +329,13 @@ internal static class QuoteEndpoints
 
         if (ValidateCommon(localizer, lang) is { } err) return err;
 
-        var pageValue = 1;
+        var pageValue = QueryParamDefaults.Page;
         if (page is not null && (!int.TryParse(page, out pageValue) || pageValue < 1))
             return Results.Problem(
                 detail: localizer[ApiMessages.PageOutOfRange],
                 statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        var pageSizeValue = 20;
+        var pageSizeValue = QueryParamDefaults.PageSize;
         if (pageSize is not null && (!int.TryParse(pageSize, out pageSizeValue) || pageSizeValue < 1 || pageSizeValue > 100))
             return Results.Problem(
                 detail: localizer[ApiMessages.PageSizeOutOfRange],
