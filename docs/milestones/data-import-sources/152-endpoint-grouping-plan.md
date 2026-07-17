@@ -90,7 +90,8 @@ Updated the two moved rows' paths and reordered both tables so all `Import`-tagg
 `ImportEndpointTests.cs`: all `/api/v1/quotes/import`(`/preview`) literals updated to the
 new paths (prefix replacement also correctly updated the `/preview` variant). New
 `AdminApiKeySecurityTransformerTests.cs` (mirrors
-`YearParameterSchemaTransformerTests.cs`'s structure): security requirement set when the
+`NumericParameterSchemaTransformerTests.cs`'s structure, named `YearParameterSchemaTransformerTests.cs`
+at the time this test was written — renamed by #194): security requirement set when the
 marker metadata is present, absent otherwise (marker missing, or unrelated metadata
 present). `QuoteImportServiceTests.cs`'s doc-comment route reference also corrected.
 

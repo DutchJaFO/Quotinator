@@ -374,16 +374,17 @@ Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.
 
 `/search` is registered before `/{id}` in `QuoteEndpoints.cs` so the literal segment takes priority over the catch-all parameter. Preserve this order.
 
-### Year parameter binding pattern
+### Numeric query parameter binding pattern
 
-`yearFrom`, `yearTo`, `year`, and `decade` are declared as `string?` in handler signatures rather than `int?`. This is deliberate: when declared as `int?`, ASP.NET Core's parameter binder throws `BadHttpRequestException` on invalid input (e.g. `yearFrom=1980x`) and the exception propagates unhandled through the entire middleware stack before being caught accidentally by `UseExceptionHandler`. Declaring them as `string?` lets `TryParseYear()` in `QuoteEndpoints.cs` catch the parse failure at the point of origin and return a 422 immediately.
+`yearFrom`, `yearTo`, `year`, `decade`, `page`, `pageSize`, `n`, and `limit` are declared as `string?` in handler signatures rather than `int?`. This is deliberate: when declared as `int?`, ASP.NET Core's parameter binder throws `BadHttpRequestException` on invalid input (e.g. `yearFrom=1980x`) and the exception propagates unhandled through the entire middleware stack before being caught accidentally by `UseExceptionHandler`. Declaring them as `string?` lets `TryParseYear()` (or the equivalent inline `int.TryParse`) in `QuoteEndpoints.cs` catch the parse failure at the point of origin and return a 422 immediately.
 
-The downside is that the OpenAPI generator infers `type: string` from the C# type, which is wrong. An operation transformer in `Program.cs` patches the schema back to `type: integer` for the three affected endpoints (`api/v1/quotes`, `api/v1/quotes/random`, `api/v1/quotes/search`). The transformer is scoped explicitly to those paths — do not add any endpoint to that set unless it also uses `TryParseYear`.
+The downside is that the OpenAPI generator infers `type: string` from the C# type, which is wrong, and drops any `[DefaultValue]` attribute along with it. `NumericParameterSchemaTransformer` (`src/Quotinator.Api/OpenApi/NumericParameterSchemaTransformer.cs`) patches both back — the schema to `type: integer` and, for parameters registered with one, the published `default` — via a registry keyed by **path and parameter name together**. Registering only the path patches nothing: this is the exact gap #194 found, where `api/v1/quotes` was registered for the year params but `page`/`pageSize` were never added alongside them.
 
-**Rules for adding new numeric query parameters:**
+**Rules for adding new numeric query parameter:**
 - Declare as `string?` and parse with `int.TryParse` (or a dedicated helper) — never `int?`
 - Return 422 on parse failure via `Results.Problem`
-- Add the endpoint path to the year-param schema transformer in `Program.cs`
+- If the parameter has a real default, add it to `Quotinator.Constants.Api.QueryParamDefaults` and use that constant in the `[DefaultValue(...)]` attribute and the handler's own fallback — one value, not three independently-drifting copies
+- Add **both** the endpoint path and the parameter name (with its default, or `null` if it has none) to `NumericParameterSchemaTransformer.NumericParamsByPath`
 
 ### GUID/enum/id comparisons are case-insensitive by default
 
