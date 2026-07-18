@@ -41,4 +41,7 @@ public static class ApiMessages
     public const string ImportFileOrBatchIdRequired      = "ErrorImportFileOrBatchIdRequired";
     public const string ImportActionBatchNotReversible   = "ErrorImportActionBatchNotReversible";
     public const string ConversationNotFound             = "ErrorConversationNotFound";
+    public const string MutuallyExclusiveEntityFilter    = "ErrorMutuallyExclusiveEntityFilter";
+    public const string InvalidEntityFilterId            = "ErrorInvalidEntityFilterId";
+    public const string EntityFilterNoMatch              = "InfoEntityFilterNoMatch";
 }

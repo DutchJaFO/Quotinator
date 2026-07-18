@@ -64,10 +64,12 @@ builder.Services.AddOpenApi(options =>
     {
         document.Tags = new HashSet<OpenApiTag>
         {
-            new() { Name = ApiTags.System,  Description = "Endpoints for monitoring and verifying the health of the API." },
-            new() { Name = ApiTags.Quotes,  Description = "Endpoints for fetching and searching quotes." },
-            new() { Name = ApiTags.Admin,   Description = "Administrative endpoints for database maintenance. Require `X-Api-Key` authentication. Protected by a concurrency-1 limiter — only one operation runs at a time; any concurrent request receives `429 Too Many Requests` immediately." },
-            new() { Name = ApiTags.Import,  Description = "Endpoints for importing quote data and reviewing/resolving merge conflicts. Write operations require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter." },
+            new() { Name = ApiTags.System,        Description = "Endpoints for monitoring and verifying the health of the API." },
+            new() { Name = ApiTags.Quotes,        Description = "Endpoints for fetching and searching quotes." },
+            new() { Name = ApiTags.Admin,         Description = "Administrative endpoints for database maintenance. Require `X-Api-Key` authentication. Protected by a concurrency-1 limiter — only one operation runs at a time; any concurrent request receives `429 Too Many Requests` immediately." },
+            new() { Name = ApiTags.Import,        Description = "Endpoints for importing quote data and reviewing/resolving merge conflicts. Write operations require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter." },
+            new() { Name = ApiTags.Conversations, Description = "Endpoints for fetching multi-line conversations (a stage direction and/or sound cue alongside one or more quotes)." },
+            new() { Name = ApiTags.MasterData,    Description = "Endpoints for fetching the shared reference data — Sources, Characters, People, Series, and Universes — that quotes and conversations are built from." },
         };
 
         document.Info = new()

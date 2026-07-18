@@ -374,6 +374,21 @@ Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.
 
 `/search` is registered before `/{id}` in `QuoteEndpoints.cs` so the literal segment takes priority over the catch-all parameter. Preserve this order.
 
+### Masterdata routing convention
+
+`/api/v1/masterdata/` is the route prefix for the five masterdata entities — Sources, Characters, People,
+Series, and Universes (`GET /api/v1/masterdata/sources`, `GET /api/v1/masterdata/sources/{id}`, and so on
+for each entity) — tagged `ApiTags.MasterData` in the OpenAPI/Scalar UI. This coexists with the flat
+top-level plural pattern `/quotes` and `/import/actions` already use, deliberately: masterdata entities are
+the shared reference data that quotes and conversations are built from, and grouping them under one prefix
+makes that relationship legible in the API surface, rather than scattering five unrelated-looking
+top-level routes.
+
+**`/api/v1/conversations` deliberately keeps its own route and `ApiTags.Conversations` tag — it does not
+move under `/masterdata/`.** Conversations is a *consumer* of masterdata (it embeds quotes, which
+reference Sources/Characters), not a masterdata entity itself. Stated explicitly here so the next reader
+doesn't reasonably assume the omission was an oversight.
+
 ### Numeric query parameter binding pattern
 
 `yearFrom`, `yearTo`, `year`, `decade`, `page`, `pageSize`, `n`, and `limit` are declared as `string?` in handler signatures rather than `int?`. This is deliberate: when declared as `int?`, ASP.NET Core's parameter binder throws `BadHttpRequestException` on invalid input (e.g. `yearFrom=1980x`) and the exception propagates unhandled through the entire middleware stack before being caught accidentally by `UseExceptionHandler`. Declaring them as `string?` lets `TryParseYear()` (or the equivalent inline `int.TryParse`) in `QuoteEndpoints.cs` catch the parse failure at the point of origin and return a 422 immediately.
@@ -447,6 +462,38 @@ otherwise be a manual `curl | grep` check of the live spec.
 Any GUID, enum, or other identifier comparison is **case-insensitive by default** — never case-sensitive, and never behind a config toggle. This applies wherever two independently-cased copies of the same identifier can meet, not only at the REST route/query-parameter boundary: `.NET` serializes a `Guid` lowercase by default, but stored values in this codebase are consistently uppercase (`Guid.ToString("D").ToUpperInvariant()`), and a curator-authored JSON file's own explicit id (e.g. a `sources[]`/`people[]` entry referencing an already-existing, `EntityIdentity`-derived row) is under no obligation to match that casing either. The pattern is `UPPER(column) = UPPER(@param)` in the `Sql.cs` query (see `Sql.Conversations.SelectForRead`, `Sql.SystemImportActions.SelectAllForBatch`'s `BuildWhere`, `Sql.Sources`/`Sql.People`'s `SelectExistingById`/`UpdateFieldsById`/`UpdateCompletenessById`/`CountActiveReferences`).
 
 Found and fixed piecemeal across `status`/`entityType`/`batchId` (#154), a conversation `{id}` route (#69), and Sources'/People's own id-first lookup used by an explicit `sources[]`/`people[]` entry (#180) before being recognised as a general rule that applies to every id-matching comparison in the codebase, not just route/query parameters. When adding any new GUID/enum/id-valued parameter or SQL id-match, apply case-insensitive matching from the start rather than waiting for it to be reported as a bug on that specific one — and when fixing an instance of this bug, grep the same file/module for sibling comparisons of the same kind and fix them together, since this class of bug has repeatedly turned out to affect more than the one reported case.
+
+### Entity-scoped filter-parameter convention
+
+Any endpoint that filters by a related masterdata entity (e.g. "quotes from this Source", "characters in
+this Universe") exposes **two mutually-exclusive parameters**: an id-valued form (`{entity}Id`, e.g.
+`sourceId`) and a name-valued form (`{entity}`, e.g. `source`). Supplying both is invalid. This is #196's
+convention, implemented once as the shared `EntityFilterParsing.ResolveAsync`
+(`src/Quotinator.Api/Endpoints/Shared/EntityFilterParsing.cs`) rather than reinvented per endpoint.
+
+**The name-valued form is resolved to the entity's id first — it is not a direct SQL contains-match.**
+`ResolveAsync` takes a caller-supplied `resolveIdByName` delegate (the consuming endpoint's own repository
+lookup) and looks the name up *before* any list/filter query runs. If nothing matches, the caller already
+knows there will be zero related results and returns that informatively — `EntityFilterOutcome.NotFound`
+with a populated `Message` — rather than running a query that would also come back empty. This is
+deliberately not a 422: a name that doesn't exist is a legitimate "no results" case, matching the existing
+`FilteredResultStatus.NoResults` precedent (`QuoteEndpoints.cs:207-216`, 200 + empty items + an informative
+message), not bad input.
+
+**Validation**: supplying both parameters, or an id-valued one that isn't a well-formed GUID, both return
+422 with a `detail`, never the framework binder's bare 400 — consistent with #183's pagination contract.
+Once resolved to an id (whether supplied directly or found by name), matching is a case-insensitive exact
+match (`UPPER(column) = UPPER(@id)`), per the case-insensitive-by-default rule above.
+
+**Explicit exemption: `/quotes/search` and `/quotes/random`.** Their existing `character`/`author`/`source`
+filters stay fuzzy, direct contains-matches — this convention is for *new* entity-scoped filters
+(#184–#189, #192), not a retrofit of Search/RandomQuote's existing behaviour.
+
+`EntityFilterParsing`'s three messages use `string.Format` on a localised template with `{0}`/`{1}`
+placeholders (the same pattern as `ApiMessages.ImportActionAmbiguousFieldsUnresolved`,
+`ImportEndpoints.cs:174`) — `IApiLocalizer` itself has no interpolation support (`this[string key]` is a
+flat lookup), so the caller formats the resolved template with the specific parameter/entity names rather
+than the message being generic.
 
 ### Vocabulary and abbreviations
 

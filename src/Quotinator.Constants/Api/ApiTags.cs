@@ -8,4 +8,5 @@ public static class ApiTags
     public const string Admin         = "Admin";
     public const string Import        = "Import";
     public const string Conversations = "Conversations";
+    public const string MasterData    = "MasterData";
 }
