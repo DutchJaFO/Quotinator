@@ -557,6 +557,7 @@ app.MapSourceEndpoints();
 app.MapCharacterEndpoints();
 app.MapPersonEndpoints();
 app.MapSeriesEndpoints();
+app.MapUniverseEndpoints();
 
 // Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
 // Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.

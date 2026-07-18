@@ -36,6 +36,8 @@ The REST API is accessible in two ways:
 | `GET /api/v1/masterdata/people/{id}` | Person by UUID |
 | `GET /api/v1/masterdata/series` | Paginated list of Series — direct continuities of Sources within a Universe (`page`, `pageSize`) |
 | `GET /api/v1/masterdata/series/{id}` | Series by UUID. Includes a `universe` reference (`{id, name}`, or `null` if the series has no universe) |
+| `GET /api/v1/masterdata/universes` | Paginated list of Universes — fictional worlds or franchises spanning one or more Series (`page`, `pageSize`) |
+| `GET /api/v1/masterdata/universes/{id}` | Universe by UUID |
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/version` | Running version |
 | `POST /api/v1/import` | Import one source file (JSON or, via `converter: "csv"` in `settings`, CSV) — same duplicate-detection engine as startup seeding. Multipart fields: `file`, `settings` (optional JSON: `converter`, `duplicateResolution`, `enrich`) — or pass `batchId` (query string) instead of `file` to apply a batch already staged by a prior `/import`/`/import/preview` call. Stages then attempts to apply — `200` when everything applied, `202` when any row needs a decision, `422` if neither `file` nor `batchId` is given. Returns a summary/conflicts/errors envelope (requires `X-Api-Key`) |

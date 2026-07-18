@@ -1,6 +1,6 @@
 # #188 — Masterdata: GET /api/v1/masterdata/universes list + get-by-id
 
-**Status:** Planning
+**Status:** In progress (step 7)
 **GitHub issue:** #188
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196, #179
@@ -113,7 +113,7 @@ when a concrete consumer needs it.
 
 ### 1. `UniverseResponse` DTO
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Models/UniverseResponse.cs`, namespace `Quotinator.Api.Models` (new
 folder — first response DTO under `Quotinator.Api`, since every existing response DTO either lives in
@@ -160,7 +160,7 @@ for them. If a future issue needs them, add them then.
 
 ### 2. `ApiMessages.UniverseNotFound` + i18n lockstep
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `src/Quotinator.Constants/Api/ApiMessages.cs`:
 ```csharp
@@ -174,7 +174,7 @@ Add to all three `i18ntext/UI.*.json` files (mirroring `ErrorConversationNotFoun
 
 ### 3. `UniverseEndpoints.cs`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Endpoints/UniverseEndpoints.cs`, static class `UniverseEndpoints`,
 extension method `MapUniverseEndpoints(this WebApplication app)`. Mirrors `AdminEndpoints.cs`'s
@@ -251,7 +251,7 @@ binding pattern" rule ("Add both the endpoint path and the parameter name... to
 
 ### 4. `FakeUniverseRepository`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Fakes/FakeUniverseRepository.cs`, implementing
 `IListableRepository<UniverseEntity>` (which extends `IRepository<UniverseEntity>` — full member list:
@@ -293,7 +293,7 @@ distinguishable from each other with one fake instance per test.
 
 ### 5. `UniverseEndpointsTests.cs`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Endpoints/UniverseEndpointsTests.cs`. `CreateFactory()` mirrors
 `AdminAuditEndpointTests.cs`'s pattern (`FakeQuoteService` + `NoOpDatabaseInitializer` boilerplate +
@@ -331,7 +331,7 @@ assertion #184/#185/#186/#187 each make explicit for their own `SafeValue<T>` fi
 
 ### 6. Documentation
 
-**Status:** Not started.
+**Status:** Done.
 
 - `README.md`'s REST API Endpoints table: add
   `| GET | \`/api/v1/masterdata/universes\` | All universes, paginated (\`page\`, \`pageSize\`) |` and
@@ -343,7 +343,20 @@ assertion #184/#185/#186/#187 each make explicit for their own `SafeValue<T>` fi
 
 ### 7. Verify
 
-**Status:** Not started.
+**Status:** Done for the automated portion. `dotnet build --configuration Release` → 0 warnings, 0
+errors. `dotnet test --configuration Release --verbosity normal` → full suite green (1454 tests across
+all projects), 0 warnings, 0 errors. Red/green proven live: temporarily commenting out
+`app.MapUniverseEndpoints()` in `Program.cs` turned 12 of `UniverseEndpointsTests`' 14 tests red (the
+remaining 2 — `GetUniverseById_MalformedId_Returns404NotBadRequest` and
+`GetAllUniverses_PageBeyondLast_Returns422DistinctDetail` — pass coincidentally on a bare-404/framework-
+routing basis, matching the same known limitation `SourceEndpointsTests`'/`SeriesEndpointsTests`'
+equivalent tests already have); restoring the registration turned the full suite green again. T1/T2
+below still require the developer/live Docker pass.
+
+T1 (developer, Visual Studio): clean startup; `GET /api/v1/masterdata/universes` and
+`GET /api/v1/masterdata/universes/{id}` both reachable and return the expected shape. Not yet run.
+
+T2 (Docker): `docker build` + `docker run`, then the Step 7 curl matrix above. Not yet run.
 
 `dotnet build --configuration Release` → must be 0 warnings, 0 errors. `dotnet test --configuration
 Release --verbosity normal` → full suite green, no regression. T1 (developer, Visual Studio) and T2
@@ -367,18 +380,18 @@ rule that the list only grows.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `GET /api/v1/masterdata/universes` returns a paginated `PagedItems<UniverseResponse>` | Unit test | `UniverseEndpointsTests.GetAllUniverses_ReturnsPaginatedResults` |
-| 2 | ❌ | `GET /api/v1/masterdata/universes/{id}` returns the universe for a known id | Unit test | `UniverseEndpointsTests.GetUniverseById_ExistingId_ReturnsUniverse` |
-| 3 | ❌ | `GET /api/v1/masterdata/universes/{id}` returns 404 for an unknown well-formed id | Unit test | `UniverseEndpointsTests.GetUniverseById_UnknownId_Returns404` |
-| 4 | ❌ | `GET /api/v1/masterdata/universes/{id}` matches case-insensitively | Unit test | `UniverseEndpointsTests.GetUniverseById_LowercaseId_MatchesCaseInsensitively` |
-| 5 | ❌ | A malformed `{id}` also returns 404, not a 422/500 | Unit test | `UniverseEndpointsTests.GetUniverseById_MalformedId_Returns404NotBadRequest` |
-| 6 | ❌ | The list endpoint satisfies CLAUDE.md's full eight-case pagination matrix | Unit test | `UniverseEndpointsTests`' 8 pagination-matrix tests (Step 5 table) |
-| 7 | ❌ | `IListableRepository<UniverseEntity>` DI registration is unchanged by this issue (pre-existing, from #193) | Doc/code review | `Program.cs:308` — confirmed already present before this issue started |
-| 8 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `UniverseEndpoints_OnLiveSpec_TaggedMasterData` |
-| 9 | ❌ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | `UniverseEndpointsTests.GetUniverseById_ExistingId_ReturnsUniverse` (shape assertion) |
-| 10 | ❌ | `README.md` and `addon/DOCS.md` document both endpoints | Doc review | Both files' REST API Endpoints tables |
-| 11 | ❌ | `ErrorUniverseNotFound` exists and is non-empty in all three `i18ntext/UI.*.json` files | Unit test | `TranslationCompletenessTests` (existing, regression) |
-| 12 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite, 0 warnings, 0 errors |
+| 1 | ✅ | `GET /api/v1/masterdata/universes` returns a paginated `PagedItems<UniverseResponse>` | Unit test | `UniverseEndpointsTests.GetAllUniverses_ReturnsPaginatedResults` |
+| 2 | ✅ | `GET /api/v1/masterdata/universes/{id}` returns the universe for a known id | Unit test | `UniverseEndpointsTests.GetUniverseById_ExistingId_ReturnsUniverse` |
+| 3 | ✅ | `GET /api/v1/masterdata/universes/{id}` returns 404 for an unknown well-formed id | Unit test | `UniverseEndpointsTests.GetUniverseById_UnknownId_Returns404` |
+| 4 | ✅ | `GET /api/v1/masterdata/universes/{id}` matches case-insensitively | Unit test | `UniverseEndpointsTests.GetUniverseById_LowercaseId_MatchesCaseInsensitively` |
+| 5 | ✅ | A malformed `{id}` also returns 404, not a 422/500 | Unit test | `UniverseEndpointsTests.GetUniverseById_MalformedId_Returns404NotBadRequest` |
+| 6 | ✅ | The list endpoint satisfies CLAUDE.md's full eight-case pagination matrix | Unit test | `UniverseEndpointsTests`' 8 pagination-matrix tests (Step 5 table) |
+| 7 | ✅ | `IListableRepository<UniverseEntity>` DI registration is unchanged by this issue (pre-existing, from #193) | Doc/code review | `Program.cs:309` — confirmed already present before this issue started |
+| 8 | ✅ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `UniverseEndpoints_OnLiveSpec_TaggedMasterData` |
+| 9 | ✅ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | `UniverseEndpointsTests.GetUniverseById_ExistingId_ReturnsUniverse` (shape assertion) |
+| 10 | ✅ | `README.md` and `addon/DOCS.md` document both endpoints | Doc review | Both files' REST API Endpoints tables |
+| 11 | ✅ | `ErrorUniverseNotFound` exists and is non-empty in all three `i18ntext/UI.*.json` files | Unit test | `TranslationCompletenessTests` (existing, regression) |
+| 12 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite (1454 tests), 0 warnings, 0 errors |
 | 13 | ❌ | T1 — app starts in Visual Studio; both endpoints behave as specified | Live (T1) | Developer confirmed |
 | 14 | ❌ | T2 — the built image serves both endpoints correctly | Live (T2) | `docker build` + `docker run`: list/get-by-id/not-found matrix per Step 7 |
 

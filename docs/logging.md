@@ -252,6 +252,8 @@ Format: `[Subsystem - Phase] message text`
 | `[Api - GetPersonById]` | Entry to GET /api/v1/masterdata/people/{id} |
 | `[Api - GetAllSeries]` | Entry to GET /api/v1/masterdata/series |
 | `[Api - GetSeriesById]` | Entry to GET /api/v1/masterdata/series/{id} |
+| `[Api - GetAllUniverses]` | Entry to GET /api/v1/masterdata/universes |
+| `[Api - GetUniverseById]` | Entry to GET /api/v1/masterdata/universes/{id} |
 | `[Audit]` | Audit trail write operations (AuditWriter) |
 
 New subsystems must register a prefix in this table before their log lines land in a PR.
