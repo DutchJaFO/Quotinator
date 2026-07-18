@@ -72,6 +72,7 @@
   "ErrorSourceNotFound": "Er is geen bron gevonden met het opgegeven ID.",
   "ErrorCharacterNotFound": "Er is geen personage gevonden met het opgegeven ID.",
   "ErrorPersonNotFound": "Er is geen persoon gevonden met het opgegeven ID.",
+  "ErrorSeriesNotFound": "Er is geen serie gevonden met het opgegeven ID.",
   "ErrorMutuallyExclusiveEntityFilter": "Geef ofwel {0} ofwel {1} op, niet beide.",
   "ErrorInvalidEntityFilterId": "{0} moet een geldige identifier zijn.",
   "InfoEntityFilterNoMatch": "Geen {0} komt overeen met '{1}'.",

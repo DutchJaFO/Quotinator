@@ -407,6 +407,22 @@ internal static class Sql
         /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
         internal const string UpdateCompletenessById =
             "UPDATE Series SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
+
+        /// <summary>Active Universe reference for one Series — #187's GetById join. No row if the Series has no
+        /// Universe, or its Universe has been soft-deleted.</summary>
+        internal const string SelectUniverseReferenceForSeries =
+            "SELECT u.Id, u.Name FROM Series s " +
+            "JOIN Universe u ON u.Id = s.UniverseId AND u.IsDeleted = 0 " +
+            "WHERE s.Id = @seriesId AND s.IsDeleted = 0;";
+
+        /// <summary>
+        /// Active Universe references for a batch of Series in a single round-trip — #187's list join, avoiding
+        /// one query per row across a page. A Series with no active Universe link is simply absent from the result.
+        /// </summary>
+        internal const string SelectUniverseReferencesForSeries =
+            "SELECT s.Id AS SeriesId, u.Id AS UniverseId, u.Name AS UniverseName FROM Series s " +
+            "JOIN Universe u ON u.Id = s.UniverseId AND u.IsDeleted = 0 " +
+            "WHERE s.Id IN @seriesIds AND s.IsDeleted = 0;";
     }
 
     /// <summary>

@@ -47,4 +47,5 @@ public static class ApiMessages
     public const string SourceNotFound                   = "ErrorSourceNotFound";
     public const string CharacterNotFound                = "ErrorCharacterNotFound";
     public const string PersonNotFound                   = "ErrorPersonNotFound";
+    public const string SeriesNotFound                   = "ErrorSeriesNotFound";
 }

@@ -75,7 +75,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#184](https://github.com/DutchJaFO/Quotinator/issues/184) | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | In progress (step 10) | T1 ⬜ T2 ⬜ | [184-sources-list-plan.md](184-sources-list-plan.md) |
 | [#185](https://github.com/DutchJaFO/Quotinator/issues/185) | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | In progress (step 11) | T1 ⬜ T2 ⬜ | [185-characters-list-plan.md](185-characters-list-plan.md) |
 | [#186](https://github.com/DutchJaFO/Quotinator/issues/186) | Masterdata: GET /api/v1/masterdata/people list + get-by-id | In progress (step 9) | T1 ⬜ T2 ⬜ | [186-people-list-plan.md](186-people-list-plan.md) |
-| [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [187-series-list-plan.md](187-series-list-plan.md) |
+| [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | In progress (step 10) | T1 ⬜ T2 ⬜ | [187-series-list-plan.md](187-series-list-plan.md) |
 | [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [188-universes-list-plan.md](188-universes-list-plan.md) |
 | [#189](https://github.com/DutchJaFO/Quotinator/issues/189) | Conversations: GET /api/v1/conversations list endpoint | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release | T1 ✅ T2 ✅ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
@@ -204,7 +204,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 40 | #184 | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | In progress (step 10) |
 | 41 | #185 | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | In progress (step 11) |
 | 42 | #186 | Masterdata: GET /api/v1/masterdata/people list + get-by-id | In progress (step 9) |
-| 43 | #187 | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning |
+| 43 | #187 | Masterdata: GET /api/v1/masterdata/series list + get-by-id | In progress (step 10) |
 | 44 | #188 | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Planning |
 | 45 | #189 | Conversations: GET /api/v1/conversations list endpoint | Planning |
 | 46 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release |

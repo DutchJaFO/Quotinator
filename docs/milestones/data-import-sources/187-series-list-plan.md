@@ -1,6 +1,6 @@
 # #187 — Masterdata: GET /api/v1/masterdata/series list + get-by-id
 
-**Status:** Planning
+**Status:** In progress (step 10)
 **GitHub issue:** #187
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196, #179
@@ -154,7 +154,7 @@ itself introduces.
 
 ### 1. `SeriesResponse` DTO
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Models/SeriesResponse.cs`, namespace `Quotinator.Api.Models`:
 
@@ -190,7 +190,7 @@ passed into the mapping, since a single-table `SeriesEntity` mapping has no way 
 
 ### 2. `MasterDataReference` type + `ISeriesUniverseReferenceReader`
 
-**Status:** Not started.
+**Status:** Done.
 
 **`MasterDataReference`** — if not already created by whichever of #184/#185/#187 lands first (all three
 need it; create once, reuse), new file `src/Quotinator.Api/Models/MasterDataReference.cs`:
@@ -260,7 +260,7 @@ builder.Services.AddSingleton<ISeriesUniverseReferenceReader, SeriesUniverseRefe
 
 ### 3. Not-found message key + i18n lockstep
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `src/Quotinator.Constants/Api/ApiMessages.cs`:
 ```csharp
@@ -274,7 +274,7 @@ angegebenen ID gefunden."`).
 
 ### 4. `SeriesEndpoints.cs` — GetAll + GetById
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Endpoints/SeriesEndpoints.cs`, static class `SeriesEndpoints`, mirroring
 `AdminEndpoints`'s `/audit` handler (repository directly to `PagedItems<T>`, no service layer) for
@@ -369,7 +369,7 @@ Background).
 
 ### 5. Register `MapSeriesEndpoints()` in `Program.cs`
 
-**Status:** Not started.
+**Status:** Done.
 
 Add `app.MapSeriesEndpoints();` alongside the existing four `Map*Endpoints()` calls
 (`Program.cs:539-542`). `SeriesEntity` and `IListableRepository<T>` are already imported for the existing
@@ -379,7 +379,7 @@ extension method — the only new DI registration needed is Step 2's
 
 ### 6. Register the OpenAPI transformer path
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `NumericParameterSchemaTransformer.NumericParamsByPath`
 (`src/Quotinator.Api/OpenApi/NumericParameterSchemaTransformer.cs`):
@@ -395,7 +395,7 @@ Without it, `page`/`pageSize` publish as bare `string` in the OpenAPI spec inste
 
 ### 7. Test fixtures and tests
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Fakes/FakeSeriesRepository.cs` — the first fake implementing
 `IListableRepository<T>` in this codebase (no prior example to copy). Backed by an in-memory
@@ -472,7 +472,7 @@ mirroring #184's equivalent `SourceEndpoints` Series-reference tests:**
 
 ### 8. Documentation
 
-**Status:** Not started.
+**Status:** Done.
 
 Add a row for `GET /api/v1/masterdata/series` and `GET /api/v1/masterdata/series/{id}` to the REST API
 Endpoints table in both `README.md` and `addon/DOCS.md`, following the existing row format/placement
@@ -481,7 +481,11 @@ themselves (done inline in Step 4).
 
 ### 9. Solution file
 
-**Status:** Not started.
+**Status:** Done. All new files (`.cs`) land inside existing SDK-style project directories
+(`Quotinator.Api`, `Quotinator.Engine`, `Quotinator.Api.Tests`), which glob-include their own
+directory trees automatically — confirmed no individual `.cs` file is listed in `Quotinator.slnx`
+(projects are referenced only via their `.csproj`), matching #184/#185/#186's precedent of no
+`.slnx` change being required.
 
 Add the new files (`src/Quotinator.Api/Models/SeriesResponse.cs`, `src/Quotinator.Api/Models/
 MasterDataReference.cs` — if not already added by whichever of #184/#185/#187 lands first,
@@ -493,7 +497,14 @@ globs — verify by opening the solution.
 
 ### 10. Verify
 
-**Status:** Not started.
+**Status:** Done for the automated portion. `dotnet build --configuration Release` → 0 warnings, 0
+errors. `dotnet test --configuration Release --verbosity normal` → full suite green (1440 tests
+across all projects), 0 warnings, 0 errors. Red/green proven live: temporarily commenting out
+`app.MapSeriesEndpoints()` in `Program.cs` turned 14 of `SeriesEndpointsTests`' 22 tests red (the
+remaining 8 pass coincidentally on a bare-404/absent-property basis, matching the same known
+limitation `SourceEndpointsTests`' equivalent tests already have) and both new
+`OpenApiSpecEndpointTests` `[DataRow]` cases red; restoring the registration turned the full suite
+green again. T1/T2 (below) still require the developer/live Docker pass.
 
 `dotnet build --configuration Release` → 0 warnings, 0 errors. `dotnet test --configuration Release
 --verbosity normal` → full suite green, 0 warnings, 0 errors.
@@ -525,28 +536,28 @@ smoke-test list) once implemented, per this project's standing practice.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | `GetSeriesById_ExistingId_ReturnsSeries` (shape assertion) |
-| 2 | ❌ | `GET /api/v1/masterdata/series` returns a paginated list | Unit test | `GetAllSeries_ReturnsPaginatedResults` |
-| 3 | ❌ | `GET /api/v1/masterdata/series/{id}` returns 200 for an existing id | Unit test | `GetSeriesById_ExistingId_ReturnsSeries` |
-| 4 | ❌ | Unknown well-formed id returns 404 | Unit test | `GetSeriesById_UnknownId_Returns404` |
-| 5 | ❌ | Lowercase id matches case-insensitively | Unit test | `GetSeriesById_LowercaseId_MatchesCaseInsensitively` |
-| 6 | ❌ | Malformed (non-Guid) id returns 404, not a bare error | Unit test | `GetSeriesById_MalformedId_Returns404NotBadRequest` |
-| 7 | ❌ | `page=0` returns 422 | Unit test | `GetAllSeries_PageZero_Returns422` |
-| 8 | ❌ | Malformed `page` returns 422 | Unit test | `GetAllSeries_PageMalformed_Returns422` |
-| 9 | ❌ | Malformed `pageSize` returns 422 | Unit test | `GetAllSeries_PageSizeMalformed_Returns422` |
-| 10 | ❌ | Negative `pageSize` returns 422 | Unit test | `GetAllSeries_PageSizeNegative_Returns422` |
-| 11 | ❌ | `pageSize` above 500 returns 422, never silently clamped | Unit test | `GetAllSeries_PageSizeAbove500_Returns422NotSilentClamp` |
-| 12 | ❌ | `pageSize=0` returns every row with the effective count reported | Unit test | `GetAllSeries_PageSizeZero_ReturnsAllRowsAsOnePage` |
-| 13 | ❌ | Omitted `pageSize` defaults to 20 | Unit test | `GetAllSeries_PageSizeOmitted_DefaultsTo20` |
-| 14 | ❌ | Page beyond the last returns 422, distinct from case 7 | Unit test | `GetAllSeries_PageBeyondLast_Returns422DistinctDetail` |
-| 15 | ❌ | `page`/`pageSize` publish as `integer` on the live OpenAPI spec for `api/v1/masterdata/series` | Unit/Live | `NumericParameterSchemaTransformerTests` new case + `OpenApiSpecEndpointTests` new `[DataRow]` entries |
-| 16 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api` | Unit test | `SeriesEndpoints_OnLiveSpec_TaggedMasterData` |
-| 17 | ❌ | A Series with a Universe returns `universe` as `{id, name}` | Unit test | `GetSeriesById_SeriesHasUniverse_ReturnsUniverseReference` |
-| 18 | ❌ | A Series with no Universe returns `universe` as `null` | Unit test | `GetSeriesById_SeriesHasNoUniverse_ReturnsNullUniverse` |
-| 19 | ❌ | A Series whose Universe has been soft-deleted returns `universe` as `null`, not a dangling reference | Unit test | `GetSeriesById_UniverseSoftDeleted_ReturnsNullUniverse` |
-| 20 | ❌ | The list endpoint resolves each item's Universe independently via the batched reader | Unit test | `GetAllSeries_MultipleSeriesWithUniverse_BatchResolvesEachUniverse` |
-| 21 | ❌ | `README.md` and `addon/DOCS.md` endpoint tables updated | Doc review | Both files contain the new rows |
-| 22 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 1 | ✅ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | `GetSeriesById_ExistingId_ReturnsSeries` (shape assertion) |
+| 2 | ✅ | `GET /api/v1/masterdata/series` returns a paginated list | Unit test | `GetAllSeries_ReturnsPaginatedResults` |
+| 3 | ✅ | `GET /api/v1/masterdata/series/{id}` returns 200 for an existing id | Unit test | `GetSeriesById_ExistingId_ReturnsSeries` |
+| 4 | ✅ | Unknown well-formed id returns 404 | Unit test | `GetSeriesById_UnknownId_Returns404` |
+| 5 | ✅ | Lowercase id matches case-insensitively | Unit test | `GetSeriesById_LowercaseId_MatchesCaseInsensitively` |
+| 6 | ✅ | Malformed (non-Guid) id returns 404, not a bare error | Unit test | `GetSeriesById_MalformedId_Returns404NotBadRequest` |
+| 7 | ✅ | `page=0` returns 422 | Unit test | `GetAllSeries_PageZero_Returns422` |
+| 8 | ✅ | Malformed `page` returns 422 | Unit test | `GetAllSeries_PageMalformed_Returns422` |
+| 9 | ✅ | Malformed `pageSize` returns 422 | Unit test | `GetAllSeries_PageSizeMalformed_Returns422` |
+| 10 | ✅ | Negative `pageSize` returns 422 | Unit test | `GetAllSeries_PageSizeNegative_Returns422` |
+| 11 | ✅ | `pageSize` above 500 returns 422, never silently clamped | Unit test | `GetAllSeries_PageSizeAbove500_Returns422NotSilentClamp` |
+| 12 | ✅ | `pageSize=0` returns every row with the effective count reported | Unit test | `GetAllSeries_PageSizeZero_ReturnsAllRowsAsOnePage` |
+| 13 | ✅ | Omitted `pageSize` defaults to 20 | Unit test | `GetAllSeries_PageSizeOmitted_DefaultsTo20` |
+| 14 | ✅ | Page beyond the last returns 422, distinct from case 7 | Unit test | `GetAllSeries_PageBeyondLast_Returns422DistinctDetail` |
+| 15 | ✅ | `page`/`pageSize` publish as `integer` on the live OpenAPI spec for `api/v1/masterdata/series` | Unit/Live | `NumericParameterSchemaTransformerTests` new case + `OpenApiSpecEndpointTests` new `[DataRow]` entries |
+| 16 | ✅ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api` | Unit test | `SeriesEndpoints_OnLiveSpec_TaggedMasterData` |
+| 17 | ✅ | A Series with a Universe returns `universe` as `{id, name}` | Unit test | `GetSeriesById_SeriesHasUniverse_ReturnsUniverseReference` |
+| 18 | ✅ | A Series with no Universe returns `universe` as `null` | Unit test | `GetSeriesById_SeriesHasNoUniverse_ReturnsNullUniverse` |
+| 19 | ✅ | A Series whose Universe has been soft-deleted returns `universe` as `null`, not a dangling reference | Unit test | `GetSeriesById_UniverseSoftDeleted_ReturnsNullUniverse` |
+| 20 | ✅ | The list endpoint resolves each item's Universe independently via the batched reader | Unit test | `GetAllSeries_MultipleSeriesWithUniverse_BatchResolvesEachUniverse` |
+| 21 | ✅ | `README.md` and `addon/DOCS.md` endpoint tables updated | Doc review | Both files contain the new rows |
+| 22 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (1440 tests), 0 warnings, 0 errors |
 | 23 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmation |
 | 24 | ❌ | T2 — both endpoints behave per contract on the built image, including a live Universe reference resolving to `{id, name}` | Live (T2) | `docker build` + `docker run`, curl matrix from Step 10 |
 

@@ -320,6 +320,10 @@ builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenc
 // same "generic repository cannot express a join" reasoning as ISourceSeriesReferenceReader above.
 builder.Services.AddSingleton<ICharacterSourceLinkReader, CharacterSourceLinkReader>();
 
+// #187: resolves a Series' UniverseId to its Universe's (Id, Name) — same "generic repository cannot
+// express a join" reasoning as ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<ISeriesUniverseReferenceReader, SeriesUniverseReferenceReader>();
+
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
 // real Serilog pipeline at the same point in startup as the rest of seeding — not through a
@@ -552,6 +556,7 @@ app.MapConversationEndpoints();
 app.MapSourceEndpoints();
 app.MapCharacterEndpoints();
 app.MapPersonEndpoints();
+app.MapSeriesEndpoints();
 
 // Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
 // Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.
