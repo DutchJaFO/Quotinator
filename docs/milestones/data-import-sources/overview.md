@@ -72,11 +72,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#193](https://github.com/DutchJaFO/Quotinator/issues/193) | Generic listable repository capability + DI registrations for the six list entities | Waiting for release | T1 ✅ T2 ✅ | [193-listable-repository-plan.md](193-listable-repository-plan.md) |
 | [#195](https://github.com/DutchJaFO/Quotinator/issues/195) | Standard pagination contract: PagedItems&lt;T&gt;, shared parsing and not-found helpers | Waiting for release | T1 ✅ T2 ✅ | [195-pagination-contract-plan.md](195-pagination-contract-plan.md) |
 | [#196](https://github.com/DutchJaFO/Quotinator/issues/196) | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter-parameter shape | Waiting for release | T1 ✅ T2 ✅ | [196-masterdata-conventions-plan.md](196-masterdata-conventions-plan.md) |
-| [#184](https://github.com/DutchJaFO/Quotinator/issues/184) | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
-| [#185](https://github.com/DutchJaFO/Quotinator/issues/185) | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
-| [#186](https://github.com/DutchJaFO/Quotinator/issues/186) | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
-| [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
-| [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
+| [#184](https://github.com/DutchJaFO/Quotinator/issues/184) | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [184-sources-list-plan.md](184-sources-list-plan.md) |
+| [#185](https://github.com/DutchJaFO/Quotinator/issues/185) | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [185-characters-list-plan.md](185-characters-list-plan.md) |
+| [#186](https://github.com/DutchJaFO/Quotinator/issues/186) | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [186-people-list-plan.md](186-people-list-plan.md) |
+| [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [187-series-list-plan.md](187-series-list-plan.md) |
+| [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [188-universes-list-plan.md](188-universes-list-plan.md) |
 | [#189](https://github.com/DutchJaFO/Quotinator/issues/189) | Conversations: GET /api/v1/conversations list endpoint | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release | T1 ✅ T2 ✅ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
 | [#190](https://github.com/DutchJaFO/Quotinator/issues/190) | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
