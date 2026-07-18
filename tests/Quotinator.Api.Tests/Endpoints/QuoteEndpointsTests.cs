@@ -527,13 +527,22 @@ public class QuoteEndpointsTests
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
-    /// <summary>pageSize=0 is semantically out of range — returns 422.</summary>
+    /// <summary>pageSize=0 means "every item as one page" under #195's contract — succeeds, doesn't 422.</summary>
     [TestMethod]
-    public async Task GetAll_PageSizeZero_Returns422()
+    public async Task GetAll_PageSizeZero_Succeeds()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=0");
-        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>150 exceeds the old 100 max but not the new 500 max — succeeds under #195's contract.</summary>
+    [TestMethod]
+    public async Task Quotes_PageSize150_NowSucceeds()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=150");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
 
     /// <summary>A non-integer pageSize is the same kind of error as yearFrom=5f — returns 422.</summary>

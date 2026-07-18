@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
+using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Helpers;
@@ -229,11 +230,7 @@ internal static class QuoteEndpoints
         if (ValidateCommon(localizer, lang) is { } err) return err;
 
         var quote = service.GetById(id, lang);
-        return quote is null
-            ? Results.Problem(
-                detail: localizer[ApiMessages.QuoteNotFound],
-                statusCode: StatusCodes.Status404NotFound)
-            : Results.Ok(quote);
+        return NotFoundResult.OkOrNotFound(quote, localizer, ApiMessages.QuoteNotFound);
     }
 
     private static IResult Search(
@@ -316,7 +313,7 @@ internal static class QuoteEndpoints
         IApiLocalizer localizer,
         ILogger<Log> logger,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
-        [Description("Number of quotes per page (1–100)."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
+        [Description("Number of quotes per page (0–500). 0 means every matching quote as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
         [Description("Filter by genre tag (repeatable, e.g. `sci-fi`, `drama`). Multiple values use OR logic.")] string[]? genre = null,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null,
@@ -329,17 +326,8 @@ internal static class QuoteEndpoints
 
         if (ValidateCommon(localizer, lang) is { } err) return err;
 
-        var pageValue = QueryParamDefaults.Page;
-        if (page is not null && (!int.TryParse(page, out pageValue) || pageValue < 1))
-            return Results.Problem(
-                detail: localizer[ApiMessages.PageOutOfRange],
-                statusCode: StatusCodes.Status422UnprocessableEntity);
-
-        var pageSizeValue = QueryParamDefaults.PageSize;
-        if (pageSize is not null && (!int.TryParse(pageSize, out pageSizeValue) || pageSizeValue < 1 || pageSizeValue > 100))
-            return Results.Problem(
-                detail: localizer[ApiMessages.PageSizeOutOfRange],
-                statusCode: StatusCodes.Status422UnprocessableEntity);
+        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
+            return pageError!;
 
         if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, nameof(yearFrom));
         if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, nameof(yearTo));
@@ -367,6 +355,8 @@ internal static class QuoteEndpoints
         if (yf is not null && yt is not null && yf > yt)
             return Results.Problem(detail: localizer[ApiMessages.YearRangeInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        return Results.Ok(service.GetAll(pageValue, pageSizeValue, type, genre, lang, yf, yt));
+        var result = service.GetAll(pageValue, pageSizeValue, type, genre, lang, yf, yt);
+        return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
+            ?? Results.Ok(result);
     }
 }

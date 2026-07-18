@@ -16,11 +16,12 @@ public sealed class SystemAuditReader : SqliteRepositoryBase<SystemAuditEntry>, 
     public SystemAuditReader(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
-    public async Task<SystemAuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
+    public async Task<PagedItems<SystemAuditEntry>> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
     {
         var filterTable    = table    is not null;
         var filterRecordId = recordId is not null;
-        var offset         = (page - 1) * pageSize;
+        var limit           = pageSize == 0 ? -1 : pageSize;
+        var offset          = pageSize == 0 ? 0  : (page - 1) * pageSize;
 
         using var conn = Factory.CreateConnection();
         conn.Open();
@@ -29,10 +30,11 @@ public sealed class SystemAuditReader : SqliteRepositoryBase<SystemAuditEntry>, 
             Sql.SystemAudit.CountPaged(filterTable, filterRecordId),
             new { table, recordId });
 
-        var items = await conn.QueryAsync<SystemAuditEntry>(
+        var items = (await conn.QueryAsync<SystemAuditEntry>(
             Sql.SystemAudit.SelectPaged(filterTable, filterRecordId),
-            new { table, recordId, pageSize, offset });
+            new { table, recordId, pageSize = limit, offset })).ToList();
 
-        return new SystemAuditPageResult(items.ToList(), page, pageSize, total);
+        var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
+        return new PagedItems<SystemAuditEntry>(items, page, effectivePageSize, total);
     }
 }

@@ -159,15 +159,17 @@ public sealed class SqliteQuoteService : IQuoteService
             Sql.Quotes.CountGetAll(whereClause),
             parameters);
 
-        var offset = (page - 1) * pageSize;
+        var limit  = pageSize == 0 ? -1 : pageSize;
+        var offset = pageSize == 0 ? 0  : (page - 1) * pageSize;
         var p = new DynamicParameters(parameters);
-        p.Add("pageSize", pageSize);
+        p.Add("pageSize", limit);
         p.Add("offset",   offset);
         var rows = connection.Query<QuoteRow>(
             Sql.Quotes.SelectPaged(whereClause), p).ToList();
 
         var items = rows.Select(r => ToResponse(r, LoadGenres(connection, r.Id), lang, LoadConversationMemberships(connection, r.Id))).ToList();
-        return new PagedResult<QuoteResponse>(items, page, pageSize, total);
+        var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
+        return new PagedResult<QuoteResponse>(items, page, effectivePageSize, total);
     }
 
     /// <inheritdoc/>

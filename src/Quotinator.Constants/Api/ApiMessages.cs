@@ -9,6 +9,7 @@ public static class ApiMessages
     public const string RandomNOutOfRange    = "ErrorRandomNOutOfRange";
     public const string PageOutOfRange       = "ErrorPageOutOfRange";
     public const string PageSizeOutOfRange   = "ErrorPageSizeOutOfRange";
+    public const string PageBeyondLastPage   = "ErrorPageBeyondLastPage";
     public const string QuoteNotFound        = "ErrorQuoteNotFound";
     public const string LangInvalid          = "ErrorLangInvalid";
     public const string TypeInvalid          = "ErrorTypeInvalid";

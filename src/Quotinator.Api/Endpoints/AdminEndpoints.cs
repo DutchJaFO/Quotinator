@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using Quotinator.Api.Endpoints.Filters;
+using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Services;
@@ -75,31 +77,25 @@ internal static class AdminEndpoints
         publicGroup.MapGet("/audit", async (
             string? table,
             string? recordId,
-            int page     = 1,
-            int pageSize = 50,
+            IApiLocalizer localizer,
+            [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
+            [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
             ISystemAuditReader auditReader = null!) =>
         {
-            if (page < 1)       page     = 1;
-            if (pageSize < 1)   pageSize = 1;
-            if (pageSize > 200) pageSize = 200;
+            if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
+                return pageError!;
 
-            var result = await auditReader.GetPagedAsync(table, recordId, page, pageSize);
+            var result = await auditReader.GetPagedAsync(table, recordId, pageValue, pageSizeValue);
 
-            return Results.Ok(new
-            {
-                totalMatching = result.TotalCount,
-                totalPages    = result.TotalPages,
-                page          = result.Page,
-                pageSize      = result.PageSize,
-                items         = result.Items
-            });
+            return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
+                ?? Results.Ok(result);
         })
         .WithName("GetAuditLog")
         .WithSummary("Get audit log")
         .WithDescription(
             "Returns a paginated list of audit entries, newest first. " +
             "Filter by `table` (e.g. `Quotes`, `Database`) and/or `recordId` (Guid). " +
-            "Maximum `pageSize` is 200.");
+            "Maximum `pageSize` is 500.");
 
         // ── Admin-only ────────────────────────────────────────────────────────
 

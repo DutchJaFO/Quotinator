@@ -132,16 +132,19 @@ internal sealed class FakeQuoteService : IQuoteService
 
     public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null)
     {
-        var items = All
+        var filtered = All
             .Where(q => types is not { Length: > 0 } || types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)))
             .Where(q => genres is not { Length: > 0 } || q.Genres.Any(g => genres.Any(fg => g.Equals(fg, StringComparison.OrdinalIgnoreCase))))
             .Where(q => yearFrom is null || (ExtractYear(q.Date) is int y1 && y1 >= yearFrom))
             .Where(q => yearTo   is null || (ExtractYear(q.Date) is int y2 && y2 <= yearTo))
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
             .ToList();
 
-        return new PagedResult<QuoteResponse>(items, page, pageSize, All.Count);
+        var items = pageSize == 0
+            ? filtered
+            : filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
+        return new PagedResult<QuoteResponse>(items, page, effectivePageSize, All.Count);
     }
 
     public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null)

@@ -64,7 +64,7 @@ public class AdminAuditEndpointTests
         var doc  = JsonDocument.Parse(body);
         var root = doc.RootElement;
 
-        Assert.IsTrue(root.TryGetProperty("totalMatching", out _), "response must have totalMatching");
+        Assert.IsTrue(root.TryGetProperty("totalCount", out _), "response must have totalCount");
         Assert.IsTrue(root.TryGetProperty("totalPages",    out _), "response must have totalPages");
         Assert.IsTrue(root.TryGetProperty("page",          out _), "response must have page");
         Assert.IsTrue(root.TryGetProperty("pageSize",      out _), "response must have pageSize");
@@ -81,7 +81,7 @@ public class AdminAuditEndpointTests
         var response = await client.GetAsync("/api/v1/admin/audit");
         var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
-        Assert.AreEqual(0, doc.RootElement.GetProperty("totalMatching").GetInt32());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
@@ -97,7 +97,7 @@ public class AdminAuditEndpointTests
             PerformedAt = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
         };
 
-        var stubReader = new StubAuditReader(new SystemAuditPageResult([entry], 1, 50, 1));
+        var stubReader = new StubAuditReader(new PagedItems<SystemAuditEntry>([entry], 1, 50, 1));
         using var factory = CreateFactory(stubReader);
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
@@ -105,14 +105,59 @@ public class AdminAuditEndpointTests
         var response = await client.GetAsync("/api/v1/admin/audit");
         var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
-        Assert.AreEqual(1, doc.RootElement.GetProperty("totalMatching").GetInt32());
+        Assert.AreEqual(1, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
-    // ── Pagination clamp ──────────────────────────────────────────────────────
+    // ── Pagination contract (#195) ────────────────────────────────────────────
 
     [TestMethod]
-    public async Task GetAudit_PageSizeOver200_ClampedTo200()
+    public async Task Audit_PageSizeAbove500_Returns422NotSilentClamp()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=999");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
+    }
+
+    /// <summary>
+    /// A global <c>BadHttpRequestException</c> safety net already maps malformed binding failures to
+    /// 422 (see <c>BadRequestExceptionHandler</c>), so this was never a bare 400 — the genuine gap is
+    /// that it falls through to the generic <c>ErrorNumericParameterInvalid</c> message instead of the
+    /// specific pageSize detail #195's shared parser produces.
+    /// </summary>
+    [TestMethod]
+    public async Task Audit_PageSizeMalformed_Returns422WithSpecificDetailNotGenericFallback()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=abc");
+        var body     = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.IsFalse(body.Contains("Numeric parameters (yearFrom"), "must not fall through to the generic BadHttpRequestException safety-net message");
+        StringAssert.Contains(body, "pageSize");
+    }
+
+    [TestMethod]
+    public async Task Audit_PageZero_Returns422NotSilentlyPageOne()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.GetAsync("/api/v1/admin/audit?page=0");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page=0 must be rejected, not silently reinterpreted as page 1");
+    }
+
+    [TestMethod]
+    public async Task Audit_PageSizeOmitted_DefaultsTo20NotFifty()
     {
         int? capturedPageSize = null;
         var  capturingReader  = new CapturingAuditReader(ps => capturedPageSize = ps);
@@ -121,9 +166,9 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        await client.GetAsync("/api/v1/admin/audit?pageSize=500");
+        await client.GetAsync("/api/v1/admin/audit");
 
-        Assert.AreEqual(200, capturedPageSize, "pageSize above 200 must be clamped to 200");
+        Assert.AreEqual(20, capturedPageSize, "the standard shared default is 20, not audit's old default of 50");
     }
 
     // ── GET audit — no auth required ─────────────────────────────────────────
@@ -191,18 +236,18 @@ public class AdminAuditEndpointTests
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private sealed class StubAuditReader(SystemAuditPageResult result) : ISystemAuditReader
+    private sealed class StubAuditReader(PagedItems<SystemAuditEntry> result) : ISystemAuditReader
     {
-        public Task<SystemAuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
+        public Task<PagedItems<SystemAuditEntry>> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
             => Task.FromResult(result);
     }
 
     private sealed class CapturingAuditReader(Action<int> onCall) : ISystemAuditReader
     {
-        public Task<SystemAuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
+        public Task<PagedItems<SystemAuditEntry>> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
         {
             onCall(pageSize);
-            return Task.FromResult(new SystemAuditPageResult([], page, pageSize, 0));
+            return Task.FromResult(new PagedItems<SystemAuditEntry>([], page, pageSize, 0));
         }
     }
 

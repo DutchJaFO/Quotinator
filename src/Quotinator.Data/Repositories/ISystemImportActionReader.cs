@@ -6,7 +6,7 @@ namespace Quotinator.Data.Repositories;
 public interface ISystemImportActionReader
 {
     /// <summary>Returns a paged list of action entries, newest first, with an optional batch, status, and entity-type filter.</summary>
-    Task<SystemImportActionPageResult> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize);
+    Task<PagedItems<Entities.SystemImportAction>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize);
 
     /// <summary>Returns a single action by Id, or <c>null</c> if none exists (#154's decide/undo/apply/discard flows).</summary>
     Task<Entities.SystemImportAction?> GetByIdAsync(Guid id);

@@ -1,3 +1,4 @@
+using Quotinator.Data.Entities;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
@@ -10,6 +11,6 @@ public sealed class NoOpSystemAuditReader : ISystemAuditReader
     public static readonly NoOpSystemAuditReader Instance = new();
 
     /// <inheritdoc/>
-    public Task<SystemAuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
-        => Task.FromResult(new SystemAuditPageResult([], page, pageSize, 0));
+    public Task<PagedItems<SystemAuditEntry>> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
+        => Task.FromResult(new PagedItems<SystemAuditEntry>([], page, pageSize, 0));
 }

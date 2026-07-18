@@ -10,6 +10,7 @@ using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Engine.Models;
@@ -65,13 +66,7 @@ public class ImportActionEndpointsTests
     {
         var fake = new FakeImportActionService
         {
-            ReturnPage = new ImportActionPageResponse
-            {
-                TotalMatching = 1,
-                TotalPages    = 1,
-                Page          = 1,
-                PageSize      = 50,
-                Items =
+            ReturnPage = new PagedItems<ImportActionSummaryResponse>(
                 [
                     new ImportActionSummaryResponse
                     {
@@ -86,7 +81,7 @@ public class ImportActionEndpointsTests
                         AmbiguousFields = ["quoteText"],
                     }
                 ],
-            }
+                Page: 1, PageSize: 50, TotalCount: 1)
         };
         using var factory = CreateFactory(fake);
         using var client  = factory.CreateClient();
@@ -94,9 +89,34 @@ public class ImportActionEndpointsTests
         var response = await client.GetAsync("/api/v1/import/actions");
         var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
-        Assert.AreEqual(1, doc.RootElement.GetProperty("totalMatching").GetInt32());
+        Assert.AreEqual(1, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual("quoteText", doc.RootElement.GetProperty("items")[0].GetProperty("ambiguousFields")[0].GetString());
+    }
+
+    // ── Pagination contract (#195) ────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task ImportActions_PageSizeAbove500_Returns422NotSilentClamp()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions?pageSize=999");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
+    }
+
+    [TestMethod]
+    public async Task ImportActions_PageSizeOmitted_DefaultsTo20NotFifty()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions");
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32(), "the standard shared default is 20, not import/actions' old default of 50");
     }
 
     // ── POST /actions/{id}/decide — requires X-Api-Key ───────────────────────

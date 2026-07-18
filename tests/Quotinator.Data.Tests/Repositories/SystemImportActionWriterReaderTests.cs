@@ -88,6 +88,21 @@ public class SystemImportActionWriterReaderTests
         DetectedAt = DateTime.UtcNow,
     };
 
+    // ── GetPagedAsync (#195) ──────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task GetPagedAsync_PageSizeZero_ReturnsEveryRowNotZeroRows()
+    {
+        for (var i = 0; i < 3; i++)
+            await _writer.WriteAsync(BuildDecidedAdd("BATCH-1"));
+
+        var result = await _reader.GetPagedAsync(null, null, null, 1, 0);
+
+        Assert.AreEqual(3, result.Items.Count, "pageSize = 0 must reach SQLite as LIMIT -1, not a literal LIMIT 0");
+        Assert.AreEqual(3, result.TotalCount);
+        Assert.AreEqual(3, result.PageSize, "PageSize must report the effective count actually returned, not the literal 0 requested");
+    }
+
     [TestMethod]
     public async Task GetByIdAsync_UnknownId_ReturnsNull()
     {

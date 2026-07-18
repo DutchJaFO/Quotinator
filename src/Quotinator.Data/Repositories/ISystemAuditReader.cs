@@ -7,5 +7,5 @@ namespace Quotinator.Data.Repositories;
 public interface ISystemAuditReader
 {
     /// <summary>Returns a paged list of audit entries, newest first, with an optional table and record-ID filter.</summary>
-    Task<SystemAuditPageResult> GetPagedAsync(string? table, string? recordId, int page, int pageSize);
+    Task<PagedItems<SystemAuditEntry>> GetPagedAsync(string? table, string? recordId, int page, int pageSize);
 }

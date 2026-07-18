@@ -56,6 +56,16 @@ internal sealed class NumericParameterSchemaTransformer : IOpenApiOperationTrans
                 ["year"]     = null,
                 ["decade"]   = null,
             },
+            ["api/v1/admin/audit"] = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["page"]     = QueryParamDefaults.Page,
+                ["pageSize"] = QueryParamDefaults.PageSize,
+            },
+            ["api/v1/import/actions"] = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["page"]     = QueryParamDefaults.Page,
+                ["pageSize"] = QueryParamDefaults.PageSize,
+            },
         };
 
     /// <inheritdoc/>

@@ -143,7 +143,44 @@ public class NumericParameterSchemaTransformerTests
 
     [TestMethod]
     public async Task Page_OnUnrelatedPath_NotPatched()
-        => Assert.AreEqual(OriginalString, await TransformAndGetType("page", "api/v1/admin/audit"));
+        => Assert.AreEqual(OriginalString, await TransformAndGetType("page", "api/v1/admin/backup"));
+
+    #endregion
+
+    // -------------------------------------------------------------------------
+    #region page/pageSize patched on admin/audit and import/actions (#195)
+
+    [TestMethod]
+    public async Task Page_OnAdminAudit_PatchedToInteger()
+        => Assert.AreEqual(Integer, await TransformAndGetType("page", "api/v1/admin/audit"));
+
+    [TestMethod]
+    public async Task PageSize_OnAdminAudit_PatchedToInteger()
+        => Assert.AreEqual(Integer, await TransformAndGetType("pageSize", "api/v1/admin/audit"));
+
+    [TestMethod]
+    public async Task Page_OnAdminAudit_PublishesDefaultOfOne()
+        => Assert.AreEqual(1, (await TransformAndGetSchema("page", "api/v1/admin/audit"))?.Default?.GetValue<int>());
+
+    [TestMethod]
+    public async Task PageSize_OnAdminAudit_PublishesDefaultOfTwenty()
+        => Assert.AreEqual(20, (await TransformAndGetSchema("pageSize", "api/v1/admin/audit"))?.Default?.GetValue<int>());
+
+    [TestMethod]
+    public async Task Page_OnImportActions_PatchedToInteger()
+        => Assert.AreEqual(Integer, await TransformAndGetType("page", "api/v1/import/actions"));
+
+    [TestMethod]
+    public async Task PageSize_OnImportActions_PatchedToInteger()
+        => Assert.AreEqual(Integer, await TransformAndGetType("pageSize", "api/v1/import/actions"));
+
+    [TestMethod]
+    public async Task Page_OnImportActions_PublishesDefaultOfOne()
+        => Assert.AreEqual(1, (await TransformAndGetSchema("page", "api/v1/import/actions"))?.Default?.GetValue<int>());
+
+    [TestMethod]
+    public async Task PageSize_OnImportActions_PublishesDefaultOfTwenty()
+        => Assert.AreEqual(20, (await TransformAndGetSchema("pageSize", "api/v1/import/actions"))?.Default?.GetValue<int>());
 
     #endregion
 

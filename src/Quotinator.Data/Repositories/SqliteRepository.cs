@@ -92,7 +92,7 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
     }
 
     /// <inheritdoc/>
-    public async Task<(IReadOnlyList<T> Items, int TotalCount)> GetPageAsync(
+    public async Task<PagedItems<T>> GetPageAsync(
         int page, int pageSize, IReadOnlyList<SortColumn>? orderBy = null, IUnitOfWork? unitOfWork = null)
     {
         if (orderBy is { Count: > 0 })
@@ -105,17 +105,23 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
         var param  = new { limit, offset };
         var sql    = RepositorySql.SelectPage(TableName, orderBy);
 
+        List<T> items;
+        int totalCount;
         if (unitOfWork is SqliteUnitOfWork uow)
         {
-            var total = await uow.Connection.ExecuteScalarAsync<int>(RepositorySql.CountActive(TableName), transaction: uow.Transaction);
-            var rows  = await uow.Connection.QueryAsync<T>(sql, param, uow.Transaction);
-            return (rows.ToList(), total);
+            totalCount = await uow.Connection.ExecuteScalarAsync<int>(RepositorySql.CountActive(TableName), transaction: uow.Transaction);
+            items      = (await uow.Connection.QueryAsync<T>(sql, param, uow.Transaction)).ToList();
         }
-        using var conn = Factory.CreateConnection();
-        conn.Open();
-        var totalCount = await conn.ExecuteScalarAsync<int>(RepositorySql.CountActive(TableName));
-        var items      = await conn.QueryAsync<T>(sql, param);
-        return (items.ToList(), totalCount);
+        else
+        {
+            using var conn = Factory.CreateConnection();
+            conn.Open();
+            totalCount = await conn.ExecuteScalarAsync<int>(RepositorySql.CountActive(TableName));
+            items      = (await conn.QueryAsync<T>(sql, param)).ToList();
+        }
+
+        var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
+        return new PagedItems<T>(items, page, effectivePageSize, totalCount);
     }
 
     /// <inheritdoc/>

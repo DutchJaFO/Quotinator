@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Filters;
+using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Models;
@@ -116,15 +117,17 @@ internal static class ImportEndpoints
             string? batchId,
             string? entityType,
             IImportActionService service,
-            int page     = 1,
-            int pageSize = 50) =>
+            IApiLocalizer localizer,
+            [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
+            [Description("Number of actions per page (0–500). 0 means every matching action as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null) =>
         {
-            if (page < 1)       page     = 1;
-            if (pageSize < 1)   pageSize = 1;
-            if (pageSize > 200) pageSize = 200;
+            if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
+                return pageError!;
 
-            var result = await service.GetPagedAsync(batchId, status, entityType, page, pageSize);
-            return Results.Ok(result);
+            var result = await service.GetPagedAsync(batchId, status, entityType, pageValue, pageSizeValue);
+
+            return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
+                ?? Results.Ok(result);
         })
         .WithName("GetImportActions")
         .WithSummary("List staged import actions")
@@ -135,7 +138,7 @@ internal static class ImportEndpoints
             "`batchId`, and/or `entityType` (`Quote`, `Source`, `Character`, `Person`). Each item " +
             "includes `relatedActionIds` (the Source/Character/Person actions in the same batch a " +
             "Quote action depends on) and `ambiguousFields` (the fields genuinely needing a decision, " +
-            "populated only while `status` is `Pending`). Maximum `pageSize` is 200.");
+            "populated only while `status` is `Pending`). Maximum `pageSize` is 500.");
 
         adminGroup.MapPost("/actions/{id}/decide", async (
             string id,

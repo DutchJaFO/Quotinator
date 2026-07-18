@@ -8,7 +8,7 @@ namespace Quotinator.Api.Tests.Fakes;
 /// <summary>Test double for <see cref="IImportActionService"/> — returns canned results or throws a configured exception, recording the arguments it was called with.</summary>
 internal sealed class FakeImportActionService : IImportActionService
 {
-    public ImportActionPageResponse? ReturnPage { get; set; }
+    public PagedItems<ImportActionSummaryResponse>? ReturnPage { get; set; }
     public Exception? ThrowOnDecide { get; set; }
     public Exception? ThrowOnUndo { get; set; }
     public Exception? ThrowOnDiscard { get; set; }
@@ -22,15 +22,8 @@ internal sealed class FakeImportActionService : IImportActionService
     public string? LastDiscardedBatchId { get; private set; }
     public string? LastReversedBatchId { get; private set; }
 
-    public Task<ImportActionPageResponse> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
-        => Task.FromResult(ReturnPage ?? new ImportActionPageResponse
-        {
-            TotalMatching = 0,
-            TotalPages    = 0,
-            Page          = page,
-            PageSize      = pageSize,
-            Items         = [],
-        });
+    public Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
+        => Task.FromResult(ReturnPage ?? new PagedItems<ImportActionSummaryResponse>([], page, pageSize, 0));
 
     public Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
     {

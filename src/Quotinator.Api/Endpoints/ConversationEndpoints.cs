@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
+using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Helpers;
@@ -44,10 +45,6 @@ internal static class ConversationEndpoints
                 statusCode: StatusCodes.Status400BadRequest);
 
         var conversation = service.GetConversation(id, lang);
-        return conversation is null
-            ? Results.Problem(
-                detail: localizer[ApiMessages.ConversationNotFound],
-                statusCode: StatusCodes.Status404NotFound)
-            : Results.Ok(conversation);
+        return NotFoundResult.OkOrNotFound(conversation, localizer, ApiMessages.ConversationNotFound);
     }
 }

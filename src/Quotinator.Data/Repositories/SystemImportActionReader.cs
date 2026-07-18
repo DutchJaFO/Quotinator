@@ -16,12 +16,13 @@ public sealed class SystemImportActionReader : SqliteRepositoryBase<SystemImport
     public SystemImportActionReader(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
-    public async Task<SystemImportActionPageResult> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize)
+    public async Task<PagedItems<SystemImportAction>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize)
     {
         var filterBatchId    = batchId    is not null;
         var filterStatus     = status     is not null;
         var filterEntityType = entityType is not null;
-        var offset           = (page - 1) * pageSize;
+        var limit             = pageSize == 0 ? -1 : pageSize;
+        var offset            = pageSize == 0 ? 0  : (page - 1) * pageSize;
 
         using var conn = Factory.CreateConnection();
         conn.Open();
@@ -30,11 +31,12 @@ public sealed class SystemImportActionReader : SqliteRepositoryBase<SystemImport
             Sql.SystemImportActions.CountPaged(filterBatchId, filterStatus, filterEntityType),
             new { batchId, status, entityType });
 
-        var items = await conn.QueryAsync<SystemImportAction>(
+        var items = (await conn.QueryAsync<SystemImportAction>(
             Sql.SystemImportActions.SelectPaged(filterBatchId, filterStatus, filterEntityType),
-            new { batchId, status, entityType, pageSize, offset });
+            new { batchId, status, entityType, pageSize = limit, offset })).ToList();
 
-        return new SystemImportActionPageResult(items.ToList(), page, pageSize, total);
+        var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
+        return new PagedItems<SystemImportAction>(items, page, effectivePageSize, total);
     }
 
     /// <inheritdoc/>

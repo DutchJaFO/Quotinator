@@ -21,7 +21,7 @@ public interface IImportActionService
     /// the Source/Character/Person actions in the same batch it depends on; <c>AmbiguousFields</c> is
     /// populated only for a <c>Pending</c> Quote action.
     /// </summary>
-    Task<ImportActionPageResponse> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Stages a decision for one action of a currently-decidable entity type and <c>ActionType</c>

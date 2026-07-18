@@ -148,10 +148,10 @@ public class SqliteRepositoryTests
         for (var i = 0; i < 5; i++)
             await _repository.InsertAsync(new Widget { Label = $"Item {i}" });
 
-        var (items, total) = await _repository.GetPageAsync(1, 2);
+        var result = await _repository.GetPageAsync(1, 2);
 
-        Assert.AreEqual(2, items.Count);
-        Assert.AreEqual(5, total);
+        Assert.AreEqual(2, result.Items.Count);
+        Assert.AreEqual(5, result.TotalCount);
     }
 
     [TestMethod]
@@ -163,10 +163,10 @@ public class SqliteRepositoryTests
         await _repository.InsertAsync(new Widget { Label = "Active 2" });
         await _repository.SoftDeleteAsync(deleted.Id);
 
-        var (items, total) = await _repository.GetPageAsync(1, 10);
+        var result = await _repository.GetPageAsync(1, 10);
 
-        Assert.AreEqual(2, total);
-        Assert.IsFalse(items.Any(w => w.Id == deleted.Id));
+        Assert.AreEqual(2, result.TotalCount);
+        Assert.IsFalse(result.Items.Any(w => w.Id == deleted.Id));
     }
 
     [TestMethod]
@@ -175,10 +175,10 @@ public class SqliteRepositoryTests
         for (var i = 0; i < 5; i++)
             await _repository.InsertAsync(new Widget { Label = $"Item {i}" });
 
-        var (items, total) = await _repository.GetPageAsync(3, 2);
+        var result = await _repository.GetPageAsync(3, 2);
 
-        Assert.AreEqual(1, items.Count);
-        Assert.AreEqual(5, total);
+        Assert.AreEqual(1, result.Items.Count);
+        Assert.AreEqual(5, result.TotalCount);
     }
 
     [TestMethod]
@@ -187,10 +187,10 @@ public class SqliteRepositoryTests
         for (var i = 0; i < 3; i++)
             await _repository.InsertAsync(new Widget { Label = $"Item {i}" });
 
-        var (items, total) = await _repository.GetPageAsync(1, 100);
+        var result = await _repository.GetPageAsync(1, 100);
 
-        Assert.AreEqual(3, items.Count);
-        Assert.AreEqual(3, total);
+        Assert.AreEqual(3, result.Items.Count);
+        Assert.AreEqual(3, result.TotalCount);
     }
 
     [TestMethod]
@@ -199,10 +199,11 @@ public class SqliteRepositoryTests
         for (var i = 0; i < 5; i++)
             await _repository.InsertAsync(new Widget { Label = $"Item {i}" });
 
-        var (items, total) = await _repository.GetPageAsync(1, 0);
+        var result = await _repository.GetPageAsync(1, 0);
 
-        Assert.AreEqual(5, items.Count);
-        Assert.AreEqual(5, total);
+        Assert.AreEqual(5, result.Items.Count);
+        Assert.AreEqual(5, result.TotalCount);
+        Assert.AreEqual(5, result.PageSize, "PageSize must report the effective count actually returned, not the literal 0 requested");
     }
 
     [TestMethod]
@@ -211,10 +212,10 @@ public class SqliteRepositoryTests
         for (var i = 0; i < 3; i++)
             await _repository.InsertAsync(new Widget { Label = $"Item {i}" });
 
-        var (items, total) = await _repository.GetPageAsync(5, 2);
+        var result = await _repository.GetPageAsync(5, 2);
 
-        Assert.AreEqual(0, items.Count);
-        Assert.AreEqual(3, total);
+        Assert.AreEqual(0, result.Items.Count);
+        Assert.AreEqual(3, result.TotalCount);
     }
 
     [TestMethod]
@@ -231,8 +232,8 @@ public class SqliteRepositoryTests
         var seen = new List<Guid>();
         for (var page = 1; page <= 3; page++)
         {
-            var (items, _) = await _repository.GetPageAsync(page, 3);
-            seen.AddRange(items.Select(w => w.Id));
+            var result = await _repository.GetPageAsync(page, 3);
+            seen.AddRange(result.Items.Select(w => w.Id));
         }
 
         CollectionAssert.AreEquivalent(inserted, seen);
@@ -245,10 +246,10 @@ public class SqliteRepositoryTests
         for (var i = 0; i < 10; i++)
             await _repository.InsertAsync(new Widget { Label = $"Item {i}" });
 
-        var (items, total) = await _repository.GetPageAsync(1, 3);
+        var result = await _repository.GetPageAsync(1, 3);
 
-        Assert.AreEqual(3, items.Count);
-        Assert.AreEqual(10, total);
+        Assert.AreEqual(3, result.Items.Count);
+        Assert.AreEqual(10, result.TotalCount);
     }
 
     [TestMethod]
@@ -258,9 +259,9 @@ public class SqliteRepositoryTests
         await _repository.InsertAsync(new Widget { Label = "Apple" });
         await _repository.InsertAsync(new Widget { Label = "Cherry" });
 
-        var (items, _) = await _repository.GetPageAsync(1, 10, [new SortColumn("Label")]);
+        var result = await _repository.GetPageAsync(1, 10, [new SortColumn("Label")]);
 
-        CollectionAssert.AreEqual(new[] { "Apple", "Banana", "Cherry" }, items.Select(w => w.Label).ToList());
+        CollectionAssert.AreEqual(new[] { "Apple", "Banana", "Cherry" }, result.Items.Select(w => w.Label).ToList());
     }
 
     [TestMethod]
@@ -270,9 +271,9 @@ public class SqliteRepositoryTests
         await _repository.InsertAsync(new Widget { Label = "Apple" });
         await _repository.InsertAsync(new Widget { Label = "Cherry" });
 
-        var (items, _) = await _repository.GetPageAsync(1, 10, [new SortColumn("Label", Descending: true)]);
+        var result = await _repository.GetPageAsync(1, 10, [new SortColumn("Label", Descending: true)]);
 
-        CollectionAssert.AreEqual(new[] { "Cherry", "Banana", "Apple" }, items.Select(w => w.Label).ToList());
+        CollectionAssert.AreEqual(new[] { "Cherry", "Banana", "Apple" }, result.Items.Select(w => w.Label).ToList());
     }
 
     [TestMethod]
@@ -285,12 +286,12 @@ public class SqliteRepositoryTests
         await _repository.InsertAsync(sameNewer);
         await _repository.InsertAsync(other);
 
-        var (items, _) = await _repository.GetPageAsync(
+        var result = await _repository.GetPageAsync(
             1, 10, [new SortColumn("Label"), new SortColumn("DateCreated", Descending: true)]);
 
         CollectionAssert.AreEqual(
             new[] { other.Id, sameNewer.Id, sameOlder.Id },
-            items.Select(w => w.Id).ToList());
+            result.Items.Select(w => w.Id).ToList());
     }
 
     [TestMethod]

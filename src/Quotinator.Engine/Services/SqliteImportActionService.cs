@@ -63,7 +63,7 @@ public sealed class SqliteImportActionService : IImportActionService
     }
 
     /// <inheritdoc/>
-    public async Task<ImportActionPageResponse> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
+    public async Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var result     = await _actionReader.GetPagedAsync(batchId, status, entityType, page, pageSize);
         var batchCache = new Dictionary<string, IReadOnlyList<SystemImportAction>>();
@@ -72,14 +72,7 @@ public sealed class SqliteImportActionService : IImportActionService
         foreach (var action in result.Items)
             items.Add(await ToSummaryAsync(action, batchCache));
 
-        return new ImportActionPageResponse
-        {
-            TotalMatching = result.TotalCount,
-            TotalPages    = result.TotalPages,
-            Page          = result.Page,
-            PageSize      = result.PageSize,
-            Items         = items,
-        };
+        return new PagedItems<ImportActionSummaryResponse>(items, result.Page, result.PageSize, result.TotalCount);
     }
 
     /// <inheritdoc/>

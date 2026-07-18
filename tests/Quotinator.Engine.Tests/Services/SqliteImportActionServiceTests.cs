@@ -247,7 +247,7 @@ public class SqliteImportActionServiceTests
         var lowercaseBatchId = batchId.ToString("D");
 
         var page = await _service.GetPagedAsync(lowercaseBatchId, null, null, 1, 50);
-        Assert.AreEqual(2, page.TotalMatching, "Quote + Source actions for a brand-new quote with no character");
+        Assert.AreEqual(2, page.TotalCount, "Quote + Source actions for a brand-new quote with no character");
 
         var result = await _service.ApplyBatchAsync(lowercaseBatchId);
 
