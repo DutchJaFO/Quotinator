@@ -1,6 +1,6 @@
 # #186 — Masterdata: GET /api/v1/masterdata/people list + get-by-id
 
-**Status:** Planning
+**Status:** In progress (step 9)
 **GitHub issue:** #186
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196
@@ -153,7 +153,7 @@ convention, added only when a concrete consumer needs it.
 
 ### 1. `ApiMessages.PersonNotFound` + i18n lockstep
 
-**Status:** Not started.
+**Status:** Done.
 
 Add `public const string PersonNotFound = "ErrorPersonNotFound";` to
 `src/Quotinator.Constants/Api/ApiMessages.cs`, placed after `EntityFilterNoMatch` (the current last
@@ -171,7 +171,7 @@ the noun changes) in all three languages.
 
 ### 2. `PersonResponse` DTO
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Models/PersonResponse.cs`, namespace `Quotinator.Api.Models`:
 
@@ -204,7 +204,7 @@ service/endpoint layer rather than on the DTO.
 
 ### 3. `PersonEndpoints.cs` + `Program.cs` wiring
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Endpoints/PersonEndpoints.cs`:
 
@@ -308,7 +308,7 @@ Notes on this shape:
 
 ### 4. Register the OpenAPI transformer path
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `NumericParameterSchemaTransformer.NumericParamsByPath`
 (`src/Quotinator.Api/OpenApi/NumericParameterSchemaTransformer.cs`), following the exact shape of the
@@ -330,7 +330,7 @@ that the transformer's own unit tests don't prove it's actually registered via `
 
 ### 5. Register new logging prefixes
 
-**Status:** Not started.
+**Status:** Done.
 
 `docs/logging.md`'s "Defined prefixes" table requires every new subsystem prefix to be registered before
 its log lines land in a PR. Add two rows, following the existing `[Api - GetById]`/`[Api - GetAll]`
@@ -343,7 +343,7 @@ pattern:
 
 ### 6. `FakePersonRepository` test double
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Fakes/FakePersonRepository.cs`, namespace
 `Quotinator.Api.Tests.Fakes`. No existing fake implements `IListableRepository<T>` to copy from — designed
@@ -399,7 +399,7 @@ internal sealed class FakePersonRepository : IListableRepository<Person>
 
 ### 7. `PersonEndpointsTests.cs`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Endpoints/PersonEndpointsTests.cs`, namespace
 `Quotinator.Api.Tests.Endpoints`. `CreateFactory()` follows `AdminAuditEndpointTests.cs`'s pattern
@@ -452,7 +452,7 @@ choices actually landed):
 
 ### 8. Documentation
 
-**Status:** Not started.
+**Status:** Done.
 
 `README.md`'s REST API Endpoints table (around line 145, immediately after the `/api/v1/conversations/{id}`
 row): add two rows for `GET /api/v1/masterdata/people` and `GET /api/v1/masterdata/people/{id}`, matching
@@ -465,7 +465,7 @@ This is the **first** masterdata route to ship — neither table currently has a
 
 ### 9. Verify
 
-**Status:** Not started.
+**Status:** Done (build + full unit-test suite only — T1/T2 not yet run, see header).
 
 `dotnet build --configuration Release` → must report 0 warnings, 0 errors.
 `dotnet test --configuration Release --verbosity normal` → full suite green, 0 warnings, 0 errors,
@@ -489,28 +489,28 @@ response has no `raw`/`parsed` leakage and a lowercase-formatted id in the URL s
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `GET /api/v1/masterdata/people` returns a paginated `PagedItems<PersonResponse>` | Unit test | `GetAllPeople_ReturnsPaginatedResults` |
-| 2 | ❌ | `GET /api/v1/masterdata/people/{id}` returns the matching person | Unit test | `GetPersonById_ExistingId_ReturnsPerson` |
-| 3 | ❌ | `GET /api/v1/masterdata/people/{id}` returns 404 for an unknown id | Unit test | `GetPersonById_UnknownId_Returns404` |
-| 4 | ❌ | `{id}` matches case-insensitively | Unit test | `GetPersonById_LowercaseId_MatchesCaseInsensitively` |
-| 5 | ❌ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `GetPersonById_MalformedId_Returns404NotBadRequest` |
-| 6 | ❌ | `page=0` returns 422 | Unit test | `GetAllPeople_PageZero_Returns422` |
-| 7 | ❌ | Malformed `page` returns 422 | Unit test | `GetAllPeople_PageMalformed_Returns422` |
-| 8 | ❌ | Malformed `pageSize` returns 422 | Unit test | `GetAllPeople_PageSizeMalformed_Returns422` |
-| 9 | ❌ | Negative `pageSize` returns 422 | Unit test | `GetAllPeople_PageSizeNegative_Returns422` |
-| 10 | ❌ | `pageSize` above 500 returns 422, never silently clamped | Unit test | `GetAllPeople_PageSizeAbove500_Returns422NotSilentClamp` |
-| 11 | ❌ | `pageSize=0` returns every row with the response's `pageSize` reporting the effective count | Unit test | `GetAllPeople_PageSizeZero_ReturnsAllRowsAsOnePage` |
-| 12 | ❌ | Omitted `pageSize` defaults to 20 | Unit test | `GetAllPeople_PageSizeOmitted_DefaultsTo20` |
-| 13 | ❌ | A page beyond the last returns 422 with a detail distinct from case 6 | Unit test | `GetAllPeople_PageBeyondLast_Returns422DistinctDetail` |
-| 14 | ❌ | `dateOfBirth`/`dateOfDeath`/`completenessStatus` serialize as plain JSON values, never `{raw, parsed}` | Unit test | `GetPersonById_ExistingId_ReturnsPerson` (shape assertions) |
-| 15 | ❌ | Unknown `dateOfBirth`/`dateOfDeath` serialize as JSON `null`, not `""` | Unit test | `GetPersonById_UnknownDates_ReturnsNullNotEmptyString` |
-| 16 | ❌ | `page`/`pageSize` on `api/v1/masterdata/people` publish as `integer` in the transformer's own logic | Unit test | `NumericParameterSchemaTransformerTests` (new region) |
-| 17 | ❌ | `page`/`pageSize` on `api/v1/masterdata/people` publish as `integer` on the real, live OpenAPI spec | Unit test (live pipeline) | `OpenApiSpecEndpointTests.PageParam_OnLiveSpec_PublishesIntegerType` (new `[DataRow]` entries) |
-| 18 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `PersonEndpoints_OnLiveSpec_TaggedMasterData` |
-| 19 | ❌ | `ErrorPersonNotFound` exists and is non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
-| 20 | ❌ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables contain the two new rows |
-| 21 | ❌ | `docs/logging.md` registers `[Api - GetAllPeople]`/`[Api - GetPersonById]` | Doc review | "Defined prefixes" table contains both rows |
-| 22 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 1 | ✅ | `GET /api/v1/masterdata/people` returns a paginated `PagedItems<PersonResponse>` | Unit test | `GetAllPeople_ReturnsPaginatedResults` |
+| 2 | ✅ | `GET /api/v1/masterdata/people/{id}` returns the matching person | Unit test | `GetPersonById_ExistingId_ReturnsPerson` |
+| 3 | ✅ | `GET /api/v1/masterdata/people/{id}` returns 404 for an unknown id | Unit test | `GetPersonById_UnknownId_Returns404` |
+| 4 | ✅ | `{id}` matches case-insensitively | Unit test | `GetPersonById_LowercaseId_MatchesCaseInsensitively` |
+| 5 | ✅ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `GetPersonById_MalformedId_Returns404NotBadRequest` |
+| 6 | ✅ | `page=0` returns 422 | Unit test | `GetAllPeople_PageZero_Returns422` |
+| 7 | ✅ | Malformed `page` returns 422 | Unit test | `GetAllPeople_PageMalformed_Returns422` |
+| 8 | ✅ | Malformed `pageSize` returns 422 | Unit test | `GetAllPeople_PageSizeMalformed_Returns422` |
+| 9 | ✅ | Negative `pageSize` returns 422 | Unit test | `GetAllPeople_PageSizeNegative_Returns422` |
+| 10 | ✅ | `pageSize` above 500 returns 422, never silently clamped | Unit test | `GetAllPeople_PageSizeAbove500_Returns422NotSilentClamp` |
+| 11 | ✅ | `pageSize=0` returns every row with the response's `pageSize` reporting the effective count | Unit test | `GetAllPeople_PageSizeZero_ReturnsAllRowsAsOnePage` |
+| 12 | ✅ | Omitted `pageSize` defaults to 20 | Unit test | `GetAllPeople_PageSizeOmitted_DefaultsTo20` |
+| 13 | ✅ | A page beyond the last returns 422 with a detail distinct from case 6 | Unit test | `GetAllPeople_PageBeyondLast_Returns422DistinctDetail` |
+| 14 | ✅ | `dateOfBirth`/`dateOfDeath`/`completenessStatus` serialize as plain JSON values, never `{raw, parsed}` | Unit test | `GetPersonById_ExistingId_ReturnsPerson` (shape assertions) |
+| 15 | ✅ | Unknown `dateOfBirth`/`dateOfDeath` serialize as JSON `null`, not `""` | Unit test | `GetPersonById_UnknownDates_ReturnsNullNotEmptyString` |
+| 16 | ✅ | `page`/`pageSize` on `api/v1/masterdata/people` publish as `integer` in the transformer's own logic | Unit test | `NumericParameterSchemaTransformerTests` (new region) |
+| 17 | ✅ | `page`/`pageSize` on `api/v1/masterdata/people` publish as `integer` on the real, live OpenAPI spec | Unit test (live pipeline) | `OpenApiSpecEndpointTests.PageParam_OnLiveSpec_PublishesIntegerType` (new `[DataRow]` entries) |
+| 18 | ✅ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `PersonEndpoints_OnLiveSpec_TaggedMasterData` |
+| 19 | ✅ | `ErrorPersonNotFound` exists and is non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
+| 20 | ✅ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables contain the two new rows |
+| 21 | ✅ | `docs/logging.md` registers `[Api - GetAllPeople]`/`[Api - GetPersonById]` | Doc review | "Defined prefixes" table contains both rows |
+| 22 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (389 tests in Quotinator.Api.Tests, all projects green), 0 warnings, 0 errors |
 | 23 | ❌ | T1 — app starts in Visual Studio; both endpoints behave as specified | Live (T1) | Developer confirms clean startup and manual exercise of both endpoints |
 | 24 | ❌ | T2 — the live contract holds on the built image | Live (T2) | Full pagination matrix + response-shape checks against a real seeded Person, per Step 9 |
 

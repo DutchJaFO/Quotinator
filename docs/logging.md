@@ -248,6 +248,8 @@ Format: `[Subsystem - Phase] message text`
 | `[Api - GetById]` | Entry to GET /api/v1/quotes/{id} |
 | `[Api - GetAll]` | Entry to GET /api/v1/quotes/ |
 | `[Api - Admin]` | Admin endpoint handlers (reseed, reset, seed preview) |
+| `[Api - GetAllPeople]` | Entry to GET /api/v1/masterdata/people |
+| `[Api - GetPersonById]` | Entry to GET /api/v1/masterdata/people/{id} |
 | `[Audit]` | Audit trail write operations (AuditWriter) |
 
 New subsystems must register a prefix in this table before their log lines land in a PR.
