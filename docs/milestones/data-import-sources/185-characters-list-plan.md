@@ -1,6 +1,6 @@
 # #185 — Masterdata: GET /api/v1/masterdata/characters list + get-by-id
 
-**Status:** Planning
+**Status:** In progress (step 11)
 **GitHub issue:** #185
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196, #179
@@ -168,7 +168,7 @@ Conventions and constants from #196 are being consumed here, not re-decided.
 
 ### 1. Two new `Sql.CharacterSources` queries
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `internal static class CharacterSources` in `src/Quotinator.Engine/Queries/Sql.cs`, alongside the
 existing `InsertIfNotExists`/`DeleteForCharacter`. Both are fixed shapes (no dynamic WHERE-clause
@@ -201,7 +201,7 @@ internal const string SelectSourceReferencesForCharacters =
 
 ### 2. `ICharacterSourceLinkReader` + `CharacterSourceLinkReader`
 
-**Status:** Not started.
+**Status:** Done.
 
 New files `src/Quotinator.Engine/Repositories/ICharacterSourceLinkReader.cs` and
 `CharacterSourceLinkReader.cs`, namespace `Quotinator.Engine.Repositories` (see Background for the
@@ -276,7 +276,7 @@ builder.Services.AddSingleton<ICharacterSourceLinkReader, CharacterSourceLinkRea
 
 ### 3. `CharacterResponse` DTO
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Models/CharacterResponse.cs`:
 
@@ -319,7 +319,7 @@ private static CharacterResponse ToResponse(Character character, IReadOnlyList<(
 
 ### 4. `ApiMessages.CharacterNotFound` + i18n lockstep
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `src/Quotinator.Constants/Api/ApiMessages.cs`:
 ```csharp
@@ -336,7 +336,7 @@ Add `"ErrorCharacterNotFound"` to all three `i18ntext/UI.*.json` files in the sa
 
 ### 5. `CharacterEndpoints.cs`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Endpoints/CharacterEndpoints.cs`, static class `CharacterEndpoints`, extension
 method `MapCharacterEndpoints(this WebApplication app)`, mirroring `ConversationEndpoints.cs`'s structure
@@ -438,7 +438,7 @@ app.MapCharacterEndpoints();
 
 ### 6. Register the OpenAPI numeric-param transformer path
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `NumericParameterSchemaTransformer.NumericParamsByPath` (found missing during planning — not in
 the original issue text, same class of gap #184 independently found for `api/v1/masterdata/sources`):
@@ -453,7 +453,8 @@ Without this, `page`/`pageSize` publish as bare `string` in the OpenAPI spec ins
 
 ### 7. `FakeCharacterRepository` + a link-reader test double
 
-**Status:** Not started.
+**Status:** Done (`FakeCharacterRepository` — `StubCharacterSourceLinkReader` is written inline in
+`CharacterEndpointsTests.cs` as part of Step 8).
 
 New file `tests/Quotinator.Api.Tests/Fakes/FakeCharacterRepository.cs`, implementing
 `IListableRepository<Character>`. In-memory `List<Character>` backing store, seeded via constructor
@@ -479,7 +480,7 @@ full `Fakes/` file would be unwarranted ceremony for this one.
 
 ### 8. Endpoint tests
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Endpoints/CharacterEndpointsTests.cs`. `CreateFactory` follows
 `AdminAuditEndpointTests.cs`'s pattern (register `FakeQuoteService`, `NoOpDatabaseInitializer`, a
@@ -539,7 +540,7 @@ live rather than by code inspection only.
 
 ### 9. Documentation
 
-**Status:** Not started.
+**Status:** Done.
 
 Update `README.md`'s and `addon/DOCS.md`'s REST API Endpoints tables — add rows for
 `GET /api/v1/masterdata/characters` and `GET /api/v1/masterdata/characters/{id}`, following the existing
@@ -548,7 +549,11 @@ table row style (see `README.md:143-146` for the pattern used by the neighbourin
 
 ### 10. Solution file
 
-**Status:** Not started.
+**Status:** Done. Verified against #184's own precedent (`git show a0adde6 --stat -- Quotinator.slnx` shows
+no changes for its structurally identical new files) and by grepping `Quotinator.slnx` for any explicit
+per-file listing under `Quotinator.Engine`/`Quotinator.Api`/the two test projects — none exists, confirming
+these projects are included via directory globs and no new `<Folder>`/`<File>` entries are needed for this
+issue's new files either.
 
 Add the new files (`src/Quotinator.Engine/Repositories/ICharacterSourceLinkReader.cs`,
 `CharacterSourceLinkReader.cs`, `src/Quotinator.Api/Models/CharacterResponse.cs`,
@@ -562,11 +567,14 @@ Solution section — no new `<Folder>` entry needed unless the folder sits outsi
 
 ### 11. Verify
 
-**Status:** Not started.
+**Status:** Done (build + full unit-test suite only — T1/T2 not yet run, see header).
 
-`dotnet build --configuration Release` → 0 warnings, 0 errors. `dotnet test --configuration Release
---verbosity normal` → full suite green, 0 warnings, 0 errors. Confirm all listed expected tests started
-red before implementation.
+`dotnet build --configuration Release` → 0 Warning(s), 0 Error(s), confirmed. `dotnet test --configuration
+Release --verbosity normal` → full suite green (368/368), 0 Warning(s), 0 Error(s), confirmed. Red-green
+verified directly: temporarily commented out `app.MapCharacterEndpoints()` in `Program.cs`, re-ran
+`CharacterEndpointsTests` — 17 of 19 tests failed (the two that don't hit the new route,
+`TranslationCompletenessTests`-independent, stayed green as expected), then restored the registration and
+confirmed all 19 pass again.
 
 T2 (Docker): `docker build` + `docker run`, then:
 ```bash
@@ -598,28 +606,28 @@ satisfies `docs/release-verification.md`'s "touches Program.cs startup" trigger.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `GET /api/v1/masterdata/characters` returns a paginated list of Characters | Unit test | `CharacterEndpointsTests.GetAllCharacters_ReturnsPaginatedResults` |
-| 2 | ❌ | Each list item includes the Sources it appears in as `{id, name}` references, batched in one join query per page | Unit test | `CharacterEndpointsTests.GetAllCharacters_IncludesSourceReferencesForEachCharacter` |
-| 3 | ❌ | A Character with no Source links returns an empty `sources` array, not null/omitted | Unit test | `CharacterEndpointsTests.GetAllCharacters_CharacterWithNoSourceLinks_ReturnsEmptySourcesArray` |
-| 4 | ❌ | `GET /api/v1/masterdata/characters/{id}` returns the matching Character with its Sources | Unit test | `CharacterEndpointsTests.GetCharacterById_ExistingId_ReturnsCharacterWithSourceReferences` |
-| 5 | ❌ | A Character linked to multiple Sources returns all of them with names | Unit test | `CharacterEndpointsTests.GetCharacterById_MultipleSourceLinks_ReturnsAllOfThemWithNames` |
-| 6 | ❌ | An unknown id returns 404 | Unit test | `CharacterEndpointsTests.GetCharacterById_UnknownId_Returns404` |
-| 7 | ❌ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `CharacterEndpointsTests.GetCharacterById_MalformedId_Returns404NotBadRequest` |
-| 8 | ❌ | A lowercase id matches an uppercase-stored id | Unit test | `CharacterEndpointsTests.GetCharacterById_LowercaseId_MatchesCaseInsensitively` |
-| 9 | ❌ | `page=0` returns 422 | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageZero_Returns422` |
-| 10 | ❌ | Malformed `page`/`pageSize` returns 422 | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
-| 11 | ❌ | Negative `pageSize` returns 422 | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageSizeNegative_Returns422` |
-| 12 | ❌ | `pageSize > 500` returns 422, never clamped | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageSizeAbove500_Returns422NotSilentClamp` |
-| 13 | ❌ | `pageSize = 0` returns every row as one page | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageSizeZero_ReturnsAllRowsAsOnePage` |
-| 14 | ❌ | `pageSize` omitted defaults to 20 | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageSizeOmitted_DefaultsTo20` |
-| 15 | ❌ | A page beyond the last returns 422 with a distinct detail | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageBeyondLast_Returns422DistinctDetail` |
-| 16 | ❌ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | `CharacterEndpointsTests.GetCharacterById_ExistingId_ReturnsCharacterWithSourceReferences` (shape assertion) |
-| 17 | ❌ | A Source excluded by the join's soft-delete filter never appears in `sources` | Unit test | `CharacterEndpointsTests.GetCharacterById_SourceSoftDeleted_ExcludedFromSources` |
-| 18 | ❌ | `page`/`pageSize` publish as `integer` in the OpenAPI spec for `api/v1/masterdata/characters` | Unit test | `NumericParameterSchemaTransformerTests` (new cases) |
-| 19 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `CharacterEndpoints_OnLiveSpec_TaggedMasterData` |
-| 20 | ❌ | `ApiMessages.CharacterNotFound` exists and all three locale files carry `ErrorCharacterNotFound` | Unit test | `TranslationCompletenessTests` |
-| 21 | ❌ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables updated |
-| 22 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 1 | ✅ | `GET /api/v1/masterdata/characters` returns a paginated list of Characters | Unit test | `CharacterEndpointsTests.GetAllCharacters_ReturnsPaginatedResults` |
+| 2 | ✅ | Each list item includes the Sources it appears in as `{id, name}` references, batched in one join query per page | Unit test | `CharacterEndpointsTests.GetAllCharacters_IncludesSourceReferencesForEachCharacter` |
+| 3 | ✅ | A Character with no Source links returns an empty `sources` array, not null/omitted | Unit test | `CharacterEndpointsTests.GetAllCharacters_CharacterWithNoSourceLinks_ReturnsEmptySourcesArray` |
+| 4 | ✅ | `GET /api/v1/masterdata/characters/{id}` returns the matching Character with its Sources | Unit test | `CharacterEndpointsTests.GetCharacterById_ExistingId_ReturnsCharacterWithSourceReferences` |
+| 5 | ✅ | A Character linked to multiple Sources returns all of them with names | Unit test | `CharacterEndpointsTests.GetCharacterById_MultipleSourceLinks_ReturnsAllOfThemWithNames` |
+| 6 | ✅ | An unknown id returns 404 | Unit test | `CharacterEndpointsTests.GetCharacterById_UnknownId_Returns404` |
+| 7 | ✅ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `CharacterEndpointsTests.GetCharacterById_MalformedId_Returns404NotBadRequest` |
+| 8 | ✅ | A lowercase id matches an uppercase-stored id | Unit test | `CharacterEndpointsTests.GetCharacterById_LowercaseId_MatchesCaseInsensitively` |
+| 9 | ✅ | `page=0` returns 422 | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageZero_Returns422` |
+| 10 | ✅ | Malformed `page`/`pageSize` returns 422 | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
+| 11 | ✅ | Negative `pageSize` returns 422 | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageSizeNegative_Returns422` |
+| 12 | ✅ | `pageSize > 500` returns 422, never clamped | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageSizeAbove500_Returns422NotSilentClamp` |
+| 13 | ✅ | `pageSize = 0` returns every row as one page | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageSizeZero_ReturnsAllRowsAsOnePage` |
+| 14 | ✅ | `pageSize` omitted defaults to 20 | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageSizeOmitted_DefaultsTo20` |
+| 15 | ✅ | A page beyond the last returns 422 with a distinct detail | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageBeyondLast_Returns422DistinctDetail` |
+| 16 | ✅ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | `CharacterEndpointsTests.GetCharacterById_ExistingId_ReturnsCharacterWithSourceReferences` (shape assertion) |
+| 17 | ✅ | A Source excluded by the join's soft-delete filter never appears in `sources` | Unit test | `CharacterEndpointsTests.GetCharacterById_SourceSoftDeleted_ExcludedFromSources` |
+| 18 | ✅ | `page`/`pageSize` publish as `integer` in the OpenAPI spec for `api/v1/masterdata/characters` | Unit test | `NumericParameterSchemaTransformerTests` (new cases), `OpenApiSpecEndpointTests.PageParam_OnLiveSpec_PublishesIntegerType` |
+| 19 | ✅ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `CharacterEndpoints_OnLiveSpec_TaggedMasterData` |
+| 20 | ✅ | `ApiMessages.CharacterNotFound` exists and all three locale files carry `ErrorCharacterNotFound` | Unit test | `TranslationCompletenessTests` |
+| 21 | ✅ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables updated |
+| 22 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (368/368), 0 warnings, 0 errors |
 | 23 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
 | 24 | ❌ | T2 — the live contract holds against the built image, including a real multi-Source Character with resolved names | Live (T2) | `docker build`/`docker run` matrix — see Step 11 |
 

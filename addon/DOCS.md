@@ -30,6 +30,8 @@ The REST API is accessible in two ways:
 | `GET /api/v1/conversations/{id}` | A conversation's full ordered line list — quotes, stage directions, and sound cues |
 | `GET /api/v1/masterdata/sources` | Paginated list of Sources — the films, television series, books, and other works quotes are drawn from (`page`, `pageSize`) |
 | `GET /api/v1/masterdata/sources/{id}` | Source by UUID. Includes a `series` reference (`{id, name}`, or `null` if the source has no series) |
+| `GET /api/v1/masterdata/characters` | Paginated list of Characters — fictional characters who deliver quotes (`page`, `pageSize`) |
+| `GET /api/v1/masterdata/characters/{id}` | Character by UUID. Includes a `sources` array of `{id, name}` references for every Source the character appears in (#179) |
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/version` | Running version |
 | `POST /api/v1/import` | Import one source file (JSON or, via `converter: "csv"` in `settings`, CSV) — same duplicate-detection engine as startup seeding. Multipart fields: `file`, `settings` (optional JSON: `converter`, `duplicateResolution`, `enrich`) — or pass `batchId` (query string) instead of `file` to apply a batch already staged by a prior `/import`/`/import/preview` call. Stages then attempts to apply — `200` when everything applied, `202` when any row needs a decision, `422` if neither `file` nor `batchId` is given. Returns a summary/conflicts/errors envelope (requires `X-Api-Key`) |

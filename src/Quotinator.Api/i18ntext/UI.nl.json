@@ -70,6 +70,7 @@
   "ErrorImportActionBatchNotReversible": "Deze batch kan niet ongedaan worden gemaakt — hij is niet momenteel toegepast, is niet de meest recent toegepaste batch die nog actief is, bevat geen acties, of de oorspronkelijke Source/Character/Person-koppeling van een Modify-actie kan niet meer worden gevonden.",
   "ErrorConversationNotFound": "Er is geen conversatie gevonden met het opgegeven ID.",
   "ErrorSourceNotFound": "Er is geen bron gevonden met het opgegeven ID.",
+  "ErrorCharacterNotFound": "Er is geen personage gevonden met het opgegeven ID.",
   "ErrorMutuallyExclusiveEntityFilter": "Geef ofwel {0} ofwel {1} op, niet beide.",
   "ErrorInvalidEntityFilterId": "{0} moet een geldige identifier zijn.",
   "InfoEntityFilterNoMatch": "Geen {0} komt overeen met '{1}'.",

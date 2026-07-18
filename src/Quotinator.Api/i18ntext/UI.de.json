@@ -70,6 +70,7 @@
   "ErrorImportActionBatchNotReversible": "Dieser Batch kann nicht rückgängig gemacht werden — er ist derzeit nicht angewendet, ist nicht der zuletzt angewendete, noch aktive Batch, enthält keine Aktionen, oder die ursprüngliche Source/Character/Person-Verknüpfung einer Modify-Aktion kann nicht mehr aufgelöst werden.",
   "ErrorConversationNotFound": "Es wurde keine Konversation mit der angegebenen ID gefunden.",
   "ErrorSourceNotFound": "Es wurde keine Quelle mit der angegebenen ID gefunden.",
+  "ErrorCharacterNotFound": "Es wurde keine Figur mit der angegebenen ID gefunden.",
   "ErrorMutuallyExclusiveEntityFilter": "Geben Sie entweder {0} oder {1} an, nicht beides.",
   "ErrorInvalidEntityFilterId": "{0} muss eine gültige Kennung sein.",
   "InfoEntityFilterNoMatch": "Kein {0} entspricht '{1}'.",

@@ -316,6 +316,10 @@ builder.Services.AddSingleton<IListableRepository<ConversationEntity>>(sp => (IL
 // IRepository<T> above cannot express this join (single-table SELECT * only).
 builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenceReader>();
 
+// #185: resolves a Character's linked Sources (via CharacterSources, #179) to their (Id, Title) —
+// same "generic repository cannot express a join" reasoning as ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<ICharacterSourceLinkReader, CharacterSourceLinkReader>();
+
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
 // real Serilog pipeline at the same point in startup as the rest of seeding — not through a
@@ -546,6 +550,7 @@ app.MapAdminEndpoints();
 app.MapImportEndpoints();
 app.MapConversationEndpoints();
 app.MapSourceEndpoints();
+app.MapCharacterEndpoints();
 
 // Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
 // Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.

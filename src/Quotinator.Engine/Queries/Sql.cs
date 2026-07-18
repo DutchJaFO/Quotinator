@@ -235,6 +235,25 @@ internal static class Sql
 
         /// <summary>CharacterSources carries a real FK to Characters(Id) — a stale Character's link rows must be removed before the Character itself is hard-deleted, or the delete violates the FK (same pattern as <see cref="QuoteGenres.DeleteForQuote"/>/<see cref="QuoteTranslations.DeleteForQuote"/>).</summary>
         internal const string DeleteForCharacter = "DELETE FROM CharacterSources WHERE CharacterId = @id;";
+
+        /// <summary>Active (SourceId, SourceTitle) pairs linked to one Character — #185's GetById join. Selects
+        /// Title alongside Id since the join through Sources (needed to exclude a soft-deleted Source) already
+        /// has it for free, and the response must surface a display name per CLAUDE.md's "Masterdata reference
+        /// shape" convention.</summary>
+        internal const string SelectSourceReferencesForCharacter =
+            "SELECT s.Id, s.Title FROM CharacterSources cs " +
+            "JOIN Sources s ON s.Id = cs.SourceId AND s.IsDeleted = 0 " +
+            "WHERE cs.CharacterId = @characterId AND cs.IsDeleted = 0;";
+
+        /// <summary>
+        /// Active (CharacterId, SourceId, SourceTitle) rows for a batch of Characters in a single round-trip —
+        /// #185's list join. Dapper expands @characterIds from any IEnumerable&lt;Guid&gt; automatically (same
+        /// pattern as RepositorySql.SelectByIds), avoiding one query per row across a page.
+        /// </summary>
+        internal const string SelectSourceReferencesForCharacters =
+            "SELECT cs.CharacterId, s.Id AS SourceId, s.Title AS SourceTitle FROM CharacterSources cs " +
+            "JOIN Sources s ON s.Id = cs.SourceId AND s.IsDeleted = 0 " +
+            "WHERE cs.CharacterId IN @characterIds AND cs.IsDeleted = 0;";
     }
 
     /// <summary>People table.</summary>

@@ -45,4 +45,5 @@ public static class ApiMessages
     public const string InvalidEntityFilterId            = "ErrorInvalidEntityFilterId";
     public const string EntityFilterNoMatch              = "InfoEntityFilterNoMatch";
     public const string SourceNotFound                   = "ErrorSourceNotFound";
+    public const string CharacterNotFound                = "ErrorCharacterNotFound";
 }
