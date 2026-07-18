@@ -91,6 +91,11 @@ internal sealed class NumericParameterSchemaTransformer : IOpenApiOperationTrans
                 ["page"]     = QueryParamDefaults.Page,
                 ["pageSize"] = QueryParamDefaults.PageSize,
             },
+            ["api/v1/conversations"] = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["page"]     = QueryParamDefaults.Page,
+                ["pageSize"] = QueryParamDefaults.PageSize,
+            },
         };
 
     /// <inheritdoc/>

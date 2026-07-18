@@ -142,6 +142,7 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`, `type`, `genre`, `yearFrom`, `yearTo`, `year`, `decade` — all optional) |
 | GET | `/api/v1/quotes/{id}` | Quote by UUID |
 | GET | `/api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
+| GET | `/api/v1/conversations` | Paginated list of Conversations — summaries only (`id`, `description`, `completenessStatus`, `lineCount`), never the full line list (`page`, `pageSize`) |
 | GET | `/api/v1/conversations/{id}` | A conversation's full ordered line list — quotes, stage directions, and sound cues |
 | GET | `/api/v1/masterdata/sources` | Paginated list of Sources — the films, television series, books, and other works quotes are drawn from (`page`, `pageSize`) |
 | GET | `/api/v1/masterdata/sources/{id}` | Source by UUID. Includes a `series` reference (`{id, name}`, or `null` if the source has no series) |

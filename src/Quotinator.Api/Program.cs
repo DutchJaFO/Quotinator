@@ -324,6 +324,10 @@ builder.Services.AddSingleton<ICharacterSourceLinkReader, CharacterSourceLinkRea
 // express a join" reasoning as ISourceSeriesReferenceReader above.
 builder.Services.AddSingleton<ISeriesUniverseReferenceReader, SeriesUniverseReferenceReader>();
 
+// #189: resolves each Conversation's active line count via ConversationLines — same "generic repository
+// cannot express a join/aggregate" reasoning as ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<IConversationLineCountReader, ConversationLineCountReader>();
+
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
 // real Serilog pipeline at the same point in startup as the rest of seeding — not through a

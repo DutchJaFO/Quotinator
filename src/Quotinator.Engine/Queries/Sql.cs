@@ -547,6 +547,20 @@ internal static class Sql
         /// <summary>#69: every QuoteId referenced by a conversation's lines — used by <c>/random</c>'s dedup to exclude every quote in a selected conversation, not only the one that triggered the selection.</summary>
         internal const string SelectQuoteIdsForConversation =
             "SELECT QuoteId FROM ConversationLines WHERE ConversationId = @conversationId AND QuoteId IS NOT NULL AND IsDeleted = 0;";
+
+        /// <summary>
+        /// Active line counts for a batch of Conversations in a single round-trip — #189's list join, avoiding
+        /// one query per row across a page. Uses a correlated <c>COUNT(*)</c> subquery per row — the same
+        /// pattern <see cref="SelectMembershipForQuote"/> already uses — rather than a grouping clause, so
+        /// this does not trip <c>SqlAggregateGuard</c>'s CVE-2025-6965 heuristic; see docs/sql-safety.md.
+        /// A Conversation with zero active lines is simply absent from the result — callers default missing
+        /// keys to 0.
+        /// </summary>
+        internal const string SelectLineCountsForConversations =
+            "SELECT DISTINCT cl.ConversationId, " +
+            "(SELECT COUNT(*) FROM ConversationLines cl2 WHERE cl2.ConversationId = cl.ConversationId AND cl2.IsDeleted = 0) AS LineCount " +
+            "FROM ConversationLines cl " +
+            "WHERE cl.ConversationId IN @conversationIds AND cl.IsDeleted = 0;";
     }
 
     /// <summary>StageDirections table (#67/#68). Explicit-id existence check, like <see cref="Conversations"/> — see its remark.</summary>

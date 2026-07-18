@@ -269,6 +269,27 @@ public class NumericParameterSchemaTransformerTests
     #endregion
 
     // -------------------------------------------------------------------------
+    #region page/pageSize patched on conversations (#189)
+
+    [TestMethod]
+    public async Task Page_OnConversations_PatchedToInteger()
+        => Assert.AreEqual(Integer, await TransformAndGetType("page", "api/v1/conversations"));
+
+    [TestMethod]
+    public async Task PageSize_OnConversations_PatchedToInteger()
+        => Assert.AreEqual(Integer, await TransformAndGetType("pageSize", "api/v1/conversations"));
+
+    [TestMethod]
+    public async Task Page_OnConversations_PublishesDefaultOfOne()
+        => Assert.AreEqual(1, (await TransformAndGetSchema("page", "api/v1/conversations"))?.Default?.GetValue<int>());
+
+    [TestMethod]
+    public async Task PageSize_OnConversations_PublishesDefaultOfTwenty()
+        => Assert.AreEqual(20, (await TransformAndGetSchema("pageSize", "api/v1/conversations"))?.Default?.GetValue<int>());
+
+    #endregion
+
+    // -------------------------------------------------------------------------
     #region Non-numeric params NOT patched even on target paths
 
     [TestMethod]

@@ -1,6 +1,6 @@
 # #189 — Conversations: GET /api/v1/conversations list endpoint
 
-**Status:** Planning
+**Status:** In progress (step 8)
 **GitHub issue:** #189
 **Tiers required:** T1, T2
 **Depends on:** #193, #195
@@ -148,7 +148,7 @@ is irrelevant here since a list never 404s).
 
 ### 1. Two new `Sql.ConversationLines` queries + `IConversationLineCountReader`
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `internal static class ConversationLines` in `src/Quotinator.Engine/Queries/Sql.cs`, alongside
 `SelectMembershipForQuote`. Batched form only (see Background for why no single-id form is needed):
@@ -192,7 +192,7 @@ builder.Services.AddSingleton<IConversationLineCountReader, ConversationLineCoun
 
 ### 2. `ConversationSummaryResponse` DTO
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Models/ConversationSummaryResponse.cs`, namespace `Quotinator.Api.Models`:
 
@@ -234,7 +234,7 @@ private static ConversationSummaryResponse ToSummaryResponse(ConversationEntity 
 
 ### 3. Extend `ConversationEndpoints.cs` with `GetAll`
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to the existing `src/Quotinator.Api/Endpoints/ConversationEndpoints.cs` (do not create a new file —
 see Background):
@@ -286,7 +286,7 @@ handler's dependencies as new parameters on `GetAll` only — `GetById` is untou
 
 ### 4. Register the OpenAPI numeric-param transformer path
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `NumericParameterSchemaTransformer.NumericParamsByPath`:
 ```csharp
@@ -301,7 +301,7 @@ the same gap #184–#188 each independently found for their own paths.
 
 ### 5. Test fixtures and tests
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Fakes/FakeConversationRepository.cs`, implementing
 `IListableRepository<ConversationEntity>`, mirroring #184's `FakeSourceRepository` shape (in-memory
@@ -354,7 +354,7 @@ a plain JSON string value, never `{"raw":...,"parsed":...}`.
 
 ### 6. Documentation
 
-**Status:** Not started.
+**Status:** Done.
 
 Add a row for `GET /api/v1/conversations` to the REST API Endpoints table in both `README.md` and
 `addon/DOCS.md`, following the existing row format/placement (immediately above the existing
@@ -364,7 +364,7 @@ Standards boyscout rule).
 
 ### 7. Solution file
 
-**Status:** Not started.
+**Status:** Done.
 
 Add the new files (`src/Quotinator.Engine/Repositories/IConversationLineCountReader.cs`/
 `ConversationLineCountReader.cs`, `src/Quotinator.Api/Models/ConversationSummaryResponse.cs`,
@@ -375,7 +375,12 @@ existing project folder, but check regardless).
 
 ### 8. Verify
 
-**Status:** Not started.
+**Status:** Done for the automated portion. `dotnet build --configuration Release` → 0 warnings, 0
+errors. `dotnet test --configuration Release --verbosity normal` → full solution (10 projects, 1475
+tests) green, 0 warnings, 0 errors. Confirmed every new/extended test starts red: temporarily reverted
+the `group.MapGet("/", GetAll)` line — 14 of 20 tests in `ConversationEndpointsTests` failed (the new
+`GetAll*`/live-spec tests; the 6 pre-existing `GetById_*` tests stayed green), then restored the line and
+re-ran to confirm all 20 pass. T1/T2 not yet run — see header.
 
 `dotnet build --configuration Release` → 0 warnings, 0 errors. `dotnet test --configuration Release
 --verbosity normal` → full suite green, 0 warnings, 0 errors. Confirm all listed expected tests started
@@ -405,24 +410,24 @@ This project always runs T2 regardless of a documented trigger — this issue's 
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `GET /api/v1/conversations` returns a paginated list of summaries | Unit test | `ConversationEndpointsTests.GetAllConversations_ReturnsPaginatedResults` |
-| 2 | ❌ | Response items carry `lineCount`, never the full `lines` array | Unit test | `ConversationEndpointsTests.GetAllConversations_ReturnsSummaryNotFullLineList` |
-| 3 | ❌ | `lineCount` matches the actual active line count | Unit test | `ConversationEndpointsTests.GetAllConversations_LineCountMatchesActualLineCount` |
-| 4 | ❌ | A Conversation with no lines returns `lineCount: 0`, not omitted/null | Unit test | `ConversationEndpointsTests.GetAllConversations_ConversationWithNoLines_ReturnsZeroLineCount` |
-| 5 | ❌ | The list endpoint resolves each item's count independently via the batched reader | Unit test | `ConversationEndpointsTests.GetAllConversations_MultipleConversationsWithLines_BatchResolvesEachCount` |
-| 6 | ❌ | `page=0` returns 422 | Unit test | `ConversationEndpointsTests.GetAllConversations_PageZero_Returns422` |
-| 7 | ❌ | Malformed `page`/`pageSize` returns 422 | Unit test | `GetAllConversations_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
-| 8 | ❌ | Negative `pageSize` returns 422 | Unit test | `ConversationEndpointsTests.GetAllConversations_PageSizeNegative_Returns422` |
-| 9 | ❌ | `pageSize > 500` returns 422, never clamped | Unit test | `ConversationEndpointsTests.GetAllConversations_PageSizeAbove500_Returns422NotSilentClamp` |
-| 10 | ❌ | `pageSize = 0` returns every row as one page | Unit test | `ConversationEndpointsTests.GetAllConversations_PageSizeZero_ReturnsAllRowsAsOnePage` |
-| 11 | ❌ | Omitted `pageSize` defaults to 20 | Unit test | `ConversationEndpointsTests.GetAllConversations_PageSizeOmitted_DefaultsTo20` |
-| 12 | ❌ | A page beyond the last returns 422 with a distinct detail | Unit test | `ConversationEndpointsTests.GetAllConversations_PageBeyondLast_Returns422DistinctDetail` |
-| 13 | ❌ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | `ConversationEndpointsTests.GetAllConversations_ReturnsPaginatedResults` (shape assertion) |
-| 14 | ❌ | `page`/`pageSize` publish as `integer` in the OpenAPI spec for `api/v1/conversations` | Unit test | `NumericParameterSchemaTransformerTests` (new cases) |
-| 15 | ❌ | `GetAll` tagged `ApiTags.Conversations` (not `MasterData`) and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `ConversationEndpoints_OnLiveSpec_GetAllTaggedConversations` |
-| 16 | ❌ | Existing `GetById` behaviour unchanged (full `lines` array, no regression) | Unit test | Existing `ConversationEndpointsTests.GetById_*` tests still pass unmodified |
-| 17 | ❌ | `README.md`/`addon/DOCS.md` document the new endpoint; `docs/logging.md` carries the new prefix | Doc review | Files updated |
-| 18 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 1 | ✅ | `GET /api/v1/conversations` returns a paginated list of summaries | Unit test | `ConversationEndpointsTests.GetAllConversations_ReturnsPaginatedResults` |
+| 2 | ✅ | Response items carry `lineCount`, never the full `lines` array | Unit test | `ConversationEndpointsTests.GetAllConversations_ReturnsSummaryNotFullLineList` |
+| 3 | ✅ | `lineCount` matches the actual active line count | Unit test | `ConversationEndpointsTests.GetAllConversations_LineCountMatchesActualLineCount` |
+| 4 | ✅ | A Conversation with no lines returns `lineCount: 0`, not omitted/null | Unit test | `ConversationEndpointsTests.GetAllConversations_ConversationWithNoLines_ReturnsZeroLineCount` |
+| 5 | ✅ | The list endpoint resolves each item's count independently via the batched reader | Unit test | `ConversationEndpointsTests.GetAllConversations_MultipleConversationsWithLines_BatchResolvesEachCount` |
+| 6 | ✅ | `page=0` returns 422 | Unit test | `ConversationEndpointsTests.GetAllConversations_PageZero_Returns422` |
+| 7 | ✅ | Malformed `page`/`pageSize` returns 422 | Unit test | `GetAllConversations_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
+| 8 | ✅ | Negative `pageSize` returns 422 | Unit test | `ConversationEndpointsTests.GetAllConversations_PageSizeNegative_Returns422` |
+| 9 | ✅ | `pageSize > 500` returns 422, never clamped | Unit test | `ConversationEndpointsTests.GetAllConversations_PageSizeAbove500_Returns422NotSilentClamp` |
+| 10 | ✅ | `pageSize = 0` returns every row as one page | Unit test | `ConversationEndpointsTests.GetAllConversations_PageSizeZero_ReturnsAllRowsAsOnePage` |
+| 11 | ✅ | Omitted `pageSize` defaults to 20 | Unit test | `ConversationEndpointsTests.GetAllConversations_PageSizeOmitted_DefaultsTo20` |
+| 12 | ✅ | A page beyond the last returns 422 with a distinct detail | Unit test | `ConversationEndpointsTests.GetAllConversations_PageBeyondLast_Returns422DistinctDetail` |
+| 13 | ✅ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | `ConversationEndpointsTests.GetAllConversations_ReturnsPaginatedResults` (shape assertion) |
+| 14 | ✅ | `page`/`pageSize` publish as `integer` in the OpenAPI spec for `api/v1/conversations` | Unit test | `NumericParameterSchemaTransformerTests` (new cases), `OpenApiSpecEndpointTests.PageParam_OnLiveSpec_PublishesIntegerType` (new `DataRow`s) |
+| 15 | ✅ | `GetAll` tagged `ApiTags.Conversations` (not `MasterData`), proven live | Unit test | `ConversationEndpoints_OnLiveSpec_GetAllTaggedConversations` |
+| 16 | ✅ | Existing `GetById` behaviour unchanged (full `lines` array, no regression) | Unit test | Existing `ConversationEndpointsTests.GetById_*` tests still pass unmodified |
+| 17 | ✅ | `README.md`/`addon/DOCS.md` document the new endpoint; `docs/logging.md` carries the new prefix | Doc review | Files updated |
+| 18 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite (10 projects, 1475 tests) green, 0 warnings, 0 errors |
 | 19 | ❌ | T1 — app starts in Visual Studio; endpoint reachable | Live (T1) | Developer confirmed |
 | 20 | ❌ | T2 — the live contract holds against the built image, including a real line-count match | Live (T2) | `docker build`/`docker run` matrix — see Step 8 |
 
