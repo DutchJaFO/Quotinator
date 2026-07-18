@@ -1,8 +1,8 @@
 # #196 — Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter-parameter shape
 
-**Status:** In progress (step 1)
+**Status:** Waiting for release
 **GitHub issue:** #196
-**Tiers required:** T1
+**Tiers required:** T1, T2
 **Depends on:** none
 
 ---
@@ -52,6 +52,14 @@ runs, and a name that doesn't resolve is reported as an informative zero-results
 `/quotes/search`/`/quotes/random` keep their existing fuzzy contains-match filters unchanged; this stricter
 resolve-first convention is for new entity-scoped filters only.
 
+**Correction found mid-implementation**: the plan's own finding 5 originally claimed `EntityFilterParsing`'s
+messages would have to be generic because `IApiLocalizer` has no interpolation support. True as far as it
+goes, but `ImportEndpoints.cs:174` already shows the sanctioned workaround — the caller applies
+`string.Format` on top of the localized template (`ApiMessages.ImportActionAmbiguousFieldsUnresolved`
+uses `{0}`). `EntityFilterParsing.ResolveAsync` now takes an `EntityFilterNames` (entity type, id param
+name, name param name) and formats its three messages with the actual parameter/entity names, matching
+that existing precedent, rather than staying fully generic.
+
 Conventions and constants only — no routes, no repository wiring to a real database, no pagination.
 
 ---
@@ -60,64 +68,57 @@ Conventions and constants only — no routes, no repository wiring to a real dat
 
 ### 1. ApiTags.MasterData
 
-**Status:** Not started.
-
-Add the constant alongside the existing five, with a red test first per this project's rule. First real
-test in `Quotinator.Constants.Tests` (project exists but has never had one).
+**Status:** Done. Constant added; `ApiTagsTests.cs` created (first test in `Quotinator.Constants.Tests`).
+Went through two revisions: a pairwise `AreNotEqual(ApiTags.X, ApiTags.MasterData)` per-tag test tripped
+`MSTEST0032` ("condition is known to be always true" — comparing two `const string` fields is
+compiler-provable). Replaced with a single `AllItemsAreUnique` over a hand-written array — but a
+hardcoded array has its own real gap: it silently stops covering "all" tags the moment someone adds a
+new one and forgets to update the list, exactly what "check all api tags" needs to not happen. Rewrote
+again to reflect over every `public const string` field on `ApiTags` (same `GetFields`/`IsLiteral`
+technique `SqlQueryGuardTests` already uses), so a future tag is automatically covered with no further
+maintenance. Verified it's a genuine check, not vacuous: temporarily set `MasterData = "System"` and
+confirmed `ApiTags_AllValues_AreDistinct` failed red, then reverted.
 
 ### 2. Tag descriptions in Program.cs (drive-by)
 
-**Status:** Not started.
-
-Add `MasterData` and `Conversations` entries to `document.Tags` in `Program.cs`, matching the existing
-`System`/`Quotes`/`Admin`/`Import` style. `Conversations` never got one — found during verification, fixed
-here per explicit developer instruction rather than filed separately.
+**Status:** Done. Added `MasterData` and `Conversations` entries to `document.Tags` in `Program.cs`,
+matching the existing `System`/`Quotes`/`Admin`/`Import` style.
 
 ### 3. Masterdata routing convention
 
-**Status:** Not started.
-
-Document `/api/v1/masterdata/` in `CLAUDE.md` alongside the existing route rules, stating **why two
-patterns coexist** rather than leaving it to read as drift: masterdata entities are the shared reference
-data quotes and conversations are built from, and grouping them makes that relationship legible in the API
-surface.
-
-Record that `/api/v1/conversations` deliberately keeps its existing route and `ApiTags.Conversations`
-tag — Conversations is a consumer of masterdata, not a masterdata entity, so #189's list endpoint does
-not move.
+**Status:** Done. Documented `/api/v1/masterdata/` in `CLAUDE.md` right after "Route registration order",
+stating why two route patterns coexist and recording `/api/v1/conversations`' exemption with its reason.
 
 ### 4. EntityFilterParsing shared helper
 
-**Status:** Not started.
+**Status:** Done. New `src/Quotinator.Api/Endpoints/Shared/EntityFilterParsing.cs`. `ResolveAsync(idValue,
+nameValue, names, resolveIdByName, localizer)` returns a 4-outcome result
+(`NoFilter`/`Resolved`/`NotFound`/`Error`) — `NotFound` is deliberately not an `IResult`/422, matching the
+existing `FilteredResultStatus.NoResults` precedent (200 + empty items + informative message) rather than
+treating "name doesn't exist" as bad input. `resolveIdByName` is caller-supplied; no real repository is
+wired to it here since no consuming endpoint exists until #184–#189/#192.
 
-New `src/Quotinator.Api/Endpoints/Shared/EntityFilterParsing.cs`. `ResolveAsync(idValue, nameValue,
-resolveIdByName, localizer)` returns a 4-outcome result (`NoFilter`/`Resolved`/`NotFound`/`Error`) —
-`NotFound` is deliberately not an `IResult`/422, matching the existing `FilteredResultStatus.NoResults`
-precedent (200 + empty items + informative message) rather than treating "name doesn't exist" as bad
-input. `resolveIdByName` is caller-supplied; no real repository is wired to it here since no consuming
-endpoint exists until #184–#189/#192.
-
-Both violation and malformed-id error details use new, generic (non-interpolated) `ApiMessages` keys —
-`IApiLocalizer` has no format-argument support, confirmed by reading `ApiLocalizer.cs`, and this helper is
-reused across every future entity, so messages can't name the specific failing parameter.
+Revised mid-implementation (see the Background correction above): messages are formatted via
+`string.Format` on a localized `{0}`/`{1}` template using a new `EntityFilterNames` (entity type, id param
+name, name param name), naming the actual parameters/entity involved — not fully generic as originally
+planned.
 
 ### 5. Filter-parameter convention documentation
 
-**Status:** Not started.
-
-Document in `CLAUDE.md`, placed after "GUID/enum/id comparisons are case-insensitive by default": naming
-(`{entity}Id`/`{entity}` mutually exclusive), resolution behaviour (not a contains-match), validation (422
-detail for mutual-exclusion or malformed id), matching (case-insensitive exact match once resolved to an
-id), the explicit Search/RandomQuote exemption, and how a consumer wires its own repository as the
-`resolveIdByName` delegate.
+**Status:** Done. Documented in `CLAUDE.md` after "GUID/enum/id comparisons are case-insensitive by
+default": naming, resolution behaviour, validation, matching, the explicit Search/RandomQuote exemption,
+and the `string.Format`-templated message design.
 
 ### 6. Verify
 
-**Status:** Not started.
-
-Full suite green, 0 warnings. T2 not required — reasoning extended from the original assessment: no route,
-no schema change, no startup behaviour, and `EntityFilterParsing` takes its resolver as an injected
-delegate, fully covered by unit tests against a fake resolver.
+**Status:** Unit suite green (1339/1339, 0 warnings, 0 errors) and full build clean. T1 confirmed by the
+developer — clean Visual Studio startup, no errors. T2 confirmed: `docker build` succeeded, the container
+started cleanly (`/api/v1/health` healthy, `/api/v1/version` correct), and `GET /openapi/v1.json` on the
+built image shows both `MasterData` and `Conversations` with their new descriptions. This project always
+runs T2, not only when a documented trigger applies — worth noting here since this issue's own change to
+`Program.cs` would have hit `docs/release-verification.md`'s stated "touches Program.cs startup" trigger
+regardless, so an earlier "T2 not required" assessment was wrong on the stated criteria too, not just on
+the always-run practice.
 
 ---
 
@@ -125,33 +126,35 @@ delegate, fully covered by unit tests against a fake resolver.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `ApiTags.MasterData` exists and is distinct from the other tags | Unit test | `ApiTagsTests.ApiTags_MasterData_IsDefinedAndDistinct` — first test in `Quotinator.Constants.Tests`, starts red |
-| 2 | ❌ | All `ApiTags` values are mutually distinct | Unit test | `ApiTagsTests.ApiTags_AllValues_AreDistinct` — starts red |
-| 3 | ❌ | `MasterData` and `Conversations` both have an OpenAPI tag description | Doc/code review | `Program.cs`'s `document.Tags` list |
-| 4 | ❌ | `/api/v1/masterdata/` is documented in `CLAUDE.md`, including why two route patterns coexist | Doc review | `CLAUDE.md` contains the named routing convention alongside the existing route rules |
-| 5 | ❌ | `/api/v1/conversations`' exemption is recorded with its reason | Doc review | `CLAUDE.md` states Conversations is a masterdata consumer, not a masterdata entity |
-| 6 | ❌ | Supplying both an id-valued and name-valued filter returns 422 | Unit test | `EntityFilterParsingTests.ResolveAsync_BothSupplied_ReturnsError` |
-| 7 | ❌ | A well-formed id-valued filter resolves without calling the name resolver | Unit test | `EntityFilterParsingTests.ResolveAsync_IdOnlyWellFormed_ReturnsResolved` |
-| 8 | ❌ | A malformed id-valued filter returns 422 | Unit test | `EntityFilterParsingTests.ResolveAsync_IdOnlyMalformed_ReturnsError` |
-| 9 | ❌ | A name-valued filter that resolves returns the resolved id | Unit test | `EntityFilterParsingTests.ResolveAsync_NameResolves_ReturnsResolved` |
-| 10 | ❌ | A name-valued filter that does not resolve returns `NotFound` with an informative message, not a 422 | Unit test | `EntityFilterParsingTests.ResolveAsync_NameDoesNotResolve_ReturnsNotFoundWithMessage` |
-| 11 | ❌ | Neither filter supplied returns `NoFilter` with no error | Unit test | `EntityFilterParsingTests.ResolveAsync_NeitherSupplied_ReturnsNoFilter` |
-| 12 | ❌ | The filter-parameter convention is documented — naming, resolution, validation, matching, the Search/RandomQuote exemption | Doc review | `CLAUDE.md` contains the convention |
-| 13 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 14 | ❌ | T1 — app starts in Visual Studio | Live (T1) | Developer to confirm in Visual Studio |
+| 1 | ✅ | `ApiTags.MasterData` exists and all `ApiTags` values are mutually distinct | Unit test | `ApiTagsTests.ApiTags_ReflectionFindsDeclaredConstants` + `ApiTags_AllValues_AreDistinct` — reflection-based, first tests in `Quotinator.Constants.Tests` |
+| 2 | ✅ | `MasterData` and `Conversations` both have an OpenAPI tag description | Doc/code review | `Program.cs`'s `document.Tags` list |
+| 3 | ✅ | `/api/v1/masterdata/` is documented in `CLAUDE.md`, including why two route patterns coexist | Doc review | `CLAUDE.md` contains the named routing convention alongside the existing route rules |
+| 4 | ✅ | `/api/v1/conversations`' exemption is recorded with its reason | Doc review | `CLAUDE.md` states Conversations is a masterdata consumer, not a masterdata entity |
+| 5 | ✅ | Supplying both an id-valued and name-valued filter returns 422 | Unit test | `EntityFilterParsingTests.ResolveAsync_BothSupplied_ReturnsError` |
+| 6 | ✅ | A well-formed id-valued filter resolves without calling the name resolver | Unit test | `EntityFilterParsingTests.ResolveAsync_IdOnlyWellFormed_ReturnsResolved` |
+| 7 | ✅ | A malformed id-valued filter returns 422 | Unit test | `EntityFilterParsingTests.ResolveAsync_IdOnlyMalformed_ReturnsError` |
+| 8 | ✅ | A name-valued filter that resolves returns the resolved id | Unit test | `EntityFilterParsingTests.ResolveAsync_NameResolves_ReturnsResolved` |
+| 9 | ✅ | A name-valued filter that does not resolve returns `NotFound` with an informative message, not a 422 | Unit test | `EntityFilterParsingTests.ResolveAsync_NameDoesNotResolve_ReturnsNotFoundWithMessage` |
+| 10 | ✅ | Neither filter supplied returns `NoFilter` with no error | Unit test | `EntityFilterParsingTests.ResolveAsync_NeitherSupplied_ReturnsNoFilter` |
+| 11 | ✅ | The filter-parameter convention is documented — naming, resolution, validation, matching, the Search/RandomQuote exemption | Doc review | `CLAUDE.md` contains the convention |
+| 12 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 10/10 projects, 1339/1339 passed, 0 warnings, 0 errors |
+| 13 | ✅ | T1 — app starts in Visual Studio | Live (T1) | Developer confirmed: clean startup, no errors |
+| 14 | ✅ | T2 — the built image starts cleanly and the tag descriptions are live | Live (T2) | `docker build` + `docker run`: `/api/v1/health` healthy, `/api/v1/version` correct, `GET /openapi/v1.json` shows `MasterData`/`Conversations` descriptions |
 
 ---
 
 ## Notes
 
-**T2 is not required** — this issue adds one constant, two tag descriptions, one self-contained helper with
-no I/O of its own (its resolver is an injected delegate), and documentation. It introduces no route, no
-schema change, no startup behaviour, and no bundled-data change, so there is nothing a container run would
-exercise that the unit suite and T1 do not. The tag becomes observable in Scalar only once #184–#188
-actually apply it, and `EntityFilterParsing` becomes live only once a consumer wires a real resolver to it —
-both carry their own T2 in their own issues.
+**T2 was run despite an earlier "not required" assessment.** The original reasoning (no route, no schema
+change, no startup behaviour) missed that this issue *does* touch `Program.cs` (the two tag-description
+entries) — `docs/release-verification.md`'s own stated trigger list includes "any change that touches...
+`Program.cs` startup". More fundamentally, this project's standing practice is to always run T2 regardless
+of whether a specific documented trigger applies — corrected here and going forward. `EntityFilterParsing`
+itself still isn't exercised by T2 (it's not wired to any endpoint yet), and the `MasterData` tag has no
+endpoints under it yet either — both become fully live once #184–#189/#192 wire them up, and carry their
+own T2 in those issues.
 
-Verification rows 4, 5, and 12 are doc review rather than a test, which is the weakest kind of gate — the
+Verification rows 3, 4, and 11 are doc review rather than a test, which is the weakest kind of gate — the
 convention's real proof is #184–#189 and #192 following it (including wiring a real `resolveIdByName`)
 without re-deciding. If any of them ends up re-litigating the filter shape, this issue's documentation
 failed regardless of its checkboxes.
