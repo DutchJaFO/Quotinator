@@ -1,6 +1,6 @@
 # #195 — Standard pagination contract: PagedItems&lt;T&gt;, shared parsing and not-found helpers
 
-**Status:** In progress (step 10)
+**Status:** Waiting for release
 **GitHub issue:** #195
 **Tiers required:** T1, T2
 **Depends on:** #194 (numeric params published as string) — done
@@ -247,7 +247,7 @@ cite no numeric pagination limits — no change needed.
 
 ### 10. Verify
 
-**Status:** T2 done (found and fixed a live bug — see step 3); T1 pending (developer's own action).
+**Status:** T1 and T2 both done.
 
 `dotnet build --configuration Release` → 0 warnings, 0 errors. `dotnet test --configuration Release
 --verbosity normal` → after the step-3 fix, 9/9 projects, 1311/1311 passed, 0 warnings, 0 errors.
@@ -264,6 +264,26 @@ distinct detail, omitted `pageSize` → 20 (not audit/import's old 50). `GET /op
 initially returned zero items despite `totalCount:17` — the exact regression this issue exists to
 prevent, in the one place a stub-backed unit test structurally cannot catch it. Fixed, covered by new
 real-SQLite tests, and re-verified live before this row was marked done.
+
+Follow-on work after this row was first marked done: endpoint-level test coverage was audited across
+all three endpoints and found uneven (e.g. no endpoint anywhere exercised page-beyond-last through an
+actual HTTP call, only through the shared parser's own unit tests) — 14 tests added to bring
+`QuoteEndpointsTests.cs`, `AdminAuditEndpointTests.cs`, and `ImportActionEndpointsTests.cs` to parity.
+The `GET /openapi/v1.json` type check was also automated: `OpenApiSpecEndpointTests.cs` fetches the
+real spec through `WebApplicationFactory` and asserts the type via `JsonDocument`, replacing the
+`curl | grep` check originally added to CLAUDE.md's smoke-test section (grepping a pretty-printed,
+multi-line JSON body proved fragile — the first version of that command never matched anything).
+Verified the new test is a genuine check, not a false positive, by temporarily removing
+`NumericParameterSchemaTransformer`'s DI registration and confirming all six cases failed red before
+reverting. A "Standard pagination contract" section was added to CLAUDE.md documenting the required
+eight-case test matrix so a future paginated endpoint starts with full coverage instead of needing the
+same audit repeated.
+
+**T1 confirmed** by the developer in Visual Studio: clean startup (schema up to date, both bundled
+sources refreshed successfully), and the exact pagination cases exercised live matched the contract —
+`pageSize=0` returns 200 with every row on `/quotes`, `/admin/audit`, and `/import/actions`;
+`pageSize=999999999999` and an empty `pageSize=` both return 422; a normal `pageSize=0` request against
+`/import/actions` (with `status`/`entityType`/`page` also set) returned 200 with items.
 
 ---
 
@@ -290,8 +310,8 @@ real-SQLite tests, and re-verified live before this row was marked done.
 | 17 | ✅ | The two `GetById` not-found paths still behave identically | Unit test | Existing `GetById_*` (Quotes), `GetById_*` (Conversations) — regression |
 | 18 | ✅ | #193's `GetPageAsync` retrofit (tuple → `PagedItems<T>`) has no behavioural regression | Unit test | `Quotinator.Data.Tests.Repositories.SqliteRepositoryTests` — all 13 `GetPageAsync` tests updated and green |
 | 19 | ✅ | `page`/`pageSize` on `/admin/audit` and `/import/actions` publish as `integer` in the OpenAPI spec | Unit/Live | Unit: `NumericParameterSchemaTransformerTests` (8 new tests); Live (T2): confirmed via `GET /openapi/v1.json` on the built image |
-| 20 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 9/9 projects, 1311/1311 passed, 0 warnings, 0 errors |
-| 21 | ❌ | T1 — app starts in Visual Studio; the changed contract behaves as specified | Live (T1) | Developer to confirm in Visual Studio |
+| 20 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 9/9 projects, 1331/1331 passed, 0 warnings, 0 errors (1311 at initial verify; +14 endpoint-coverage-parity tests, +6 `OpenApiSpecEndpointTests`) |
+| 21 | ✅ | T1 — app starts in Visual Studio; the changed contract behaves as specified | Live (T1) | Developer confirmed in Visual Studio: clean startup, `pageSize=0`/`pageSize=999999999999`/empty `pageSize=` all behave per contract on all three endpoints |
 | 22 | ✅ | T2 — the live contract holds on all three endpoints | Live (T2) | Full matrix confirmed on `/quotes`, `/admin/audit`, `/import/actions` — see step 10. Found and fixed a live `pageSize=0` bug on `/admin/audit`/`/import/actions` in the process (step 3) |
 
 ---
