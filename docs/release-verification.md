@@ -33,7 +33,15 @@ This document defines the three verification tiers used in the Quotinator releas
 - Version number visible at `/api/v1/version` — a missing `Directory.Build.props` in the build context silently produces `1.0.0`
 - Schema/reset behaviour building and running end-to-end from a fresh container image, independent of the local dev environment — confirms the same migration/reset path works identically outside VS
 
-**When required:** any change that touches the Dockerfile, publish output, `Program.cs` startup, port or SSL configuration, `Directory.Build.props`; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`, migration SQL, or schema/table-wipe logic (reseed, reset, backup).
+**When required:** Always — every issue runs T2, not only when one of the triggers below applies. That
+was tried once (#196, "T2 not required — no route/schema/startup change") and was wrong on two counts: it
+missed that the change touched `Program.cs`, hitting a trigger below anyway, and it's simply not how this
+project verifies releases regardless of trigger-matching. The trigger list still matters for what to
+additionally exercise beyond the baseline smoke tests in CLAUDE.md's Pre-Push Checklist → step 6: any
+change that touches the Dockerfile, publish output, `Program.cs` startup, port or SSL configuration,
+`Directory.Build.props`; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`,
+migration SQL, or schema/table-wipe logic (reseed, reset, backup) needs a targeted check on top of the
+baseline, not instead of it.
 
 **Gate:** `docker build` succeeds; every command in CLAUDE.md's Pre-Push Checklist → step 6
 ("Smoke-test the image") returns expected output. That checklist is the single authoritative,
@@ -80,6 +88,9 @@ or
 ```
 
 If an issue requires T3, it must go through a beta release before the final tag is pushed. See `docs/workflow/checklist.md → Milestone close` for the full gate sequence.
+
+T2 is always required (see T2's own "When required" above) — `**Tiers required:** T1` alone is not a
+valid declaration for any issue that touches code.
 
 ---
 
