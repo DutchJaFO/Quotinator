@@ -13,16 +13,19 @@
    .GetPageAsync` (already DI-registered) + `Quotinator.Data.Models.PagedItems<T>` (not `PageResponse<T>`
    — that type does not exist) + `PaginationParsing.TryParse`/`ValidatePageBeyondLast` (rejects
    out-of-range input with 422; does not clamp). Response items are a new `CharacterResponse` DTO with
-   `Id`, `Name`, `CompletenessStatus`, and `SourceIds` — the last populated via a new join query against
+   `Id`, `Name`, `CompletenessStatus`, and `Sources` — a list of minimal `MasterDataReference` (`{id,
+   name}`) records, **not** bare `SourceIds`, per CLAUDE.md's "Masterdata reference shape" convention
+   added during this planning review (see Background) — populated via a new join query against
    `CharacterSources`, batched once per page (not once per row).
 2. `GET /api/v1/masterdata/characters/{id}` — single Character by id, same `CharacterResponse` shape,
    using `NotFoundResult.OkOrNotFound`. `{id}` matches case-insensitively — `Guid.TryParse` on the route
    string is inherently case-insensitive, and `SqliteRepository<T>.GetByIdAsync` always uppercases the id
    before binding it (`id.ToString("D").ToUpperInvariant()`), so no extra work is needed beyond parsing
    the route string to `Guid` before calling the repository.
-3. A new join query/queries against `CharacterSources`, exposed through a new `ICharacterSourceLinkReader`
-   (design decision — see Background) — single-id form for `GetById`, batch form for `GetAll` (one query
-   for the whole page, not one per row).
+3. A new join query/queries against `CharacterSources` (joined through to `Sources` for `Title`), exposed
+   through a new `ICharacterSourceLinkReader` (design decision — see Background) — single-id form for
+   `GetById`, batch form for `GetAll` (one query for the whole page, not one per row). Returns each
+   linked Source's `(Id, Title)`, not a bare `Guid`, since the response must surface a display name.
 4. Both endpoints use `RateLimitPolicies.Api`, tag `ApiTags.MasterData`, and `[Description]` attributes
    for OpenAPI/Scalar documentation.
 5. No entity-specific filters yet (e.g. `?sourceId=`) — deferred per #196's entity-scoped
@@ -137,6 +140,26 @@ inheriting `SqliteRepositoryBase<CharacterSourceEntity>` — inheriting would re
 (`CharacterSources` and `Sources`) inline and never use `SELECT *` against a single entity shape. A
 plain constructor dependency is simpler and equally correct here.
 
+- **New design element, added during cross-plan review (developer directive, 2026-07-18)**:
+  `CharacterResponse.SourceIds` (bare `IReadOnlyList<string>`) is replaced with `CharacterResponse
+  .Sources` (`IReadOnlyList<MasterDataReference>`) per CLAUDE.md's new "Masterdata reference shape"
+  convention — this was in fact the concrete motivating case for that convention: the original design's
+  bare-id list was pointed out as an avoidable regression, since `SelectSourceIdsForCharacter(s)`'s own
+  join through `Sources` already fetches `Title` for free (it must join to `Sources` anyway, purely to
+  filter a soft-deleted Source's id out of the result — see Step 1). `ICharacterSourceLinkReader`'s
+  return types change from bare `Guid`/`IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>` to `(Guid Id,
+  string Name)`/`IReadOnlyDictionary<Guid, IReadOnlyList<(Guid Id, string Name)>>` tuples — never the
+  `Quotinator.Api.Models.MasterDataReference` DTO directly, since `Quotinator.Engine` has no dependency
+  on `Quotinator.Api`. `MasterDataReference` itself may already exist by the time this issue lands (#184
+  and #187 also need it) — reuse the existing file rather than redefining it; see Notes.
+- **Soft-deleted visibility, already correct, now explicitly confirmed**: the existing join design (Step
+  1) already filters `Sources.IsDeleted = 0` in the `ON` clause — a Character linked to a soft-deleted
+  Source was already excluded from `sourceIds` before this redesign, for the unrelated reason that a
+  dangling id would otherwise be meaningless to the caller. This redesign changes *what* is returned per
+  matched row (`(Id, Title)` instead of a bare `Id`), not *which* rows match — no additional soft-delete
+  filtering is needed, and this is now also the concrete first example of CLAUDE.md's "Soft-deleted rows
+  are invisible by default" convention being satisfied by pre-existing code rather than newly added for it.
+
 Conventions and constants from #196 are being consumed here, not re-decided.
 
 ---
@@ -156,19 +179,22 @@ leaks into a `sourceIds` response — same reasoning `Sql.Sources.CountActiveRef
 `SelectBase`/`CountForRandomBase` quote queries already apply when joining through `Sources`:
 
 ```csharp
-/// <summary>Active SourceIds linked to one Character — #185's GetById join.</summary>
-internal const string SelectSourceIdsForCharacter =
-    "SELECT cs.SourceId FROM CharacterSources cs " +
+/// <summary>Active (SourceId, SourceTitle) pairs linked to one Character — #185's GetById join. Selects
+/// Title alongside Id since the join through Sources (needed to exclude a soft-deleted Source) already
+/// has it for free, and the response must surface a display name per CLAUDE.md's "Masterdata reference
+/// shape" convention.</summary>
+internal const string SelectSourceReferencesForCharacter =
+    "SELECT s.Id, s.Title FROM CharacterSources cs " +
     "JOIN Sources s ON s.Id = cs.SourceId AND s.IsDeleted = 0 " +
     "WHERE cs.CharacterId = @characterId AND cs.IsDeleted = 0;";
 
 /// <summary>
-/// Active (CharacterId, SourceId) pairs for a batch of Characters in a single round-trip — #185's list
-/// join. Dapper expands @characterIds from any IEnumerable&lt;Guid&gt; automatically (same pattern as
-/// RepositorySql.SelectByIds), avoiding one query per row across a page.
+/// Active (CharacterId, SourceId, SourceTitle) rows for a batch of Characters in a single round-trip —
+/// #185's list join. Dapper expands @characterIds from any IEnumerable&lt;Guid&gt; automatically (same
+/// pattern as RepositorySql.SelectByIds), avoiding one query per row across a page.
 /// </summary>
-internal const string SelectSourceIdsForCharacters =
-    "SELECT cs.CharacterId, cs.SourceId FROM CharacterSources cs " +
+internal const string SelectSourceReferencesForCharacters =
+    "SELECT cs.CharacterId, s.Id AS SourceId, s.Title AS SourceTitle FROM CharacterSources cs " +
     "JOIN Sources s ON s.Id = cs.SourceId AND s.IsDeleted = 0 " +
     "WHERE cs.CharacterId IN @characterIds AND cs.IsDeleted = 0;";
 ```
@@ -184,18 +210,20 @@ placement rationale):
 ```csharp
 namespace Quotinator.Engine.Repositories;
 
-/// <summary>Reads the CharacterSources join for masterdata read endpoints (#185) — never writes.</summary>
+/// <summary>Reads the CharacterSources join for masterdata read endpoints (#185) — never writes. Returns
+/// plain (Id, Name) tuples, not Quotinator.Api.Models.MasterDataReference directly — Quotinator.Engine has
+/// no dependency on Quotinator.Api; the Api-layer endpoint maps the tuple to the DTO.</summary>
 public interface ICharacterSourceLinkReader
 {
-    /// <summary>Active SourceIds linked to one Character.</summary>
-    Task<IReadOnlyList<Guid>> GetSourceIdsAsync(Guid characterId);
+    /// <summary>Active (Id, Title) references for every Source linked to one Character.</summary>
+    Task<IReadOnlyList<(Guid Id, string Name)>> GetSourceReferencesAsync(Guid characterId);
 
     /// <summary>
-    /// Active SourceIds linked to each of the given Characters, in one round-trip. A Character with no
-    /// links is absent from the result rather than mapped to an empty list — callers default missing
-    /// keys to an empty array.
+    /// Active (Id, Title) Source references for each of the given Characters, in one round-trip. A
+    /// Character with no links is absent from the result rather than mapped to an empty list — callers
+    /// default missing keys to an empty array.
     /// </summary>
-    Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> GetSourceIdsForManyAsync(IReadOnlyList<Guid> characterIds);
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<(Guid Id, string Name)>>> GetSourceReferencesForManyAsync(IReadOnlyList<Guid> characterIds);
 }
 ```
 
@@ -211,28 +239,30 @@ public sealed class CharacterSourceLinkReader : ICharacterSourceLinkReader
     public CharacterSourceLinkReader(IDbConnectionFactory factory) => _factory = factory;
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<Guid>> GetSourceIdsAsync(Guid characterId)
+    public async Task<IReadOnlyList<(Guid Id, string Name)>> GetSourceReferencesAsync(Guid characterId)
     {
         using var conn = _factory.CreateConnection();
         conn.Open();
-        var rows = await conn.QueryAsync<Guid>(Sql.CharacterSources.SelectSourceIdsForCharacter, new { characterId });
-        return rows.ToList();
+        var rows = await conn.QueryAsync<SourceRow>(Sql.CharacterSources.SelectSourceReferencesForCharacter, new { characterId });
+        return rows.Select(r => (r.Id, r.Title)).ToList();
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> GetSourceIdsForManyAsync(IReadOnlyList<Guid> characterIds)
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<(Guid Id, string Name)>>> GetSourceReferencesForManyAsync(IReadOnlyList<Guid> characterIds)
     {
         if (characterIds.Count == 0)
-            return new Dictionary<Guid, IReadOnlyList<Guid>>();
+            return new Dictionary<Guid, IReadOnlyList<(Guid Id, string Name)>>();
 
         using var conn = _factory.CreateConnection();
         conn.Open();
-        var rows = await conn.QueryAsync<LinkRow>(Sql.CharacterSources.SelectSourceIdsForCharacters, new { characterIds });
+        var rows = await conn.QueryAsync<LinkRow>(Sql.CharacterSources.SelectSourceReferencesForCharacters, new { characterIds });
         return rows.GroupBy(r => r.CharacterId)
-                    .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(r => r.SourceId).ToList());
+                    .ToDictionary(g => g.Key, g => (IReadOnlyList<(Guid Id, string Name)>)g.Select(r => (r.SourceId, r.SourceTitle)).ToList());
     }
 
-    private sealed record LinkRow(Guid CharacterId, Guid SourceId);
+    private sealed record SourceRow(Guid Id, string Title);
+
+    private sealed record LinkRow(Guid CharacterId, Guid SourceId, string SourceTitle);
 }
 ```
 
@@ -267,20 +297,23 @@ public sealed class CharacterResponse
     /// <summary>Whether the record's fields are known to be fully populated and reviewed.</summary>
     public required CompletenessStatus CompletenessStatus { get; init; }
 
-    /// <summary>Every Source this character appears in (#179's many-to-many). Empty, never null, when the character has no linked Source.</summary>
-    public IReadOnlyList<string> SourceIds { get; init; } = [];
+    /// <summary>Every Source this character appears in (#179's many-to-many), as minimal read-only
+    /// references (<c>{id, name}</c> only — see <see cref="MasterDataReference"/>). Empty, never null,
+    /// when the character has no linked Source. A Source that has been soft-deleted is never included
+    /// (per CLAUDE.md's "Soft-deleted rows are invisible by default" convention).</summary>
+    public IReadOnlyList<MasterDataReference> Sources { get; init; } = [];
 }
 ```
 
 A private mapping method in `CharacterEndpoints` performs the flattening:
 
 ```csharp
-private static CharacterResponse ToResponse(Character character, IReadOnlyList<Guid> sourceIds) => new()
+private static CharacterResponse ToResponse(Character character, IReadOnlyList<(Guid Id, string Name)> sources) => new()
 {
     Id                 = character.Id.ToString("D").ToUpperInvariant(),
     Name               = character.Name,
     CompletenessStatus = character.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,
-    SourceIds          = sourceIds.Select(s => s.ToString("D").ToUpperInvariant()).ToList(),
+    Sources            = sources.Select(s => new MasterDataReference(s.Id.ToString("D").ToUpperInvariant(), s.Name)).ToList(),
 };
 ```
 
@@ -324,13 +357,14 @@ internal static class CharacterEndpoints
              .WithName("GetAllCharacters")
              .WithSummary("List characters")
              .WithDescription(
-                 "Returns a paginated list of characters, each with the Source ids it appears in (#179). " +
-                 "See CLAUDE.md's \"Standard pagination contract\" for page/pageSize semantics.");
+                 "Returns a paginated list of characters, each with the Sources it appears in (#179) as " +
+                 "minimal {id, name} references. See CLAUDE.md's \"Standard pagination contract\" for " +
+                 "page/pageSize semantics.");
 
         group.MapGet("/{id}", GetById)
              .WithName("GetCharacterById")
              .WithSummary("Character by ID")
-             .WithDescription("Returns a single character with the Source ids it appears in. Returns 404 if not found. Matches `id` case-insensitively.");
+             .WithDescription("Returns a single character with the Sources it appears in. Returns 404 if not found. Matches `id` case-insensitively.");
     }
 
     private static async Task<IResult> GetAll(
@@ -353,10 +387,10 @@ internal static class CharacterEndpoints
             return beyondLast;
 
         var characterIds     = result.Items.Select(c => c.Id).ToList();
-        var linksByCharacter = await linkReader.GetSourceIdsForManyAsync(characterIds);
+        var linksByCharacter = await linkReader.GetSourceReferencesForManyAsync(characterIds);
 
         var items = result.Items
-            .Select(c => ToResponse(c, linksByCharacter.TryGetValue(c.Id, out var ids) ? ids : []))
+            .Select(c => ToResponse(c, linksByCharacter.TryGetValue(c.Id, out var sources) ? sources : []))
             .ToList();
 
         var response = new PagedItems<CharacterResponse>(items, result.Page, result.PageSize, result.TotalCount);
@@ -379,11 +413,11 @@ internal static class CharacterEndpoints
         if (character is null)
             return NotFoundResult.OkOrNotFound<CharacterResponse>(null, localizer, ApiMessages.CharacterNotFound);
 
-        var sourceIds = await linkReader.GetSourceIdsAsync(characterId);
-        return NotFoundResult.OkOrNotFound(ToResponse(character, sourceIds), localizer, ApiMessages.CharacterNotFound);
+        var sources = await linkReader.GetSourceReferencesAsync(characterId);
+        return NotFoundResult.OkOrNotFound(ToResponse(character, sources), localizer, ApiMessages.CharacterNotFound);
     }
 
-    private static CharacterResponse ToResponse(Character character, IReadOnlyList<Guid> sourceIds) => new() { /* see Step 3 */ };
+    private static CharacterResponse ToResponse(Character character, IReadOnlyList<(Guid Id, string Name)> sources) => new() { /* see Step 3 */ };
 }
 ```
 
@@ -439,8 +473,9 @@ The `ICharacterSourceLinkReader` test double is a small inline stub class inside
 `CharacterEndpointsTests.cs` itself (`StubCharacterSourceLinkReader`), not a `Fakes/` file — mirroring the
 existing inline `StubAuditReader` in `AdminAuditEndpointTests.cs`. Unlike the repository fake (which needs
 to be a reusable, correctly-paginating in-memory store shared across many test methods), the link reader's
-test double only needs to echo back a caller-supplied `Dictionary<Guid, IReadOnlyList<Guid>>` — a single
-constructor parameter is enough, so a full `Fakes/` file would be unwarranted ceremony for this one.
+test double only needs to echo back a caller-supplied
+`Dictionary<Guid, IReadOnlyList<(Guid Id, string Name)>>` — a single constructor parameter is enough, so a
+full `Fakes/` file would be unwarranted ceremony for this one.
 
 ### 8. Endpoint tests
 
@@ -456,17 +491,18 @@ pagination contract" mandates for every new paginated GET endpoint, plus join-sp
 cases this issue's design introduces beyond what the issue body itself lists:
 
 - `GetAllCharacters_ReturnsPaginatedResults` (issue)
-- `GetAllCharacters_IncludesSourceIdsForEachCharacter` (issue)
-- `GetCharacterById_ExistingId_ReturnsCharacterWithSourceIds` (issue)
-- `GetCharacterById_MultipleSourceLinks_ReturnsAllOfThem` (issue)
+- `GetAllCharacters_IncludesSourceReferencesForEachCharacter` (issue)
+- `GetCharacterById_ExistingId_ReturnsCharacterWithSourceReferences` (issue)
+- `GetCharacterById_MultipleSourceLinks_ReturnsAllOfThemWithNames` (issue)
 - `GetCharacterById_UnknownId_Returns404` (issue)
 - `GetCharacterById_MalformedId_Returns404NotBadRequest` — mirrors #184's equivalent; a non-Guid `{id}`
   segment must not throw or bare-400
 - `GetCharacterById_LowercaseId_MatchesCaseInsensitively` — seeds a Character with an explicit
   uppercase-stored `Id`, requests it via a deliberately-lowercased id string, asserts 200 with the
   matching `Id` in the response
-- `GetAllCharacters_CharacterWithNoSourceLinks_ReturnsEmptySourceIdsArray` — proves the "missing key
-  defaults to empty array, not null/omitted" contract from Step 2's `GetSourceIdsForManyAsync` doc comment
+- `GetAllCharacters_CharacterWithNoSourceLinks_ReturnsEmptySourcesArray` — proves the "missing key
+  defaults to empty array, not null/omitted" contract from Step 2's `GetSourceReferencesForManyAsync` doc
+  comment
 - `GetAllCharacters_PageZero_Returns422`
 - `GetAllCharacters_PageMalformed_Returns422`
 - `GetAllCharacters_PageSizeMalformed_Returns422`
@@ -476,16 +512,24 @@ cases this issue's design introduces beyond what the issue body itself lists:
 - `GetAllCharacters_PageSizeOmitted_DefaultsTo20`
 - `GetAllCharacters_PageBeyondLast_Returns422DistinctDetail`
 
-`GetAllCharacters_IncludesSourceIdsForEachCharacter` and `GetCharacterById_MultipleSourceLinks_
-ReturnsAllOfThem` are the two tests that actually exercise the join batching — seed the stub link reader
-with a multi-entry dictionary and assert every id round-trips into the response's `sourceIds` array,
-proving the mapping in `GetAll`/`GetById` reads the reader's result correctly rather than just proving the
-reader itself returns data (which would be a weaker, reader-only test).
+`GetAllCharacters_IncludesSourceReferencesForEachCharacter` and `GetCharacterById_MultipleSourceLinks_
+ReturnsAllOfThemWithNames` are the two tests that actually exercise the join batching — seed the stub link
+reader with a multi-entry dictionary of `(Id, Name)` tuples and assert every reference round-trips into
+the response's `sources` array as `{id, name}`, proving the mapping in `GetAll`/`GetById` reads the
+reader's result correctly (including the name, not just the id) rather than just proving the reader itself
+returns data (which would be a weaker, reader-only test).
 
 **Response shape assertion** (proving Step 3's `CharacterResponse` design actually prevents the
 `SafeValue<T>` leak, matching #184/#186's identical assertion for their own `SafeValue<T>` fields):
-`GetCharacterById_ExistingId_ReturnsCharacterWithSourceIds` must additionally assert `completenessStatus`
-serializes as a plain JSON string value (e.g. `"Complete"`), never `{"raw":...,"parsed":...}`.
+`GetCharacterById_ExistingId_ReturnsCharacterWithSourceReferences` must additionally assert
+`completenessStatus` serializes as a plain JSON string value (e.g. `"Complete"`), never
+`{"raw":...,"parsed":...}`.
+
+**Soft-deleted Source exclusion** — `GetCharacterById_SourceSoftDeleted_ExcludedFromSources`: seeds a
+Character whose stub link reader omits an otherwise-known Source (modelling the join's `Sources.IsDeleted
+= 0` filter excluding it), asserts the response's `sources` array does not contain it — proving CLAUDE.md's
+"Soft-deleted rows are invisible by default" convention holds for this join, consistent with #184's
+equivalent test for its own `ISourceSeriesReferenceReader`.
 
 **Live tag/rate-limit proof** (added consistently across all five masterdata issues during cross-plan
 review, mirroring #187's `SeriesEndpoints_OnLiveSpec_TaggedMasterData`): `CharacterEndpoints_
@@ -506,9 +550,10 @@ table row style (see `README.md:143-146` for the pattern used by the neighbourin
 
 **Status:** Not started.
 
-Add the five new files (`src/Quotinator.Engine/Repositories/ICharacterSourceLinkReader.cs`,
+Add the new files (`src/Quotinator.Engine/Repositories/ICharacterSourceLinkReader.cs`,
 `CharacterSourceLinkReader.cs`, `src/Quotinator.Api/Models/CharacterResponse.cs`,
-`src/Quotinator.Api/Endpoints/CharacterEndpoints.cs`, `tests/Quotinator.Api.Tests/Fakes/
+`src/Quotinator.Api/Models/MasterDataReference.cs` — if not already added by whichever of #184/#185/#187
+lands first, `src/Quotinator.Api/Endpoints/CharacterEndpoints.cs`, `tests/Quotinator.Api.Tests/Fakes/
 FakeCharacterRepository.cs`, `tests/Quotinator.Api.Tests/Endpoints/CharacterEndpointsTests.cs`) to
 `Quotinator.slnx` if not automatically picked up by the existing project globs — verify by opening the
 solution. `Quotinator.Engine/Repositories/` is a new folder inside an existing project (source files under
@@ -532,15 +577,16 @@ curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/character
 curl -s "http://localhost:8080/openapi/v1.json" | grep -o '"masterdata/characters[^"]*"'
 ```
 Confirm: default list returns 200 with `items`/`page`/`pageSize`/`totalCount`/`totalPages`, and each item
-carries a `sourceIds` array; `pageSize=0` returns every Character as one page; `pageSize=999` returns 422;
-an unknown id returns 404 with `ErrorCharacterNotFound`'s message; the OpenAPI spec publishes
+carries a `sources` array of `{id, name}`; `pageSize=0` returns every Character as one page; `pageSize=999`
+returns 422; an unknown id returns 404 with `ErrorCharacterNotFound`'s message; the OpenAPI spec publishes
 `page`/`pageSize` as `integer|null` on `api/v1/masterdata/characters`. Also fetch a real Character known
 to have more than one Source link via `Quotinator.Tools.DbInspector` (`SELECT c.Id, c.Name, COUNT(*) FROM
 Characters c JOIN CharacterSources cs ON cs.CharacterId = c.Id WHERE c.IsDeleted = 0 AND cs.IsDeleted = 0
 GROUP BY c.Id HAVING COUNT(*) > 1 LIMIT 1;` — the bundled Gandalf rows from #169's research are a likely
 candidate) and confirm `GET /api/v1/masterdata/characters/{that id, lowercased}` returns 200 with all of
-that Character's Source ids in `sourceIds` — live proof of the join and case-insensitive matching, not
-just the unit tests' stubbed data.
+that Character's Sources in `sources`, each carrying both `id` and a non-empty `name` — live proof of the
+join actually resolving `Title` (not just id), and of case-insensitive matching, not just the unit tests'
+stubbed data.
 
 This project always runs T2 regardless of a documented trigger — this issue's own change to `Program.cs`
 (the new `MapCharacterEndpoints()` call and `ICharacterSourceLinkReader` registration) also independently
@@ -553,10 +599,10 @@ satisfies `docs/release-verification.md`'s "touches Program.cs startup" trigger.
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ❌ | `GET /api/v1/masterdata/characters` returns a paginated list of Characters | Unit test | `CharacterEndpointsTests.GetAllCharacters_ReturnsPaginatedResults` |
-| 2 | ❌ | Each list item includes the Source ids it appears in, batched in one join query per page | Unit test | `CharacterEndpointsTests.GetAllCharacters_IncludesSourceIdsForEachCharacter` |
-| 3 | ❌ | A Character with no Source links returns an empty `sourceIds` array, not null/omitted | Unit test | `CharacterEndpointsTests.GetAllCharacters_CharacterWithNoSourceLinks_ReturnsEmptySourceIdsArray` |
-| 4 | ❌ | `GET /api/v1/masterdata/characters/{id}` returns the matching Character with its Source ids | Unit test | `CharacterEndpointsTests.GetCharacterById_ExistingId_ReturnsCharacterWithSourceIds` |
-| 5 | ❌ | A Character linked to multiple Sources returns all of them | Unit test | `CharacterEndpointsTests.GetCharacterById_MultipleSourceLinks_ReturnsAllOfThem` |
+| 2 | ❌ | Each list item includes the Sources it appears in as `{id, name}` references, batched in one join query per page | Unit test | `CharacterEndpointsTests.GetAllCharacters_IncludesSourceReferencesForEachCharacter` |
+| 3 | ❌ | A Character with no Source links returns an empty `sources` array, not null/omitted | Unit test | `CharacterEndpointsTests.GetAllCharacters_CharacterWithNoSourceLinks_ReturnsEmptySourcesArray` |
+| 4 | ❌ | `GET /api/v1/masterdata/characters/{id}` returns the matching Character with its Sources | Unit test | `CharacterEndpointsTests.GetCharacterById_ExistingId_ReturnsCharacterWithSourceReferences` |
+| 5 | ❌ | A Character linked to multiple Sources returns all of them with names | Unit test | `CharacterEndpointsTests.GetCharacterById_MultipleSourceLinks_ReturnsAllOfThemWithNames` |
 | 6 | ❌ | An unknown id returns 404 | Unit test | `CharacterEndpointsTests.GetCharacterById_UnknownId_Returns404` |
 | 7 | ❌ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `CharacterEndpointsTests.GetCharacterById_MalformedId_Returns404NotBadRequest` |
 | 8 | ❌ | A lowercase id matches an uppercase-stored id | Unit test | `CharacterEndpointsTests.GetCharacterById_LowercaseId_MatchesCaseInsensitively` |
@@ -567,14 +613,15 @@ satisfies `docs/release-verification.md`'s "touches Program.cs startup" trigger.
 | 13 | ❌ | `pageSize = 0` returns every row as one page | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageSizeZero_ReturnsAllRowsAsOnePage` |
 | 14 | ❌ | `pageSize` omitted defaults to 20 | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageSizeOmitted_DefaultsTo20` |
 | 15 | ❌ | A page beyond the last returns 422 with a distinct detail | Unit test | `CharacterEndpointsTests.GetAllCharacters_PageBeyondLast_Returns422DistinctDetail` |
-| 16 | ❌ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | `CharacterEndpointsTests.GetCharacterById_ExistingId_ReturnsCharacterWithSourceIds` (shape assertion) |
-| 17 | ❌ | `page`/`pageSize` publish as `integer` in the OpenAPI spec for `api/v1/masterdata/characters` | Unit test | `NumericParameterSchemaTransformerTests` (new cases) |
-| 18 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `CharacterEndpoints_OnLiveSpec_TaggedMasterData` |
-| 19 | ❌ | `ApiMessages.CharacterNotFound` exists and all three locale files carry `ErrorCharacterNotFound` | Unit test | `TranslationCompletenessTests` |
-| 20 | ❌ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables updated |
-| 21 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 22 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
-| 23 | ❌ | T2 — the live contract holds against the built image, including a real multi-Source Character | Live (T2) | `docker build`/`docker run` matrix — see Step 11 |
+| 16 | ❌ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | `CharacterEndpointsTests.GetCharacterById_ExistingId_ReturnsCharacterWithSourceReferences` (shape assertion) |
+| 17 | ❌ | A Source excluded by the join's soft-delete filter never appears in `sources` | Unit test | `CharacterEndpointsTests.GetCharacterById_SourceSoftDeleted_ExcludedFromSources` |
+| 18 | ❌ | `page`/`pageSize` publish as `integer` in the OpenAPI spec for `api/v1/masterdata/characters` | Unit test | `NumericParameterSchemaTransformerTests` (new cases) |
+| 19 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `CharacterEndpoints_OnLiveSpec_TaggedMasterData` |
+| 20 | ❌ | `ApiMessages.CharacterNotFound` exists and all three locale files carry `ErrorCharacterNotFound` | Unit test | `TranslationCompletenessTests` |
+| 21 | ❌ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables updated |
+| 22 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 23 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
+| 24 | ❌ | T2 — the live contract holds against the built image, including a real multi-Source Character with resolved names | Live (T2) | `docker build`/`docker run` matrix — see Step 11 |
 
 ---
 
@@ -589,16 +636,20 @@ is unmodified by this issue — its `GetPageAsync`/`GetByIdAsync` SQL already we
 verification (including the `pageSize = 0` → `LIMIT -1` fix), so this issue only needs to prove the new
 endpoint/DTO/mapping layer and the new `CharacterSources` join, not re-verify that underlying layer.
 
-The batch join (`GetSourceIdsForManyAsync`) is the one piece of this issue with no sibling precedent
-anywhere else in the codebase — every existing "resolve a related id" query
+The batch join (`GetSourceReferencesForManyAsync`) is the one piece of this issue with no sibling
+precedent anywhere else in the codebase — every existing "resolve a related id" query
 (`Sql.Characters.SelectIdBySourceAndName`, `Sql.Sources.SelectExistingById`, etc.) operates on a single
 row, never a caller-supplied batch of ids via `IN @ids`. `RepositorySql.SelectByIds` (`Quotinator.Data`)
 is the only other place in the codebase using the `IN @ids`-expansion pattern, and it operates generically
-over `T`, not a join. If a future masterdata issue needs the same "batch of ids → grouped related ids"
-shape again (e.g. Source → Characters, or Series → Sources), consider whether `ICharacterSourceLinkReader`
-should generalise rather than being copied a second time — not decided here, since #185 is the first and
-only consumer today and speculative generalisation before a second real need is exactly what this
-project's Simplicity priority argues against.
+over `T`, not a join. #184 independently introduces the same single-id/batch shape for its own
+`ISourceSeriesReferenceReader` — both are one-off, entity-specific readers rather than a shared
+generalised abstraction; if a third masterdata issue needs the same "batch of ids → grouped related
+references" shape again, consider generalising then, not speculatively now.
+
+`MasterDataReference` (`src/Quotinator.Api/Models/MasterDataReference.cs`) is a shared type, not owned by
+this issue specifically — #184 and #187 also need it. Whichever of the three lands first creates the
+file; the other two reuse it. If #184 lands first (it is the lower-numbered, and its own plan doc already
+anticipates this), this issue's own Step 3 does not recreate it.
 
 ---
 
@@ -621,15 +672,18 @@ single `SourceId`, or the endpoint would misrepresent #179's own schema change (
 1. `GET /api/v1/masterdata/characters` — paginated list, using #183's `IListableRepository<Character>` +
    `Quotinator.Data.Models.PagedItems<T>` + the shared `PaginationParsing` helper (rejects out-of-range
    `page`/`pageSize` with 422 — it does not clamp). Response items include `Id`, `Name`,
-   `CompletenessStatus`, and a `sourceIds` array populated via a join against `CharacterSources` — not a
-   single nullable FK — via a new `CharacterResponse` DTO (the raw `Character` entity's `SafeValue<T>`-
-   wrapped fields cannot be serialized directly).
+   `CompletenessStatus`, and a `sources` array of minimal `MasterDataReference` (`{id, name}`) records
+   populated via a join against `CharacterSources` — never a bare `sourceIds` array of ids, per CLAUDE.md's
+   "Masterdata reference shape" convention — via a new `CharacterResponse` DTO (the raw `Character`
+   entity's `SafeValue<T>`-wrapped fields cannot be serialized directly).
 2. `GET /api/v1/masterdata/characters/{id}` — single Character by id, same join-array shape, using #183's
    shared `NotFoundResult.OkOrNotFound` helper. `{id}` matches case-insensitively (per this project's
    existing GUID parameter binding rule).
 3. A new `ICharacterSourceLinkReader` (single-id and batch-for-a-page forms) backed by two new
-   `Sql.CharacterSources` queries, to fetch the joined Source ids for one or many Character ids in a
-   single round-trip — avoid N+1 (one query per page, not one per row).
+   `Sql.CharacterSources` queries joined through to `Sources`, to fetch each linked Source's `(Id, Title)`
+   for one or many Character ids in a single round-trip — avoid N+1 (one query per page, not one per row).
+   A Source excluded by the join's own `Sources.IsDeleted = 0` filter is never surfaced (per CLAUDE.md's
+   "Soft-deleted rows are invisible by default" convention).
 4. Both endpoints use `RateLimitPolicies.Api`, tag `ApiTags.MasterData`, and `[Description]` attributes.
 5. Register `api/v1/masterdata/characters`'s `page`/`pageSize` parameters in
    `NumericParameterSchemaTransformer.NumericParamsByPath` (per #194's registration requirement — easy to
@@ -644,9 +698,10 @@ single `SourceId`, or the endpoint would misrepresent #179's own schema change (
 | Test class | Test method | Starts |
 |---|---|---|
 | New: `Quotinator.Api.Tests` | `GetAllCharacters_ReturnsPaginatedResults` | ❌ |
-| New: `Quotinator.Api.Tests` | `GetAllCharacters_IncludesSourceIdsForEachCharacter` | ❌ |
-| New: `Quotinator.Api.Tests` | `GetCharacterById_ExistingId_ReturnsCharacterWithSourceIds` | ❌ |
-| New: `Quotinator.Api.Tests` | `GetCharacterById_MultipleSourceLinks_ReturnsAllOfThem` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetAllCharacters_IncludesSourceReferencesForEachCharacter` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetCharacterById_ExistingId_ReturnsCharacterWithSourceReferences` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetCharacterById_MultipleSourceLinks_ReturnsAllOfThemWithNames` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetCharacterById_SourceSoftDeleted_ExcludedFromSources` | ❌ |
 | New: `Quotinator.Api.Tests` | `GetCharacterById_UnknownId_Returns404` | ❌ |
 
 Plus the full eight-case pagination matrix CLAUDE.md's "Standard pagination contract" mandates for every

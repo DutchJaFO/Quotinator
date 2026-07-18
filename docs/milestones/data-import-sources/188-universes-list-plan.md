@@ -96,6 +96,17 @@ No new discrepancies were found beyond the "first-ever repository registration" 
 flagged going into this review — the rest of the issue's technical claims (helper names aside,
 already corrected above) matched the code.
 
+**Masterdata reference shape / soft-delete visibility — confirmed not applicable, added during
+cross-plan review (2026-07-18):** Universe sits at the top of the Universe → Series → Source hierarchy
+(ADR 011) — it has no FK of its own to another masterdata entity (the reverse is true: `Series.UniverseId`
+points *at* Universe, which is #187's concern, not this issue's). This issue introduces no
+`MasterDataReference`-typed field and no new joined-table reader. Soft-deleted visibility is still
+relevant, though, and already satisfied structurally with no work needed: `RepositorySql.SelectPage`/
+`SelectById` already filter `IsDeleted = 0` unconditionally, so a soft-deleted Universe is already
+invisible via this endpoint for free, per CLAUDE.md's "Soft-deleted rows are invisible by default,
+everywhere" convention. No `includeDeleted` opt-in is being built here — per that convention, added only
+when a concrete consumer needs it.
+
 ---
 
 ## Steps

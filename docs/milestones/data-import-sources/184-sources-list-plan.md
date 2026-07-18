@@ -13,7 +13,9 @@
    (already DI-registered) + `Quotinator.Data.Models.PagedItems<T>` (not `PageResponse<T>` — that type
    does not exist) + `PaginationParsing.TryParse`/`ValidatePageBeyondLast` (rejects out-of-range input
    with 422; does not clamp). Response items are a new `SourceResponse` DTO with `Id`, `Title`, `Type`,
-   `Date`, `SeriesId` (nullable), `CompletenessStatus`.
+   `Date`, `Series` (nullable `MasterDataReference` — **not** a bare `SeriesId`, per CLAUDE.md's
+   "Masterdata reference shape" convention added during this planning review — see Background),
+   `CompletenessStatus`.
 2. `GET /api/v1/masterdata/sources/{id}` — single Source by id, using `NotFoundResult.OkOrNotFound`.
    `{id}` matches case-insensitively (existing GUID parameter binding rule) — `Guid.TryParse` on the
    route parameter is inherently case-insensitive, and `IRepository<T>.GetByIdAsync` accepts a `Guid`,
@@ -101,6 +103,23 @@ caught this way):
   `IListableRepository<T> : IRepository<T>` — `IRepository<T>`'s full member list, re-read directly:
   `GetByIdAsync`, `InsertAsync`, `InsertManyAsync`, `UpdateAsync`, `SoftDeleteAsync`, plus
   `IListableRepository<T>.GetPageAsync`. A new `FakeSourceRepository` must implement all six.
+- **New design element, added during cross-plan review (developer directive, 2026-07-18)**:
+  `SourceResponse.SeriesId` (bare `string?`) is replaced with `SourceResponse.Series`
+  (`MasterDataReference?`) per CLAUDE.md's new "Masterdata reference shape" convention. Confirmed via
+  research: **no existing query anywhere in the codebase joins `Sources.SeriesId` to `Series` to fetch
+  the parent's `Name`** — every existing reference to `SeriesId` (`Sql.Sources.SelectExistingById`,
+  `Sql.Series.CountActiveReferences`) treats it as a bare FK column. This issue writes the first one, via
+  a new `ISourceSeriesReferenceReader` (see Step 3) — the same "resolver, not the generic repository"
+  pattern #185 independently designed for `CharacterSources`, now formalised as a general convention
+  rather than left as one issue's bespoke solution.
+- **Soft-deleted visibility, confirmed structural**: `RepositorySql.SelectPage`/`SelectById`
+  (`src/Quotinator.Data/Repositories/RepositorySql.cs`) already filter `IsDeleted = 0` unconditionally, no
+  override exists anywhere in the codebase — so Sources themselves are already invisible once
+  soft-deleted, for free, matching CLAUDE.md's "Soft-deleted rows are invisible by default, everywhere".
+  The new `ISourceSeriesReferenceReader` query must independently apply the same rule to the *joined*
+  `Series` row — a Source pointing at a soft-deleted Series must resolve `Series` to `null`, not surface
+  a dangling reference. No `includeDeleted` opt-in is being built for this issue — per that same
+  convention, it's added only when a concrete consumer needs it, not speculatively.
 
 Conventions and constants only from #196 are being consumed here, not re-decided — this issue is the
 convention's first real consumer for the "no filter yet" path.
@@ -135,8 +154,12 @@ public sealed class SourceResponse
     /// <c>"1994-06"</c>). <c>null</c> when unknown.</summary>
     public string? Date { get; init; }
 
-    /// <summary>The series this source belongs to, if any (#179). <c>null</c> for a standalone source.</summary>
-    public string? SeriesId { get; init; }
+    /// <summary>The series this source belongs to, if any (#179), as a minimal read-only reference — the
+    /// series' <c>Id</c>/<c>Name</c> only, resolved via <see cref="ISourceSeriesReferenceReader"/> (Step 3).
+    /// <c>null</c> for a standalone source, and <c>null</c> if the linked series has been soft-deleted
+    /// (per CLAUDE.md's "Soft-deleted rows are invisible by default" convention — a dangling reference to
+    /// a deleted series is never surfaced).</summary>
+    public MasterDataReference? Series { get; init; }
 
     /// <summary>Whether the record's fields are known to be fully populated and reviewed.</summary>
     public required CompletenessStatus CompletenessStatus { get; init; }
@@ -148,17 +171,19 @@ public sealed class SourceResponse
 serializes using the member's exact declared name (`"Incomplete"`, `"NeedsReview"`, `"Complete"`), not
 lowercased — no further transform needed on the DTO side.
 
-A private mapping method (`SourceEndpoints.ToResponse(Source source)`) performs the flattening:
+A private mapping method (`SourceEndpoints.ToResponse(Source source, MasterDataReference? series)`)
+performs the flattening — `series` is resolved separately (Step 3) and passed in, since a single-table
+`Source` mapping has no way to know its Series' `Name`:
 
 ```csharp
-private static SourceResponse ToResponse(Source source) => new()
+private static SourceResponse ToResponse(Source source, MasterDataReference? series) => new()
 {
     Id                 = source.Id.ToString("D").ToUpperInvariant(),
     Title              = source.Title,
     Type               = source.Type.Parsed?.ToString().ToLowerInvariant()
                           ?? source.Type.Raw.ToLowerInvariant(),
     Date               = string.IsNullOrEmpty(source.Date.Raw) ? null : source.Date.Raw,
-    SeriesId           = source.SeriesId?.ToString("D").ToUpperInvariant(),
+    Series             = series,
     CompletenessStatus = source.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,
 };
 ```
@@ -180,7 +205,75 @@ Add `"ErrorSourceNotFound"` to all three `i18ntext/UI.*.json` files in the same 
 
 `TranslationCompletenessTests` must stay green.
 
-### 3. `SourceEndpoints.cs`
+### 3. `MasterDataReference` type + `ISourceSeriesReferenceReader`
+
+**Status:** Not started.
+
+**`MasterDataReference`** — if not already created by whichever of #184/#185/#187 lands first (all three
+need it; create once, reuse), new file `src/Quotinator.Api/Models/MasterDataReference.cs`:
+```csharp
+namespace Quotinator.Api.Models;
+
+/// <summary>A minimal, read-only reference to a related masterdata entity — just enough to display
+/// without a separate lookup. Fetch the full record via that entity's own masterdata endpoint for more
+/// detail. See CLAUDE.md's "Masterdata reference shape" convention.</summary>
+public sealed record MasterDataReference(string Id, string Name);
+```
+
+**`ISourceSeriesReferenceReader`** — new files `src/Quotinator.Engine/Repositories/
+ISourceSeriesReferenceReader.cs`/`SourceSeriesReferenceReader.cs`, namespace `Quotinator.Engine
+.Repositories` (same folder #185 introduces for `ICharacterSourceLinkReader` — not a new namespace).
+Returns plain `(Guid Id, string Name)` tuples, not `Quotinator.Api.Models.MasterDataReference` directly —
+`Quotinator.Engine` has no dependency on `Quotinator.Api`:
+
+```csharp
+namespace Quotinator.Engine.Repositories;
+
+/// <summary>Resolves a Source's SeriesId to its Series' (Id, Name), filtered to an active (non-deleted)
+/// Series only — never writes.</summary>
+public interface ISourceSeriesReferenceReader
+{
+    /// <summary>The linked Series' (Id, Name) for one Source, or <c>null</c> if the Source has no Series
+    /// or its Series has been soft-deleted.</summary>
+    Task<(Guid Id, string Name)?> GetSeriesReferenceAsync(Guid sourceId);
+
+    /// <summary>The linked Series' (Id, Name) for each of the given Sources, in one round-trip. A Source
+    /// with no active Series link is absent from the result rather than mapped to a null entry — callers
+    /// default missing keys to <c>null</c>.</summary>
+    Task<IReadOnlyDictionary<Guid, (Guid Id, string Name)>> GetSeriesReferencesForManyAsync(IReadOnlyList<Guid> sourceIds);
+}
+```
+
+New `Sql.Sources` queries in `src/Quotinator.Engine/Queries/Sql.cs`, matching the established
+double-`IsDeleted`-gated join idiom (`Sql.Quotes.SelectBase`, `Sql.Characters.SelectIdBySourceAndName`):
+
+```csharp
+/// <summary>Active Series reference for one Source — #184's GetById join. No row if the Source has no
+/// Series, or its Series has been soft-deleted.</summary>
+internal const string SelectSeriesReferenceForSource =
+    "SELECT ser.Id, ser.Name FROM Sources s " +
+    "JOIN Series ser ON ser.Id = s.SeriesId AND ser.IsDeleted = 0 " +
+    "WHERE s.Id = @sourceId AND s.IsDeleted = 0;";
+
+/// <summary>
+/// Active Series references for a batch of Sources in a single round-trip — #184's list join, avoiding
+/// one query per row across a page. A Source with no active Series link is simply absent from the result.
+/// </summary>
+internal const string SelectSeriesReferencesForSources =
+    "SELECT s.Id AS SourceId, ser.Id AS SeriesId, ser.Name AS SeriesName FROM Sources s " +
+    "JOIN Series ser ON ser.Id = s.SeriesId AND ser.IsDeleted = 0 " +
+    "WHERE s.Id IN @sourceIds AND s.IsDeleted = 0;";
+```
+
+`SourceSeriesReferenceReader` implementation mirrors `CharacterSourceLinkReader`'s shape (Dapper
+`QueryFirstOrDefaultAsync`/`QueryAsync` against `IDbConnectionFactory`, a private `record` row type for
+the batch form's three-column result). Register in `Program.cs` alongside the other repository
+registrations (near `Program.cs:310`):
+```csharp
+builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenceReader>();
+```
+
+### 4. `SourceEndpoints.cs`
 
 **Status:** Not started.
 
@@ -218,6 +311,7 @@ internal static class SourceEndpoints
         IApiLocalizer localizer,
         ILogger<Log> logger,
         IListableRepository<Source> repository,
+        ISourceSeriesReferenceReader seriesReader,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
@@ -232,9 +326,16 @@ internal static class SourceEndpoints
         if (beyondLast is not null)
             return beyondLast;
 
-        var response = new PagedItems<SourceResponse>(
-            result.Items.Select(ToResponse).ToList(), result.Page, result.PageSize, result.TotalCount);
+        var sourceIds        = result.Items.Select(s => s.Id).ToList();
+        var seriesBySourceId = await seriesReader.GetSeriesReferencesForManyAsync(sourceIds);
 
+        var items = result.Items
+            .Select(s => ToResponse(s, seriesBySourceId.TryGetValue(s.Id, out var series)
+                ? new MasterDataReference(series.Id.ToString("D").ToUpperInvariant(), series.Name)
+                : null))
+            .ToList();
+
+        var response = new PagedItems<SourceResponse>(items, result.Page, result.PageSize, result.TotalCount);
         return Results.Ok(response);
     }
 
@@ -242,7 +343,8 @@ internal static class SourceEndpoints
         [Description("UUID of the source.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        IListableRepository<Source> repository)
+        IListableRepository<Source> repository,
+        ISourceSeriesReferenceReader seriesReader)
     {
         logger.LogInformation("[Api - GetSourceById] id={Id}", id);
 
@@ -250,10 +352,16 @@ internal static class SourceEndpoints
             return NotFoundResult.OkOrNotFound<SourceResponse>(null, localizer, ApiMessages.SourceNotFound);
 
         var source = await repository.GetByIdAsync(guid);
-        return NotFoundResult.OkOrNotFound(source is null ? null : ToResponse(source), localizer, ApiMessages.SourceNotFound);
+        if (source is null)
+            return NotFoundResult.OkOrNotFound<SourceResponse>(null, localizer, ApiMessages.SourceNotFound);
+
+        var seriesRef = await seriesReader.GetSeriesReferenceAsync(guid);
+        var series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToString("D").ToUpperInvariant(), s.Name) : null;
+
+        return NotFoundResult.OkOrNotFound(ToResponse(source, series), localizer, ApiMessages.SourceNotFound);
     }
 
-    private static SourceResponse ToResponse(Source source) => new() { /* see Step 1 */ };
+    private static SourceResponse ToResponse(Source source, MasterDataReference? series) => new() { /* see Step 1 */ };
 }
 ```
 
@@ -268,7 +376,7 @@ Register the call in `Program.cs` alongside the other `Map*Endpoints()` calls (`
 app.MapSourceEndpoints();
 ```
 
-### 4. Register the OpenAPI numeric-param transformer path
+### 5. Register the OpenAPI numeric-param transformer path
 
 **Status:** Not started.
 
@@ -284,7 +392,7 @@ the original issue text):
 Without this, `page`/`pageSize` publish as bare `string` in the OpenAPI spec instead of
 `integer|null` — the exact #194 gap.
 
-### 5. `FakeSourceRepository`
+### 6. `FakeSourceRepository`
 
 **Status:** Not started.
 
@@ -299,13 +407,23 @@ New file `tests/Quotinator.Api.Tests/Fakes/FakeSourceRepository.cs`, implementin
 - `GetByIdAsync(id, unitOfWork)` — case-insensitive `Guid` match (`Guid` comparison is inherently
   case-insensitive once parsed, so a straight `==` on `Guid` values is already correct here — the
   case-insensitivity concern only applies to the *string* form before parsing, which the endpoint handles
-  in Step 3), returns `null` if not found or `IsDeleted`.
+  in Step 4), returns `null` if not found or `IsDeleted`.
 - `InsertAsync`, `InsertManyAsync`, `UpdateAsync`, `SoftDeleteAsync` — implemented minimally (append/
   update/mark-deleted against the in-memory list) rather than `throw new NotImplementedException()`, so
   the fake is a genuine substitutable double per this project's testing conventions, not a partial stub
   that would break if a future test exercises a write path through it.
 
-### 6. Endpoint tests
+**`FakeSourceSeriesReferenceReader`** — new file `tests/Quotinator.Api.Tests/Fakes/
+FakeSourceSeriesReferenceReader.cs`, implementing `ISourceSeriesReferenceReader`. Backed by a
+constructor-supplied `IReadOnlyDictionary<Guid, (Guid Id, string Name)>` (Source id → Series reference);
+a Source id absent from the dictionary resolves to `null`/no entry, exactly matching the real reader's
+documented "absent, not null-valued" contract for both `GetSeriesReferenceAsync` and
+`GetSeriesReferencesForManyAsync`. This is a resolver double, not a joined-table simulation — it never
+needs to model soft-deletion itself, since the test simply omits a Series' entry from the seed dictionary
+to represent "the Series doesn't resolve" (whether because it doesn't exist or because it was
+soft-deleted; the reader's contract makes the two indistinguishable to its caller by design).
+
+### 7. Endpoint tests
 
 **Status:** Not started.
 
@@ -341,6 +459,21 @@ pagination contract" mandates for every new paginated GET endpoint:
   3's tag/rate-limit wiring live rather than by code inspection only. Mirrors #187's identical test for
   `SeriesEndpoints` — added consistently across all five masterdata issues during cross-plan review, not
   unique to one.
+- `GetSourceById_SourceHasSeries_ReturnsSeriesReference` — seeds a Source with a `SeriesId` and a matching
+  `FakeSourceSeriesReferenceReader` entry, asserts the response's `series` field is `{id, name}` matching
+  the seeded Series.
+- `GetSourceById_SourceHasNoSeries_ReturnsNullSeries` — seeds a Source with no reader entry, asserts
+  `series` serializes as JSON `null`.
+- `GetSourceById_SeriesSoftDeleted_ReturnsNullSeries` — seeds a Source whose `SeriesId` is set, but omits
+  the corresponding entry from `FakeSourceSeriesReferenceReader`'s seed dictionary (modelling a
+  soft-deleted Series, per the reader's documented "absent means unresolved" contract), asserts `series`
+  serializes as JSON `null`, not a dangling reference — proving CLAUDE.md's "Soft-deleted rows are
+  invisible by default" convention holds for this new joined reference, not just for the Source row
+  itself.
+- `GetAllSources_MultipleSourcesWithSeries_BatchResolvesEachSeries` — seeds several Sources, some with a
+  Series and some without, across one page; asserts each item's `series` field resolves independently and
+  correctly, proving the batched `GetSeriesReferencesForManyAsync` path (not just the single-id
+  `GetById` path) maps results back to the right Source.
 
 `GetSourceById_LowercaseId_MatchesCaseInsensitively` seeds a `Source` with an explicit uppercase-stored
 `Id`, requests it via a deliberately-lowercased id string, and asserts 200 with the matching `Id` in the
@@ -352,7 +485,7 @@ additionally assert `type`/`completenessStatus` serialize as plain JSON string v
 `"Complete"`), never `{"raw":...,"parsed":...}` — the same assertion #186's `PersonResponse` plan makes
 explicit for its own `SafeValue<T>` fields.
 
-### 7. Documentation
+### 8. Documentation
 
 **Status:** Not started.
 
@@ -361,18 +494,20 @@ Update `README.md`'s and `addon/DOCS.md`'s REST API Endpoints tables — add row
 row style (see `README.md:143-146` for the pattern used by the neighbouring `/quotes` and
 `/conversations` rows).
 
-### 8. Solution file
+### 9. Solution file
 
 **Status:** Not started.
 
-Add `src/Quotinator.Api/Models/SourceResponse.cs`, `src/Quotinator.Api/Endpoints/SourceEndpoints.cs`, and
-`tests/Quotinator.Api.Tests/Fakes/FakeSourceRepository.cs`/`tests/Quotinator.Api.Tests/Endpoints/
-SourceEndpointsTests.cs` to `Quotinator.slnx` if they are not automatically picked up by the existing
-project globs (verify by opening the solution — most `.cs` files under an existing project folder are
-included automatically; only files outside any project need an explicit `<Folder>` entry per CLAUDE.md's
-Visual Studio Solution section).
+Add `src/Quotinator.Api/Models/SourceResponse.cs`, `src/Quotinator.Api/Models/MasterDataReference.cs` (if
+not already added by whichever of #184/#185/#187 lands first), `src/Quotinator.Engine/Repositories/
+ISourceSeriesReferenceReader.cs`/`SourceSeriesReferenceReader.cs`, `src/Quotinator.Api/Endpoints/
+SourceEndpoints.cs`, and `tests/Quotinator.Api.Tests/Fakes/FakeSourceRepository.cs`/
+`FakeSourceSeriesReferenceReader.cs`/`tests/Quotinator.Api.Tests/Endpoints/SourceEndpointsTests.cs` to
+`Quotinator.slnx` if they are not automatically picked up by the existing project globs (verify by opening
+the solution — most `.cs` files under an existing project folder are included automatically; only files
+outside any project need an explicit `<Folder>` entry per CLAUDE.md's Visual Studio Solution section).
 
-### 9. Verify
+### 10. Verify
 
 **Status:** Not started.
 
@@ -395,7 +530,10 @@ with `ErrorSourceNotFound`'s message; the OpenAPI spec publishes `page`/`pageSiz
 `api/v1/masterdata/sources`. Also fetch a real Source id via
 `Quotinator.Tools.DbInspector` (`SELECT Id, Title FROM Sources WHERE IsDeleted = 0 LIMIT 1;`) and confirm
 `GET /api/v1/masterdata/sources/{that id, lowercased}` returns 200 — live proof of case-insensitive
-matching, not just the unit test.
+matching, not just the unit test. If any bundled/seeded Source has a `SeriesId`
+(`SELECT Id, Title FROM Sources WHERE SeriesId IS NOT NULL AND IsDeleted = 0 LIMIT 1;`), fetch that
+Source by id too and confirm the response's `series` field is `{id, name}`, not `null` — live proof the
+`ISourceSeriesReferenceReader` join actually resolves, not just the fake-backed unit tests.
 
 This project always runs T2 regardless of a documented trigger — this issue's own change to `Program.cs`
 (the new `MapSourceEndpoints()` call) also independently satisfies `docs/release-verification.md`'s
@@ -424,10 +562,14 @@ This project always runs T2 regardless of a documented trigger — this issue's 
 | 15 | ❌ | `page`/`pageSize` publish as `integer` in the OpenAPI spec for `api/v1/masterdata/sources` | Unit test | `NumericParameterSchemaTransformerTests` (new cases) |
 | 16 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `SourceEndpoints_OnLiveSpec_TaggedMasterData` |
 | 17 | ❌ | `ApiMessages.SourceNotFound` exists and all three locale files carry `ErrorSourceNotFound` | Unit test | `TranslationCompletenessTests` |
-| 18 | ❌ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables updated |
-| 19 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 20 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
-| 21 | ❌ | T2 — the live contract holds against the built image | Live (T2) | `docker build`/`docker run` matrix — see Step 9 |
+| 18 | ❌ | A Source with a Series returns `series` as `{id, name}` | Unit test | `SourceEndpointsTests.GetSourceById_SourceHasSeries_ReturnsSeriesReference` |
+| 19 | ❌ | A Source with no Series returns `series` as `null` | Unit test | `SourceEndpointsTests.GetSourceById_SourceHasNoSeries_ReturnsNullSeries` |
+| 20 | ❌ | A Source whose Series has been soft-deleted returns `series` as `null`, not a dangling reference | Unit test | `SourceEndpointsTests.GetSourceById_SeriesSoftDeleted_ReturnsNullSeries` |
+| 21 | ❌ | The list endpoint resolves each item's Series independently via the batched reader | Unit test | `SourceEndpointsTests.GetAllSources_MultipleSourcesWithSeries_BatchResolvesEachSeries` |
+| 22 | ❌ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables updated |
+| 23 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 24 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
+| 25 | ❌ | T2 — the live contract holds against the built image, including a live Series reference resolving to `{id, name}` | Live (T2) | `docker build`/`docker run` matrix — see Step 10 |
 
 ---
 
@@ -441,7 +583,13 @@ adding it.
 `Source`'s underlying repository (`SqliteRepository<Source>` via `IRestorableRepository<Source>`) is
 unmodified by this issue — its `GetPageAsync`/`GetByIdAsync` SQL already went through #193's/#195's own
 verification (including the `pageSize = 0` → `LIMIT -1` fix), so this issue does not need to re-prove
-that layer, only the new endpoint/DTO/mapping layer on top of it.
+that layer, only the new endpoint/DTO/mapping layer, plus the new `ISourceSeriesReferenceReader` join,
+on top of it.
+
+`MasterDataReference` (`src/Quotinator.Api/Models/MasterDataReference.cs`) is a shared type, not owned by
+this issue specifically — #185 and #187 also need it. Whichever of the three lands first creates the
+file; the other two reuse it rather than redefining it. If #184 lands first, note this explicitly in
+#185's and #187's own plan docs so their own Step 1 doesn't recreate it.
 
 ---
 
@@ -464,21 +612,28 @@ discovering duplicate/near-duplicate Sources (#182) once results can actually be
 1. `GET /api/v1/masterdata/sources` — paginated list, using #183's `IListableRepository<Source>` +
    `Quotinator.Data.Models.PagedItems<T>` + the shared `PaginationParsing` helper (rejects
    out-of-range `page`/`pageSize` with 422 — it does not clamp). Response items include `Id`, `Title`,
-   `Type`, `Date`, `SeriesId` (nullable), `CompletenessStatus`, via a new `SourceResponse` DTO (the raw
-   `Source` entity's `SafeValue<T>`-wrapped fields cannot be serialized directly).
+   `Type`, `Date`, `Series` (nullable `MasterDataReference` — a minimal `{id, name}` record, per
+   CLAUDE.md's "Masterdata reference shape" convention; never a bare `SeriesId`), `CompletenessStatus`,
+   via a new `SourceResponse` DTO (the raw `Source` entity's `SafeValue<T>`-wrapped fields cannot be
+   serialized directly).
 2. `GET /api/v1/masterdata/sources/{id}` — single Source by id, using #183's shared
    `NotFoundResult.OkOrNotFound` helper. `{id}` matches case-insensitively (per this project's existing
    GUID parameter binding rule).
-3. Both endpoints use `RateLimitPolicies.Api`, tag `ApiTags.MasterData`, and `[Description]` attributes
+3. New `ISourceSeriesReferenceReader` (`Quotinator.Engine.Repositories`) resolves a Source's `SeriesId`
+   to its Series' `(Id, Name)`, filtered to an active (non-soft-deleted) Series only — a Source pointing
+   at a soft-deleted Series resolves `Series` to `null`, per CLAUDE.md's "Soft-deleted rows are invisible
+   by default" convention. Both a single-id and a batched form are needed (the list endpoint must not
+   issue one query per row).
+4. Both endpoints use `RateLimitPolicies.Api`, tag `ApiTags.MasterData`, and `[Description]` attributes
    for OpenAPI/Scalar documentation (per `QuoteEndpoints.cs`'s existing pattern).
-4. Register `api/v1/masterdata/sources`'s `page`/`pageSize` parameters in
+5. Register `api/v1/masterdata/sources`'s `page`/`pageSize` parameters in
    `NumericParameterSchemaTransformer.NumericParamsByPath` (per #194's registration requirement — easy
    to miss, as #195 found for `/admin/audit` and `/import/actions`).
-5. Add `ApiMessages.SourceNotFound` (`"ErrorSourceNotFound"`) with lockstep translations in all three
+6. Add `ApiMessages.SourceNotFound` (`"ErrorSourceNotFound"`) with lockstep translations in all three
    `i18ntext/UI.*.json` files.
-6. No entity-specific filters yet (e.g. `?seriesId=`) — deferred to a future issue per #196's
+7. No entity-specific filters yet (e.g. `?seriesId=`) — deferred to a future issue per #196's
    documented entity-scoped filter-parameter convention, added only when a concrete need exists.
-7. Update `README.md` and `addon/DOCS.md`'s endpoint tables per this project's "Keeping API
+8. Update `README.md` and `addon/DOCS.md`'s endpoint tables per this project's "Keeping API
    documentation in sync" rule.
 
 ## Expected tests
@@ -487,6 +642,10 @@ discovering duplicate/near-duplicate Sources (#182) once results can actually be
 |---|---|---|
 | New: `Quotinator.Api.Tests` | `GetAllSources_ReturnsPaginatedResults` | ❌ |
 | New: `Quotinator.Api.Tests` | `GetAllSources_PageSizeOmitted_DefaultsTo20` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetAllSources_MultipleSourcesWithSeries_BatchResolvesEachSeries` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetSourceById_SourceHasSeries_ReturnsSeriesReference` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetSourceById_SourceHasNoSeries_ReturnsNullSeries` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetSourceById_SeriesSoftDeleted_ReturnsNullSeries` | ❌ |
 | New: `Quotinator.Api.Tests` | `GetSourceById_ExistingId_ReturnsSource` | ❌ |
 | New: `Quotinator.Api.Tests` | `GetSourceById_UnknownId_Returns404` | ❌ |
 | New: `Quotinator.Api.Tests` | `GetSourceById_LowercaseId_MatchesCaseInsensitively` | ❌ |

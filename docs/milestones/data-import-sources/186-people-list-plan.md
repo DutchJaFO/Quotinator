@@ -136,6 +136,17 @@ CLAUDE.md's file placement rule; no service layer exists for this endpoint so th
   (`CompletenessStatus.cs:10`), so `System.Text.Json` serializes it as a string automatically — this is
   exactly the pattern CLAUDE.md's "JSON parsing policy" section prescribes for enum-valued fields.
 
+**Masterdata reference shape / soft-delete visibility — confirmed not applicable, added during cross-plan
+review (2026-07-18):** `Person` has no FK to another masterdata entity (`Character`'s `Sources` list in
+#185, `Source`'s `Series` reference in #184, and `Series`' `Universe` reference in #187 are the only three
+places this milestone's new "Masterdata reference shape" CLAUDE.md convention actually applies — see those
+issues' plan docs). This issue introduces no `MasterDataReference`-typed field and no new joined-table
+reader. Soft-deleted visibility is still relevant, though, and already satisfied structurally with no work
+needed: `RepositorySql.SelectPage`/`SelectById` already filter `IsDeleted = 0` unconditionally, so a
+soft-deleted Person is already invisible via this endpoint for free, per CLAUDE.md's "Soft-deleted rows are
+invisible by default, everywhere" convention. No `includeDeleted` opt-in is being built here — per that
+convention, added only when a concrete consumer needs it.
+
 ---
 
 ## Steps

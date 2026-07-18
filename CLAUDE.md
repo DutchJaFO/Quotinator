@@ -389,6 +389,61 @@ move under `/masterdata/`.** Conversations is a *consumer* of masterdata (it emb
 reference Sources/Characters), not a masterdata entity itself. Stated explicitly here so the next reader
 doesn't reasonably assume the omission was an oversight.
 
+### Masterdata reference shape
+
+Any FK-valued field on a masterdata response DTO (e.g. a Source's link to its Series, a Character's links
+to its Sources) is a minimal, read-only `MasterDataReference(string Id, string Name)` —
+`src/Quotinator.Api/Models/MasterDataReference.cs` — **never** a bare id and never the full related record.
+A single optional FK (`Source.SeriesId`) becomes a nullable `MasterDataReference?`; a many-to-many link
+(Character↔Source) becomes a `IReadOnlyList<MasterDataReference>`.
+
+**Why not a bare id:** a bare id forces the client into a second round-trip per reference just to show a
+name. **Why not the full related record:** that would denormalise and bloat every response with data the
+caller can already fetch via that entity's own masterdata endpoint if it needs more than a display label —
+and `Quotinator.Core.Models.QuoteResponse` already establishes the precedent of embedding just enough to
+render, not a nested full object. `MasterDataReference` is the middle ground, sized for "enough to display
+without an extra call."
+
+**Deliberately minimal, not permanently minimal.** `MasterDataReference` carries only `Id`/`Name` today
+because nothing has needed more yet — richer detail (or the full related record) can be added to specific
+response fields later, per concrete need, without redesigning the shape from scratch. Its properties are
+read-only (`init`-only): these are display references embedded in another entity's response, not something
+a client edits through this endpoint. Any future CRUD work targets the core response record itself (e.g.
+`PUT /masterdata/sources/{id}`), never a nested reference field directly.
+
+**A resolver, not the generic repository — resolving a FK to a reference always requires a join** the
+generic `IListableRepository<T>`/`IRepository<T>` (single-table, `SELECT * FROM {table}`) cannot express.
+Each masterdata issue that needs this writes its own small reader in `Quotinator.Engine.Repositories`
+(e.g. `ISourceSeriesReferenceReader`, `ICharacterSourceLinkReader`) returning plain `(Guid Id, string
+Name)` tuples or a small Engine-local record — never `Quotinator.Api.Models.MasterDataReference` directly,
+since `Quotinator.Engine` has no dependency on `Quotinator.Api`. The consuming endpoint maps the resolver's
+result into `MasterDataReference` at the API layer. A batched form (`GetXForManyAsync`, one query per page
+rather than one per row) is required wherever the reference appears in a list response, matching #195's
+N+1 avoidance rule for pagination generally.
+
+### Soft-deleted rows are invisible by default, everywhere
+
+`IRepository<T>.GetByIdAsync`/`IListableRepository<T>.GetPageAsync` already exclude `IsDeleted = 1` rows
+unconditionally — confirmed by reading `RepositorySql.SelectById`/`SelectPage`/`CountActive`
+(`src/Quotinator.Data/Repositories/RepositorySql.cs`), none of which have a parameter or overload for
+including deleted rows. No endpoint anywhere in this codebase exposes soft-deleted rows today, opt-in or
+otherwise — `IRestorableRepository<T>.GetDeletedAsync`/`RestoreAsync` exist and are DI-registered, but are
+never called from `Quotinator.Api`.
+
+**The rule this establishes:** a soft-deleted row is never visible through a read endpoint by default, and
+if a concrete need for admin-style "show me deleted rows too" visibility ever arises, it must be built as
+an explicit opt-in query parameter (e.g. `includeDeleted=true`, defaulting to `false`) — never a default,
+and never inferred from a caller's role or key. **Do not build this parameter speculatively** — add it to
+a specific endpoint only when a real consumer needs it; until then, the existing unconditional exclusion
+is the entire implementation, for free.
+
+**This applies one level deeper than the primary record, too.** Any new reference-resolving join
+(`MasterDataReference` above) must filter the *referenced* table to `IsDeleted = 0` in the `JOIN`/`ON`
+clause, not just the driving table — the same idiom `Sql.Quotes.SelectBase`'s multi-table join and
+`Sql.Characters.SelectIdBySourceAndName` already use (`JOIN Sources s ON s.Id = ... AND s.IsDeleted = 0`).
+A soft-deleted target simply produces no matching row, so the reference resolves to `null` (or is absent
+from a list) automatically — no separate "is this reference deleted" check is ever needed at the call site.
+
 ### Numeric query parameter binding pattern
 
 `yearFrom`, `yearTo`, `year`, `decade`, `page`, `pageSize`, `n`, and `limit` are declared as `string?` in handler signatures rather than `int?`. This is deliberate: when declared as `int?`, ASP.NET Core's parameter binder throws `BadHttpRequestException` on invalid input (e.g. `yearFrom=1980x`) and the exception propagates unhandled through the entire middleware stack before being caught accidentally by `UseExceptionHandler`. Declaring them as `string?` lets `TryParseYear()` (or the equivalent inline `int.TryParse`) in `QuoteEndpoints.cs` catch the parse failure at the point of origin and return a 422 immediately.

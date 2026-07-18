@@ -14,8 +14,10 @@
    shape, not `QuoteEndpoints.GetAll`'s) + `Quotinator.Data.Models.PagedItems<T>` (not `PageResponse<T>`
    — that type does not exist) + the shared `PaginationParsing.TryParse`/`ValidatePageBeyondLast` helper
    (which rejects out-of-range `page`/`pageSize` with 422 — it does not clamp). Response items are a new
-   `SeriesResponse` DTO (`Id`, `Name`, `UniverseId` nullable, `CompletenessStatus`) — never the raw
-   `SeriesEntity`, whose `SafeValue<CompletenessStatus?>` field has no `System.Text.Json` converter.
+   `SeriesResponse` DTO (`Id`, `Name`, `Universe` — nullable `MasterDataReference` (`{id, name}`), **not**
+   a bare `UniverseId`, per CLAUDE.md's "Masterdata reference shape" convention added during this planning
+   review (see Background) — `CompletenessStatus`) — never the raw `SeriesEntity`, whose
+   `SafeValue<CompletenessStatus?>` field has no `System.Text.Json` converter.
 2. `GET /api/v1/masterdata/series/{id}` — single Series by id, using the shared
    `NotFoundResult.OkOrNotFound` helper. `{id}` matches case-insensitively — for free, via
    `SqliteRepository<T>.GetByIdAsync`'s existing uppercase-normalisation (see Background), not new logic
@@ -119,14 +121,32 @@ had errors caught this way):
   being wired into `Program.cs`'s real `AddOpenApi` pipeline).
 - Confirmed no existing fake implements `IListableRepository<T>` anywhere in `tests/` — `Fakes/` contains
   `FakeQuoteService`, `FakeQuoteImportService`, `FakeImportActionService` only. `FakeSeriesRepository` is
-  new, no prior example to copy structurally (see Step 5 for its designed shape).
-- Confirmed no `src/Quotinator.Api/Models/` folder exists yet — `SeriesResponse` is the first response
-  DTO placed directly under `Quotinator.Api` rather than `Quotinator.Core` (correct per CLAUDE.md's File
+  new, no prior example to copy structurally (see Step 7 for its designed shape).
+- Confirmed no `src/Quotinator.Api/Models/` folder exists yet at the time #187 was originally drafted —
+  by the time this issue actually lands, #184 and/or #185 will likely have already created it for
+  `SourceResponse.cs`/`CharacterResponse.cs`; `SeriesResponse.cs` and (if not already present)
+  `MasterDataReference.cs` are added to that same folder, not a second one (correct per CLAUDE.md's File
   placement rule: this endpoint has no service layer, so the DTO has no reason to live in
   `Quotinator.Core`, which `QuoteResponse` does only because `IQuoteService` is a Core-layer interface).
+- **New design element, added during cross-plan review (developer directive, 2026-07-18)**:
+  `SeriesResponse.UniverseId` (bare `string?`) is replaced with `SeriesResponse.Universe`
+  (`MasterDataReference?`) per CLAUDE.md's new "Masterdata reference shape" convention. No existing query
+  joins `Series.UniverseId` to `Universe` to fetch the parent's `Name` — every existing reference to
+  `UniverseId` treats it as a bare FK column. This issue writes the first one, via a new
+  `ISeriesUniverseReferenceReader`, mirroring the "resolver, not the generic repository" pattern #184
+  independently designed for `Sources.SeriesId → Series` (`ISourceSeriesReferenceReader`) and #185 for
+  `CharacterSources → Sources` (`ICharacterSourceLinkReader`) — the same shape, applied a third time.
+- **Soft-deleted visibility, confirmed structural**: `RepositorySql.SelectPage`/`SelectById` already
+  filter `IsDeleted = 0` unconditionally, so Series rows themselves are already invisible once
+  soft-deleted, for free (per CLAUDE.md's "Soft-deleted rows are invisible by default" convention). The
+  new `ISeriesUniverseReferenceReader` query must independently apply the same rule to the *joined*
+  `Universe` row — a Series pointing at a soft-deleted Universe must resolve `Universe` to `null`, not
+  surface a dangling reference. No `includeDeleted` opt-in is being built here — per that same
+  convention, added only when a concrete consumer needs it.
 
 Conventions and infrastructure only — no new DI registration, no schema change, no repository code (all
-already shipped by #179/#193/#195/#196).
+already shipped by #179/#193/#195/#196), except for the new `ISeriesUniverseReferenceReader` this issue
+itself introduces.
 
 ---
 
@@ -150,8 +170,11 @@ public sealed class SeriesResponse
     /// <summary>The series' name.</summary>
     public required string Name { get; init; }
 
-    /// <summary>The universe this series belongs to, if any. <c>null</c> for a standalone series.</summary>
-    public string? UniverseId { get; init; }
+    /// <summary>The universe this series belongs to, if any (#179), as a minimal read-only reference —
+    /// the universe's <c>Id</c>/<c>Name</c> only, resolved via <see cref="ISeriesUniverseReferenceReader"/>
+    /// (Step 2). <c>null</c> for a standalone series, and <c>null</c> if the linked universe has been
+    /// soft-deleted (per CLAUDE.md's "Soft-deleted rows are invisible by default" convention).</summary>
+    public MasterDataReference? Universe { get; init; }
 
     /// <summary>Whether the record's fields are known to be fully populated and reviewed.</summary>
     public CompletenessStatus CompletenessStatus { get; init; }
@@ -161,9 +184,81 @@ public sealed class SeriesResponse
 Mirrors `Quotinator.Core.Models.QuoteResponse`'s flattening style (`Id` as `string`, not `Guid`).
 `CompletenessStatus` is typed as the enum directly — it already carries
 `[JsonConverter(typeof(JsonStringEnumConverter))]`, so it serialises as a plain string with no further
-work. No global `SafeValue<T>` converter is introduced.
+work. No global `SafeValue<T>` converter is introduced. `Universe` is resolved separately (Step 2) and
+passed into the mapping, since a single-table `SeriesEntity` mapping has no way to know its Universe's
+`Name`.
 
-### 2. Not-found message key + i18n lockstep
+### 2. `MasterDataReference` type + `ISeriesUniverseReferenceReader`
+
+**Status:** Not started.
+
+**`MasterDataReference`** — if not already created by whichever of #184/#185/#187 lands first (all three
+need it; create once, reuse), new file `src/Quotinator.Api/Models/MasterDataReference.cs`:
+```csharp
+namespace Quotinator.Api.Models;
+
+/// <summary>A minimal, read-only reference to a related masterdata entity — just enough to display
+/// without a separate lookup. Fetch the full record via that entity's own masterdata endpoint for more
+/// detail. See CLAUDE.md's "Masterdata reference shape" convention.</summary>
+public sealed record MasterDataReference(string Id, string Name);
+```
+
+**`ISeriesUniverseReferenceReader`** — new files `src/Quotinator.Engine/Repositories/
+ISeriesUniverseReferenceReader.cs`/`SeriesUniverseReferenceReader.cs`, namespace `Quotinator.Engine
+.Repositories` (the same folder #185 introduces for `ICharacterSourceLinkReader`, #184 for
+`ISourceSeriesReferenceReader` — not a new namespace). Returns plain `(Guid Id, string Name)` tuples, not
+`Quotinator.Api.Models.MasterDataReference` directly — `Quotinator.Engine` has no dependency on
+`Quotinator.Api`:
+
+```csharp
+namespace Quotinator.Engine.Repositories;
+
+/// <summary>Resolves a Series' UniverseId to its Universe's (Id, Name), filtered to an active
+/// (non-deleted) Universe only — never writes.</summary>
+public interface ISeriesUniverseReferenceReader
+{
+    /// <summary>The linked Universe's (Id, Name) for one Series, or <c>null</c> if the Series has no
+    /// Universe or its Universe has been soft-deleted.</summary>
+    Task<(Guid Id, string Name)?> GetUniverseReferenceAsync(Guid seriesId);
+
+    /// <summary>The linked Universe's (Id, Name) for each of the given Series, in one round-trip. A
+    /// Series with no active Universe link is absent from the result rather than mapped to a null entry —
+    /// callers default missing keys to <c>null</c>.</summary>
+    Task<IReadOnlyDictionary<Guid, (Guid Id, string Name)>> GetUniverseReferencesForManyAsync(IReadOnlyList<Guid> seriesIds);
+}
+```
+
+New `Sql.Series` queries in `src/Quotinator.Engine/Queries/Sql.cs`, matching the established
+double-`IsDeleted`-gated join idiom (`Sql.Quotes.SelectBase`, #184's `SelectSeriesReferenceForSource`).
+The `Universe` table is singular (`[Table("Universe")]`, confirmed in `Universe.cs`), not `Universes`:
+
+```csharp
+/// <summary>Active Universe reference for one Series — #187's GetById join. No row if the Series has no
+/// Universe, or its Universe has been soft-deleted.</summary>
+internal const string SelectUniverseReferenceForSeries =
+    "SELECT u.Id, u.Name FROM Series s " +
+    "JOIN Universe u ON u.Id = s.UniverseId AND u.IsDeleted = 0 " +
+    "WHERE s.Id = @seriesId AND s.IsDeleted = 0;";
+
+/// <summary>
+/// Active Universe references for a batch of Series in a single round-trip — #187's list join, avoiding
+/// one query per row across a page. A Series with no active Universe link is simply absent from the result.
+/// </summary>
+internal const string SelectUniverseReferencesForSeries =
+    "SELECT s.Id AS SeriesId, u.Id AS UniverseId, u.Name AS UniverseName FROM Series s " +
+    "JOIN Universe u ON u.Id = s.UniverseId AND u.IsDeleted = 0 " +
+    "WHERE s.Id IN @seriesIds AND s.IsDeleted = 0;";
+```
+
+`SeriesUniverseReferenceReader` implementation mirrors #184's `SourceSeriesReferenceReader`'s shape
+(Dapper `QueryFirstOrDefaultAsync`/`QueryAsync` against `IDbConnectionFactory`, a private `record` row
+type for the batch form's three-column result). Register in `Program.cs` alongside the other repository
+registrations (near `Program.cs:310`):
+```csharp
+builder.Services.AddSingleton<ISeriesUniverseReferenceReader, SeriesUniverseReferenceReader>();
+```
+
+### 3. Not-found message key + i18n lockstep
 
 **Status:** Not started.
 
@@ -177,7 +272,7 @@ style already used there (e.g. `"No conversation with the requested ID was found
 `"Er is geen conversatie gevonden met het opgegeven ID."` / `"Es wurde keine Konversation mit der
 angegebenen ID gefunden."`).
 
-### 3. `SeriesEndpoints.cs` — GetAll + GetById
+### 4. `SeriesEndpoints.cs` — GetAll + GetById
 
 **Status:** Not started.
 
@@ -200,8 +295,9 @@ internal static class SeriesEndpoints
              .WithName("GetAllSeries")
              .WithSummary("List Series")
              .WithDescription(
-                 "Returns a paginated list of Series. Maximum `pageSize` is 500; `pageSize=0` returns " +
-                 "every Series as a single page.");
+                 "Returns a paginated list of Series, each with the Universe it belongs to (if any) as a " +
+                 "minimal {id, name} reference. Maximum `pageSize` is 500; `pageSize=0` returns every " +
+                 "Series as a single page.");
 
         group.MapGet("/{id}", GetById)
              .WithName("GetSeriesById")
@@ -212,6 +308,7 @@ internal static class SeriesEndpoints
 
     private static async Task<IResult> GetAll(
         IListableRepository<SeriesEntity> repository,
+        ISeriesUniverseReferenceReader universeReader,
         IApiLocalizer localizer,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0-500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
@@ -219,9 +316,18 @@ internal static class SeriesEndpoints
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
 
-        var result   = await repository.GetPageAsync(pageValue, pageSizeValue);
-        var response = new PagedItems<SeriesResponse>(
-            result.Items.Select(ToResponse).ToList(), result.Page, result.PageSize, result.TotalCount);
+        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
+
+        var seriesIds          = result.Items.Select(s => s.Id).ToList();
+        var universesBySeriesId = await universeReader.GetUniverseReferencesForManyAsync(seriesIds);
+
+        var items = result.Items
+            .Select(s => ToResponse(s, universesBySeriesId.TryGetValue(s.Id, out var universe)
+                ? new MasterDataReference(universe.Id.ToString("D").ToUpperInvariant(), universe.Name)
+                : null))
+            .ToList();
+
+        var response = new PagedItems<SeriesResponse>(items, result.Page, result.PageSize, result.TotalCount);
 
         return PaginationParsing.ValidatePageBeyondLast(pageValue, response.TotalPages, localizer)
             ?? Results.Ok(response);
@@ -230,17 +336,24 @@ internal static class SeriesEndpoints
     private static async Task<IResult> GetById(
         [Description("UUID of the Series.")] string id,
         IListableRepository<SeriesEntity> repository,
+        ISeriesUniverseReferenceReader universeReader,
         IApiLocalizer localizer)
     {
         var entity = Guid.TryParse(id, out var guidId) ? await repository.GetByIdAsync(guidId) : null;
-        return NotFoundResult.OkOrNotFound(entity is null ? null : ToResponse(entity), localizer, ApiMessages.SeriesNotFound);
+        if (entity is null)
+            return NotFoundResult.OkOrNotFound<SeriesResponse>(null, localizer, ApiMessages.SeriesNotFound);
+
+        var universeRef = await universeReader.GetUniverseReferenceAsync(entity.Id);
+        var universe     = universeRef is { } u ? new MasterDataReference(u.Id.ToString("D").ToUpperInvariant(), u.Name) : null;
+
+        return NotFoundResult.OkOrNotFound(ToResponse(entity, universe), localizer, ApiMessages.SeriesNotFound);
     }
 
-    private static SeriesResponse ToResponse(SeriesEntity entity) => new()
+    private static SeriesResponse ToResponse(SeriesEntity entity, MasterDataReference? universe) => new()
     {
         Id                 = entity.Id.ToString("D").ToUpperInvariant(),
         Name               = entity.Name,
-        UniverseId         = entity.UniverseId?.ToString("D").ToUpperInvariant(),
+        Universe           = universe,
         CompletenessStatus = entity.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,
     };
 }
@@ -254,16 +367,17 @@ A malformed (non-`Guid`) `{id}` falls through `GetById` to `entity == null` and 
 separate 422 path, matching `QuoteEndpoints`/`ConversationEndpoints`'s existing behaviour (see
 Background).
 
-### 4. Register `MapSeriesEndpoints()` in `Program.cs`
+### 5. Register `MapSeriesEndpoints()` in `Program.cs`
 
 **Status:** Not started.
 
 Add `app.MapSeriesEndpoints();` alongside the existing four `Map*Endpoints()` calls
-(`Program.cs:539-542`). No new DI registration and no new `using` needed — `SeriesEntity` and
-`IListableRepository<T>` are already imported for the existing DI registration at `Program.cs:307`, and
-`using Quotinator.Api.Endpoints;` already covers the new extension method.
+(`Program.cs:539-542`). `SeriesEntity` and `IListableRepository<T>` are already imported for the existing
+DI registration at `Program.cs:307`, and `using Quotinator.Api.Endpoints;` already covers the new
+extension method — the only new DI registration needed is Step 2's
+`ISeriesUniverseReferenceReader`/`SeriesUniverseReferenceReader` pair.
 
-### 5. Register the OpenAPI transformer path
+### 6. Register the OpenAPI transformer path
 
 **Status:** Not started.
 
@@ -279,7 +393,7 @@ Add to `NumericParameterSchemaTransformer.NumericParamsByPath`
 Not mentioned anywhere in the issue's own text — found during this review (see Background finding 6).
 Without it, `page`/`pageSize` publish as bare `string` in the OpenAPI spec instead of `integer|string`.
 
-### 6. Test fixtures and tests
+### 7. Test fixtures and tests
 
 **Status:** Not started.
 
@@ -299,9 +413,17 @@ New file `tests/Quotinator.Api.Tests/Fakes/FakeSeriesRepository.cs` — the firs
   against the same in-memory list (not `NotImplementedException`), since a fake left partially
   implemented risks silently breaking a future test that exercises write paths.
 
+**`FakeSeriesUniverseReferenceReader`** — new file `tests/Quotinator.Api.Tests/Fakes/
+FakeSeriesUniverseReferenceReader.cs`, implementing `ISeriesUniverseReferenceReader`. Backed by a
+constructor-supplied `IReadOnlyDictionary<Guid, (Guid Id, string Name)>` (Series id → Universe reference);
+a Series id absent from the dictionary resolves to `null`/no entry, mirroring #184's
+`FakeSourceSeriesReferenceReader` precedent exactly (same "absent, not null-valued" contract for both the
+single-id and batch forms).
+
 New file `tests/Quotinator.Api.Tests/Endpoints/SeriesEndpointsTests.cs`, `CreateFactory()` registering
-`FakeSeriesRepository` alongside the standard `IQuoteService`/`IDatabaseInitializer` boilerplate
-(pattern from `AdminAuditEndpointTests.CreateFactory()`). Tests:
+`FakeSeriesRepository` and `FakeSeriesUniverseReferenceReader` alongside the standard
+`IQuoteService`/`IDatabaseInitializer` boilerplate (pattern from `AdminAuditEndpointTests.CreateFactory()`).
+Tests:
 
 **From the issue's own list:**
 - `GetAllSeries_ReturnsPaginatedResults`
@@ -327,22 +449,49 @@ New file `tests/Quotinator.Api.Tests/Endpoints/SeriesEndpointsTests.cs`, `Create
 - `SeriesEndpoints_OnLiveSpec_TaggedMasterData` (extends `OpenApiSpecEndpointTests` or a small dedicated
   assertion against `/openapi/v1.json`'s `tags` array for both operations)
 
+**Added for the new `Universe` reference (per CLAUDE.md's "Masterdata reference shape" convention),
+mirroring #184's equivalent `SourceEndpoints` Series-reference tests:**
+- `GetSeriesById_SeriesHasUniverse_ReturnsUniverseReference` — seeds a Series with a `UniverseId` and a
+  matching `FakeSeriesUniverseReferenceReader` entry, asserts the response's `universe` field is
+  `{id, name}` matching the seeded Universe.
+- `GetSeriesById_SeriesHasNoUniverse_ReturnsNullUniverse` — seeds a Series with no reader entry, asserts
+  `universe` serializes as JSON `null`.
+- `GetSeriesById_UniverseSoftDeleted_ReturnsNullUniverse` — seeds a Series whose `UniverseId` is set, but
+  omits the corresponding entry from `FakeSeriesUniverseReferenceReader`'s seed dictionary (modelling a
+  soft-deleted Universe), asserts `universe` serializes as JSON `null`, not a dangling reference.
+- `GetAllSeries_MultipleSeriesWithUniverse_BatchResolvesEachUniverse` — seeds several Series, some with a
+  Universe and some without, across one page; asserts each item's `universe` field resolves independently
+  and correctly, proving the batched `GetUniverseReferencesForManyAsync` path (not just the single-id
+  `GetById` path).
+
 **Extend existing shared-infrastructure test files (both already exist, from #195):**
 - `tests/Quotinator.Api.Tests/OpenApi/NumericParameterSchemaTransformerTests.cs` — new case(s) for
   `api/v1/masterdata/series`.
 - `tests/Quotinator.Api.Tests/OpenApi/OpenApiSpecEndpointTests.cs` — two new `[DataRow]` entries:
   `("/api/v1/masterdata/series", "page")`, `("/api/v1/masterdata/series", "pageSize")`.
 
-### 7. Documentation
+### 8. Documentation
 
 **Status:** Not started.
 
 Add a row for `GET /api/v1/masterdata/series` and `GET /api/v1/masterdata/series/{id}` to the REST API
 Endpoints table in both `README.md` and `addon/DOCS.md`, following the existing row format/placement
 (alongside the `/api/v1/conversations/{id}` row). Add `[Description]` attributes on the endpoint methods
-themselves (done inline in Step 3).
+themselves (done inline in Step 4).
 
-### 8. Verify
+### 9. Solution file
+
+**Status:** Not started.
+
+Add the new files (`src/Quotinator.Api/Models/SeriesResponse.cs`, `src/Quotinator.Api/Models/
+MasterDataReference.cs` — if not already added by whichever of #184/#185/#187 lands first,
+`src/Quotinator.Engine/Repositories/ISeriesUniverseReferenceReader.cs`/`SeriesUniverseReferenceReader.cs`,
+`src/Quotinator.Api/Endpoints/SeriesEndpoints.cs`, `tests/Quotinator.Api.Tests/Fakes/
+FakeSeriesRepository.cs`/`FakeSeriesUniverseReferenceReader.cs`, `tests/Quotinator.Api.Tests/Endpoints/
+SeriesEndpointsTests.cs`) to `Quotinator.slnx` if not automatically picked up by the existing project
+globs — verify by opening the solution.
+
+### 10. Verify
 
 **Status:** Not started.
 
@@ -363,9 +512,12 @@ curl -s "http://localhost:8080/openapi/v1.json" | grep -A2 '"masterdata/series"'
 ```
 Confirm `page`/`pageSize=999` returns 422, an unknown-but-well-formed id returns 404, a lowercase id for
 a real row (seeded via #180's overlay file, if any Series rows exist by then) returns 200, and the live
-OpenAPI spec publishes `page`/`pageSize` as `integer|string` under the new path. This scenario should be
-added to CLAUDE.md's Pre-Push Checklist step 6 (living smoke-test list) once implemented, per this
-project's standing practice.
+OpenAPI spec publishes `page`/`pageSize` as `integer|string` under the new path. If any bundled/seeded
+Series has a `UniverseId` (`SELECT Id, Name FROM Series WHERE UniverseId IS NOT NULL AND IsDeleted = 0
+LIMIT 1;` via `Quotinator.Tools.DbInspector`), fetch that Series by id too and confirm the response's
+`universe` field is `{id, name}`, not `null` — live proof the `ISeriesUniverseReferenceReader` join
+actually resolves. This scenario should be added to CLAUDE.md's Pre-Push Checklist step 6 (living
+smoke-test list) once implemented, per this project's standing practice.
 
 ---
 
@@ -389,10 +541,14 @@ project's standing practice.
 | 14 | ❌ | Page beyond the last returns 422, distinct from case 7 | Unit test | `GetAllSeries_PageBeyondLast_Returns422DistinctDetail` |
 | 15 | ❌ | `page`/`pageSize` publish as `integer` on the live OpenAPI spec for `api/v1/masterdata/series` | Unit/Live | `NumericParameterSchemaTransformerTests` new case + `OpenApiSpecEndpointTests` new `[DataRow]` entries |
 | 16 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api` | Unit test | `SeriesEndpoints_OnLiveSpec_TaggedMasterData` |
-| 17 | ❌ | `README.md` and `addon/DOCS.md` endpoint tables updated | Doc review | Both files contain the new rows |
-| 18 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 19 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmation |
-| 20 | ❌ | T2 — both endpoints behave per contract on the built image | Live (T2) | `docker build` + `docker run`, curl matrix from Step 8 |
+| 17 | ❌ | A Series with a Universe returns `universe` as `{id, name}` | Unit test | `GetSeriesById_SeriesHasUniverse_ReturnsUniverseReference` |
+| 18 | ❌ | A Series with no Universe returns `universe` as `null` | Unit test | `GetSeriesById_SeriesHasNoUniverse_ReturnsNullUniverse` |
+| 19 | ❌ | A Series whose Universe has been soft-deleted returns `universe` as `null`, not a dangling reference | Unit test | `GetSeriesById_UniverseSoftDeleted_ReturnsNullUniverse` |
+| 20 | ❌ | The list endpoint resolves each item's Universe independently via the batched reader | Unit test | `GetAllSeries_MultipleSeriesWithUniverse_BatchResolvesEachUniverse` |
+| 21 | ❌ | `README.md` and `addon/DOCS.md` endpoint tables updated | Doc review | Both files contain the new rows |
+| 22 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 23 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmation |
+| 24 | ❌ | T2 — both endpoints behave per contract on the built image, including a live Universe reference resolving to `{id, name}` | Live (T2) | `docker build` + `docker run`, curl matrix from Step 10 |
 
 ---
 
@@ -418,6 +574,13 @@ here" boundary.
 The malformed-id-returns-404 decision (Background) is a judgement call, not something explicitly
 specified anywhere — flagged here in case a reviewer prefers 422 for structurally invalid input instead.
 Chosen to match the two existing `GetById` endpoints' actual behaviour over introducing a third shape.
+
+`MasterDataReference` (`src/Quotinator.Api/Models/MasterDataReference.cs`) is a shared type, not owned by
+this issue specifically — #184 and #185 also need it. Whichever of the three lands first creates the
+file; the other two reuse it. `ISeriesUniverseReferenceReader` follows the exact single-id/batch shape
+#184's `ISourceSeriesReferenceReader` and #185's `ICharacterSourceLinkReader` each independently
+introduced — by the time #187 lands, this is the third instance of the same resolver pattern, not a new
+design decision.
 
 ---
 
@@ -445,18 +608,23 @@ work can be verified against real API responses and before duplicate-Series disc
    `IListableRepository<SeriesEntity>` (no service layer — call the repository directly, mirroring
    `AdminEndpoints`'s `/audit` handler) + `Quotinator.Data.Models.PagedItems<T>` + the shared
    `PaginationParsing.TryParse`/`ValidatePageBeyondLast` helper (rejects out-of-range input with 422; it
-   does not clamp). Response items are a new `SeriesResponse` DTO (`Id`, `Name`, `UniverseId` nullable,
-   `CompletenessStatus`) in `Quotinator.Api.Models` — never the raw `SeriesEntity`.
+   does not clamp). Response items are a new `SeriesResponse` DTO (`Id`, `Name`, `Universe` — nullable
+   `MasterDataReference` (`{id, name}`), never a bare `UniverseId`, per CLAUDE.md's "Masterdata reference
+   shape" convention — `CompletenessStatus`) in `Quotinator.Api.Models` — never the raw `SeriesEntity`.
 2. `GET /api/v1/masterdata/series/{id}` — single Series by id, using the shared
    `NotFoundResult.OkOrNotFound` helper. `{id}` matches case-insensitively via
    `SqliteRepository<T>.GetByIdAsync`'s existing normalisation — no new logic required for this.
-3. Both endpoints use `RateLimitPolicies.Api`, tag `ApiTags.MasterData`, and `[Description]` attributes.
-4. No entity-specific filters yet (e.g. `?universeId=`) — deferred per #196's entity-scoped
+3. New `ISeriesUniverseReferenceReader` (`Quotinator.Engine.Repositories`) resolves a Series' `UniverseId`
+   to its Universe's `(Id, Name)`, filtered to an active (non-soft-deleted) Universe only — a Series
+   pointing at a soft-deleted Universe resolves `Universe` to `null`, per CLAUDE.md's "Soft-deleted rows
+   are invisible by default" convention. Both a single-id and a batched form are needed.
+4. Both endpoints use `RateLimitPolicies.Api`, tag `ApiTags.MasterData`, and `[Description]` attributes.
+5. No entity-specific filters yet (e.g. `?universeId=`) — deferred per #196's entity-scoped
    filter-parameter convention.
-5. Register `api/v1/masterdata/series` (with `page`/`pageSize` defaults) in
+6. Register `api/v1/masterdata/series` (with `page`/`pageSize` defaults) in
    `NumericParameterSchemaTransformer.NumericParamsByPath`, or the published OpenAPI type for these
    parameters regresses to bare `string`.
-6. Update `README.md` and `addon/DOCS.md`'s endpoint tables.
+7. Update `README.md` and `addon/DOCS.md`'s endpoint tables.
 
 ## Expected tests
 
@@ -468,6 +636,10 @@ work can be verified against real API responses and before duplicate-Series disc
 | New: `Quotinator.Api.Tests` | `GetSeriesById_LowercaseId_MatchesCaseInsensitively` | ❌ |
 | New: `Quotinator.Api.Tests` | Full 8-case pagination matrix per CLAUDE.md's "Standard pagination contract" | ❌ |
 | New: `Quotinator.Api.Tests` | `GetSeriesById_MalformedId_Returns404NotBadRequest` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetSeriesById_SeriesHasUniverse_ReturnsUniverseReference` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetSeriesById_SeriesHasNoUniverse_ReturnsNullUniverse` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetSeriesById_UniverseSoftDeleted_ReturnsNullUniverse` | ❌ |
+| New: `Quotinator.Api.Tests` | `GetAllSeries_MultipleSeriesWithUniverse_BatchResolvesEachUniverse` | ❌ |
 | Extended: `Quotinator.Api.Tests` | `NumericParameterSchemaTransformerTests` + `OpenApiSpecEndpointTests` new cases for `api/v1/masterdata/series` | ❌ |
 
 ## Definition of done
