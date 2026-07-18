@@ -343,6 +343,23 @@ internal static class Sql
         internal const string InsertIfNotExists =
             "INSERT OR IGNORE INTO Sources (Id, Title, Type, Date, SeriesId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
             "VALUES (@Id, @Title, @Type, @Date, @SeriesId, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+
+        /// <summary>Active Series reference for one Source — #184's GetById join. No row if the Source has
+        /// no Series, or its Series has been soft-deleted.</summary>
+        internal const string SelectSeriesReferenceForSource =
+            "SELECT ser.Id, ser.Name FROM Sources s " +
+            "JOIN Series ser ON ser.Id = s.SeriesId AND ser.IsDeleted = 0 " +
+            "WHERE s.Id = @sourceId AND s.IsDeleted = 0;";
+
+        /// <summary>
+        /// Active Series references for a batch of Sources in a single round-trip — #184's list join,
+        /// avoiding one query per row across a page. A Source with no active Series link is simply absent
+        /// from the result.
+        /// </summary>
+        internal const string SelectSeriesReferencesForSources =
+            "SELECT s.Id AS SourceId, ser.Id AS SeriesId, ser.Name AS SeriesName FROM Sources s " +
+            "JOIN Series ser ON ser.Id = s.SeriesId AND ser.IsDeleted = 0 " +
+            "WHERE s.Id IN @sourceIds AND s.IsDeleted = 0;";
     }
 
     /// <summary>

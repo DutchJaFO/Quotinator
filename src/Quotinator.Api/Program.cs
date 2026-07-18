@@ -18,6 +18,7 @@ using Quotinator.Data.Database;
 using Quotinator.Engine.Database;
 using Quotinator.Engine.Entities;
 using Quotinator.Engine.Helpers;
+using Quotinator.Engine.Repositories;
 using Quotinator.Engine.Services;
 using Quotinator.Api.Middleware;
 using Quotinator.Api.OpenApi;
@@ -311,6 +312,10 @@ builder.Services.AddSingleton<IListableRepository<Character>>(sp => (IListableRe
 builder.Services.AddSingleton<IListableRepository<Person>>(sp => (IListableRepository<Person>)sp.GetRequiredService<IRestorableRepository<Person>>());
 builder.Services.AddSingleton<IListableRepository<ConversationEntity>>(sp => (IListableRepository<ConversationEntity>)sp.GetRequiredService<IRestorableRepository<ConversationEntity>>());
 
+// #184: resolves a Source's SeriesId to its Series' (Id, Name) — the generic IListableRepository<T>/
+// IRepository<T> above cannot express this join (single-table SELECT * only).
+builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenceReader>();
+
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
 // real Serilog pipeline at the same point in startup as the rest of seeding — not through a
@@ -540,6 +545,7 @@ app.MapQuoteEndpoints();
 app.MapAdminEndpoints();
 app.MapImportEndpoints();
 app.MapConversationEndpoints();
+app.MapSourceEndpoints();
 
 // Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
 // Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.

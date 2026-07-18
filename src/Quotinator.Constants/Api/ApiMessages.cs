@@ -44,4 +44,5 @@ public static class ApiMessages
     public const string MutuallyExclusiveEntityFilter    = "ErrorMutuallyExclusiveEntityFilter";
     public const string InvalidEntityFilterId            = "ErrorInvalidEntityFilterId";
     public const string EntityFilterNoMatch              = "InfoEntityFilterNoMatch";
+    public const string SourceNotFound                   = "ErrorSourceNotFound";
 }

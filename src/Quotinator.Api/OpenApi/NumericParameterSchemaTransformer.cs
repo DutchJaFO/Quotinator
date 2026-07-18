@@ -66,6 +66,11 @@ internal sealed class NumericParameterSchemaTransformer : IOpenApiOperationTrans
                 ["page"]     = QueryParamDefaults.Page,
                 ["pageSize"] = QueryParamDefaults.PageSize,
             },
+            ["api/v1/masterdata/sources"] = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["page"]     = QueryParamDefaults.Page,
+                ["pageSize"] = QueryParamDefaults.PageSize,
+            },
         };
 
     /// <inheritdoc/>

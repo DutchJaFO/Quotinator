@@ -72,7 +72,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#193](https://github.com/DutchJaFO/Quotinator/issues/193) | Generic listable repository capability + DI registrations for the six list entities | Waiting for release | T1 ✅ T2 ✅ | [193-listable-repository-plan.md](193-listable-repository-plan.md) |
 | [#195](https://github.com/DutchJaFO/Quotinator/issues/195) | Standard pagination contract: PagedItems&lt;T&gt;, shared parsing and not-found helpers | Waiting for release | T1 ✅ T2 ✅ | [195-pagination-contract-plan.md](195-pagination-contract-plan.md) |
 | [#196](https://github.com/DutchJaFO/Quotinator/issues/196) | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter-parameter shape | Waiting for release | T1 ✅ T2 ✅ | [196-masterdata-conventions-plan.md](196-masterdata-conventions-plan.md) |
-| [#184](https://github.com/DutchJaFO/Quotinator/issues/184) | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [184-sources-list-plan.md](184-sources-list-plan.md) |
+| [#184](https://github.com/DutchJaFO/Quotinator/issues/184) | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | In progress (step 10) | T1 ⬜ T2 ⬜ | [184-sources-list-plan.md](184-sources-list-plan.md) |
 | [#185](https://github.com/DutchJaFO/Quotinator/issues/185) | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [185-characters-list-plan.md](185-characters-list-plan.md) |
 | [#186](https://github.com/DutchJaFO/Quotinator/issues/186) | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [186-people-list-plan.md](186-people-list-plan.md) |
 | [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [187-series-list-plan.md](187-series-list-plan.md) |
@@ -201,7 +201,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 37 | #195 | Standard pagination contract: PagedItems&lt;T&gt;, shared helpers (sub-issue of #183) | Waiting for release |
 | 38 | #196 | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter shape (sub-issue of #183) | Waiting for release |
 | 39 | #183 | List-endpoint shared infrastructure (parent — closes once #193–#196 all close) | Planning |
-| 40 | #184 | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Planning |
+| 40 | #184 | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | In progress (step 10) |
 | 41 | #185 | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Planning |
 | 42 | #186 | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Planning |
 | 43 | #187 | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Planning |

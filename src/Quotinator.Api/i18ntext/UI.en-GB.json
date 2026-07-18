@@ -72,6 +72,7 @@
   "ErrorMutuallyExclusiveEntityFilter": "Specify either {0} or {1}, not both.",
   "ErrorInvalidEntityFilterId": "{0} must be a valid identifier.",
   "InfoEntityFilterNoMatch": "No {0} matches '{1}'.",
+  "ErrorSourceNotFound": "No source with the requested ID was found.",
   "AdminEndpointsHeading": "Admin endpoints",
   "AdminEndpointsDescription": "These endpoints require an X-Api-Key header matching the admin_api_key configured in the add-on options. They are unavailable when no key is configured.",
   "AdminPreviewSeedLabel": "Preview seed import",

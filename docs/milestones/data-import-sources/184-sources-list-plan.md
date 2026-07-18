@@ -1,6 +1,6 @@
 # #184 — Masterdata: GET /api/v1/masterdata/sources list + get-by-id
 
-**Status:** Planning
+**Status:** In progress (step 10)
 **GitHub issue:** #184
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196
@@ -130,7 +130,7 @@ convention's first real consumer for the "no filter yet" path.
 
 ### 1. `SourceResponse` DTO
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Models/SourceResponse.cs`, namespace `Quotinator.Api.Models`:
 
@@ -190,7 +190,7 @@ private static SourceResponse ToResponse(Source source, MasterDataReference? ser
 
 ### 2. `ApiMessages.SourceNotFound` + i18n lockstep
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `src/Quotinator.Constants/Api/ApiMessages.cs`:
 ```csharp
@@ -207,7 +207,7 @@ Add `"ErrorSourceNotFound"` to all three `i18ntext/UI.*.json` files in the same 
 
 ### 3. `MasterDataReference` type + `ISourceSeriesReferenceReader`
 
-**Status:** Not started.
+**Status:** Done.
 
 **`MasterDataReference`** — if not already created by whichever of #184/#185/#187 lands first (all three
 need it; create once, reuse), new file `src/Quotinator.Api/Models/MasterDataReference.cs`:
@@ -275,7 +275,7 @@ builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenc
 
 ### 4. `SourceEndpoints.cs`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Endpoints/SourceEndpoints.cs`, static class `SourceEndpoints`, extension
 method `MapSourceEndpoints(this WebApplication app)`, mirroring `ConversationEndpoints.cs`'s structure
@@ -378,7 +378,7 @@ app.MapSourceEndpoints();
 
 ### 5. Register the OpenAPI numeric-param transformer path
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `NumericParameterSchemaTransformer.NumericParamsByPath` (found missing during planning — not in
 the original issue text):
@@ -394,7 +394,7 @@ Without this, `page`/`pageSize` publish as bare `string` in the OpenAPI spec ins
 
 ### 6. `FakeSourceRepository`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Fakes/FakeSourceRepository.cs`, implementing
 `IListableRepository<Source>`. In-memory `List<Source>` backing store, seeded via constructor parameter
@@ -425,7 +425,7 @@ soft-deleted; the reader's contract makes the two indistinguishable to its calle
 
 ### 7. Endpoint tests
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Endpoints/SourceEndpointsTests.cs`. `CreateFactory` follows
 `AdminAuditEndpointTests.cs`'s pattern (register `FakeQuoteService`, `NoOpDatabaseInitializer`, and a
@@ -487,7 +487,7 @@ explicit for its own `SafeValue<T>` fields.
 
 ### 8. Documentation
 
-**Status:** Not started.
+**Status:** Done.
 
 Update `README.md`'s and `addon/DOCS.md`'s REST API Endpoints tables — add rows for
 `GET /api/v1/masterdata/sources` and `GET /api/v1/masterdata/sources/{id}`, following the existing table
@@ -496,7 +496,17 @@ row style (see `README.md:143-146` for the pattern used by the neighbouring `/qu
 
 ### 9. Solution file
 
-**Status:** Not started.
+**Status:** Done — no `Quotinator.slnx` change needed. All six new files
+(`src/Quotinator.Api/Models/SourceResponse.cs`, `src/Quotinator.Api/Models/MasterDataReference.cs`,
+`src/Quotinator.Engine/Repositories/ISourceSeriesReferenceReader.cs`,
+`src/Quotinator.Engine/Repositories/SourceSeriesReferenceReader.cs`,
+`src/Quotinator.Api/Endpoints/SourceEndpoints.cs`, plus the three new files under
+`tests/Quotinator.Api.Tests/Fakes/` and `tests/Quotinator.Api.Tests/Endpoints/`) live inside an
+existing SDK-style `<Project>` folder already referenced in `Quotinator.slnx`
+(`src/Quotinator.Api/Quotinator.Api.csproj`, `src/Quotinator.Engine/Quotinator.Engine.csproj`,
+`tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj`), all of which glob `.cs` files
+automatically — confirmed via `Quotinator.slnx`'s existing `<Folder Name="/src/">`/`/tests/">` entries
+listing only the `.csproj` files themselves, never individual source files within them.
 
 Add `src/Quotinator.Api/Models/SourceResponse.cs`, `src/Quotinator.Api/Models/MasterDataReference.cs` (if
 not already added by whichever of #184/#185/#187 lands first), `src/Quotinator.Engine/Repositories/
@@ -509,7 +519,25 @@ outside any project need an explicit `<Folder>` entry per CLAUDE.md's Visual Stu
 
 ### 10. Verify
 
-**Status:** Not started.
+**Status:** Done — `dotnet build --configuration Release` reports 0 Warning(s)/0 Error(s); `dotnet test
+--configuration Release --verbosity normal` reports the full suite green (343 tests, 0 Warning(s)/0
+Error(s)). Confirmed red-before-green directly: temporarily commented out `app.MapSourceEndpoints();`
+in `Program.cs` and reran `SourceEndpointsTests` — 14 of 19 tests failed (structural/count/id/tag
+assertions genuinely exercise the new endpoint), then restored the registration and reran to confirm
+all 19 green again. The remaining 5 tests that stayed green without the registration are absence-based
+assertions (`GetSourceById_UnknownId_Returns404`, `GetSourceById_MalformedId_Returns404NotBadRequest`,
+`GetSourceById_UnknownDate_ReturnsNullNotEmptyString`, `GetSourceById_SourceHasNoSeries_ReturnsNullSeries`,
+`GetSourceById_SeriesSoftDeleted_ReturnsNullSeries`) — an unmapped route also returns 404 with a body
+that vacuously satisfies "field is null or absent", a pre-existing characteristic of this codebase's
+global `DefaultIgnoreCondition = WhenWritingNull` JSON option, not something specific to this issue.
+Each has a positive-case counterpart that did go red
+(`GetSourceById_ExistingId_ReturnsSource`/`GetSourceById_SourceHasSeries_ReturnsSeriesReference`),
+which is what actually proves the mapping/join logic. T1/T2 (live verification) have not run yet — see
+rows 24/25 below.
+
+T2 (Docker) has deliberately **not** been run for this issue individually — the developer is running a
+single combined T2 pass across all five masterdata issues (#184–#188) once all five are implemented,
+per session instructions.
 
 `dotnet build --configuration Release` → 0 warnings, 0 errors. `dotnet test --configuration Release
 --verbosity normal` → full suite green, 0 warnings, 0 errors. Confirm all listed expected tests started
@@ -545,29 +573,29 @@ This project always runs T2 regardless of a documented trigger — this issue's 
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `GET /api/v1/masterdata/sources` returns a paginated list of Sources | Unit test | `SourceEndpointsTests.GetAllSources_ReturnsPaginatedResults` |
-| 2 | ❌ | `page=0` returns 422 | Unit test | `SourceEndpointsTests.GetAllSources_PageZero_Returns422` |
-| 3 | ❌ | Malformed `page`/`pageSize` returns 422 | Unit test | `SourceEndpointsTests.GetAllSources_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
-| 4 | ❌ | Negative `pageSize` returns 422 | Unit test | `SourceEndpointsTests.GetAllSources_PageSizeNegative_Returns422` |
-| 5 | ❌ | `pageSize > 500` returns 422, never clamped | Unit test | `SourceEndpointsTests.GetAllSources_PageSizeAbove500_Returns422NotSilentClamp` |
-| 6 | ❌ | `pageSize = 0` returns every row as one page | Unit test | `SourceEndpointsTests.GetAllSources_PageSizeZero_ReturnsAllRowsAsOnePage` |
-| 7 | ❌ | Omitted `pageSize` defaults to 20 | Unit test | `SourceEndpointsTests.GetAllSources_PageSizeOmitted_DefaultsTo20` |
-| 8 | ❌ | A page beyond the last returns 422 with a distinct detail | Unit test | `SourceEndpointsTests.GetAllSources_PageBeyondLast_Returns422DistinctDetail` |
-| 9 | ❌ | `GET /api/v1/masterdata/sources/{id}` returns the matching Source | Unit test | `SourceEndpointsTests.GetSourceById_ExistingId_ReturnsSource` |
-| 10 | ❌ | An unknown id returns 404 | Unit test | `SourceEndpointsTests.GetSourceById_UnknownId_Returns404` |
-| 11 | ❌ | A lowercase id matches an uppercase-stored id | Unit test | `SourceEndpointsTests.GetSourceById_LowercaseId_MatchesCaseInsensitively` |
-| 12 | ❌ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `SourceEndpointsTests.GetSourceById_MalformedId_Returns404NotBadRequest` |
-| 13 | ❌ | An unknown `date` serializes as JSON `null`, not `""` | Unit test | `SourceEndpointsTests.GetSourceById_UnknownDate_ReturnsNullNotEmptyString` |
-| 14 | ❌ | `type`/`completenessStatus` serialize as plain JSON values, never `{raw, parsed}` | Unit test | `SourceEndpointsTests.GetSourceById_ExistingId_ReturnsSource` (shape assertions) |
-| 15 | ❌ | `page`/`pageSize` publish as `integer` in the OpenAPI spec for `api/v1/masterdata/sources` | Unit test | `NumericParameterSchemaTransformerTests` (new cases) |
-| 16 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `SourceEndpoints_OnLiveSpec_TaggedMasterData` |
-| 17 | ❌ | `ApiMessages.SourceNotFound` exists and all three locale files carry `ErrorSourceNotFound` | Unit test | `TranslationCompletenessTests` |
-| 18 | ❌ | A Source with a Series returns `series` as `{id, name}` | Unit test | `SourceEndpointsTests.GetSourceById_SourceHasSeries_ReturnsSeriesReference` |
-| 19 | ❌ | A Source with no Series returns `series` as `null` | Unit test | `SourceEndpointsTests.GetSourceById_SourceHasNoSeries_ReturnsNullSeries` |
-| 20 | ❌ | A Source whose Series has been soft-deleted returns `series` as `null`, not a dangling reference | Unit test | `SourceEndpointsTests.GetSourceById_SeriesSoftDeleted_ReturnsNullSeries` |
-| 21 | ❌ | The list endpoint resolves each item's Series independently via the batched reader | Unit test | `SourceEndpointsTests.GetAllSources_MultipleSourcesWithSeries_BatchResolvesEachSeries` |
-| 22 | ❌ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables updated |
-| 23 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 1 | ✅ | `GET /api/v1/masterdata/sources` returns a paginated list of Sources | Unit test | `SourceEndpointsTests.GetAllSources_ReturnsPaginatedResults` |
+| 2 | ✅ | `page=0` returns 422 | Unit test | `SourceEndpointsTests.GetAllSources_PageZero_Returns422` |
+| 3 | ✅ | Malformed `page`/`pageSize` returns 422 | Unit test | `SourceEndpointsTests.GetAllSources_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
+| 4 | ✅ | Negative `pageSize` returns 422 | Unit test | `SourceEndpointsTests.GetAllSources_PageSizeNegative_Returns422` |
+| 5 | ✅ | `pageSize > 500` returns 422, never clamped | Unit test | `SourceEndpointsTests.GetAllSources_PageSizeAbove500_Returns422NotSilentClamp` |
+| 6 | ✅ | `pageSize = 0` returns every row as one page | Unit test | `SourceEndpointsTests.GetAllSources_PageSizeZero_ReturnsAllRowsAsOnePage` |
+| 7 | ✅ | Omitted `pageSize` defaults to 20 | Unit test | `SourceEndpointsTests.GetAllSources_PageSizeOmitted_DefaultsTo20` |
+| 8 | ✅ | A page beyond the last returns 422 with a distinct detail | Unit test | `SourceEndpointsTests.GetAllSources_PageBeyondLast_Returns422DistinctDetail` |
+| 9 | ✅ | `GET /api/v1/masterdata/sources/{id}` returns the matching Source | Unit test | `SourceEndpointsTests.GetSourceById_ExistingId_ReturnsSource` |
+| 10 | ✅ | An unknown id returns 404 | Unit test | `SourceEndpointsTests.GetSourceById_UnknownId_Returns404` |
+| 11 | ✅ | A lowercase id matches an uppercase-stored id | Unit test | `SourceEndpointsTests.GetSourceById_LowercaseId_MatchesCaseInsensitively` |
+| 12 | ✅ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `SourceEndpointsTests.GetSourceById_MalformedId_Returns404NotBadRequest` |
+| 13 | ✅ | An unknown `date` serializes as JSON `null`, not `""` | Unit test | `SourceEndpointsTests.GetSourceById_UnknownDate_ReturnsNullNotEmptyString` |
+| 14 | ✅ | `type`/`completenessStatus` serialize as plain JSON values, never `{raw, parsed}` | Unit test | `SourceEndpointsTests.GetSourceById_ExistingId_ReturnsSource` (shape assertions) |
+| 15 | ✅ | `page`/`pageSize` publish as `integer` in the OpenAPI spec for `api/v1/masterdata/sources` | Unit test | `NumericParameterSchemaTransformerTests` (new cases), `OpenApiSpecEndpointTests.PageParam_OnLiveSpec_PublishesIntegerType` |
+| 16 | ✅ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `SourceEndpoints_OnLiveSpec_TaggedMasterData` |
+| 17 | ✅ | `ApiMessages.SourceNotFound` exists and all three locale files carry `ErrorSourceNotFound` | Unit test | `TranslationCompletenessTests` |
+| 18 | ✅ | A Source with a Series returns `series` as `{id, name}` | Unit test | `SourceEndpointsTests.GetSourceById_SourceHasSeries_ReturnsSeriesReference` |
+| 19 | ✅ | A Source with no Series returns `series` as `null` | Unit test | `SourceEndpointsTests.GetSourceById_SourceHasNoSeries_ReturnsNullSeries` |
+| 20 | ✅ | A Source whose Series has been soft-deleted returns `series` as `null`, not a dangling reference | Unit test | `SourceEndpointsTests.GetSourceById_SeriesSoftDeleted_ReturnsNullSeries` |
+| 21 | ✅ | The list endpoint resolves each item's Series independently via the batched reader | Unit test | `SourceEndpointsTests.GetAllSources_MultipleSourcesWithSeries_BatchResolvesEachSeries` |
+| 22 | ✅ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables updated |
+| 23 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (343 tests), 0 warnings, 0 errors |
 | 24 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
 | 25 | ❌ | T2 — the live contract holds against the built image, including a live Series reference resolving to `{id, name}` | Live (T2) | `docker build`/`docker run` matrix — see Step 10 |
 

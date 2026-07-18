@@ -185,6 +185,27 @@ public class NumericParameterSchemaTransformerTests
     #endregion
 
     // -------------------------------------------------------------------------
+    #region page/pageSize patched on masterdata/sources (#184)
+
+    [TestMethod]
+    public async Task Page_OnMasterDataSources_PatchedToInteger()
+        => Assert.AreEqual(Integer, await TransformAndGetType("page", "api/v1/masterdata/sources"));
+
+    [TestMethod]
+    public async Task PageSize_OnMasterDataSources_PatchedToInteger()
+        => Assert.AreEqual(Integer, await TransformAndGetType("pageSize", "api/v1/masterdata/sources"));
+
+    [TestMethod]
+    public async Task Page_OnMasterDataSources_PublishesDefaultOfOne()
+        => Assert.AreEqual(1, (await TransformAndGetSchema("page", "api/v1/masterdata/sources"))?.Default?.GetValue<int>());
+
+    [TestMethod]
+    public async Task PageSize_OnMasterDataSources_PublishesDefaultOfTwenty()
+        => Assert.AreEqual(20, (await TransformAndGetSchema("pageSize", "api/v1/masterdata/sources"))?.Default?.GetValue<int>());
+
+    #endregion
+
+    // -------------------------------------------------------------------------
     #region Non-numeric params NOT patched even on target paths
 
     [TestMethod]
