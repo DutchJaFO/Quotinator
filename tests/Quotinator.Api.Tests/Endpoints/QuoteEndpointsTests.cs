@@ -554,6 +554,43 @@ public class QuoteEndpointsTests
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
+    /// <summary>pageSize above 500 is rejected outright, never silently clamped.</summary>
+    [TestMethod]
+    public async Task Quotes_PageSizeAbove500_Returns422NotSilentClamp()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=501");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
+    }
+
+    /// <summary>A negative pageSize is out of range — returns 422.</summary>
+    [TestMethod]
+    public async Task Quotes_PageSizeNegative_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=-1");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>An omitted pageSize defaults to the shared standard of 20.</summary>
+    [TestMethod]
+    public async Task Quotes_PageSizeOmitted_DefaultsTo20()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes");
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32());
+    }
+
+    /// <summary>Requesting a page past the last page is rejected, not silently clamped or emptied.</summary>
+    [TestMethod]
+    public async Task Quotes_PageBeyondLast_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=1&page=99");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page beyond the last page must be rejected");
+    }
+
     /// <summary>limit=0 on search is semantically out of range — returns 422.</summary>
     [TestMethod]
     public async Task Search_LimitZero_Returns422()

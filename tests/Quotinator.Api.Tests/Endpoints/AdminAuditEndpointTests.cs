@@ -171,6 +171,72 @@ public class AdminAuditEndpointTests
         Assert.AreEqual(20, capturedPageSize, "the standard shared default is 20, not audit's old default of 50");
     }
 
+    [TestMethod]
+    public async Task Audit_PageMalformed_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.GetAsync("/api/v1/admin/audit?page=abc");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Audit_PageSizeNegative_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=-1");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Audit_PageSizeZero_Succeeds()
+    {
+        var entry = new SystemAuditEntry
+        {
+            TableName   = "Quotes",
+            RecordId    = Guid.Empty.ToString("D").ToUpperInvariant(),
+            Operation   = AuditOperation.Insert,
+            Agent       = "TestRunner/1.0",
+            PerformedAt = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+        };
+        var stubReader = new StubAuditReader(new PagedItems<SystemAuditEntry>([entry], 1, 1, 1));
+        using var factory = CreateFactory(stubReader);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=0");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "pageSize=0 means every row as one page — must succeed, not 422");
+    }
+
+    [TestMethod]
+    public async Task Audit_PageBeyondLast_Returns422()
+    {
+        var entry = new SystemAuditEntry
+        {
+            TableName   = "Quotes",
+            RecordId    = Guid.Empty.ToString("D").ToUpperInvariant(),
+            Operation   = AuditOperation.Insert,
+            Agent       = "TestRunner/1.0",
+            PerformedAt = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+        };
+        var stubReader = new StubAuditReader(new PagedItems<SystemAuditEntry>([entry], 1, 1, 1));
+        using var factory = CreateFactory(stubReader);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.GetAsync("/api/v1/admin/audit?page=5");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page beyond the last page must be rejected");
+    }
+
     // ── GET audit — no auth required ─────────────────────────────────────────
 
     [TestMethod]

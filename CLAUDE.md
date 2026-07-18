@@ -886,6 +886,49 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    — proving today's per-Source matching genuinely survived the mechanism change unchanged, not
    silently reused across Sources.
 
+   **Pagination contract: pageSize=0, max 500, default 20, page-beyond-last** (#195) — `/quotes`,
+   `/admin/audit`, and `/import/actions` share one pagination contract; this proves it holds live on
+   all three, not just at the unit-test/stub level. The two audit/import readers were caught passing
+   `pageSize=0` straight into `LIMIT @pageSize` instead of translating it to `LIMIT -1` during this
+   issue's own T2 pass — no existing unit test could catch it, since the stub readers those tests use
+   echo their input back rather than exercising real SQL. Run this section after the sections above so
+   `/admin/audit` and `/import/actions` already have rows to page through.
+   ```bash
+   curl -s "http://localhost:8080/api/v1/quotes?pageSize=0"
+   curl -s "http://localhost:8080/api/v1/admin/audit?pageSize=0" -H "X-Api-Key: <your admin key>"
+   curl -s "http://localhost:8080/api/v1/import/actions?pageSize=0"
+   ```
+   On all three: `items` must contain every row (not zero), and `pageSize` in the response must equal
+   `totalCount` — the effective-size contract, not the literal `0` requested.
+   ```bash
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes?pageSize=501"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/audit?pageSize=501" -H "X-Api-Key: <your admin key>"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?pageSize=501"
+   ```
+   All three must return `422` — `pageSize` above 500 is rejected, never silently clamped.
+   ```bash
+   curl -s "http://localhost:8080/api/v1/admin/audit" -H "X-Api-Key: <your admin key>"
+   curl -s "http://localhost:8080/api/v1/import/actions"
+   ```
+   `pageSize` in both responses must be `20`, not the endpoints' old default of `50` — since both
+   tables already have rows from the sections above, this also confirms the default is genuinely
+   applied, not just an artifact of an empty table.
+   ```bash
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes?pageSize=500&page=99"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/audit?pageSize=1&page=999999" -H "X-Api-Key: <your admin key>"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?pageSize=1&page=999999"
+   ```
+   All three must return `422` (page beyond the last page) — true for `/admin/audit` and
+   `/import/actions` only because the sections above already populated at least one row in each; on a
+   database with zero rows in a table, page 1 of nothing is not "beyond the last page" and this would
+   return `200` instead (see `PaginationParsingTests.ValidatePageBeyondLast_ZeroTotalPages_ReturnsNull`).
+   ```bash
+   curl -s "http://localhost:8080/openapi/v1.json" | grep -A 6 '"name": "pageSize"'
+   ```
+   All three `pageSize` occurrences (quotes, `/admin/audit`, `/import/actions`) must show a `schema`
+   whose `type` includes `"integer"` — never `"string"` — confirming both new paths' registration in
+   `NumericParameterSchemaTransformer` (added by #195) actually took effect on the live spec.
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle

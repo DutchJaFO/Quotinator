@@ -119,6 +119,91 @@ public class ImportActionEndpointsTests
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32(), "the standard shared default is 20, not import/actions' old default of 50");
     }
 
+    [TestMethod]
+    public async Task ImportActions_PageZero_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions?page=0");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ImportActions_PageMalformed_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions?page=abc");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ImportActions_PageSizeMalformed_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions?pageSize=abc");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ImportActions_PageSizeNegative_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions?pageSize=-1");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ImportActions_PageSizeZero_Succeeds()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions?pageSize=0");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "pageSize=0 means every row as one page — must succeed, not 422");
+    }
+
+    [TestMethod]
+    public async Task ImportActions_PageBeyondLast_Returns422()
+    {
+        var fake = new FakeImportActionService
+        {
+            ReturnPage = new PagedItems<ImportActionSummaryResponse>(
+                [
+                    new ImportActionSummaryResponse
+                    {
+                        Id             = Guid.NewGuid(),
+                        BatchId        = "BATCH-1",
+                        ActionType     = "Modify",
+                        EntityType     = "Quote",
+                        EntityId       = "11111111-1111-1111-1111-111111111111",
+                        Status         = "Pending",
+                        DetectedAt     = DateTime.UtcNow,
+                        IncomingFields = new Dictionary<string, object?>(),
+                        AmbiguousFields = ["quoteText"],
+                    }
+                ],
+                Page: 1, PageSize: 1, TotalCount: 1)
+        };
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions?page=5");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page beyond the last page must be rejected");
+    }
+
     // ── POST /actions/{id}/decide — requires X-Api-Key ───────────────────────
 
     [TestMethod]
