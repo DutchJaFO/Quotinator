@@ -36,7 +36,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#61](https://github.com/DutchJaFO/Quotinator/issues/61) | Seed script: one file per source | Released | — (pre-dates tier system) | [61-seed-script-per-source-plan.md](61-seed-script-per-source-plan.md) |
 | [#71](https://github.com/DutchJaFO/Quotinator/issues/71) | Generic repository pattern | Released | — (pre-dates tier system) | [71-generic-repository-plan.md](71-generic-repository-plan.md) |
 | [#78](https://github.com/DutchJaFO/Quotinator/issues/78) | Repository: transaction and shared connection support | Released | — (pre-dates tier system) | [78-repository-transaction-plan.md](78-repository-transaction-plan.md) |
-| [#58](https://github.com/DutchJaFO/Quotinator/issues/58) | ImportBatches schema | Waiting for release | T1 ✅ T2 ✅ | [58-import-batches-schema-plan.md](58-import-batches-schema-plan.md) |
+| [#79](https://github.com/DutchJaFO/Quotinator/issues/79) | Fix Highlights sections in CHANGELOG.md for 1.3.0 and 1.4.0 | Released | None required | No plan doc |
+| [#58](https://github.com/DutchJaFO/Quotinator/issues/58) | ImportBatches schema | Released | T1 ✅ T2 ✅ | [58-import-batches-schema-plan.md](58-import-batches-schema-plan.md) |
 | [#57](https://github.com/DutchJaFO/Quotinator/issues/57) | Seed script: dedup inconsistent | Waiting for release | None required | [57-seed-script-dedup-plan.md](57-seed-script-dedup-plan.md) |
 | [#63](https://github.com/DutchJaFO/Quotinator/issues/63) | Import manifest | Waiting for release | T1 ✅ T2 ✅ | [63-import-manifest-plan.md](63-import-manifest-plan.md) |
 | [#62](https://github.com/DutchJaFO/Quotinator/issues/62) | Folder-based seeder | Waiting for release | T1 ✅ T2 ✅ | [62-folder-based-seeder-plan.md](62-folder-based-seeder-plan.md) |
@@ -164,7 +165,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 1  | #61 | Seed script: one file per source | Released |
 | 2  | #71 | Generic repository pattern | Released |
 | 3  | #78 | Repository: transaction and shared connection support | Released |
-| 4  | #58 | ImportBatches schema | Waiting for release |
+| 4  | #58 | ImportBatches schema | Released |
 | 5  | #57 | Seed script: dedup inconsistent | Waiting for release |
 | 6  | #63 | Import manifest | Waiting for release |
 | 7  | #62 | Folder-based seeder | Waiting for release |
