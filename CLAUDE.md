@@ -386,6 +386,62 @@ The downside is that the OpenAPI generator infers `type: string` from the C# typ
 - If the parameter has a real default, add it to `Quotinator.Constants.Api.QueryParamDefaults` and use that constant in the `[DefaultValue(...)]` attribute and the handler's own fallback — one value, not three independently-drifting copies
 - Add **both** the endpoint path and the parameter name (with its default, or `null` if it has none) to `NumericParameterSchemaTransformer.NumericParamsByPath`
 
+### Standard pagination contract
+
+Every paginated GET list endpoint (`/quotes`, `/admin/audit`, `/import/actions`) shares one contract
+(#183/#195), implemented once and reused rather than reimplemented per endpoint:
+
+- `page`/`pageSize` are `string?`-bound (see "Numeric query parameter binding pattern" above) and
+  parsed via `PaginationParsing.TryParse` (`src/Quotinator.Api/Endpoints/Shared/PaginationParsing.cs`).
+- `pageSize = 0` means "every matching row as a single page" — bypasses the max, and the response's
+  `pageSize` reports the actual returned count, not the literal `0` requested (the "effective size"
+  contract, built into `PagedItems<T>` wherever it's constructed).
+- Maximum `pageSize` is `QueryParamDefaults.PageSizeMax` (500); default is `QueryParamDefaults.PageSize`
+  (20). Both live in `Quotinator.Constants.Api.QueryParamDefaults` — never a second hardcoded copy.
+- A page number past the last page is a distinct 422 (`PaginationParsing.ValidatePageBeyondLast`),
+  checked *after* the query runs against the real `TotalPages`, never silently clamped or emptied.
+- The response shape is `Quotinator.Data.Models.PagedItems<T>` (or, for `/quotes`, the pre-existing
+  `Quotinator.Core.Models.PagedResult<T>`, which has an identical field shape — see #195's plan doc
+  for why the two types coexist instead of unifying).
+- `NotFoundResult.OkOrNotFound` (`src/Quotinator.Api/Endpoints/Shared/NotFoundResult.cs`) is the shared
+  404 helper for the matching `GET /{id}` endpoint, when one exists.
+
+**Whenever a new paginated GET endpoint is added, it must ship with the full test matrix below.**
+Coverage of these eight cases was missing piecemeal across `/quotes`, `/admin/audit`, and
+`/import/actions` themselves and only closed after the fact — do not let a new endpoint repeat that
+gap.
+
+| # | Case | Expected |
+|---|---|---|
+| 1 | `page=0` | 422 |
+| 2 | `page` malformed (e.g. `page=abc`) | 422 |
+| 3 | `pageSize` malformed | 422 |
+| 4 | `pageSize` negative | 422 |
+| 5 | `pageSize` above 500 | 422, never silently clamped |
+| 6 | `pageSize = 0` | 200, `items` contains every row, `pageSize` in the response equals `totalCount` |
+| 7 | `pageSize` omitted | defaults to 20 — assert the actual response field, not just a 200 |
+| 8 | `page` beyond the last page (given a known `TotalPages`) | 422, distinct from case 1 |
+
+See `tests/Quotinator.Api.Tests/Endpoints/QuoteEndpointsTests.cs`, `AdminAuditEndpointTests.cs`, and
+`ImportActionEndpointsTests.cs` for the canonical implementations of all eight cases.
+
+**Case 6 needs a second test at the repository/service level, not just the endpoint level.** The
+endpoint-level test typically runs against a stub/fake reader that echoes its input back, which cannot
+catch a reader translating `pageSize = 0` into a literal SQL `LIMIT 0` instead of `LIMIT -1` — exactly
+the live bug #195's own T2 pass found in `SystemAuditReader`/`SystemImportActionReader` after their
+*type* was retrofitted to `PagedItems<T>` but their SQL wasn't. Add a real-SQLite test asserting
+`pageSize = 0` returns every row, not zero — see `SystemAuditReaderTests.cs`,
+`SqliteQuoteServiceTests.cs`, and the `GetPagedAsync` region of `SystemImportActionWriterReaderTests.cs`
+for the pattern.
+
+**Registering a new path in `NumericParameterSchemaTransformer` also needs a live-pipeline test, not
+only the transformer's own unit tests.** `NumericParameterSchemaTransformerTests.cs` exercises the
+transformer class directly against a synthetic `OpenApiOperation` — it would keep passing even if the
+transformer were never actually registered via `AddOpenApi` in `Program.cs`.
+`OpenApiSpecEndpointTests.cs` closes that gap: a `WebApplicationFactory`-based test that fetches the
+real `/openapi/v1.json` through the full pipeline and asserts the published type, replacing what would
+otherwise be a manual `curl | grep` check of the live spec.
+
 ### GUID/enum/id comparisons are case-insensitive by default
 
 Any GUID, enum, or other identifier comparison is **case-insensitive by default** — never case-sensitive, and never behind a config toggle. This applies wherever two independently-cased copies of the same identifier can meet, not only at the REST route/query-parameter boundary: `.NET` serializes a `Guid` lowercase by default, but stored values in this codebase are consistently uppercase (`Guid.ToString("D").ToUpperInvariant()`), and a curator-authored JSON file's own explicit id (e.g. a `sources[]`/`people[]` entry referencing an already-existing, `EntityIdentity`-derived row) is under no obligation to match that casing either. The pattern is `UPPER(column) = UPPER(@param)` in the `Sql.cs` query (see `Sql.Conversations.SelectForRead`, `Sql.SystemImportActions.SelectAllForBatch`'s `BuildWhere`, `Sql.Sources`/`Sql.People`'s `SelectExistingById`/`UpdateFieldsById`/`UpdateCompletenessById`/`CountActiveReferences`).
@@ -922,12 +978,16 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    `/import/actions` only because the sections above already populated at least one row in each; on a
    database with zero rows in a table, page 1 of nothing is not "beyond the last page" and this would
    return `200` instead (see `PaginationParsingTests.ValidatePageBeyondLast_ZeroTotalPages_ReturnsNull`).
-   ```bash
-   curl -s "http://localhost:8080/openapi/v1.json" | grep -A 6 '"name": "pageSize"'
-   ```
-   All three `pageSize` occurrences (quotes, `/admin/audit`, `/import/actions`) must show a `schema`
-   whose `type` includes `"integer"` — never `"string"` — confirming both new paths' registration in
-   `NumericParameterSchemaTransformer` (added by #195) actually took effect on the live spec.
+   The remaining case — `page`/`pageSize` publishing as `integer`, not `string`, on the live spec for
+   all three paths — is **not** part of this manual checklist. It was originally a `curl | grep`
+   check here, but grepping a pretty-printed, multi-line JSON body for a nested field is fragile (the
+   first version of that exact command was wrong — it assumed single-line JSON and never matched
+   anything) and its pass/fail requires a human or AI to eyeball the output. It is now
+   `OpenApiSpecEndpointTests.cs` — a `WebApplicationFactory`-based test that fetches the real
+   `/openapi/v1.json` through the full pipeline and asserts the type via `JsonDocument`, so it runs
+   deterministically in every `dotnet test` instead of requiring a live container. See "Standard
+   pagination contract" earlier in this file for why this needs a dedicated live-pipeline test at all,
+   given `NumericParameterSchemaTransformer` already has its own unit tests.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
