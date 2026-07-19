@@ -93,6 +93,7 @@
     <File Path="docs/architecture-decisions/009-verify-migrations-against-last-released-schema.md" />
     <File Path="docs/architecture-decisions/010-repository-is-csharp-only.md" />
     <File Path="docs/architecture-decisions/011-series-universe-hierarchy-and-character-source-identity.md" />
+    <File Path="docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />

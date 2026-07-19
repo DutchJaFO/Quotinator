@@ -19,6 +19,20 @@ itself.
 
 ---
 
+## Entity id casing
+
+| | Rule |
+|---|---|
+| ✅ Do | Canonicalize an externally-supplied id (a JSON file's explicit `id` field, a URL path segment) to this project's uppercase form exactly once, at the single earliest point it is captured — before indexing it, staging it for another write, or inserting it. Everything derived from that capture point inherits the canonical form for free. |
+| ✅ Do | Compare an id read back from storage case-insensitively (`UPPER(column) = UPPER(@param)`) wherever the incoming comparison value's casing can't be controlled — this is a *separate*, still-required rule; it does not substitute for canonicalizing on write. |
+| ❌ Don't | Assume a `Guid`-typed Dapper parameter is automatically canonicalized and therefore skip explicit canonicalization — `GuidHandler` only normalizes parameters that are actually `Guid`-typed; an id threaded through the system as a plain `string` (as staged-action ids necessarily are, since a not-yet-existing row's id must be computable before any `Guid` exists to type it as) bypasses that entirely. |
+| ❌ Don't | Fix an id-casing bug by wrapping only the query that surfaced it in `UPPER()` without checking whether other writes derive from the same uncanonicalized in-memory value — two columns that are both wrong in the same way can still join correctly against each other, masking the underlying defect until a third, canonically-typed comparison exposes it. |
+
+📖 [ADR 012](architecture-decisions/012-canonicalize-entity-ids-at-capture.md), CLAUDE.md's
+"GUID/enum/id comparisons are case-insensitive by default"
+
+---
+
 ## Enum-backed columns
 
 | | Rule |
