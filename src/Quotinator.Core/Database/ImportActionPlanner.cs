@@ -322,17 +322,25 @@ internal static class ImportActionPlanner
         {
             var typeStr = s.Type.ToString();
 
-            // #180: seriesName resolves via the same-batch index first (populated by PlanSeriesAsync,
-            // which must run before this method), falling back to a DB lookup for a Series declared
-            // in an earlier batch. A seriesName with no match anywhere resolves to null — silently
-            // dropped, same as PlanSeriesAsync's own dangling-universeName treatment.
-            string? incomingSeriesId = null;
-            if (s.SeriesName is { } seriesName)
-                incomingSeriesId = seriesIndex.TryGetValue(seriesName, out var indexed)
-                    ? indexed
-                    : await connection.ExecuteScalarAsync<Guid?>(Sql.Series.SelectIdByName, new { name = seriesName }, transaction) is { } found
-                        ? found.ToString("D").ToUpperInvariant()
-                        : null;
+            // #180/#190: seriesName resolution is Optional-aware — an absent seriesName stays Absent
+            // (never touches the existing Series link, resolved per-branch below via ResolveAgainst);
+            // an explicit null stays a genuine clear; a real name resolves via the same-batch index
+            // first (populated by PlanSeriesAsync, which must run before this method), falling back to
+            // a DB lookup for a Series declared in an earlier batch. A name with no match anywhere
+            // resolves to null — silently dropped, same as PlanSeriesAsync's own dangling-universeName
+            // treatment.
+            var resolvedSeriesId = Optional<string>.Absent;
+            if (s.SeriesName.HasValue)
+            {
+                var seriesName = s.SeriesName.Value;
+                resolvedSeriesId = seriesName is null
+                    ? Optional<string>.Of(null)
+                    : Optional<string>.Of(seriesIndex.TryGetValue(seriesName, out var indexed)
+                        ? indexed
+                        : await connection.ExecuteScalarAsync<Guid?>(Sql.Series.SelectIdByName, new { name = seriesName }, transaction) is { } found
+                            ? found.ToString("D").ToUpperInvariant()
+                            : null);
+            }
 
             // #162's correction shape: an entry carrying an explicit id is matched by it first. An
             // entry omitting one (#180's enrichment shape) skips straight to the natural-key path below.
@@ -344,8 +352,12 @@ internal static class ImportActionPlanner
             if (existing is { } row)
             {
                 var matchedId       = s.Id!; // Non-null by construction: `existing` is only set when s.Id is.
+                // #190: an absent Date/SeriesName resolves to the existing row's own value — never a
+                // change, under any policy. See OptionalExtensions.ResolveAgainst.
+                var incomingDate     = s.Date.ResolveAgainst(row.Date);
+                var incomingSeriesId = resolvedSeriesId.ResolveAgainst(row.SeriesId);
                 var existingPayload = new SourceActionPayload(row.Title, row.Type, row.Date, row.SeriesId);
-                var incomingPayload = new SourceActionPayload(s.Title, typeStr, s.Date, incomingSeriesId);
+                var incomingPayload = new SourceActionPayload(s.Title, typeStr, incomingDate, incomingSeriesId);
                 var existingFields  = ToFieldMap(existingPayload);
                 var incomingFields  = ToFieldMap(incomingPayload);
 
@@ -423,24 +435,47 @@ internal static class ImportActionPlanner
                 // resolve to the existing row, never to this entry's own (possibly absent) id.
                 sourceIndex[$"{s.Title}|{typeStr}"] = keyRow.Id;
 
-                // #180: seriesId is the ONLY field diffable here. Title/Type are the lookup key, so
-                // they cannot differ by construction (correcting them is exactly what #162's explicit
-                // id exists for). Date is carried through from the existing row on BOTH sides — an
-                // entry that never mentions a date must never reset one, and the resolved payload
-                // feeds Sql.Sources.UpdateFieldsById, which writes Date unconditionally. (A file
-                // cannot currently distinguish "date omitted" from "date: null" at all — see this
-                // issue's own Notes; carrying the existing value through sidesteps that entirely on
-                // this path, since a natural-key entry has no business setting a date anyway.)
-                if (s.SeriesName is null || FieldMergeResolver.ValuesEqual(keyRow.SeriesId, incomingSeriesId))
-                    continue; // Nothing to enrich, or already points at this Series — silent reuse.
-
+                // #190: retired the old hard-coded Date carry-through — Date and SeriesId now both
+                // resolve the same Optional-aware way the explicit-id branch above uses. Title/Type
+                // still cannot differ on this path by construction (they are the lookup key;
+                // correcting them is #162's explicit-id job). A natural-key entry that never mentions
+                // "date" still never changes it (ResolveAgainst falls back to keyRow.Date); one that
+                // explicitly sets "date" now actually takes effect, where it was previously always
+                // silently ignored regardless of what the file said.
+                var keyIncomingDate     = s.Date.ResolveAgainst(keyRow.Date);
+                var keyIncomingSeriesId = resolvedSeriesId.ResolveAgainst(keyRow.SeriesId);
                 var keyExistingPayload = new SourceActionPayload(s.Title, typeStr, keyRow.Date, keyRow.SeriesId);
-                var keyIncomingPayload = new SourceActionPayload(s.Title, typeStr, keyRow.Date, incomingSeriesId);
+                var keyIncomingPayload = new SourceActionPayload(s.Title, typeStr, keyIncomingDate, keyIncomingSeriesId);
                 var keyExistingFields  = ToFieldMap(keyExistingPayload);
                 var keyIncomingFields  = ToFieldMap(keyIncomingPayload);
 
+                var changedFields = new HashSet<string>(
+                    keyExistingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, keyIncomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as the explicit-id branch above.
+
+                // #190 drive-by fix: this branch previously never consulted FieldMergeResolver.Resolve
+                // for MergeOurs/MergeTheirs at all — it always took keyIncomingPayload for any policy
+                // but Skip, so MergeOurs could silently overwrite an existing Series link even though
+                // its own contract is "existing wins on a genuine conflict". Now matches the
+                // explicit-id branch's shape exactly.
+                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var mergeResult = isMerge ? FieldMergeResolver.Resolve(keyExistingFields, keyIncomingFields, policy) : null;
+                var resolved    = policy switch
+                {
+                    DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
+                        new SourceActionPayload((string)mergeResult!.MergedFields["title"]!, (string)mergeResult.MergedFields["type"]!, (string?)mergeResult.MergedFields["date"], (string?)mergeResult.MergedFields["seriesId"]),
+                    DuplicateResolutionPolicy.Skip => keyExistingPayload,
+                    _ => keyIncomingPayload,
+                };
+
+                // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
+                // not the raw incoming value used for the "unchanged" check above.
+                var resolvedFields        = ToFieldMap(resolved);
+                var effectiveChangedFields = new HashSet<string>(
+                    keyExistingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+
                 var keyCurrentStatus = keyRow.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-                if (CompletenessGuard.ShouldBlock(keyCurrentStatus, new HashSet<string> { "seriesId" }))
+                if (CompletenessGuard.ShouldBlock(keyCurrentStatus, effectiveChangedFields))
                 {
                     actions.Add(new SystemImportAction
                     {
@@ -467,10 +502,7 @@ internal static class ImportActionPlanner
                     EntityId      = keyRow.Id,
                     ExistingValue = JsonSerializer.Serialize(keyExistingPayload),
                     IncomingValue = JsonSerializer.Serialize(keyIncomingPayload),
-                    // Skip means "existing row wins, untouched" — resolve to the existing payload, so
-                    // an apply writes today's values back unchanged rather than the incoming SeriesId.
-                    MergedFields  = keyIsPending ? null : JsonSerializer.Serialize(
-                        policy == DuplicateResolutionPolicy.Skip ? keyExistingPayload : keyIncomingPayload),
+                    MergedFields  = keyIsPending ? null : JsonSerializer.Serialize(resolved),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
                     Status        = new SafeValue<ImportActionStatus?>(keyStatus.ToString(), keyStatus),
                     DetectedAt    = now,
@@ -489,13 +521,15 @@ internal static class ImportActionPlanner
             // stable id (which would differ from a file-declared id).
             sourceIndex[$"{s.Title}|{typeStr}"] = addId;
 
+            // #190: no existing row to preserve, so ResolveAgainst(null) — an absent property simply
+            // resolves to null, matching this project's existing Add-path behaviour exactly.
             actions.Add(new SystemImportAction
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.Source,
                 EntityId      = addId,
-                IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(s.Title, typeStr, s.Date, incomingSeriesId)),
+                IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(s.Title, typeStr, s.Date.ResolveAgainst(null), resolvedSeriesId.ResolveAgainst(null))),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
             });
@@ -524,8 +558,12 @@ internal static class ImportActionPlanner
 
             if (existing is { } row)
             {
+                // #190: an absent DateOfBirth/DateOfDeath resolves to the existing row's own value —
+                // never a change, under any policy.
+                var incomingDob = p.DateOfBirth.ResolveAgainst(row.DateOfBirth);
+                var incomingDod = p.DateOfDeath.ResolveAgainst(row.DateOfDeath);
                 var existingPayload = new PersonActionPayload(row.Name, row.DateOfBirth, row.DateOfDeath);
-                var incomingPayload = new PersonActionPayload(p.Name, p.DateOfBirth, p.DateOfDeath);
+                var incomingPayload = new PersonActionPayload(p.Name, incomingDob, incomingDod);
                 var existingFields  = ToFieldMap(existingPayload);
                 var incomingFields  = ToFieldMap(incomingPayload);
 
@@ -605,7 +643,7 @@ internal static class ImportActionPlanner
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.Person,
                 EntityId      = p.Id,
-                IncomingValue = JsonSerializer.Serialize(new PersonActionPayload(p.Name, p.DateOfBirth, p.DateOfDeath)),
+                IncomingValue = JsonSerializer.Serialize(new PersonActionPayload(p.Name, p.DateOfBirth.ResolveAgainst(null), p.DateOfDeath.ResolveAgainst(null))),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
             });
@@ -711,8 +749,10 @@ internal static class ImportActionPlanner
             if (existing is { } row)
             {
                 var emptyTranslations = new Dictionary<string, SourceStageDirectionTranslation>();
+                // #190: an absent ImageUrl resolves to the existing row's own value — never a change.
+                var incomingImageUrl = sd.ImageUrl.ResolveAgainst(row.ImageUrl);
                 var existingPayload = new StageDirectionActionPayload(row.Text, row.ImageUrl, emptyTranslations);
-                var incomingPayload = new StageDirectionActionPayload(sd.Text, sd.ImageUrl, emptyTranslations);
+                var incomingPayload = new StageDirectionActionPayload(sd.Text, incomingImageUrl, emptyTranslations);
                 var existingFields  = ToFieldMap(existingPayload);
                 var incomingFields  = ToFieldMap(incomingPayload);
 
@@ -778,7 +818,7 @@ internal static class ImportActionPlanner
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.StageDirection,
                 EntityId      = sd.Id,
-                IncomingValue = JsonSerializer.Serialize(new StageDirectionActionPayload(sd.Text, sd.ImageUrl, sd.Translations)),
+                IncomingValue = JsonSerializer.Serialize(new StageDirectionActionPayload(sd.Text, sd.ImageUrl.ResolveAgainst(null), sd.Translations)),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
             });
@@ -797,8 +837,11 @@ internal static class ImportActionPlanner
             if (existing is { } row)
             {
                 var emptyTranslations = new Dictionary<string, SourceSoundCueTranslation>();
+                // #190: an absent SoundFileUrl/ImageUrl resolves to the existing row's own value — never a change.
+                var incomingSoundFileUrl = sc.SoundFileUrl.ResolveAgainst(row.SoundFileUrl);
+                var incomingImageUrl     = sc.ImageUrl.ResolveAgainst(row.ImageUrl);
                 var existingPayload = new SoundCueActionPayload(row.Text, row.SoundFileUrl, row.ImageUrl, emptyTranslations);
-                var incomingPayload = new SoundCueActionPayload(sc.Text, sc.SoundFileUrl, sc.ImageUrl, emptyTranslations);
+                var incomingPayload = new SoundCueActionPayload(sc.Text, incomingSoundFileUrl, incomingImageUrl, emptyTranslations);
                 var existingFields  = ToFieldMap(existingPayload);
                 var incomingFields  = ToFieldMap(incomingPayload);
 
@@ -864,7 +907,7 @@ internal static class ImportActionPlanner
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.SoundCue,
                 EntityId      = sc.Id,
-                IncomingValue = JsonSerializer.Serialize(new SoundCueActionPayload(sc.Text, sc.SoundFileUrl, sc.ImageUrl, sc.Translations)),
+                IncomingValue = JsonSerializer.Serialize(new SoundCueActionPayload(sc.Text, sc.SoundFileUrl.ResolveAgainst(null), sc.ImageUrl.ResolveAgainst(null), sc.Translations)),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
             });
@@ -892,8 +935,10 @@ internal static class ImportActionPlanner
 
             if (existing is { } row)
             {
+                // #190: an absent Description resolves to the existing row's own value — never a change.
+                var incomingDescription = c.Description.ResolveAgainst(row.Description);
                 var existingPayload = new ConversationActionPayload(row.Description, []);
-                var incomingPayload = new ConversationActionPayload(c.Description, []);
+                var incomingPayload = new ConversationActionPayload(incomingDescription, []);
                 var existingFields  = ToConversationFieldMap(existingPayload);
                 var incomingFields  = ToConversationFieldMap(incomingPayload);
 
@@ -963,7 +1008,7 @@ internal static class ImportActionPlanner
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.Conversation,
                 EntityId      = c.Id,
-                IncomingValue = JsonSerializer.Serialize(new ConversationActionPayload(c.Description, lines)),
+                IncomingValue = JsonSerializer.Serialize(new ConversationActionPayload(c.Description.ResolveAgainst(null), lines)),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
             });

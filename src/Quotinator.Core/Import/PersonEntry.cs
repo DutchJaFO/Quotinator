@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Import;
 
@@ -18,11 +19,17 @@ public sealed class PersonEntry
     [JsonPropertyName("name")]
     public required string Name { get; init; }
 
-    /// <summary>Imprecise ISO 8601 birth date (e.g. "1955" or "1955-02-24"). Null when unknown.</summary>
+    /// <summary>
+    /// Imprecise ISO 8601 birth date (e.g. "1955" or "1955-02-24"). Absent means leave the existing
+    /// value alone; present with <c>null</c> means reset it (#190).
+    /// </summary>
     [JsonPropertyName("dateOfBirth")]
-    public string? DateOfBirth { get; init; }
+    public Optional<string> DateOfBirth { get; init; }
 
-    /// <summary>Imprecise ISO 8601 death date. Null when still living or unknown.</summary>
+    /// <summary>
+    /// Imprecise ISO 8601 death date. Absent means leave the existing value alone; present with
+    /// <c>null</c> means reset it (#190).
+    /// </summary>
     [JsonPropertyName("dateOfDeath")]
-    public string? DateOfDeath { get; init; }
+    public Optional<string> DateOfDeath { get; init; }
 }

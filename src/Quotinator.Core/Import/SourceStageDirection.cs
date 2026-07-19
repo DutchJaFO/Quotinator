@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Import;
 
@@ -13,9 +14,12 @@ public sealed class SourceStageDirection
     [JsonPropertyName("text")]
     public required string Text { get; init; }
 
-    /// <summary>Optional image (e.g. a production still) illustrating the scene.</summary>
+    /// <summary>
+    /// Optional image (e.g. a production still) illustrating the scene. Absent means leave the
+    /// existing value alone; present with <c>null</c> means reset it (#190).
+    /// </summary>
     [JsonPropertyName("imageUrl")]
-    public string? ImageUrl { get; init; }
+    public Optional<string> ImageUrl { get; init; }
 
     /// <summary>Available translations of <see cref="Text"/>, keyed by ISO 639-1 language code.</summary>
     [JsonPropertyName("translations")]

@@ -100,7 +100,7 @@
         "title":      { "type": "string", "minLength": 1 },
         "type":       { "type": "string", "enum": ["movie", "tv", "anime", "book", "person"] },
         "date":       { "type": ["string", "null"], "description": "Publication or release date. Only meaningful alongside an explicit 'id' — a natural-key-matched entry never sets it. Omit entirely unless you intend to set it." },
-        "seriesName": { "type": ["string", "null"], "description": "Name of the Series (#180) this Source belongs to, if any. Resolved to a Series id at import time — never a raw id, matching how a quote's own 'source'/'author' fields are text, not ids." }
+        "seriesName": { "type": ["string", "null"], "description": "Name of the Series (#180) this Source belongs to, if any. Resolved to a Series id at import time — never a raw id, matching how a quote's own 'source'/'author' fields are text, not ids. Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." }
       }
     },
     "series": {
@@ -127,8 +127,8 @@
       "properties": {
         "id":          { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
         "name":        { "type": "string", "minLength": 1 },
-        "dateOfBirth": { "type": ["string", "null"] },
-        "dateOfDeath": { "type": ["string", "null"] }
+        "dateOfBirth": { "type": ["string", "null"], "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
+        "dateOfDeath": { "type": ["string", "null"], "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." }
       }
     },
     "stageDirection": {
@@ -138,7 +138,7 @@
       "properties": {
         "id":       { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
         "text":     { "type": "string", "minLength": 1, "description": "e.g. '[EXT. AIRPORT - DAY]'" },
-        "imageUrl": { "type": ["string", "null"], "format": "uri" },
+        "imageUrl": { "type": ["string", "null"], "format": "uri", "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
         "translations": {
           "type": "object",
           "additionalProperties": {
@@ -157,8 +157,8 @@
       "properties": {
         "id":           { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
         "text":         { "type": "string", "minLength": 1, "description": "e.g. '[rimshot]', '[awkward silence]'" },
-        "soundFileUrl": { "type": ["string", "null"], "format": "uri" },
-        "imageUrl":     { "type": ["string", "null"], "format": "uri" },
+        "soundFileUrl": { "type": ["string", "null"], "format": "uri", "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
+        "imageUrl":     { "type": ["string", "null"], "format": "uri", "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
         "translations": {
           "type": "object",
           "additionalProperties": {
@@ -176,7 +176,7 @@
       "additionalProperties": false,
       "properties": {
         "id":          { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
-        "description": { "type": ["string", "null"] },
+        "description": { "type": ["string", "null"], "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
         "lines": {
           "type": "array",
           "minItems": 2,

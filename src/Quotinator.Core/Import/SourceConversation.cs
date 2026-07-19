@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Import;
 
@@ -9,9 +10,12 @@ public sealed class SourceConversation
     [JsonPropertyName("id")]
     public required string Id { get; init; }
 
-    /// <summary>Optional human-readable label for the conversation.</summary>
+    /// <summary>
+    /// Optional human-readable label for the conversation. Absent means leave the existing value
+    /// alone; present with <c>null</c> means reset it (#190).
+    /// </summary>
     [JsonPropertyName("description")]
-    public string? Description { get; init; }
+    public Optional<string> Description { get; init; }
 
     /// <summary>The conversation's lines, in <see cref="SourceConversationLine.Order"/> order.</summary>
     [JsonPropertyName("lines")]

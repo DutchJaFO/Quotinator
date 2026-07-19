@@ -931,6 +931,49 @@ public class SqliteImportActionServiceTests
         Assert.AreEqual("1942-11-26", date);
     }
 
+    [TestMethod]
+    public async Task ApplyBatchAsync_SourceModifyWithAbsentDate_LeavesExistingDateIntact()
+    {
+        var id = "c9111111-1111-4111-8111-111111111112";
+        await SeedExplicitSourceAsync(id, title: "Casablanca", date: "1942");
+
+        // Title changes; Date is never mentioned — must survive the apply untouched (#190).
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [new SourceEntry { Id = id, Title = "Casablanca (1942)", Type = QuoteType.Movie }]);
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
+
+        var result = await _service.ApplyBatchAsync(sourceAction.BatchId);
+        Assert.IsNull(result);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (title, date) = await conn.QuerySingleAsync<(string Title, string Date)>(
+            "SELECT Title, Date FROM Sources WHERE Id = @id", new { id });
+        Assert.AreEqual("Casablanca (1942)", title);
+        Assert.AreEqual("1942", date, "An omitted 'date' must never be reset — the real value must survive the apply unchanged");
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_SourceModifyWithExplicitNullDate_ClearsDate()
+    {
+        var id = "c9111111-1111-4111-8111-111111111113";
+        await SeedExplicitSourceAsync(id, title: "Casablanca", date: "1942");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [new SourceEntry { Id = id, Title = "Casablanca", Type = QuoteType.Movie, Date = Optional<string>.Of(null) }]);
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
+
+        var result = await _service.ApplyBatchAsync(sourceAction.BatchId);
+        Assert.IsNull(result);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var date = await conn.QuerySingleAsync<string?>("SELECT Date FROM Sources WHERE Id = @id", new { id });
+        Assert.IsNull(date, "An explicit 'date: null' must genuinely clear the stored value on apply");
+    }
+
     /// <summary>
     /// #180 regression guard, found live via T2: <c>DecideAsync</c>'s Source branch reconstructed
     /// <see cref="SourceActionPayload"/> with only Title/Type/Date, silently dropping SeriesId to its

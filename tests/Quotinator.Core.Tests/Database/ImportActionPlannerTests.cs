@@ -593,8 +593,12 @@ public class ImportActionPlannerTests
             new { Id = Guid.NewGuid(), now });
 
         var newFileId = "c3111111-1111-4111-8111-111111111111";
+        // #190: date must be passed explicitly as null here — BuildSourceEntry's own default ("1942")
+        // would otherwise now genuinely take effect on the natural-key path (requirement 6's
+        // liberalization), which is a different, separately-tested scenario, not what this test means
+        // to exercise (nothing about this entry differs from the existing row at all).
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            sources: [BuildSourceEntry(newFileId, title: "Casablanca", type: Core.Models.QuoteType.Movie)]);
+            sources: [BuildSourceEntry(newFileId, title: "Casablanca", type: Core.Models.QuoteType.Movie, date: null)]);
 
         Assert.AreEqual(0, actions.Count, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#162 scope boundary)");
     }
@@ -994,5 +998,182 @@ public class ImportActionPlannerTests
 
         var action = actions.Single(a => a.EntityType == "Conversation");
         Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
+    }
+
+    // ── #190: absent vs. explicit-null distinguishability ────────────────────
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_ExplicitId_DateAbsent_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e0111111-1111-4111-8111-111111111181";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942");
+
+        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Models.QuoteType.Movie };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [entry]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "An omitted 'date' must never be treated as a change, under any policy");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_ExplicitId_DateExplicitlyNull_StagesModifyResettingDate()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e0111111-1111-4111-8111-111111111182";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942");
+
+        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Models.QuoteType.Movie, Date = Optional<string>.Of(null) };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [entry]);
+
+        var action = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed, "An explicit 'date: null' must resolve to a genuine reset");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        Assert.IsNull(merged.Date);
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_ExplicitId_SeriesNameAbsent_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var seriesId = await SeedExistingSeriesAsync(conn, "The Hobbit");
+        var id = "e0111111-1111-4111-8111-111111111183";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942", seriesId: seriesId);
+
+        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Models.QuoteType.Movie, Date = "1942" };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [entry]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "An omitted 'seriesName' must never be treated as a change, under any policy — same bug as Date, found on the same DTO one field over (#190 scope-expansion finding)");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_ExplicitId_SeriesNameExplicitlyNull_StagesModifyClearingSeries()
+    {
+        using var conn = await OpenConnectionAsync();
+        var seriesId = await SeedExistingSeriesAsync(conn, "The Hobbit");
+        var id = "e0111111-1111-4111-8111-111111111184";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942", seriesId: seriesId);
+
+        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Models.QuoteType.Movie, Date = "1942", SeriesName = Optional<string>.Of(null) };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [entry]);
+
+        var action = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed, "An explicit 'seriesName: null' must resolve to a genuine clear");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        Assert.IsNull(merged.SeriesId);
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_NaturalKey_DateExplicitlySet_NowTakesEffect()
+    {
+        using var conn = await OpenConnectionAsync();
+        // Not referenced by the entry below — a row found only by natural key (Title+Type).
+        await SeedExplicitSourceAsync(conn, "e0111111-1111-4111-8111-111111111185", title: "Casablanca", date: null);
+
+        // #180's enrichment shape: no explicit id.
+        var entry = new SourceEntry { Title = "Casablanca", Type = Core.Models.QuoteType.Movie, Date = "1975" };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [entry]);
+
+        var action = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed,
+            "#190 requirement 6's liberalization: a natural-key entry that explicitly sets 'date' now actually takes effect, where it was previously always silently ignored regardless of what the file said");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        Assert.AreEqual("1975", merged.Date);
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_NaturalKey_MergeOurs_ExistingSeriesWins()
+    {
+        using var conn = await OpenConnectionAsync();
+        var originalSeriesId = await SeedExistingSeriesAsync(conn, "Original Series");
+        await SeedExistingSeriesAsync(conn, "New Series");
+        // Not referenced by the entry below — a row found only by natural key (Title+Type).
+        await SeedExplicitSourceAsync(conn, "e0111111-1111-4111-8111-111111111186", title: "Casablanca", seriesId: originalSeriesId);
+
+        var entry = new SourceEntry { Title = "Casablanca", Type = Core.Models.QuoteType.Movie, SeriesName = "New Series" };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.MergeOurs,
+            sources: [entry]);
+
+        var action = actions.Single(a => a.EntityType == "Source");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        Assert.AreEqual(originalSeriesId, merged.SeriesId,
+            "#190 drive-by fix: MergeOurs must keep the existing Series on a genuine conflict — this branch previously never consulted FieldMergeResolver at all and always took the incoming value unconditionally");
+    }
+
+    [TestMethod]
+    public async Task PlanPeopleAsync_DateOfBirthAbsent_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e0111111-1111-4111-8111-111111111187";
+        await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27");
+
+        var entry = new PersonEntry { Id = id, Name = "Ada Lovelace", DateOfDeath = "1852-11-27" };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [entry]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Person"), "An omitted 'dateOfBirth' must never be treated as a change, under any policy");
+    }
+
+    [TestMethod]
+    public async Task PlanPeopleAsync_DateOfDeathExplicitlyNull_StagesModifyResettingDate()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e0111111-1111-4111-8111-111111111188";
+        await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27");
+
+        var entry = new PersonEntry { Id = id, Name = "Ada Lovelace", DateOfBirth = "1815-12-10", DateOfDeath = Optional<string>.Of(null) };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [entry]);
+
+        var action = actions.Single(a => a.EntityType == "Person");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed, "An explicit 'dateOfDeath: null' must resolve to a genuine reset");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<PersonActionPayload>(action.MergedFields!)!;
+        Assert.IsNull(merged.DateOfDeath);
+    }
+
+    [TestMethod]
+    public async Task PlanStageDirectionsAsync_ImageUrlAbsent_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e0111111-1111-4111-8111-111111111189";
+        await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.", imageUrl: "http://example.com/still.jpg");
+
+        var entry = new SourceStageDirection { Id = id, Text = "A shot rings out." };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            stageDirections: [entry]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "StageDirection"), "An omitted 'imageUrl' must never be treated as a change, under any policy — must preserve a real existing value, not just null-matches-null");
+    }
+
+    [TestMethod]
+    public async Task PlanSoundCuesAsync_SoundFileUrlAbsent_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e0111111-1111-4111-8111-111111111191";
+        await SeedExplicitSoundCueAsync(conn, id, text: "Distant thunder.", soundFileUrl: "http://example.com/thunder.mp3", imageUrl: "http://example.com/img.jpg");
+
+        var entry = new SourceSoundCue { Id = id, Text = "Distant thunder.", ImageUrl = "http://example.com/img.jpg" };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            soundCues: [entry]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "SoundCue"), "An omitted 'soundFileUrl' must never be treated as a change, under any policy — must preserve a real existing value, not just null-matches-null");
+    }
+
+    [TestMethod]
+    public async Task PlanConversationsAsync_DescriptionAbsent_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "e0111111-1111-4111-8111-111111111192";
+        await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.");
+
+        var entry = new SourceConversation { Id = id, Lines = [] };
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            conversations: [entry]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Conversation"), "An omitted 'description' must never be treated as a change, under any policy");
     }
 }

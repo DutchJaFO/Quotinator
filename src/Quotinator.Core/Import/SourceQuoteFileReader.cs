@@ -1,12 +1,19 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Import;
 
 /// <summary>Parses a Quotinator source file's raw JSON text into <see cref="SourceQuote"/> entries.</summary>
 public static class SourceQuoteFileReader
 {
-    private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
+    // #190: OptionalJsonConverterFactory covers every Optional<T>-typed entry-DTO property (Date,
+    // SeriesName, DateOfBirth, etc.) with this one registration — no per-property attribute needed.
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new OptionalJsonConverterFactory() },
+    };
 
     /// <summary>
     /// Attempts to parse <paramref name="json"/> as either a bare <see cref="SourceQuote"/> array or a

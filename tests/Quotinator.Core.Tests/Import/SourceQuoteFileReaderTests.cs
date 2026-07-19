@@ -1,5 +1,6 @@
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Tests.Import;
 
@@ -121,7 +122,7 @@ public class SourceQuoteFileReaderTests
         Assert.AreEqual(1, parsed.Sources.Count);
         Assert.AreEqual("World", parsed.Sources[0].Title);
         Assert.AreEqual(QuoteType.Movie, parsed.Sources[0].Type);
-        Assert.AreEqual("1994", parsed.Sources[0].Date);
+        Assert.AreEqual("1994", parsed.Sources[0].Date.Value);
         Assert.AreEqual(1, parsed.StageDirections.Count);
         Assert.AreEqual("[EXT. AIRPORT - DAY]", parsed.StageDirections[0].Text);
         Assert.AreEqual(1, parsed.SoundCues.Count);
@@ -154,8 +155,64 @@ public class SourceQuoteFileReaderTests
         Assert.AreEqual(1, parsed!.People.Count);
         Assert.AreEqual("66666666-6666-6666-6666-666666666666", parsed.People[0].Id);
         Assert.AreEqual("Ada Lovelace", parsed.People[0].Name);
-        Assert.AreEqual("1815-12-10", parsed.People[0].DateOfBirth);
-        Assert.AreEqual("1852-11-27", parsed.People[0].DateOfDeath);
+        Assert.AreEqual("1815-12-10", parsed.People[0].DateOfBirth.Value);
+        Assert.AreEqual("1852-11-27", parsed.People[0].DateOfDeath.Value);
+    }
+
+    // ── #190: absent vs. explicit-null distinguishability ────────────────────
+
+    [TestMethod]
+    public void TryParseExtended_SourceDateAbsent_IsDistinguishableFromExplicitNull()
+    {
+        var absentJson = """
+            {"quotes":[],"sources":[{"title":"World","type":"movie"}]}
+            """;
+        var explicitNullJson = """
+            {"quotes":[],"sources":[{"title":"World","type":"movie","date":null}]}
+            """;
+
+        SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult);
+        SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult);
+
+        Assert.IsFalse(absentResult!.Sources[0].Date.HasValue, "Omitted 'date' must be Absent, not Of(null)");
+        Assert.IsTrue(explicitNullResult!.Sources[0].Date.HasValue, "Explicit 'date: null' must be Of(null), not Absent");
+        Assert.IsNull(explicitNullResult.Sources[0].Date.Value);
+    }
+
+    [TestMethod]
+    public void TryParseExtended_SourceSeriesNameAbsent_IsDistinguishableFromExplicitNull()
+    {
+        var absentJson = """
+            {"quotes":[],"sources":[{"title":"World","type":"movie"}]}
+            """;
+        var explicitNullJson = """
+            {"quotes":[],"sources":[{"title":"World","type":"movie","seriesName":null}]}
+            """;
+
+        SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult);
+        SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult);
+
+        Assert.IsFalse(absentResult!.Sources[0].SeriesName.HasValue, "Omitted 'seriesName' must be Absent, not Of(null)");
+        Assert.IsTrue(explicitNullResult!.Sources[0].SeriesName.HasValue, "Explicit 'seriesName: null' must be Of(null), not Absent");
+        Assert.IsNull(explicitNullResult.Sources[0].SeriesName.Value);
+    }
+
+    [TestMethod]
+    public void TryParseExtended_PersonDateOfBirthAbsent_IsDistinguishableFromExplicitNull()
+    {
+        var absentJson = """
+            {"quotes":[],"people":[{"id":"66666666-6666-6666-6666-666666666666","name":"Ada Lovelace"}]}
+            """;
+        var explicitNullJson = """
+            {"quotes":[],"people":[{"id":"66666666-6666-6666-6666-666666666666","name":"Ada Lovelace","dateOfBirth":null}]}
+            """;
+
+        SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult);
+        SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult);
+
+        Assert.IsFalse(absentResult!.People[0].DateOfBirth.HasValue, "Omitted 'dateOfBirth' must be Absent, not Of(null)");
+        Assert.IsTrue(explicitNullResult!.People[0].DateOfBirth.HasValue, "Explicit 'dateOfBirth: null' must be Of(null), not Absent");
+        Assert.IsNull(explicitNullResult.People[0].DateOfBirth.Value);
     }
 
     [TestMethod]
@@ -195,7 +252,7 @@ public class SourceQuoteFileReaderTests
         Assert.AreEqual(1, parsed.Universe.Count);
         Assert.AreEqual("World Universe", parsed.Universe[0].Name);
         Assert.AreEqual(1, parsed.Sources.Count);
-        Assert.AreEqual("World Series", parsed.Sources[0].SeriesName);
+        Assert.AreEqual("World Series", parsed.Sources[0].SeriesName.Value);
     }
 
     [TestMethod]

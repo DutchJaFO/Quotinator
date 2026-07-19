@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Import;
 
@@ -13,13 +14,19 @@ public sealed class SourceSoundCue
     [JsonPropertyName("text")]
     public required string Text { get; init; }
 
-    /// <summary>Optional audio file for the cue.</summary>
+    /// <summary>
+    /// Optional audio file for the cue. Absent means leave the existing value alone; present with
+    /// <c>null</c> means reset it (#190).
+    /// </summary>
     [JsonPropertyName("soundFileUrl")]
-    public string? SoundFileUrl { get; init; }
+    public Optional<string> SoundFileUrl { get; init; }
 
-    /// <summary>Optional image illustrating the cue.</summary>
+    /// <summary>
+    /// Optional image illustrating the cue. Absent means leave the existing value alone; present with
+    /// <c>null</c> means reset it (#190).
+    /// </summary>
     [JsonPropertyName("imageUrl")]
-    public string? ImageUrl { get; init; }
+    public Optional<string> ImageUrl { get; init; }
 
     /// <summary>Available translations of <see cref="Text"/>, keyed by ISO 639-1 language code.</summary>
     [JsonPropertyName("translations")]

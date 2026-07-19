@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Quotinator.Core.Models;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Import;
 
@@ -34,14 +35,18 @@ public sealed class SourceEntry
     [JsonConverter(typeof(QuoteTypeJsonConverter))]
     public QuoteType Type { get; init; } = QuoteType.Movie;
 
-    /// <summary>Publication or release date. Imprecise ISO 8601 text (e.g. "1994", "1994-06"). Null when unknown.</summary>
+    /// <summary>
+    /// Publication or release date. Imprecise ISO 8601 text (e.g. "1994", "1994-06"). Absent means
+    /// leave the existing value alone; present with <c>null</c> means reset it (#190).
+    /// </summary>
     [JsonPropertyName("date")]
-    public string? Date { get; init; }
+    public Optional<string> Date { get; init; }
 
     /// <summary>
     /// Name of the Series (#180) this Source belongs to, if any. Resolved to a Series id at import
     /// time — never a raw id, matching how a quote's own <c>source</c>/<c>author</c> fields are text.
+    /// Absent means leave the existing Series link alone; present with <c>null</c> means clear it (#190).
     /// </summary>
     [JsonPropertyName("seriesName")]
-    public string? SeriesName { get; init; }
+    public Optional<string> SeriesName { get; init; }
 }
