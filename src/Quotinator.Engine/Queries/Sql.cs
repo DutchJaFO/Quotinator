@@ -554,13 +554,18 @@ internal static class Sql
         /// pattern <see cref="SelectMembershipForQuote"/> already uses — rather than a grouping clause, so
         /// this does not trip <c>SqlAggregateGuard</c>'s CVE-2025-6965 heuristic; see docs/sql-safety.md.
         /// A Conversation with zero active lines is simply absent from the result — callers default missing
-        /// keys to 0.
+        /// keys to 0. <c>UPPER(cl.ConversationId)</c> in the WHERE clause is required, not cosmetic — #68's
+        /// curated JSON conversations were seeded with their file-authored lowercase ids preserved verbatim
+        /// (per CLAUDE.md's case-insensitivity convention: an import file's own explicit id is under no
+        /// obligation to match the codebase's usual stored-uppercase convention), while GuidHandler always
+        /// uppercases the bound @conversationIds parameters — an exact-case IN match against the unmodified
+        /// column silently matched nothing, live-verified during this issue's own T2 pass.
         /// </summary>
         internal const string SelectLineCountsForConversations =
             "SELECT DISTINCT cl.ConversationId, " +
-            "(SELECT COUNT(*) FROM ConversationLines cl2 WHERE cl2.ConversationId = cl.ConversationId AND cl2.IsDeleted = 0) AS LineCount " +
+            "CAST((SELECT COUNT(*) FROM ConversationLines cl2 WHERE cl2.ConversationId = cl.ConversationId AND cl2.IsDeleted = 0) AS INTEGER) AS LineCount " +
             "FROM ConversationLines cl " +
-            "WHERE cl.ConversationId IN @conversationIds AND cl.IsDeleted = 0;";
+            "WHERE UPPER(cl.ConversationId) IN @conversationIds AND cl.IsDeleted = 0;";
     }
 
     /// <summary>StageDirections table (#67/#68). Explicit-id existence check, like <see cref="Conversations"/> — see its remark.</summary>

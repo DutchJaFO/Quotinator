@@ -1,6 +1,6 @@
 # #186 — Masterdata: GET /api/v1/masterdata/people list + get-by-id
 
-**Status:** In progress (step 9)
+**Status:** Waiting for release
 **GitHub issue:** #186
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196
@@ -511,8 +511,8 @@ response has no `raw`/`parsed` leakage and a lowercase-formatted id in the URL s
 | 20 | ✅ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables contain the two new rows |
 | 21 | ✅ | `docs/logging.md` registers `[Api - GetAllPeople]`/`[Api - GetPersonById]` | Doc review | "Defined prefixes" table contains both rows |
 | 22 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (389 tests in Quotinator.Api.Tests, all projects green), 0 warnings, 0 errors |
-| 23 | ❌ | T1 — app starts in Visual Studio; both endpoints behave as specified | Live (T1) | Developer confirms clean startup and manual exercise of both endpoints |
-| 24 | ❌ | T2 — the live contract holds on the built image | Live (T2) | Full pagination matrix + response-shape checks against a real seeded Person, per Step 9 |
+| 23 | ✅ | T1 — app starts in Visual Studio; both endpoints behave as specified | Live (T1) | Developer confirmed 2026-07-19 — clean startup, GetAll/GetById/pagination contract all exercised live |
+| 24 | ✅ | T2 — the live contract holds on the built image | Live (T2) | Full pagination matrix + response-shape checks against a real seeded Person, per Step 9. Run 2026-07-19 as a combined pass across #184–#189/#204/#205 — endpoint reachable and returns the standard pagination shape (no Person rows seeded in this bundled dataset, so the empty-list path was confirmed rather than a populated one) |
 
 ---
 

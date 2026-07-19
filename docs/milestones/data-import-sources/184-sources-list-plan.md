@@ -1,6 +1,6 @@
 # #184 — Masterdata: GET /api/v1/masterdata/sources list + get-by-id
 
-**Status:** In progress (step 10)
+**Status:** Waiting for release
 **GitHub issue:** #184
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196
@@ -596,8 +596,8 @@ This project always runs T2 regardless of a documented trigger — this issue's 
 | 21 | ✅ | The list endpoint resolves each item's Series independently via the batched reader | Unit test | `SourceEndpointsTests.GetAllSources_MultipleSourcesWithSeries_BatchResolvesEachSeries` |
 | 22 | ✅ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables updated |
 | 23 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (343 tests), 0 warnings, 0 errors |
-| 24 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
-| 25 | ❌ | T2 — the live contract holds against the built image, including a live Series reference resolving to `{id, name}` | Live (T2) | `docker build`/`docker run` matrix — see Step 10 |
+| 24 | ✅ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed 2026-07-19 — clean startup, GetAll/GetById/pagination contract all exercised live |
+| 25 | ✅ | T2 — the live contract holds against the built image, including a live Series reference resolving to `{id, name}` | Live (T2) | `docker build`/`docker run` matrix — see Step 10. Run 2026-07-19 as a combined pass across #184–#189/#204/#205 — confirmed live |
 
 ---
 

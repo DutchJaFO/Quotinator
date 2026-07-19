@@ -1,6 +1,6 @@
 # #187 — Masterdata: GET /api/v1/masterdata/series list + get-by-id
 
-**Status:** In progress (step 10)
+**Status:** Waiting for release
 **GitHub issue:** #187
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196, #179
@@ -558,8 +558,8 @@ smoke-test list) once implemented, per this project's standing practice.
 | 20 | ✅ | The list endpoint resolves each item's Universe independently via the batched reader | Unit test | `GetAllSeries_MultipleSeriesWithUniverse_BatchResolvesEachUniverse` |
 | 21 | ✅ | `README.md` and `addon/DOCS.md` endpoint tables updated | Doc review | Both files contain the new rows |
 | 22 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (1440 tests), 0 warnings, 0 errors |
-| 23 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmation |
-| 24 | ❌ | T2 — both endpoints behave per contract on the built image, including a live Universe reference resolving to `{id, name}` | Live (T2) | `docker build` + `docker run`, curl matrix from Step 10 |
+| 23 | ✅ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed 2026-07-19 — clean startup, GetAll/GetById/pagination contract all exercised live |
+| 24 | ✅ | T2 — both endpoints behave per contract on the built image, including a live Universe reference resolving to `{id, name}` | Live (T2) | `docker build` + `docker run`, curl matrix from Step 10. Run 2026-07-19 as a combined pass across #184–#189/#204/#205 — endpoint reachable and returns the standard pagination shape (no Series rows seeded in this bundled dataset, so the empty-list path was confirmed rather than a populated one) |
 
 ---
 

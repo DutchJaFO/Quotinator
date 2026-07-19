@@ -1,6 +1,6 @@
 # #204 — Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id
 
-**Status:** In progress (step 10)
+**Status:** Waiting for release
 **GitHub issue:** #204
 **Tiers required:** T1, T2
 **Depends on:** #195, #196
@@ -403,8 +403,8 @@ This project always runs T2 regardless of a documented trigger — this issue's 
 | 17 | ✅ | `ApiMessages.StageDirectionNotFound` exists and all three locale files carry `ErrorStageDirectionNotFound` | Unit test | `TranslationCompletenessTests` |
 | 18 | ✅ | `README.md`/`addon/DOCS.md`/`docs/logging.md` document both new endpoints | Doc review | Files updated |
 | 19 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 20 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
-| 21 | ❌ | T2 — the live contract holds against the built image | Live (T2) | `docker build`/`docker run` matrix — see Step 10 |
+| 20 | ✅ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed 2026-07-19 — clean startup, GetAll/GetById/pagination contract all exercised live |
+| 21 | ✅ | T2 — the live contract holds against the built image | Live (T2) | `docker build`/`docker run` matrix — see Step 10. Run 2026-07-19 as a combined pass across #184–#189/#204/#205 — confirmed live with real seeded StageDirection rows |
 
 ---
 

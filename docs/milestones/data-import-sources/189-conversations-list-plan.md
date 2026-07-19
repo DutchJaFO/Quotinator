@@ -1,6 +1,6 @@
 # #189 — Conversations: GET /api/v1/conversations list endpoint
 
-**Status:** In progress (step 8)
+**Status:** Waiting for release
 **GitHub issue:** #189
 **Tiers required:** T1, T2
 **Depends on:** #193, #195
@@ -428,8 +428,8 @@ This project always runs T2 regardless of a documented trigger — this issue's 
 | 16 | ✅ | Existing `GetById` behaviour unchanged (full `lines` array, no regression) | Unit test | Existing `ConversationEndpointsTests.GetById_*` tests still pass unmodified |
 | 17 | ✅ | `README.md`/`addon/DOCS.md` document the new endpoint; `docs/logging.md` carries the new prefix | Doc review | Files updated |
 | 18 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite (10 projects, 1475 tests) green, 0 warnings, 0 errors |
-| 19 | ❌ | T1 — app starts in Visual Studio; endpoint reachable | Live (T1) | Developer confirmed |
-| 20 | ❌ | T2 — the live contract holds against the built image, including a real line-count match | Live (T2) | `docker build`/`docker run` matrix — see Step 8 |
+| 19 | ✅ | T1 — app starts in Visual Studio; endpoint reachable | Live (T1) | Developer confirmed 2026-07-19 — clean startup, GetAll/pagination contract exercised live, correct lineCount values, against the already-fixed build (both bugs in this row's Notes were caught by the preceding T2 pass, not this one). Developer's own eyeballing of the live T1 output separately caught the missing Description on one seeded conversation — fixed in quotinator-curated.json |
+| 20 | ✅ | T2 — the live contract holds against the built image, including a real line-count match | Live (T2) | `docker build`/`docker run` matrix — see Step 8. Run 2026-07-19: found and fixed two genuine live-only bugs in `IConversationLineCountReader` — see Notes |
 
 ---
 
@@ -448,6 +448,53 @@ single-id line count without loading the full line list, add the method then, no
 two DTOs share no properties beyond `Id`/`Description` by coincidence of both describing a Conversation,
 not by design; keeping them structurally separate avoids ever needing to make `Lines` nullable/optional
 on a type documented as "the full ordered line list."
+
+**Two genuine bugs found during T2 (2026-07-19), neither catchable by the fake-backed unit tests, both
+fixed and covered by new real-SQLite tests in `ConversationLineCountReaderTests.cs`
+(`tests/Quotinator.Engine.Tests/Repositories/`):**
+
+1. **Dapper materialization failure, live 500.** Two independently-confirmed causes, verified against
+   official documentation/source after the initial empirical diagnosis (per CLAUDE.md's "Authoritative
+   sources" policy — the first pass here was reasoned from observed behaviour alone, then checked):
+   - **Dapper skips every registered `SqlMapper.TypeHandler` (including `GuidHandler`) when the target
+     type has a parameterized constructor whose parameter count matches the query** — confirmed via
+     [DapperLib/Dapper#461](https://github.com/StackExchange/Dapper/issues/461): "the `Parse` method is
+     only called if it is being serialised to a type with a parameterless constructor. If a constructor
+     exists which initialises all the properties the type handler is not called." A positional record
+     like the original `LineCountRow(Guid ConversationId, int LineCount)` hits exactly this path — Dapper
+     requires a constructor matching the *raw* database column types, not the handler-converted ones.
+   - `LineCount` is a correlated-subquery expression column with no SQLite-declared type. Per
+     [Microsoft's own Sqlite type-mapping docs](https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/types),
+     `System.Byte[]` maps to SQLite `BLOB` — and (confirmed via
+     [aspnet/Microsoft.Data.Sqlite#433](https://github.com/aspnet/Microsoft.Data.Sqlite/issues/433)) a
+     column with no declared type takes `BLOB` affinity by default, which is what a query with no
+     matching row falls back to when there's nothing to sample a runtime type from. `CAST(... AS
+     INTEGER)` forces a real `INTEGER`/`Int64` result once a row exists, but doesn't change the
+     zero-row fallback — this is why `Byte[]` and `Int64` were both observed across otherwise-identical
+     queries, not true "inconsistency."
+   Fixed by reading rows via `QueryAsync` (dynamic), not a typed record, and converting each field
+   explicitly (`ConversationLineCountReader.cs`) — dynamic access involves neither constructor-matching
+   nor declared-type schema inference, so it's immune to both causes rather than working around either
+   one specifically. The `CAST(... AS INTEGER)` stays in the SQL as documentation of intent even though
+   the dynamic-row read is what actually makes the fix robust.
+2. **Case-sensitivity bug, silent wrong-answer (not an exception) — `lineCount: 0` for every conversation.**
+   `#68`'s curated JSON conversations were seeded with their file-authored lowercase ids preserved verbatim
+   (per CLAUDE.md's case-insensitivity convention: an import file's own explicit id is under no obligation
+   to match the codebase's usual stored-uppercase convention), while the reader's `@conversationIds`
+   parameter is bound via the globally-registered `GuidHandler`, which always uppercases. The original
+   `cl.ConversationId IN @conversationIds` was therefore an exact-case comparison that matched nothing, for
+   every real (lowercase-stored) conversation — confirmed live via `Quotinator.Tools.DbInspector` against a
+   copy of the running container's database (`docker cp` the `.db`+`.db-wal`+`.db-shm` files together — a
+   WAL-mode SQLite database's committed data lives partly in the `-wal` sidecar file, not the main `.db`
+   file alone). Fixed with `UPPER(cl.ConversationId) IN @conversationIds`, matching this project's
+   established case-insensitive-id-comparison convention. This is a second, independent instance of the
+   same class of bug CLAUDE.md's "GUID/enum/id comparisons are case-insensitive by default" section already
+   tracks recurring across `Sql.Sources`/`Sql.People` (#180) — worth flagging there too.
+3. **Not a bug, a false lead investigated and ruled out along the way**: whether `AssemblyInitialize`
+   (`Quotinator.Engine.Tests`) actually registers `GuidHandler` before an isolated/filtered test run —
+   confirmed it does (it runs once per test-process regardless of `--filter`), so the materialization
+   failure in (1) was never actually about a missing handler registration, despite initially looking like
+   one from the error text alone.
 
 ---
 

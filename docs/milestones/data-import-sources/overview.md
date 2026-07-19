@@ -72,14 +72,14 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#193](https://github.com/DutchJaFO/Quotinator/issues/193) | Generic listable repository capability + DI registrations for the six list entities | Waiting for release | T1 ✅ T2 ✅ | [193-listable-repository-plan.md](193-listable-repository-plan.md) |
 | [#195](https://github.com/DutchJaFO/Quotinator/issues/195) | Standard pagination contract: PagedItems&lt;T&gt;, shared parsing and not-found helpers | Waiting for release | T1 ✅ T2 ✅ | [195-pagination-contract-plan.md](195-pagination-contract-plan.md) |
 | [#196](https://github.com/DutchJaFO/Quotinator/issues/196) | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter-parameter shape | Waiting for release | T1 ✅ T2 ✅ | [196-masterdata-conventions-plan.md](196-masterdata-conventions-plan.md) |
-| [#184](https://github.com/DutchJaFO/Quotinator/issues/184) | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | In progress (step 10) | T1 ⬜ T2 ⬜ | [184-sources-list-plan.md](184-sources-list-plan.md) |
-| [#185](https://github.com/DutchJaFO/Quotinator/issues/185) | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | In progress (step 11) | T1 ⬜ T2 ⬜ | [185-characters-list-plan.md](185-characters-list-plan.md) |
-| [#186](https://github.com/DutchJaFO/Quotinator/issues/186) | Masterdata: GET /api/v1/masterdata/people list + get-by-id | In progress (step 9) | T1 ⬜ T2 ⬜ | [186-people-list-plan.md](186-people-list-plan.md) |
-| [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | In progress (step 10) | T1 ⬜ T2 ⬜ | [187-series-list-plan.md](187-series-list-plan.md) |
-| [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | In progress (step 7) | T1 ⬜ T2 ⬜ | [188-universes-list-plan.md](188-universes-list-plan.md) |
-| [#189](https://github.com/DutchJaFO/Quotinator/issues/189) | Conversations: GET /api/v1/conversations list endpoint | In progress (step 8) | T1 ⬜ T2 ⬜ | [189-conversations-list-plan.md](189-conversations-list-plan.md) |
-| [#204](https://github.com/DutchJaFO/Quotinator/issues/204) | Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id | In progress (step 10) | T1 ⬜ T2 ⬜ | [204-stagedirections-list-plan.md](204-stagedirections-list-plan.md) |
-| [#205](https://github.com/DutchJaFO/Quotinator/issues/205) | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | In progress (step 10) | T1 ⬜ T2 ⬜ | [205-soundcues-list-plan.md](205-soundcues-list-plan.md) |
+| [#184](https://github.com/DutchJaFO/Quotinator/issues/184) | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [184-sources-list-plan.md](184-sources-list-plan.md) |
+| [#185](https://github.com/DutchJaFO/Quotinator/issues/185) | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [185-characters-list-plan.md](185-characters-list-plan.md) |
+| [#186](https://github.com/DutchJaFO/Quotinator/issues/186) | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [186-people-list-plan.md](186-people-list-plan.md) |
+| [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [187-series-list-plan.md](187-series-list-plan.md) |
+| [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [188-universes-list-plan.md](188-universes-list-plan.md) |
+| [#189](https://github.com/DutchJaFO/Quotinator/issues/189) | Conversations: GET /api/v1/conversations list endpoint | Waiting for release | T1 ✅ T2 ✅ | [189-conversations-list-plan.md](189-conversations-list-plan.md) |
+| [#204](https://github.com/DutchJaFO/Quotinator/issues/204) | Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [204-stagedirections-list-plan.md](204-stagedirections-list-plan.md) |
+| [#205](https://github.com/DutchJaFO/Quotinator/issues/205) | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [205-soundcues-list-plan.md](205-soundcues-list-plan.md) |
 | [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release | T1 ✅ T2 ✅ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
 | [#190](https://github.com/DutchJaFO/Quotinator/issues/190) | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#191](https://github.com/DutchJaFO/Quotinator/issues/191) | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
@@ -205,26 +205,26 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 37 | #195 | Standard pagination contract: PagedItems&lt;T&gt;, shared helpers (sub-issue of #183) | Waiting for release |
 | 38 | #196 | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter shape (sub-issue of #183) | Waiting for release |
 | 39 | #183 | List-endpoint shared infrastructure (parent — closes once #193–#196 all close) | Planning |
-| 40 | #184 | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | In progress (step 10) |
-| 41 | #185 | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | In progress (step 11) |
-| 42 | #186 | Masterdata: GET /api/v1/masterdata/people list + get-by-id | In progress (step 9) |
-| 43 | #187 | Masterdata: GET /api/v1/masterdata/series list + get-by-id | In progress (step 10) |
-| 44 | #188 | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | In progress (step 7) |
-| 45 | #189 | Conversations: GET /api/v1/conversations list endpoint | In progress (step 8) |
-| 46 | #204 | Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id | In progress (step 10) |
-| 47 | #205 | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | In progress (step 10) |
-| 46 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release |
-| 47 | #192 | Expose series/universe on the quote read path — QuoteResponse fields and filters | Planning |
-| 48 | #190 | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Planning |
-| 49 | #191 | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Planning |
-| 50 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
-| 51 | #175 | Character: explicit id, Modify/decidability | Planning |
-| 52 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
-| 53 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
-| 54 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload | Planning |
-| 55 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
-| 56 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |
-| 57 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
+| 40 | #184 | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Waiting for release |
+| 41 | #185 | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Waiting for release |
+| 42 | #186 | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Waiting for release |
+| 43 | #187 | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Waiting for release |
+| 44 | #188 | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Waiting for release |
+| 45 | #189 | Conversations: GET /api/v1/conversations list endpoint | Waiting for release |
+| 46 | #204 | Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id | Waiting for release |
+| 47 | #205 | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | Waiting for release |
+| 48 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release |
+| 49 | #192 | Expose series/universe on the quote read path — QuoteResponse fields and filters | Planning |
+| 50 | #190 | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Planning |
+| 51 | #191 | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Planning |
+| 52 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
+| 53 | #175 | Character: explicit id, Modify/decidability | Planning |
+| 54 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
+| 55 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Planning |
+| 56 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload | Planning |
+| 57 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
+| 58 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |
+| 59 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
 
 ---
 

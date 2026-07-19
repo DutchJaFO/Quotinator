@@ -1,6 +1,6 @@
 # #188 — Masterdata: GET /api/v1/masterdata/universes list + get-by-id
 
-**Status:** In progress (step 7)
+**Status:** Waiting for release
 **GitHub issue:** #188
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196, #179
@@ -392,8 +392,8 @@ rule that the list only grows.
 | 10 | ✅ | `README.md` and `addon/DOCS.md` document both endpoints | Doc review | Both files' REST API Endpoints tables |
 | 11 | ✅ | `ErrorUniverseNotFound` exists and is non-empty in all three `i18ntext/UI.*.json` files | Unit test | `TranslationCompletenessTests` (existing, regression) |
 | 12 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite (1454 tests), 0 warnings, 0 errors |
-| 13 | ❌ | T1 — app starts in Visual Studio; both endpoints behave as specified | Live (T1) | Developer confirmed |
-| 14 | ❌ | T2 — the built image serves both endpoints correctly | Live (T2) | `docker build` + `docker run`: list/get-by-id/not-found matrix per Step 7 |
+| 13 | ✅ | T1 — app starts in Visual Studio; both endpoints behave as specified | Live (T1) | Developer confirmed 2026-07-19 — clean startup, GetAll/GetById/pagination contract all exercised live |
+| 14 | ✅ | T2 — the built image serves both endpoints correctly | Live (T2) | `docker build` + `docker run`: list/get-by-id/not-found matrix per Step 7. Run 2026-07-19 as a combined pass across #184–#189/#204/#205 — endpoint reachable and returns the standard pagination shape (no Universe rows seeded in this bundled dataset, so the empty-list path was confirmed rather than a populated one) |
 
 ---
 

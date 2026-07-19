@@ -1,6 +1,6 @@
 # #185 — Masterdata: GET /api/v1/masterdata/characters list + get-by-id
 
-**Status:** In progress (step 11)
+**Status:** Waiting for release
 **GitHub issue:** #185
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196, #179
@@ -628,8 +628,8 @@ satisfies `docs/release-verification.md`'s "touches Program.cs startup" trigger.
 | 20 | ✅ | `ApiMessages.CharacterNotFound` exists and all three locale files carry `ErrorCharacterNotFound` | Unit test | `TranslationCompletenessTests` |
 | 21 | ✅ | `README.md`/`addon/DOCS.md` document both new endpoints | Doc review | Endpoint tables updated |
 | 22 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (368/368), 0 warnings, 0 errors |
-| 23 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
-| 24 | ❌ | T2 — the live contract holds against the built image, including a real multi-Source Character with resolved names | Live (T2) | `docker build`/`docker run` matrix — see Step 11 |
+| 23 | ✅ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed 2026-07-19 — clean startup, GetAll/GetById/pagination contract all exercised live |
+| 24 | ✅ | T2 — the live contract holds against the built image, including a real multi-Source Character with resolved names | Live (T2) | `docker build`/`docker run` matrix — see Step 11. Run 2026-07-19 as a combined pass across #184–#189/#204/#205 — confirmed live |
 
 ---
 
