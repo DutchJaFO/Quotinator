@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 192, 193, 194, 195, 196, 204, 205, 206],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -31,7 +31,8 @@
       "Citaten worden nu correct gegroepeerd op de filmreeks of het fictieve universum waartoe ze behoren, en kunnen worden gefilterd op reeks of universum bij het zoeken, weergeven van een lijst, of het opvragen van een willekeurig citaat.",
       "Bronnen, personages, personen, reeksen, universums, regieaanwijzingen en geluidscues kunnen nu allemaal afzonderlijk worden weergegeven en opgezocht via nieuwe eindpunten, op dezelfde manier als citaten dat al konden.",
       "Het corrigeren van een bron, persoon, regieaanwijzing, geluidscue of conversatie door deze opnieuw te importeren, wijzigt nu alleen de velden die het bestand daadwerkelijk vermeldt — een veld dat wordt weggelaten wordt niet langer stilzwijgend teruggezet naar leeg.",
-      "Paginering is nu consistent bij elk lijsteindpunt: het opvragen van meer dan 500 items in één keer wordt geweigerd in plaats van stilzwijgend beperkt, en het opvragen van alle overeenkomende items als één pagina (`pageSize=0`) werkt overal op dezelfde manier."
+      "Paginering is nu consistent bij elk lijsteindpunt: het opvragen van meer dan 500 items in één keer wordt geweigerd in plaats van stilzwijgend beperkt, en het opvragen van alle overeenkomende items als één pagina (`pageSize=0`) werkt overal op dezelfde manier.",
+      "De meeste films, series en andere bronnen die bij quotes worden getoond, hebben nu een releasedatum — voorheen was dit veld vrijwel altijd leeg."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -119,7 +120,8 @@
       "De queryparameters `page`/`pageSize` waren in de OpenAPI-specificatie gedocumenteerd als `string` in plaats van `integer` bij elk lijsteindpunt dat ze heeft — een vervolg op dezelfde correctie die al werd toegepast op de jaarfilters van `/quotes`, nu overal waar paginering wordt gebruikt",
       "Een importbestand dat een bron, persoon, regieaanwijzing, geluidscue of conversatie corrigeerde, kon een veld stilzwijgend terugzetten naar leeg simpelweg door het niet te vermelden in het bestand — een weggelaten veld laat de bestaande waarde nu correct ongewijzigd; een expliciete `null` zet het nog steeds terug zoals bedoeld",
       "Generieke infrastructuur voor lijsteindpunten (paginering, afhandeling van niet-gevonden, masterdata-routerings-/tag-conventies, entiteitsgebonden filterontleding) wordt nu gedeeld door elk lijsteindpunt in plaats van per entiteit opnieuw te worden geïmplementeerd — een zuiver interne consolidatie, geen gedragswijziging naast de hierboven genoemde wijziging in het pagineringscontract (issues #193, #196)",
-      "`Quotinator.Engine` — een derde intern project dat tussen de API en de generieke gegevenstoegangsbibliotheek in zat — is samengevoegd met `Quotinator.Core`; een zuiver interne code-organisatiewijziging zonder gedragswijziging (issue #206)"
+      "`Quotinator.Engine` — een derde intern project dat tussen de API en de generieke gegevenstoegangsbibliotheek in zat — is samengevoegd met `Quotinator.Core`; een zuiver interne code-organisatiewijziging zonder gedragswijziging (issue #206)",
+      "De releasedatum van een bron werd stilzwijgend genegeerd wanneer de bron alleen werd ontdekt via een quote in plaats van expliciet te zijn opgegeven in de `sources[]`-sectie van een bronbestand — het gebruikelijke geval voor vrijwel elke gebundelde bron; de datum wordt nu correct vastgelegd. Bronnen die al vóór deze fix waren geïmporteerd, blijven ongewijzigd totdat de database volledig wordt gereset (issue #191)"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"

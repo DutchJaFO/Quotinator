@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 192, 193, 194, 195, 196, 204, 205, 206],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -31,7 +31,8 @@
       "Zitate werden jetzt korrekt nach der Filmreihe oder dem fiktiven Universum gruppiert, zu dem sie gehören, und können bei der Suche, beim Auflisten oder beim Abrufen eines zufälligen Zitats nach Reihe oder Universum gefiltert werden.",
       "Quellen, Charaktere, Personen, Reihen, Universen, Regieanweisungen und Toncues können jetzt alle einzeln aufgelistet und nachgeschlagen werden über neue Endpunkte, genau wie es bei Zitaten bereits möglich war.",
       "Das Korrigieren einer Quelle, Person, Regieanweisung, eines Toncues oder einer Konversation durch erneuten Import ändert jetzt nur die Felder, die die Datei tatsächlich angibt — ein weggelassenes Feld wird nicht mehr stillschweigend auf leer zurückgesetzt.",
-      "Die Paginierung ist jetzt bei jedem Listen-Endpunkt konsistent: Das Anfordern von mehr als 500 Elementen auf einmal wird abgelehnt statt stillschweigend begrenzt, und das Anfordern aller passenden Elemente als eine Seite (`pageSize=0`) funktioniert überall gleich."
+      "Die Paginierung ist jetzt bei jedem Listen-Endpunkt konsistent: Das Anfordern von mehr als 500 Elementen auf einmal wird abgelehnt statt stillschweigend begrenzt, und das Anfordern aller passenden Elemente als eine Seite (`pageSize=0`) funktioniert überall gleich.",
+      "Die meisten Filme, Serien und anderen Quellen, die bei Zitaten angezeigt werden, enthalten jetzt ein Erscheinungsdatum — zuvor war dieses Feld fast immer leer."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -119,7 +120,8 @@
       "Die Query-Parameter `page`/`pageSize` waren in der OpenAPI-Spezifikation als `string` statt `integer` dokumentiert, bei jedem Listen-Endpunkt, der sie hat — eine Fortsetzung derselben Korrektur, die bereits auf die Jahresfilter von `/quotes` angewendet wurde, jetzt überall dort, wo Paginierung verwendet wird",
       "Eine Importdatei, die eine Quelle, Person, Regieanweisung, einen Toncue oder eine Konversation korrigierte, konnte ein Feld stillschweigend auf leer zurücksetzen, nur weil es in der Datei nicht angegeben war — ein ausgelassenes Feld lässt den bestehenden Wert jetzt korrekt unverändert; ein explizites `null` setzt es weiterhin wie beabsichtigt zurück",
       "Generische Infrastruktur für Listen-Endpunkte (Paginierung, Behandlung von Nicht-gefunden, Masterdata-Routing-/Tagging-Konventionen, entitätsbezogene Filteranalyse) wird jetzt von jedem Listen-Endpunkt gemeinsam genutzt, statt pro Entität neu implementiert zu werden — eine rein interne Konsolidierung, keine Verhaltensänderung über die oben genannte Änderung des Paginierungsvertrags hinaus (Issues #193, #196)",
-      "`Quotinator.Engine` — ein drittes internes Projekt, das zwischen der API und der generischen Datenzugriffsbibliothek lag — wurde in `Quotinator.Core` zusammengeführt; eine rein interne Code-Organisationsänderung ohne Verhaltensänderung (Issue #206)"
+      "`Quotinator.Engine` — ein drittes internes Projekt, das zwischen der API und der generischen Datenzugriffsbibliothek lag — wurde in `Quotinator.Core` zusammengeführt; eine rein interne Code-Organisationsänderung ohne Verhaltensänderung (Issue #206)",
+      "Das Erscheinungsdatum einer Quelle wurde stillschweigend verworfen, wenn die Quelle nur über ein Zitat entdeckt wurde, statt ausdrücklich im `sources[]`-Abschnitt einer Quelldatei angegeben zu sein — der übliche Fall für nahezu jede gebündelte Quelle; das Datum wird jetzt korrekt gespeichert. Bereits vor dieser Korrektur eingelesene Quellen bleiben unverändert, bis die Datenbank vollständig zurückgesetzt wird (Issue #191)"
     ],
     "removed": [
       "Die Konvertornamen `nikhilnamal17` und `vilaboim` existieren nicht mehr — ein benutzerdefinierter Manifesteintrag, der einen von beiden namentlich referenziert, muss auf `basic-json-array`/`regex-array` mit den entsprechenden `converterOptions` aktualisiert werden"

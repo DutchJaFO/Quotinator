@@ -126,6 +126,25 @@ public class DatabaseInitializerTests
         Assert.AreEqual(0,  db.LastSeedDuplicates.Count);
     }
 
+    /// <summary>#191: a Source discovered implicitly from a quote (never named in a sources[] section) still carries that quote's own Date once seeded — the curated file's own Airplane!/1980 entries are the fixture.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_AllSourceFiles_SeedsSourceDatesFromQuotes()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var airplaneDate = await conn.ExecuteScalarAsync<string?>(
+            "SELECT Date FROM Sources WHERE Title = 'Airplane!' AND Type = 'Movie' AND IsDeleted = 0;");
+        Assert.AreEqual("1980", airplaneDate, "Sources.Date must be populated from the resolving quote's own Date");
+
+        var datedSourceCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Sources WHERE Date IS NOT NULL AND IsDeleted = 0;");
+        Assert.IsGreaterThan(0, datedSourceCount, "At least some seeded Sources must now carry a Date — today every one of them is null");
+    }
+
     /// <summary>
     /// #68: seeding the curated file writes its four conversations (Airplane!, Holy Grail, Princess
     /// Bride, Empire Strikes Back) into Conversations/ConversationLines/StageDirections/SoundCues,

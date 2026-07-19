@@ -1047,6 +1047,33 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    — proving today's per-Source matching genuinely survived the mechanism change unchanged, not
    silently reused across Sources.
 
+   **Sources.Date populated from the resolving quote** (#191) — a Source discovered implicitly from a
+   quote (no `sources[]` entry naming it) previously never carried a date, even when the resolving
+   quote had one. Re-imports the curated file's own `Airplane!`/`1980` quote to confirm the fix reaches
+   a real import, not only startup seeding (already proven by a fresh container's seed — see the
+   aggregate query below).
+   ```bash
+   curl -s "http://localhost:8080/api/v1/quotes/search?q=Airplane&field=source"
+   ```
+   Check the `date` field on the returned item(s) is `"1980"`, not `null` — this Source already exists
+   from seeding, so this call only confirms the read path surfaces the seeded date correctly; it does
+   not by itself re-exercise `ResolveSourceAsync`. To confirm the fix on a *fresh* seed specifically
+   (the actual code path this issue fixed), inspect the database directly, matching the issue's own
+   reproduction steps:
+   ```bash
+   docker stop -t 15 <container>
+   docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-191.db
+   dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
+     --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Sources WHERE IsDeleted = 0"
+   ```
+   `have_date` must be nonzero and a large majority of `sources` (roughly 400+ of 479 on the current
+   bundled dataset) — before the fix this was always `0`. Cross-check one specific title:
+   ```bash
+   dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
+     --sql "SELECT Title, Type, Date FROM Sources WHERE Title = 'Jurassic Park' AND IsDeleted = 0"
+   ```
+   Must return `Date = 1993`.
+
    **Pagination contract: pageSize=0, max 500, default 20, page-beyond-last** (#195) — `/quotes`,
    `/admin/audit`, and `/import/actions` share one pagination contract; this proves it holds live on
    all three, not just at the unit-test/stub level. The two audit/import readers were caught passing

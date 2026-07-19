@@ -1,6 +1,6 @@
 # #191 — Populate Sources.Date from the resolving quote
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #191
 **Tiers required:** T1, T2
 **Depends on:** none (isolated fix inside `ImportActionPlanner.ResolveSourceAsync`)
@@ -81,7 +81,7 @@ this is an Add-payload-only fix. A Source discovered this way is staged as `Deci
 
 ### 1. Write the two failing tests (red)
 
-**Status:** Not started.
+**Status:** ✅ Done — three tests written (two `ImportActionPlannerTests`, one `DatabaseInitializerTests`), confirmed red before the fix (`payload.Date`/`airplaneDate` all `null` as expected).
 
 - `Quotinator.Core.Tests.Database.ImportActionPlannerTests.ResolveSourceAsync_QuoteWithDate_StagesSourceAddCarryingThatDate`
   — plan a single brand-new quote carrying `Date = "1993"`; assert the staged Source Add action's
@@ -101,18 +101,14 @@ this is an Add-payload-only fix. A Source discovered this way is staged as `Deci
 
 ### 2. Implement the fix
 
-**Status:** Not started. The one-line change in the Approach section above.
+**Status:** ✅ Done — `ImportActionPlanner.cs`'s Add-payload construction changed to
+`new SourceActionPayload(q.Source, typeStr, q.Date)`, exactly per the Approach section.
 
 ### 3. Verify
 
-**Status:** Not started. `dotnet build --configuration Release` (0 warnings/errors), `dotnet test
---configuration Release --verbosity normal` (full suite green, including the 3 new tests going red→green),
-T1, T2 (Docker: reseed a fresh container from the bundled files, confirm via
-`Quotinator.Tools.DbInspector` that `Sources.Date` is populated for a known-dated title such as
-`Jurassic Park`, and cross-check the aggregate `have_date` count from the issue's own reproduction steps
-is now nonzero and roughly matches the ~453 distinct dated source keys measured against the bundled
-files — not necessarily exactly, since first-quote-wins plus multiple source files' import order
-determines the final count, not a 1:1 mapping).
+**Status:** ✅ Build + full suite green (`dotnet build --configuration Release`: 0 warnings/errors;
+`dotnet test --configuration Release --verbosity normal`: 493/493 passed, no regression). T2 ✅ (Docker,
+see Verification checklist row 6). T1 awaiting the developer.
 
 ---
 
@@ -120,12 +116,12 @@ determines the final count, not a 1:1 mapping).
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | A brand-new Source discovered via a quote carries that quote's `Date` in its staged Add payload | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_QuoteWithDate_StagesSourceAddCarryingThatDate` |
-| 2 | ⬜ | Two same-batch quotes disagreeing on `Date` for the same Source: the first-encountered quote's date wins, no new conflict logic | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_TwoQuotesSameSourceDifferentDates_FirstQuotesDateWins` |
-| 3 | ⬜ | A real startup seed populates `Sources.Date` end to end | Unit test | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_SeedsSourceDatesFromQuotes` |
-| 4 | ⬜ | No regression | Unit test | Full `dotnet test --configuration Release --verbosity normal` |
-| 5 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
-| 6 | ⬜ | T2 — a fresh seeded container has populated Source dates | Live (T2) | Docker: `Quotinator.Tools.DbInspector` query against a known-dated title, plus the aggregate `have_date` reproduction query from the issue |
+| 1 | ✅ | A brand-new Source discovered via a quote carries that quote's `Date` in its staged Add payload | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_QuoteWithDate_StagesSourceAddCarryingThatDate` |
+| 2 | ✅ | Two same-batch quotes disagreeing on `Date` for the same Source: the first-encountered quote's date wins, no new conflict logic | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_TwoQuotesSameSourceDifferentDates_FirstQuotesDateWins` |
+| 3 | ✅ | A real startup seed populates `Sources.Date` end to end | Unit test | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_SeedsSourceDatesFromQuotes` |
+| 4 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 493/493 passed, 0 warnings, 0 errors |
+| 5 | ✅ | T1 — app starts in Visual Studio | Live (T1) | Developer confirmed: clean startup (schema up to date, data v10/app v9, 796 quotes/479 sources), no errors; a live `POST /api/v1/admin/database/reseed` and a range of `/quotes` queries all returned expected results |
+| 6 | ✅ | T2 — a fresh seeded container has populated Source dates | Live (T2) | `docker build` + `docker run`, fresh seed: aggregate query `have_date` = 439/479 (up from 0/479 pre-fix); `Airplane!`/`Jurassic Park` confirmed `1980`/`1993` via `Quotinator.Tools.DbInspector` |
 
 ---
 

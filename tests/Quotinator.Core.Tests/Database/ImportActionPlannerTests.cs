@@ -63,7 +63,7 @@ public class ImportActionPlannerTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private static SourceQuote BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null, string quoteText = "Here's looking at you, kid.") => new()
+    private static SourceQuote BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null, string quoteText = "Here's looking at you, kid.", string? date = null) => new()
     {
         Id               = id,
         QuoteText        = quoteText,
@@ -72,6 +72,7 @@ public class ImportActionPlannerTests
         Character        = character,
         Author           = author,
         Type             = Core.Models.QuoteType.Movie,
+        Date             = date,
     };
 
     private async Task<SqliteConnection> OpenConnectionAsync()
@@ -221,6 +222,33 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [q1, q2], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
         Assert.AreEqual(1, actions.Count(a => a.EntityType == "Source"), "Both quotes share the same Source — must be staged once, not twice");
+    }
+
+    [TestMethod]
+    public async Task ResolveSourceAsync_QuoteWithDate_StagesSourceAddCarryingThatDate()
+    {
+        using var conn = await OpenConnectionAsync();
+        var quote = BuildQuote("61211111-1111-4111-8111-111111111111", date: "1993");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        Assert.AreEqual("1993", payload.Date, "The resolving quote's own Date must carry through to the staged Source Add payload");
+    }
+
+    [TestMethod]
+    public async Task ResolveSourceAsync_TwoQuotesSameSourceDifferentDates_FirstQuotesDateWins()
+    {
+        using var conn = await OpenConnectionAsync();
+        var q1 = BuildQuote("61311111-1111-4111-8111-111111111111", character: "Rick Blaine", date: "1942");
+        var q2 = BuildQuote("61411111-1111-4111-8111-111111111111", character: "Ilsa Lund", date: "1943");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [q1, q2], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        Assert.AreEqual("1942", payload.Date, "Only one Source Add is staged for both quotes — the first-encountered quote's Date wins, matching the existing Title/Type first-quote-wins behaviour");
     }
 
     [TestMethod]

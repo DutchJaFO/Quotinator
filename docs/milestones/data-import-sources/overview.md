@@ -82,7 +82,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#205](https://github.com/DutchJaFO/Quotinator/issues/205) | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [205-soundcues-list-plan.md](205-soundcues-list-plan.md) |
 | [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release | T1 ✅ T2 ✅ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
 | [#190](https://github.com/DutchJaFO/Quotinator/issues/190) | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Waiting for release | T1 ✅ T2 ✅ | [190-optional-fields-plan.md](190-optional-fields-plan.md) |
-| [#191](https://github.com/DutchJaFO/Quotinator/issues/191) | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Planning | T1 ⬜ T2 ⬜ | [191-source-date-population-plan.md](191-source-date-population-plan.md) |
+| [#191](https://github.com/DutchJaFO/Quotinator/issues/191) | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Waiting for release | T1 ✅ T2 ✅ | [191-source-date-population-plan.md](191-source-date-population-plan.md) |
 | [#206](https://github.com/DutchJaFO/Quotinator/issues/206) | Merge Quotinator.Engine into Quotinator.Core — collapse the three-project domain split to two | Waiting for release | T1 ✅ T2 ✅ | [206-core-engine-merge-plan.md](206-core-engine-merge-plan.md) |
 | [#192](https://github.com/DutchJaFO/Quotinator/issues/192) | Expose series/universe on the quote read path — QuoteResponse fields and filters | Waiting for release | T1 ✅ T2 ✅ | [192-quote-series-universe-plan.md](192-quote-series-universe-plan.md) |
 | [#207](https://github.com/DutchJaFO/Quotinator/issues/207) | File-authored explicit ids aren't canonicalized before write — Source/Person/Quote lookups can silently break | Planning | T1 ⬜ T2 ⬜ | [207-canonicalize-entity-ids-plan.md](207-canonicalize-entity-ids-plan.md) |
@@ -222,7 +222,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 50 | #192 | Expose series/universe on the quote read path — QuoteResponse fields and filters | Waiting for release |
 | 51 | #190 | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Waiting for release |
 | 52 | #207 | File-authored explicit ids aren't canonicalized before write — Source/Person/Quote lookups can silently break | Planning |
-| 53 | #191 | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Planning |
+| 53 | #191 | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Waiting for release |
 | 54 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
 | 55 | #175 | Character: explicit id, Modify/decidability | Planning |
 | 56 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |

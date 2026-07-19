@@ -216,7 +216,7 @@ internal static class ImportActionPlanner
             ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
             EntityType    = ImportActionEntityTypes.Source,
             EntityId      = stableId,
-            IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(q.Source, typeStr)),
+            IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(q.Source, typeStr, q.Date)),
             Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
             DetectedAt    = now,
         });
