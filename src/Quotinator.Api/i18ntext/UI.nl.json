@@ -75,6 +75,7 @@
   "ErrorSeriesNotFound": "Er is geen serie gevonden met het opgegeven ID.",
   "ErrorUniverseNotFound": "Er is geen universum gevonden met het opgegeven ID.",
   "ErrorStageDirectionNotFound": "Er is geen regieaanwijzing gevonden met het opgegeven ID.",
+  "ErrorSoundCueNotFound": "Er is geen geluidssignaal gevonden met het opgegeven ID.",
   "ErrorMutuallyExclusiveEntityFilter": "Geef ofwel {0} ofwel {1} op, niet beide.",
   "ErrorInvalidEntityFilterId": "{0} moet een geldige identifier zijn.",
   "InfoEntityFilterNoMatch": "Geen {0} komt overeen met '{1}'.",

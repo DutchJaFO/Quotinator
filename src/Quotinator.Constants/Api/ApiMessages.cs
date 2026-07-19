@@ -50,4 +50,5 @@ public static class ApiMessages
     public const string SeriesNotFound                   = "ErrorSeriesNotFound";
     public const string UniverseNotFound                 = "ErrorUniverseNotFound";
     public const string StageDirectionNotFound           = "ErrorStageDirectionNotFound";
+    public const string SoundCueNotFound                 = "ErrorSoundCueNotFound";
 }

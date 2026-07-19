@@ -79,7 +79,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | In progress (step 7) | T1 ⬜ T2 ⬜ | [188-universes-list-plan.md](188-universes-list-plan.md) |
 | [#189](https://github.com/DutchJaFO/Quotinator/issues/189) | Conversations: GET /api/v1/conversations list endpoint | In progress (step 8) | T1 ⬜ T2 ⬜ | [189-conversations-list-plan.md](189-conversations-list-plan.md) |
 | [#204](https://github.com/DutchJaFO/Quotinator/issues/204) | Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id | In progress (step 10) | T1 ⬜ T2 ⬜ | [204-stagedirections-list-plan.md](204-stagedirections-list-plan.md) |
-| [#205](https://github.com/DutchJaFO/Quotinator/issues/205) | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | Planning | T1 ⬜ T2 ⬜ | [205-soundcues-list-plan.md](205-soundcues-list-plan.md) |
+| [#205](https://github.com/DutchJaFO/Quotinator/issues/205) | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | In progress (step 10) | T1 ⬜ T2 ⬜ | [205-soundcues-list-plan.md](205-soundcues-list-plan.md) |
 | [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release | T1 ✅ T2 ✅ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
 | [#190](https://github.com/DutchJaFO/Quotinator/issues/190) | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#191](https://github.com/DutchJaFO/Quotinator/issues/191) | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
@@ -212,7 +212,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 44 | #188 | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | In progress (step 7) |
 | 45 | #189 | Conversations: GET /api/v1/conversations list endpoint | In progress (step 8) |
 | 46 | #204 | Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id | In progress (step 10) |
-| 47 | #205 | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | Planning |
+| 47 | #205 | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | In progress (step 10) |
 | 46 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release |
 | 47 | #192 | Expose series/universe on the quote read path — QuoteResponse fields and filters | Planning |
 | 48 | #190 | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Planning |

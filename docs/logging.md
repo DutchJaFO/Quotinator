@@ -256,6 +256,8 @@ Format: `[Subsystem - Phase] message text`
 | `[Api - GetUniverseById]` | Entry to GET /api/v1/masterdata/universes/{id} |
 | `[Api - GetAllStageDirections]` | Entry to GET /api/v1/masterdata/stagedirections |
 | `[Api - GetStageDirectionById]` | Entry to GET /api/v1/masterdata/stagedirections/{id} |
+| `[Api - GetAllSoundCues]` | Entry to GET /api/v1/masterdata/soundcues |
+| `[Api - GetSoundCueById]` | Entry to GET /api/v1/masterdata/soundcues/{id} |
 | `[Api - GetAllConversations]` | Entry to GET /api/v1/conversations |
 | `[Api - GetConversationById]` | Entry to GET /api/v1/conversations/{id} |
 | `[Audit]` | Audit trail write operations (AuditWriter) |

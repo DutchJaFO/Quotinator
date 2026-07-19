@@ -47,6 +47,8 @@ public class OpenApiSpecEndpointTests
     [DataRow("/api/v1/conversations", "pageSize")]
     [DataRow("/api/v1/masterdata/stagedirections", "page")]
     [DataRow("/api/v1/masterdata/stagedirections", "pageSize")]
+    [DataRow("/api/v1/masterdata/soundcues", "page")]
+    [DataRow("/api/v1/masterdata/soundcues", "pageSize")]
     public async Task PageParam_OnLiveSpec_PublishesIntegerType(string path, string paramName)
     {
         using var factory = CreateFactory();

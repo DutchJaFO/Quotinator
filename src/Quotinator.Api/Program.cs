@@ -317,6 +317,11 @@ builder.Services.AddSingleton<IListableRepository<ConversationEntity>>(sp => (IL
 // four bindings immediately above.
 builder.Services.AddSingleton<IListableRepository<StageDirectionEntity>>(sp => (IListableRepository<StageDirectionEntity>)sp.GetRequiredService<IRestorableRepository<StageDirectionEntity>>());
 
+// #205: SoundCueEntity was left out of #193's original six-entity scope, the same gap #204 closed for
+// StageDirectionEntity. Same "second interface binding onto the existing IRestorableRepository<T>
+// singleton, not a second instance" reasoning.
+builder.Services.AddSingleton<IListableRepository<SoundCueEntity>>(sp => (IListableRepository<SoundCueEntity>)sp.GetRequiredService<IRestorableRepository<SoundCueEntity>>());
+
 // #184: resolves a Source's SeriesId to its Series' (Id, Name) — the generic IListableRepository<T>/
 // IRepository<T> above cannot express this join (single-table SELECT * only).
 builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenceReader>();
@@ -568,6 +573,7 @@ app.MapPersonEndpoints();
 app.MapSeriesEndpoints();
 app.MapUniverseEndpoints();
 app.MapStageDirectionEndpoints();
+app.MapSoundCueEndpoints();
 
 // Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
 // Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.

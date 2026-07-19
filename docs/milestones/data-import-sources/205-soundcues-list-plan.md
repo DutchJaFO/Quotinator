@@ -1,6 +1,6 @@
 # #205 — Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id
 
-**Status:** Planning
+**Status:** In progress (step 10)
 **GitHub issue:** #205
 **Tiers required:** T1, T2
 **Depends on:** #195, #196
@@ -112,7 +112,7 @@ one new DI binding this issue itself adds.
 
 ### 1. Register `IListableRepository<SoundCueEntity>` in `Program.cs`
 
-**Status:** Not started.
+**Status:** Done.
 
 Add immediately after #204's `IListableRepository<StageDirectionEntity>` binding (`Program.cs:318`):
 
@@ -123,7 +123,7 @@ builder.Services.AddSingleton<IListableRepository<SoundCueEntity>>(sp =>
 
 ### 2. `SoundCueResponse` DTO
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Models/SoundCueResponse.cs`, namespace `Quotinator.Api.Models`:
 
@@ -152,7 +152,7 @@ public sealed class SoundCueResponse
 
 ### 3. `ApiMessages.SoundCueNotFound` + i18n lockstep
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `src/Quotinator.Constants/Api/ApiMessages.cs`:
 ```csharp
@@ -168,7 +168,7 @@ Add `"ErrorSoundCueNotFound"` to all three `i18ntext/UI.*.json` files in the sam
 
 ### 4. `SoundCueEndpoints.cs`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Endpoints/SoundCueEndpoints.cs`, static class `SoundCueEndpoints`,
 mirroring #204's `StageDirectionEndpoints.cs` exactly:
@@ -259,7 +259,7 @@ app.MapSoundCueEndpoints();
 
 ### 5. Register the OpenAPI numeric-param transformer path
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `NumericParameterSchemaTransformer.NumericParamsByPath`:
 ```csharp
@@ -272,7 +272,7 @@ Add to `NumericParameterSchemaTransformer.NumericParamsByPath`:
 
 ### 6. `FakeSoundCueRepository`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Fakes/FakeSoundCueRepository.cs`, implementing
 `IListableRepository<SoundCueEntity>`, mirroring #204's `FakeStageDirectionRepository.cs` exactly (canned
@@ -280,7 +280,7 @@ New file `tests/Quotinator.Api.Tests/Fakes/FakeSoundCueRepository.cs`, implement
 
 ### 7. Endpoint tests
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Endpoints/SoundCueEndpointsTests.cs`, mirroring #204's
 `StageDirectionEndpointsTests.cs` exactly (`CreateFactory(FakeSoundCueRepository? repository = null)`, a
@@ -312,7 +312,7 @@ top of what #188 originally shipped without it):
 
 ### 8. Documentation
 
-**Status:** Not started.
+**Status:** Done.
 
 Update `README.md`'s and `addon/DOCS.md`'s REST API Endpoints tables — add rows for
 `GET /api/v1/masterdata/soundcues` and `GET /api/v1/masterdata/soundcues/{id}`. Add
@@ -321,7 +321,9 @@ placed near the other `[Api - Get*ById]` rows.
 
 ### 9. Solution file
 
-**Status:** Not started.
+**Status:** Done. No changes needed — confirmed no `<Compile Remove>`/`<Compile Include>` restriction in
+either `Quotinator.Api.csproj` or `Quotinator.Api.Tests.csproj`; all new `.cs` files are picked up by the
+existing SDK-style project globs (same outcome #204 confirmed for its own files).
 
 Add `src/Quotinator.Api/Models/SoundCueResponse.cs`, `src/Quotinator.Api/Endpoints/SoundCueEndpoints.cs`,
 and `tests/Quotinator.Api.Tests/Fakes/FakeSoundCueRepository.cs`/`tests/Quotinator.Api.Tests/Endpoints/
@@ -332,7 +334,19 @@ regardless.
 
 ### 10. Verify
 
-**Status:** Not started.
+**Status:** Done (unit-test tier only; T1/T2 live verification still pending — see header status).
+
+`dotnet build --configuration Release` → 0 Warning(s), 0 Error(s). `dotnet test --configuration Release
+--verbosity normal` → all 10 test projects report "Test Run Successful", 487 tests passed in
+`Quotinator.Api.Tests` (including all 14 new `SoundCueEndpointsTests`, 4 new
+`NumericParameterSchemaTransformerTests` cases, 2 new `OpenApiSpecEndpointTests` DataRow cases, and both
+`TranslationCompletenessTests`), 0 warnings/0 errors overall. Confirmed red-before-green: temporarily
+commented out `app.MapSoundCueEndpoints();` in `Program.cs` and reran `SoundCueEndpointsTests` — 12 of 14
+failed (the 2 that "passed" were the two tests that already expect 404, which a nonexistent route also
+produces) — then restored the line and reran the full suite green.
+
+T2 (Docker) and T1 (Visual Studio) have not been run — deferred to a single combined pass covering #204 and
+#205 together, per this session's instructions.
 
 `dotnet build --configuration Release` → 0 warnings, 0 errors. `dotnet test --configuration Release
 --verbosity normal` → full suite green across all 10 test projects, 0 warnings, 0 errors — check every
@@ -365,25 +379,25 @@ This project always runs T2 regardless of a documented trigger — this issue's 
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `IListableRepository<SoundCueEntity>` is registered in DI | Unit test | App starts under `WebApplicationFactory` (implicit in every endpoint test) |
-| 2 | ❌ | `GET /api/v1/masterdata/soundcues` returns a paginated list | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_ReturnsPaginatedResults` |
-| 3 | ❌ | `page=0` returns 422 | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageZero_Returns422` |
-| 4 | ❌ | Malformed `page`/`pageSize` returns 422 | Unit test | `_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
-| 5 | ❌ | Negative `pageSize` returns 422 | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageSizeNegative_Returns422` |
-| 6 | ❌ | `pageSize > 500` returns 422, never clamped | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageSizeAbove500_Returns422NotSilentClamp` |
-| 7 | ❌ | `pageSize = 0` returns every row with the effective count reported | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageSizeZero_ReturnsAllRowsAsOnePage` |
-| 8 | ❌ | Omitted `pageSize` defaults to 20 | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageSizeOmitted_DefaultsTo20` |
-| 9 | ❌ | A page beyond the last returns 422, distinct from case 3 | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageBeyondLast_Returns422DistinctDetail` |
-| 10 | ❌ | `GET /api/v1/masterdata/soundcues/{id}` returns the matching SoundCue | Unit test | `SoundCueEndpointsTests.GetSoundCueById_ExistingId_ReturnsSoundCue` |
-| 11 | ❌ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | Same test (shape assertion) |
-| 12 | ❌ | An unknown id returns 404 | Unit test | `SoundCueEndpointsTests.GetSoundCueById_UnknownId_Returns404` |
-| 13 | ❌ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `SoundCueEndpointsTests.GetSoundCueById_MalformedId_Returns404NotBadRequest` |
-| 14 | ❌ | A lowercase id matches an uppercase-stored id | Unit test | `SoundCueEndpointsTests.GetSoundCueById_LowercaseId_MatchesCaseInsensitively` |
-| 15 | ❌ | `page`/`pageSize` publish as `integer` in the OpenAPI spec, proven via the live pipeline | Unit test | `NumericParameterSchemaTransformerTests` (new cases) + `OpenApiSpecEndpointTests` (new `[DataRow]`s) |
-| 16 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `SoundCueEndpoints_OnLiveSpec_TaggedMasterData` |
-| 17 | ❌ | `ApiMessages.SoundCueNotFound` exists and all three locale files carry `ErrorSoundCueNotFound` | Unit test | `TranslationCompletenessTests` |
-| 18 | ❌ | `README.md`/`addon/DOCS.md`/`docs/logging.md` document both new endpoints | Doc review | Files updated |
-| 19 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 1 | ✅ | `IListableRepository<SoundCueEntity>` is registered in DI | Unit test | App starts under `WebApplicationFactory` (implicit in every endpoint test) |
+| 2 | ✅ | `GET /api/v1/masterdata/soundcues` returns a paginated list | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_ReturnsPaginatedResults` |
+| 3 | ✅ | `page=0` returns 422 | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageZero_Returns422` |
+| 4 | ✅ | Malformed `page`/`pageSize` returns 422 | Unit test | `_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
+| 5 | ✅ | Negative `pageSize` returns 422 | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageSizeNegative_Returns422` |
+| 6 | ✅ | `pageSize > 500` returns 422, never clamped | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageSizeAbove500_Returns422NotSilentClamp` |
+| 7 | ✅ | `pageSize = 0` returns every row with the effective count reported | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageSizeZero_ReturnsAllRowsAsOnePage` |
+| 8 | ✅ | Omitted `pageSize` defaults to 20 | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageSizeOmitted_DefaultsTo20` |
+| 9 | ✅ | A page beyond the last returns 422, distinct from case 3 | Unit test | `SoundCueEndpointsTests.GetAllSoundCues_PageBeyondLast_Returns422DistinctDetail` |
+| 10 | ✅ | `GET /api/v1/masterdata/soundcues/{id}` returns the matching SoundCue | Unit test | `SoundCueEndpointsTests.GetSoundCueById_ExistingId_ReturnsSoundCue` |
+| 11 | ✅ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | Same test (shape assertion) |
+| 12 | ✅ | An unknown id returns 404 | Unit test | `SoundCueEndpointsTests.GetSoundCueById_UnknownId_Returns404` |
+| 13 | ✅ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `SoundCueEndpointsTests.GetSoundCueById_MalformedId_Returns404NotBadRequest` |
+| 14 | ✅ | A lowercase id matches an uppercase-stored id | Unit test | `SoundCueEndpointsTests.GetSoundCueById_LowercaseId_MatchesCaseInsensitively` |
+| 15 | ✅ | `page`/`pageSize` publish as `integer` in the OpenAPI spec, proven via the live pipeline | Unit test | `NumericParameterSchemaTransformerTests` (new cases) + `OpenApiSpecEndpointTests` (new `[DataRow]`s) |
+| 16 | ✅ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `SoundCueEndpoints_OnLiveSpec_TaggedMasterData` |
+| 17 | ✅ | `ApiMessages.SoundCueNotFound` exists and all three locale files carry `ErrorSoundCueNotFound` | Unit test | `TranslationCompletenessTests` |
+| 18 | ✅ | `README.md`/`addon/DOCS.md`/`docs/logging.md` document both new endpoints | Doc review | Files updated |
+| 19 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
 | 20 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
 | 21 | ❌ | T2 — the live contract holds against the built image | Live (T2) | `docker build`/`docker run` matrix — see Step 10 |
 
