@@ -642,7 +642,9 @@ public class ImportActionPlannerTests
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Add, sourceAction.ActionType.Parsed);
-        Assert.AreEqual(newFileId, sourceAction.EntityId, "Add uses the file's own declared id, not an EntityIdentity-derived stable id");
+        // #209: Add uses the file's own declared id, canonicalized to uppercase at capture — not an
+        // EntityIdentity-derived stable id, and no longer the file's raw casing verbatim.
+        Assert.AreEqual(newFileId.ToUpperInvariant(), sourceAction.EntityId);
     }
 
     [TestMethod]
@@ -687,7 +689,8 @@ public class ImportActionPlannerTests
         Assert.AreEqual(1, actions.Count(a => a.EntityType == "Source"), "Only one Source Add — the quote must resolve to the same row the sources[] section staged, not a second one");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
-        Assert.AreEqual(newFileId, payload.SourceId);
+        // #209: the quote resolves to the canonicalized (uppercase) form of the file's declared id.
+        Assert.AreEqual(newFileId.ToUpperInvariant(), payload.SourceId);
     }
 
     // ── #171: PlanStageDirectionsAsync ───────────────────────────────────────
@@ -1026,6 +1029,107 @@ public class ImportActionPlannerTests
 
         var action = actions.Single(a => a.EntityType == "Conversation");
         Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
+    }
+
+    // ── #209: canonicalize explicit ids at capture ───────────────────────────
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_LowercaseExplicitId_AddPath_ResolvedIdIsCanonicalUppercase()
+    {
+        using var conn = await OpenConnectionAsync();
+        var lowercaseId = "c8111111-1111-4111-8111-111111111177";
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(lowercaseId, title: "A Brand New Film (Canonical Id Test)")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(lowercaseId.ToUpperInvariant(), sourceAction.EntityId, "A lowercase file-authored explicit id must canonicalize to uppercase at capture");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_LowercaseExplicitId_CorrectionMatch_IndexedIdIsCanonicalUppercase()
+    {
+        using var conn = await OpenConnectionAsync();
+        var uppercaseId = "C9111111-1111-4111-8111-111111111178";
+        await SeedExplicitSourceAsync(conn, uppercaseId, title: "Casablanca");
+        var quote = BuildQuote("ca111111-1111-4111-8111-111111111179", source: "Casablanca (Corrected)");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(uppercaseId.ToLowerInvariant(), title: "Casablanca (Corrected)")]);
+
+        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Source"), "The correction-match must be found via case-insensitive lookup — no duplicate Add");
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        Assert.AreEqual(uppercaseId, payload.SourceId, "sourceIndex must be seeded with the canonicalized (uppercase) form of the file's lowercase id, not the raw file casing, so a same-batch quote resolves to the row's real stored id");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_QuoteReferencesLowercaseExplicitSource_ResolvedSourceIdIsCanonical()
+    {
+        using var conn = await OpenConnectionAsync();
+        var lowercaseId = "cb111111-1111-4111-8111-111111111180";
+        var quote = BuildQuote("cc111111-1111-4111-8111-111111111181", source: "A Brand New Film (Join Canonical Test)");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildSourceEntry(lowercaseId, title: "A Brand New Film (Join Canonical Test)")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        var quoteAction  = actions.Single(a => a.EntityType == "Quote");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        Assert.AreEqual(sourceAction.EntityId, payload.SourceId, "The quote must resolve to the same canonical id the Source Add itself staged");
+        Assert.AreEqual(lowercaseId.ToUpperInvariant(), payload.SourceId);
+    }
+
+    [TestMethod]
+    public async Task PlanPeopleAsync_LowercaseExplicitId_ResolvedIdIsCanonicalUppercase()
+    {
+        using var conn = await OpenConnectionAsync();
+        var lowercaseId = "e4111111-1111-4111-8111-111111111174";
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [BuildPersonEntry(lowercaseId, name: "A Brand New Person (Canonical Id Test)")]);
+
+        var personAction = actions.Single(a => a.EntityType == "Person");
+        Assert.AreEqual(lowercaseId.ToUpperInvariant(), personAction.EntityId, "A lowercase file-authored explicit id must canonicalize to uppercase at capture");
+    }
+
+    [TestMethod]
+    public async Task PlanStageDirectionsAsync_LowercaseExplicitId_ResolvedIdIsCanonicalUppercase()
+    {
+        using var conn = await OpenConnectionAsync();
+        var lowercaseId = "dc111111-1111-4111-8111-111111111177";
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            stageDirections: [BuildStageDirectionEntry(lowercaseId, text: "A brand new stage direction (canonical id test).")]);
+
+        var action = actions.Single(a => a.EntityType == "StageDirection");
+        Assert.AreEqual(lowercaseId.ToUpperInvariant(), action.EntityId, "A lowercase file-authored explicit id must canonicalize to uppercase at capture");
+    }
+
+    [TestMethod]
+    public async Task PlanSoundCuesAsync_LowercaseExplicitId_ResolvedIdIsCanonicalUppercase()
+    {
+        using var conn = await OpenConnectionAsync();
+        var lowercaseId = "dd111111-1111-4111-8111-111111111178";
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            soundCues: [BuildSoundCueEntry(lowercaseId, text: "A brand new sound cue (canonical id test).")]);
+
+        var action = actions.Single(a => a.EntityType == "SoundCue");
+        Assert.AreEqual(lowercaseId.ToUpperInvariant(), action.EntityId, "A lowercase file-authored explicit id must canonicalize to uppercase at capture");
+    }
+
+    [TestMethod]
+    public async Task PlanConversationsAsync_LowercaseExplicitId_ResolvedIdIsCanonicalUppercase()
+    {
+        using var conn = await OpenConnectionAsync();
+        var lowercaseId = "de111111-1111-4111-8111-111111111179";
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            conversations: [BuildConversationEntry(lowercaseId, description: "A brand new conversation (canonical id test).")]);
+
+        var action = actions.Single(a => a.EntityType == "Conversation");
+        Assert.AreEqual(lowercaseId.ToUpperInvariant(), action.EntityId, "A lowercase file-authored explicit id must canonicalize to uppercase at capture");
     }
 
     // ── #190: absent vs. explicit-null distinguishability ────────────────────

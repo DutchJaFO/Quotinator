@@ -313,7 +313,9 @@ public class QuoteImportServiceTests
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             conn.Open();
-            await conn.ExecuteAsync("UPDATE Sources SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = sourceId });
+            // #209: the row is stored under its canonicalized (uppercase) id, not the lowercase id
+            // this test declared — UPPER() makes the update tolerant of either.
+            await conn.ExecuteAsync("UPDATE Sources SET CompletenessStatus = 'Complete' WHERE UPPER(Id) = UPPER(@id)", new { id = sourceId });
         }
 
         var unrelatedQuoteId = "dddddddd-4444-4444-8444-444444444444";

@@ -1074,6 +1074,30 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    ```
    Must return `Date = 1993`.
 
+   **Canonicalize explicit ids at capture — Source/Person/StageDirection/SoundCue/Conversation** (#209)
+   — a file-authored explicit id previously reached storage in whatever raw casing the file used,
+   never canonicalized; a `Guid`-typed lookup (which force-uppercases) then silently failed to find a
+   non-canonically-stored row, even though the same row resolved fine via a join. Also proves the
+   ConversationLines FOREIGN KEY fix: the bundled curated file's own Conversations reference
+   StageDirections/SoundCues by id, and #209's own fix would have broken that reference if left
+   incomplete — a clean seed with no `SQLite Error 19` is itself part of this check, not just the
+   import below.
+   ```bash
+   cat > .claude/temp/smoke-209.json <<'EOF'
+   {
+     "quotes": [{"id":"f6000001-0000-4000-8000-000000000001","quote":"A #209 smoke test line.","originalLanguage":"en","source":"209 Smoke Test Film","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+     "sources": [{"id":"f6000002-0000-4000-8000-000000000002","title":"209 Smoke Test Film","type":"movie"}]
+   }
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-209.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources/f6000002-0000-4000-8000-000000000002"
+   curl -s "http://localhost:8080/api/v1/quotes/f6000001-0000-4000-8000-000000000001"
+   ```
+   The import must return `200`. The masterdata lookup — using the file's own lowercase id in the URL,
+   the exact scenario that originally 404'd — must also return `200`, with `id` shown canonicalized to
+   uppercase in the response. The quote lookup must resolve `source` to `"209 Smoke Test Film"` via the
+   Quote→Source join, proving the fix didn't break the join to make the masterdata lookup work.
+
    **Pagination contract: pageSize=0, max 500, default 20, page-beyond-last** (#195) — `/quotes`,
    `/admin/audit`, and `/import/actions` share one pagination contract; this proves it holds live on
    all three, not just at the unit-test/stub level. The two audit/import readers were caught passing

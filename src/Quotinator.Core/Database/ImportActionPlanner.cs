@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Core.Helpers;
@@ -322,6 +323,14 @@ internal static class ImportActionPlanner
         {
             var typeStr = s.Type.ToString();
 
+            // #209: canonicalize once, at the single earliest point this entry's explicit id is
+            // captured — every later reference to the file's id (lookup, matchedId, addId) uses this
+            // canonicalized form instead of the file's raw casing. A malformed or absent id passes
+            // through unchanged; general id-format validation is out of scope here.
+            var canonicalId = s.Id is { } sIdRaw && EntityIdCanonicalizer.TryCanonicalizeUppercase(sIdRaw, out var sIdCanonical)
+                ? sIdCanonical
+                : s.Id;
+
             // #180/#190: seriesName resolution is Optional-aware — an absent seriesName stays Absent
             // (never touches the existing Series link, resolved per-branch below via ResolveAgainst);
             // an explicit null stays a genuine clear; a real name resolves via the same-batch index
@@ -344,14 +353,14 @@ internal static class ImportActionPlanner
 
             // #162's correction shape: an entry carrying an explicit id is matched by it first. An
             // entry omitting one (#180's enrichment shape) skips straight to the natural-key path below.
-            var existing = s.Id is { } explicitId
+            var existing = canonicalId is { } explicitId
                 ? await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                     Sql.Sources.SelectExistingById, new { id = explicitId }, transaction)
                 : null;
 
             if (existing is { } row)
             {
-                var matchedId       = s.Id!; // Non-null by construction: `existing` is only set when s.Id is.
+                var matchedId       = canonicalId!; // Non-null by construction: `existing` is only set when canonicalId is.
                 // #190: an absent Date/SeriesName resolves to the existing row's own value — never a
                 // change, under any policy. See OptionalExtensions.ResolveAgainst.
                 var incomingDate     = s.Date.ResolveAgainst(row.Date);
@@ -514,7 +523,7 @@ internal static class ImportActionPlanner
             // EntityIdentity-derived stable id is used: the same value ResolveSourceAsync would
             // independently compute for a quote referencing this same title/type, so both resolve to
             // one row rather than two.
-            var addId = s.Id ?? EntityIdentity.SourceId(s.Title, typeStr);
+            var addId = canonicalId ?? EntityIdentity.SourceId(s.Title, typeStr);
 
             // Indexed so a same-batch quote referencing this exact title/type resolves to this same
             // new row, instead of ResolveSourceAsync independently deriving its own EntityIdentity
@@ -553,8 +562,12 @@ internal static class ImportActionPlanner
     {
         foreach (var p in people)
         {
+            // #209: canonicalize once, at the single earliest point this entry's explicit id is
+            // captured — PersonEntry.Id is required, so there is no absent case to preserve.
+            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeUppercase(p.Id, out var pIdCanonical) ? pIdCanonical! : p.Id;
+
             var existing = await connection.QuerySingleOrDefaultAsync<(string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
-                Sql.People.SelectExistingById, new { id = p.Id }, transaction);
+                Sql.People.SelectExistingById, new { id = canonicalId }, transaction);
 
             if (existing is { } row)
             {
@@ -567,7 +580,7 @@ internal static class ImportActionPlanner
                 var existingFields  = ToFieldMap(existingPayload);
                 var incomingFields  = ToFieldMap(incomingPayload);
 
-                personIndex[p.Name] = p.Id;
+                personIndex[p.Name] = canonicalId;
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
@@ -597,7 +610,7 @@ internal static class ImportActionPlanner
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                         EntityType    = ImportActionEntityTypes.Person,
-                        EntityId      = p.Id,
+                        EntityId      = canonicalId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
                         Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
@@ -614,7 +627,7 @@ internal static class ImportActionPlanner
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                     EntityType    = ImportActionEntityTypes.Person,
-                    EntityId      = p.Id,
+                    EntityId      = canonicalId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
                     MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
@@ -635,14 +648,14 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            personIndex[p.Name] = p.Id;
+            personIndex[p.Name] = canonicalId;
 
             actions.Add(new SystemImportAction
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.Person,
-                EntityId      = p.Id,
+                EntityId      = canonicalId,
                 IncomingValue = JsonSerializer.Serialize(new PersonActionPayload(p.Name, p.DateOfBirth.ResolveAgainst(null), p.DateOfDeath.ResolveAgainst(null))),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
@@ -743,8 +756,12 @@ internal static class ImportActionPlanner
     {
         foreach (var sd in stageDirections)
         {
+            // #209: canonicalize once, at the single earliest point this entry's explicit id is
+            // captured. No natural-key fallback exists for StageDirection — matched purely by id.
+            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeUppercase(sd.Id, out var sdIdCanonical) ? sdIdCanonical! : sd.Id;
+
             var existing = await connection.QuerySingleOrDefaultAsync<(string Text, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
-                Sql.StageDirections.SelectExistingById, new { id = sd.Id }, transaction);
+                Sql.StageDirections.SelectExistingById, new { id = canonicalId }, transaction);
 
             if (existing is { } row)
             {
@@ -784,7 +801,7 @@ internal static class ImportActionPlanner
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                         EntityType    = ImportActionEntityTypes.StageDirection,
-                        EntityId      = sd.Id,
+                        EntityId      = canonicalId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
                         Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
@@ -801,7 +818,7 @@ internal static class ImportActionPlanner
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                     EntityType    = ImportActionEntityTypes.StageDirection,
-                    EntityId      = sd.Id,
+                    EntityId      = canonicalId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
                     MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
@@ -817,7 +834,7 @@ internal static class ImportActionPlanner
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.StageDirection,
-                EntityId      = sd.Id,
+                EntityId      = canonicalId,
                 IncomingValue = JsonSerializer.Serialize(new StageDirectionActionPayload(sd.Text, sd.ImageUrl.ResolveAgainst(null), sd.Translations)),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
@@ -831,8 +848,12 @@ internal static class ImportActionPlanner
     {
         foreach (var sc in soundCues)
         {
+            // #209: canonicalize once, at the single earliest point this entry's explicit id is
+            // captured. No natural-key fallback exists for SoundCue — matched purely by id.
+            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeUppercase(sc.Id, out var scIdCanonical) ? scIdCanonical! : sc.Id;
+
             var existing = await connection.QuerySingleOrDefaultAsync<(string Text, string? SoundFileUrl, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
-                Sql.SoundCues.SelectExistingById, new { id = sc.Id }, transaction);
+                Sql.SoundCues.SelectExistingById, new { id = canonicalId }, transaction);
 
             if (existing is { } row)
             {
@@ -873,7 +894,7 @@ internal static class ImportActionPlanner
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                         EntityType    = ImportActionEntityTypes.SoundCue,
-                        EntityId      = sc.Id,
+                        EntityId      = canonicalId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
                         Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
@@ -890,7 +911,7 @@ internal static class ImportActionPlanner
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                     EntityType    = ImportActionEntityTypes.SoundCue,
-                    EntityId      = sc.Id,
+                    EntityId      = canonicalId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
                     MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
@@ -906,7 +927,7 @@ internal static class ImportActionPlanner
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.SoundCue,
-                EntityId      = sc.Id,
+                EntityId      = canonicalId,
                 IncomingValue = JsonSerializer.Serialize(new SoundCueActionPayload(sc.Text, sc.SoundFileUrl.ResolveAgainst(null), sc.ImageUrl.ResolveAgainst(null), sc.Translations)),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
@@ -930,8 +951,14 @@ internal static class ImportActionPlanner
     {
         foreach (var c in conversations)
         {
+            // #209: canonicalize once, at the single earliest point this entry's explicit id is
+            // captured. No natural-key fallback exists for Conversation — matched purely by id.
+            // Cross-references inside c.Lines (StageDirectionId/SoundCueId/QuoteId) are a separate,
+            // not-yet-scoped capture point — tracked in a follow-up issue, not touched here.
+            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeUppercase(c.Id, out var cIdCanonical) ? cIdCanonical! : c.Id;
+
             var existing = await connection.QuerySingleOrDefaultAsync<(string? Description, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
-                Sql.Conversations.SelectExistingById, new { id = c.Id }, transaction);
+                Sql.Conversations.SelectExistingById, new { id = canonicalId }, transaction);
 
             if (existing is { } row)
             {
@@ -970,7 +997,7 @@ internal static class ImportActionPlanner
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                         EntityType    = ImportActionEntityTypes.Conversation,
-                        EntityId      = c.Id,
+                        EntityId      = canonicalId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
                         Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
@@ -987,7 +1014,7 @@ internal static class ImportActionPlanner
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                     EntityType    = ImportActionEntityTypes.Conversation,
-                    EntityId      = c.Id,
+                    EntityId      = canonicalId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
                     MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
@@ -998,8 +1025,17 @@ internal static class ImportActionPlanner
                 continue;
             }
 
+            // #209: a line's StageDirectionId/SoundCueId is a curator-typed reference to another
+            // entry in this same file, which #209 canonicalizes to uppercase at its own capture point
+            // above — the reference must be canonicalized identically, or ConversationLines'
+            // real FOREIGN KEY constraint to StageDirections(Id)/SoundCues(Id) fails outright once the
+            // referenced row's own id no longer matches the file's raw casing. QuoteId is left
+            // untouched — Quotes.Id canonicalizes to lowercase, a separate sub-issue (#210).
             var lines = c.Lines
-                .Select(l => new ConversationLinePayload(l.Order, l.Type, l.QuoteId, l.StageDirectionId, l.SoundCueId))
+                .Select(l => new ConversationLinePayload(
+                    l.Order, l.Type, l.QuoteId,
+                    l.StageDirectionId is { } sdRaw && EntityIdCanonicalizer.TryCanonicalizeUppercase(sdRaw, out var sdCanonical) ? sdCanonical : l.StageDirectionId,
+                    l.SoundCueId is { } scRaw && EntityIdCanonicalizer.TryCanonicalizeUppercase(scRaw, out var scCanonical) ? scCanonical : l.SoundCueId))
                 .ToList();
 
             actions.Add(new SystemImportAction
@@ -1007,7 +1043,7 @@ internal static class ImportActionPlanner
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.Conversation,
-                EntityId      = c.Id,
+                EntityId      = canonicalId,
                 IncomingValue = JsonSerializer.Serialize(new ConversationActionPayload(c.Description.ResolveAgainst(null), lines)),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,

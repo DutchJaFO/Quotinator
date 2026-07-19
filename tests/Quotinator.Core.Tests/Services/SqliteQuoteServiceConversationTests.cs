@@ -125,7 +125,9 @@ public class SqliteQuoteServiceConversationTests
 
         Assert.IsNotNull(quote!.Conversations);
         Assert.HasCount(1, quote.Conversations!);
-        Assert.AreEqual(Conversation1Id, quote.Conversations![0].ConversationId);
+        // #209: the Conversation was seeded through the real import pipeline, so its id is now
+        // canonicalized to uppercase at capture — the lowercase fixture constant is not the stored form.
+        Assert.AreEqual(Conversation1Id.ToUpperInvariant(), quote.Conversations![0].ConversationId);
         Assert.AreEqual(1, quote.Conversations[0].Position);
         Assert.AreEqual(2, quote.Conversations[0].TotalLines);
     }
@@ -161,7 +163,9 @@ public class SqliteQuoteServiceConversationTests
         var result = CreateService().GetConversation(Conversation1Id.ToUpperInvariant());
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(Conversation1Id, result!.Id);
+        // #209: the Conversation was seeded through the real import pipeline, so its id is now
+        // canonicalized to uppercase at capture — the lowercase fixture constant is not the stored form.
+        Assert.AreEqual(Conversation1Id.ToUpperInvariant(), result!.Id);
     }
 
     [TestMethod]

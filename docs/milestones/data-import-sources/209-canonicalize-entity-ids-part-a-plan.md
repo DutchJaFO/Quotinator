@@ -175,7 +175,7 @@ found; masterdata endpoints are read-only, `DecideAsync`'s conflict-resolution p
 
 ### 1. `EntityIdCanonicalizer` + its tests
 
-**Status:** Not started.
+**Status:** ✅ Done.
 
 New file `src/Quotinator.Data/Helpers/EntityIdCanonicalizer.cs`. New test file
 `tests/Quotinator.Data.Tests/Helpers/EntityIdCanonicalizerTests.cs`:
@@ -185,39 +185,70 @@ New file `src/Quotinator.Data/Helpers/EntityIdCanonicalizer.cs`. New test file
 
 ### 2. `PlanSourcesAsync` capture-point fix
 
-**Status:** Not started. Per the Approach section above — one `canonicalId` computed at the top of the
+**Status:** ✅ Done. Per the Approach section above — one `canonicalId` computed at the top of the
 loop, used at every `s.Id`/`explicitId`/`matchedId`/`addId` reference.
 
 ### 3. `PlanPeopleAsync` capture-point fix
 
-**Status:** Not started. Same pattern, adjusted for `PersonEntry.Id` being required rather than optional.
+**Status:** ✅ Done. Same pattern, adjusted for `PersonEntry.Id` being required rather than optional.
 
 ### 4. `PlanStageDirectionsAsync`/`PlanSoundCuesAsync`/`PlanConversationsAsync` capture-point fix
 
-**Status:** Not started. Same pattern as Step 3, applied to all three methods independently — each has
-its own loop and its own `.Id` reference, no shared index to coordinate across them.
+**Status:** ✅ Done. Same pattern as Step 3, applied to all three methods independently — each has its
+own loop and its own `.Id` reference, no shared index to coordinate across them.
 
 ### 5. Character — no fix, finding documented
 
-**Status:** Done during planning (see Background's verified finding) — `EntityIdentity.CharacterId`'s
+**Status:** ✅ Done during planning (see Background's verified finding) — `EntityIdentity.CharacterId`'s
 hash input is always lowercased before hashing, so its output is casing-invariant regardless of
 `sourceId`'s casing. No code change.
 
 ### 6. Audit `Ensure*ExistsAsync`/`Sql.*.Insert`/`Update` sites
 
-**Status:** Not started. Confirm (by inspection, not by changing code) that every remaining raw-`string`
-id parameter downstream of Steps 2-4 now receives an already-canonical value — `EnsureSourceExistsAsync`,
-`EnsurePersonExistsAsync`, `EnsureCharacterExistsAsync`, and the direct insert/update bindings inside
-`PlanStageDirectionsAsync`/`PlanSoundCuesAsync`/`PlanConversationsAsync`. Record the grep evidence in this
-doc's Notes once done.
+**Status:** ✅ Done. `EnsureSourceExistsAsync`/`EnsurePersonExistsAsync`/`EnsureCharacterExistsAsync`
+(`SqliteImportActionService.cs`) all bind their `id` parameter as a plain `string`, sourced directly
+from `action.EntityId`/`payload.SourceId` — both already canonical post-Steps 2-4, confirmed by
+inspection, zero code changes needed there.
 
-### 7. Tests
+**New finding, not anticipated in the original plan**: `StageDirections`/`SoundCues`/`Conversations`'
+`SelectExistingById` queries (`Sql.cs`) were `WHERE Id = @id` — plain, case-sensitive — unlike
+`Sources`/`People`'s equivalents, which #180 had already made `UPPER(Id) = UPPER(@id)`. Before this
+issue, both sides of that comparison always carried the same raw (un-canonicalized) casing by
+accident, so the case-sensitive match happened to work. Once Step 4 canonicalizes the *lookup* id to
+uppercase but a row from before this fix (or seeded via the not-yet-updated `SelectExistingById`
+itself, self-referentially) is stored under its original casing, the match silently fails — the
+correction-match branch never finds the existing row and stages a duplicate Add instead. Caught live
+by the full test suite (8 `Quotinator.Core.Tests` failures, all `SQLite Error 19` or a mismatched
+correction-match). Fixed by applying the identical `UPPER(Id) = UPPER(@id)` pattern to
+`SelectExistingById`/`SelectCompletenessById`/`UpdateCompletenessById`/`UpdateFieldsById`
+(`UpdateDescriptionById` for Conversations) across all three entities — mirroring `Sources`/`People`'s
+existing convention exactly, not inventing a new one.
 
-**Status:** Not started.
+### 7. ConversationLines cross-reference casing (found during implementation, fixed inline)
+
+**Status:** ✅ Done. Not in the original Spec requirements — found while implementing Step 4.
+`SourceConversationLine.StageDirectionId`/`SoundCueId` are curator-typed references to another entry
+declared elsewhere in the same file (a `stageDirections[]`/`soundCues[]` entry's own explicit id) — under
+no obligation to match that entry's own casing. `ConversationLines.StageDirectionId`/`SoundCueId` have
+real SQLite `FOREIGN KEY` constraints to `StageDirections(Id)`/`SoundCues(Id)` (`QuotinatorMigrations.cs`).
+Once Step 4 canonicalizes `StageDirections.Id`/`SoundCues.Id` to uppercase but `PlanConversationsAsync`
+left the line-level cross-references at whatever casing the curator typed, the two no longer match —
+confirmed live via the bundled curated file's own real seeding data (`SQLite Error 19: FOREIGN KEY
+constraint failed`, 50 failing tests across the suite, all downstream of a failed seed). Fixed by
+canonicalizing `l.StageDirectionId`/`l.SoundCueId` to uppercase alongside the Conversation's own id, in
+the same `lines` construction inside `PlanConversationsAsync`'s Add branch — `l.QuoteId` is deliberately
+left untouched, since `Quotes.Id` canonicalizes to lowercase and is #210's job, not #209's. A dedicated
+regression test (`ApplyBatchAsync_ConversationLineReferencesDifferentlyCasedStageDirectionAndSoundCue_ForeignKeyHolds`)
+now covers this directly rather than relying on the bundled data file's specific casing to keep catching
+it.
+
+### 8. Tests
+
+**Status:** ✅ Done.
 
 | Test class | Test method |
 |---|---|
-| `Quotinator.Data.Tests.Helpers.EntityIdCanonicalizerTests` | (5 cases, Step 1) |
+| `Quotinator.Data.Tests.Helpers.EntityIdCanonicalizerTests` | 5 cases (Step 1) |
 | `Quotinator.Core.Tests.Database.ImportActionPlannerTests` | `PlanSourcesAsync_LowercaseExplicitId_AddPath_ResolvedIdIsCanonicalUppercase` |
 | " | `PlanSourcesAsync_LowercaseExplicitId_CorrectionMatch_IndexedIdIsCanonicalUppercase` |
 | " | `PlanSourcesAsync_QuoteReferencesLowercaseExplicitSource_ResolvedSourceIdIsCanonical` (the join-safety case, at planner level) |
@@ -228,14 +259,20 @@ doc's Notes once done.
 | `Quotinator.Core.Tests.Services.SqliteImportActionServiceTests` | `[DynamicData]`-driven, one method covering Sources/People/StageDirections/SoundCues/Conversations: canonicalize a lowercase id, insert directly, assert a `Guid`-typed `SELECT` finds it (the storage-layer guard — see Background's correction to ADR 012's original sketch) |
 | " | `ApplyBatchAsync_LowercaseExplicitSourceId_QuoteJoinStillResolves` (full pipeline: import Source + same-batch Quote with lowercase explicit Source id, apply, read the quote back via the real join query, confirm source title/date resolve) |
 | " | `ApplyBatchAsync_LowercaseExplicitSourceId_MasterdataRepositoryLookupResolves` (apply, then `SqliteRepository<Source>.GetByIdAsync(Guid)` — the exact call the masterdata endpoint makes — finds the row) |
+| " | `ApplyBatchAsync_ConversationLineReferencesDifferentlyCasedStageDirectionAndSoundCue_ForeignKeyHolds` (Step 7's dedicated FK regression guard) |
 
-### 8. Verify
+Nine pre-existing tests needed updating to match the now-correct canonicalized behaviour (they had
+encoded the old, buggy casing as expected output) — two in `ImportActionPlannerTests.cs`
+(`PlanSourcesAsync_NoMatchAtAll_StagesAddWithFileId`,
+`PlanSourcesAsync_QuoteReferencesExplicitlyDeclaredSource_ResolvesToItsId`), six in
+`SqliteImportActionServiceTests.cs`, and one in `QuoteImportServiceTests.cs` — all fixed to compare
+case-insensitively or against the canonicalized form, per this doc's Notes.
 
-**Status:** Not started. `dotnet build --configuration Release` (0 warnings/errors), `dotnet test
---configuration Release --verbosity normal` (full suite green), T1, T2 (Docker smoke test — reproduce
-the original live finding: import a Source with a lowercase explicit id, confirm
-`GET /api/v1/masterdata/sources/{id}` now returns 200, and confirm `GET /api/v1/quotes/{id}` for a
-same-batch quote referencing it still resolves the source title/date correctly).
+### 9. Verify
+
+**Status:** ✅ Build + full suite green (`dotnet build --configuration Release`: 0 warnings/errors;
+`dotnet test --configuration Release --verbosity normal`: all 8 test projects green, 611 total in
+`Quotinator.Core.Tests` alone). T2 and T1 still pending.
 
 ---
 
@@ -243,18 +280,20 @@ same-batch quote referencing it still resolves the source title/date correctly).
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | `EntityIdCanonicalizer` canonicalizes, is idempotent, and rejects malformed input via both a throwing and non-throwing form | Unit test | `EntityIdCanonicalizerTests` (5 cases) |
-| 2 | ⬜ | A lowercase explicit Source id (Add or correction-match) resolves to canonical uppercase everywhere it's used in the same batch | Unit test | `ImportActionPlannerTests.PlanSourcesAsync_LowercaseExplicitId_*` (2 cases) |
-| 3 | ⬜ | A same-batch quote referencing a lowercase-id'd Source resolves to the canonical id | Unit test | `PlanSourcesAsync_QuoteReferencesLowercaseExplicitSource_ResolvedSourceIdIsCanonical` |
-| 4 | ⬜ | A lowercase explicit Person id resolves to canonical uppercase | Unit test | `PlanPeopleAsync_LowercaseExplicitId_ResolvedIdIsCanonicalUppercase` |
-| 5 | ⬜ | A lowercase explicit StageDirection/SoundCue/Conversation id resolves to canonical uppercase | Unit test | `PlanStageDirectionsAsync_/PlanSoundCuesAsync_/PlanConversationsAsync_LowercaseExplicitId_ResolvedIdIsCanonicalUppercase` |
-| 6 | ⬜ | Character ids are unaffected by Source-id casing (documented finding, not a fix) | Doc review | This plan doc's Background section |
-| 7 | ⬜ | Every explicit-id-capable table's rows are findable via a `Guid`-typed lookup once canonicalized | Unit test | `SqliteImportActionServiceTests`' `[DynamicData]` storage guard (5 cases) |
-| 8 | ⬜ | The Quote→Source join survives a lowercase explicit Source id through a full plan→apply cycle | Unit test | `ApplyBatchAsync_LowercaseExplicitSourceId_QuoteJoinStillResolves` |
-| 9 | ⬜ | The masterdata Sources repository lookup (the exact query that originally 404'd) resolves | Unit test | `ApplyBatchAsync_LowercaseExplicitSourceId_MasterdataRepositoryLookupResolves` |
-| 10 | ⬜ | No regression | Unit test | Full `dotnet test --configuration Release --verbosity normal` |
-| 11 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
-| 12 | ⬜ | T2 — the original live symptom is fixed end to end | Live (T2) | Docker: import a lowercase-explicit-id Source, `GET /api/v1/masterdata/sources/{id}` returns 200; a same-batch quote's `GET /api/v1/quotes/{id}` still resolves the source correctly |
+| 1 | ✅ | `EntityIdCanonicalizer` canonicalizes, is idempotent, and rejects malformed input via both a throwing and non-throwing form | Unit test | `EntityIdCanonicalizerTests` (5 cases) |
+| 2 | ✅ | A lowercase explicit Source id (Add or correction-match) resolves to canonical uppercase everywhere it's used in the same batch | Unit test | `ImportActionPlannerTests.PlanSourcesAsync_LowercaseExplicitId_*` (2 cases) |
+| 3 | ✅ | A same-batch quote referencing a lowercase-id'd Source resolves to the canonical id | Unit test | `PlanSourcesAsync_QuoteReferencesLowercaseExplicitSource_ResolvedSourceIdIsCanonical` |
+| 4 | ✅ | A lowercase explicit Person id resolves to canonical uppercase | Unit test | `PlanPeopleAsync_LowercaseExplicitId_ResolvedIdIsCanonicalUppercase` |
+| 5 | ✅ | A lowercase explicit StageDirection/SoundCue/Conversation id resolves to canonical uppercase | Unit test | `PlanStageDirectionsAsync_/PlanSoundCuesAsync_/PlanConversationsAsync_LowercaseExplicitId_ResolvedIdIsCanonicalUppercase` |
+| 6 | ✅ | Character ids are unaffected by Source-id casing (documented finding, not a fix) | Doc review | This plan doc's Background section |
+| 7 | ✅ | Every explicit-id-capable table's rows are findable via a `Guid`-typed lookup once canonicalized | Unit test | `SqliteImportActionServiceTests`' `[DynamicData]` storage guard (5 cases) |
+| 8 | ✅ | The Quote→Source join survives a lowercase explicit Source id through a full plan→apply cycle | Unit test | `ApplyBatchAsync_LowercaseExplicitSourceId_QuoteJoinStillResolves` |
+| 9 | ✅ | The masterdata Sources repository lookup (the exact query that originally 404'd) resolves | Unit test | `ApplyBatchAsync_LowercaseExplicitSourceId_MasterdataRepositoryLookupResolves` |
+| 10 | ✅ | `StageDirections`/`SoundCues`/`Conversations`' correction-match lookup is case-insensitive, matching `Sources`/`People`'s existing convention | Unit test | Full suite green after `Sql.cs`'s `SelectExistingById`/`SelectCompletenessById`/`UpdateCompletenessById`/`UpdateFieldsById` fix (Step 6) |
+| 11 | ✅ | A Conversation line referencing a StageDirection/SoundCue under different casing than its own declared id still resolves — the ConversationLines FOREIGN KEY constraint holds | Unit test | `ApplyBatchAsync_ConversationLineReferencesDifferentlyCasedStageDirectionAndSoundCue_ForeignKeyHolds` |
+| 12 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — all 8 projects green, 0 warnings, 0 errors |
+| 13 | ✅ | T1 — app starts in Visual Studio | Live (T1) | Developer confirmed: clean startup (schema up to date, data v10/app v9), no errors; every masterdata list endpoint (sources, characters, people, series, universes, stagedirections, soundcues) plus admin/audit and quotes/random/quotes all returned 200 |
+| 14 | ✅ | T2 — the original live symptom is fixed end to end | Live (T2) | `docker build` + `docker run`: bundled curated file (whose Conversations exercise the ConversationLines FK fix) seeded cleanly with no errors; imported a lowercase-explicit-id Source with a same-batch quote — `GET /api/v1/masterdata/sources/{id}` (lowercase URL) returns `200` with the id shown canonicalized to uppercase; `GET /api/v1/quotes/{id}` still resolves the source title via the join |
 
 ---
 

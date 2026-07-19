@@ -6,6 +6,7 @@ using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
@@ -527,8 +528,10 @@ public class SqliteImportActionServiceTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE Id = @id AND IsDeleted = 1", new { id = conversationId }));
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE Id = @id AND IsDeleted = 1", new { id = stageDirectionId }));
+        // #209: the applied rows are now stored under their canonicalized (uppercase) id, not the
+        // lowercase id this test declared — UPPER() makes the verification query tolerant of either.
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 1", new { id = conversationId }));
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 1", new { id = stageDirectionId }));
     }
 
     /// <summary>
@@ -575,8 +578,10 @@ public class SqliteImportActionServiceTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE Id = @id AND IsDeleted = 1", new { id = conversation2Id }), "Newer conversation is reversed");
-        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE Id = @id AND IsDeleted = 1", new { id = sharedStageDirectionId }), "StageDirection must survive — still referenced by the older, non-reversed conversation");
+        // #209: applied rows are stored under their canonicalized (uppercase) id — UPPER() makes the
+        // verification query tolerant of the lowercase id this test declared.
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 1", new { id = conversation2Id }), "Newer conversation is reversed");
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 1", new { id = sharedStageDirectionId }), "StageDirection must survive — still referenced by the older, non-reversed conversation");
     }
 
     [TestMethod]
@@ -1045,7 +1050,9 @@ public class SqliteImportActionServiceTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE Id = @id AND IsDeleted = 1", new { id = newFileId }));
+        // #209: the row is stored under its canonicalized (uppercase) id, not the lowercase id this
+        // test declared — UPPER() makes the verification query tolerant of either.
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 1", new { id = newFileId }));
     }
 
     /// <summary>
@@ -1083,8 +1090,134 @@ public class SqliteImportActionServiceTests
         var count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE Title LIKE 'T2 Regression Movie%'");
         Assert.AreEqual(1, count, "Must be exactly one Source row — the correction must have found and updated the original, not created a second one");
 
-        var title = await conn.ExecuteScalarAsync<string>("SELECT Title FROM Sources WHERE Id = @id", new { id = sourceId });
+        // #209: the row is stored under its canonicalized (uppercase) id, not the lowercase id this
+        // test declared — UPPER() makes the verification query tolerant of either.
+        var title = await conn.ExecuteScalarAsync<string>("SELECT Title FROM Sources WHERE UPPER(Id) = UPPER(@id)", new { id = sourceId });
         Assert.AreEqual("T2 Regression Movie (Corrected)", title);
+    }
+
+    // ── #209 — canonicalize explicit ids at capture ──────────────────────────
+
+    public static IEnumerable<object[]> ExplicitIdCapableEntityInsertCases()
+    {
+        const string now = "2026-01-01 00:00:00";
+        return
+        [
+            ["Sources", (Func<SqliteConnection, string, Task>)(async (conn, id) =>
+                await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Storage Guard Source', 'Movie', @now)", new { Id = id, now }))],
+            ["People", (Func<SqliteConnection, string, Task>)(async (conn, id) =>
+                await conn.ExecuteAsync("INSERT INTO People (Id, Name, DateCreated) VALUES (@Id, 'Storage Guard Person', @now)", new { Id = id, now }))],
+            ["StageDirections", (Func<SqliteConnection, string, Task>)(async (conn, id) =>
+                await conn.ExecuteAsync("INSERT INTO StageDirections (Id, Text, DateCreated) VALUES (@Id, 'Storage guard direction.', @now)", new { Id = id, now }))],
+            ["SoundCues", (Func<SqliteConnection, string, Task>)(async (conn, id) =>
+                await conn.ExecuteAsync("INSERT INTO SoundCues (Id, Text, DateCreated) VALUES (@Id, 'Storage guard cue.', @now)", new { Id = id, now }))],
+            ["Conversations", (Func<SqliteConnection, string, Task>)(async (conn, id) =>
+                await conn.ExecuteAsync("INSERT INTO Conversations (Id, Description, DateCreated) VALUES (@Id, 'Storage guard conversation.', @now)", new { Id = id, now }))],
+        ];
+    }
+
+    /// <summary>
+    /// Storage-layer invariant guard (ADR 012) — canonicalize a lowercase id via
+    /// <see cref="EntityIdCanonicalizer"/>, insert it directly into each explicit-id-capable table via
+    /// minimal raw SQL, then assert a <see cref="Guid"/>-typed lookup (which <c>GuidHandler</c>
+    /// force-uppercases) still finds it. Proves the invariant a canonicalized capture-point fix relies
+    /// on — a canonically-written row is always reachable via a Guid-typed lookup — independent of
+    /// whichever entity-specific planner logic produced the write.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(ExplicitIdCapableEntityInsertCases))]
+    public async Task CanonicalizedLowercaseId_InsertedDirectly_FoundByGuidTypedLookup(string tableName, Func<SqliteConnection, string, Task> insertRow)
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var lowercaseId = Guid.NewGuid().ToString("D");
+        var canonicalId = EntityIdCanonicalizer.CanonicalizeUppercase(lowercaseId);
+        await insertRow(conn, canonicalId);
+
+        var found = await conn.QuerySingleOrDefaultAsync<Guid?>($"SELECT Id FROM {tableName} WHERE Id = @id", new { id = Guid.Parse(lowercaseId) });
+        Assert.IsNotNull(found, $"{tableName}: a canonically-written row must be findable via a Guid-typed lookup regardless of the lookup value's own original casing");
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_LowercaseExplicitSourceId_QuoteJoinStillResolves()
+    {
+        var lowercaseSourceId = "f0111111-1111-4111-8111-111111111209";
+        var quoteId = "f1111111-1111-4111-8111-111111111209";
+        var quote = BuildQuote(quoteId, source: "Canonicalization Join Test Film", character: null);
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([quote], batchId, DuplicateResolutionPolicy.NewestWins,
+            sources: [new SourceEntry { Id = lowercaseSourceId, Title = "Canonicalization Join Test Film", Type = QuoteType.Movie, Date = "1999" }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var (title, date) = await conn.QuerySingleAsync<(string Title, string Date)>(
+            "SELECT s.Title, s.Date FROM Quotes q JOIN Sources s ON s.Id = q.SourceId WHERE q.Id = @id", new { id = quoteId });
+        Assert.AreEqual("Canonicalization Join Test Film", title, "The Quote->Source join must still resolve after the Source's explicit id was canonicalized at capture");
+        Assert.AreEqual("1999", date);
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_LowercaseExplicitSourceId_MasterdataRepositoryLookupResolves()
+    {
+        var lowercaseSourceId = "f2111111-1111-4111-8111-111111111209";
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            sources: [new SourceEntry { Id = lowercaseSourceId, Title = "Canonicalization Repository Test Film", Type = QuoteType.Movie }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        // The exact call the masterdata GET /sources/{id} endpoint makes (SourceEndpoints.GetById).
+        var repository = new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var source = await repository.GetByIdAsync(Guid.Parse(lowercaseSourceId));
+        Assert.IsNotNull(source, "The masterdata repository's Guid-typed lookup must resolve a Source whose explicit id was file-authored in lowercase");
+        Assert.AreEqual("Canonicalization Repository Test Film", source!.Title);
+    }
+
+    /// <summary>
+    /// #209 regression guard: a Conversation's <c>lines[].stageDirectionId</c>/<c>soundCueId</c> is a
+    /// curator-typed reference to another entry declared elsewhere in the same file — it is under no
+    /// obligation to match that entry's own explicit id's casing exactly. Once #209 canonicalizes
+    /// StageDirections.Id/SoundCues.Id to uppercase at capture, a cross-reference using a *different*
+    /// casing than the declaration must still resolve, or ConversationLines' real FOREIGN KEY
+    /// constraint to StageDirections(Id)/SoundCues(Id) fails outright — found live via the bundled
+    /// curated file's own real seeding data during this issue's own verification pass.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyBatchAsync_ConversationLineReferencesDifferentlyCasedStageDirectionAndSoundCue_ForeignKeyHolds()
+    {
+        var stageDirectionId = "f3111111-1111-4111-8111-111111111209";
+        var soundCueId       = "f4111111-1111-4111-8111-111111111209";
+        var conversationId   = "f5111111-1111-4111-8111-111111111209";
+
+        var conversation = new SourceConversation
+        {
+            Id = conversationId,
+            Lines =
+            [
+                // Deliberately uppercase references against lowercase-declared entries below —
+                // the exact mismatch #209's own canonicalization would otherwise introduce.
+                new SourceConversationLine { Order = 1, Type = ConversationLineType.StageDirection, StageDirectionId = stageDirectionId.ToUpperInvariant() },
+                new SourceConversationLine { Order = 2, Type = ConversationLineType.SoundCue, SoundCueId = soundCueId.ToUpperInvariant() },
+            ],
+        };
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            stageDirections: [new SourceStageDirection { Id = stageDirectionId, Text = "A shot rings out." }],
+            soundCues: [new SourceSoundCue { Id = soundCueId, Text = "Distant thunder." }],
+            conversations: [conversation]);
+
+        // Must not throw SQLite Error 19 (FOREIGN KEY constraint failed).
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var lineCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM ConversationLines WHERE UPPER(ConversationId) = UPPER(@id) AND IsDeleted = 0", new { id = conversationId });
+        Assert.AreEqual(2, lineCount, "Both lines must have actually been written — a caught-and-swallowed FK failure would leave this at 0, not just throw");
     }
 
     // ── #171 — StageDirection decidability ───────────────────────────────────
@@ -1387,8 +1520,14 @@ public class SqliteImportActionServiceTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
+        // #209: the row is stored under its canonicalized (uppercase) id, not the lowercase id this
+        // test declared — UPPER() makes the verification query tolerant of either. #209 also means the
+        // stale row is now canonical-uppercase from its very first Add, so ClearStaleAddTargetsAsync's
+        // Guid.Parse(...)-based HardDeleteAsync naturally matches it; this test still exercises that
+        // exact code path end to end (Add -> reverse -> Add again), just on the now-guaranteed-canonical
+        // input the original #173 regression could no longer reproduce a mismatch against.
         var (name, isDeleted) = await conn.QuerySingleAsync<(string Name, int IsDeleted)>(
-            "SELECT Name, IsDeleted FROM People WHERE Id = @id", new { id });
+            "SELECT Name, IsDeleted FROM People WHERE UPPER(Id) = UPPER(@id)", new { id });
         Assert.AreEqual(0, isDeleted, "The stale soft-deleted row must be hard-deleted, letting the fresh Add actually insert");
         Assert.AreEqual("Fresh Name After Undo", name);
     }

@@ -486,21 +486,27 @@ internal static class Sql
             "INSERT OR IGNORE INTO Conversations (Id, Description, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted) " +
             "VALUES (@Id, @Description, @ImportBatchId, @DateCreated, NULL, NULL, 0);";
 
-        /// <summary>#176's id-first lookup for an explicit <c>conversations[]</c> entry — mirrors <see cref="Sources.SelectExistingById"/>. Never selects <c>lines</c> — out of scope for Modify.</summary>
+        /// <summary>
+        /// #176's id-first lookup for an explicit <c>conversations[]</c> entry — mirrors
+        /// <see cref="Sources.SelectExistingById"/>. Never selects <c>lines</c> — out of scope for
+        /// Modify. Case-insensitive (<c>UPPER</c>) since #209 — a file-authored explicit id is
+        /// canonicalized to uppercase at capture (<c>ImportActionPlanner</c>), but a row already
+        /// stored under a pre-#209 raw casing must still match.
+        /// </summary>
         internal const string SelectExistingById =
-            "SELECT Description, CompletenessStatus FROM Conversations WHERE Id = @id AND IsDeleted = 0;";
+            "SELECT Description, CompletenessStatus FROM Conversations WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 0;";
 
-        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string SelectCompletenessById =
-            "SELECT CompletenessStatus, NoValueKnown FROM Conversations WHERE Id = @id;";
+            "SELECT CompletenessStatus, NoValueKnown FROM Conversations WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string UpdateCompletenessById =
-            "UPDATE Conversations SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE Conversations SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>#176's Modify apply — writes an id-matched Conversation's corrected Description only. Never touches Lines/CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for the latter.</summary>
+        /// <summary>#176's Modify apply — writes an id-matched Conversation's corrected Description only. Never touches Lines/CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for the latter. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string UpdateDescriptionById =
-            "UPDATE Conversations SET Description = @description, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE Conversations SET Description = @description, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
     }
 
     /// <summary>
@@ -580,21 +586,27 @@ internal static class Sql
         internal const string DeleteAll = "DELETE FROM StageDirections;";
         internal const string SelectIdById = "SELECT Id FROM StageDirections WHERE Id = @id AND IsDeleted = 0;";
 
-        /// <summary>#171's id-first lookup for an explicit <c>stageDirections[]</c> entry — mirrors <see cref="Sources.SelectExistingById"/>.</summary>
+        /// <summary>
+        /// #171's id-first lookup for an explicit <c>stageDirections[]</c> entry — mirrors
+        /// <see cref="Sources.SelectExistingById"/>. Case-insensitive (<c>UPPER</c>) since #209 —
+        /// a file-authored explicit id is canonicalized to uppercase at capture
+        /// (<c>ImportActionPlanner</c>), but a row already stored under a pre-#209 raw casing must
+        /// still match.
+        /// </summary>
         internal const string SelectExistingById =
-            "SELECT Text, ImageUrl, CompletenessStatus FROM StageDirections WHERE Id = @id AND IsDeleted = 0;";
+            "SELECT Text, ImageUrl, CompletenessStatus FROM StageDirections WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 0;";
 
-        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string SelectCompletenessById =
-            "SELECT CompletenessStatus, NoValueKnown FROM StageDirections WHERE Id = @id;";
+            "SELECT CompletenessStatus, NoValueKnown FROM StageDirections WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string UpdateCompletenessById =
-            "UPDATE StageDirections SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE StageDirections SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>#171's Modify apply — writes an id-matched StageDirection's corrected Text/ImageUrl. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that.</summary>
+        /// <summary>#171's Modify apply — writes an id-matched StageDirection's corrected Text/ImageUrl. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string UpdateFieldsById =
-            "UPDATE StageDirections SET Text = @text, ImageUrl = @imageUrl, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE StageDirections SET Text = @text, ImageUrl = @imageUrl, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
 
         /// <summary>
         /// Number of active ConversationLines still referencing this StageDirection — see
@@ -653,21 +665,27 @@ internal static class Sql
         internal const string DeleteAll = "DELETE FROM SoundCues;";
         internal const string SelectIdById = "SELECT Id FROM SoundCues WHERE Id = @id AND IsDeleted = 0;";
 
-        /// <summary>#172's id-first lookup for an explicit <c>soundCues[]</c> entry — mirrors <see cref="Sources.SelectExistingById"/>.</summary>
+        /// <summary>
+        /// #172's id-first lookup for an explicit <c>soundCues[]</c> entry — mirrors
+        /// <see cref="Sources.SelectExistingById"/>. Case-insensitive (<c>UPPER</c>) since #209 —
+        /// a file-authored explicit id is canonicalized to uppercase at capture
+        /// (<c>ImportActionPlanner</c>), but a row already stored under a pre-#209 raw casing must
+        /// still match.
+        /// </summary>
         internal const string SelectExistingById =
-            "SELECT Text, SoundFileUrl, ImageUrl, CompletenessStatus FROM SoundCues WHERE Id = @id AND IsDeleted = 0;";
+            "SELECT Text, SoundFileUrl, ImageUrl, CompletenessStatus FROM SoundCues WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 0;";
 
-        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string SelectCompletenessById =
-            "SELECT CompletenessStatus, NoValueKnown FROM SoundCues WHERE Id = @id;";
+            "SELECT CompletenessStatus, NoValueKnown FROM SoundCues WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string UpdateCompletenessById =
-            "UPDATE SoundCues SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE SoundCues SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
 
-        /// <summary>#172's Modify apply — writes an id-matched SoundCue's corrected Text/SoundFileUrl/ImageUrl. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that.</summary>
+        /// <summary>#172's Modify apply — writes an id-matched SoundCue's corrected Text/SoundFileUrl/ImageUrl. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal const string UpdateFieldsById =
-            "UPDATE SoundCues SET Text = @text, SoundFileUrl = @soundFileUrl, ImageUrl = @imageUrl, DateModified = @dateModified WHERE Id = @id;";
+            "UPDATE SoundCues SET Text = @text, SoundFileUrl = @soundFileUrl, ImageUrl = @imageUrl, DateModified = @dateModified WHERE UPPER(Id) = UPPER(@id);";
 
         /// <summary>Number of active ConversationLines still referencing this SoundCue — see <see cref="StageDirections.CountActiveReferences"/>'s remark for why this joins through Conversations.</summary>
         internal const string CountActiveReferences =
