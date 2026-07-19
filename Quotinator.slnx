@@ -152,6 +152,7 @@
     <File Path="docs/milestones/data-import-sources/192-quote-series-universe-plan.md" />
     <File Path="docs/milestones/data-import-sources/206-core-engine-merge-plan.md" />
     <File Path="docs/milestones/data-import-sources/190-optional-fields-plan.md" />
+    <File Path="docs/milestones/data-import-sources/207-canonicalize-entity-ids-plan.md" />
     <File Path="docs/milestones/data-import-sources/174-character-global-identity-plan.md" />
     <File Path="docs/milestones/data-import-sources/175-character-modify-plan.md" />
     <File Path="docs/milestones/data-import-sources/176-conversation-description-modify-plan.md" />
