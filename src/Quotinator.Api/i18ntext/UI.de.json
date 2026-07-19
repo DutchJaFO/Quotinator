@@ -74,6 +74,7 @@
   "ErrorPersonNotFound": "Es wurde keine Person mit der angegebenen ID gefunden.",
   "ErrorSeriesNotFound": "Es wurde keine Serie mit der angegebenen ID gefunden.",
   "ErrorUniverseNotFound": "Es wurde kein Universum mit der angegebenen ID gefunden.",
+  "ErrorStageDirectionNotFound": "Es wurde keine Regieanweisung mit der angegebenen ID gefunden.",
   "ErrorMutuallyExclusiveEntityFilter": "Geben Sie entweder {0} oder {1} an, nicht beides.",
   "ErrorInvalidEntityFilterId": "{0} muss eine gültige Kennung sein.",
   "InfoEntityFilterNoMatch": "Kein {0} entspricht '{1}'.",

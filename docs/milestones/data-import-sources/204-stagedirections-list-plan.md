@@ -1,6 +1,6 @@
 # #204 — Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id
 
-**Status:** Planning
+**Status:** In progress (step 10)
 **GitHub issue:** #204
 **Tiers required:** T1, T2
 **Depends on:** #195, #196
@@ -126,7 +126,7 @@ already made the generic capability entity-agnostic), only the one new DI bindin
 
 ### 1. Register `IListableRepository<StageDirectionEntity>` in `Program.cs`
 
-**Status:** Not started.
+**Status:** Done.
 
 Add immediately after the existing `IListableRepository<ConversationEntity>` binding
 (`Program.cs:313`), inside the same `#193` comment block (extend the block's own comment to note the two
@@ -139,7 +139,7 @@ builder.Services.AddSingleton<IListableRepository<StageDirectionEntity>>(sp =>
 
 ### 2. `StageDirectionResponse` DTO
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Models/StageDirectionResponse.cs`, namespace `Quotinator.Api.Models`
 (existing folder — #184–#188 already created it):
@@ -166,7 +166,7 @@ public sealed class StageDirectionResponse
 
 ### 3. `ApiMessages.StageDirectionNotFound` + i18n lockstep
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `src/Quotinator.Constants/Api/ApiMessages.cs`:
 ```csharp
@@ -182,7 +182,7 @@ Add `"ErrorStageDirectionNotFound"` to all three `i18ntext/UI.*.json` files in t
 
 ### 4. `StageDirectionEndpoints.cs`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `src/Quotinator.Api/Endpoints/StageDirectionEndpoints.cs`, static class
 `StageDirectionEndpoints`, mirroring `UniverseEndpoints.cs`'s exact shape (repository directly to
@@ -273,7 +273,7 @@ app.MapStageDirectionEndpoints();
 
 ### 5. Register the OpenAPI numeric-param transformer path
 
-**Status:** Not started.
+**Status:** Done.
 
 Add to `NumericParameterSchemaTransformer.NumericParamsByPath`:
 ```csharp
@@ -286,7 +286,7 @@ Add to `NumericParameterSchemaTransformer.NumericParamsByPath`:
 
 ### 6. `FakeStageDirectionRepository`
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Fakes/FakeStageDirectionRepository.cs`, implementing
 `IListableRepository<StageDirectionEntity>`, mirroring `FakeUniverseRepository.cs`'s exact shape (canned
@@ -294,7 +294,7 @@ New file `tests/Quotinator.Api.Tests/Fakes/FakeStageDirectionRepository.cs`, imp
 
 ### 7. Endpoint tests
 
-**Status:** Not started.
+**Status:** Done.
 
 New file `tests/Quotinator.Api.Tests/Endpoints/StageDirectionEndpointsTests.cs`, mirroring
 `UniverseEndpointsTests.cs`'s exact structure (`CreateFactory(FakeStageDirectionRepository? repository =
@@ -319,7 +319,7 @@ null)`, a `NewStageDirection(...)` fixture builder). 14 tests:
 
 ### 8. Documentation
 
-**Status:** Not started.
+**Status:** Done.
 
 Update `README.md`'s and `addon/DOCS.md`'s REST API Endpoints tables — add rows for
 `GET /api/v1/masterdata/stagedirections` and `GET /api/v1/masterdata/stagedirections/{id}`, following
@@ -328,7 +328,11 @@ the existing table row style. Add `[Api - GetAllStageDirections]`/`[Api - GetSta
 
 ### 9. Solution file
 
-**Status:** Not started.
+**Status:** Done. No `Quotinator.slnx` edit needed — all four new `.cs` files land inside existing
+`<Project Path="...csproj">` folders (`src/Quotinator.Api/Models/`, `src/Quotinator.Api/Endpoints/`,
+`tests/Quotinator.Api.Tests/Fakes/`, `tests/Quotinator.Api.Tests/Endpoints/`), and neither project's
+`.csproj` restricts the default SDK `**/*.cs` glob with a `<Compile Remove>`/`<Compile Include>` — same
+outcome as every other issue in this batch, confirmed directly this time rather than assumed.
 
 Add `src/Quotinator.Api/Models/StageDirectionResponse.cs`, `src/Quotinator.Api/Endpoints/
 StageDirectionEndpoints.cs`, and `tests/Quotinator.Api.Tests/Fakes/FakeStageDirectionRepository.cs`/
@@ -338,7 +342,16 @@ needed for any `.cs` file in this batch so far, but check regardless).
 
 ### 10. Verify
 
-**Status:** Not started.
+**Status:** Done (build/test only — T1/T2 not yet run).
+
+`dotnet build --configuration Release` → 0 Warning(s), 0 Error(s). Confirmed all 14 endpoint tests plus
+the two `GetStageDirectionById_MalformedId_Returns404NotBadRequest`/`_UnknownId_Returns404` exceptions
+started red (12 of 14 failed) by temporarily commenting out `app.MapStageDirectionEndpoints();` in
+`Program.cs` and reverting immediately after — the two "still pass" cases return 404 either way since an
+unmapped route also 404s, matching the equivalent check done for #184-#189. `dotnet test --configuration
+Release --verbosity normal` → full suite green across every test project, 0 warnings, 0 errors (per-project
+counts in the closing report). T1/T2 deferred to the combined batch verification pass for #184-#189/#204/
+#205 per the task instructions for this session.
 
 `dotnet build --configuration Release` → 0 warnings, 0 errors. `dotnet test --configuration Release
 --verbosity normal` → full suite green across all 10 test projects, 0 warnings, 0 errors. Confirm all
@@ -371,25 +384,25 @@ This project always runs T2 regardless of a documented trigger — this issue's 
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `IListableRepository<StageDirectionEntity>` is registered in DI | Unit test | App starts under `WebApplicationFactory` (implicit in every endpoint test) |
-| 2 | ❌ | `GET /api/v1/masterdata/stagedirections` returns a paginated list | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_ReturnsPaginatedResults` |
-| 3 | ❌ | `page=0` returns 422 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageZero_Returns422` |
-| 4 | ❌ | Malformed `page`/`pageSize` returns 422 | Unit test | `_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
-| 5 | ❌ | Negative `pageSize` returns 422 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeNegative_Returns422` |
-| 6 | ❌ | `pageSize > 500` returns 422, never clamped | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeAbove500_Returns422NotSilentClamp` |
-| 7 | ❌ | `pageSize = 0` returns every row with the effective count reported | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeZero_ReturnsAllRowsAsOnePage` |
-| 8 | ❌ | Omitted `pageSize` defaults to 20 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeOmitted_DefaultsTo20` |
-| 9 | ❌ | A page beyond the last returns 422, distinct from case 3 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageBeyondLast_Returns422DistinctDetail` |
-| 10 | ❌ | `GET /api/v1/masterdata/stagedirections/{id}` returns the matching StageDirection | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_ExistingId_ReturnsStageDirection` |
-| 11 | ❌ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | Same test (shape assertion) |
-| 12 | ❌ | An unknown id returns 404 | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_UnknownId_Returns404` |
-| 13 | ❌ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_MalformedId_Returns404NotBadRequest` |
-| 14 | ❌ | A lowercase id matches an uppercase-stored id | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_LowercaseId_MatchesCaseInsensitively` |
-| 15 | ❌ | `page`/`pageSize` publish as `integer` in the OpenAPI spec | Unit test | `NumericParameterSchemaTransformerTests` (new cases) |
-| 16 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `StageDirectionEndpoints_OnLiveSpec_TaggedMasterData` |
-| 17 | ❌ | `ApiMessages.StageDirectionNotFound` exists and all three locale files carry `ErrorStageDirectionNotFound` | Unit test | `TranslationCompletenessTests` |
-| 18 | ❌ | `README.md`/`addon/DOCS.md`/`docs/logging.md` document both new endpoints | Doc review | Files updated |
-| 19 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 1 | ✅ | `IListableRepository<StageDirectionEntity>` is registered in DI | Unit test | App starts under `WebApplicationFactory` (implicit in every endpoint test) |
+| 2 | ✅ | `GET /api/v1/masterdata/stagedirections` returns a paginated list | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_ReturnsPaginatedResults` |
+| 3 | ✅ | `page=0` returns 422 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageZero_Returns422` |
+| 4 | ✅ | Malformed `page`/`pageSize` returns 422 | Unit test | `_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
+| 5 | ✅ | Negative `pageSize` returns 422 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeNegative_Returns422` |
+| 6 | ✅ | `pageSize > 500` returns 422, never clamped | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeAbove500_Returns422NotSilentClamp` |
+| 7 | ✅ | `pageSize = 0` returns every row with the effective count reported | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeZero_ReturnsAllRowsAsOnePage` |
+| 8 | ✅ | Omitted `pageSize` defaults to 20 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeOmitted_DefaultsTo20` |
+| 9 | ✅ | A page beyond the last returns 422, distinct from case 3 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageBeyondLast_Returns422DistinctDetail` |
+| 10 | ✅ | `GET /api/v1/masterdata/stagedirections/{id}` returns the matching StageDirection | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_ExistingId_ReturnsStageDirection` |
+| 11 | ✅ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | Same test (shape assertion) |
+| 12 | ✅ | An unknown id returns 404 | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_UnknownId_Returns404` |
+| 13 | ✅ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_MalformedId_Returns404NotBadRequest` |
+| 14 | ✅ | A lowercase id matches an uppercase-stored id | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_LowercaseId_MatchesCaseInsensitively` |
+| 15 | ✅ | `page`/`pageSize` publish as `integer` in the OpenAPI spec | Unit test | `NumericParameterSchemaTransformerTests.Page_OnMasterDataStageDirections_PatchedToInteger` (+ 3 sibling cases), `OpenApiSpecEndpointTests.PageParam_OnLiveSpec_PublishesIntegerType` (new `stagedirections` DataRow cases) |
+| 16 | ✅ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `StageDirectionEndpoints_OnLiveSpec_TaggedMasterData` |
+| 17 | ✅ | `ApiMessages.StageDirectionNotFound` exists and all three locale files carry `ErrorStageDirectionNotFound` | Unit test | `TranslationCompletenessTests` |
+| 18 | ✅ | `README.md`/`addon/DOCS.md`/`docs/logging.md` document both new endpoints | Doc review | Files updated |
+| 19 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
 | 20 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
 | 21 | ❌ | T2 — the live contract holds against the built image | Live (T2) | `docker build`/`docker run` matrix — see Step 10 |
 

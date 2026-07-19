@@ -154,6 +154,8 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/masterdata/series/{id}` | Series by UUID. Includes a `universe` reference (`{id, name}`, or `null` if the series has no universe) |
 | GET | `/api/v1/masterdata/universes` | Paginated list of Universes — fictional worlds or franchises spanning one or more Series (`page`, `pageSize`) |
 | GET | `/api/v1/masterdata/universes/{id}` | Universe by UUID |
+| GET | `/api/v1/masterdata/stagedirections` | Paginated list of StageDirections — reusable scene-setting or action descriptions that can appear in a conversation (`page`, `pageSize`) |
+| GET | `/api/v1/masterdata/stagedirections/{id}` | StageDirection by UUID |
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/version` | Running version and environment |
 | POST | `/api/v1/import` | Import one source file (JSON or, via `converter: "csv"` in `settings`, CSV) — same duplicate-detection engine as startup seeding. Multipart fields: `file`, `settings` (optional JSON: `converter`, `duplicateResolution`, `enrich`) — or pass `batchId` (query string) instead of `file` to apply a batch already staged by a prior `/import`/`/import/preview` call. Stages then attempts to apply — `200` when everything applied, `202` when any row needs a decision, `422` if neither `file` nor `batchId` is given. Returns a summary/conflicts/errors envelope (requires `X-Api-Key`) |

@@ -312,6 +312,11 @@ builder.Services.AddSingleton<IListableRepository<Character>>(sp => (IListableRe
 builder.Services.AddSingleton<IListableRepository<Person>>(sp => (IListableRepository<Person>)sp.GetRequiredService<IRestorableRepository<Person>>());
 builder.Services.AddSingleton<IListableRepository<ConversationEntity>>(sp => (IListableRepository<ConversationEntity>)sp.GetRequiredService<IRestorableRepository<ConversationEntity>>());
 
+// #204: StageDirectionEntity was left out of #193's original six-entity scope. Same "second interface
+// binding onto the existing IRestorableRepository<T> singleton, not a second instance" reasoning as the
+// four bindings immediately above.
+builder.Services.AddSingleton<IListableRepository<StageDirectionEntity>>(sp => (IListableRepository<StageDirectionEntity>)sp.GetRequiredService<IRestorableRepository<StageDirectionEntity>>());
+
 // #184: resolves a Source's SeriesId to its Series' (Id, Name) — the generic IListableRepository<T>/
 // IRepository<T> above cannot express this join (single-table SELECT * only).
 builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenceReader>();
@@ -562,6 +567,7 @@ app.MapCharacterEndpoints();
 app.MapPersonEndpoints();
 app.MapSeriesEndpoints();
 app.MapUniverseEndpoints();
+app.MapStageDirectionEndpoints();
 
 // Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
 // Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.
