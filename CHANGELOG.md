@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-19 20:20 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-19 21:27 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -120,6 +120,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Generic list-endpoint infrastructure (pagination, not-found handling, masterdata routing/tagging conventions, entity-scoped filter parsing) is now shared across every list endpoint instead of being reimplemented per entity — a purely internal consolidation, no behaviour change beyond the pagination contract change above (issues #193, #196)
 - `Quotinator.Engine` — a third internal project that sat between the API and the generic data-access library — has been merged into `Quotinator.Core`; a purely internal code-organisation change with no behaviour change (issue #206)
 - A source's release date was silently dropped whenever the source was only discovered from a quote instead of being explicitly declared in a source file's own `sources[]` section — the common case for almost every bundled source; the date is now correctly recorded. Sources already seeded before this fix are unaffected until a full database reset (issue #191)
+- A source, person, stage direction, sound cue, or conversation created with a lowercase explicit id could resolve correctly through one lookup path (for example, via a related quote) but fail to be found by that same record's own individual lookup endpoint — ids are now normalised consistently wherever they're written, fixing the inconsistency (issue #209)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`
