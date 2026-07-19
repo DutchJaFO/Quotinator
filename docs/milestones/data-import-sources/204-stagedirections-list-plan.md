@@ -1,0 +1,419 @@
+# #204 — Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id
+
+**Status:** Planning
+**GitHub issue:** #204
+**Tiers required:** T1, T2
+**Depends on:** #195, #196
+
+---
+
+## Spec requirements (corrected during planning review 2026-07-19)
+
+1. Register `IListableRepository<StageDirectionEntity>` in `Program.cs`, resolving to the existing
+   `IRestorableRepository<StageDirectionEntity>` singleton (`Program.cs:300`) — a second interface
+   binding, not a second object. This entity was left out of #193's original six-entity scope (Source,
+   Character, Person, Series, Universe, Conversation), so this issue adds the missing binding itself
+   rather than depending on #193 to have done it.
+2. `GET /api/v1/masterdata/stagedirections` — paginated list, using the newly-registered
+   `IListableRepository<StageDirectionEntity>.GetPageAsync` + `Quotinator.Data.Models.PagedItems<T>` +
+   `PaginationParsing.TryParse`/`ValidatePageBeyondLast` (rejects out-of-range input with 422; does not
+   clamp). Response items are a new `StageDirectionResponse` DTO with `Id`, `Text`, `ImageUrl`,
+   `CompletenessStatus` — no `MasterDataReference` field, since `StageDirectionEntity` has no FK to
+   another masterdata entity (same shape as #186's `PersonResponse`/#188's `UniverseResponse`).
+3. `GET /api/v1/masterdata/stagedirections/{id}` — single StageDirection by id, using
+   `NotFoundResult.OkOrNotFound`. `{id}` matches case-insensitively — for free, via
+   `SqliteRepository<T>.GetByIdAsync`'s existing uppercase-normalisation, not new logic this issue has
+   to write.
+4. Both endpoints use `RateLimitPolicies.Api`, tag `ApiTags.MasterData`, and `[Description]` attributes.
+5. No entity-specific filters yet — deferred per #196's entity-scoped filter-parameter convention.
+6. `page`/`pageSize` on `api/v1/masterdata/stagedirections` must be registered in
+   `NumericParameterSchemaTransformer.NumericParamsByPath` — the same gap every issue in the #184–#189
+   batch independently found for their own paths.
+7. Per CLAUDE.md's "Standard pagination contract", the endpoint must ship with the full eight-case
+   pagination test matrix.
+8. Update `README.md` and `addon/DOCS.md`'s endpoint tables, and register the new
+   `[Api - GetAllStageDirections]`/`[Api - GetStageDirectionById]` log prefixes in `docs/logging.md`
+   (every #184–#189 endpoint did this).
+9. Route naming: `stagedirections` (plain lowercase-concatenated, **not** kebab-case
+   `stage-directions`) — explicit developer decision (2026-07-19), matching the existing single-word
+   style every other masterdata route uses (`sources`, `characters`, `people`, `series`, `universes`).
+
+---
+
+## Background — why this issue exists
+
+`StageDirectionEntity` (`src/Quotinator.Engine/Entities/StageDirectionEntity.cs`, #67/#68) — "a reusable
+scene-setting or action description... that can appear in a conversation" — has
+`IRestorableRepository<StageDirectionEntity>` registered (`Program.cs:300`, added for #67/#68's
+stale-Add-target/batch-reversal machinery) but no `IListableRepository<StageDirectionEntity>` binding and
+no read endpoint of any kind today. #193 ("Generic listable repository capability + DI registrations for
+the six list entities") explicitly scoped itself to Source, Character, Person, Series, Universe, and
+Conversation — confirmed by reading #193's own issue body directly, which names exactly those six and
+never mentions StageDirection or SoundCue. This was found as a gap during the #184–#189 batch's
+implementation, not a pre-existing plan — issue #204 (this one) and #205 (SoundCue) were filed to close
+it, following the exact per-entity pattern #184–#188 established.
+
+**Verified before starting** (per this project's standing rule — every issue in this milestone's
+`184`–`196` range has had at least one factual error caught this way; #188's own already-shipped code,
+the closest structural sibling — a no-FK masterdata entity — was read directly and used as the template
+rather than #188's own now-historical plan doc, since implementation sometimes diverges slightly from a
+plan doc in ways worth copying exactly):
+
+- **`StageDirectionEntity` fields confirmed directly** (`src/Quotinator.Engine/Entities/
+  StageDirectionEntity.cs`): `Text` (`string`, defaults to `string.Empty`), `ImageUrl` (`string?`),
+  `ImportBatchId` (`Guid?`), `CompletenessStatus` (`SafeValue<CompletenessStatus?>`), `NoValueKnown`
+  (`IReadOnlyList<string>`), plus `RecordBase`'s `Id`/`DateCreated`/`DateModified`/`DateDeleted`/
+  `IsDeleted`. **No FK to another masterdata entity** — confirmed by reading the full file — so no
+  `MasterDataReference`-typed field is needed anywhere on `StageDirectionResponse`.
+- **`IRestorableRepository<StageDirectionEntity>` confirmed registered, `IListableRepository<T>` confirmed
+  NOT registered** — read `Program.cs` directly (`Program.cs:300` for the former; grepped the file for
+  `IListableRepository<StageDirectionEntity>` and found no match). This issue's Step 1 adds exactly the
+  one missing line, mirroring the existing `IListableRepository<Source>`/`<Character>`/`<Person>`/
+  `<ConversationEntity>` bindings at `Program.cs:310-313` (`sp => (IListableRepository<T>)
+  sp.GetRequiredService<IRestorableRepository<T>>()`) — a second interface binding onto the same object,
+  not a second instance, since `SqliteRestorableRepository<T>` already implements `IListableRepository<T>`
+  transitively (it extends `SqliteRepository<T>`).
+- **`RepositorySql.SelectPage`/generic count already work for any `[Table]`-attributed entity with no
+  further infrastructure work** — confirmed by reading #193's own shipped code: `SelectPage(tableName)`
+  and the generic active-row count are driven purely by the `[Table]` attribute
+  (`[Table("StageDirections")]`, confirmed on the entity), not by an entity-specific allowlist. No schema
+  change, no new `RepositorySql` method, no new `SqlQueryGuardTests`/`RepositorySqlGuardTests` case is
+  needed for this issue — those were #193's one-time cost, already paid.
+- **`PagedItems<T>`, `PaginationParsing`, `NotFoundResult`, `ApiTags.MasterData`, `RateLimitPolicies.Api`,
+  `NumericParameterSchemaTransformer.NumericParamsByPath`, and the full eight-case pagination test matrix
+  requirement** are all re-confirmed exactly as every #184–#189 plan doc already established — not
+  re-verified line-by-line again here since six issues in a row have now independently confirmed the same
+  facts about the same shared infrastructure; see #184's plan doc for the original, most detailed
+  verification of each.
+- **Response DTO decision, mirroring #186/#188 exactly**: `StageDirectionEntity`'s
+  `SafeValue<CompletenessStatus?>` field has no `System.Text.Json` converter anywhere in the codebase —
+  confirmed no `Converters.Add` for `SafeValue<T>` in `Program.cs`. `StageDirectionResponse.
+  CompletenessStatus` is typed as the plain enum, populated via `entity.CompletenessStatus.Parsed ??
+  CompletenessStatus.Incomplete` — the enum already carries `[JsonConverter(typeof(JsonStringEnumConverter))]`,
+  so no further work is needed to serialize it as a plain string.
+- **`ApiMessages.StageDirectionNotFound` does not exist yet**, and no `ErrorStageDirectionNotFound` key
+  exists in any of the three `i18ntext/UI.*.json` files — confirmed via grep. Both must be added, mirroring
+  `PersonNotFound`/`ErrorPersonNotFound` and `UniverseNotFound`/`ErrorUniverseNotFound`.
+- **Malformed-id-as-404 precedent re-confirmed**: `GetStageDirectionById` follows the same precedent every
+  prior masterdata `GetById` endpoint uses — a malformed (non-`Guid`) `{id}` and a well-formed-but-unknown
+  `{id}` both produce the same 404 via `NotFoundResult.OkOrNotFound`, since there is no repository call to
+  make either way. Not a 422 — that status is reserved for filter/pagination *parameters*, not a primary
+  resource-identifying route segment.
+- **Route naming decided explicitly, not left to inference**: this is the first multi-word masterdata
+  resource name in the API (every existing one — `sources`, `characters`, `people`, `series`,
+  `universes` — is a single word). The developer explicitly rejected kebab-case (`stage-directions`)
+  during this issue's own filing; `stagedirections` (plain lowercase-concatenated) was chosen instead,
+  matching the existing single-word style rather than introducing a second route-naming convention.
+- **Soft-deleted visibility, already correct, confirmed structural**: `RepositorySql.SelectPage`/
+  `SelectById` already filter `IsDeleted = 0` unconditionally — a soft-deleted StageDirection is already
+  invisible via this endpoint for free, per CLAUDE.md's "Soft-deleted rows are invisible by default,
+  everywhere" convention. No new work is needed, and no `includeDeleted` opt-in is being built here.
+- **Fake repository shape confirmed against the actual shipped `FakeUniverseRepository.cs`**, not an
+  earlier plan doc's description of it: a "canned page / canned single entity, recording the arguments it
+  was called with" double — `ReturnPage`/`ReturnById` settable properties, `LastPageRequested`/
+  `LastPageSizeRequested`/`LastIdRequested` recorded for assertion, write methods (`InsertAsync`,
+  `InsertManyAsync`, `UpdateAsync`, `SoftDeleteAsync`) throw `NotImplementedException` since no
+  StageDirection endpoint needs them today — simpler than an earlier "real in-memory paginating list"
+  description some #184-era plan docs used, and this is what's actually shipped in four of five sibling
+  fakes now, so this issue's own fake matches that real precedent.
+
+Conventions and infrastructure only — no schema change, no new `Sql.cs`/`RepositorySql` method (#193
+already made the generic capability entity-agnostic), only the one new DI binding this issue itself adds.
+
+---
+
+## Steps
+
+### 1. Register `IListableRepository<StageDirectionEntity>` in `Program.cs`
+
+**Status:** Not started.
+
+Add immediately after the existing `IListableRepository<ConversationEntity>` binding
+(`Program.cs:313`), inside the same `#193` comment block (extend the block's own comment to note the two
+new bindings land here, not in #193's original block):
+
+```csharp
+builder.Services.AddSingleton<IListableRepository<StageDirectionEntity>>(sp =>
+    (IListableRepository<StageDirectionEntity>)sp.GetRequiredService<IRestorableRepository<StageDirectionEntity>>());
+```
+
+### 2. `StageDirectionResponse` DTO
+
+**Status:** Not started.
+
+New file `src/Quotinator.Api/Models/StageDirectionResponse.cs`, namespace `Quotinator.Api.Models`
+(existing folder — #184–#188 already created it):
+
+```csharp
+namespace Quotinator.Api.Models;
+
+/// <summary>The API response shape for a single StageDirection.</summary>
+public sealed class StageDirectionResponse
+{
+    /// <summary>Unique identifier (UUID v4).</summary>
+    public required string Id { get; init; }
+
+    /// <summary>The stage direction text in its original language.</summary>
+    public required string Text { get; init; }
+
+    /// <summary>Optional image (e.g. a production still) illustrating the scene. <c>null</c> when unset.</summary>
+    public string? ImageUrl { get; init; }
+
+    /// <summary>Whether the record's fields are known to be fully populated and reviewed.</summary>
+    public required Quotinator.Data.Entities.CompletenessStatus CompletenessStatus { get; init; }
+}
+```
+
+### 3. `ApiMessages.StageDirectionNotFound` + i18n lockstep
+
+**Status:** Not started.
+
+Add to `src/Quotinator.Constants/Api/ApiMessages.cs`:
+```csharp
+public const string StageDirectionNotFound = "ErrorStageDirectionNotFound";
+```
+
+Add `"ErrorStageDirectionNotFound"` to all three `i18ntext/UI.*.json` files in the same commit:
+- `UI.en-GB.json`: `"No stage direction with the requested ID was found."`
+- `UI.nl.json`: `"Er is geen regieaanwijzing gevonden met het opgegeven ID."`
+- `UI.de.json`: `"Es wurde keine Regieanweisung mit der angegebenen ID gefunden."`
+
+`TranslationCompletenessTests` must stay green.
+
+### 4. `StageDirectionEndpoints.cs`
+
+**Status:** Not started.
+
+New file `src/Quotinator.Api/Endpoints/StageDirectionEndpoints.cs`, static class
+`StageDirectionEndpoints`, mirroring `UniverseEndpoints.cs`'s exact shape (repository directly to
+`PagedItems<T>`, no service layer, no join reader):
+
+```csharp
+namespace Quotinator.Api.Endpoints;
+
+/// <summary>Registers all <c>/api/v1/masterdata/stagedirections</c> endpoints.</summary>
+internal static class StageDirectionEndpoints
+{
+    private sealed class Log { }
+
+    internal static void MapStageDirectionEndpoints(this WebApplication app)
+    {
+        var group = app.MapGroup("/api/v1/masterdata/stagedirections")
+                       .WithTags(ApiTags.MasterData)
+                       .RequireRateLimiting(RateLimitPolicies.Api);
+
+        group.MapGet("/", GetAll)
+             .WithName("GetAllStageDirections")
+             .WithSummary("List stage directions")
+             .WithDescription(
+                 "Returns a paginated list of stage directions. Maximum `pageSize` is 500. " +
+                 "`pageSize=0` returns every stage direction as a single page.");
+
+        group.MapGet("/{id}", GetById)
+             .WithName("GetStageDirectionById")
+             .WithSummary("Stage direction by ID")
+             .WithDescription("Returns a single stage direction by ID. Matches case-insensitively. Returns 404 if not found.");
+    }
+
+    private static async Task<IResult> GetAll(
+        IApiLocalizer localizer,
+        ILogger<Log> logger,
+        IListableRepository<StageDirectionEntity> repository,
+        [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
+        [Description("Number of entries per page (0-500). 0 means every stage direction as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
+    {
+        logger.LogInformation("[Api - GetAllStageDirections] page={Page} pageSize={PageSize}", page, pageSize);
+
+        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
+            return pageError!;
+
+        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
+
+        var beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
+        if (beyondLastError is not null)
+            return beyondLastError;
+
+        var mapped = new PagedItems<StageDirectionResponse>(
+            result.Items.Select(ToResponse).ToList(),
+            result.Page, result.PageSize, result.TotalCount);
+
+        return Results.Ok(mapped);
+    }
+
+    private static async Task<IResult> GetById(
+        [Description("UUID of the stage direction.")] string id,
+        IApiLocalizer localizer,
+        ILogger<Log> logger,
+        IListableRepository<StageDirectionEntity> repository)
+    {
+        logger.LogInformation("[Api - GetStageDirectionById] id={Id}", id);
+
+        StageDirectionEntity? entity = Guid.TryParse(id, out var stageDirectionId)
+            ? await repository.GetByIdAsync(stageDirectionId)
+            : null;
+
+        var response = entity is null ? null : ToResponse(entity);
+        return NotFoundResult.OkOrNotFound(response, localizer, ApiMessages.StageDirectionNotFound);
+    }
+
+    private static StageDirectionResponse ToResponse(StageDirectionEntity entity) => new()
+    {
+        Id                 = entity.Id.ToString("D").ToUpperInvariant(),
+        Text               = entity.Text,
+        ImageUrl           = entity.ImageUrl,
+        CompletenessStatus = entity.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,
+    };
+}
+```
+
+Register the call in `Program.cs` alongside the other `Map*Endpoints()` calls:
+```csharp
+app.MapStageDirectionEndpoints();
+```
+
+### 5. Register the OpenAPI numeric-param transformer path
+
+**Status:** Not started.
+
+Add to `NumericParameterSchemaTransformer.NumericParamsByPath`:
+```csharp
+["api/v1/masterdata/stagedirections"] = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase)
+{
+    ["page"]     = QueryParamDefaults.Page,
+    ["pageSize"] = QueryParamDefaults.PageSize,
+},
+```
+
+### 6. `FakeStageDirectionRepository`
+
+**Status:** Not started.
+
+New file `tests/Quotinator.Api.Tests/Fakes/FakeStageDirectionRepository.cs`, implementing
+`IListableRepository<StageDirectionEntity>`, mirroring `FakeUniverseRepository.cs`'s exact shape (canned
+`ReturnPage`/`ReturnById`, `Last*Requested` recording, write methods throw `NotImplementedException`).
+
+### 7. Endpoint tests
+
+**Status:** Not started.
+
+New file `tests/Quotinator.Api.Tests/Endpoints/StageDirectionEndpointsTests.cs`, mirroring
+`UniverseEndpointsTests.cs`'s exact structure (`CreateFactory(FakeStageDirectionRepository? repository =
+null)`, a `NewStageDirection(...)` fixture builder). 14 tests:
+
+- `GetAllStageDirections_ReturnsPaginatedResults`
+- `GetAllStageDirections_PageZero_Returns422`
+- `GetAllStageDirections_PageMalformed_Returns422`
+- `GetAllStageDirections_PageSizeMalformed_Returns422`
+- `GetAllStageDirections_PageSizeNegative_Returns422`
+- `GetAllStageDirections_PageSizeAbove500_Returns422NotSilentClamp`
+- `GetAllStageDirections_PageSizeZero_ReturnsAllRowsAsOnePage`
+- `GetAllStageDirections_PageSizeOmitted_DefaultsTo20`
+- `GetAllStageDirections_PageBeyondLast_Returns422DistinctDetail`
+- `GetStageDirectionById_ExistingId_ReturnsStageDirection` — must additionally assert
+  `completenessStatus` serializes as a plain JSON string value, never `{"raw":...,"parsed":...}`
+  (mirrors `UniverseEndpointsTests`'s identical shape assertion)
+- `GetStageDirectionById_UnknownId_Returns404`
+- `GetStageDirectionById_MalformedId_Returns404NotBadRequest`
+- `GetStageDirectionById_LowercaseId_MatchesCaseInsensitively`
+- `StageDirectionEndpoints_OnLiveSpec_TaggedMasterData`
+
+### 8. Documentation
+
+**Status:** Not started.
+
+Update `README.md`'s and `addon/DOCS.md`'s REST API Endpoints tables — add rows for
+`GET /api/v1/masterdata/stagedirections` and `GET /api/v1/masterdata/stagedirections/{id}`, following
+the existing table row style. Add `[Api - GetAllStageDirections]`/`[Api - GetStageDirectionById]` to
+`docs/logging.md`'s "Defined prefixes" table, placed near the other `[Api - Get*ById]` rows.
+
+### 9. Solution file
+
+**Status:** Not started.
+
+Add `src/Quotinator.Api/Models/StageDirectionResponse.cs`, `src/Quotinator.Api/Endpoints/
+StageDirectionEndpoints.cs`, and `tests/Quotinator.Api.Tests/Fakes/FakeStageDirectionRepository.cs`/
+`tests/Quotinator.Api.Tests/Endpoints/StageDirectionEndpointsTests.cs` to `Quotinator.slnx` if not
+automatically picked up by the existing project globs — verify by opening the solution (has not been
+needed for any `.cs` file in this batch so far, but check regardless).
+
+### 10. Verify
+
+**Status:** Not started.
+
+`dotnet build --configuration Release` → 0 warnings, 0 errors. `dotnet test --configuration Release
+--verbosity normal` → full suite green across all 10 test projects, 0 warnings, 0 errors. Confirm all
+listed expected tests started red before implementation (e.g. by temporarily reverting the new
+`app.MapStageDirectionEndpoints();` line).
+
+T2 (Docker): `docker build` + `docker run`, then:
+```bash
+curl -s "http://localhost:8080/api/v1/masterdata/stagedirections"
+curl -s "http://localhost:8080/api/v1/masterdata/stagedirections?pageSize=0"
+curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/stagedirections?pageSize=999"
+curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/stagedirections/00000000-0000-0000-0000-000000000000"
+curl -s "http://localhost:8080/openapi/v1.json" | grep -o '"masterdata/stagedirections[^"]*"'
+```
+Confirm: default list returns 200 with `items`/`page`/`pageSize`/`totalCount`/`totalPages`; `pageSize=0`
+returns every StageDirection as one page; `pageSize=999` returns 422; an unknown id returns 404 with
+`ErrorStageDirectionNotFound`'s message; the OpenAPI spec publishes `page`/`pageSize` as `integer|null`
+on `api/v1/masterdata/stagedirections`. Also fetch a real StageDirection id via
+`Quotinator.Tools.DbInspector` (`SELECT Id, Text FROM StageDirections WHERE IsDeleted = 0 LIMIT 1;`) and
+confirm `GET /api/v1/masterdata/stagedirections/{that id, lowercased}` returns 200 — live proof of
+case-insensitive matching, not just the unit test.
+
+This project always runs T2 regardless of a documented trigger — this issue's own change to `Program.cs`
+(the new DI registration and `MapStageDirectionEndpoints()` call) also independently satisfies
+`docs/release-verification.md`'s "touches Program.cs startup" trigger.
+
+---
+
+## Verification checklist
+
+| # | Status | Requirement | Method | Verification |
+|---|--------|-------------|--------|--------------|
+| 1 | ❌ | `IListableRepository<StageDirectionEntity>` is registered in DI | Unit test | App starts under `WebApplicationFactory` (implicit in every endpoint test) |
+| 2 | ❌ | `GET /api/v1/masterdata/stagedirections` returns a paginated list | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_ReturnsPaginatedResults` |
+| 3 | ❌ | `page=0` returns 422 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageZero_Returns422` |
+| 4 | ❌ | Malformed `page`/`pageSize` returns 422 | Unit test | `_PageMalformed_Returns422`, `_PageSizeMalformed_Returns422` |
+| 5 | ❌ | Negative `pageSize` returns 422 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeNegative_Returns422` |
+| 6 | ❌ | `pageSize > 500` returns 422, never clamped | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeAbove500_Returns422NotSilentClamp` |
+| 7 | ❌ | `pageSize = 0` returns every row with the effective count reported | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeZero_ReturnsAllRowsAsOnePage` |
+| 8 | ❌ | Omitted `pageSize` defaults to 20 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageSizeOmitted_DefaultsTo20` |
+| 9 | ❌ | A page beyond the last returns 422, distinct from case 3 | Unit test | `StageDirectionEndpointsTests.GetAllStageDirections_PageBeyondLast_Returns422DistinctDetail` |
+| 10 | ❌ | `GET /api/v1/masterdata/stagedirections/{id}` returns the matching StageDirection | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_ExistingId_ReturnsStageDirection` |
+| 11 | ❌ | `completenessStatus` serializes as a plain JSON value, never `{raw, parsed}` | Unit test | Same test (shape assertion) |
+| 12 | ❌ | An unknown id returns 404 | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_UnknownId_Returns404` |
+| 13 | ❌ | A malformed `{id}` route segment returns 404, not an unhandled exception or bare 400 | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_MalformedId_Returns404NotBadRequest` |
+| 14 | ❌ | A lowercase id matches an uppercase-stored id | Unit test | `StageDirectionEndpointsTests.GetStageDirectionById_LowercaseId_MatchesCaseInsensitively` |
+| 15 | ❌ | `page`/`pageSize` publish as `integer` in the OpenAPI spec | Unit test | `NumericParameterSchemaTransformerTests` (new cases) |
+| 16 | ❌ | Both endpoints tagged `ApiTags.MasterData` and rate-limited `RateLimitPolicies.Api`, proven live | Unit test | `StageDirectionEndpoints_OnLiveSpec_TaggedMasterData` |
+| 17 | ❌ | `ApiMessages.StageDirectionNotFound` exists and all three locale files carry `ErrorStageDirectionNotFound` | Unit test | `TranslationCompletenessTests` |
+| 18 | ❌ | `README.md`/`addon/DOCS.md`/`docs/logging.md` document both new endpoints | Doc review | Files updated |
+| 19 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 20 | ❌ | T1 — app starts in Visual Studio; both endpoints reachable | Live (T1) | Developer confirmed |
+| 21 | ❌ | T2 — the live contract holds against the built image | Live (T2) | `docker build`/`docker run` matrix — see Step 10 |
+
+---
+
+## Notes
+
+This issue and #205 (SoundCue) both close the same gap: #193 scoped itself to six entities and never
+included StageDirection/SoundCue, even though both already had `IRestorableRepository<T>` from #67/#68.
+Filed as two separate issues (not one combined one) to match the established one-issue-per-entity
+granularity #184–#188 already set.
+
+Route naming (`stagedirections`, not `stage-directions`) was an explicit developer decision made when
+this issue was filed — see Spec requirement 9 and the Background section's dedicated note. Worth stating
+plainly here since it's the only masterdata route in this milestone where a naming alternative was
+seriously considered and rejected, rather than following an unambiguous existing pattern.
+
+No `MasterDataReference` work is needed here (see Background) — this is the fourth masterdata entity in
+the milestone with no FK of its own, after Person (#186) and Universe (#188), and now StageDirection/
+SoundCue (#204/#205).
+
+---
+
+## Corrected issue text (for a future `gh issue edit`)
+
+The issue as filed already reflects this plan doc's findings (it was drafted in this same planning pass,
+not corrected after the fact) — no `gh issue edit` is needed unless implementation surfaces something new.
