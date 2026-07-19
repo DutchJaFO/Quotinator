@@ -387,7 +387,7 @@ awaiting the developer's own Visual Studio confirmation.
 | 9 | ✅ | Applying a Modify with an absent field leaves the DB value untouched; explicit null clears it | Unit test | `SqliteImportActionServiceTests.ApplyBatchAsync_SourceModifyWithAbsentDate_LeavesExistingDateIntact` + `...ExplicitNullDate_ClearsDate` |
 | 10 | ✅ | `schemas/source-extended.schema.json` documents the distinction on every affected field | Doc review | Field-level descriptions on `dateOfBirth`/`dateOfDeath`/`imageUrl`/`soundFileUrl`/`description`/`seriesName` |
 | 11 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — all 9 projects green, 0 warnings, 0 errors |
-| 12 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Awaiting developer confirmation |
+| 12 | ✅ | T1 — app starts in Visual Studio | Live (T1) | Developer confirmed: clean startup (schema up to date, data v10/app v9), no errors; `/quotes/random`, `/conversations`, `/masterdata/sources`, `/masterdata/universes` all 200 |
 | 13 | ✅ | T2 — a real import exercises absent-vs-null end to end | Live (T2) | `docker build` + `docker run`: explicit-id Source correction omitting `date` preserved `1942`; a follow-up import with `date: null` cleared it entirely (confirmed via `GET /api/v1/quotes/{id}`, whose `date` field is joined from the Source) |
 
 ---

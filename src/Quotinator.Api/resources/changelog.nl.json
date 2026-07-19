@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 192, 193, 194, 195, 196, 204, 205, 206],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -27,7 +27,11 @@
       "De titel, het type of de releasedatum van een bron kunnen nu achteraf worden gecorrigeerd — bijvoorbeeld een typefout in een filmtitel of een ontbrekend jaartal — zonder dat er een dubbele vermelding ontstaat.",
       "Regieaanwijzingen en geluidscues die in meerregelige dialogen worden gebruikt, kunnen nu ook achteraf worden gecorrigeerd, op dezelfde manier als de gegevens van een bron dat al konden.",
       "De beschrijving van een conversatie kan nu ook achteraf worden gecorrigeerd; de regels waaruit de conversatie zelf bestaat blijven ongewijzigd.",
-      "De naam, geboortedatum en overlijdensdatum van een persoon kunnen nu ook achteraf worden gecorrigeerd; geboorte- en overlijdensdatum kunnen nu voor het eerst voor een persoon worden ingesteld."
+      "De naam, geboortedatum en overlijdensdatum van een persoon kunnen nu ook achteraf worden gecorrigeerd; geboorte- en overlijdensdatum kunnen nu voor het eerst voor een persoon worden ingesteld.",
+      "Citaten worden nu correct gegroepeerd op de filmreeks of het fictieve universum waartoe ze behoren, en kunnen worden gefilterd op reeks of universum bij het zoeken, weergeven van een lijst, of het opvragen van een willekeurig citaat.",
+      "Bronnen, personages, personen, reeksen, universums, regieaanwijzingen en geluidscues kunnen nu allemaal afzonderlijk worden weergegeven en opgezocht via nieuwe eindpunten, op dezelfde manier als citaten dat al konden.",
+      "Het corrigeren van een bron, persoon, regieaanwijzing, geluidscue of conversatie door deze opnieuw te importeren, wijzigt nu alleen de velden die het bestand daadwerkelijk vermeldt — een veld dat wordt weggelaten wordt niet langer stilzwijgend teruggezet naar leeg.",
+      "Paginering is nu consistent bij elk lijsteindpunt: het opvragen van meer dan 500 items in één keer wordt geweigerd in plaats van stilzwijgend beperkt, en het opvragen van alle overeenkomende items als één pagina (`pageSize=0`) werkt overal op dezelfde manier."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -69,7 +73,18 @@
       "`GET /api/v1/quotes/random` toont nu de volledige conversatie wanneer een gekozen citaat daar deel van uitmaakt, en sluit voor de rest van de aanvraag elk ander citaat uit diezelfde conversatie uit; de respons rapporteert nu `requestedCount` en `returnedCount`, zodat een tekort door deze deduplicatie zichtbaar is (issue #69)",
       "`stageDirections[]`/`soundCues[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten in plaats van alleen ooit te worden toegevoegd — hetzelfde op beleid gebaseerde verschil, blokkering via de volledigheidscontrole, en beslissings-/terugdraaiproces dat broncorrecties al gebruiken",
       "`conversations[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten voor alleen het veld `description` — `lines` worden door dit pad nooit vergeleken, gelezen of geschreven; dat blijft een aparte, nog niet geplande toekomstige kwestie",
-      "`people[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten in plaats van alleen ooit te worden toegevoegd — hetzelfde op beleid gebaseerde verschil en dezelfde blokkering via de volledigheidscontrole die broncorrecties, regieaanwijzingen, geluidscues en conversaties al gebruiken; dit is ook het eerste pad dat ooit de velden `dateOfBirth`/`dateOfDeath` van een persoon schrijft, voorheen altijd `null`"
+      "`people[]`-vermeldingen met een id die overeenkomt met een bestaande rij kunnen nu een `Modify`-actie in gang zetten in plaats van alleen ooit te worden toegevoegd — hetzelfde op beleid gebaseerde verschil en dezelfde blokkering via de volledigheidscontrole die broncorrecties, regieaanwijzingen, geluidscues en conversaties al gebruiken; dit is ook het eerste pad dat ooit de velden `dateOfBirth`/`dateOfDeath` van een persoon schrijft, voorheen altijd `null`",
+      "Bronbestanden kunnen nu secties `series[]`/`universe[]` definiëren die gerelateerde bronnen koppelen tot een franchisehiërarchie (film → reeks → universum); een bron herkent zijn reeks op naam",
+      "Een samengesteld overlaybestand koppelt elke gebundelde film aan de juiste reeks/het juiste universum waar dit bekend is (bijv. de Lord of the Rings-trilogie) — gefaseerd voor beoordeling zoals elke andere correctie, niet automatisch toegepast",
+      "Citaatresponsen, en de filters van de eindpunten voor willekeurig/zoeken/lijst, bevatten nu de reeks en het universum van de bron (indien aanwezig), en kunnen worden gefilterd op `series`, `seriesId`, `universe` of `universeId`",
+      "Nieuwe eindpunten `GET /api/v1/masterdata/sources` en `.../sources/{id}` tonen en zoeken bronnen afzonderlijk op, inclusief hun gekoppelde reeks",
+      "Nieuwe eindpunten `GET /api/v1/masterdata/characters` en `.../characters/{id}` tonen en zoeken personages afzonderlijk op, inclusief elke bron waarin ze voorkomen",
+      "Nieuwe eindpunten `GET /api/v1/masterdata/people` en `.../people/{id}` tonen en zoeken personen afzonderlijk op",
+      "Nieuwe eindpunten `GET /api/v1/masterdata/series` en `.../series/{id}` tonen en zoeken reeksen afzonderlijk op, inclusief hun bovenliggende universum",
+      "Nieuwe eindpunten `GET /api/v1/masterdata/universes` en `.../universes/{id}` tonen en zoeken universums afzonderlijk op",
+      "Nieuw eindpunt `GET /api/v1/conversations` toont een gepagineerde lijst van conversaties",
+      "Nieuwe eindpunten `GET /api/v1/masterdata/stagedirections` en `.../stagedirections/{id}` tonen en zoeken regieaanwijzingen afzonderlijk op",
+      "Nieuwe eindpunten `GET /api/v1/masterdata/soundcues` en `.../soundcues/{id}` tonen en zoeken geluidscues afzonderlijk op"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
@@ -80,7 +95,9 @@
       "`POST /api/v1/import` en `.../import/preview` geven nu `200` terug wanneer alles netjes wordt (of zou worden) toegepast, of `202` wanneer een rij een beslissing nodig heeft, in plaats van altijd `200` terug te geven",
       "Het `status`-filter van `GET /api/v1/import/actions` accepteert nu ook `blocked`, voor een actie die wordt vastgehouden omdat deze een record zou wijzigen dat bevestigd volledig beoordeeld is",
       "`POST /api/v1/import/preview` faseert nu een echte, inspecteerbare batch in plaats van de wijzigingen ongedaan te maken — in beide gevallen wordt er niets weggeschreven, maar de gefaseerde batch kan achteraf worden bekeken via `GET /api/v1/import/actions?batchId=`",
-      "De gebundelde bronnen `NikhilNamal17/popular-movie-quotes` en `vilaboim/movie-quotes` gebruiken nu de nieuwe generieke convertors `basic-json-array`/`regex-array`, geconfigureerd via `converterOptions` in `data/sources/manifest.json` in plaats van eigen code per bron — de uitvoer is ongewijzigd, dezelfde citaat-id's en inhoud"
+      "De gebundelde bronnen `NikhilNamal17/popular-movie-quotes` en `vilaboim/movie-quotes` gebruiken nu de nieuwe generieke convertors `basic-json-array`/`regex-array`, geconfigureerd via `converterOptions` in `data/sources/manifest.json` in plaats van eigen code per bron — de uitvoer is ongewijzigd, dezelfde citaat-id's en inhoud",
+      "Paginering bij elk lijsteindpunt volgt nu één consistent contract: een `pageSize` boven 500 wordt geweigerd (422) in plaats van stilzwijgend beperkt, `pageSize=0` geeft alle overeenkomende rijen als één pagina terug, en het opvragen van een pagina voorbij de laatste is een aparte 422",
+      "De standaardpaginagrootte voor `GET /api/v1/admin/audit` en `GET /api/v1/import/actions` is gewijzigd van 50 naar 20, gelijk aan elk ander lijsteindpunt"
     ],
     "fixed": [
       "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor elk gebundeld bestand, of het nu extern is aangeleverd met een manifest-URL of intern is samengesteld) en bewaren de bron-URL; voorheen werd elke geseede batch onjuist geregistreerd",
@@ -98,7 +115,11 @@
       "Citaat-, bron-, personage- en conversatie-SQL-query's stonden al sinds vóór die scheiding bestond in de generieke gegevenstoegangsbibliotheek in plaats van in het Quotinator-specifieke project — een zuiver interne code-organisatiecorrectie zonder gedragswijziging (issue #157)",
       "De registratie van importbatches (welk bestand is geïmporteerd, wanneer, en met welk beleid) stond ook in het Quotinator-specifieke project terwijl deze eigenlijk in de generieke gegevenstoegangsbibliotheek thuishoort — weer een zuiver interne code-organisatiecorrectie zonder gedragswijziging (issue #158)",
       "Een citaat dat als volledig gecontroleerd was bevestigd, kon nog steeds stilzwijgend worden gewijzigd door een latere import — alleen een broncorrectie werd daadwerkelijk vastgehouden voor controle zoals bedoeld; beide worden nu correct vastgehouden. Een broncorrectie onder een beleid dat de bestaande waarde behoudt bij een conflict wordt niet langer onnodig vastgehouden wanneer er feitelijk niets zou veranderen (issue #168)",
-      "Het bericht van `ImportActionNotDecidableException` en de API-beschrijving van `POST /import/actions/{id}/decide` noemden specifiek `Quote`/`Source` en beweerden dat andere entiteitstypen altijd al beslist waren — beide waren verouderd sinds broncorrecties zelf beschikbaar kwamen; algemener geformuleerd zodat het bericht accuraat blijft naarmate meer entiteitstypen corrigeerbaar worden"
+      "Het bericht van `ImportActionNotDecidableException` en de API-beschrijving van `POST /import/actions/{id}/decide` noemden specifiek `Quote`/`Source` en beweerden dat andere entiteitstypen altijd al beslist waren — beide waren verouderd sinds broncorrecties zelf beschikbaar kwamen; algemener geformuleerd zodat het bericht accuraat blijft naarmate meer entiteitstypen corrigeerbaar worden",
+      "De queryparameters `page`/`pageSize` waren in de OpenAPI-specificatie gedocumenteerd als `string` in plaats van `integer` bij elk lijsteindpunt dat ze heeft — een vervolg op dezelfde correctie die al werd toegepast op de jaarfilters van `/quotes`, nu overal waar paginering wordt gebruikt",
+      "Een importbestand dat een bron, persoon, regieaanwijzing, geluidscue of conversatie corrigeerde, kon een veld stilzwijgend terugzetten naar leeg simpelweg door het niet te vermelden in het bestand — een weggelaten veld laat de bestaande waarde nu correct ongewijzigd; een expliciete `null` zet het nog steeds terug zoals bedoeld",
+      "Generieke infrastructuur voor lijsteindpunten (paginering, afhandeling van niet-gevonden, masterdata-routerings-/tag-conventies, entiteitsgebonden filterontleding) wordt nu gedeeld door elk lijsteindpunt in plaats van per entiteit opnieuw te worden geïmplementeerd — een zuiver interne consolidatie, geen gedragswijziging naast de hierboven genoemde wijziging in het pagineringscontract (issues #193, #196)",
+      "`Quotinator.Engine` — een derde intern project dat tussen de API en de generieke gegevenstoegangsbibliotheek in zat — is samengevoegd met `Quotinator.Core`; een zuiver interne code-organisatiewijziging zonder gedragswijziging (issue #206)"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"

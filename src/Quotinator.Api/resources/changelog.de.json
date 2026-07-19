@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 192, 193, 194, 195, 196, 204, 205, 206],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -27,7 +27,11 @@
       "Titel, Typ oder Erscheinungsdatum einer Quelle können jetzt nachträglich korrigiert werden — etwa ein Tippfehler in einem Filmtitel oder ein fehlendes Jahr — ohne dass ein doppelter Eintrag entsteht.",
       "Regieanweisungen und Toncues, die in mehrzeiligen Konversationen verwendet werden, können jetzt ebenfalls nachträglich korrigiert werden, genau wie die Angaben einer Quelle es bereits konnten.",
       "Die Beschreibung einer Konversation kann jetzt ebenfalls nachträglich korrigiert werden; die Zeilen, aus denen die Konversation selbst besteht, bleiben unverändert.",
-      "Name, Geburtsdatum und Todesdatum einer Person können jetzt ebenfalls nachträglich korrigiert werden; Geburts- und Todesdatum können jetzt erstmals für eine Person gesetzt werden."
+      "Name, Geburtsdatum und Todesdatum einer Person können jetzt ebenfalls nachträglich korrigiert werden; Geburts- und Todesdatum können jetzt erstmals für eine Person gesetzt werden.",
+      "Zitate werden jetzt korrekt nach der Filmreihe oder dem fiktiven Universum gruppiert, zu dem sie gehören, und können bei der Suche, beim Auflisten oder beim Abrufen eines zufälligen Zitats nach Reihe oder Universum gefiltert werden.",
+      "Quellen, Charaktere, Personen, Reihen, Universen, Regieanweisungen und Toncues können jetzt alle einzeln aufgelistet und nachgeschlagen werden über neue Endpunkte, genau wie es bei Zitaten bereits möglich war.",
+      "Das Korrigieren einer Quelle, Person, Regieanweisung, eines Toncues oder einer Konversation durch erneuten Import ändert jetzt nur die Felder, die die Datei tatsächlich angibt — ein weggelassenes Feld wird nicht mehr stillschweigend auf leer zurückgesetzt.",
+      "Die Paginierung ist jetzt bei jedem Listen-Endpunkt konsistent: Das Anfordern von mehr als 500 Elementen auf einmal wird abgelehnt statt stillschweigend begrenzt, und das Anfordern aller passenden Elemente als eine Seite (`pageSize=0`) funktioniert überall gleich."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -69,7 +73,18 @@
       "`GET /api/v1/quotes/random` bettet jetzt die vollständige Konversation ein, wenn ein ausgewähltes Zitat dazugehört, und schließt für den Rest der Anfrage jedes andere Zitat aus derselben Konversation aus; die Antwort meldet jetzt `requestedCount` und `returnedCount`, sodass ein durch diese Deduplizierung verursachtes Defizit sichtbar wird (Issue #69)",
       "`stageDirections[]`/`soundCues[]`-Einträge mit einer Id, die mit einer bestehenden Zeile übereinstimmt, können jetzt eine `Modify`-Aktion auslösen, anstatt nur jemals neu hinzugefügt zu werden — derselbe richtlinienbasierte Abgleich, dieselbe Sperrung über die Vollständigkeitsprüfung und derselbe Entscheidungs-/Rückgängig-Ablauf, den Quellenkorrekturen bereits verwenden",
       "`conversations[]`-Einträge mit einer Id, die mit einer bestehenden Zeile übereinstimmt, können jetzt eine `Modify`-Aktion nur für das Feld `description` auslösen — `lines` werden von diesem Pfad nie verglichen, gelesen oder geschrieben; das bleibt ein separates, noch nicht geplantes zukünftiges Thema",
-      "`people[]`-Einträge mit einer Id, die mit einer bestehenden Zeile übereinstimmt, können jetzt eine `Modify`-Aktion auslösen, anstatt nur jemals neu hinzugefügt zu werden — derselbe richtlinienbasierte Abgleich und dieselbe Sperrung über die Vollständigkeitsprüfung, die Quellen-, Regieanweisungs-, Toncue- und Konversationskorrekturen bereits verwenden; dies ist außerdem der erste Pfad, der jemals die Felder `dateOfBirth`/`dateOfDeath` einer Person schreibt, zuvor immer `null`"
+      "`people[]`-Einträge mit einer Id, die mit einer bestehenden Zeile übereinstimmt, können jetzt eine `Modify`-Aktion auslösen, anstatt nur jemals neu hinzugefügt zu werden — derselbe richtlinienbasierte Abgleich und dieselbe Sperrung über die Vollständigkeitsprüfung, die Quellen-, Regieanweisungs-, Toncue- und Konversationskorrekturen bereits verwenden; dies ist außerdem der erste Pfad, der jemals die Felder `dateOfBirth`/`dateOfDeath` einer Person schreibt, zuvor immer `null`",
+      "Quelldateien können jetzt Abschnitte `series[]`/`universe[]` angeben, die verwandte Quellen zu einer Franchise-Hierarchie verknüpfen (Film → Reihe → Universum); eine Quelle löst ihre Reihe anhand des Namens auf",
+      "Eine kuratierte Overlay-Datei verknüpft jeden gebündelten Film mit seiner korrekten Reihe/seinem korrekten Universum, sofern bekannt (z. B. die Der-Herr-der-Ringe-Trilogie) — gestaffelt zur Überprüfung wie jede andere Korrektur, nicht automatisch angewendet",
+      "Zitatantworten sowie die Filter der Zufalls-/Such-/Listen-Endpunkte enthalten jetzt die Reihe und das Universum der Quelle (sofern vorhanden) und können nach `series`, `seriesId`, `universe` oder `universeId` gefiltert werden",
+      "Neue Endpunkte `GET /api/v1/masterdata/sources` und `.../sources/{id}` listen Quellen einzeln auf und schlagen sie nach, einschließlich ihrer verknüpften Reihe",
+      "Neue Endpunkte `GET /api/v1/masterdata/characters` und `.../characters/{id}` listen Charaktere einzeln auf und schlagen sie nach, einschließlich jeder Quelle, in der sie vorkommen",
+      "Neue Endpunkte `GET /api/v1/masterdata/people` und `.../people/{id}` listen Personen einzeln auf und schlagen sie nach",
+      "Neue Endpunkte `GET /api/v1/masterdata/series` und `.../series/{id}` listen Reihen einzeln auf und schlagen sie nach, einschließlich ihres übergeordneten Universums",
+      "Neue Endpunkte `GET /api/v1/masterdata/universes` und `.../universes/{id}` listen Universen einzeln auf und schlagen sie nach",
+      "Neuer Endpunkt `GET /api/v1/conversations` listet Konversationen paginiert auf",
+      "Neue Endpunkte `GET /api/v1/masterdata/stagedirections` und `.../stagedirections/{id}` listen Regieanweisungen einzeln auf und schlagen sie nach",
+      "Neue Endpunkte `GET /api/v1/masterdata/soundcues` und `.../soundcues/{id}` listen Toncues einzeln auf und schlagen sie nach"
     ],
     "changed": [
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",
@@ -80,7 +95,9 @@
       "`POST /api/v1/import` und `.../import/preview` geben jetzt `200` zurück, wenn alles sauber angewendet wird (oder würde), oder `202`, wenn eine Zeile eine Entscheidung benötigt, statt immer `200` zurückzugeben",
       "Der `status`-Filter von `GET /api/v1/import/actions` akzeptiert jetzt auch `blocked`, für eine Aktion, die zurückgehalten wird, weil sie einen als vollständig überprüft bestätigten Datensatz ändern würde",
       "`POST /api/v1/import/preview` staffelt jetzt einen echten, einsehbaren Batch, anstatt seine Schreibvorgänge rückgängig zu machen — in beiden Fällen wird nichts geschrieben, aber der gestaffelte Batch kann anschließend über `GET /api/v1/import/actions?batchId=` überprüft werden",
-      "Die gebündelten Quellen `NikhilNamal17/popular-movie-quotes` und `vilaboim/movie-quotes` verwenden jetzt die neuen generischen Konverter `basic-json-array`/`regex-array`, konfiguriert über `converterOptions` in `data/sources/manifest.json` statt über eigenen Code pro Quelle — die Ausgabe ist unverändert, dieselben Zitat-Ids und Inhalte"
+      "Die gebündelten Quellen `NikhilNamal17/popular-movie-quotes` und `vilaboim/movie-quotes` verwenden jetzt die neuen generischen Konverter `basic-json-array`/`regex-array`, konfiguriert über `converterOptions` in `data/sources/manifest.json` statt über eigenen Code pro Quelle — die Ausgabe ist unverändert, dieselben Zitat-Ids und Inhalte",
+      "Die Paginierung jedes Listen-Endpunkts folgt jetzt einem einheitlichen Vertrag: eine `pageSize` über 500 wird abgelehnt (422) statt stillschweigend begrenzt, `pageSize=0` gibt alle passenden Zeilen als eine Seite zurück, und das Anfordern einer Seite hinter der letzten ist ein eigenständiger 422",
+      "Die Standard-Seitengröße für `GET /api/v1/admin/audit` und `GET /api/v1/import/actions` wurde von 50 auf 20 geändert, passend zu jedem anderen Listen-Endpunkt"
     ],
     "fixed": [
       "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für jede gebündelte Datei, ob extern über eine Manifest-URL bezogen oder intern kuratiert) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch falsch erfasst",
@@ -98,7 +115,11 @@
       "Zitat-, Quellen-, Charakter- und Konversations-SQL-Abfragen befanden sich schon vor dieser Trennung in der generischen Datenzugriffsbibliothek statt im Quotinator-spezifischen Projekt — eine rein interne Code-Organisationskorrektur ohne Verhaltensänderung (Issue #157)",
       "Die Nachverfolgung von Importbatches (welche Datei wann und mit welcher Richtlinie importiert wurde) befand sich ebenfalls im Quotinator-spezifischen Projekt, gehört aber eigentlich in die generische Datenzugriffsbibliothek — eine weitere rein interne Code-Organisationskorrektur ohne Verhaltensänderung (Issue #158)",
       "Ein als vollständig geprüft bestätigtes Zitat konnte durch einen späteren Import trotzdem stillschweigend geändert werden — nur eine Quellenkorrektur wurde tatsächlich wie vorgesehen zur Prüfung zurückgehalten; beide werden jetzt korrekt zurückgehalten. Eine Quellenkorrektur unter einer Richtlinie, die den bestehenden Wert bei einem Konflikt beibehält, wird nicht mehr unnötig zurückgehalten, wenn sich dadurch tatsächlich nichts ändern würde (Issue #168)",
-      "Die Meldung von `ImportActionNotDecidableException` und die API-Beschreibung von `POST /import/actions/{id}/decide` nannten explizit `Quote`/`Source` und behaupteten, andere Entitätstypen seien immer bereits entschieden — beide Aussagen waren veraltet, seit Quellenkorrekturen selbst verfügbar wurden; allgemeiner formuliert, damit die Meldung korrekt bleibt, während weitere Entitätstypen korrigierbar werden"
+      "Die Meldung von `ImportActionNotDecidableException` und die API-Beschreibung von `POST /import/actions/{id}/decide` nannten explizit `Quote`/`Source` und behaupteten, andere Entitätstypen seien immer bereits entschieden — beide Aussagen waren veraltet, seit Quellenkorrekturen selbst verfügbar wurden; allgemeiner formuliert, damit die Meldung korrekt bleibt, während weitere Entitätstypen korrigierbar werden",
+      "Die Query-Parameter `page`/`pageSize` waren in der OpenAPI-Spezifikation als `string` statt `integer` dokumentiert, bei jedem Listen-Endpunkt, der sie hat — eine Fortsetzung derselben Korrektur, die bereits auf die Jahresfilter von `/quotes` angewendet wurde, jetzt überall dort, wo Paginierung verwendet wird",
+      "Eine Importdatei, die eine Quelle, Person, Regieanweisung, einen Toncue oder eine Konversation korrigierte, konnte ein Feld stillschweigend auf leer zurücksetzen, nur weil es in der Datei nicht angegeben war — ein ausgelassenes Feld lässt den bestehenden Wert jetzt korrekt unverändert; ein explizites `null` setzt es weiterhin wie beabsichtigt zurück",
+      "Generische Infrastruktur für Listen-Endpunkte (Paginierung, Behandlung von Nicht-gefunden, Masterdata-Routing-/Tagging-Konventionen, entitätsbezogene Filteranalyse) wird jetzt von jedem Listen-Endpunkt gemeinsam genutzt, statt pro Entität neu implementiert zu werden — eine rein interne Konsolidierung, keine Verhaltensänderung über die oben genannte Änderung des Paginierungsvertrags hinaus (Issues #193, #196)",
+      "`Quotinator.Engine` — ein drittes internes Projekt, das zwischen der API und der generischen Datenzugriffsbibliothek lag — wurde in `Quotinator.Core` zusammengeführt; eine rein interne Code-Organisationsänderung ohne Verhaltensänderung (Issue #206)"
     ],
     "removed": [
       "Die Konvertornamen `nikhilnamal17` und `vilaboim` existieren nicht mehr — ein benutzerdefinierter Manifesteintrag, der einen von beiden namentlich referenziert, muss auf `basic-json-array`/`regex-array` mit den entsprechenden `converterOptions` aktualisiert werden"

@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-14 19:32 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-19 18:02 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -26,6 +26,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Stage directions and sound cues used in multi-line conversations can now be corrected after the fact too, the same way a source's details already could.
 - A conversation's description can now be corrected after the fact too; the lines that make up the conversation itself are unaffected.
 - A person's name, date of birth, and date of death can now be corrected after the fact too; date of birth and date of death can now actually be set for a person for the first time.
+- Quotes are now correctly grouped by the film series or fictional universe they belong to, and can be filtered by series or universe when searching, listing, or requesting a random one.
+- Sources, characters, people, series, universes, stage directions, and sound cues can now all be listed and looked up individually through new endpoints, the same way quotes already could.
+- Correcting a source, person, stage direction, sound cue, or conversation by re-importing it now only changes the fields the file actually mentions — a field left out is no longer silently reset to blank.
+- Pagination is now consistent across every list endpoint: requesting more than 500 items at once is rejected instead of silently limited, and requesting every matching item as one page (`pageSize=0`) works the same way everywhere.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -68,6 +72,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `stageDirections[]`/`soundCues[]` entries with an id matching an existing row can now stage a `Modify` action instead of only ever being added once — the same policy-resolved diff, completeness-guard blocking, and decide/reverse workflow Source corrections already use
 - `conversations[]` entries with an id matching an existing row can now stage a `Modify` action for their `description` field only — `lines` are never diffed, read, or written by this path, that remains a separate, not-yet-scoped future issue
 - `people[]` entries with an id matching an existing row can now stage a `Modify` action instead of only ever being added once — the same policy-resolved diff and completeness-guard blocking Source/StageDirection/SoundCue/Conversation corrections already use; this is also the first path that ever writes a Person's `dateOfBirth`/`dateOfDeath` fields, previously always left `null`
+- Source files can now declare `series[]`/`universe[]` sections linking related Sources into a franchise hierarchy (film → series → universe); a Source resolves its series by name
+- A curated overlay file links each bundled film to its correct series/universe where one is known (e.g. the Lord of the Rings trilogy) — staged for review like any other correction, not applied automatically
+- Quote responses, and the random/search/list endpoints' filters, now include the source's series and universe (if any), and can be filtered by `series`, `seriesId`, `universe`, or `universeId`
+- New `GET /api/v1/masterdata/sources` and `.../sources/{id}` endpoints list and look up sources individually, including their linked series
+- New `GET /api/v1/masterdata/characters` and `.../characters/{id}` endpoints list and look up characters individually, including every source they appear in
+- New `GET /api/v1/masterdata/people` and `.../people/{id}` endpoints list and look up people individually
+- New `GET /api/v1/masterdata/series` and `.../series/{id}` endpoints list and look up series individually, including their parent universe
+- New `GET /api/v1/masterdata/universes` and `.../universes/{id}` endpoints list and look up universes individually
+- New `GET /api/v1/conversations` endpoint lists conversations, paginated
+- New `GET /api/v1/masterdata/stagedirections` and `.../stagedirections/{id}` endpoints list and look up stage directions individually
+- New `GET /api/v1/masterdata/soundcues` and `.../soundcues/{id}` endpoints list and look up sound cues individually
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
@@ -79,6 +94,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `GET /api/v1/import/actions`'s `status` filter now also accepts `blocked`, for an action held because it would have modified a record confirmed fully reviewed
 - `POST /api/v1/import/preview` now stages a real, inspectable batch instead of rolling back its writes — nothing is written either way, but the staged batch can be reviewed afterward via `GET /api/v1/import/actions?batchId=`
 - The bundled `NikhilNamal17/popular-movie-quotes` and `vilaboim/movie-quotes` sources now use the new generic `basic-json-array`/`regex-array` converters, configured via `converterOptions` in `data/sources/manifest.json` instead of dedicated per-source code — output is unchanged, same quote ids and content
+- Every list endpoint's pagination now follows one consistent contract: `pageSize` above 500 is rejected (422) instead of silently capped, `pageSize=0` returns every matching row as a single page, and requesting a page past the last one is a distinct 422
+- The default page size for `GET /api/v1/admin/audit` and `GET /api/v1/import/actions` changed from 50 to 20, matching every other list endpoint
 
 ### Fixed
 - ImportBatch rows created during seeding now record the correct `Type` (`Seed` for any bundled file, whether externally sourced with a manifest URL or internally authored) and persist the source URL; previously every seeded batch was recorded incorrectly
@@ -97,6 +114,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Import-batch tracking (which file was imported, when, and by what policy) had also ended up in the Quotinator-specific project instead of the generic data-access library it actually belongs in — another purely internal code-organisation fix with no behaviour change (issue #158)
 - A quote confirmed fully reviewed could still have its fields silently changed by a later import — only a Source correction was actually held for review as intended; both are now correctly held. A Source correction under a policy that keeps the existing value on conflict no longer holds unnecessarily when nothing would actually change (issue #168)
 - `ImportActionNotDecidableException`'s message and the `POST /import/actions/{id}/decide` API description named `Quote`/`Source` specifically and claimed other entity types were always already-decided — both were stale since Source's own correction path shipped; reworded generically so the message stays accurate as more entity types become correctable
+- `page`/`pageSize` query parameters were documented as `string` instead of `integer` in the OpenAPI spec for every list endpoint that has them — continuing the same fix already applied to `/quotes`'s year filters, now covering pagination everywhere it's used
+- An import file correcting a source, person, stage direction, sound cue, or conversation could silently reset a field to blank just by not mentioning it in the file — an omitted field now correctly leaves the existing value untouched; an explicit `null` still resets it as intended
+- Generic list-endpoint infrastructure (pagination, not-found handling, masterdata routing/tagging conventions, entity-scoped filter parsing) is now shared across every list endpoint instead of being reimplemented per entity — a purely internal consolidation, no behaviour change beyond the pagination contract change above (issues #193, #196)
+- `Quotinator.Engine` — a third internal project that sat between the API and the generic data-access library — has been merged into `Quotinator.Core`; a purely internal code-organisation change with no behaviour change (issue #206)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`
