@@ -84,7 +84,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#190](https://github.com/DutchJaFO/Quotinator/issues/190) | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#191](https://github.com/DutchJaFO/Quotinator/issues/191) | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 | [#206](https://github.com/DutchJaFO/Quotinator/issues/206) | Merge Quotinator.Engine into Quotinator.Core — collapse the three-project domain split to two | Waiting for release | T1 ✅ T2 ✅ | [206-core-engine-merge-plan.md](206-core-engine-merge-plan.md) |
-| [#192](https://github.com/DutchJaFO/Quotinator/issues/192) | Expose series/universe on the quote read path — QuoteResponse fields and filters | Planning | T1 ⬜ T2 ⬜ | [192-quote-series-universe-plan.md](192-quote-series-universe-plan.md) |
+| [#192](https://github.com/DutchJaFO/Quotinator/issues/192) | Expose series/universe on the quote read path — QuoteResponse fields and filters | Waiting for release | T1 ✅ T2 ✅ | [192-quote-series-universe-plan.md](192-quote-series-universe-plan.md) |
 | [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
 | [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
@@ -217,7 +217,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 47 | #205 | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | Waiting for release |
 | 48 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release |
 | 49 | #206 | Merge Quotinator.Engine into Quotinator.Core — collapse the three-project domain split to two | Waiting for release |
-| 50 | #192 | Expose series/universe on the quote read path — QuoteResponse fields and filters | Planning |
+| 50 | #192 | Expose series/universe on the quote read path — QuoteResponse fields and filters | Waiting for release |
 | 51 | #190 | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Planning |
 | 52 | #191 | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Planning |
 | 53 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |

@@ -92,26 +92,30 @@ public class SqlQueryGuardTests
     public static IEnumerable<object[]> AssembledQueryCases()
     {
         // Full matrix of filter combinations — exercises every branch in BuildFilterWhere.
-        var filterCases = new (string Label, string[]? Types, string[]? Genres, string? Lang, string? Character, string? Author, string? Source, int? YearFrom, int? YearTo)[]
+        var seriesGuid   = Guid.Parse("11111111-0000-0000-0000-000000000001");
+        var universeGuid = Guid.Parse("22222222-0000-0000-0000-000000000001");
+        var filterCases = new (string Label, string[]? Types, string[]? Genres, string? Lang, string? Character, string? Author, string? Source, Guid? SeriesId, Guid? UniverseId, int? YearFrom, int? YearTo)[]
         {
-            ("no filters",      null,               null,               null, null,       null,    null,    null, null),
-            ("type",            ["movie"],          null,               null, null,       null,    null,    null, null),
-            ("genre",           null,               ["drama"],          null, null,       null,    null,    null, null),
-            ("lang",            null,               null,               "nl", null,       null,    null,    null, null),
-            ("character",       null,               null,               null, "Hannibal", null,    null,    null, null),
-            ("author",          null,               null,               null, null,       "Twain", null,    null, null),
-            ("source",          null,               null,               null, null,       null,    "Matrix",null, null),
-            ("yearFrom",        null,               null,               null, null,       null,    null,    1990, null),
-            ("yearTo",          null,               null,               null, null,       null,    null,    null, 2000),
-            ("all filters",     ["tv"],             ["comedy"],         "de", "Sherlock", "Doyle", "BBC",   1900, 2020),
-            ("multi-type",      ["movie", "book"],  null,               null, null,       null,    null,    null, null),
-            ("multi-genre",     null,               ["sci-fi", "drama"],null, null,       null,    null,    null, null),
+            ("no filters",      null,               null,               null, null,       null,    null,    null,        null,          null, null),
+            ("type",            ["movie"],          null,               null, null,       null,    null,    null,        null,          null, null),
+            ("genre",           null,               ["drama"],          null, null,       null,    null,    null,        null,          null, null),
+            ("lang",            null,               null,               "nl", null,       null,    null,    null,        null,          null, null),
+            ("character",       null,               null,               null, "Hannibal", null,    null,    null,        null,          null, null),
+            ("author",          null,               null,               null, null,       "Twain", null,    null,        null,          null, null),
+            ("source",          null,               null,               null, null,       null,    "Matrix",null,        null,          null, null),
+            ("seriesId",        null,               null,               null, null,       null,    null,    seriesGuid,  null,          null, null),
+            ("universeId",      null,               null,               null, null,       null,    null,    null,        universeGuid,  null, null),
+            ("yearFrom",        null,               null,               null, null,       null,    null,    null,        null,          1990, null),
+            ("yearTo",          null,               null,               null, null,       null,    null,    null,        null,          null, 2000),
+            ("all filters",     ["tv"],             ["comedy"],         "de", "Sherlock", "Doyle", "BBC",   seriesGuid,  universeGuid,  1900, 2020),
+            ("multi-type",      ["movie", "book"],  null,               null, null,       null,    null,    null,        null,          null, null),
+            ("multi-genre",     null,               ["sci-fi", "drama"],null, null,       null,    null,    null,        null,          null, null),
         };
 
-        foreach (var (label, types, genres, lang, character, author, source, yearFrom, yearTo) in filterCases)
+        foreach (var (label, types, genres, lang, character, author, source, seriesId, universeId, yearFrom, yearTo) in filterCases)
         {
             var (whereClause, _) = SqliteQuoteService.BuildFilterWhere(
-                types, genres, lang, character, author, source, yearFrom, yearTo);
+                types, genres, lang, character, author, source, seriesId, universeId, yearFrom, yearTo);
 
             yield return [$"CountRandom({label})",    Sql.Quotes.CountRandom(whereClause)];
             yield return [$"CountGetAll({label})",    Sql.Quotes.CountGetAll(whereClause)];
@@ -126,7 +130,7 @@ public class SqlQueryGuardTests
         yield return ["SelectRawById()", Sql.Quotes.SelectRawById()];
 
         // SelectSearch: one case per field-filter constant × a representative where clause.
-        var (baseWhere, _) = SqliteQuoteService.BuildFilterWhere(["movie"], ["drama"], null, null, null, null, null, null);
+        var (baseWhere, _) = SqliteQuoteService.BuildFilterWhere(["movie"], ["drama"], null, null, null, null, null, null, null, null);
         foreach (var (fieldName, fieldFilter) in new[]
         {
             (nameof(Sql.SearchField.Quote),     Sql.SearchField.Quote),

@@ -12,6 +12,8 @@ public interface IQuoteService
     /// Returns <paramref name="count"/> quotes chosen at random from the filtered pool, wrapped in a result envelope.
     /// Pass <paramref name="types"/>, <paramref name="genres"/>, <paramref name="character"/>, <paramref name="author"/>, or <paramref name="source"/>
     /// to restrict the pool before random selection. Omit all filters to draw from the full dataset.
+    /// <paramref name="seriesId"/>/<paramref name="universeId"/> restrict to quotes whose source is in that
+    /// Series/Universe (#192) — already resolved to an id by the caller.
     /// </summary>
     FilteredQuoteResult<QuoteResponse> GetRandom(
         int count,
@@ -22,13 +24,20 @@ public interface IQuoteService
         string? source = null,
         string? lang = null,
         int? yearFrom = null,
-        int? yearTo = null);
+        int? yearTo = null,
+        Guid? seriesId = null,
+        Guid? universeId = null);
 
-    /// <summary>Returns a paginated slice of all quotes, with optional multi-value type, genre, and year filters.</summary>
-    PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null);
+    /// <summary>Returns a paginated slice of all quotes, with optional multi-value type, genre, and year
+    /// filters, plus an optional Series/Universe filter (#192, already resolved to an id by the
+    /// caller).</summary>
+    PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null);
 
-    /// <summary>Returns quotes whose text, source, character, or author contain <paramref name="query"/> (case-insensitive). Pass <paramref name="field"/> to restrict which field is searched.</summary>
-    FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null);
+    /// <summary>Returns quotes whose text, source, character, or author contain <paramref name="query"/>
+    /// (case-insensitive). Pass <paramref name="field"/> to restrict which field is searched.
+    /// <paramref name="seriesId"/>/<paramref name="universeId"/> restrict to quotes whose source is in
+    /// that Series/Universe (#192, already resolved to an id by the caller).</summary>
+    FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null);
 
     /// <summary>Returns the full ordered line list of the conversation with the given ID (case-insensitive), localised to <paramref name="lang"/> where a translation exists. Returns <c>null</c> if not found.</summary>
     ConversationResponse? GetConversation(string id, string? lang = null);

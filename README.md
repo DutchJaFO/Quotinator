@@ -137,9 +137,10 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/quotes/random?author=Tolkien&source=Fellowship` | Combine filters with AND logic |
 | GET | `/api/v1/quotes/random?decade=1980` | Random quote from the 1980s (expands to yearFrom=1980&yearTo=1989) |
 | GET | `/api/v1/quotes/random?yearFrom=1970&yearTo=1989` | Random quote from an explicit year range |
-| GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`, `type`, `genre`, `yearFrom`, `yearTo`, `year`, `decade` — all optional) |
-| GET | `/api/v1/quotes/{id}` | Quote by UUID |
-| GET | `/api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book` and/or `&field=quote\|source\|character\|author` |
+| GET | `/api/v1/quotes/random?universe=Middle%20Earth` | Random quote from any Series in the Middle Earth Universe. Also accepts `seriesId`/`series` (mutually exclusive with `universeId`/`universe`) |
+| GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`, `type`, `genre`, `yearFrom`, `yearTo`, `year`, `decade`, `seriesId`/`series`, `universeId`/`universe` — all optional) |
+| GET | `/api/v1/quotes/{id}` | Quote by UUID. Response includes `series`/`universe` references (`{id, name}`, or `null` if the source has no series / the series has no universe) |
+| GET | `/api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book`, `&field=quote\|source\|character\|author`, and/or `&seriesId=`/`&series=`/`&universeId=`/`&universe=` |
 | GET | `/api/v1/conversations` | Paginated list of Conversations — summaries only (`id`, `description`, `completenessStatus`, `lineCount`), never the full line list (`page`, `pageSize`) |
 | GET | `/api/v1/conversations/{id}` | A conversation's full ordered line list — quotes, stage directions, and sound cues |
 | GET | `/api/v1/masterdata/sources` | Paginated list of Sources — the films, television series, books, and other works quotes are drawn from (`page`, `pageSize`) |

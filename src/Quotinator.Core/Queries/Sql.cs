@@ -56,7 +56,11 @@ internal static class Sql
                 s.Type                                 AS SourceType,
                 COALESCE(ct.Name,       c.Name)        AS Character,
                 p.Name                                 AS Author,
-                CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage
+                CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage,
+                ser.Id                                 AS SeriesId,
+                ser.Name                               AS SeriesName,
+                uni.Id                                  AS UniverseId,
+                uni.Name                                AS UniverseName
             FROM   Quotes          q
             JOIN   Sources         s  ON  s.Id  = q.SourceId                                          AND s.IsDeleted  = 0
             LEFT JOIN Characters   c  ON  c.Id  = q.CharacterId                                       AND c.IsDeleted  = 0
@@ -64,6 +68,8 @@ internal static class Sql
             LEFT JOIN QuoteTranslations    qt ON qt.QuoteId     = q.Id AND qt.Language = @lang        AND qt.IsDeleted = 0
             LEFT JOIN SourceTranslations   st ON st.SourceId    = s.Id AND st.Language = @lang        AND st.IsDeleted = 0
             LEFT JOIN CharacterTranslations ct ON ct.CharacterId = c.Id AND ct.Language = @lang       AND ct.IsDeleted = 0
+            LEFT JOIN Series       ser ON ser.Id = s.SeriesId                                         AND ser.IsDeleted = 0
+            LEFT JOIN Universe     uni ON uni.Id = ser.UniverseId                                     AND uni.IsDeleted = 0
             """;
 
         // COUNT base for GetRandom — includes character/author/source JOINs needed for all filter options.

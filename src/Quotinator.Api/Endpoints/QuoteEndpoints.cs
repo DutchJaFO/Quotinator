@@ -5,6 +5,7 @@ using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
+using Quotinator.Core.Repositories;
 using Quotinator.Core.Services;
 
 namespace Quotinator.Api.Endpoints;
@@ -32,6 +33,8 @@ internal static class QuoteEndpoints
                  "Filter the pool with `type` (repeatable, OR logic), `genre` (repeatable, OR logic), " +
                  "`character`, `author`, or `source` (case-insensitive contains match), " +
                  "`yearFrom` / `yearTo` (inclusive year range), `year` (exact year), or `decade` (e.g. `1980` for 1980–1989, must be divisible by 10). " +
+                 "Also filter by `seriesId`/`series` or `universeId`/`universe` (each pair mutually exclusive) " +
+                 "to restrict to quotes whose source is in that Series or Universe. " +
                  "Multiple distinct filter parameters combine with AND logic. " +
                  "The envelope always includes `status`, `items`, and `totalMatching` (pool size before random selection), " +
                  "plus `requestedCount` (the effective `n`) and `returnedCount` (`items.length`), which can differ from " +
@@ -50,6 +53,8 @@ internal static class QuoteEndpoints
                  "Returns quotes whose text, source, character, or author contain `q` (case-insensitive). " +
                  "Optionally filter by `type` or `genre` (both repeatable, OR logic within each), " +
                  "or by `yearFrom` / `yearTo` (inclusive year range), `year` (exact year), or `decade` (must be divisible by 10). " +
+                 "Also filter by `seriesId`/`series` or `universeId`/`universe` (each pair mutually exclusive) " +
+                 "to restrict to quotes whose source is in that Series or Universe. " +
                  "Use `lang` to request a specific language.");
 
         group.MapGet("/{id}", GetById)
@@ -66,6 +71,8 @@ internal static class QuoteEndpoints
                  "Returns a paginated list of all quotes. " +
                  "Optionally filter by `type` (movie, tv, anime, book, person) or `genre` — both parameters are repeatable (OR logic within each). " +
                  "Also supports `yearFrom` / `yearTo` (inclusive year range), `year` (exact year), or `decade` (must be divisible by 10). " +
+                 "Also filter by `seriesId`/`series` or `universeId`/`universe` (each pair mutually exclusive) " +
+                 "to restrict to quotes whose source is in that Series or Universe. " +
                  "Use `lang` to request a specific language.");
     }
 
@@ -146,10 +153,31 @@ internal static class QuoteEndpoints
             detail: string.Format(localizer[ApiMessages.YearParamNotInteger], paramName),
             statusCode: StatusCodes.Status422UnprocessableEntity);
 
-    private static IResult GetRandom(
+    // Resolves both Series and Universe entity-scoped filters (#196's convention, #192's first
+    // consumer) — shared across GetRandom/Search/GetAll since the resolve step is identical; each
+    // caller handles its own Error/NotFound response shape, since GetAll's envelope (PagedResult)
+    // differs from GetRandom/Search's (FilteredQuoteResult).
+    private static async Task<(EntityFilterResult Series, EntityFilterResult Universe)> ResolveSeriesUniverseAsync(
+        string? seriesId, string? series, string? universeId, string? universe,
+        ISeriesNameResolver seriesResolver, IUniverseNameResolver universeResolver, IApiLocalizer localizer)
+    {
+        var seriesResult = await EntityFilterParsing.ResolveAsync(
+            seriesId, series, new EntityFilterNames("Series", "seriesId", "series"),
+            seriesResolver.ResolveIdByNameAsync, localizer);
+
+        var universeResult = await EntityFilterParsing.ResolveAsync(
+            universeId, universe, new EntityFilterNames("Universe", "universeId", "universe"),
+            universeResolver.ResolveIdByNameAsync, localizer);
+
+        return (seriesResult, universeResult);
+    }
+
+    private static async Task<IResult> GetRandom(
         IQuoteService service,
         IApiLocalizer localizer,
         ILogger<Log> logger,
+        ISeriesNameResolver seriesNameResolver,
+        IUniverseNameResolver universeNameResolver,
         [Description("Number of quotes to return (1–100). Omit for a single random quote."), DefaultValue(QueryParamDefaults.RandomCount)] string? n = null,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null,
         [Description("Filter by source type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
@@ -160,7 +188,11 @@ internal static class QuoteEndpoints
         [Description("Return only quotes from this year or later (inclusive).")] string? yearFrom = null,
         [Description("Return only quotes from this year or earlier (inclusive).")] string? yearTo = null,
         [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] string? year = null,
-        [Description("Shorthand for yearFrom=N&yearTo=N+9. Must be divisible by 10. Accepts two-digit form: `80` = 1980–1989, `00` = 2000–2009, `20` = 2020–2029.")] string? decade = null)
+        [Description("Shorthand for yearFrom=N&yearTo=N+9. Must be divisible by 10. Accepts two-digit form: `80` = 1980–1989, `00` = 2000–2009, `20` = 2020–2029.")] string? decade = null,
+        [Description("Filter to quotes in this Series, by id.")] string? seriesId = null,
+        [Description("Filter to quotes in this Series, by exact name. Mutually exclusive with `seriesId`.")] string? series = null,
+        [Description("Filter to quotes in this Universe (spans every Series in it), by id.")] string? universeId = null,
+        [Description("Filter to quotes in this Universe (spans every Series in it), by exact name. Mutually exclusive with `universeId`.")] string? universe = null)
     {
         logger.LogInformation("[Api - Random] n={N} type={Type} genre={Genre} lang={Lang}", n, type, genre, lang);
 
@@ -202,7 +234,23 @@ internal static class QuoteEndpoints
         if (ValidateFilterParams(localizer, type, genre, character, author, source) is { } invalid)
             return ToValidationResult(invalid);
 
-        var result = service.GetRandom(count, type, genre, character, author, source, lang, yf, yt);
+        var (seriesResult, universeResult) = await ResolveSeriesUniverseAsync(
+            seriesId, series, universeId, universe, seriesNameResolver, universeNameResolver, localizer);
+        if (seriesResult.Outcome == EntityFilterOutcome.Error) return seriesResult.Error!;
+        if (universeResult.Outcome == EntityFilterOutcome.Error) return universeResult.Error!;
+
+        if (seriesResult.Outcome == EntityFilterOutcome.NotFound || universeResult.Outcome == EntityFilterOutcome.NotFound)
+            return Results.Ok(new FilteredQuoteResult<QuoteResponse>
+            {
+                Status         = FilteredResultStatus.NoResults,
+                Items          = [],
+                TotalMatching  = 0,
+                Message        = seriesResult.Message ?? universeResult.Message,
+                RequestedCount = count,
+                ReturnedCount  = 0,
+            });
+
+        var result = service.GetRandom(count, type, genre, character, author, source, lang, yf, yt, seriesResult.Id, universeResult.Id);
 
         if (result.Status == FilteredResultStatus.NoResults)
             return Results.Ok(new FilteredQuoteResult<QuoteResponse>
@@ -233,10 +281,12 @@ internal static class QuoteEndpoints
         return NotFoundResult.OkOrNotFound(quote, localizer, ApiMessages.QuoteNotFound);
     }
 
-    private static IResult Search(
+    private static async Task<IResult> Search(
         IQuoteService service,
         IApiLocalizer localizer,
         ILogger<Log> logger,
+        ISeriesNameResolver seriesNameResolver,
+        IUniverseNameResolver universeNameResolver,
         [Description("Search term. Matched case-insensitively against the selected field (or all fields when `field` is omitted).")] string? q = null,
         [Description("Maximum number of results to return (1–100)."), DefaultValue(QueryParamDefaults.SearchLimit)] string? limit = null,
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
@@ -246,7 +296,11 @@ internal static class QuoteEndpoints
         [Description("Return only quotes from this year or later (inclusive).")] string? yearFrom = null,
         [Description("Return only quotes from this year or earlier (inclusive).")] string? yearTo = null,
         [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] string? year = null,
-        [Description("Shorthand for yearFrom=N&yearTo=N+9. Must be divisible by 10. Accepts two-digit form: `80` = 1980–1989, `00` = 2000–2009, `20` = 2020–2029.")] string? decade = null)
+        [Description("Shorthand for yearFrom=N&yearTo=N+9. Must be divisible by 10. Accepts two-digit form: `80` = 1980–1989, `00` = 2000–2009, `20` = 2020–2029.")] string? decade = null,
+        [Description("Filter to quotes in this Series, by id.")] string? seriesId = null,
+        [Description("Filter to quotes in this Series, by exact name. Mutually exclusive with `seriesId`.")] string? series = null,
+        [Description("Filter to quotes in this Universe (spans every Series in it), by id.")] string? universeId = null,
+        [Description("Filter to quotes in this Universe (spans every Series in it), by exact name. Mutually exclusive with `universeId`.")] string? universe = null)
     {
         logger.LogInformation("[Api - Search] q={Q} field={Field} limit={Limit} type={Type} lang={Lang}", q, field, limit, type, lang);
 
@@ -294,7 +348,21 @@ internal static class QuoteEndpoints
         if (yf is not null && yt is not null && yf > yt)
             return Results.Problem(detail: localizer[ApiMessages.YearRangeInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        var result = service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yf, yt);
+        var (seriesResult, universeResult) = await ResolveSeriesUniverseAsync(
+            seriesId, series, universeId, universe, seriesNameResolver, universeNameResolver, localizer);
+        if (seriesResult.Outcome == EntityFilterOutcome.Error) return seriesResult.Error!;
+        if (universeResult.Outcome == EntityFilterOutcome.Error) return universeResult.Error!;
+
+        if (seriesResult.Outcome == EntityFilterOutcome.NotFound || universeResult.Outcome == EntityFilterOutcome.NotFound)
+            return Results.Ok(new FilteredQuoteResult<QuoteResponse>
+            {
+                Status        = FilteredResultStatus.NoResults,
+                Items         = [],
+                TotalMatching = 0,
+                Message       = seriesResult.Message ?? universeResult.Message,
+            });
+
+        var result = service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yf, yt, seriesResult.Id, universeResult.Id);
 
         if (result.Status == FilteredResultStatus.NoResults)
             return Results.Ok(new FilteredQuoteResult<QuoteResponse>
@@ -308,10 +376,12 @@ internal static class QuoteEndpoints
         return Results.Ok(result);
     }
 
-    private static IResult GetAll(
+    private static async Task<IResult> GetAll(
         IQuoteService service,
         IApiLocalizer localizer,
         ILogger<Log> logger,
+        ISeriesNameResolver seriesNameResolver,
+        IUniverseNameResolver universeNameResolver,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of quotes per page (0–500). 0 means every matching quote as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
         [Description("Filter by type (repeatable). One of: `movie`, `tv`, `anime`, `book`, `person`. Multiple values use OR logic.")] string[]? type = null,
@@ -320,7 +390,11 @@ internal static class QuoteEndpoints
         [Description("Return only quotes from this year or later (inclusive).")] string? yearFrom = null,
         [Description("Return only quotes from this year or earlier (inclusive).")] string? yearTo = null,
         [Description("Shorthand for yearFrom=N&yearTo=N — matches quotes from exactly this year.")] string? year = null,
-        [Description("Shorthand for yearFrom=N&yearTo=N+9. Must be divisible by 10. Accepts two-digit form: `80` = 1980–1989, `00` = 2000–2009, `20` = 2020–2029.")] string? decade = null)
+        [Description("Shorthand for yearFrom=N&yearTo=N+9. Must be divisible by 10. Accepts two-digit form: `80` = 1980–1989, `00` = 2000–2009, `20` = 2020–2029.")] string? decade = null,
+        [Description("Filter to quotes in this Series, by id.")] string? seriesId = null,
+        [Description("Filter to quotes in this Series, by exact name. Mutually exclusive with `seriesId`.")] string? series = null,
+        [Description("Filter to quotes in this Universe (spans every Series in it), by id.")] string? universeId = null,
+        [Description("Filter to quotes in this Universe (spans every Series in it), by exact name. Mutually exclusive with `universeId`.")] string? universe = null)
     {
         logger.LogInformation("[Api - GetAll] page={Page} pageSize={PageSize} type={Type} lang={Lang}", page, pageSize, type, lang);
 
@@ -355,7 +429,15 @@ internal static class QuoteEndpoints
         if (yf is not null && yt is not null && yf > yt)
             return Results.Problem(detail: localizer[ApiMessages.YearRangeInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        var result = service.GetAll(pageValue, pageSizeValue, type, genre, lang, yf, yt);
+        var (seriesResult, universeResult) = await ResolveSeriesUniverseAsync(
+            seriesId, series, universeId, universe, seriesNameResolver, universeNameResolver, localizer);
+        if (seriesResult.Outcome == EntityFilterOutcome.Error) return seriesResult.Error!;
+        if (universeResult.Outcome == EntityFilterOutcome.Error) return universeResult.Error!;
+
+        if (seriesResult.Outcome == EntityFilterOutcome.NotFound || universeResult.Outcome == EntityFilterOutcome.NotFound)
+            return Results.Ok(new PagedResult<QuoteResponse>([], pageValue, pageSizeValue, 0));
+
+        var result = service.GetAll(pageValue, pageSizeValue, type, genre, lang, yf, yt, seriesResult.Id, universeResult.Id);
         return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
             ?? Results.Ok(result);
     }

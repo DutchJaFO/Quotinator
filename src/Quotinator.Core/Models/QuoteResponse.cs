@@ -45,6 +45,16 @@ public sealed class QuoteResponse
     /// <summary>Genre tags. See <c>Quote.Genres</c> for standard values.</summary>
     public IReadOnlyList<string> Genres { get; init; } = [];
 
+    /// <summary>The series this quote's source belongs to, if any (#179), as a minimal read-only
+    /// reference. <c>null</c> for a standalone source, and <c>null</c> if the linked series has been
+    /// soft-deleted (per CLAUDE.md's "Soft-deleted rows are invisible by default" convention).</summary>
+    public MasterDataReference? Series { get; init; }
+
+    /// <summary>The universe this quote's series belongs to, if any (#179), as a minimal read-only
+    /// reference. <c>null</c> when there is no series, when the series has no universe, or when the
+    /// linked universe has been soft-deleted.</summary>
+    public MasterDataReference? Universe { get; init; }
+
     /// <summary>
     /// Conversations this quote appears in — id, position, and total line count only, not the full
     /// line list (fetch that via <c>GET /api/v1/conversations/{id}</c>). <c>null</c> when the quote

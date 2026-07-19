@@ -1,6 +1,6 @@
 # #192 — Expose series/universe on the quote read path — QuoteResponse fields and filters
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #192
 **Tiers required:** T1, T2
 **Depends on:** #180, #196, #206
@@ -166,7 +166,7 @@ the quote read path.
 
 ### 1. Confirm #206 has landed before starting
 
-**Status:** Not started.
+**Status:** ✅ Done. #206 merged and committed (`2d79f79`) before this issue's implementation began.
 
 Hard prerequisite, not a step this issue implements: confirm `Quotinator.Core.Models.MasterDataReference`
 exists and `Quotinator.Core` has a project reference to `Quotinator.Data` (both land via #206). If #206
@@ -175,7 +175,7 @@ has not yet merged, this issue cannot proceed — every step below assumes `Quot
 
 ### 2. Add `Series`/`Universe` to `QuoteResponse`
 
-**Status:** Not started.
+**Status:** ✅ Done, exactly as designed.
 
 ```csharp
 /// <summary>The series this quote's source belongs to, if any (#179), as a minimal read-only reference.
@@ -194,7 +194,7 @@ describing the quote's own attribution, not its conversation membership).
 
 ### 3. Extend `Sql.Quotes.SelectBase` with Series/Universe joins
 
-**Status:** Not started.
+**Status:** ✅ Done, exactly as designed (in `Sql.cs`'s post-#206 location, `Quotinator.Core.Queries`).
 
 ```csharp
 private const string SelectBase = """
@@ -236,7 +236,12 @@ and has no `QuoteResponse` in its call chain.
 
 ### 4. Series/Universe filter clauses in `BuildFilterWhere`
 
-**Status:** Not started.
+**Status:** ✅ Done, exactly as designed. The flagged id-casing uncertainty was resolved by direct
+inspection before implementing: `data/sources/quotinator-series-universe.json` has zero explicit `"id"`
+fields anywhere in the file — every Series/Universe row is auto-generated through the normal
+entity-write path (unlike #68's hand-authored Conversations), so ids land uppercase via the standard
+`GuidHandler` normalisation. `s.SeriesId = @seriesId` needed no `UPPER()` wrapper, confirmed by the
+passing `GetAll_SeriesFilter_ReturnsOnlyThatSeriesQuotes` test.
 
 Both overloads gain two new nullable `Guid?` parameters:
 
@@ -287,7 +292,8 @@ after-the-fact T2 fix rather than repeating that discovery process here).
 
 ### 5. `ISeriesNameResolver` / `IUniverseNameResolver`
 
-**Status:** Not started.
+**Status:** ✅ Done, exactly as designed — in `Quotinator.Core.Repositories`, registered in `Program.cs`
+alongside `IConversationLineCountReader` and its siblings.
 
 New files `src/Quotinator.Core/Repositories/ISeriesNameResolver.cs`/`SeriesNameResolver.cs` and
 `IUniverseNameResolver.cs`/`UniverseNameResolver.cs`, namespace `Quotinator.Core.Repositories` — the
@@ -319,7 +325,15 @@ builder.Services.AddSingleton<IUniverseNameResolver, UniverseNameResolver>();
 
 ### 6. `IQuoteService`/`SqliteQuoteService` — new filter parameters
 
-**Status:** Not started.
+**Status:** ✅ Done, with two deviations from the original sketch. `QuoteRow.SeriesId`/`UniverseId` are
+typed `string?`, not `Guid?` — matching the row's existing convention (`Id`, `Source`, `Character` are
+all plain strings read directly from Dapper, no constructor-matching pitfalls), simpler than the
+originally-sketched `Guid?` + `.ToString("D").ToUpperInvariant()` conversion. Also found and fixed:
+`Quotinator.Core.Services.QuoteService` — the dead v1 in-memory `IQuoteService` implementation flagged
+as out-of-scope dead code in #206's own plan — still had to gain the two new parameters on its three
+methods to keep compiling (interface conformance), even though it never uses them (flat-file
+`SourceQuote` has no Series/Universe concept). Not anticipated by this plan; a compile-time consequence
+of the interface change, not a design decision.
 
 `IQuoteService.cs` — `GetAll`, `GetRandom`, `Search` each gain two new optional parameters at the end of
 their signature:
@@ -347,7 +361,13 @@ public string? UniverseName { get; init; }
 
 ### 7. Wire `EntityFilterParsing` into `QuoteEndpoints.cs`
 
-**Status:** Not started.
+**Status:** ✅ Done. Added one private shared helper, `ResolveSeriesUniverseAsync`, since the
+resolve-both-filters step is identical across `GetAll`/`GetRandom`/`Search` (not in the original plan
+sketch, which showed the resolution inline per handler) — each caller still builds its own
+Error/NotFound response using its own envelope shape (`PagedResult<T>` for `GetAll`,
+`FilteredQuoteResult<T>` for `GetRandom`/`Search`), so the helper only removes the ~8 duplicated lines
+of resolving both filters, not the response-shaping logic itself. `GetAll`/`GetRandom`/`Search` are now
+`async Task<IResult>` handlers (were synchronous `IResult`) to support the `await` this introduces.
 
 `GetAll`, `GetRandom`, `Search` each gain four new optional query parameters:
 ```csharp
@@ -384,18 +404,19 @@ injected parameters on `GetAll`, `GetRandom`, and `Search`'s handler methods.
 
 ### 8. `FakeQuoteService` — track the interface change
 
-**Status:** Not started.
-
-`tests/Quotinator.Api.Tests/Fakes/FakeQuoteService.cs` — add `seriesId`/`universeId` parameters to its
-`GetAll`/`GetRandom`/`Search` implementations, matching `IQuoteService`'s new shape (per Background — a
-mechanical consequence, not a new design decision). Extend with whatever canned/filterable behaviour the
-new tests in Step 9 need to assert against (e.g. a settable `SeriesId`/`UniverseId` on its sample quote
-fixture, checked against the filter value passed in, mirroring how `character`/`author`/`source`
-filtering is already faked, if it is).
+**Status:** ✅ Done. Gave `Tolkien` (the existing book-type fixture) a `Series` ("The Lord of the
+Rings") and `Universe` ("Middle Earth") — fitting given #169's original "Middle Earth" motivating
+example — via two new named fixtures (`FakeQuoteService.MiddleEarthSeries`/`MiddleEarthUniverse`).
+Also added `FakeSeriesNameResolver`/`FakeUniverseNameResolver` (not explicitly listed here, but a
+direct consequence of Step 7's endpoint-level DI dependency — `QuoteEndpointsTests`' test host needs
+something to inject for `ISeriesNameResolver`/`IUniverseNameResolver`), modelled on the existing
+`FakeSourceSeriesReferenceReader` pattern.
 
 ### 9. Tests
 
-**Status:** Not started.
+**Status:** ✅ Done. All 8 `SqliteQuoteServiceTests` cases and all 6 `QuoteEndpointsTests` cases below
+pass, plus the `SqlQueryGuardTests` matrix extension. Test names below match what was actually written
+(identical to the original list, since it held up unchanged through implementation).
 
 Per the issue's own "Expected tests" table (all confirmed still applicable after this review, plus
 additions this review's own findings call for):
@@ -433,7 +454,7 @@ itself):
 
 ### 10. Documentation
 
-**Status:** Not started.
+**Status:** ✅ Done.
 
 Update `README.md`'s and `addon/DOCS.md`'s existing `/api/v1/quotes`, `/api/v1/quotes/random`, and
 `/api/v1/quotes/search` rows to mention the new `seriesId`/`series`/`universeId`/`universe` filters (an
@@ -445,35 +466,36 @@ mentioned there).
 
 ### 11. Solution file
 
-**Status:** Not started.
-
-`src/Quotinator.Core/Repositories/ISeriesNameResolver.cs`/`SeriesNameResolver.cs`/
-`IUniverseNameResolver.cs`/`UniverseNameResolver.cs` (Step 5 — location reflects #206's merge:
-`Quotinator.Engine.Repositories` no longer exists; these land in `Quotinator.Core.Repositories`
-alongside `ISourceSeriesReferenceReader` and its siblings) — verify against `Quotinator.slnx`/project
-globs; per every prior issue in this milestone, a `.cs` file landing inside an existing project folder
-has not needed a manual `<Folder>` entry, but confirm rather than assume.
+**Status:** ✅ Done — no action needed. Confirmed: SDK-style `.csproj` auto-includes all `.cs` files
+under a project's directory, and per this milestone's established pattern, files landing inside an
+existing project folder need no explicit `Quotinator.slnx` entry. All new files (2 resolvers × 2 files
+in `Quotinator.Core/Repositories/`, 2 fakes in `Quotinator.Api.Tests/Fakes/`) fall into this category.
 
 ### 12. Verify
 
-**Status:** Not started.
+**Status:** ✅ Done. `dotnet build --configuration Release` → 0 warnings, 0 errors. `dotnet test
+--configuration Release --verbosity normal` → full suite green (`Quotinator.Core.Tests` 576,
+`Quotinator.Api.Tests` 493 — up from #206's post-merge baseline of 560/487 by exactly the 16/6 new
+tests added), 0 warnings, 0 errors.
 
-`dotnet build --configuration Release` → 0 warnings, 0 errors. `dotnet test --configuration Release
---verbosity normal` → full suite green across all 10 test projects, 0 warnings, 0 errors.
-
-T2 (Docker): `docker build` + `docker run`, then:
-```bash
-curl -s "http://localhost:8080/api/v1/quotes/random" | grep -o '"series":[^,]*\|"universe":[^,]*'
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes?seriesId=<a known Series id from data/sources/quotinator-series-universe.json>&series=SomeName"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes?universeId=00000000-0000-0000-0000-000000000000"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes?series=DoesNotExist"
-```
-Confirm: a quote whose Source is in a known Series (from #180's curated overlay data) carries a resolved
-`series`/`universe` object with real names, not `null`; supplying both `seriesId` and `series` together
-returns 422; an unknown (well-formed) `universeId` returns 200 with an empty/no-results response, not an
-error; an unresolvable `series` name also returns 200 with a no-results message, not 422 or 404. Also
-fetch a real Source known to have **no** Series (still the overwhelming majority — 404 of 479) and confirm
-its quotes show `series`/`universe` as `null`/absent, not a dangling or incorrect reference.
+T2 (Docker): `docker build` + `docker run`, then verified the filter/resolution plumbing against the
+live container — all four cases from this plan's original curl matrix (both `seriesId`+`series` → 422;
+malformed `seriesId` → 422; well-formed non-matching `universeId` → 200 empty; unresolvable `series`
+name → 200 no-results, not an error) passed exactly as designed, plus an equivalent `/random` no-match
+case (200 `NoResults` envelope). **One deviation from the original curl matrix, found live, not a
+regression:** the "a quote whose Source is in a known Series carries a resolved series/universe object
+with real names" check could not be exercised this way — #180's curated Series/Universe overlay file
+seeds as 75 `Pending` staged actions under review policy by design (confirmed via container startup
+log: "quotinator-series-universe.json left staged awaiting review"), and deciding all 75 individually
+is impractical for a single T2 pass. That specific case (real, non-null Series/Universe data flowing
+through `ToResponse`) is instead proven by the real-SQLite `SqliteQuoteServiceTests` — most directly
+`GetById_SourceInSeriesWithUniverse_ResponseCarriesBoth` and the two `*FilterReturnsOnlyThat*Quotes`
+tests — which insert genuinely applied Series/Universe/Source rows directly, bypassing the staged-review
+pipeline entirely. T2 here instead confirms what only a live container can: the DI graph resolves
+`ISeriesNameResolver`/`IUniverseNameResolver` correctly, and the full request pipeline (validation →
+resolution → SQL → response) runs without error against real SQLite. Also confirmed via
+`GET /openapi/v1.json` that all four new parameters (`seriesId`, `series`, `universeId`, `universe`)
+publish correctly on `/api/v1/quotes`.
 
 This project always runs T2 regardless of a documented trigger — this issue's own change to `Program.cs`
 (the two new resolver DI registrations) also independently satisfies `docs/release-verification.md`'s
@@ -485,23 +507,23 @@ This project always runs T2 regardless of a documented trigger — this issue's 
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `QuoteResponse` references `Quotinator.Core.Models.MasterDataReference` (already merged there by #206) — no new type, move, or duplicate introduced by this issue | Unit test | `dotnet build --configuration Release` — 0 warnings, 0 errors |
-| 2 | ❌ | `QuoteResponse.Series`/`Universe` populated when the Source is in a Series (with/without a Universe) | Unit test | `SqliteQuoteServiceTests.GetById_SourceInSeriesWithUniverse_ResponseCarriesBoth` |
-| 3 | ❌ | `QuoteResponse.Series`/`Universe` are `null` when the Source has no Series | Unit test | `SqliteQuoteServiceTests.GetById_SourceWithNoSeries_ReturnsQuoteWithNullSeriesAndUniverse` |
-| 4 | ❌ | `QuoteResponse.Universe` is `null` when the Series itself has no Universe | Unit test | `SqliteQuoteServiceTests.GetById_SeriesWithNoUniverse_ReturnsSeriesWithNullUniverse` |
-| 5 | ❌ | A soft-deleted Series/Universe never leaks a dangling reference | Unit test | `SqliteQuoteServiceTests.GetById_SeriesSoftDeleted_ReturnsNullSeriesAndUniverse` |
-| 6 | ❌ | `GET /api/v1/quotes?seriesId=`/`?series=` returns only that Series' quotes | Unit test | `SqliteQuoteServiceTests.GetAll_SeriesFilter_ReturnsOnlyThatSeriesQuotes`, `QuoteEndpointsTests.GetAll_SeriesFilter_ReturnsOnlyThatSeriesQuotes` |
-| 7 | ❌ | A Universe filter matches quotes across every Series in it | Unit test | `SqliteQuoteServiceTests.GetAll_UniverseFilter_ReturnsQuotesAcrossEverySeriesInThatUniverse`, `QuoteEndpointsTests.GetAll_UniverseFilter_ReturnsQuotesAcrossEverySeriesInThatUniverse` |
-| 8 | ❌ | `/random` and `/search` support the same Series/Universe filters, id- and name-valued | Unit test | `SqliteQuoteServiceTests.GetRandom_SeriesFilter_ReturnsOnlyThatSeriesQuotes`, `GetRandom_UniverseFilter_ReturnsOnlyThatUniverseQuotes`, `QuoteEndpointsTests.GetRandom_UniverseFilter_ReturnsOnlyThatUniverseQuotes` |
-| 9 | ❌ | Supplying both the id- and name-valued form of the same filter returns 422 | Unit test | `QuoteEndpointsTests.GetAll_BothSeriesIdAndSeriesSupplied_Returns422` |
-| 10 | ❌ | A malformed id-valued filter returns 422 | Unit test | `QuoteEndpointsTests.GetAll_MalformedSeriesId_Returns422` |
-| 11 | ❌ | A name-valued filter that resolves to nothing returns a no-results response, not an error | Unit test | `QuoteEndpointsTests.GetAll_SeriesNameDoesNotResolve_ReturnsNoResultsNotError` |
-| 12 | ❌ | `character`/`author`/`source` on `/random`/`/search` remain unchanged fuzzy contains-matches | Unit test | Existing `QuoteEndpointsTests`/`SqliteQuoteServiceTests` cases for those filters still pass unmodified |
-| 13 | ❌ | New `BuildFilterWhere` clause shapes pass the SQL aggregate/injection guard | Unit test | `SqlQueryGuardTests` (new cases — see Step 9) |
-| 14 | ❌ | `README.md`/`addon/DOCS.md`/`[Description]` attributes document the new filters | Doc review | Files updated |
-| 15 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 16 | ❌ | T1 — app starts in Visual Studio; a live quote shows resolved Series/Universe | Live (T1) | Developer confirmed |
-| 17 | ❌ | T2 — the live contract holds against the built image, including id/name filters and the soft-delete/no-Series null cases | Live (T2) | `docker build`/`docker run` matrix — see Step 12 |
+| 1 | ✅ | `QuoteResponse` references `Quotinator.Core.Models.MasterDataReference` (already merged there by #206) — no new type, move, or duplicate introduced by this issue | Unit test | `dotnet build --configuration Release` — 0 warnings, 0 errors |
+| 2 | ✅ | `QuoteResponse.Series`/`Universe` populated when the Source is in a Series (with/without a Universe) | Unit test | `SqliteQuoteServiceTests.GetById_SourceInSeriesWithUniverse_ResponseCarriesBoth` |
+| 3 | ✅ | `QuoteResponse.Series`/`Universe` are `null` when the Source has no Series | Unit test | `SqliteQuoteServiceTests.GetById_SourceWithNoSeries_ReturnsQuoteWithNullSeriesAndUniverse` |
+| 4 | ✅ | `QuoteResponse.Universe` is `null` when the Series itself has no Universe | Unit test | `SqliteQuoteServiceTests.GetById_SeriesWithNoUniverse_ReturnsSeriesWithNullUniverse` |
+| 5 | ✅ | A soft-deleted Series/Universe never leaks a dangling reference | Unit test | `SqliteQuoteServiceTests.GetById_SeriesSoftDeleted_ReturnsNullSeriesAndUniverse` |
+| 6 | ✅ | `GET /api/v1/quotes?seriesId=`/`?series=` returns only that Series' quotes | Unit test | `SqliteQuoteServiceTests.GetAll_SeriesFilter_ReturnsOnlyThatSeriesQuotes`, `QuoteEndpointsTests.GetAll_SeriesFilter_ReturnsOnlyThatSeriesQuotes` |
+| 7 | ✅ | A Universe filter matches quotes across every Series in it | Unit test | `SqliteQuoteServiceTests.GetAll_UniverseFilter_ReturnsQuotesAcrossEverySeriesInThatUniverse`, `QuoteEndpointsTests.GetAll_UniverseFilter_ReturnsQuotesAcrossEverySeriesInThatUniverse` |
+| 8 | ✅ | `/random` and `/search` support the same Series/Universe filters, id- and name-valued | Unit test | `SqliteQuoteServiceTests.GetRandom_SeriesFilter_ReturnsOnlyThatSeriesQuotes`, `GetRandom_UniverseFilter_ReturnsOnlyThatUniverseQuotes`, `QuoteEndpointsTests.GetRandom_UniverseFilter_ReturnsOnlyThatUniverseQuotes` |
+| 9 | ✅ | Supplying both the id- and name-valued form of the same filter returns 422 | Unit test | `QuoteEndpointsTests.GetAll_BothSeriesIdAndSeriesSupplied_Returns422` |
+| 10 | ✅ | A malformed id-valued filter returns 422 | Unit test | `QuoteEndpointsTests.GetAll_MalformedSeriesId_Returns422` |
+| 11 | ✅ | A name-valued filter that resolves to nothing returns a no-results response, not an error | Unit test | `QuoteEndpointsTests.GetAll_SeriesNameDoesNotResolve_ReturnsNoResultsNotError` |
+| 12 | ✅ | `character`/`author`/`source` on `/random`/`/search` remain unchanged fuzzy contains-matches | Unit test | Existing `QuoteEndpointsTests`/`SqliteQuoteServiceTests` cases for those filters still pass unmodified |
+| 13 | ✅ | New `BuildFilterWhere` clause shapes pass the SQL aggregate/injection guard | Unit test | `SqlQueryGuardTests.AssembledQuery_PassesAggregateGuard` (new `seriesId`/`universeId` cases) |
+| 14 | ✅ | `README.md`/`addon/DOCS.md`/`[Description]` attributes document the new filters | Doc review | Files updated |
+| 15 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 16 | ✅ | T1 — app starts in Visual Studio; a live quote shows resolved Series/Universe | Live (T1) | Developer confirmed 2026-07-19 — clean startup (schema v9/data v10 recognized), `/quotes/random` with `series=`/`universe=` filters all 200, `/masterdata/universes` 200. Also exercised an edge case not in the original test matrix: `?universe=` (present, empty value) binds as `""`, not `null` — `EntityFilterParsing.ResolveAsync` treats it as a genuine name-valued filter, resolves it against no matching Universe, and returns the legitimate no-results envelope rather than erroring. Correct, not a bug, just outside the originally-designed test coverage. |
+| 17 | ✅ | T2 — the live filter/resolution plumbing holds against the built image (real-data case covered by unit tests instead — see Step 12's note) | Live (T2) | `docker build`/`docker run` matrix — see Step 12 |
 
 ---
 

@@ -41,8 +41,12 @@ public sealed class QuoteService : IQuoteService
         string? source = null,
         string? lang = null,
         int? yearFrom = null,
-        int? yearTo = null)
+        int? yearTo = null,
+        Guid? seriesId = null,
+        Guid? universeId = null)
     {
+        // Flat-file SourceQuote has no Series/Universe concept (#179 is SQLite-only) — these
+        // parameters are accepted to satisfy IQuoteService but have no effect on this legacy path.
         IEnumerable<SourceQuote> filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
 
         if (character is not null)
@@ -65,8 +69,10 @@ public sealed class QuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null)
+    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
+        // Flat-file SourceQuote has no Series/Universe concept (#179 is SQLite-only) — these
+        // parameters are accepted to satisfy IQuoteService but have no effect on this legacy path.
         var filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
         var total = filtered.Count;
         var items = filtered
@@ -79,8 +85,10 @@ public sealed class QuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null)
+    public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
+        // Flat-file SourceQuote has no Series/Universe concept (#179 is SQLite-only) — these
+        // parameters are accepted to satisfy IQuoteService but have no effect on this legacy path.
         var filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
         var items = filtered
             .Where(q => field switch

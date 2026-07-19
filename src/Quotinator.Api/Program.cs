@@ -337,6 +337,11 @@ builder.Services.AddSingleton<ISeriesUniverseReferenceReader, SeriesUniverseRefe
 // cannot express a join/aggregate" reasoning as ISourceSeriesReferenceReader above.
 builder.Services.AddSingleton<IConversationLineCountReader, ConversationLineCountReader>();
 
+// #192: resolves a Series/Universe name to its id — the resolveIdByName delegate #196's
+// EntityFilterParsing.ResolveAsync needs for the quote read path's Series/Universe filters.
+builder.Services.AddSingleton<ISeriesNameResolver, SeriesNameResolver>();
+builder.Services.AddSingleton<IUniverseNameResolver, UniverseNameResolver>();
+
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
 // real Serilog pipeline at the same point in startup as the rest of seeding — not through a

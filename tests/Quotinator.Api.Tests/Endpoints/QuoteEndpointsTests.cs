@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
 using Quotinator.Data.Testing.NoOps;
+using Quotinator.Core.Repositories;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 
@@ -20,6 +21,10 @@ public class QuoteEndpointsTests
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
+                services.AddSingleton<ISeriesNameResolver>(new FakeSeriesNameResolver(
+                    new Dictionary<string, Guid> { [FakeQuoteService.MiddleEarthSeries.Name] = Guid.Parse(FakeQuoteService.MiddleEarthSeries.Id) }));
+                services.AddSingleton<IUniverseNameResolver>(new FakeUniverseNameResolver(
+                    new Dictionary<string, Guid> { [FakeQuoteService.MiddleEarthUniverse.Name] = Guid.Parse(FakeQuoteService.MiddleEarthUniverse.Id) }));
             }));
 
     // ── /random — envelope shape ──────────────────────────────────────────
@@ -945,5 +950,84 @@ public class QuoteEndpointsTests
         var body = await response.Content.ReadAsStringAsync();
         StringAssert.Contains(body, "decade");
         Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
+    }
+
+    // ── #192: Series/Universe filters ───────────────────────────────────────
+
+    /// <summary>?seriesId=&lt;the fixture's Series id&gt; returns only quotes in that Series.</summary>
+    [TestMethod]
+    public async Task GetAll_SeriesFilter_ReturnsOnlyThatSeriesQuotes()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes?seriesId={FakeQuoteService.MiddleEarthSeries.Id}");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
+        Assert.AreEqual(1, items.Count);
+        Assert.AreEqual(FakeQuoteService.Tolkien.Id, items[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>?universeId=&lt;the fixture's Universe id&gt; returns quotes across every Series in it.</summary>
+    [TestMethod]
+    public async Task GetAll_UniverseFilter_ReturnsQuotesAcrossEverySeriesInThatUniverse()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes?universeId={FakeQuoteService.MiddleEarthUniverse.Id}");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
+        Assert.AreEqual(1, items.Count);
+        Assert.AreEqual(FakeQuoteService.Tolkien.Id, items[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>/random supports the Universe filter the same way /quotes does.</summary>
+    [TestMethod]
+    public async Task GetRandom_UniverseFilter_ReturnsOnlyThatUniverseQuotes()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/random?n=10&universeId={FakeQuoteService.MiddleEarthUniverse.Id}");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
+        Assert.AreEqual(1, items.Count);
+        Assert.AreEqual(FakeQuoteService.Tolkien.Id, items[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>Supplying both seriesId and series (the id- and name-valued forms of the same filter)
+    /// returns 422 — #196's mutual-exclusivity rule, proven on a real endpoint.</summary>
+    [TestMethod]
+    public async Task GetAll_BothSeriesIdAndSeriesSupplied_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync(
+            $"/api/v1/quotes?seriesId={FakeQuoteService.MiddleEarthSeries.Id}&series={FakeQuoteService.MiddleEarthSeries.Name}");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>A malformed seriesId (not a GUID) returns 422, not a bare framework 400.</summary>
+    [TestMethod]
+    public async Task GetAll_MalformedSeriesId_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?seriesId=not-a-guid");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>A series name that doesn't resolve to anything is a legitimate zero-results case
+    /// (200 + empty items), not an error — #196's NotFound-is-not-an-error distinction, proven
+    /// end to end through the resolver.</summary>
+    [TestMethod]
+    public async Task GetAll_SeriesNameDoesNotResolve_ReturnsNoResultsNotError()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?series=DoesNotExist");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("totalCount").GetInt32());
     }
 }

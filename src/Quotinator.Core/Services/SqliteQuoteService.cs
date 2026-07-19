@@ -80,12 +80,14 @@ public sealed class SqliteQuoteService : IQuoteService
         string? source = null,
         string? lang = null,
         int? yearFrom = null,
-        int? yearTo = null)
+        int? yearTo = null,
+        Guid? seriesId = null,
+        Guid? universeId = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var (whereClause, filterParams) = BuildFilterWhere(types, genres, lang, character, author, source, yearFrom, yearTo);
+        var (whereClause, filterParams) = BuildFilterWhere(types, genres, lang, character, author, source, seriesId, universeId, yearFrom, yearTo);
 
         var totalMatching = connection.ExecuteScalar<int>(
             Sql.Quotes.CountRandom(whereClause),
@@ -148,12 +150,12 @@ public sealed class SqliteQuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null)
+    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var (whereClause, parameters) = BuildFilterWhere(types, genres, lang, yearFrom, yearTo);
+        var (whereClause, parameters) = BuildFilterWhere(types, genres, lang, seriesId, universeId, yearFrom, yearTo);
 
         var total = connection.ExecuteScalar<int>(
             Sql.Quotes.CountGetAll(whereClause),
@@ -173,7 +175,7 @@ public sealed class SqliteQuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null)
+    public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
@@ -189,7 +191,7 @@ public sealed class SqliteQuoteService : IQuoteService
             _           => Sql.SearchField.All
         };
 
-        var (typeGenreWhere, filterParams) = BuildFilterWhere(types, genres, lang, yearFrom, yearTo);
+        var (typeGenreWhere, filterParams) = BuildFilterWhere(types, genres, lang, seriesId, universeId, yearFrom, yearTo);
 
         var sql = Sql.Quotes.SelectSearch(typeGenreWhere, fieldFilter);
 
@@ -266,6 +268,8 @@ public sealed class SqliteQuoteService : IQuoteService
                 })
                 .Where(g => !string.IsNullOrEmpty(g))
                 .ToList(),
+            Series           = row.SeriesId   is { } sid ? new MasterDataReference(sid, row.SeriesName!)   : null,
+            Universe         = row.UniverseId is { } uid ? new MasterDataReference(uid, row.UniverseName!) : null,
             Conversations        = conversations is { Count: > 0 } ? conversations : null,
             EmbeddedConversation = embeddedConversation,
         };
@@ -359,13 +363,16 @@ public sealed class SqliteQuoteService : IQuoteService
     // could silently drift from it — same pattern as SqliteQuoteImportService.ToWireString.
     private static string ConversationLineTypeWire(string dbLineType) => JsonNamingPolicy.SnakeCaseLower.ConvertName(dbLineType);
 
-    // Overload without text filters — used by GetAll and Search.
-    internal static (string Sql, object Parameters) BuildFilterWhere(string[]? types, string[]? genres, string? lang, int? yearFrom = null, int? yearTo = null)
-        => BuildFilterWhere(types, genres, lang, null, null, null, yearFrom, yearTo);
+    // Overload without text filters — used by GetAll.
+    internal static (string Sql, object Parameters) BuildFilterWhere(
+        string[]? types, string[]? genres, string? lang, Guid? seriesId, Guid? universeId,
+        int? yearFrom = null, int? yearTo = null)
+        => BuildFilterWhere(types, genres, lang, null, null, null, seriesId, universeId, yearFrom, yearTo);
 
     internal static (string Sql, DynamicParameters Parameters) BuildFilterWhere(
         string[]? types, string[]? genres, string? lang,
         string? character, string? author, string? source,
+        Guid? seriesId, Guid? universeId,
         int? yearFrom = null, int? yearTo = null)
     {
         var dbTypes  = types  is { Length: > 0 } ? types.Select(NormaliseType).ToArray()  : null;
@@ -377,6 +384,9 @@ public sealed class SqliteQuoteService : IQuoteService
         if (character is not null) clauses.Add("c.Name LIKE @characterLike");
         if (author    is not null) clauses.Add("p.Name LIKE @authorLike");
         if (source    is not null) clauses.Add("s.Title LIKE @sourceLike");
+        if (seriesId  is not null) clauses.Add("s.SeriesId = @seriesId");
+        if (universeId is not null) clauses.Add(
+            "s.SeriesId IN (SELECT Id FROM Series WHERE UniverseId = @universeId AND IsDeleted = 0)");
         if (yearFrom  is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom");
         if (yearTo    is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo");
 
@@ -387,6 +397,8 @@ public sealed class SqliteQuoteService : IQuoteService
         if (character is not null) p.Add("characterLike", $"%{character}%");
         if (author    is not null) p.Add("authorLike",    $"%{author}%");
         if (source    is not null) p.Add("sourceLike",    $"%{source}%");
+        if (seriesId  is not null) p.Add("seriesId",   seriesId);
+        if (universeId is not null) p.Add("universeId", universeId);
         if (yearFrom  is not null) p.Add("yearFrom", yearFrom);
         if (yearTo    is not null) p.Add("yearTo",   yearTo);
 
@@ -415,6 +427,10 @@ public sealed class SqliteQuoteService : IQuoteService
         public string?             Character         { get; init; }
         public string?             Author            { get; init; }
         public string              EffectiveLanguage { get; init; } = string.Empty;
+        public string?             SeriesId          { get; init; }
+        public string?             SeriesName        { get; init; }
+        public string?             UniverseId        { get; init; }
+        public string?             UniverseName      { get; init; }
     }
 
     private sealed class ConversationRow
