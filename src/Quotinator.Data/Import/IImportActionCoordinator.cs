@@ -91,7 +91,7 @@ public interface IImportActionCoordinator
     /// Unlike <see cref="ImportActionStatus.Applied"/>, this coordinator never introduces a
     /// <c>Reversed</c> action status — every action stays <see cref="ImportActionStatus.Applied"/>
     /// permanently, an accurate historical record of what was done. Whether a batch's effects are
-    /// still live is entirely the consuming project's own concern (e.g. Quotinator.Engine soft-deletes
+    /// still live is entirely the consuming project's own concern (e.g. Quotinator.Core soft-deletes
     /// its own <c>ImportBatch</c> row inside <paramref name="reverseActions"/> itself) — this
     /// coordinator has no domain-level batch concept to update.
     /// </summary>

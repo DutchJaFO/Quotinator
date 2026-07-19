@@ -28,7 +28,7 @@ public class SqlQueryGuardTests
     /// factory methods (<c>SystemAudit</c>, <c>SystemImportActions</c>, <c>Queries</c>) passes the
     /// aggregate guard for all filter-flag combinations.
     /// Quotinator-domain factory methods (<c>Quotes</c>, etc.) are covered in
-    /// <c>Quotinator.Engine.Tests.Security.SqlQueryGuardTests</c>.
+    /// <c>Quotinator.Core.Tests.Security.SqlQueryGuardTests</c>.
     /// </summary>
     [TestMethod]
     [DynamicData(nameof(AssembledQueryCases))]

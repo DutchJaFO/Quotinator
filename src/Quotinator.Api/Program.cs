@@ -15,11 +15,11 @@ using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
-using Quotinator.Engine.Database;
-using Quotinator.Engine.Entities;
-using Quotinator.Engine.Helpers;
-using Quotinator.Engine.Repositories;
-using Quotinator.Engine.Services;
+using Quotinator.Core.Database;
+using Quotinator.Core.Entities;
+using Quotinator.Core.Helpers;
+using Quotinator.Core.Repositories;
+using Quotinator.Core.Services;
 using Quotinator.Api.Middleware;
 using Quotinator.Api.OpenApi;
 using Quotinator.Data.Import;
@@ -30,7 +30,6 @@ using Quotinator.Converters.BasicJsonArray;
 using Quotinator.Converters.Csv;
 using Quotinator.Converters.RegexArray;
 using Quotinator.Core.Import;
-using Quotinator.Core.Services;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
 
@@ -391,8 +390,8 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         autoUpdateSources,
         QuotinatorMigrations.Baseline);
 });
-builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Engine.Services.SqliteQuoteService(connectionFactory));
-builder.Services.AddSingleton<Quotinator.Engine.Services.IQuoteImportService>(sp => new Quotinator.Engine.Services.SqliteQuoteImportService(
+builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Core.Services.SqliteQuoteService(connectionFactory));
+builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp => new Quotinator.Core.Services.SqliteQuoteImportService(
     connectionFactory,
     sp.GetRequiredService<IImportBatchRepository>(),
     sp.GetRequiredService<IImportActionCoordinator>(),

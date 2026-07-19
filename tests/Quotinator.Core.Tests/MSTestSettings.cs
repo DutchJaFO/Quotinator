@@ -1,5 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Quotinator.Engine.Helpers;
+using Quotinator.Core.Helpers;
 
 [assembly: DoNotParallelize]
 

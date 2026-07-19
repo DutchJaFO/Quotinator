@@ -256,7 +256,6 @@
     <Project Path="src/Quotinator.Converters.RegexArray/Quotinator.Converters.RegexArray.csproj" />
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
     <Project Path="src/Quotinator.Data/Quotinator.Data.csproj" />
-    <Project Path="src/Quotinator.Engine/Quotinator.Engine.csproj" />
     <Project Path="src/Quotinator.Data.Testing/Quotinator.Data.Testing.csproj" />
     <File Path="src/Quotinator.Api/resources/changelog.en.json" />
     <File Path="src/Quotinator.Api/resources/changelog.nl.json" />
@@ -276,7 +275,6 @@
     <Project Path="tests/Quotinator.Data.Example/Quotinator.Data.Example.csproj" />
     <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
     <Project Path="tests/Quotinator.Data.Testing.Tests/Quotinator.Data.Testing.Tests.csproj" />
-    <Project Path="tests/Quotinator.Engine.Tests/Quotinator.Engine.Tests.csproj" />
     <Project Path="tests/Quotinator.Tools.DbInspector.Tests/Quotinator.Tools.DbInspector.Tests.csproj" />
   </Folder>
   <Folder Name="/CVE/" />
@@ -323,7 +321,7 @@
     <File Path="src/Quotinator.Core/CVE/CVE-2025-6965.md" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Core.Tests/">
-    <File Path="tests/Quotinator.Core.Tests/CVE/.gitkeep" />
+    <File Path="tests/Quotinator.Core.Tests/CVE/CVE-2025-6965.md" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Data/">
     <File Path="src/Quotinator.Data/CVE/CVE-2025-6965.md" />
@@ -339,12 +337,6 @@
   </Folder>
   <Folder Name="/CVE/Quotinator.Data.Testing.Tests/">
     <File Path="tests/Quotinator.Data.Testing.Tests/CVE/.gitkeep" />
-  </Folder>
-  <Folder Name="/CVE/Quotinator.Engine/">
-    <File Path="src/Quotinator.Engine/CVE/.gitkeep" />
-  </Folder>
-  <Folder Name="/CVE/Quotinator.Engine.Tests/">
-    <File Path="tests/Quotinator.Engine.Tests/CVE/.gitkeep" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Tools.DbInspector/">
     <File Path="tools/Quotinator.Tools.DbInspector/CVE/.gitkeep" />

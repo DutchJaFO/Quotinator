@@ -41,7 +41,6 @@
     <ProjectReference Include="..\Quotinator.Converters.RegexArray\Quotinator.Converters.RegexArray.csproj" />
     <ProjectReference Include="..\Quotinator.Core\Quotinator.Core.csproj" />
     <ProjectReference Include="..\Quotinator.Data\Quotinator.Data.csproj" />
-    <ProjectReference Include="..\Quotinator.Engine\Quotinator.Engine.csproj" />
   </ItemGroup>
 
   <ItemGroup>

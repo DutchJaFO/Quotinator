@@ -34,19 +34,17 @@ Quotinator/
 │   ├── Quotinator.Api/          # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
 │   ├── Quotinator.Changelog/    # Changelog library — models, schema validation, formatters
 │   ├── Quotinator.Constants/    # Route strings, tag names, error message keys (no dependencies)
-│   ├── Quotinator.Core/         # Domain models, interfaces, and in-memory service implementations
+│   ├── Quotinator.Core/         # Domain models, interfaces, and the SQLite-backed service implementation
 │   ├── Quotinator.Data/         # Generic, reusable SQLite/Dapper infrastructure (domain-agnostic)
-│   ├── Quotinator.Data.Testing/ # Test helper library — stubs, fakes, and disposable SQLite DB
-│   └── Quotinator.Engine/       # SQLite-backed Quotinator domain implementation (bridges Core + Data)
+│   └── Quotinator.Data.Testing/ # Test helper library — stubs, fakes, and disposable SQLite DB
 ├── tests/
 │   ├── Quotinator.Api.Tests/         # Endpoint integration tests (WebApplicationFactory)
 │   ├── Quotinator.Changelog.Tests/   # Changelog schema and generation tests
 │   ├── Quotinator.Constants.Tests/   # Tests for route and constant definitions
-│   ├── Quotinator.Core.Tests/        # Unit tests for domain logic and in-memory service
+│   ├── Quotinator.Core.Tests/        # Unit tests for domain logic, integration tests for the SQLite-backed implementation
 │   ├── Quotinator.Data.Example/      # Concrete example implementations of Data patterns (not a test runner)
 │   ├── Quotinator.Data.Testing.Tests/ # Tests for the Data.Testing helper library
-│   ├── Quotinator.Data.Tests/        # Integration tests for Data infrastructure (real SQLite, no fakes)
-│   └── Quotinator.Engine.Tests/      # Integration tests for Engine (SqliteQuoteService, migrations)
+│   └── Quotinator.Data.Tests/        # Integration tests for Data infrastructure (real SQLite, no fakes)
 ├── addon/                       # Home Assistant add-on manifest, config, and translations
 ├── data/
 │   └── sources/                 # Bundled source files (one JSON per dataset) + manifest

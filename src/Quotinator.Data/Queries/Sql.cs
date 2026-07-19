@@ -3,7 +3,7 @@ namespace Quotinator.Data.Queries;
 /// <summary>Generic infrastructure SQL — schema/version bookkeeping, join helpers, and the System_-prefixed tables Quotinator.Data itself owns.</summary>
 /// <remarks>
 /// Quotinator-domain SQL (Quotes, Sources, Characters, Conversations, etc.) lives in
-/// <c>Quotinator.Engine.Queries.Sql</c> instead — Quotinator.Data must stay domain-agnostic
+/// <c>Quotinator.Core.Queries.Sql</c> instead — Quotinator.Data must stay domain-agnostic
 /// (ADR 004). Everything in this file is reusable infrastructure with no dependency on any
 /// Quotinator-specific table shape.
 /// <para>

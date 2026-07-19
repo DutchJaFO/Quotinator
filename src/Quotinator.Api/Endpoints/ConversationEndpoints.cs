@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Shared;
-using Quotinator.Api.Models;
+using Quotinator.Core.Models;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Helpers;
@@ -9,8 +9,8 @@ using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
-using Quotinator.Engine.Entities;
-using Quotinator.Engine.Repositories;
+using Quotinator.Core.Entities;
+using Quotinator.Core.Repositories;
 
 namespace Quotinator.Api.Endpoints;
 

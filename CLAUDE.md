@@ -120,9 +120,9 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 - **One schema change per migration where possible.** Multi-statement migrations are harder to make fully idempotent and harder to reason about when partially applied.
 - All migration SQL stays inside `DatabaseInitializer` as `private const string Migration00N_...` — not in `Sql.cs`. Migration text is frozen at migration time and must not be discoverable or modifiable via the `Sql` class.
 
-**Migration ownership split (Data vs. consumer):** `Quotinator.Data` owns migrations for its own tables (currently `System_AuditEntries`; any future `System_`-prefixed table Quotinator.Data itself defines) via a fixed internal list (`DatabaseInitializer.DataOwnedMigrations`) — never passed through the constructor, and never controlled by the consuming project. These always apply first, before any consumer-supplied migration, and are tracked in their own `System_SchemaVersion` table. A consuming project's own domain migrations (e.g. `Quotinator.Engine`'s `QuotinatorMigrations.All`) are tracked independently in `System_ConsumerSchemaVersion`, so "version N" always means the same specific migration for whichever side owns it, unaffected by the other side's migration count changing over time. `IDatabaseInitializer.SchemaVersion` reports the consumer's own version (what operators track release-over-release); `DataSchemaVersion` reports Quotinator.Data's own version separately.
+**Migration ownership split (Data vs. consumer):** `Quotinator.Data` owns migrations for its own tables (currently `System_AuditEntries`; any future `System_`-prefixed table Quotinator.Data itself defines) via a fixed internal list (`DatabaseInitializer.DataOwnedMigrations`) — never passed through the constructor, and never controlled by the consuming project. These always apply first, before any consumer-supplied migration, and are tracked in their own `System_SchemaVersion` table. A consuming project's own domain migrations (e.g. `Quotinator.Core`'s `QuotinatorMigrations.All`) are tracked independently in `System_ConsumerSchemaVersion`, so "version N" always means the same specific migration for whichever side owns it, unaffected by the other side's migration count changing over time. `IDatabaseInitializer.SchemaVersion` reports the consumer's own version (what operators track release-over-release); `DataSchemaVersion` reports Quotinator.Data's own version separately.
 
-**Baseline schema for fresh databases:** A completely empty database (zero tables of any kind, detected via `Sql.Schema.AnyTableExists`) skips replaying migration history entirely and instead applies a one-step consolidated baseline: `DatabaseInitializer`'s own `DataBaselineSql` (Quotinator.Data's tables) followed by the consumer's `SchemaBaseline.Sql` (e.g. `QuotinatorMigrations.Baseline`, Quotinator.Engine's domain tables). A database with *any* pre-existing table — even just an empty version table — always takes the full incremental path instead; the two paths never cross. **Whenever a new migration is added to either `DataOwnedMigrations` or a consumer's migration list, the corresponding baseline must be updated to match its final result in the same commit** — this is enforced by dedicated schema-drift tests (`DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema` in `Quotinator.Data.Tests`, `Baseline_And_IncrementalReplay_ProduceIdenticalEngineSchema`/`...AcceptSameCheckConstraintValues` in `Quotinator.Engine.Tests`) that compare the baseline-created schema against the incrementally-replayed schema and fail on any drift, including in CHECK constraint behaviour (which `PRAGMA table_info` doesn't capture structurally).
+**Baseline schema for fresh databases:** A completely empty database (zero tables of any kind, detected via `Sql.Schema.AnyTableExists`) skips replaying migration history entirely and instead applies a one-step consolidated baseline: `DatabaseInitializer`'s own `DataBaselineSql` (Quotinator.Data's tables) followed by the consumer's `SchemaBaseline.Sql` (e.g. `QuotinatorMigrations.Baseline`, Quotinator.Core's domain tables). A database with *any* pre-existing table — even just an empty version table — always takes the full incremental path instead; the two paths never cross. **Whenever a new migration is added to either `DataOwnedMigrations` or a consumer's migration list, the corresponding baseline must be updated to match its final result in the same commit** — this is enforced by dedicated schema-drift tests (`DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema` in `Quotinator.Data.Tests`, `Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema`/`...AcceptSameCheckConstraintValues` in `Quotinator.Core.Tests`) that compare the baseline-created schema against the incrementally-replayed schema and fail on any drift, including in CHECK constraint behaviour (which `PRAGMA table_info` doesn't capture structurally).
 
 **No exception-based migration recovery.** A migration must never rely on catching its own failure to detect an already-applied state — a genuinely different failure with the same error message would be silently misclassified and swallowed, leaving no way to know whether the correct migrations actually applied. Two rules follow from this:
 
@@ -133,10 +133,9 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 ```
 src/
   Quotinator.Constants/        # Route strings, tag names, error message keys — no dependencies
-  Quotinator.Core/             # Domain models, interfaces, and in-memory service implementations
+  Quotinator.Core/             # Domain models, interfaces, and the SQLite-backed service implementation — bridges domain contracts with Quotinator.Data's generic infrastructure
   Quotinator.Data/             # Generic, reusable SQLite/Dapper infrastructure — domain-agnostic
   Quotinator.Data.Testing/     # Test helper library — stubs, fakes, disposable SQLite DB (reference from test projects only)
-  Quotinator.Engine/           # SQLite-backed Quotinator domain implementation — bridges Core + Data
   Quotinator.Changelog/        # Changelog schema, models, and generator logic
   Quotinator.Converters.Vilaboim/      # IQuoteSourceConverter plugin: vilaboim/movie-quotes raw format
   Quotinator.Converters.NikhilNamal17/ # IQuoteSourceConverter plugin: NikhilNamal17/popular-movie-quotes raw format
@@ -147,11 +146,10 @@ tests/
   Quotinator.Constants.Tests/       # Tests for route and constant definitions
   Quotinator.Converters.Vilaboim.Tests/      # Tests for the Vilaboim converter plugin
   Quotinator.Converters.NikhilNamal17.Tests/ # Tests for the NikhilNamal17 converter plugin
-  Quotinator.Core.Tests/            # Unit tests for domain logic and in-memory service
+  Quotinator.Core.Tests/            # Unit tests for domain logic, and integration tests for the SQLite-backed implementation (SqliteQuoteService, migrations)
   Quotinator.Data.Example/          # Concrete example implementations of Data patterns (not a test runner)
   Quotinator.Data.Testing.Tests/    # Tests for the Data.Testing helper library
   Quotinator.Data.Tests/            # Integration tests for Data infrastructure (real SQLite, no fakes)
-  Quotinator.Engine.Tests/          # Integration tests for Engine (SqliteQuoteService, migrations)
   Quotinator.Tools.DbInspector.Tests/  # Unit tests for the DbInspector dev tool
 tools/
   Quotinator.Tools.DbInspector/     # Dev-only CLI: run arbitrary SQL against a Quotinator SQLite file. Never shipped.
@@ -163,7 +161,7 @@ docker/Dockerfile         # Multi-stage build, targets linux/amd64 + linux/arm64
 addon/                    # Home Assistant add-on manifest and assets
 ```
 
-Dependency direction: `Quotinator.Api` → `Quotinator.Engine` → `Quotinator.Core`; `Quotinator.Engine` → `Quotinator.Data`; `Quotinator.Api` → `Quotinator.Constants`. Core and Data have no dependencies on each other or on Engine. `Quotinator.Data.Testing` → `Quotinator.Data` only.
+Dependency direction: `Quotinator.Api` → `Quotinator.Core`; `Quotinator.Core` → `Quotinator.Data`; `Quotinator.Api` → `Quotinator.Constants`. `Quotinator.Data` has no dependency on Core (must stay domain-agnostic — see ADR 004). `Quotinator.Data.Testing` → `Quotinator.Data` only. (Until #206, `Quotinator.Engine` sat between Api and Core as a separate project; it was merged into `Quotinator.Core` because Core's own "stay Dapper/SQLite-free" invariant — the only reason Engine existed as a *third* project rather than Core depending on Data directly — turned out not to be worth its cost. See ADR 004's `#206` revision for the full reasoning.)
 
 `tools/` holds standalone developer utilities that are never referenced by any `src/` project and never built into the Docker image — they exist purely to support local development/debugging. See `tools/Quotinator.Tools.DbInspector/README.md` for the current example.
 
@@ -393,9 +391,12 @@ doesn't reasonably assume the omission was an oversight.
 
 Any FK-valued field on a masterdata response DTO (e.g. a Source's link to its Series, a Character's links
 to its Sources) is a minimal, read-only `MasterDataReference(string Id, string Name)` —
-`src/Quotinator.Api/Models/MasterDataReference.cs` — **never** a bare id and never the full related record.
+`src/Quotinator.Core/Models/MasterDataReference.cs` — **never** a bare id and never the full related record.
 A single optional FK (`Source.SeriesId`) becomes a nullable `MasterDataReference?`; a many-to-many link
-(Character↔Source) becomes a `IReadOnlyList<MasterDataReference>`.
+(Character↔Source) becomes a `IReadOnlyList<MasterDataReference>`. `MasterDataReference` originally lived
+in `Quotinator.Api.Models` (introduced by #184); #206's merge of `Quotinator.Engine` into `Quotinator.Core`
+relocated it to `Quotinator.Core.Models` alongside every masterdata response DTO and `QuoteResponse` —
+one canonical location, not split across two projects.
 
 **Why not a bare id:** a bare id forces the client into a second round-trip per reference just to show a
 name. **Why not the full related record:** that would denormalise and bloat every response with data the
@@ -413,13 +414,15 @@ a client edits through this endpoint. Any future CRUD work targets the core resp
 
 **A resolver, not the generic repository — resolving a FK to a reference always requires a join** the
 generic `IListableRepository<T>`/`IRepository<T>` (single-table, `SELECT * FROM {table}`) cannot express.
-Each masterdata issue that needs this writes its own small reader in `Quotinator.Engine.Repositories`
+Each masterdata issue that needs this writes its own small reader in `Quotinator.Core.Repositories`
 (e.g. `ISourceSeriesReferenceReader`, `ICharacterSourceLinkReader`) returning plain `(Guid Id, string
-Name)` tuples or a small Engine-local record — never `Quotinator.Api.Models.MasterDataReference` directly,
-since `Quotinator.Engine` has no dependency on `Quotinator.Api`. The consuming endpoint maps the resolver's
-result into `MasterDataReference` at the API layer. A batched form (`GetXForManyAsync`, one query per page
-rather than one per row) is required wherever the reference appears in a list response, matching #195's
-N+1 avoidance rule for pagination generally.
+Name)` tuples, not `MasterDataReference` directly — this keeps the reader a data-shape concern,
+independent of which response DTO an individual endpoint chooses to build from the tuple, rather than a
+project-boundary workaround (both types are reachable from the same project since #206's merge; the
+separation is a design choice, not a constraint). The consuming endpoint maps the resolver's result into
+`MasterDataReference` at the API layer. A batched form (`GetXForManyAsync`, one query per page rather
+than one per row) is required wherever the reference appears in a list response, matching #195's N+1
+avoidance rule for pagination generally.
 
 ### Soft-deleted rows are invisible by default, everywhere
 

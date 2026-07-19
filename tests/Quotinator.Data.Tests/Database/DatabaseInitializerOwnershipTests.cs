@@ -13,7 +13,7 @@ namespace Quotinator.Data.Tests.Database;
 /// <summary>
 /// Proves the #143 ownership split at the base <see cref="DatabaseInitializer"/> level, with zero
 /// consumer migrations/baseline involved — isolates Quotinator.Data's own behaviour from whatever
-/// a consuming project (e.g. Quotinator.Engine) supplies.
+/// a consuming project (e.g. Quotinator.Core) supplies.
 /// </summary>
 [TestClass]
 public class DatabaseInitializerOwnershipTests

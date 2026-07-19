@@ -1,4 +1,4 @@
-using Quotinator.Engine.Repositories;
+using Quotinator.Core.Repositories;
 
 namespace Quotinator.Api.Tests.Fakes;
 

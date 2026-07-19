@@ -7,7 +7,7 @@ namespace Quotinator.Core.Import;
 /// One position in a <see cref="SourceConversation"/>'s ordered line list. Exactly one of
 /// <see cref="QuoteId"/>, <see cref="StageDirectionId"/>, <see cref="SoundCueId"/> is populated,
 /// matching <see cref="Type"/> — the same discriminated shape as
-/// <c>Quotinator.Engine.Entities.ConversationLineEntity</c>.
+/// <c>Quotinator.Core.Entities.ConversationLineEntity</c>.
 /// </summary>
 public sealed class SourceConversationLine
 {

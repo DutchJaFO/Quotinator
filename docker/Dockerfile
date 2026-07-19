@@ -9,7 +9,6 @@ COPY src/Quotinator.Constants/Quotinator.Constants.csproj src/Quotinator.Constan
 COPY src/Quotinator.Changelog/Quotinator.Changelog.csproj src/Quotinator.Changelog/
 COPY src/Quotinator.Data/Quotinator.Data.csproj src/Quotinator.Data/
 COPY src/Quotinator.Core/Quotinator.Core.csproj src/Quotinator.Core/
-COPY src/Quotinator.Engine/Quotinator.Engine.csproj src/Quotinator.Engine/
 COPY src/Quotinator.Converters.RegexArray/Quotinator.Converters.RegexArray.csproj src/Quotinator.Converters.RegexArray/
 COPY src/Quotinator.Converters.BasicJsonArray/Quotinator.Converters.BasicJsonArray.csproj src/Quotinator.Converters.BasicJsonArray/
 COPY src/Quotinator.Converters.Csv/Quotinator.Converters.Csv.csproj src/Quotinator.Converters.Csv/

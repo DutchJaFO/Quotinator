@@ -10,7 +10,7 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
-using Quotinator.Engine.Entities;
+using Quotinator.Core.Entities;
 
 namespace Quotinator.Api.Tests.Endpoints;
 

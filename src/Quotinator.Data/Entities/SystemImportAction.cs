@@ -12,10 +12,10 @@ namespace Quotinator.Data.Entities;
 /// <remarks>
 /// RecordBase-shaped from creation (#154).
 /// <c>ExistingValue</c>/<c>IncomingValue</c>/<c>MergedFields</c> are opaque JSON blobs — this
-/// project never deserializes them; the consuming project (e.g. Quotinator.Engine) produces and
+/// project never deserializes them; the consuming project (e.g. Quotinator.Core) produces and
 /// later interprets that content, since this project has no dependency on any specific domain
 /// schema. Not a candidate for <see cref="Quotinator.Data.Helpers.JsonHandler{T}"/>: the concrete
-/// shape is owned by a consumer project (e.g. <c>Quotinator.Core.Models</c>/<c>Quotinator.Engine.Models</c>),
+/// shape is owned by a consumer project (e.g. <c>Quotinator.Core.Models</c>),
 /// and typing this property that way would require <c>Quotinator.Data</c> to reference it, which
 /// ADR 004 forbids. <see cref="EntityType"/> is likewise free-text, entirely caller-defined — Data
 /// never branches on its value beyond storing/filtering by it.

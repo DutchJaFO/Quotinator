@@ -1,6 +1,6 @@
 using Quotinator.Core.Models;
 using Quotinator.Data.Import;
-using Quotinator.Engine.Services;
+using Quotinator.Core.Services;
 
 namespace Quotinator.Api.Tests.Fakes;
 

@@ -1,9 +1,9 @@
 # ADR 004 — Quotinator.Data project boundaries and design intent
 
-**Status:** Superseded in part by ADR 004-A (Engine layer)  
+**Status:** Revised (see inline revisions below) — the Engine layer introduced by the #121 revision was retired by #206  
 **Date:** 2026-06-25  
 **GitHub issue:** #115  
-**Updated:** 2026-07-11
+**Updated:** 2026-07-19
 
 ---
 
@@ -161,3 +161,66 @@ constants themselves — found while doing this split: `DatabaseInitializer.Trun
 (the shared base class in `Quotinator.Data`) directly called `Sql.Quotes.DeleteAll`,
 `Sql.Conversations.DeleteAll`, and similar Quotinator-domain deletes. It moved to
 `QuotinatorDatabaseInitializer` (`Quotinator.Engine`), its only caller.
+
+---
+
+## Revision — issue #206 merged `Quotinator.Engine` back into `Quotinator.Core`
+
+The #121 revision above introduced `Quotinator.Engine` as a third project because `Quotinator.Data`
+had to stay domain-agnostic (no Quotinator-specific types), while `Quotinator.Core` was held to a
+separate, freestanding invariant: zero Dapper, zero SQLite, zero `Quotinator.Data` reference. Something
+needed to hold Quotinator-domain entities and SQL that referenced both Core's domain types and Data's
+Dapper/SQLite infrastructure at once, so a third project absorbed that role.
+
+**That second invariant — not the first — is what's retired here.** `Quotinator.Data`'s domain-agnostic
+boundary (Data must never reference Core; Data carries no Quotinator-specific types) is unaffected and
+remains exactly as this ADR already describes. What changes is that `Quotinator.Core` no longer avoids
+depending on `Quotinator.Data` — it depends on it directly, the same way `Quotinator.Engine` did, and
+everything `Quotinator.Engine` held (domain entities, domain SQL, the SQLite-backed service
+implementations, the reference-resolving readers) moves into `Quotinator.Core` unchanged in content,
+renamespaced only.
+
+**Why the "Core stays Dapper-free" invariant wasn't worth keeping**: found while planning issue #192
+(exposing Series/Universe on the quote read path). `QuoteResponse` (Core) needed the same
+`MasterDataReference` shape #184 had defined in `Quotinator.Api.Models` for the masterdata response
+DTOs, but every one of those DTOs also needed `Quotinator.Data.Entities.CompletenessStatus`. Under the
+three-project split, no single project could see a Core-owned reference type and a Data-owned
+completeness type at once except `Quotinator.Api` — which is why #184's response DTOs had ended up
+there instead of alongside `QuoteResponse`, and why #192 couldn't cleanly extend `QuoteResponse` without
+either duplicating a type or reaching for an increasingly awkward workaround. The underlying problem
+wasn't where any specific type lived; it was that the three-project split manufactured a boundary that
+had no real justification once `Quotinator.Data`'s own domain-agnostic invariant (the actual reason
+Engine was introduced) is honoured on its own. The boundary had also already blurred in practice
+independent of #192: `Quotinator.Core.Tests.csproj` referenced `Quotinator.Engine.csproj` directly, and
+several `Quotinator.Engine`-testing files (`QuotinatorMigrationsTests`, `SqliteQuoteServiceTests` and
+its siblings) already lived under `Quotinator.Core.Tests` before this merge, filed under a `Data/`
+folder matching neither project's actual namespace.
+
+### Revised boundary rules (supersedes the #121 revision's table)
+
+| What | Where | Rule |
+|------|-------|------|
+| Domain service interfaces (`IQuoteService`) | Core | Core defines the contract |
+| Domain models and DTOs (`QuoteResponse`, masterdata response DTOs, `MasterDataReference`) | Core | Core owns domain models — one canonical location, no Core/Api split |
+| Domain enums (`QuoteType`, `Genre`) | Core | Surfaced in service signatures |
+| Domain import models (`SourceQuote`) | Core | Used by the legacy in-memory `QuoteService` |
+| Generic DB infrastructure (repositories, UoW, migrations base, type handlers) | Data | Domain-agnostic; no Core reference |
+| Generic import infrastructure (`SeedBatch`, `ManifestPolicy`, `ImportBatch` bookkeeping) | Data | Reusable across future projects |
+| Quotinator-domain DB entities (`Source`, `QuoteEntity`, etc.) | Core | Reference both domain types and Data infrastructure directly |
+| Quotinator-specific migrations and seeding | Core | `QuotinatorDatabaseInitializer` extends `DatabaseInitializer` |
+| Quotinator-specific Dapper handler registration | Core | `QuotinatorDapperConfiguration` extends `DatabaseConfiguration` |
+| SQLite implementation of `IQuoteService` | Core | `SqliteQuoteService` |
+| Quotinator-domain SQL (`Sql.cs`) | Core | `Quotinator.Core.Queries.Sql` — same #157/#158 consumer-entity-interaction test still applies |
+| DI wiring | Api | `Program.cs` registers Core types; no Dapper or SQLite in Api |
+
+### Revised invariants
+
+- `Quotinator.Core` may reference `Quotinator.Data` (this is the invariant that changed).
+- `Quotinator.Data` must have zero Core project references and zero Quotinator-domain types
+  (unchanged from the #121 revision).
+- `Quotinator.Api` wires everything via DI. It may reference Core (to register types) but must not
+  contain business logic (unchanged).
+
+The #121 revision's own project graph diagram, invariant list, and "What belongs in
+`Quotinator.Engine`" guidance are superseded by this section — left in place above as history, per this
+project's append-only ADR convention, not because they still describe the current structure.

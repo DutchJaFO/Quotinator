@@ -13,8 +13,6 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
-using Quotinator.Engine.Models;
-using Quotinator.Engine.Services;
 
 namespace Quotinator.Api.Tests.Endpoints;
 
