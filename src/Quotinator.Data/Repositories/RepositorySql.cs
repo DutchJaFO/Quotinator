@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Quotinator.Data.Queries;
 
 namespace Quotinator.Data.Repositories;
 
@@ -13,25 +14,25 @@ internal static class RepositorySql
     private static readonly Regex IdentifierPattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
     private static readonly IReadOnlyList<SortColumn> DefaultOrderBy = [new SortColumn("DateCreated")];
 
-    /// <summary>Selects an active record by primary key.</summary>
+    /// <summary>Selects an active record by primary key. Case-insensitive (#210) via <see cref="IdClauses"/> — every id-comparison query in this codebase is, per ADR 012, regardless of whether the entity reached through this generic layer happens to already bind its Guid parameter uppercased today.</summary>
     internal static string SelectById(string tableName)
-        => $"SELECT * FROM {tableName} WHERE Id = @id AND IsDeleted = 0";
+        => $"SELECT * FROM {tableName} WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0";
 
-    /// <summary>Soft-deletes a record by primary key.</summary>
+    /// <summary>Soft-deletes a record by primary key. Case-insensitive — see <see cref="SelectById"/>'s remark.</summary>
     internal static string SoftDelete(string tableName)
-        => $"UPDATE {tableName} SET IsDeleted = 1, DateDeleted = @now, DateModified = @now WHERE Id = @id AND IsDeleted = 0;";
+        => $"UPDATE {tableName} SET IsDeleted = 1, DateDeleted = @now, DateModified = @now WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
 
     /// <summary>Selects all soft-deleted records in the table.</summary>
     internal static string SelectDeleted(string tableName)
         => $"SELECT * FROM {tableName} WHERE IsDeleted = 1";
 
-    /// <summary>Restores a soft-deleted record by primary key.</summary>
+    /// <summary>Restores a soft-deleted record by primary key. Case-insensitive — see <see cref="SelectById"/>'s remark.</summary>
     internal static string Restore(string tableName)
-        => $"UPDATE {tableName} SET IsDeleted = 0, DateDeleted = NULL, DateModified = @now WHERE Id = @id AND IsDeleted = 1";
+        => $"UPDATE {tableName} SET IsDeleted = 0, DateDeleted = NULL, DateModified = @now WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 1";
 
-    /// <summary>Hard-deletes a soft-deleted record by primary key.</summary>
+    /// <summary>Hard-deletes a soft-deleted record by primary key. Case-insensitive — see <see cref="SelectById"/>'s remark.</summary>
     internal static string HardDelete(string tableName)
-        => $"DELETE FROM {tableName} WHERE Id = @id AND IsDeleted = 1";
+        => $"DELETE FROM {tableName} WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 1";
 
     /// <summary>Purges all soft-deleted records from the table.</summary>
     internal static string Purge(string tableName)
@@ -40,24 +41,29 @@ internal static class RepositorySql
     /// <summary>
     /// Selects the active detail record whose <paramref name="fkColumn"/> matches the given parent ID.
     /// Used by <see cref="SqliteOneToOneRepository{TParent,TDetail}"/> for separate-FK layouts.
+    /// Case-insensitive — see <see cref="SelectById"/>'s remark.
     /// </summary>
     internal static string SelectByForeignKey(string tableName, string fkColumn)
-        => $"SELECT * FROM [{tableName}] WHERE [{fkColumn}] = @parentId AND [IsDeleted] = 0";
+        => $"SELECT * FROM [{tableName}] WHERE {IdClauses.Equals($"[{fkColumn}]", "parentId")} AND [IsDeleted] = 0";
 
     /// <summary>
     /// Selects a junction row by the two FK columns — active or soft-deleted.
     /// No <c>IsDeleted</c> filter: <see cref="SqliteLinkRepository{TLeft,TRight,TJunction}"/>
     /// needs to see soft-deleted rows to decide whether to restore or insert.
+    /// Case-insensitive — see <see cref="SelectById"/>'s remark.
     /// </summary>
     internal static string SelectJunctionRow(string tableName, string leftFkColumn, string rightFkColumn)
-        => $"SELECT * FROM [{tableName}] WHERE [{leftFkColumn}] = @leftId AND [{rightFkColumn}] = @rightId";
+        => $"SELECT * FROM [{tableName}] WHERE {IdClauses.Equals($"[{leftFkColumn}]", "leftId")} AND {IdClauses.Equals($"[{rightFkColumn}]", "rightId")}";
 
     /// <summary>
     /// Selects a set of active records by primary key list.
     /// Dapper expands <c>@ids</c> from any <see cref="System.Collections.Generic.IEnumerable{T}"/> automatically.
+    /// The column side is UPPER()-wrapped (#210); protecting the list-parameter side is the caller's
+    /// responsibility (canonicalize every id in the list before binding), the same as
+    /// <c>Sql.CharacterSources.SelectSourceReferencesForCharacters</c>'s equivalent IN clause.
     /// </summary>
     internal static string SelectByIds(string tableName)
-        => $"SELECT * FROM [{tableName}] WHERE [Id] IN @ids AND [IsDeleted] = 0";
+        => $"SELECT * FROM [{tableName}] WHERE {IdClauses.In("[Id]", "ids")} AND [IsDeleted] = 0";
 
     /// <summary>
     /// Selects a page of active records, ordered by <paramref name="orderBy"/> (defaulting to

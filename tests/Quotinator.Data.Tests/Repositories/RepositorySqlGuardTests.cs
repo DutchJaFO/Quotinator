@@ -21,6 +21,22 @@ public class RepositorySqlGuardTests
             "Review the factory method and consult docs/sql-safety.md.");
     }
 
+    /// <summary>
+    /// Verifies that every SQL string produced by <see cref="RepositorySql"/> factory methods does not
+    /// compare an id-named column to a bound parameter case-sensitively. See ADR 012 and #210 — every
+    /// entity reachable through the generic repository layer gets the same protection, not just the
+    /// domain-specific queries in <c>Quotinator.Core</c>.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(RepositorySqlCases))]
+    public void RepositorySqlFactory_PassesIdCaseGuard(string name, string sql)
+    {
+        var violations = SqlIdCaseGuard.FindViolations(sql);
+        Assert.IsEmpty(violations,
+            $"RepositorySql.{name} contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
+            "Wrap both sides in UPPER(...) — see ADR 012.");
+    }
+
     public static IEnumerable<object[]> RepositorySqlCases()
     {
         const string t = "TestWidgets";

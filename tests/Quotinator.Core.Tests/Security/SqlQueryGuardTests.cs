@@ -42,6 +42,33 @@ public class SqlQueryGuardTests
     }
 
     /// <summary>
+    /// Reflects over every string constant in <see cref="Sql"/> and its nested classes, and asserts
+    /// none compare an id-named column to a bound parameter case-sensitively. See ADR 012 and #210 —
+    /// a canonically-stored id must still be matched via <c>UPPER(...)</c> on both sides, since
+    /// SQLite's default TEXT comparison is case-sensitive.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(AllNamedSqlConstants))]
+    public void SqlConstant_PassesIdCaseGuard(string name, string sql)
+    {
+        var violations = SqlIdCaseGuard.FindViolations(sql);
+        Assert.IsEmpty(violations,
+            $"Sql.{name} contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
+            "Wrap both sides in UPPER(...) — see ADR 012.");
+    }
+
+    /// <summary>Same guard, applied to every dynamically-assembled query (see <see cref="AssembledQueryCases"/>).</summary>
+    [TestMethod]
+    [DynamicData(nameof(AssembledQueryCases))]
+    public void AssembledQuery_PassesIdCaseGuard(string label, string fullSql)
+    {
+        var violations = SqlIdCaseGuard.FindViolations(fullSql);
+        Assert.IsEmpty(violations,
+            $"Assembled query '{label}' contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
+            "Wrap both sides in UPPER(...) — see ADR 012.");
+    }
+
+    /// <summary>
     /// Asserts that the set of SQL constants containing aggregate functions exactly matches the
     /// documented inventory. If a new aggregate query is added, this test fails — update the list
     /// and confirm the query has been reviewed against docs/sql-safety.md.
@@ -144,7 +171,18 @@ public class SqlQueryGuardTests
         }
     }
 
-    /// <summary>Enumerates all string constants in <see cref="Sql"/> and its nested classes.</summary>
+    /// <summary>
+    /// Enumerates all fixed string queries in <see cref="Sql"/> and its nested classes — <c>const</c>
+    /// fields (<see cref="FieldInfo.IsLiteral"/>), <c>static readonly</c> fields
+    /// (<see cref="FieldInfo.IsInitOnly"/>), and arrow-bodied <c>static string</c> properties. A query
+    /// that calls <see cref="Quotinator.Data.Queries.IdClauses"/> cannot be a compile-time
+    /// <c>const</c> — it must be <c>static readonly</c> instead — so fields alone are not enough.
+    /// Properties matter too: <c>Sql.SystemImportActions.SelectById</c> (in
+    /// <c>Quotinator.Data.Queries.Sql</c>) was declared as a property, not a field, and a real
+    /// case-sensitivity bug in it went completely undetected by every guard test until this method
+    /// was widened to also call <see cref="Type.GetProperties(BindingFlags)"/> — found live during
+    /// #210's IdClauses refactor, not by design.
+    /// </summary>
     public static IEnumerable<object[]> AllNamedSqlConstants()
         => EnumerateSqlConstants().Select(x => new object[] { x.Name, x.Sql });
 
@@ -153,6 +191,10 @@ public class SqlQueryGuardTests
             .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)
             .SelectMany(t => t
                 .GetFields(BindingFlags.NonPublic | BindingFlags.Static)
-                .Where(f => f.IsLiteral && f.FieldType == typeof(string))
-                .Select(f => ($"{t.Name}.{f.Name}", (string)f.GetValue(null)!)));
+                .Where(f => (f.IsLiteral || f.IsInitOnly) && f.FieldType == typeof(string))
+                .Select(f => ($"{t.Name}.{f.Name}", (string)f.GetValue(null)!))
+                .Concat(t
+                    .GetProperties(BindingFlags.NonPublic | BindingFlags.Static)
+                    .Where(p => p.PropertyType == typeof(string) && p.GetMethod is not null)
+                    .Select(p => ($"{t.Name}.{p.Name}", (string)p.GetValue(null)!))));
 }

@@ -125,8 +125,9 @@ internal static class Sql
         internal const string SelectByType =
             "SELECT * FROM ImportBatches WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC, ROWID DESC;";
 
-        internal const string UpdateRecordCount =
-            "UPDATE ImportBatches SET RecordCount = @count, DateModified = @now WHERE Id = @id;";
+        // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
+        internal static readonly string UpdateRecordCount =
+            $"UPDATE ImportBatches SET RecordCount = @count, DateModified = @now WHERE {IdClauses.Equals("Id", "id")};";
 
         internal const string DeleteAll = "DELETE FROM ImportBatches;";
     }
@@ -153,11 +154,16 @@ internal static class Sql
         internal static string CountPaged(bool filterTable, bool filterRecordId)
             => CountPagedBase + BuildWhere(filterTable, filterRecordId) + ";";
 
+        // RecordId comparison is case-insensitive (#210): RecordId is always stored canonical-uppercase
+        // (derived from the entity's own Guid Id — see SqliteRepository<T>.BuildEntry), but a caller's
+        // ?recordId= query-string value is never canonicalized before reaching here — a lowercase or
+        // mixed-case value (the default Guid.ToString() casing in most client languages) previously
+        // matched nothing. See docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
         private static string BuildWhere(bool filterTable, bool filterRecordId)
         {
             var parts = new List<string>(2);
             if (filterTable)    parts.Add("TableName = @table");
-            if (filterRecordId) parts.Add("RecordId = @recordId");
+            if (filterRecordId) parts.Add(IdClauses.Equals("RecordId", "recordId"));
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
     }
@@ -185,8 +191,16 @@ internal static class Sql
         internal static string CountPaged(bool filterBatchId, bool filterStatus, bool filterEntityType = false)
             => CountPagedBase + BuildWhere(filterBatchId, filterStatus, filterEntityType) + ";";
 
-        /// <summary>Single-action lookup by Id (#154's decide/undo/apply/discard flows).</summary>
-        internal static string SelectById => $"SELECT {SelectColumns} FROM System_ImportActions WHERE Id = @id;";
+        /// <summary>
+        /// Single-action lookup by Id (#154's decide/undo/apply/discard flows). Case-insensitive
+        /// (#210) — found live during the IdClauses refactor: this was declared as a property, not a
+        /// field, which meant it silently evaded every guard test's reflection-based enumeration
+        /// (both scanned only <c>GetFields</c>) despite being a real, reachable comparison via
+        /// <see cref="Repositories.SystemImportActionReader.GetByIdAsync"/>. Fixed here, and the
+        /// guard tests' reflection was widened to scan properties too so this class of gap can't
+        /// recur — see <c>EnumerateSqlConstants</c> in both <c>SqlQueryGuardTests</c> files.
+        /// </summary>
+        internal static string SelectById => $"SELECT {SelectColumns} FROM System_ImportActions WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>
         /// Every action sharing a BatchId, any status — #154's apply-batch readiness check needs the
@@ -202,7 +216,7 @@ internal static class Sql
         /// here is only safe because <c>WriteManyAsync</c> inserts sequentially, in the exact order a
         /// consumer's planner produced — never reordered, never bulk/set-based.
         /// </summary>
-        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportActions WHERE UPPER(BatchId) = UPPER(@batchId) ORDER BY rowid ASC;";
+        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportActions WHERE {IdClauses.Equals("BatchId", "batchId")} ORDER BY rowid ASC;";
 
         /// <summary>
         /// Stages a per-field decision (#154) — Status→Decided, MergedFields holds the decision
@@ -210,20 +224,21 @@ internal static class Sql
         /// <c>MarkCompletenessAs</c> (#165) is always written, including <c>NULL</c> — resubmitting
         /// a decide call without the override must clear a previously-set one, not leave it stale.
         /// </summary>
-        internal const string MarkDecided =
-            "UPDATE System_ImportActions SET Status = @status, MergedFields = @mergedFields, MarkCompletenessAs = @markCompletenessAs, DateModified = @dateModified WHERE Id = @id;";
+        // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
+        internal static readonly string MarkDecided =
+            $"UPDATE System_ImportActions SET Status = @status, MergedFields = @mergedFields, MarkCompletenessAs = @markCompletenessAs, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
 
-        /// <summary>Reverts a staged decision back to Pending (#154's undo-before-apply) — clears MergedFields.</summary>
-        internal const string ClearDecision =
-            "UPDATE System_ImportActions SET Status = @status, MergedFields = NULL, DateModified = @dateModified WHERE Id = @id;";
+        /// <summary>Reverts a staged decision back to Pending (#154's undo-before-apply) — clears MergedFields. Case-insensitive — see <see cref="MarkDecided"/>.</summary>
+        internal static readonly string ClearDecision =
+            $"UPDATE System_ImportActions SET Status = @status, MergedFields = NULL, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
 
-        /// <summary>Marks an action applied once its batch has been applied (#154) — AppliedAt set.</summary>
-        internal const string MarkApplied =
-            "UPDATE System_ImportActions SET Status = @status, AppliedAt = @appliedAt, DateModified = @dateModified WHERE Id = @id;";
+        /// <summary>Marks an action applied once its batch has been applied (#154) — AppliedAt set. Case-insensitive — see <see cref="MarkDecided"/>.</summary>
+        internal static readonly string MarkApplied =
+            $"UPDATE System_ImportActions SET Status = @status, AppliedAt = @appliedAt, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>Marks every action sharing a BatchId discarded in one statement (#154) — DiscardedAt set. Case-insensitive — see <see cref="SelectAllForBatch"/>.</summary>
-        internal const string MarkBatchDiscarded =
-            "UPDATE System_ImportActions SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE UPPER(BatchId) = UPPER(@batchId);";
+        internal static readonly string MarkBatchDiscarded =
+            $"UPDATE System_ImportActions SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE {IdClauses.Equals("BatchId", "batchId")};";
 
         /// <summary>
         /// Case-insensitive on every filter — see <see cref="SelectAllForBatch"/>'s remark for why
@@ -234,7 +249,7 @@ internal static class Sql
         private static string BuildWhere(bool filterBatchId, bool filterStatus, bool filterEntityType)
         {
             var parts = new List<string>(3);
-            if (filterBatchId)    parts.Add("UPPER(BatchId) = UPPER(@batchId)");
+            if (filterBatchId)    parts.Add(IdClauses.Equals("BatchId", "batchId"));
             if (filterStatus)     parts.Add("UPPER(Status) = UPPER(@status)");
             if (filterEntityType) parts.Add("UPPER(EntityType) = UPPER(@entityType)");
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
@@ -248,8 +263,10 @@ internal static class Sql
         internal const string DeleteAll = "DELETE FROM System_ChangeLog;";
 
         /// <summary>Every change-log entry for a single entity, newest first.</summary>
-        internal const string SelectByEntity =
+        // EntityId comparison is case-insensitive (#210) — same reasoning as every other id column in
+        // this codebase, applied even though no endpoint currently exposes this reader over HTTP.
+        internal static readonly string SelectByEntity =
             "SELECT Id, EntityType, EntityId, InitiatedByType, InitiatedById, Action, Field, OldValue, NewValue, OccurredAt " +
-            "FROM System_ChangeLog WHERE EntityType = @entityType AND EntityId = @entityId ORDER BY OccurredAt DESC;";
+            $"FROM System_ChangeLog WHERE EntityType = @entityType AND {IdClauses.Equals("EntityId", "entityId")} ORDER BY OccurredAt DESC;";
     }
 }

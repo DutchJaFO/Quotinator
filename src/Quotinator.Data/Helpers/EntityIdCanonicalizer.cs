@@ -24,4 +24,21 @@ public static class EntityIdCanonicalizer
         canonical = null;
         return false;
     }
+
+    /// <exception cref="FormatException"><paramref name="rawId"/> is not a valid Guid.</exception>
+    public static string CanonicalizeLowercase(string rawId)
+        => Guid.Parse(rawId).ToString("D");
+
+    /// <summary>Non-throwing form — a capture site must fall back gracefully on a malformed id, not abort an entire import batch.</summary>
+    public static bool TryCanonicalizeLowercase(string rawId, out string? canonical)
+    {
+        if (Guid.TryParse(rawId, out var parsed))
+        {
+            canonical = parsed.ToString("D");
+            return true;
+        }
+
+        canonical = null;
+        return false;
+    }
 }

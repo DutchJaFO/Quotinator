@@ -1145,6 +1145,32 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    pagination contract" earlier in this file for why this needs a dedicated live-pipeline test at all,
    given `NumericParameterSchemaTransformer` already has its own unit tests.
 
+   **Quotes.Id case-insensitive lookup** (#210) — unlike Source/People (canonicalize to uppercase),
+   Quotes.Id canonicalizes to lowercase, matching `QuoteIdentity.StableId`'s own pinned convention.
+   Before #210, `GET /quotes/{id}` had no case-insensitive read-side mitigation at all — the one fully-
+   unmitigated gap of this kind found across the whole codebase.
+   ```bash
+   cat > .claude/temp/smoke-210.json <<'EOF'
+   {"quotes": [{"id":"F0000210-0000-4000-8000-000000000210","quote":"A #210 smoke test quote with an uppercase explicit id.","originalLanguage":"en","source":"Smoke Test Film 210","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes/F0000210-0000-4000-8000-000000000210"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes/f0000210-0000-4000-8000-000000000210"
+   ```
+   Import must return `200`. Both `GET` calls (original uppercase URL casing, and fully lowercase) must
+   return `200` with the same quote, and the response's own `id` field must be the canonical **lowercase**
+   form (`f0000210-...`) regardless of the uppercase casing the file supplied — proving both the
+   capture-time canonicalization (#210 Step 2) and the case-insensitive read (#210 Step 3) together.
+
+   **Systemic id-case guard** (#210's scope expansion) — `Quotinator.Data.Diagnostics.SqlIdCaseGuard`
+   scans every SQL query in the codebase for an unwrapped id-comparison at build/test time
+   (`SqlConstant_PassesIdCaseGuard`/`AssembledQuery_PassesIdCaseGuard` in both `Quotinator.Core.Tests`
+   and `Quotinator.Data.Tests`, `RepositorySqlFactory_PassesIdCaseGuard` in
+   `Quotinator.Data.Tests.Repositories.RepositorySqlGuardTests`) — this is unit-test-tier coverage, not a
+   live/T2 check, and needs no separate Docker verification beyond the Quotes.Id scenario above; listed
+   here only so a future reader knows why `RepositorySql.cs`'s generic `SelectById`/`SoftDelete`/etc. are
+   now `UPPER()`-wrapped even though no single T2 scenario exercises them directly.
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle

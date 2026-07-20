@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -122,7 +122,8 @@
       "Generische Infrastruktur für Listen-Endpunkte (Paginierung, Behandlung von Nicht-gefunden, Masterdata-Routing-/Tagging-Konventionen, entitätsbezogene Filteranalyse) wird jetzt von jedem Listen-Endpunkt gemeinsam genutzt, statt pro Entität neu implementiert zu werden — eine rein interne Konsolidierung, keine Verhaltensänderung über die oben genannte Änderung des Paginierungsvertrags hinaus (Issues #193, #196)",
       "`Quotinator.Engine` — ein drittes internes Projekt, das zwischen der API und der generischen Datenzugriffsbibliothek lag — wurde in `Quotinator.Core` zusammengeführt; eine rein interne Code-Organisationsänderung ohne Verhaltensänderung (Issue #206)",
       "Das Erscheinungsdatum einer Quelle wurde stillschweigend verworfen, wenn die Quelle nur über ein Zitat entdeckt wurde, statt ausdrücklich im `sources[]`-Abschnitt einer Quelldatei angegeben zu sein — der übliche Fall für nahezu jede gebündelte Quelle; das Datum wird jetzt korrekt gespeichert. Bereits vor dieser Korrektur eingelesene Quellen bleiben unverändert, bis die Datenbank vollständig zurückgesetzt wird (Issue #191)",
-      "Eine Quelle, Person, Regieanweisung, ein Toneffekt oder ein Dialog, die mit einer klein geschriebenen expliziten ID angelegt wurden, konnten über einen Abrufweg korrekt gefunden werden (zum Beispiel über ein zugehöriges Zitat), aber nicht über den eigenen individuellen Abruf-Endpunkt desselben Datensatzes — IDs werden jetzt überall einheitlich normalisiert, sobald sie geschrieben werden, wodurch diese Inkonsistenz behoben ist (Issue #209)"
+      "Eine Quelle, Person, Regieanweisung, ein Toneffekt oder ein Dialog, die mit einer klein geschriebenen expliziten ID angelegt wurden, konnten über einen Abrufweg korrekt gefunden werden (zum Beispiel über ein zugehöriges Zitat), aber nicht über den eigenen individuellen Abruf-Endpunkt desselben Datensatzes — IDs werden jetzt überall einheitlich normalisiert, sobald sie geschrieben werden, wodurch diese Inkonsistenz behoben ist (Issue #209)",
+      "Ein Zitat, das mit einer groß geschriebenen expliziten ID angelegt wurde, konnte über die meisten Abrufwege korrekt gefunden werden, aber `GET /api/v1/quotes/{id}` lieferte nur dann ein Ergebnis, wenn die Groß-/Kleinschreibung in der URL exakt der ursprünglich importierten ID entsprach — IDs werden jetzt auch für Zitate einheitlich normalisiert, womit der letzte verbleibende Fall dieses Problems behoben ist (Issue #210)"
     ],
     "removed": [
       "Die Konvertornamen `nikhilnamal17` und `vilaboim` existieren nicht mehr — ein benutzerdefinierter Manifesteintrag, der einen von beiden namentlich referenziert, muss auf `basic-json-array`/`regex-array` mit den entsprechenden `converterOptions` aktualisiert werden"

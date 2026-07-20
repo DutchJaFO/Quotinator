@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -122,7 +122,8 @@
       "Generieke infrastructuur voor lijsteindpunten (paginering, afhandeling van niet-gevonden, masterdata-routerings-/tag-conventies, entiteitsgebonden filterontleding) wordt nu gedeeld door elk lijsteindpunt in plaats van per entiteit opnieuw te worden geïmplementeerd — een zuiver interne consolidatie, geen gedragswijziging naast de hierboven genoemde wijziging in het pagineringscontract (issues #193, #196)",
       "`Quotinator.Engine` — een derde intern project dat tussen de API en de generieke gegevenstoegangsbibliotheek in zat — is samengevoegd met `Quotinator.Core`; een zuiver interne code-organisatiewijziging zonder gedragswijziging (issue #206)",
       "De releasedatum van een bron werd stilzwijgend genegeerd wanneer de bron alleen werd ontdekt via een quote in plaats van expliciet te zijn opgegeven in de `sources[]`-sectie van een bronbestand — het gebruikelijke geval voor vrijwel elke gebundelde bron; de datum wordt nu correct vastgelegd. Bronnen die al vóór deze fix waren geïmporteerd, blijven ongewijzigd totdat de database volledig wordt gereset (issue #191)",
-      "Een bron, persoon, regieaanwijzing, geluidscue of conversatie die werd aangemaakt met een kleingeschreven expliciete id kon via het ene opzoekpad correct worden gevonden (bijvoorbeeld via een gekoppelde quote), maar niet via het eigen individuele opzoekeindpunt van datzelfde record — id's worden nu overal consistent genormaliseerd bij het wegschrijven, waarmee deze inconsistentie is verholpen (issue #209)"
+      "Een bron, persoon, regieaanwijzing, geluidscue of conversatie die werd aangemaakt met een kleingeschreven expliciete id kon via het ene opzoekpad correct worden gevonden (bijvoorbeeld via een gekoppelde quote), maar niet via het eigen individuele opzoekeindpunt van datzelfde record — id's worden nu overal consistent genormaliseerd bij het wegschrijven, waarmee deze inconsistentie is verholpen (issue #209)",
+      "Een quote die werd aangemaakt met een hoofdlettergevoelige expliciete id kon via de meeste opzoekpaden correct worden gevonden, maar `GET /api/v1/quotes/{id}` gaf alleen een resultaat als de hoofdlettering in de URL precies overeenkwam met de oorspronkelijk geïmporteerde id — id's worden nu ook voor quotes consistent genormaliseerd, waarmee het laatste geval van dit probleem is opgelost (issue #210)"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"

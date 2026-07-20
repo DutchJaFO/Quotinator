@@ -49,4 +49,44 @@ public class EntityIdCanonicalizerTests
         Assert.IsFalse(succeeded);
         Assert.IsNull(canonical);
     }
+
+    [TestMethod]
+    public void CanonicalizeLowercase_UppercaseGuid_ReturnsLowercaseD()
+    {
+        var result = EntityIdCanonicalizer.CanonicalizeLowercase("F0000210-0000-4000-8000-000000000001");
+
+        Assert.AreEqual("f0000210-0000-4000-8000-000000000001", result);
+    }
+
+    [TestMethod]
+    public void CanonicalizeLowercase_AlreadyCanonical_IsIdempotent()
+    {
+        var result = EntityIdCanonicalizer.CanonicalizeLowercase("f0000210-0000-4000-8000-000000000001");
+
+        Assert.AreEqual("f0000210-0000-4000-8000-000000000001", result);
+    }
+
+    [TestMethod]
+    public void CanonicalizeLowercase_Malformed_Throws()
+    {
+        Assert.ThrowsExactly<FormatException>(() => EntityIdCanonicalizer.CanonicalizeLowercase("not-a-guid"));
+    }
+
+    [TestMethod]
+    public void TryCanonicalizeLowercase_ValidGuid_ReturnsTrueWithCanonicalForm()
+    {
+        var succeeded = EntityIdCanonicalizer.TryCanonicalizeLowercase("F0000210-0000-4000-8000-000000000001", out var canonical);
+
+        Assert.IsTrue(succeeded);
+        Assert.AreEqual("f0000210-0000-4000-8000-000000000001", canonical);
+    }
+
+    [TestMethod]
+    public void TryCanonicalizeLowercase_Malformed_ReturnsFalse()
+    {
+        var succeeded = EntityIdCanonicalizer.TryCanonicalizeLowercase("not-a-guid", out var canonical);
+
+        Assert.IsFalse(succeeded);
+        Assert.IsNull(canonical);
+    }
 }

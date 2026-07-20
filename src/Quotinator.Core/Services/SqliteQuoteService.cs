@@ -6,6 +6,7 @@ using Quotinator.Core.Services;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Models;
 using Quotinator.Core.Queries;
+using IdClauses = Quotinator.Data.Queries.IdClauses;
 
 namespace Quotinator.Core.Services;
 
@@ -103,7 +104,7 @@ public sealed class SqliteQuoteService : IQuoteService
         for (var pass = 0; pass < maxPasses && items.Count < count; pass++)
         {
             var remaining     = count - items.Count;
-            var effectiveWhere = excludedIds.Count > 0 ? whereClause + " AND q.Id NOT IN @excludedIds" : whereClause;
+            var effectiveWhere = excludedIds.Count > 0 ? whereClause + $" AND {IdClauses.NotIn("q.Id", "excludedIds")}" : whereClause;
 
             var rp = new DynamicParameters(filterParams);
             rp.Add("count", remaining);
@@ -380,13 +381,14 @@ public sealed class SqliteQuoteService : IQuoteService
 
         var clauses = new List<string> { "q.IsDeleted = 0", "s.IsDeleted = 0" };
         if (dbTypes  is not null) clauses.Add("s.Type IN @dbTypes");
-        if (dbGenres is not null) clauses.Add("EXISTS (SELECT 1 FROM QuoteGenres qg WHERE qg.QuoteId = q.Id AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)");
+        if (dbGenres is not null) clauses.Add($"EXISTS (SELECT 1 FROM QuoteGenres qg WHERE {IdClauses.Join("qg.QuoteId", "q.Id")} AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)");
         if (character is not null) clauses.Add("c.Name LIKE @characterLike");
         if (author    is not null) clauses.Add("p.Name LIKE @authorLike");
         if (source    is not null) clauses.Add("s.Title LIKE @sourceLike");
-        if (seriesId  is not null) clauses.Add("s.SeriesId = @seriesId");
+        // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
+        if (seriesId  is not null) clauses.Add(IdClauses.Equals("s.SeriesId", "seriesId"));
         if (universeId is not null) clauses.Add(
-            "s.SeriesId IN (SELECT Id FROM Series WHERE UniverseId = @universeId AND IsDeleted = 0)");
+            $"UPPER(s.SeriesId) IN (SELECT UPPER(Id) FROM Series WHERE {IdClauses.Equals("UniverseId", "universeId")} AND IsDeleted = 0)");
         if (yearFrom  is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom");
         if (yearTo    is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo");
 

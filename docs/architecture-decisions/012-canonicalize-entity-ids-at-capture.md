@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-07-19
-**GitHub issues:** #190, #207
+**GitHub issues:** #190, #207, #209, #210
 
 ---
 
@@ -110,6 +110,88 @@ with no possibility of a capture site forgetting to call `EntityIdCanonicalizer`
 is not ruled out, but is a substantially larger refactor across the whole staged-action pipeline. It is
 noted here as a future option, not decided or required by this ADR.
 
+### Mechanism: a read-side systemic guard, `SqlIdCaseGuard` (#210)
+
+The write-side guard above (`EntityIdCanonicalizer` + its cross-entity regression test) proves ids are
+canonicalized *at capture*. It does not, by itself, prove every *read* against an id column is safe
+against a value that — for whatever reason — did not go through that capture point (a value from before
+this ADR existed, a future call site that reads an id from somewhere other than the documented capture
+points, a defensive lookup against externally-supplied input). #210 found this gap directly: while
+implementing Quotes.Id's own capture-point fix, a broader audit (prompted by the developer's explicit
+instruction — "never assume a comparison that works won't break in the future simply because the known
+references have the same logic") found several more case-sensitive id comparisons across
+`Quotinator.Core`'s and `Quotinator.Data`'s `Sql.cs` files, `RepositorySql.cs` (the generic repository
+layer shared by every entity), and a dynamically-assembled filter clause in `SqliteQuoteService` — none
+of which the write-side guard alone could have caught, because they are read-side defects independent of
+whether the underlying data is actually canonical.
+
+**`Quotinator.Data.Diagnostics.SqlIdCaseGuard`** closes this the same way `SqlAggregateGuard` (CVE-2025-6965)
+already closes its own class of SQL defect — a regex-based static analyzer, not a runtime check, applied
+to every SQL string the codebase produces:
+
+- Flags any comparison between an id-named column (`\w*Id`, alias-qualified or bracket-quoted) and a bound
+  parameter (`= @param`, `IN @param`, or `NOT IN @param`) that is not wrapped `UPPER(column) = UPPER(@param)`
+  on both sides (or, for an `IN`/`NOT IN` clause, at least the column side — the parameter side of an
+  expanded list is the caller's responsibility to pre-canonicalize, not expressible as a single SQL-side
+  wrap).
+- Flags any comparison between **two id-named columns** — a JOIN `ON` condition or a correlated-subquery
+  predicate (e.g. `s.Id = q.SourceId`, `cl2.ConversationId = cl.ConversationId`) — that is not wrapped
+  `UPPER(...) = UPPER(...)` on both sides. This is defense-in-depth, not a correction of an active bug:
+  both sides are already canonical by construction once write-side canonicalization is in place. It was
+  added after the developer's explicit direction to wrap joins too, reversing this ADR's original position
+  (an earlier draft of this section reasoned joins didn't need wrapping — that reasoning is superseded).
+- A **half-protected** comparison (only one side wrapped) is still flagged in every case above — it is
+  exactly as unsafe as an unwrapped one.
+- `UPDATE ... SET` assignments are stripped before scanning (a write-side, capture-time concern this guard
+  does not cover — that is `EntityIdCanonicalizer`'s job) so a raw `SET SourceId = @sid` assignment isn't
+  misflagged as a read-side comparison.
+
+**A gap in the guard's own reflection-based test enumeration was found and closed during the same pass**:
+`EnumerateSqlConstants()` (in both `SqlQueryGuardTests.cs` files) originally called only `Type.GetFields`,
+so a query declared as an arrow-bodied `static string` *property* rather than a field silently evaded
+scanning entirely — `Sql.SystemImportActions.SelectById` was exactly this case, with a real, live,
+unwrapped `WHERE Id = @id` that no test had ever exercised. `EnumerateSqlConstants()` now also calls
+`Type.GetProperties`, and the fixed query has a dedicated regression test
+(`SystemImportActionWriterReaderTests.GetByIdAsync_LowercaseStoredId_StillResolves`) that inserts a
+lowercase-stored row via raw SQL to prove the read side resolves it independent of how it was written.
+
+It is wired into the existing guard-test infrastructure via the same `DynamicData`-driven enumeration
+methods `SqlAggregateGuard` already uses — `AllNamedSqlConstants`/`AssembledQueryCases` in both
+`Quotinator.Core.Tests.Security.SqlQueryGuardTests` and `Quotinator.Data.Tests.Security.SqlQueryGuardTests`,
+and `RepositorySqlCases` in `Quotinator.Data.Tests.Repositories.RepositorySqlGuardTests` — so every SQL
+constant, every dynamically-assembled query, and every generic-repository factory method is scanned on
+every test run, with no duplicated enumeration logic. `SqlIdCaseGuardTests`
+(`Quotinator.Data.Tests.Diagnostics`) covers the guard's own regex logic directly (bare/prefixed/aliased/
+bracket-quoted columns, half-protected wraps, `SET`-clause stripping, `IN`/`NOT IN` clauses, and both
+unwrapped and half-wrapped JOIN/correlated-subquery conditions).
+
+**This guard does not replace the write-side mechanism above — it is the read-side counterpart the
+"Read-side" bullet under Decision already called for**, now made structural instead of relying on each
+future query author remembering CLAUDE.md's case-insensitivity rule unaided.
+
+### Mechanism: `IdClauses` — construct the comparison correctly, don't just catch it wrong
+
+`SqlIdCaseGuard` catches a mistake after it's written. The developer's follow-on direction was to prevent
+the mistake from being typed in the first place: **`Quotinator.Data.Queries.IdClauses`** is a small
+public static class — `Equals(column, paramName)`, `In(column, paramName)`, `NotIn(column, paramName)`,
+`Join(leftColumn, rightColumn)` — each returning the correctly `UPPER()`-wrapped SQL fragment for that
+shape of comparison. Every fixed query and factory method across `Quotinator.Core.Queries.Sql`,
+`Quotinator.Data.Queries.Sql`, and `RepositorySql.cs` was rewritten to call it instead of hand-typing
+`UPPER(...)` text.
+
+A fixed query that calls `IdClauses` cannot remain a compile-time `const` — C# does not allow a method
+call in a constant expression — so every converted query became `static readonly` instead (evaluated
+once at type-init time; functionally identical to a `const` for every consumer). This is what made the
+reflection gap above ((`GetFields` only) surface: it was already a latent gap before this ADR's own
+mechanism started producing `static readonly` fields, but converting queries to call `IdClauses` is what
+made the gap load-bearing enough to matter, and specifically motivated widening the enumeration to also
+cover the pre-existing property case found along the way.
+
+`IdClauses` is deliberately minimal — four methods matching the four SQL shapes this codebase actually
+uses (parameter equality, `IN`, `NOT IN`, column-to-column). It does not attempt to generate whole
+queries or clauses; it only owns the comparison fragment itself, the same scoping discipline
+`PaginationParsing`/`EntityFilterParsing` already established for other shared query-building concerns.
+
 ---
 
 ## Reasoning
@@ -156,3 +238,16 @@ written rule instead of being independently rediscovered and independently reaso
   this ADR before assuming read-side tolerance is sufficient.
 - This does not require a schema or migration change — it is an application-code discipline, enforced at
   the point external ids enter the system, not a database constraint.
+- #210 delivered the read-side counterpart described above (`SqlIdCaseGuard`) and used it to find and fix
+  every case-sensitive id comparison across `Quotinator.Core`/`Quotinator.Data`'s `Sql.cs` files,
+  `RepositorySql.cs`, and `SqliteQuoteService`'s dynamic filter clauses — not just Quotes.Id, the issue's
+  original scope. Any future SQL query that compares an id column to a bound parameter, another id
+  column, or an `IN`/`NOT IN` list without wrapping both sides in `UPPER(...)` now fails the build's test
+  suite automatically; this is no longer a discipline that depends on the author remembering CLAUDE.md's
+  rule.
+- #210 also delivered `IdClauses` (`Quotinator.Data.Queries`), now the required way to build any id
+  comparison in new or edited SQL — call `IdClauses.Equals`/`In`/`NotIn`/`Join`, don't hand-type
+  `UPPER(...)`. `SqlIdCaseGuard` remains the backstop for the rare case where calling it isn't practical
+  (an id embedded in a larger hand-assembled fragment), not the primary mechanism.
+- `docs/database-conventions.md`'s "Entity id casing" table was updated to reference both `IdClauses` and
+  `SqlIdCaseGuard`, and to reverse its prior "joins don't need wrapping" framing.

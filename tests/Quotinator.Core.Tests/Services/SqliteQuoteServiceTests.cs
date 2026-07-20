@@ -1,6 +1,8 @@
+using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Models;
+using Quotinator.Core.Queries;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
@@ -224,6 +226,42 @@ public class SqliteQuoteServiceTests
         Assert.IsNotNull(result);
         Assert.IsNull(result!.Series, "A soft-deleted Series must never leak through as a dangling reference.");
         Assert.IsNull(result.Universe);
+    }
+
+    // ── #210: Quotes.Id case-insensitive lookup ─────────────────────────────
+
+    /// <summary>
+    /// Unlike Source/People (which canonicalize to uppercase), a Quote's canonical stored form is
+    /// lowercase (<c>QuoteIdentity.StableId</c>'s pinned convention) — inserted here via raw SQL rather
+    /// than <see cref="InsertQuoteAsync"/>, whose generic repository path would force an uppercase id
+    /// via <c>GuidHandler</c> and not actually exercise a lowercase-stored row. Before #210,
+    /// <c>Sql.Quotes.SelectById()</c> had no <c>UPPER()</c> wrapping at all — the one fully-unmitigated
+    /// case-sensitivity gap in the codebase, closed by this test.
+    /// </summary>
+    [TestMethod]
+    public async Task GetById_UppercaseUrlIdAgainstLowercaseStoredQuote_StillResolves()
+    {
+        var source      = await InsertSourceAsync("A Film With A Lowercase-Stored Quote Id");
+        var lowercaseId = Guid.NewGuid().ToString("D");
+
+        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        connection.Open();
+        await connection.ExecuteAsync(Sql.Quotes.Insert, new
+        {
+            Id               = lowercaseId,
+            QuoteText        = "A quote whose id is stored in canonical lowercase.",
+            OriginalLanguage = "en",
+            SourceId         = source.Id,
+            CharacterId      = (string?)null,
+            PersonId         = (string?)null,
+            ImportBatchId    = (string?)null,
+            DateCreated      = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+        });
+
+        var result = _service.GetById(lowercaseId.ToUpperInvariant());
+
+        Assert.IsNotNull(result,
+            "GET /quotes/{id} must resolve regardless of URL casing (#210) — the previously fully-unmitigated gap.");
     }
 
     [TestMethod]

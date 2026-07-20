@@ -124,6 +124,35 @@ public class SystemImportActionWriterReaderTests
         Assert.AreEqual(ImportActionKind.Modify, found.ActionType.Parsed);
     }
 
+    /// <summary>
+    /// Found live during #210's IdClauses refactor: Sql.SystemImportActions.SelectById was declared as
+    /// a property, not a field, so it evaded both guard tests' reflection-based enumeration entirely
+    /// and its "WHERE Id = @id" was never wrapped in UPPER() by the earlier #210 pass. Writing through
+    /// <see cref="_writer"/> alone can't reproduce the gap — WriteAsync binds Id as a Guid-typed
+    /// parameter, which GuidHandler force-uppercases at insert time too, so both sides would already
+    /// agree by construction. This inserts a lowercase-stored row via raw SQL to prove the read side
+    /// resolves it regardless, independent of how it was written.
+    /// </summary>
+    [TestMethod]
+    public async Task GetByIdAsync_LowercaseStoredId_StillResolves()
+    {
+        var lowercaseId = Guid.NewGuid().ToString("D");
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            conn.Open();
+            await conn.ExecuteAsync("""
+                INSERT INTO System_ImportActions
+                    (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated, IsDeleted)
+                VALUES
+                    (@Id, 'BATCH-1', 'Add', 'Quote', @Id, '{}', 'Pending', @now, @now, 0);
+                """, new { Id = lowercaseId, now = DateTime.UtcNow.ToString("O") });
+        }
+
+        var found = await _reader.GetByIdAsync(Guid.Parse(lowercaseId));
+
+        Assert.IsNotNull(found, "GetByIdAsync must resolve regardless of the stored row's casing (#210) — the previously fully-unmitigated gap in Sql.SystemImportActions.SelectById.");
+    }
+
     [TestMethod]
     public async Task WriteManyAsync_PersistsEveryAction()
     {

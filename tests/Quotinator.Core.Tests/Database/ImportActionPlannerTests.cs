@@ -1132,6 +1132,24 @@ public class ImportActionPlannerTests
         Assert.AreEqual(lowercaseId.ToUpperInvariant(), action.EntityId, "A lowercase file-authored explicit id must canonicalize to uppercase at capture");
     }
 
+    /// <summary>
+    /// Unlike Source/Person/StageDirection/SoundCue/Conversation above (which canonicalize to
+    /// uppercase), Quotes.Id canonicalizes to lowercase, matching QuoteIdentity.StableId's own pinned
+    /// convention (#210).
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_UppercaseExplicitQuoteId_ResolvedIdIsCanonicalLowercase()
+    {
+        using var conn = await OpenConnectionAsync();
+        var uppercaseId = "DF111111-1111-4111-8111-111111111180";
+        var quote = BuildQuote(uppercaseId, source: "A Brand New Film (Quote Canonical Id Test)");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(uppercaseId.ToLowerInvariant(), quoteAction.EntityId, "An uppercase file-authored explicit quote id must canonicalize to lowercase at capture");
+    }
+
     // ── #190: absent vs. explicit-null distinguishability ────────────────────
 
     [TestMethod]

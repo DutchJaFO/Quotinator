@@ -73,8 +73,30 @@ internal static class ImportActionPlanner
         // file also declares explicitly via people[].
         await PlanPeopleAsync(connection, people ?? [], batchIdStr, policy, personIndex, actions, now, transaction);
 
-        foreach (var q in quotes)
+        foreach (var rawQuote in quotes)
         {
+            // #210: canonicalize a file-authored Quotes.Id to lowercase at the single earliest point of
+            // capture, matching QuoteIdentity.StableId's own pinned lowercase convention — every later
+            // reference to q.Id in this iteration (seenQuotes, EntityId, the resolved SourceQuote
+            // threaded through QuoteFieldMerge) is automatically canonical once this substitution is
+            // made. SourceQuote is a plain class with init-only properties, not a record, so a corrected
+            // copy is built the same way ApplyMergedFields already does above, not via a `with` expression.
+            var q = EntityIdCanonicalizer.TryCanonicalizeLowercase(rawQuote.Id, out var canonicalQuoteId)
+                ? new SourceQuote
+                {
+                    Id               = canonicalQuoteId!,
+                    QuoteText        = rawQuote.QuoteText,
+                    OriginalLanguage = rawQuote.OriginalLanguage,
+                    Source           = rawQuote.Source,
+                    Date             = rawQuote.Date,
+                    Character        = rawQuote.Character,
+                    Author           = rawQuote.Author,
+                    Type             = rawQuote.Type,
+                    Genres           = rawQuote.Genres,
+                    Translations     = rawQuote.Translations,
+                }
+                : rawQuote;
+
             var sourceId    = await ResolveSourceAsync(connection, q, sourceIndex, batchIdStr, actions, now, transaction);
             var characterId = await ResolveCharacterAsync(connection, q, sourceId, characterIndex, batchIdStr, actions, now, transaction);
             var personId    = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
