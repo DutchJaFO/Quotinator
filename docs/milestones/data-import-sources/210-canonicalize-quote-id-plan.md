@@ -117,9 +117,11 @@ one) has no such safety net and renders exactly the casing already on disk.
 fields flow through — `Sql.SystemImportActions.SelectColumns` (covers `SelectPaged`/`SelectById`/
 `SelectAllForBatch` in one edit) and `Sql.SystemAudit.SelectPaged`. `ImportActionSummaryResponse
 .ExistingBatchId` and `ImportResultResponse.QuoteId` inherit the fix automatically since both populate
-directly from the now-fixed reads. See ADR 012's `## Revision — read-time presentation normalization for
-string-typed id-reference fields` section for full reasoning, including why this is a genuinely distinct
-third mechanism and not a restatement of the existing rule.
+directly from the now-fixed reads. See ADR 012's "Read-time presentation normalization" section for full
+reasoning, including why this is a genuinely distinct third mechanism and not a restatement of the
+existing rule. (This registry-based approach and its ADR narrative were both superseded by the seventh
+round above — ADR 012 no longer carries this as a separate "Revision" section, having been rewritten
+into a single current-state document.)
 
 One test updated: `ExistingBatchId_RoundTripsCorrectly`
 (`tests/Quotinator.Data.Tests/Repositories/SystemImportActionWriterReaderTests.cs`) previously asserted a
@@ -138,8 +140,8 @@ own reasoning had conflated: `UPPER(...)` in a SQL comparison exists purely so t
 regardless of casing — it says nothing about which casing is canonical for storage or presentation. Those
 are separate decisions. The developer's response reopened the format choice itself: **the canonical form
 for every entity id, system-wide, is now lowercase** — `Guid.ToString("D")`'s own default, matching the
-conventional RFC 4122 UUID string representation. See ADR 012's `## Revision — system-wide lowercase
-convention` section for the full reasoning, including two infrastructure-level bugs found live while
+conventional RFC 4122 UUID string representation. See ADR 012's "Canonical form" section for the full
+current-state reasoning; the incident narrative below records two infrastructure-level bugs found live while
 making the switch that were not casing bugs themselves but were unmasked by it: `GuidHandler` was never
 actually the "single global choke point" its own doc comments claimed (Dapper's built-in `typeMap`
 resolves a bare `Guid` parameter's `DbType` before ever consulting a registered `ITypeHandler`, silently
@@ -170,13 +172,15 @@ After the second round of scope expansion below shipped (`IdClauses`, T1/T2 both
 in responses while every other entity's id renders uppercase. The original #210 work deliberately kept
 Quote as the one lowercase-canonical entity, reasoning that `QuoteIdentity.StableId`'s lowercase output
 was pinned by a production-data regression test and changing it risked breaking already-deployed
-databases. The developer's response — "we need to be consistent" — reopened that decision. See
-ADR 012's own `## Revision — issue #210: Quotes.Id unified to the same uppercase convention as every
-other entity` section for the full reasoning (why the original safety concern is now moot given #210's
-own case-insensitive-read infrastructure, what changed, and the three real production bugs found and
-fixed along the way — a `Guid.ToString()` round-trip in `QuoteSeedWriter`, a plain C# string-equality
-comparison in `QuotinatorDatabaseInitializer`, and `ConversationLines.QuoteId`'s FOREIGN KEY-safety gap
-— none of which `SqlIdCaseGuard`/`IdClauses` could have caught, since none were SQL-comparison defects).
+databases. The developer's response — "we need to be consistent" — reopened that decision. (Quote's
+casing was flipped again, to lowercase, one round later — see "System-wide lowercase convention" above.
+Recorded here as the historical narrative of how that decision was reached; ADR 012 itself carries only
+the final, current-state design, not this round-by-round account — why the original safety concern was
+moot given #210's own case-insensitive-read infrastructure, what changed, and the three real production
+bugs found and fixed along the way — a `Guid.ToString()` round-trip in `QuoteSeedWriter`, a plain C#
+string-equality comparison in `QuotinatorDatabaseInitializer`, and `ConversationLines.QuoteId`'s FOREIGN
+KEY-safety gap — none of which `SqlIdCaseGuard`/`IdClauses` could have caught, since none were
+SQL-comparison defects.)
 
 This section documents the change here rather than rewriting the (now superseded) Steps/Notes sections
 below, matching this project's convention of appending new decisions rather than editing a plan doc's
@@ -471,7 +475,7 @@ revision). T2 (Docker) run three times — see checklist row 8 for all three pas
 | 4 | ✅ | `GET /quotes/{id}` resolves regardless of URL casing — the previously fully-unmitigated gap | Unit test | `SqliteQuoteServiceTests.GetById_UppercaseUrlIdAgainstLowercaseStoredQuote_StillResolves` |
 | 5 | ✅ | `Guid`-typed vs. `string`-typed quote-id parameter bindings are consistent | Doc review + code review | Step 4's audit findings recorded above — no mismatch found, no code change needed |
 | 6 | ✅ | No regression | Unit test | Full `dotnet test --configuration Release --verbosity normal` — all green |
-| 7 | ⬜ | T1 — app starts in Visual Studio, quote ids render uppercase | Live (T1) | Pass 1 (pre-casing-unification) confirmed: clean startup, schema up to date (data v10, app v9), 796 quotes/479 sources/7 characters seeded, every touched endpoint 200. Needs a Pass 2 to confirm quote ids now render uppercase in responses and no conversation-with-quote-lines endpoint regressed. |
+| 7 | ⬜ | T1 — app starts in Visual Studio; every entity id, including quote ids, renders lowercase (the final convention — see "System-wide lowercase convention" above; superseded the round-3 uppercase-unification this row originally targeted) | Live (T1) | Pass 1 (pre-casing-unification) confirmed: clean startup, schema up to date (data v10, app v9), 796 quotes/479 sources/7 characters seeded, every touched endpoint 200. Needs a fresh confirmation covering every round through the seventh (lowercase system-wide, read-time presentation normalization, uniform SELECT-list wrap) — none of which have had a T1 pass since round 3's Pass 1. |
 | 8 | ✅ | T2 — the case-insensitive lookup gap is fixed end to end, stays fixed after the `IdClauses` refactor, and quote ids now render uppercase like every other entity | Live (T2), 3 passes | **Pass 1** (initial casing fix, pre-revision): imported a quote with explicit id `F0000210-0000-4000-8000-000000000210`; response's own `id` field came back canonically lowercase (`f0000210-...`); `GET /api/v1/quotes/{id}` returned 200 for both uppercase and lowercase URL casing. **Pass 2** (after the `IdClauses` refactor, pre-revision): baseline endpoints re-run clean; import-actions decide/apply exercised the fixed `SelectById` property; `/random?n=10` exercised the fixed `NOT IN` clause. **Pass 3** (after the casing-unification revision, fresh image rebuild): a fresh-seeded `/quotes/random` call already returned an uppercase `id` (e.g. `8AECF114-...`), confirming newly-seeded quotes are uppercase by default. Imported a quote with explicit id `f0000210-0000-4000-8000-000000000210` (lowercase) — response's own `id` came back canonically **uppercase** (`F0000210-...`), and `GET /api/v1/quotes/{id}` returned 200 for both casings. Imported a conversation whose `lines[].quoteId` (`F0000210-...-211`, uppercase) deliberately mismatched the referenced quote's own explicit id (`f0000210-...-211`, lowercase) — returned `200`, not `SQLite Error 19: FOREIGN KEY constraint failed`, and `GET /conversations/{id}` confirmed the line's embedded quote resolved correctly. Baseline search/import-actions/audit re-run clean. |
 
 ---
