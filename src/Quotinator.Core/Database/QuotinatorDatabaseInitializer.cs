@@ -6,6 +6,7 @@ using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
@@ -243,9 +244,12 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         // human-readable FirstSeenInFile/ConflictFile labels — actual duplicate detection is the
         // planner's own job (in-memory within one file, a real DB lookup across files, since each
         // file's batch is staged then applied before the next file is planned).
-        var lastFileByQuoteId = new Dictionary<string, string>(StringComparer.Ordinal);
+        // Case-insensitive (ADR 012) — these are keyed/looked-up by the file's own raw q.Id, which is
+        // never canonicalized at this outer level (only ImportActionPlanner's internal loop copy is),
+        // while action.EntityId used for lookups below is always canonical lowercase.
+        var lastFileByQuoteId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var duplicates        = new List<SeedDuplicateRecord>();
-        var uniqueQuoteIds    = new HashSet<string>(StringComparer.Ordinal);
+        var uniqueQuoteIds    = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var stagedFiles       = new List<string>();
 
         foreach (var batch in effectiveBatches)
@@ -262,7 +266,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                     quotes.Count, fileName, batch.Label);
 
                 var importBatch = await CreateImportBatchAsync(batch, seedFile, filePolicy);
-                var batchIdStr  = importBatch.Id.ToString("D").ToUpperInvariant();
+                var batchIdStr  = importBatch.Id.ToCanonicalId();
 
                 IReadOnlyList<SystemImportAction> actions;
                 using (var tx = connection.BeginTransaction())
@@ -280,7 +284,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                         continue;
 
                     lastFileByQuoteId.TryGetValue(action.EntityId, out var firstFile);
-                    var quoteText = quotes.First(q => q.Id == action.EntityId).QuoteText;
+                    var quoteText = quotes.First(q => string.Equals(q.Id, action.EntityId, StringComparison.OrdinalIgnoreCase)).QuoteText;
                     duplicates.Add(new SeedDuplicateRecord(
                         "quote", action.EntityId, TruncateLabel(quoteText), firstFile ?? fileName, fileName, policy));
                 }

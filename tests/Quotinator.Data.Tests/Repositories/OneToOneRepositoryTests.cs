@@ -215,7 +215,7 @@ public class OneToOneRepositoryTests
         var detail = await repo.GetDetailAsync(parent.Id);
 
         Assert.IsNotNull(detail);
-        Assert.AreEqual(parent.Id.ToString("D").ToUpperInvariant(), detail.WidgetId);
+        Assert.AreEqual(parent.Id.ToString("D"), detail.WidgetId);
     }
 
     [TestMethod]

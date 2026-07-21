@@ -14,7 +14,7 @@ internal static class RepositorySql
     private static readonly Regex IdentifierPattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
     private static readonly IReadOnlyList<SortColumn> DefaultOrderBy = [new SortColumn("DateCreated")];
 
-    /// <summary>Selects an active record by primary key. Case-insensitive (#210) via <see cref="IdClauses"/> — every id-comparison query in this codebase is, per ADR 012, regardless of whether the entity reached through this generic layer happens to already bind its Guid parameter uppercased today.</summary>
+    /// <summary>Selects an active record by primary key. Case-insensitive (#210) via <see cref="IdClauses"/> — every id-comparison query in this codebase is, per ADR 012, regardless of what casing the entity reached through this generic layer happens to already bind its Guid parameter as today.</summary>
     internal static string SelectById(string tableName)
         => $"SELECT * FROM {tableName} WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0";
 
@@ -58,7 +58,7 @@ internal static class RepositorySql
     /// <summary>
     /// Selects a set of active records by primary key list.
     /// Dapper expands <c>@ids</c> from any <see cref="System.Collections.Generic.IEnumerable{T}"/> automatically.
-    /// The column side is UPPER()-wrapped (#210); protecting the list-parameter side is the caller's
+    /// The column side is LOWER()-wrapped (#210); protecting the list-parameter side is the caller's
     /// responsibility (canonicalize every id in the list before binding), the same as
     /// <c>Sql.CharacterSources.SelectSourceReferencesForCharacters</c>'s equivalent IN clause.
     /// </summary>

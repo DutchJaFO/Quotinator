@@ -5,6 +5,7 @@ using Quotinator.Core.Models;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Services;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
@@ -74,7 +75,7 @@ internal static class PersonEndpoints
 
     private static PersonResponse ToResponse(Person person) => new()
     {
-        Id                 = person.Id.ToString("D").ToUpperInvariant(),
+        Id                 = person.Id.ToCanonicalId(),
         Name               = person.Name,
         DateOfBirth        = string.IsNullOrEmpty(person.DateOfBirth.Raw) ? null : person.DateOfBirth.Raw,
         DateOfDeath        = string.IsNullOrEmpty(person.DateOfDeath.Raw) ? null : person.DateOfDeath.Raw,

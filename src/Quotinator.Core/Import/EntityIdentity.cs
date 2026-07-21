@@ -29,17 +29,18 @@ public static class EntityIdentity
 
     /// <summary>
     /// SHA-256 of the normalised, pipe-joined <paramref name="parts"/>, truncated to 16 bytes with
-    /// the UUID version/variant bits forced — identical mechanics to <see cref="QuoteIdentity.StableId"/>.
-    /// The first part is always a type tag (<c>"source"</c>/<c>"character"</c>/<c>"person"</c>/
-    /// <c>"series"</c>/<c>"universe"</c>) so these id spaces can never collide with each other or
-    /// with a <see cref="QuoteIdentity.StableId"/> value.
-    /// Uppercased — unlike <see cref="QuoteIdentity.StableId"/> (whose lowercase output is pinned by a
-    /// production-data regression test and must never change), this id is brand new with #154 and is
-    /// stored directly as a Source/Character/Person/Series/Universe <c>Id</c> without passing through
-    /// <c>GuidHandler</c> at creation time. <c>GuidHandler</c> stores/reads every other Guid-shaped id
-    /// in this database as uppercase TEXT (see <c>GuidHandler.cs</c>) — matching that convention here
-    /// is what lets a later lookup's <see cref="Guid"/>-typed round-trip compare equal to what was
-    /// actually written, since SQLite's default TEXT comparison is case-sensitive.
+    /// the UUID version/variant bits forced — identical mechanics to <see cref="QuoteIdentity.StableId"/>,
+    /// and now (ADR 012) identical casing too: both render <c>Guid.ToString("D")</c>'s default
+    /// lowercase form, this project's single canonical id format. The first part is always a type tag
+    /// (<c>"source"</c>/<c>"character"</c>/<c>"person"</c>/<c>"series"</c>/<c>"universe"</c>) so these
+    /// id spaces can never collide with each other or with a <see cref="QuoteIdentity.StableId"/> value.
+    /// This id is stored directly as a Source/Character/Person/Series/Universe <c>Id</c> without passing
+    /// through <c>GuidHandler</c> at creation time (Character/Series/Universe's own <c>Add</c> ids are
+    /// always this-method-derived, never file-authored, so there is no separate capture point to
+    /// canonicalize at afterward — they must already be canonical the moment they're computed here).
+    /// Matching <c>GuidHandler</c>'s own lowercase convention (see <c>GuidHandler.cs</c>) is what lets a
+    /// later lookup's <see cref="Guid"/>-typed round-trip compare equal to what was actually written,
+    /// since SQLite's default TEXT comparison is case-sensitive.
     /// </summary>
     private static string StableId(params string[] parts)
     {
@@ -47,6 +48,6 @@ public static class EntityIdentity
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
         hash[6] = (byte)((hash[6] & 0x0f) | 0x40);
         hash[8] = (byte)((hash[8] & 0x3f) | 0x80);
-        return new Guid(hash[..16]).ToString("D").ToUpperInvariant();
+        return new Guid(hash[..16]).ToString("D");
     }
 }

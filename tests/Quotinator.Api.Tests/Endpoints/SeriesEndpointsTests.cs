@@ -152,7 +152,7 @@ public class SeriesEndpointsTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
 
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("Star Wars", root.GetProperty("name").GetString());
 
         // Response shape assertion (Step 1): completenessStatus must serialize as a plain JSON string
@@ -170,16 +170,16 @@ public class SeriesEndpointsTests
     }
 
     [TestMethod]
-    public async Task GetSeriesById_LowercaseId_MatchesCaseInsensitively()
+    public async Task GetSeriesById_UppercaseId_MatchesCaseInsensitively()
     {
         var id   = Guid.NewGuid();
         var repo = new FakeSeriesRepository([NewSeries(id: id)]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{id.ToString("D").ToLowerInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{id.ToString("D").ToUpperInvariant()}");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
     [TestMethod]
@@ -208,7 +208,7 @@ public class SeriesEndpointsTests
         var root     = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         var universe = root.GetProperty("universe");
         Assert.AreEqual(JsonValueKind.Object, universe.ValueKind);
-        Assert.AreEqual(universeId.ToString("D").ToUpperInvariant(), universe.GetProperty("id").GetString());
+        Assert.AreEqual(universeId.ToString("D"), universe.GetProperty("id").GetString());
         Assert.AreEqual("Star Wars Universe", universe.GetProperty("name").GetString());
     }
 

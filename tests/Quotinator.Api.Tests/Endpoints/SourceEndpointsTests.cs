@@ -156,7 +156,7 @@ public class SourceEndpointsTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
 
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("Casablanca", root.GetProperty("title").GetString());
 
         // Response shape assertions (Step 1): type/completenessStatus must serialize as plain JSON
@@ -176,16 +176,16 @@ public class SourceEndpointsTests
     }
 
     [TestMethod]
-    public async Task GetSourceById_LowercaseId_MatchesCaseInsensitively()
+    public async Task GetSourceById_UppercaseId_MatchesCaseInsensitively()
     {
         var id   = Guid.NewGuid();
         var repo = new FakeSourceRepository([NewSource(id: id)]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{id.ToString("D").ToLowerInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{id.ToString("D").ToUpperInvariant()}");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
     [TestMethod]
@@ -226,7 +226,7 @@ public class SourceEndpointsTests
         var root   = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         var series = root.GetProperty("series");
         Assert.AreEqual(JsonValueKind.Object, series.ValueKind);
-        Assert.AreEqual(seriesId.ToString("D").ToUpperInvariant(), series.GetProperty("id").GetString());
+        Assert.AreEqual(seriesId.ToString("D"), series.GetProperty("id").GetString());
         Assert.AreEqual("Star Wars", series.GetProperty("name").GetString());
     }
 

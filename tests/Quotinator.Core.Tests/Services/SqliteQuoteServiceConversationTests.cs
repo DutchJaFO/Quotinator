@@ -125,9 +125,7 @@ public class SqliteQuoteServiceConversationTests
 
         Assert.IsNotNull(quote!.Conversations);
         Assert.HasCount(1, quote.Conversations!);
-        // #209: the Conversation was seeded through the real import pipeline, so its id is now
-        // canonicalized to uppercase at capture — the lowercase fixture constant is not the stored form.
-        Assert.AreEqual(Conversation1Id.ToUpperInvariant(), quote.Conversations![0].ConversationId);
+        Assert.AreEqual(Conversation1Id, quote.Conversations![0].ConversationId);
         Assert.AreEqual(1, quote.Conversations[0].Position);
         Assert.AreEqual(2, quote.Conversations[0].TotalLines);
     }
@@ -163,9 +161,11 @@ public class SqliteQuoteServiceConversationTests
         var result = CreateService().GetConversation(Conversation1Id.ToUpperInvariant());
 
         Assert.IsNotNull(result);
-        // #209: the Conversation was seeded through the real import pipeline, so its id is now
-        // canonicalized to uppercase at capture — the lowercase fixture constant is not the stored form.
-        Assert.AreEqual(Conversation1Id.ToUpperInvariant(), result!.Id);
+        // #209/#210: the Conversation was seeded through the real import pipeline, so its id is
+        // canonicalized at capture — the lowercase fixture constant already matches the stored form
+        // (ADR 012), so the lookup above deliberately passes an uppercase-cased id to prove the
+        // case-insensitive lookup itself still resolves it.
+        Assert.AreEqual(Conversation1Id, result!.Id);
     }
 
     [TestMethod]

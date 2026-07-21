@@ -357,8 +357,8 @@ public class SqliteImportActionServiceTests
         Assert.IsNull(result, "Re-import after reversal must apply cleanly, not throw a FOREIGN KEY constraint error");
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes WHERE Id = @id AND IsDeleted = 0", new { id = quote.Id }));
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM QuoteGenres WHERE QuoteId = @id AND Genre = 'Comedy'", new { id = quote.Id }));
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 0", new { id = quote.Id }));
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM QuoteGenres WHERE UPPER(QuoteId) = UPPER(@id) AND Genre = 'Comedy'", new { id = quote.Id }));
     }
 
     [TestMethod]
@@ -594,7 +594,9 @@ public class SqliteImportActionServiceTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes WHERE Id = @id AND IsDeleted = 1", new { id }));
+        // #210: applied rows are stored under their canonicalized (uppercase) id — UPPER() makes the
+        // verification query tolerant of the lowercase id this test declared.
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 1", new { id }));
     }
 
     [TestMethod]
@@ -634,8 +636,10 @@ public class SqliteImportActionServiceTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE IsDeleted = 1"), "The older batch's quote still actively references this Source — it must be kept");
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes WHERE Id = @id AND IsDeleted = 1", new { id = newerId }));
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes WHERE Id = @id AND IsDeleted = 0", new { id = olderId }));
+        // #210: applied rows are stored under their canonicalized (uppercase) id — UPPER() makes the
+        // verification query tolerant of the lowercase id this test declared.
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 1", new { id = newerId }));
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 0", new { id = olderId }));
     }
 
     [TestMethod]
@@ -1117,12 +1121,13 @@ public class SqliteImportActionServiceTests
     }
 
     /// <summary>
-    /// Storage-layer invariant guard (ADR 012) — canonicalize a lowercase id via
+    /// Storage-layer invariant guard (ADR 012) — canonicalize an uppercase-cased raw id via
     /// <see cref="EntityIdCanonicalizer"/>, insert it directly into each explicit-id-capable table via
     /// minimal raw SQL, then assert a <see cref="Guid"/>-typed lookup (which <c>GuidHandler</c>
-    /// force-uppercases) still finds it. Proves the invariant a canonicalized capture-point fix relies
-    /// on — a canonically-written row is always reachable via a Guid-typed lookup — independent of
-    /// whichever entity-specific planner logic produced the write.
+    /// re-renders to lowercase) still finds it. Proves the invariant a canonicalized capture-point fix
+    /// relies on — a canonically-written row is always reachable via a Guid-typed lookup regardless of
+    /// the lookup value's own original casing — independent of whichever entity-specific planner logic
+    /// produced the write.
     /// </summary>
     [TestMethod]
     [DynamicData(nameof(ExplicitIdCapableEntityInsertCases))]
@@ -1131,11 +1136,11 @@ public class SqliteImportActionServiceTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
 
-        var lowercaseId = Guid.NewGuid().ToString("D");
-        var canonicalId = EntityIdCanonicalizer.CanonicalizeUppercase(lowercaseId);
+        var rawUppercaseId = Guid.NewGuid().ToString("D").ToUpperInvariant();
+        var canonicalId = EntityIdCanonicalizer.CanonicalizeLowercase(rawUppercaseId);
         await insertRow(conn, canonicalId);
 
-        var found = await conn.QuerySingleOrDefaultAsync<Guid?>($"SELECT Id FROM {tableName} WHERE Id = @id", new { id = Guid.Parse(lowercaseId) });
+        var found = await conn.QuerySingleOrDefaultAsync<Guid?>($"SELECT Id FROM {tableName} WHERE Id = @id", new { id = Guid.Parse(rawUppercaseId) });
         Assert.IsNotNull(found, $"{tableName}: a canonically-written row must be findable via a Guid-typed lookup regardless of the lookup value's own original casing");
     }
 
@@ -1154,7 +1159,7 @@ public class SqliteImportActionServiceTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
         var (title, date) = await conn.QuerySingleAsync<(string Title, string Date)>(
-            "SELECT s.Title, s.Date FROM Quotes q JOIN Sources s ON s.Id = q.SourceId WHERE q.Id = @id", new { id = quoteId });
+            "SELECT s.Title, s.Date FROM Quotes q JOIN Sources s ON s.Id = q.SourceId WHERE UPPER(q.Id) = UPPER(@id)", new { id = quoteId });
         Assert.AreEqual("Canonicalization Join Test Film", title, "The Quote->Source join must still resolve after the Source's explicit id was canonicalized at capture");
         Assert.AreEqual("1999", date);
     }

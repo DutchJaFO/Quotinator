@@ -1,5 +1,6 @@
 using Quotinator.Data.Connections;
 using Quotinator.Data.Example.Common;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Example.ManyToMany;
@@ -29,7 +30,7 @@ public sealed class WidgetTagLinkRepository(
 
     protected override WidgetTag CreateJunction(Guid leftId, Guid rightId) => new()
     {
-        WidgetId = leftId.ToString("D").ToUpperInvariant(),
-        TagId    = rightId.ToString("D").ToUpperInvariant()
+        WidgetId = leftId.ToCanonicalId(),
+        TagId    = rightId.ToCanonicalId()
     };
 }

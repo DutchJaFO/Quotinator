@@ -2,6 +2,7 @@ using System.Reflection;
 using Dapper;
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Repositories;
@@ -53,7 +54,7 @@ public abstract class SqliteOneToOneRepository<TParent, TDetail>(
     protected async Task<TDetail?> GetDetailByForeignKeyAsync(
         string fkColumn, Guid parentId, IUnitOfWork? unitOfWork = null)
     {
-        var param = new { parentId = parentId.ToString("D").ToUpperInvariant() };
+        var param = new { parentId = parentId.ToCanonicalId() };
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var rows = await uow.Connection.QueryAsync<TDetail>(

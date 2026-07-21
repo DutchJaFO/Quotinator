@@ -19,6 +19,11 @@ public abstract class DatabaseConfiguration
     /// </summary>
     public void Configure()
     {
+        // Dapper's own built-in typeMap resolves a bare Guid parameter's DbType before it ever
+        // consults a registered ITypeHandler, so GuidHandler.SetValue is silently skipped for
+        // outbound parameters unless the built-in mapping is removed first — see GuidHandler's
+        // remarks and GuidExtensions.ToCanonicalId, which is this project's real casing choke point.
+        SqlMapper.RemoveTypeMap(typeof(Guid));
         SqlMapper.AddTypeHandler(new GuidHandler());
         SqlMapper.AddTypeHandler(new SafeDateHandler());
         RegisterJsonHandler<IReadOnlyList<string>>();

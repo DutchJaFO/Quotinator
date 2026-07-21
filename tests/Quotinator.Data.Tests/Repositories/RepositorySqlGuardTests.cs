@@ -34,7 +34,23 @@ public class RepositorySqlGuardTests
         var violations = SqlIdCaseGuard.FindViolations(sql);
         Assert.IsEmpty(violations,
             $"RepositorySql.{name} contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
-            "Wrap both sides in UPPER(...) — see ADR 012.");
+            "Wrap both sides in LOWER(...) — see ADR 012.");
+    }
+
+    /// <summary>
+    /// Verifies that every SQL string produced by <see cref="RepositorySql"/> factory methods does not
+    /// return any <c>*Id</c>-suffixed column unwrapped in its SELECT column list — PK or FK, regardless
+    /// of downstream C# type. See ADR 012's "read-time presentation normalization" revision.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(RepositorySqlCases))]
+    public void RepositorySqlFactory_PassesSelectPresentationGuard(string name, string sql)
+    {
+        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
+        Assert.IsEmpty(violations,
+            $"RepositorySql.{name} selects {string.Join(", ", violations)} unwrapped — wrap in " +
+            "LOWER(...) AS ColumnName in the SELECT column list. See ADR 012's \"read-time " +
+            "presentation normalization\" revision.");
     }
 
     public static IEnumerable<object[]> RepositorySqlCases()

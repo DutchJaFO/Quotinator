@@ -175,7 +175,7 @@ public class SqliteQuoteServiceTests
         var source   = await InsertSourceAsync("The Fellowship of the Ring", series.Id);
         var quote    = await InsertQuoteAsync(source.Id, "One does not simply walk into Mordor.");
 
-        var result = _service.GetById(quote.Id.ToString("D").ToUpperInvariant());
+        var result = _service.GetById(quote.Id.ToString("D"));
 
         Assert.IsNotNull(result);
         Assert.IsNotNull(result.Series);
@@ -203,7 +203,7 @@ public class SqliteQuoteServiceTests
         var source = await InsertSourceAsync("A Standalone Film", series.Id);
         var quote  = await InsertQuoteAsync(source.Id, "A quote with a series but no universe.");
 
-        var result = _service.GetById(quote.Id.ToString("D").ToUpperInvariant());
+        var result = _service.GetById(quote.Id.ToString("D"));
 
         Assert.IsNotNull(result);
         Assert.IsNotNull(result.Series);
@@ -221,7 +221,7 @@ public class SqliteQuoteServiceTests
         var seriesRepo = new SqliteRestorableRepository<SeriesEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
         await seriesRepo.SoftDeleteAsync(series.Id);
 
-        var result = _service.GetById(quote.Id.ToString("D").ToUpperInvariant());
+        var result = _service.GetById(quote.Id.ToString("D"));
 
         Assert.IsNotNull(result);
         Assert.IsNull(result!.Series, "A soft-deleted Series must never leak through as a dangling reference.");
@@ -274,7 +274,7 @@ public class SqliteQuoteServiceTests
         var result = _service.GetAll(1, 10, seriesId: series.Id);
 
         Assert.AreEqual(1, result.Items.Count);
-        Assert.AreEqual(quote.Id.ToString("D").ToUpperInvariant(), result.Items[0].Id);
+        Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
     }
 
     [TestMethod]
@@ -291,8 +291,8 @@ public class SqliteQuoteServiceTests
         var result = _service.GetAll(1, 10, universeId: universe.Id);
 
         var ids = result.Items.Select(i => i.Id).ToList();
-        CollectionAssert.Contains(ids, quoteA.Id.ToString("D").ToUpperInvariant());
-        CollectionAssert.Contains(ids, quoteB.Id.ToString("D").ToUpperInvariant());
+        CollectionAssert.Contains(ids, quoteA.Id.ToString("D"));
+        CollectionAssert.Contains(ids, quoteB.Id.ToString("D"));
     }
 
     [TestMethod]
@@ -305,7 +305,7 @@ public class SqliteQuoteServiceTests
         var result = _service.GetRandom(10, seriesId: series.Id);
 
         Assert.AreEqual(1, result.Items.Count);
-        Assert.AreEqual(quote.Id.ToString("D").ToUpperInvariant(), result.Items[0].Id);
+        Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
     }
 
     [TestMethod]
@@ -319,6 +319,6 @@ public class SqliteQuoteServiceTests
         var result = _service.GetRandom(10, universeId: universe.Id);
 
         Assert.AreEqual(1, result.Items.Count);
-        Assert.AreEqual(quote.Id.ToString("D").ToUpperInvariant(), result.Items[0].Id);
+        Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
     }
 }

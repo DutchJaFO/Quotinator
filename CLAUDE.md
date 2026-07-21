@@ -517,9 +517,15 @@ otherwise be a manual `curl | grep` check of the live spec.
 
 ### GUID/enum/id comparisons are case-insensitive by default
 
-Any GUID, enum, or other identifier comparison is **case-insensitive by default** — never case-sensitive, and never behind a config toggle. This applies wherever two independently-cased copies of the same identifier can meet, not only at the REST route/query-parameter boundary: `.NET` serializes a `Guid` lowercase by default, but stored values in this codebase are consistently uppercase (`Guid.ToString("D").ToUpperInvariant()`), and a curator-authored JSON file's own explicit id (e.g. a `sources[]`/`people[]` entry referencing an already-existing, `EntityIdentity`-derived row) is under no obligation to match that casing either. The pattern is `UPPER(column) = UPPER(@param)` in the `Sql.cs` query (see `Sql.Conversations.SelectForRead`, `Sql.SystemImportActions.SelectAllForBatch`'s `BuildWhere`, `Sql.Sources`/`Sql.People`'s `SelectExistingById`/`UpdateFieldsById`/`UpdateCompletenessById`/`CountActiveReferences`).
+Any GUID, enum, or other identifier comparison is **case-insensitive by default** — never case-sensitive, and never behind a config toggle. This applies wherever two independently-cased copies of the same identifier can meet, not only at the REST route/query-parameter boundary: a curator-authored JSON file's own explicit id (e.g. a `sources[]`/`people[]` entry referencing an already-existing, `EntityIdentity`-derived row) is under no obligation to match the stored casing. The pattern is `LOWER(column) = LOWER(@param)` in the `Sql.cs` query, built via `Quotinator.Data.Queries.IdClauses` (see `Sql.Conversations.SelectForRead`, `Sql.SystemImportActions.SelectAllForBatch`'s `BuildWhere`, `Sql.Sources`/`Sql.People`'s `SelectExistingById`/`UpdateFieldsById`/`UpdateCompletenessById`/`CountActiveReferences`). This `LOWER()` wrapping is a pure comparison-mechanics concern, independent of and unrelated to which casing is canonical for storage/presentation — see ADR 012's "system-wide lowercase convention" revision. The canonical stored/presented form for every entity id is lowercase (`Guid.ToString("D")`'s own default), rendered via `Quotinator.Data.Helpers.GuidExtensions.ToCanonicalId()` — the single real choke point; never a bare `.ToString("D")`/`.ToUpperInvariant()` typed out inline, and never a raw `Guid`-typed value bound directly into an `IN`-list (Dapper's list-parameter expansion does not reliably invoke a registered type handler per element — pre-canonicalize to strings first).
 
 Found and fixed piecemeal across `status`/`entityType`/`batchId` (#154), a conversation `{id}` route (#69), and Sources'/People's own id-first lookup used by an explicit `sources[]`/`people[]` entry (#180) before being recognised as a general rule that applies to every id-matching comparison in the codebase, not just route/query parameters. When adding any new GUID/enum/id-valued parameter or SQL id-match, apply case-insensitive matching from the start rather than waiting for it to be reported as a bug on that specific one — and when fixing an instance of this bug, grep the same file/module for sibling comparisons of the same kind and fix them together, since this class of bug has repeatedly turned out to affect more than the one reported case.
+
+**Comparison case-insensitivity is not the same guarantee as canonical presentation — a third mechanism, applied uniformly to every selected id column, is required.** A `SELECT` that isn't filtering or joining on a column runs neither write-side canonicalization nor `IdClauses`' comparison-side `LOWER()` wrapping. Every `*Id`-suffixed column in a SELECT list — primary key or foreign key — must go through `Quotinator.Data.Queries.IdClauses.SelectColumn(column, alias)`, which emits `LOWER(column) AS alias`. This applies unconditionally, not only to columns known to be `string`-typed on their C# side: a `Guid`-typed property happens to render lowercase for free today via `System.Text.Json`'s default formatting, but that's an accident of the serializer, not a guarantee — a column's downstream C# type can change without the query being touched (`Quotinator.Core.Models.MasterDataReference.Id` is `string`-typed for exactly this reason, despite backing what was originally a `Guid`-typed column). Wrap every selected id column the same way `IdClauses.Join` already wraps every JOIN condition unconditionally, regardless of whether it looks safe today.
+
+**The one exemption**: `SystemChangeLog.InitiatedById` is `Id`-suffixed but not always an id — it holds an import batch UUID, an HTTP route, or an enrichment provider name — so forcing it lowercase would corrupt legitimate mixed-case content in the non-id cases. It is excluded by name in `SqlSelectPresentationGuard.ExemptColumnNames`, the only entry. A reader with no HTTP endpoint yet is still in scope for this rule — a DI-registered reader with a real `SELECT` query needs correct presentation for any consumer, not only a live one.
+
+**Mechanical guard**: `Quotinator.Data.Diagnostics.SqlSelectPresentationGuard` mirrors `SqlIdCaseGuard`'s own strip-then-scan technique (not a maintained registry of "columns known to need it") — strip every already-`LOWER(...)`-wrapped column from a query's SELECT list, then flag any remaining `*Id`-suffixed reference. Wired into the same `SqlQueryGuardTests`/`RepositorySqlGuardTests` `DynamicData` enumeration `SqlIdCaseGuard` uses, so every SQL constant, factory method, and dynamically-assembled query is scanned on every test run. The one structural exception is `RepositorySql.cs`'s generic `SELECT *` queries — entity-agnostic by design (ADR 004), they never have an explicit column list for a text-based guard to rewrap, so correctness there depends on every domain entity's id/FK properties staying `Guid`-typed (true today; see ADR 012 for the boundary this creates).
 
 ### Entity-scoped filter-parameter convention
 
@@ -541,7 +547,7 @@ message), not bad input.
 **Validation**: supplying both parameters, or an id-valued one that isn't a well-formed GUID, both return
 422 with a `detail`, never the framework binder's bare 400 — consistent with #183's pagination contract.
 Once resolved to an id (whether supplied directly or found by name), matching is a case-insensitive exact
-match (`UPPER(column) = UPPER(@id)`), per the case-insensitive-by-default rule above.
+match (`LOWER(column) = LOWER(@id)`), per the case-insensitive-by-default rule above.
 
 **Explicit exemption: `/quotes/search` and `/quotes/random`.** Their existing `character`/`author`/`source`
 filters stay fuzzy, direct contains-matches — this convention is for *new* entity-scoped filters
@@ -1094,9 +1100,10 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    curl -s "http://localhost:8080/api/v1/quotes/f6000001-0000-4000-8000-000000000001"
    ```
    The import must return `200`. The masterdata lookup — using the file's own lowercase id in the URL,
-   the exact scenario that originally 404'd — must also return `200`, with `id` shown canonicalized to
-   uppercase in the response. The quote lookup must resolve `source` to `"209 Smoke Test Film"` via the
-   Quote→Source join, proving the fix didn't break the join to make the masterdata lookup work.
+   the exact scenario that originally 404'd — must also return `200`, with `id` shown canonicalized (as
+   lowercase, ADR 012's system-wide convention) in the response. The quote lookup must resolve `source`
+   to `"209 Smoke Test Film"` via the Quote→Source join, proving the fix didn't break the join to make
+   the masterdata lookup work.
 
    **Pagination contract: pageSize=0, max 500, default 20, page-beyond-last** (#195) — `/quotes`,
    `/admin/audit`, and `/import/actions` share one pagination contract; this proves it holds live on
@@ -1145,22 +1152,39 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    pagination contract" earlier in this file for why this needs a dedicated live-pipeline test at all,
    given `NumericParameterSchemaTransformer` already has its own unit tests.
 
-   **Quotes.Id case-insensitive lookup** (#210) — unlike Source/People (canonicalize to uppercase),
-   Quotes.Id canonicalizes to lowercase, matching `QuoteIdentity.StableId`'s own pinned convention.
-   Before #210, `GET /quotes/{id}` had no case-insensitive read-side mitigation at all — the one fully-
-   unmitigated gap of this kind found across the whole codebase.
+   **Quotes.Id case-insensitive lookup** (#210) — Quotes.Id canonicalizes to lowercase, the same
+   convention every other entity uses (`EntityIdentity.StableId`, `GuidExtensions.ToCanonicalId`) —
+   this project's single settled id format after two prior revisions (ADR 012's revision history).
+   Before #210's first pass, `GET /quotes/{id}` had no case-insensitive read-side mitigation at all —
+   the one fully-unmitigated gap of this kind found across the whole codebase.
    ```bash
    cat > .claude/temp/smoke-210.json <<'EOF'
    {"quotes": [{"id":"F0000210-0000-4000-8000-000000000210","quote":"A #210 smoke test quote with an uppercase explicit id.","originalLanguage":"en","source":"Smoke Test Film 210","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
    EOF
    curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
-   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes/F0000210-0000-4000-8000-000000000210"
    curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes/f0000210-0000-4000-8000-000000000210"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes/F0000210-0000-4000-8000-000000000210"
    ```
-   Import must return `200`. Both `GET` calls (original uppercase URL casing, and fully lowercase) must
-   return `200` with the same quote, and the response's own `id` field must be the canonical **lowercase**
-   form (`f0000210-...`) regardless of the uppercase casing the file supplied — proving both the
-   capture-time canonicalization (#210 Step 2) and the case-insensitive read (#210 Step 3) together.
+   Import must return `200`. Both `GET` calls (lowercase URL casing, and the file's own original
+   uppercase casing) must return `200` with the same quote, and the response's own `id` field must be
+   the canonical **lowercase** form (`f0000210-...`) regardless of the uppercase casing the file
+   supplied — proving both the capture-time canonicalization and the case-insensitive read together.
+
+   **ConversationLines.QuoteId FK safety** (#210's casing-unification revision) — a conversation line
+   referencing a quote by an id whose casing doesn't match the quote's own now-canonical form must not
+   violate `ConversationLines`' real `FOREIGN KEY` constraint to `Quotes(Id)` — the same bug class #209
+   found for `StageDirectionId`/`SoundCueId`, now also covering `QuoteId`.
+   ```bash
+   cat > .claude/temp/smoke-210-conv.json <<'EOF'
+   {
+     "quotes": [{"id":"f0000210-0000-4000-8000-000000000211","quote":"A #210 conversation-line smoke test quote.","originalLanguage":"en","source":"Smoke Test Film 210b","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+     "conversations": [{"id":"f0000210-0000-4000-8000-000000000212","description":"A #210 smoke test conversation.","lines":[{"order":1,"type":"quote","quoteId":"F0000210-0000-4000-8000-000000000211"}]}]
+   }
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210-conv.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+   ```
+   The quote's own `id` is lowercase; the conversation line's `quoteId` deliberately uses the uppercase
+   form of the same id. Must return `200`, not a `SQLite Error 19: FOREIGN KEY constraint failed`.
 
    **Systemic id-case guard** (#210's scope expansion) — `Quotinator.Data.Diagnostics.SqlIdCaseGuard`
    scans every SQL query in the codebase for an unwrapped id-comparison at build/test time
@@ -1169,7 +1193,33 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    `Quotinator.Data.Tests.Repositories.RepositorySqlGuardTests`) — this is unit-test-tier coverage, not a
    live/T2 check, and needs no separate Docker verification beyond the Quotes.Id scenario above; listed
    here only so a future reader knows why `RepositorySql.cs`'s generic `SelectById`/`SoftDelete`/etc. are
-   now `UPPER()`-wrapped even though no single T2 scenario exercises them directly.
+   now `LOWER()`-wrapped (ADR 012's system-wide lowercase revision — see that ADR for why `LOWER()`, not
+   `UPPER()`) even though no single T2 scenario exercises them directly.
+
+   **Read-time presentation normalization for string-typed id-reference fields** (#210's third
+   revision) — `batchId`/`entityId`/`existingBatchId`/`recordId` are `string`-typed (not `Guid`-typed),
+   so unlike `id` fields they get no automatic lowercase rendering from `System.Text.Json`'s `Guid`
+   serialization default; a `LOWER(...) AS ColumnName` wrap was added to `Sql.SystemImportActions
+   .SelectColumns` and `Sql.SystemAudit.SelectPaged` so these fields render canonically regardless of
+   what casing is actually stored. Confirms a real end-to-end HTTP round trip, not just the unit-test-tier
+   `ExistingBatchId_RoundTripsCorrectly`:
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" \
+     -F "file=@data/sources/quotinator-curated.json" \
+     -F 'settings={"duplicateResolution":{"default":"review"}}' \
+     "http://localhost:8080/api/v1/import"
+   curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=1"
+   curl -s "http://localhost:8080/api/v1/admin/audit?pageSize=1" -H "X-Api-Key: <your admin key>"
+   ```
+   The import response's own `batchId` and every `quoteId` under `pendingActionIds`, and the
+   `/import/actions` response's `batchId`/`entityId`/`existingBatchId`, and the `/admin/audit` response's
+   `recordId`, must all be lowercase — freshly generated `Guid`s render lowercase from
+   `GuidExtensions.ToCanonicalId()` regardless, so this mainly confirms no regression; the actual
+   read-time fix (rendering an *already-uppercase* stored value as lowercase) is proven at the SQLite
+   integration-test tier by `ExistingBatchId_RoundTripsCorrectly`, which writes a deliberately mixed-case
+   fixture directly (bypassing capture-time canonicalization) and reads it back through this exact query
+   path — a live T2 run cannot easily manufacture pre-existing non-canonical data through the API alone,
+   since every write path now canonicalizes at capture time.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 

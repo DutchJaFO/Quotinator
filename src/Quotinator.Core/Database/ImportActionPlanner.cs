@@ -55,7 +55,7 @@ internal static class ImportActionPlanner
         var seenQuotes     = new Dictionary<string, SourceQuote>(StringComparer.Ordinal);
         var seenQuoteStatus = new Dictionary<string, CompletenessStatus>(StringComparer.Ordinal);
 
-        var batchIdStr = batchId.ToString("D").ToUpperInvariant();
+        var batchIdStr = batchId.ToCanonicalId();
         var now        = DateTime.UtcNow;
 
         // #180: Universe then Series are planned before Source — a declared series[] entry's own
@@ -76,11 +76,12 @@ internal static class ImportActionPlanner
         foreach (var rawQuote in quotes)
         {
             // #210: canonicalize a file-authored Quotes.Id to lowercase at the single earliest point of
-            // capture, matching QuoteIdentity.StableId's own pinned lowercase convention — every later
-            // reference to q.Id in this iteration (seenQuotes, EntityId, the resolved SourceQuote
-            // threaded through QuoteFieldMerge) is automatically canonical once this substitution is
-            // made. SourceQuote is a plain class with init-only properties, not a record, so a corrected
-            // copy is built the same way ApplyMergedFields already does above, not via a `with` expression.
+            // capture, matching this project's single canonical id convention (ADR 012, GuidHandler).
+            // Every later reference to q.Id in this iteration (seenQuotes, EntityId, the resolved
+            // SourceQuote threaded through QuoteFieldMerge) is automatically canonical once this
+            // substitution is made. SourceQuote is a plain class with init-only properties, not a
+            // record, so a corrected copy is built the same way ApplyMergedFields already does above,
+            // not via a `with` expression.
             var q = EntityIdCanonicalizer.TryCanonicalizeLowercase(rawQuote.Id, out var canonicalQuoteId)
                 ? new SourceQuote
                 {
@@ -216,12 +217,12 @@ internal static class ImportActionPlanner
         if (index.TryGetValue(key, out var existing)) return existing;
 
         // #162: raw string, not Guid?-typed — a natural-key-matched row's id may now be an explicit,
-        // not-necessarily-uppercase file-authored id (from a sources[] entry), not only a
+        // not-necessarily-canonically-cased file-authored id (from a sources[] entry), not only a
         // Guid.NewGuid()/EntityIdentity-derived one. Guid has no memory of original string casing —
         // ToString("D") always renders lowercase regardless of what was actually stored — so
-        // round-tripping through Guid? and re-casing would silently produce a different string than
-        // the real row's id, exactly the bug ClearStaleAddTargetsAsync's own remarks warn about for
-        // Quote ids.
+        // round-tripping through Guid? and re-casing would silently produce a string that no longer
+        // matches the real row's id if that row predates a casing-convention change (this project has
+        // been through two: see ADR 012's revision history).
         var existingId = await connection.ExecuteScalarAsync<string?>(
             Sql.Sources.SelectIdByTitleAndType, new { title = q.Source, type = typeStr }, transaction);
         if (existingId is { } foundId)
@@ -261,7 +262,7 @@ internal static class ImportActionPlanner
             Sql.Characters.SelectIdBySourceAndName, new { sourceId, name = q.Character }, transaction);
         if (existingId is { } foundId)
         {
-            var idStr = foundId.ToString("D").ToUpperInvariant();
+            var idStr = foundId.ToCanonicalId();
             index[key] = idStr;
             return idStr;
         }
@@ -295,7 +296,7 @@ internal static class ImportActionPlanner
             Sql.People.SelectIdByName, new { name = q.Author }, transaction);
         if (existingId is { } foundId)
         {
-            var idStr = foundId.ToString("D").ToUpperInvariant();
+            var idStr = foundId.ToCanonicalId();
             index[q.Author] = idStr;
             return idStr;
         }
@@ -349,7 +350,7 @@ internal static class ImportActionPlanner
             // captured — every later reference to the file's id (lookup, matchedId, addId) uses this
             // canonicalized form instead of the file's raw casing. A malformed or absent id passes
             // through unchanged; general id-format validation is out of scope here.
-            var canonicalId = s.Id is { } sIdRaw && EntityIdCanonicalizer.TryCanonicalizeUppercase(sIdRaw, out var sIdCanonical)
+            var canonicalId = s.Id is { } sIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(sIdRaw, out var sIdCanonical)
                 ? sIdCanonical
                 : s.Id;
 
@@ -369,7 +370,7 @@ internal static class ImportActionPlanner
                     : Optional<string>.Of(seriesIndex.TryGetValue(seriesName, out var indexed)
                         ? indexed
                         : await connection.ExecuteScalarAsync<Guid?>(Sql.Series.SelectIdByName, new { name = seriesName }, transaction) is { } found
-                            ? found.ToString("D").ToUpperInvariant()
+                            ? found.ToCanonicalId()
                             : null);
             }
 
@@ -586,7 +587,7 @@ internal static class ImportActionPlanner
         {
             // #209: canonicalize once, at the single earliest point this entry's explicit id is
             // captured — PersonEntry.Id is required, so there is no absent case to preserve.
-            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeUppercase(p.Id, out var pIdCanonical) ? pIdCanonical! : p.Id;
+            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(p.Id, out var pIdCanonical) ? pIdCanonical! : p.Id;
 
             var existing = await connection.QuerySingleOrDefaultAsync<(string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.People.SelectExistingById, new { id = canonicalId }, transaction);
@@ -666,7 +667,7 @@ internal static class ImportActionPlanner
                 Sql.People.SelectIdByName, new { name = p.Name }, transaction);
             if (matchesByKey is not null)
             {
-                personIndex[p.Name] = matchesByKey.Value.ToString("D").ToUpperInvariant();
+                personIndex[p.Name] = matchesByKey.Value.ToCanonicalId();
                 continue;
             }
 
@@ -701,7 +702,7 @@ internal static class ImportActionPlanner
                 Sql.Universe.SelectIdByName, new { name = u.Name }, transaction);
             if (matchesByKey is not null)
             {
-                universeIndex[u.Name] = matchesByKey.Value.ToString("D").ToUpperInvariant();
+                universeIndex[u.Name] = matchesByKey.Value.ToCanonicalId();
                 continue;
             }
 
@@ -739,7 +740,7 @@ internal static class ImportActionPlanner
                 Sql.Series.SelectIdByName, new { name = s.Name }, transaction);
             if (matchesByKey is not null)
             {
-                seriesIndex[s.Name] = matchesByKey.Value.ToString("D").ToUpperInvariant();
+                seriesIndex[s.Name] = matchesByKey.Value.ToCanonicalId();
                 continue;
             }
 
@@ -748,7 +749,7 @@ internal static class ImportActionPlanner
                 universeId = universeIndex.TryGetValue(universeName, out var indexed)
                     ? indexed
                     : await connection.ExecuteScalarAsync<Guid?>(Sql.Universe.SelectIdByName, new { name = universeName }, transaction) is { } found
-                        ? found.ToString("D").ToUpperInvariant()
+                        ? found.ToCanonicalId()
                         : null;
 
             var stableId = EntityIdentity.SeriesId(s.Name);
@@ -780,7 +781,7 @@ internal static class ImportActionPlanner
         {
             // #209: canonicalize once, at the single earliest point this entry's explicit id is
             // captured. No natural-key fallback exists for StageDirection — matched purely by id.
-            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeUppercase(sd.Id, out var sdIdCanonical) ? sdIdCanonical! : sd.Id;
+            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(sd.Id, out var sdIdCanonical) ? sdIdCanonical! : sd.Id;
 
             var existing = await connection.QuerySingleOrDefaultAsync<(string Text, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.StageDirections.SelectExistingById, new { id = canonicalId }, transaction);
@@ -872,7 +873,7 @@ internal static class ImportActionPlanner
         {
             // #209: canonicalize once, at the single earliest point this entry's explicit id is
             // captured. No natural-key fallback exists for SoundCue — matched purely by id.
-            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeUppercase(sc.Id, out var scIdCanonical) ? scIdCanonical! : sc.Id;
+            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(sc.Id, out var scIdCanonical) ? scIdCanonical! : sc.Id;
 
             var existing = await connection.QuerySingleOrDefaultAsync<(string Text, string? SoundFileUrl, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.SoundCues.SelectExistingById, new { id = canonicalId }, transaction);
@@ -977,7 +978,7 @@ internal static class ImportActionPlanner
             // captured. No natural-key fallback exists for Conversation — matched purely by id.
             // Cross-references inside c.Lines (StageDirectionId/SoundCueId/QuoteId) are a separate,
             // not-yet-scoped capture point — tracked in a follow-up issue, not touched here.
-            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeUppercase(c.Id, out var cIdCanonical) ? cIdCanonical! : c.Id;
+            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(c.Id, out var cIdCanonical) ? cIdCanonical! : c.Id;
 
             var existing = await connection.QuerySingleOrDefaultAsync<(string? Description, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.Conversations.SelectExistingById, new { id = canonicalId }, transaction);
@@ -1047,17 +1048,19 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            // #209: a line's StageDirectionId/SoundCueId is a curator-typed reference to another
-            // entry in this same file, which #209 canonicalizes to uppercase at its own capture point
-            // above — the reference must be canonicalized identically, or ConversationLines'
-            // real FOREIGN KEY constraint to StageDirections(Id)/SoundCues(Id) fails outright once the
-            // referenced row's own id no longer matches the file's raw casing. QuoteId is left
-            // untouched — Quotes.Id canonicalizes to lowercase, a separate sub-issue (#210).
+            // #209/#210: a line's QuoteId/StageDirectionId/SoundCueId is a curator-typed reference to
+            // another entry in this same file, which is canonicalized to this project's single
+            // canonical id form at its own capture point (above, for StageDirections/SoundCues/
+            // Conversations; in this method's own quote loop, for Quote) — the reference must be
+            // canonicalized identically here too, or ConversationLines' real FOREIGN KEY constraint to
+            // Quotes(Id)/StageDirections(Id)/SoundCues(Id) fails outright once the referenced row's own
+            // id no longer matches the file's raw casing.
             var lines = c.Lines
                 .Select(l => new ConversationLinePayload(
-                    l.Order, l.Type, l.QuoteId,
-                    l.StageDirectionId is { } sdRaw && EntityIdCanonicalizer.TryCanonicalizeUppercase(sdRaw, out var sdCanonical) ? sdCanonical : l.StageDirectionId,
-                    l.SoundCueId is { } scRaw && EntityIdCanonicalizer.TryCanonicalizeUppercase(scRaw, out var scCanonical) ? scCanonical : l.SoundCueId))
+                    l.Order, l.Type,
+                    l.QuoteId is { } qRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(qRaw, out var qCanonical) ? qCanonical : l.QuoteId,
+                    l.StageDirectionId is { } sdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(sdRaw, out var sdCanonical) ? sdCanonical : l.StageDirectionId,
+                    l.SoundCueId is { } scRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(scRaw, out var scCanonical) ? scCanonical : l.SoundCueId))
                 .ToList();
 
             actions.Add(new SystemImportAction

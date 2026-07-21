@@ -224,6 +224,6 @@ public class SystemAuditWriterTests
 
         Assert.AreEqual("Widgets",          entry.TableName);
         Assert.AreEqual(AuditOperation.Insert, entry.Operation);
-        Assert.AreEqual(w.Id.ToString("D").ToUpperInvariant(), entry.RecordId);
+        Assert.AreEqual(w.Id.ToString("D"), entry.RecordId);
     }
 }

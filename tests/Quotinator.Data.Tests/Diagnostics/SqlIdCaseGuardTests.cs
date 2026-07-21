@@ -56,12 +56,12 @@ public class SqlIdCaseGuardTests
     [TestMethod]
     public void IsCaseSensitiveIdComparison_HalfProtectedEquality_ColumnOnlyWrapped_ReturnsTrue()
         => Assert.IsTrue(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "SELECT * FROM Sources WHERE UPPER(Id) = @id;"));
+            "SELECT * FROM Sources WHERE LOWER(Id) = @id;"));
 
     [TestMethod]
     public void IsCaseSensitiveIdComparison_HalfProtectedEquality_ParamOnlyWrapped_ReturnsTrue()
         => Assert.IsTrue(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "SELECT * FROM Sources WHERE Id = UPPER(@id);"));
+            "SELECT * FROM Sources WHERE Id = LOWER(@id);"));
 
     /// <summary>
     /// #210's scope expansion: an unwrapped id-to-id JOIN condition must be flagged too, per the
@@ -76,7 +76,7 @@ public class SqlIdCaseGuardTests
     [TestMethod]
     public void IsCaseSensitiveIdComparison_HalfProtectedJoin_ReturnsTrue()
         => Assert.IsTrue(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "SELECT * FROM Quotes q JOIN Sources s ON UPPER(s.Id) = q.SourceId AND s.IsDeleted = 0;"));
+            "SELECT * FROM Quotes q JOIN Sources s ON LOWER(s.Id) = q.SourceId AND s.IsDeleted = 0;"));
 
     /// <summary>A correlated-subquery id-to-id predicate is the same shape as a JOIN condition and must be flagged the same way.</summary>
     [TestMethod]
@@ -89,42 +89,42 @@ public class SqlIdCaseGuardTests
     [TestMethod]
     public void IsCaseSensitiveIdComparison_FullyProtectedEquality_ReturnsFalse()
         => Assert.IsFalse(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "SELECT * FROM Sources WHERE UPPER(Id) = UPPER(@id) AND IsDeleted = 0;"));
+            "SELECT * FROM Sources WHERE LOWER(Id) = LOWER(@id) AND IsDeleted = 0;"));
 
     [TestMethod]
     public void IsCaseSensitiveIdComparison_FullyProtectedAliasedEquality_ReturnsFalse()
         => Assert.IsFalse(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "SELECT * FROM Sources s WHERE UPPER(s.SourceId) = UPPER(@sourceId);"));
+            "SELECT * FROM Sources s WHERE LOWER(s.SourceId) = LOWER(@sourceId);"));
 
     [TestMethod]
     public void IsCaseSensitiveIdComparison_ProtectedInClause_ReturnsFalse()
         => Assert.IsFalse(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "SELECT * FROM [Widgets] WHERE UPPER([Id]) IN @ids AND [IsDeleted] = 0"));
+            "SELECT * FROM [Widgets] WHERE LOWER([Id]) IN @ids AND [IsDeleted] = 0"));
 
     [TestMethod]
     public void IsCaseSensitiveIdComparison_ProtectedNotInClause_ReturnsFalse()
         => Assert.IsFalse(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "SELECT * FROM Quotes WHERE UPPER(Id) NOT IN @excludedIds"));
+            "SELECT * FROM Quotes WHERE LOWER(Id) NOT IN @excludedIds"));
 
     [TestMethod]
     public void IsCaseSensitiveIdComparison_SetClauseAssignmentOnly_WhereClauseProtected_ReturnsFalse()
         => Assert.IsFalse(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "UPDATE Sources SET Title = @title, SourceId = @sid, DateModified = @now WHERE UPPER(Id) = UPPER(@id);"));
+            "UPDATE Sources SET Title = @title, SourceId = @sid, DateModified = @now WHERE LOWER(Id) = LOWER(@id);"));
 
     [TestMethod]
     public void IsCaseSensitiveIdComparison_NonIdColumnEquality_ReturnsFalse()
         => Assert.IsFalse(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "UPDATE Conversations SET Description = @description WHERE UPPER(Id) = UPPER(@id);"));
+            "UPDATE Conversations SET Description = @description WHERE LOWER(Id) = LOWER(@id);"));
 
     [TestMethod]
     public void IsCaseSensitiveIdComparison_FullyProtectedJoin_ReturnsFalse()
         => Assert.IsFalse(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "SELECT * FROM Quotes q JOIN Sources s ON UPPER(s.Id) = UPPER(q.SourceId) AND s.IsDeleted = 0;"));
+            "SELECT * FROM Quotes q JOIN Sources s ON LOWER(s.Id) = LOWER(q.SourceId) AND s.IsDeleted = 0;"));
 
     [TestMethod]
     public void IsCaseSensitiveIdComparison_FullyProtectedCorrelatedSubqueryPredicate_ReturnsFalse()
         => Assert.IsFalse(SqlIdCaseGuard.IsCaseSensitiveIdComparison(
-            "SELECT (SELECT COUNT(*) FROM ConversationLines cl2 WHERE UPPER(cl2.ConversationId) = UPPER(cl.ConversationId)) FROM ConversationLines cl;"));
+            "SELECT (SELECT COUNT(*) FROM ConversationLines cl2 WHERE LOWER(cl2.ConversationId) = LOWER(cl.ConversationId)) FROM ConversationLines cl;"));
 
     [TestMethod]
     public void IsCaseSensitiveIdComparison_NoIdReferenceAtAll_ReturnsFalse()
@@ -143,5 +143,5 @@ public class SqlIdCaseGuardTests
     [TestMethod]
     public void FindViolations_NoViolations_ReturnsEmpty()
         => Assert.IsEmpty(SqlIdCaseGuard.FindViolations(
-            "SELECT * FROM Sources WHERE UPPER(Id) = UPPER(@id);"));
+            "SELECT * FROM Sources WHERE LOWER(Id) = LOWER(@id);"));
 }

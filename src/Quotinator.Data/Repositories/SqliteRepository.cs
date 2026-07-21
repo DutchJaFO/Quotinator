@@ -2,6 +2,7 @@ using Dapper;
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Repositories;
@@ -30,7 +31,7 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
     /// <inheritdoc/>
     public async Task<T?> GetByIdAsync(Guid id, IUnitOfWork? unitOfWork = null)
     {
-        var param = new { id = id.ToString("D").ToUpperInvariant() };
+        var param = new { id = id.ToCanonicalId() };
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var results = await uow.Connection.QueryAsync<T>(
@@ -77,7 +78,7 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
     /// <inheritdoc/>
     public async Task SoftDeleteAsync(Guid id, IUnitOfWork? unitOfWork = null)
     {
-        var param = new { now = SafeDateValue.Now.Raw, id = id.ToString("D").ToUpperInvariant() };
+        var param = new { now = SafeDateValue.Now.Raw, id = id.ToCanonicalId() };
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             await uow.Connection.ExecuteAsync(
@@ -159,7 +160,7 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
     private SystemAuditEntry BuildEntry(string operation, Guid? id) => new()
     {
         TableName   = TableName,
-        RecordId    = id.HasValue ? id.Value.ToString("D").ToUpperInvariant() : null,
+        RecordId    = id.HasValue ? id.Value.ToCanonicalId() : null,
         Operation   = operation,
         Agent       = _callerContext.Agent,
         PerformedAt = DateTime.UtcNow,

@@ -66,6 +66,36 @@ public class SqlQueryGuardTests
     }
 
     /// <summary>
+    /// Reflects over every string constant in <see cref="Sql"/> and its nested classes, and asserts
+    /// none returns any <c>*Id</c>-suffixed column unwrapped in its SELECT column list — PK or FK,
+    /// regardless of downstream C# type. Distinct from <see cref="SqlConstant_PassesIdCaseGuard"/>:
+    /// that guard protects comparisons; this one protects presentation of a column no comparison ever
+    /// touches. See ADR 012's "read-time presentation normalization" revision.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(AllNamedSqlConstants))]
+    public void SqlConstant_PassesSelectPresentationGuard(string name, string sql)
+    {
+        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
+        Assert.IsEmpty(violations,
+            $"Sql.{name} selects {string.Join(", ", violations)} unwrapped — wrap in LOWER(...) AS " +
+            "ColumnName in the SELECT column list. See ADR 012's \"read-time presentation " +
+            "normalization\" revision.");
+    }
+
+    /// <summary>Same guard, applied to every dynamically-assembled query (see <see cref="AssembledQueryCases"/>).</summary>
+    [TestMethod]
+    [DynamicData(nameof(AssembledQueryCases))]
+    public void AssembledQuery_PassesSelectPresentationGuard(string label, string fullSql)
+    {
+        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(fullSql);
+        Assert.IsEmpty(violations,
+            $"Assembled query '{label}' selects {string.Join(", ", violations)} unwrapped — wrap in " +
+            "LOWER(...) AS ColumnName in the SELECT column list. See ADR 012's \"read-time " +
+            "presentation normalization\" revision.");
+    }
+
+    /// <summary>
     /// Asserts that the set of SQL constants containing aggregate functions exactly matches the
     /// documented inventory. If a new aggregate query is added, this test fails — update the list
     /// and confirm the query has been reviewed against docs/sql-safety.md.

@@ -1,5 +1,6 @@
 using Dapper;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Helpers;
 using Quotinator.Core.Queries;
 
 namespace Quotinator.Core.Repositories;
@@ -29,7 +30,11 @@ public sealed class CharacterSourceLinkReader : ICharacterSourceLinkReader
 
         using var conn = _factory.CreateConnection();
         conn.Open();
-        var rows = await conn.QueryAsync<LinkRow>(Sql.CharacterSources.SelectSourceReferencesForCharacters, new { characterIds });
+        // Dapper's list-parameter expansion does not reliably invoke a registered Guid ITypeHandler the
+        // way a scalar parameter does — pre-canonicalize to strings before binding an IN-list (see
+        // GuidExtensions.ToCanonicalId's remarks and ConversationLineCountReader's identical fix).
+        var canonicalIds = characterIds.Select(id => id.ToCanonicalId());
+        var rows = await conn.QueryAsync<LinkRow>(Sql.CharacterSources.SelectSourceReferencesForCharacters, new { characterIds = canonicalIds });
         return rows.GroupBy(r => r.CharacterId)
                     .ToDictionary(g => g.Key, g => (IReadOnlyList<(Guid Id, string Name)>)g.Select(r => (r.SourceId, r.SourceTitle)).ToList());
     }

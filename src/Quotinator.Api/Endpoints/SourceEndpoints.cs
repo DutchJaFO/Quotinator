@@ -6,6 +6,7 @@ using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
@@ -63,7 +64,7 @@ internal static class SourceEndpoints
 
         var items = result.Items
             .Select(s => ToResponse(s, seriesBySourceId.TryGetValue(s.Id, out var series)
-                ? new MasterDataReference(series.Id.ToString("D").ToUpperInvariant(), series.Name)
+                ? new MasterDataReference(series.Id.ToCanonicalId(), series.Name)
                 : null))
             .ToList();
 
@@ -88,14 +89,14 @@ internal static class SourceEndpoints
             return NotFoundResult.OkOrNotFound<SourceResponse>(null, localizer, ApiMessages.SourceNotFound);
 
         var seriesRef = await seriesReader.GetSeriesReferenceAsync(guid);
-        var series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToString("D").ToUpperInvariant(), s.Name) : null;
+        var series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToCanonicalId(), s.Name) : null;
 
         return NotFoundResult.OkOrNotFound(ToResponse(source, series), localizer, ApiMessages.SourceNotFound);
     }
 
     private static SourceResponse ToResponse(Source source, MasterDataReference? series) => new()
     {
-        Id                 = source.Id.ToString("D").ToUpperInvariant(),
+        Id                 = source.Id.ToCanonicalId(),
         Title              = source.Title,
         Type               = source.Type.Parsed?.ToString().ToLowerInvariant()
                               ?? source.Type.Raw.ToLowerInvariant(),

@@ -99,7 +99,7 @@ public class CharacterEndpointsTests
 
         var sources = items[0].GetProperty("sources");
         Assert.AreEqual(1, sources.GetArrayLength());
-        Assert.AreEqual(sourceId.ToString("D").ToUpperInvariant(), sources[0].GetProperty("id").GetString());
+        Assert.AreEqual(sourceId.ToString("D"), sources[0].GetProperty("id").GetString());
         Assert.AreEqual("Casablanca", sources[0].GetProperty("name").GetString());
     }
 
@@ -241,12 +241,12 @@ public class CharacterEndpointsTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
 
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("Rick Blaine", root.GetProperty("name").GetString());
 
         var sources = root.GetProperty("sources");
         Assert.AreEqual(1, sources.GetArrayLength());
-        Assert.AreEqual(sourceId.ToString("D").ToUpperInvariant(), sources[0].GetProperty("id").GetString());
+        Assert.AreEqual(sourceId.ToString("D"), sources[0].GetProperty("id").GetString());
         Assert.AreEqual("Casablanca", sources[0].GetProperty("name").GetString());
 
         // Response shape assertion (Step 3): completenessStatus must serialize as a plain JSON string
@@ -273,10 +273,10 @@ public class CharacterEndpointsTests
         var sources = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("sources");
         Assert.AreEqual(2, sources.GetArrayLength());
         Assert.IsTrue(sources.EnumerateArray().Any(s =>
-            s.GetProperty("id").GetString() == sourceA.ToString("D").ToUpperInvariant() &&
+            s.GetProperty("id").GetString() == sourceA.ToString("D") &&
             s.GetProperty("name").GetString() == "The Fellowship of the Ring"));
         Assert.IsTrue(sources.EnumerateArray().Any(s =>
-            s.GetProperty("id").GetString() == sourceB.ToString("D").ToUpperInvariant() &&
+            s.GetProperty("id").GetString() == sourceB.ToString("D") &&
             s.GetProperty("name").GetString() == "The Hobbit"));
     }
 
@@ -297,16 +297,16 @@ public class CharacterEndpointsTests
     }
 
     [TestMethod]
-    public async Task GetCharacterById_LowercaseId_MatchesCaseInsensitively()
+    public async Task GetCharacterById_UppercaseId_MatchesCaseInsensitively()
     {
         var id   = Guid.NewGuid();
         var repo = new FakeCharacterRepository([NewCharacter(id: id)]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{id.ToString("D").ToLowerInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{id.ToString("D").ToUpperInvariant()}");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
     [TestMethod]

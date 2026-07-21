@@ -130,7 +130,16 @@ internal static class QuoteSeedWriter
         return id;
     }
 
-    /// <summary>Inserts every translation entry (and, when new, its source-title translation) for <paramref name="q"/>.</summary>
+    /// <summary>
+    /// Inserts every translation entry (and, when new, its source-title translation) for <paramref name="q"/>.
+    /// <paramref name="quoteId"/> is rendered via <c>.ToString("D")</c> explicitly, not implicitly through
+    /// <c>GuidHandler</c> — this call binds <c>QuoteId</c> as a plain string property, not a <see
+    /// cref="Guid"/>-typed one, so <c>GuidHandler</c> never runs here. <c>Guid.ToString("D")</c>'s own
+    /// default lowercase form is this project's single canonical id format (ADR 012); rendering it any
+    /// other way would silently produce a <c>QuoteTranslations.QuoteId</c>/<c>QuoteGenres.QuoteId</c> value
+    /// that no longer matches the canonical <c>Quotes.Id</c>, breaking the real <c>FOREIGN KEY</c>
+    /// constraint on every insert (found live, not assumed — see ADR 012's Quotes.Id revision history).
+    /// </summary>
     internal static async Task InsertTranslationsAsync(
         SqliteConnection connection, SourceQuote q, Guid quoteId, Guid sourceId, string now,
         SqliteTransaction? transaction = null)
@@ -142,7 +151,7 @@ internal static class QuoteSeedWriter
                 new
                 {
                     Id        = Guid.NewGuid().ToString(),
-                    QuoteId   = quoteId.ToString(),
+                    QuoteId   = quoteId.ToString("D"),
                     Language  = lang,
                     QuoteText = t.QuoteText,
                     DateCreated = now
@@ -164,7 +173,11 @@ internal static class QuoteSeedWriter
         }
     }
 
-    /// <summary>Inserts one QuoteGenres row per recognised genre tag on <paramref name="q"/>, skipping unrecognised tags.</summary>
+    /// <summary>
+    /// Inserts one QuoteGenres row per recognised genre tag on <paramref name="q"/>, skipping unrecognised
+    /// tags. <paramref name="quoteId"/> is rendered via <c>.ToString("D")</c> explicitly — see <see
+    /// cref="InsertTranslationsAsync"/>'s remark for why this must match <c>Quotes.Id</c>'s canonical form.
+    /// </summary>
     internal static async Task InsertGenresAsync(
         SqliteConnection connection, SourceQuote q, Guid quoteId, string now, SqliteTransaction? transaction = null)
     {
@@ -174,7 +187,7 @@ internal static class QuoteSeedWriter
             {
                 await connection.ExecuteAsync(
                     Sql.QuoteGenres.Insert,
-                    new { Id = Guid.NewGuid().ToString(), QuoteId = quoteId.ToString(), Genre = g.ToString(), DateCreated = now },
+                    new { Id = Guid.NewGuid().ToString(), QuoteId = quoteId.ToString("D"), Genre = g.ToString(), DateCreated = now },
                     transaction);
             }
         }

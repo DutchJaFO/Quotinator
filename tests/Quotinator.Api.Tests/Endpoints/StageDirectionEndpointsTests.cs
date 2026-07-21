@@ -159,7 +159,7 @@ public class StageDirectionEndpointsTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
 
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("[EXT. AIRPORT - DAY]", root.GetProperty("text").GetString());
 
         // Response shape assertion (Step 1/9): completenessStatus must serialize as a plain JSON string
@@ -185,16 +185,16 @@ public class StageDirectionEndpointsTests
     }
 
     [TestMethod]
-    public async Task GetStageDirectionById_LowercaseId_MatchesCaseInsensitively()
+    public async Task GetStageDirectionById_UppercaseId_MatchesCaseInsensitively()
     {
         var id   = Guid.NewGuid();
         var repo = new FakeStageDirectionRepository { ReturnById = NewStageDirection(id: id) };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/stagedirections/{id.ToString("D").ToLowerInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/stagedirections/{id.ToString("D").ToUpperInvariant()}");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
     // ── OpenAPI: tag + rate limit, proven live ──────────────────────────────

@@ -1,5 +1,6 @@
 using Dapper;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Helpers;
 using Quotinator.Core.Queries;
 
 namespace Quotinator.Core.Repositories;
@@ -36,8 +37,13 @@ public sealed class ConversationLineCountReader : IConversationLineCountReader
         //    exists, but does nothing to change the zero-row fallback.
         // Dynamic row access needs neither: it reads each value by name via IDictionary<string, object>
         // and converts explicitly below, with no constructor-matching or declared-type inference involved.
+        // Dapper's list-parameter expansion does not reliably invoke a registered Guid ITypeHandler the
+        // way a scalar parameter does — pre-canonicalize to strings before binding an IN-list (see
+        // GuidExtensions.ToCanonicalId's remarks; found live via this reader's own test suite while
+        // switching IdClauses from UPPER(...) to LOWER(...), ADR 012's revision history).
+        var canonicalIds = conversationIds.Select(id => id.ToCanonicalId());
         var rows = await conn.QueryAsync(
-            Sql.ConversationLines.SelectLineCountsForConversations, new { conversationIds });
+            Sql.ConversationLines.SelectLineCountsForConversations, new { conversationIds = canonicalIds });
 
         var result = new Dictionary<Guid, int>();
         foreach (var row in rows)

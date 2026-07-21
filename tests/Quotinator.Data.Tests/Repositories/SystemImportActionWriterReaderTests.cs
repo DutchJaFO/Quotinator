@@ -283,13 +283,16 @@ public class SystemImportActionWriterReaderTests
     [TestMethod]
     public async Task ExistingBatchId_RoundTripsCorrectly()
     {
+        // BatchId/ExistingBatchId are read back through LOWER(...) (this project's read-time
+        // normalization, independent of what casing was actually written) so a mismatched-case
+        // fixture proves the read side, not just an exact round-trip of the written value.
         var entry = BuildPendingModify("BATCH-2", existingBatchId: "BATCH-1");
         await _writer.WriteAsync(entry);
 
         var found = await _reader.GetByIdAsync(entry.Id);
 
-        Assert.AreEqual("BATCH-1", found!.ExistingBatchId);
-        Assert.AreEqual("BATCH-2", found.BatchId);
+        Assert.AreEqual("batch-1", found!.ExistingBatchId);
+        Assert.AreEqual("batch-2", found.BatchId);
     }
 
     [TestMethod]

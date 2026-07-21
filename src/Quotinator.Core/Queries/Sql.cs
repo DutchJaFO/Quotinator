@@ -14,7 +14,7 @@ namespace Quotinator.Core.Queries;
 /// directly in <c>SqlQueryGuardTests.AssembledQueryCases</c> with the full set of clause variants.
 /// </para>
 /// Every id-to-id comparison (a WHERE-clause parameter match, an IN-list match, or a JOIN
-/// condition) is built through <see cref="IdClauses"/>, not hand-typed <c>UPPER(...)</c> — see
+/// condition) is built through <see cref="IdClauses"/>, not hand-typed <c>LOWER(...)</c> — see
 /// ADR 012 and <c>docs/database-conventions.md</c>'s "Entity id casing" section. A fixed query
 /// that calls <see cref="IdClauses"/> must be <c>static readonly</c>, not <c>const</c> — C# does
 /// not allow a method call in a compile-time constant expression.
@@ -53,13 +53,13 @@ internal static class Sql
             $"CharacterId=@cid, PersonId=@pid, ImportBatchId=@batchId, DateModified=@mod WHERE {IdClauses.Equals("Id", "id")};";
 
         // Shared SELECT projection used by all read factory methods below. Every JOIN condition
-        // between two id columns is UPPER()-wrapped via IdClauses.Join — defense-in-depth, since
+        // between two id columns is LOWER()-wrapped via IdClauses.Join — defense-in-depth, since
         // both sides are already canonical by construction once write-side canonicalization
         // (EntityIdCanonicalizer) is in place, per the developer's "never assume" directive (#210).
         // @lang is always bound — null when no translation is requested.
         private static readonly string SelectBase = $"""
             SELECT
-                q.Id,
+                {IdClauses.SelectColumn("q.Id", "Id")},
                 COALESCE(qt.QuoteText,  q.QuoteText)  AS QuoteText,
                 q.OriginalLanguage,
                 COALESCE(st.Title,      s.Title)       AS Source,
@@ -68,9 +68,9 @@ internal static class Sql
                 COALESCE(ct.Name,       c.Name)        AS Character,
                 p.Name                                 AS Author,
                 CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage,
-                ser.Id                                 AS SeriesId,
+                {IdClauses.SelectColumn("ser.Id", "SeriesId")},
                 ser.Name                               AS SeriesName,
-                uni.Id                                  AS UniverseId,
+                {IdClauses.SelectColumn("uni.Id", "UniverseId")},
                 uni.Name                                AS UniverseName
             FROM   Quotes          q
             JOIN   Sources         s  ON  {IdClauses.Join("s.Id", "q.SourceId")}                                          AND s.IsDeleted  = 0
@@ -112,7 +112,7 @@ internal static class Sql
         internal static string SelectRawById()
             => $"""
                SELECT
-                   q.Id,
+                   {IdClauses.SelectColumn("q.Id", "Id")},
                    q.QuoteText,
                    q.OriginalLanguage,
                    s.Title AS Source,
@@ -120,7 +120,7 @@ internal static class Sql
                    s.Type,
                    c.Name  AS Character,
                    p.Name  AS Author,
-                   q.ImportBatchId,
+                   {IdClauses.SelectColumn("q.ImportBatchId", "ImportBatchId")},
                    q.CompletenessStatus
                FROM   Quotes          q
                JOIN   Sources         s ON {IdClauses.Join("s.Id", "q.SourceId")}    AND s.IsDeleted = 0
@@ -222,7 +222,7 @@ internal static class Sql
         /// matching key itself changes to something Source-independent.
         /// </summary>
         internal static readonly string SelectIdBySourceAndName =
-            "SELECT c.Id FROM Characters c " +
+            $"SELECT {IdClauses.SelectColumn("c.Id", "Id")} FROM Characters c " +
             $"JOIN CharacterSources cs ON {IdClauses.Join("cs.CharacterId", "c.Id")} " +
             $"WHERE {IdClauses.Equals("cs.SourceId", "sourceId")} AND c.Name = @name AND c.IsDeleted = 0 AND cs.IsDeleted = 0;";
 
@@ -260,7 +260,7 @@ internal static class Sql
         /// has it for free, and the response must surface a display name per CLAUDE.md's "Masterdata reference
         /// shape" convention. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
         internal static readonly string SelectSourceReferencesForCharacter =
-            "SELECT s.Id, s.Title FROM CharacterSources cs " +
+            $"SELECT {IdClauses.SelectColumn("s.Id", "Id")}, s.Title FROM CharacterSources cs " +
             $"JOIN Sources s ON {IdClauses.Join("s.Id", "cs.SourceId")} AND s.IsDeleted = 0 " +
             $"WHERE {IdClauses.Equals("cs.CharacterId", "characterId")} AND cs.IsDeleted = 0;";
 
@@ -268,12 +268,12 @@ internal static class Sql
         /// Active (CharacterId, SourceId, SourceTitle) rows for a batch of Characters in a single round-trip —
         /// #185's list join. Dapper expands @characterIds from any IEnumerable&lt;Guid&gt; automatically (same
         /// pattern as RepositorySql.SelectByIds), avoiding one query per row across a page. The IN clause's
-        /// column side is UPPER()-wrapped (#210) — the caller-supplied list itself is already pre-canonicalized
-        /// to uppercase (see <c>CharacterSourceLinkReader</c>), but wrapping the column here means the query
-        /// stays correct even if a future caller doesn't.
+        /// column side is LOWER()-wrapped (#210) — the caller-supplied list itself is already pre-canonicalized
+        /// via <c>GuidExtensions.ToCanonicalId()</c> (see <c>CharacterSourceLinkReader</c>), but wrapping the
+        /// column here means the query stays correct even if a future caller doesn't.
         /// </summary>
         internal static readonly string SelectSourceReferencesForCharacters =
-            "SELECT cs.CharacterId, s.Id AS SourceId, s.Title AS SourceTitle FROM CharacterSources cs " +
+            $"SELECT {IdClauses.SelectColumn("cs.CharacterId", "CharacterId")}, {IdClauses.SelectColumn("s.Id", "SourceId")}, s.Title AS SourceTitle FROM CharacterSources cs " +
             $"JOIN Sources s ON {IdClauses.Join("s.Id", "cs.SourceId")} AND s.IsDeleted = 0 " +
             $"WHERE {IdClauses.In("cs.CharacterId", "characterIds")} AND cs.IsDeleted = 0;";
     }
@@ -283,13 +283,13 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM People WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM People;";
-        internal const string SelectIdByName = "SELECT Id FROM People WHERE Name = @name AND IsDeleted = 0;";
+        internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM People WHERE Name = @name AND IsDeleted = 0;";
 
         /// <summary>
         /// #173's id-first lookup for an explicit <c>people[]</c> entry — mirrors
         /// <see cref="Sources.SelectExistingById"/>. Case-insensitive (#180 fix, same reasoning as
         /// <see cref="Sources.SelectExistingById"/>'s remark) — Person shares the identical exposure:
-        /// an <c>EntityIdentity</c>-derived (always uppercase) row later referenced by an explicit
+        /// an <c>EntityIdentity</c>-derived (always lowercase) row later referenced by an explicit
         /// <c>people[]</c> entry whose file-authored id casing isn't guaranteed to match.
         /// </summary>
         internal static readonly string SelectExistingById =
@@ -322,8 +322,8 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Sources WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Sources;";
-        internal const string SelectIdByTitleAndType =
-            "SELECT Id FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
+        internal static readonly string SelectIdByTitleAndType =
+            $"SELECT {IdClauses.SelectColumn("Id")} FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
 
         /// <summary>
         /// #180's natural-key lookup for a <c>sources[]</c> entry that omits an explicit id (the
@@ -336,8 +336,8 @@ internal static class Sql
         /// identifiers, and loosening them would silently merge two genuinely distinct Sources (see
         /// #182 for that class of problem).
         /// </summary>
-        internal const string SelectExistingByTitleAndType =
-            "SELECT Id, Date, SeriesId, CompletenessStatus FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
+        internal static readonly string SelectExistingByTitleAndType =
+            $"SELECT {IdClauses.SelectColumn("Id")}, Date, {IdClauses.SelectColumn("SeriesId")}, CompletenessStatus FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
 
         /// <summary>
         /// #162's id-first lookup for an explicit <c>sources[]</c> entry — a row already migrated to
@@ -346,14 +346,14 @@ internal static class Sql
         ///
         /// Case-insensitive (this project's GUID/enum parameter binding rule, CLAUDE.md) — a
         /// file-authored id referencing an already-existing, <c>EntityIdentity</c>-derived row (which
-        /// is always stored uppercase) must match regardless of which case the file itself uses.
+        /// is always stored lowercase) must match regardless of which case the file itself uses.
         /// Found live while authoring #180's curated overlay file: a case mismatch here silently
         /// matches nothing, mirroring the exact class of bug this project has already hit and fixed
         /// piecemeal for GUID-typed query/route parameters — applied here on the same "case-insensitive
         /// by default" principle, not waited for a second live report first.
         /// </summary>
         internal static readonly string SelectExistingById =
-            $"SELECT Title, Type, Date, SeriesId, CompletenessStatus FROM Sources WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+            $"SELECT Title, Type, Date, {IdClauses.SelectColumn("SeriesId")}, CompletenessStatus FROM Sources WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
 
         /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal static readonly string SelectCompletenessById =
@@ -388,7 +388,7 @@ internal static class Sql
         /// <summary>Active Series reference for one Source — #184's GetById join. No row if the Source has
         /// no Series, or its Series has been soft-deleted.</summary>
         internal static readonly string SelectSeriesReferenceForSource =
-            "SELECT ser.Id, ser.Name FROM Sources s " +
+            $"SELECT {IdClauses.SelectColumn("ser.Id", "Id")}, ser.Name FROM Sources s " +
             $"JOIN Series ser ON {IdClauses.Join("ser.Id", "s.SeriesId")} AND ser.IsDeleted = 0 " +
             $"WHERE {IdClauses.Equals("s.Id", "sourceId")} AND s.IsDeleted = 0;";
 
@@ -396,10 +396,10 @@ internal static class Sql
         /// Active Series references for a batch of Sources in a single round-trip — #184's list join,
         /// avoiding one query per row across a page. A Source with no active Series link is simply absent
         /// from the result. See <see cref="CharacterSources.SelectSourceReferencesForCharacters"/>'s remark
-        /// on why the IN clause's column side is UPPER()-wrapped too.
+        /// on why the IN clause's column side is LOWER()-wrapped too.
         /// </summary>
         internal static readonly string SelectSeriesReferencesForSources =
-            "SELECT s.Id AS SourceId, ser.Id AS SeriesId, ser.Name AS SeriesName FROM Sources s " +
+            $"SELECT {IdClauses.SelectColumn("s.Id", "SourceId")}, {IdClauses.SelectColumn("ser.Id", "SeriesId")}, ser.Name AS SeriesName FROM Sources s " +
             $"JOIN Series ser ON {IdClauses.Join("ser.Id", "s.SeriesId")} AND ser.IsDeleted = 0 " +
             $"WHERE {IdClauses.In("s.Id", "sourceIds")} AND s.IsDeleted = 0;";
     }
@@ -412,7 +412,7 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Series WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Series;";
-        internal const string SelectIdByName = "SELECT Id FROM Series WHERE Name = @name AND IsDeleted = 0;";
+        internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM Series WHERE Name = @name AND IsDeleted = 0;";
 
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale. UniverseId (nullable) is resolved by name at planning time, same as Sources.SeriesId.</summary>
         internal const string InsertIfNotExists =
@@ -434,7 +434,7 @@ internal static class Sql
         /// <summary>Active Universe reference for one Series — #187's GetById join. No row if the Series has no
         /// Universe, or its Universe has been soft-deleted.</summary>
         internal static readonly string SelectUniverseReferenceForSeries =
-            "SELECT u.Id, u.Name FROM Series s " +
+            $"SELECT {IdClauses.SelectColumn("u.Id", "Id")}, u.Name FROM Series s " +
             $"JOIN Universe u ON {IdClauses.Join("u.Id", "s.UniverseId")} AND u.IsDeleted = 0 " +
             $"WHERE {IdClauses.Equals("s.Id", "seriesId")} AND s.IsDeleted = 0;";
 
@@ -442,10 +442,10 @@ internal static class Sql
         /// Active Universe references for a batch of Series in a single round-trip — #187's list join, avoiding
         /// one query per row across a page. A Series with no active Universe link is simply absent from the result.
         /// See <see cref="CharacterSources.SelectSourceReferencesForCharacters"/>'s remark on why the IN clause's
-        /// column side is UPPER()-wrapped too.
+        /// column side is LOWER()-wrapped too.
         /// </summary>
         internal static readonly string SelectUniverseReferencesForSeries =
-            "SELECT s.Id AS SeriesId, u.Id AS UniverseId, u.Name AS UniverseName FROM Series s " +
+            $"SELECT {IdClauses.SelectColumn("s.Id", "SeriesId")}, {IdClauses.SelectColumn("u.Id", "UniverseId")}, u.Name AS UniverseName FROM Series s " +
             $"JOIN Universe u ON {IdClauses.Join("u.Id", "s.UniverseId")} AND u.IsDeleted = 0 " +
             $"WHERE {IdClauses.In("s.Id", "seriesIds")} AND s.IsDeleted = 0;";
     }
@@ -458,7 +458,7 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Universe WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Universe;";
-        internal const string SelectIdByName = "SELECT Id FROM Universe WHERE Name = @name AND IsDeleted = 0;";
+        internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM Universe WHERE Name = @name AND IsDeleted = 0;";
 
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
         internal const string InsertIfNotExists =
@@ -490,17 +490,16 @@ internal static class Sql
         internal const string DeleteAll = "DELETE FROM Conversations;";
 
         /// <summary>Case-insensitive (#210) — see <see cref="SelectForRead"/>'s remark; every id-comparison query in this codebase is case-insensitive by default now (ADR 012), not just the ones with a known-differently-cased caller.</summary>
-        internal static readonly string SelectIdById = $"SELECT Id FROM Conversations WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+        internal static readonly string SelectIdById = $"SELECT {IdClauses.SelectColumn("Id")} FROM Conversations WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
 
         /// <summary>
-        /// #69: <c>GET /api/v1/conversations/{id}</c>'s own lookup — case-insensitive (<c>UPPER</c>),
-        /// unlike <see cref="SelectIdById"/> above, because this id comes from a user-supplied route
-        /// parameter (established rule: new GUID route parameters default to case-insensitive
-        /// matching), while <see cref="SelectIdById"/> only ever compares against another id already
-        /// stored in this database (an incoming file's own casing, matched exactly, same as Quote).
+        /// #69: <c>GET /api/v1/conversations/{id}</c>'s own lookup — case-insensitive via
+        /// <see cref="IdClauses"/>, same as <see cref="SelectIdById"/> above; both queries are
+        /// case-insensitive by default now (ADR 012), whether the id being matched came from a
+        /// user-supplied route parameter or from another id already stored in this database.
         /// </summary>
         internal static readonly string SelectForRead =
-            $"SELECT Id, Description FROM Conversations WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+            $"SELECT {IdClauses.SelectColumn("Id")}, Description FROM Conversations WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
 
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
         internal const string InsertIfNotExists =
@@ -510,9 +509,9 @@ internal static class Sql
         /// <summary>
         /// #176's id-first lookup for an explicit <c>conversations[]</c> entry — mirrors
         /// <see cref="Sources.SelectExistingById"/>. Never selects <c>lines</c> — out of scope for
-        /// Modify. Case-insensitive (<c>UPPER</c>) since #209 — a file-authored explicit id is
-        /// canonicalized to uppercase at capture (<c>ImportActionPlanner</c>), but a row already
-        /// stored under a pre-#209 raw casing must still match.
+        /// Modify. Case-insensitive via <see cref="IdClauses"/> since #209 — a file-authored explicit
+        /// id is canonicalized at capture (<c>ImportActionPlanner</c>), but a row already stored under
+        /// a pre-#209 raw casing must still match.
         /// </summary>
         internal static readonly string SelectExistingById =
             $"SELECT Description, CompletenessStatus FROM Conversations WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
@@ -560,7 +559,7 @@ internal static class Sql
 
         /// <summary>#69: a conversation's full ordered line list. Case-insensitive (#210) — never assume a comparison stays safe just because a known caller already confirmed the parent's existence; see ADR 012.</summary>
         internal static readonly string SelectByConversationId =
-            "SELECT [Order], LineType, QuoteId, StageDirectionId, SoundCueId FROM ConversationLines " +
+            $"SELECT [Order], LineType, {IdClauses.SelectColumn("QuoteId")}, {IdClauses.SelectColumn("StageDirectionId")}, {IdClauses.SelectColumn("SoundCueId")} FROM ConversationLines " +
             $"WHERE {IdClauses.Equals("ConversationId", "conversationId")} AND IsDeleted = 0 ORDER BY [Order] ASC;";
 
         /// <summary>
@@ -573,7 +572,7 @@ internal static class Sql
         /// the same as any other id-to-id comparison, per the developer's "wrap joins too" decision.
         /// </summary>
         internal static readonly string SelectMembershipForQuote =
-            "SELECT cl.ConversationId, cl.[Order] AS Position, " +
+            $"SELECT {IdClauses.SelectColumn("cl.ConversationId", "ConversationId")}, cl.[Order] AS Position, " +
             $"(SELECT COUNT(*) FROM ConversationLines cl2 WHERE {IdClauses.Join("cl2.ConversationId", "cl.ConversationId")} AND cl2.IsDeleted = 0) AS TotalLines " +
             "FROM ConversationLines cl " +
             $"INNER JOIN Conversations c ON {IdClauses.Join("c.Id", "cl.ConversationId")} AND c.IsDeleted = 0 " +
@@ -581,7 +580,7 @@ internal static class Sql
 
         /// <summary>#69: every QuoteId referenced by a conversation's lines — used by <c>/random</c>'s dedup to exclude every quote in a selected conversation, not only the one that triggered the selection. Case-insensitive (#210).</summary>
         internal static readonly string SelectQuoteIdsForConversation =
-            $"SELECT QuoteId FROM ConversationLines WHERE {IdClauses.Equals("ConversationId", "conversationId")} AND QuoteId IS NOT NULL AND IsDeleted = 0;";
+            $"SELECT {IdClauses.SelectColumn("QuoteId")} FROM ConversationLines WHERE {IdClauses.Equals("ConversationId", "conversationId")} AND QuoteId IS NOT NULL AND IsDeleted = 0;";
 
         /// <summary>
         /// Active line counts for a batch of Conversations in a single round-trip — #189's list join, avoiding
@@ -589,15 +588,18 @@ internal static class Sql
         /// pattern <see cref="SelectMembershipForQuote"/> already uses — rather than a grouping clause, so
         /// this does not trip <c>SqlAggregateGuard</c>'s CVE-2025-6965 heuristic; see docs/sql-safety.md.
         /// A Conversation with zero active lines is simply absent from the result — callers default missing
-        /// keys to 0. The IN clause's column side is UPPER()-wrapped, not cosmetic — #68's curated JSON
-        /// conversations were seeded with their file-authored lowercase ids preserved verbatim (per
-        /// CLAUDE.md's case-insensitivity convention: an import file's own explicit id is under no
-        /// obligation to match the codebase's usual stored-uppercase convention), while GuidHandler always
-        /// uppercases the bound @conversationIds parameters — an exact-case IN match against the unmodified
-        /// column silently matched nothing, live-verified during this issue's own T2 pass.
+        /// keys to 0. The IN clause's column side is LOWER()-wrapped (#210), not cosmetic — #68's curated
+        /// JSON conversations were seeded with their file-authored ids preserved verbatim (per CLAUDE.md's
+        /// case-insensitivity convention: an import file's own explicit id is under no obligation to match
+        /// this codebase's canonical casing), and separately, binding a raw <c>Guid</c> list directly (as
+        /// <c>@conversationIds</c> originally was) does not reliably go through any casing handler at all —
+        /// an exact-case IN match against the unwrapped column silently matched nothing, live-verified
+        /// during this issue's own T2 pass. The caller now pre-canonicalizes via
+        /// <c>GuidExtensions.ToCanonicalId()</c> before binding (see <c>ConversationLineCountReader</c>),
+        /// matching this column's <c>LOWER()</c> wrap.
         /// </summary>
         internal static readonly string SelectLineCountsForConversations =
-            "SELECT DISTINCT cl.ConversationId, " +
+            $"SELECT DISTINCT {IdClauses.SelectColumn("cl.ConversationId", "ConversationId")}, " +
             $"CAST((SELECT COUNT(*) FROM ConversationLines cl2 WHERE {IdClauses.Join("cl2.ConversationId", "cl.ConversationId")} AND cl2.IsDeleted = 0) AS INTEGER) AS LineCount " +
             "FROM ConversationLines cl " +
             $"WHERE {IdClauses.In("cl.ConversationId", "conversationIds")} AND cl.IsDeleted = 0;";
@@ -609,12 +611,12 @@ internal static class Sql
         internal const string DeleteAll = "DELETE FROM StageDirections;";
 
         /// <summary>Case-insensitive (#210) — see <see cref="Conversations.SelectIdById"/>'s remark.</summary>
-        internal static readonly string SelectIdById = $"SELECT Id FROM StageDirections WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+        internal static readonly string SelectIdById = $"SELECT {IdClauses.SelectColumn("Id")} FROM StageDirections WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
 
         /// <summary>
         /// #171's id-first lookup for an explicit <c>stageDirections[]</c> entry — mirrors
-        /// <see cref="Sources.SelectExistingById"/>. Case-insensitive (<c>UPPER</c>) since #209 —
-        /// a file-authored explicit id is canonicalized to uppercase at capture
+        /// <see cref="Sources.SelectExistingById"/>. Case-insensitive via <see cref="IdClauses"/>
+        /// since #209 — a file-authored explicit id is canonicalized at capture
         /// (<c>ImportActionPlanner</c>), but a row already stored under a pre-#209 raw casing must
         /// still match.
         /// </summary>
@@ -665,7 +667,7 @@ internal static class Sql
         /// </summary>
         internal static readonly string SelectByIdWithTranslation =
             $"""
-            SELECT sd.Id, COALESCE(sdt.Text, sd.Text) AS Text, sd.ImageUrl,
+            SELECT {IdClauses.SelectColumn("sd.Id", "Id")}, COALESCE(sdt.Text, sd.Text) AS Text, sd.ImageUrl,
                    CASE WHEN sdt.Text IS NOT NULL THEN @lang ELSE 'en' END AS EffectiveLanguage
             FROM StageDirections sd
             LEFT JOIN StageDirectionTranslations sdt ON {IdClauses.Join("sdt.StageDirectionId", "sd.Id")} AND sdt.Language = @lang AND sdt.IsDeleted = 0
@@ -691,12 +693,12 @@ internal static class Sql
         internal const string DeleteAll = "DELETE FROM SoundCues;";
 
         /// <summary>Case-insensitive (#210) — see <see cref="Conversations.SelectIdById"/>'s remark.</summary>
-        internal static readonly string SelectIdById = $"SELECT Id FROM SoundCues WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+        internal static readonly string SelectIdById = $"SELECT {IdClauses.SelectColumn("Id")} FROM SoundCues WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
 
         /// <summary>
         /// #172's id-first lookup for an explicit <c>soundCues[]</c> entry — mirrors
-        /// <see cref="Sources.SelectExistingById"/>. Case-insensitive (<c>UPPER</c>) since #209 —
-        /// a file-authored explicit id is canonicalized to uppercase at capture
+        /// <see cref="Sources.SelectExistingById"/>. Case-insensitive via <see cref="IdClauses"/>
+        /// since #209 — a file-authored explicit id is canonicalized at capture
         /// (<c>ImportActionPlanner</c>), but a row already stored under a pre-#209 raw casing must
         /// still match.
         /// </summary>
@@ -729,7 +731,7 @@ internal static class Sql
         /// <summary>#69: single-row lookup with optional translation — see <see cref="StageDirections.SelectByIdWithTranslation"/>'s remark (same 'en'-hardcoded rationale, same internal-id-only usage).</summary>
         internal static readonly string SelectByIdWithTranslation =
             $"""
-            SELECT sc.Id, COALESCE(sct.Text, sc.Text) AS Text, sc.SoundFileUrl, sc.ImageUrl,
+            SELECT {IdClauses.SelectColumn("sc.Id", "Id")}, COALESCE(sct.Text, sc.Text) AS Text, sc.SoundFileUrl, sc.ImageUrl,
                    CASE WHEN sct.Text IS NOT NULL THEN @lang ELSE 'en' END AS EffectiveLanguage
             FROM SoundCues sc
             LEFT JOIN SoundCueTranslations sct ON {IdClauses.Join("sct.SoundCueId", "sc.Id")} AND sct.Language = @lang AND sct.IsDeleted = 0

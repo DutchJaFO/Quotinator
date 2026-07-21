@@ -154,7 +154,7 @@ public class ConversationEndpointsTests
         Assert.IsTrue(item.TryGetProperty("id", out _));
         Assert.IsTrue(item.TryGetProperty("completenessStatus", out _));
         Assert.IsTrue(item.TryGetProperty("lineCount", out _));
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), item.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), item.GetProperty("id").GetString());
     }
 
     [TestMethod]

@@ -388,7 +388,7 @@ public sealed class SqliteQuoteService : IQuoteService
         // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
         if (seriesId  is not null) clauses.Add(IdClauses.Equals("s.SeriesId", "seriesId"));
         if (universeId is not null) clauses.Add(
-            $"UPPER(s.SeriesId) IN (SELECT UPPER(Id) FROM Series WHERE {IdClauses.Equals("UniverseId", "universeId")} AND IsDeleted = 0)");
+            $"LOWER(s.SeriesId) IN (SELECT LOWER(Id) FROM Series WHERE {IdClauses.Equals("UniverseId", "universeId")} AND IsDeleted = 0)");
         if (yearFrom  is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom");
         if (yearTo    is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo");
 

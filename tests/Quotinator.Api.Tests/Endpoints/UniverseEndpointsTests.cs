@@ -157,7 +157,7 @@ public class UniverseEndpointsTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
 
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("Middle Earth", root.GetProperty("name").GetString());
 
         // Response shape assertion (Step 1/9): completenessStatus must serialize as a plain JSON string
@@ -183,16 +183,16 @@ public class UniverseEndpointsTests
     }
 
     [TestMethod]
-    public async Task GetUniverseById_LowercaseId_MatchesCaseInsensitively()
+    public async Task GetUniverseById_UppercaseId_MatchesCaseInsensitively()
     {
         var id   = Guid.NewGuid();
         var repo = new FakeUniverseRepository { ReturnById = NewUniverse(id: id) };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/universes/{id.ToString("D").ToLowerInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/universes/{id.ToString("D").ToUpperInvariant()}");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
     // ── OpenAPI: tag + rate limit, proven live ──────────────────────────────

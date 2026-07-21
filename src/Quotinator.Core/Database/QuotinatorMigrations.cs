@@ -375,11 +375,15 @@ public static class QuotinatorMigrations
     // Zero data merging — every existing Characters row (including soft-deleted ones, to preserve
     // full history/reversibility) gets exactly one CharacterSources row carrying its current
     // SourceId, before the column is dropped. CharacterSources.Id is generated in SQL (SQLite has
-    // no native UUID function) via the standard randomblob()/hex() idiom, formatted to match this
-    // project's stored-uppercase-hyphenated-GUID convention (GuidHandler.cs) even though nothing
-    // outside this migration ever looks a CharacterSources row up by its own Id (only by the
-    // CharacterId/SourceId pair) — consistency avoids ever needing to reason about a mixed-case
-    // exception later. Characters.SourceId and its UNIQUE(SourceId, Name) constraint are then
+    // no native UUID function) via the standard randomblob()/hex() idiom — SQLite's hex() always
+    // returns uppercase hex digits, which matched this project's canonical convention at the time
+    // this migration was written (GuidHandler.cs then stored uppercase). ADR 012's later revisions
+    // moved the canonical convention to lowercase, but this migration is frozen per this project's
+    // migration policy (never edit a shipped migration) — it permanently produces an uppercase-
+    // cased CharacterSources.Id regardless. This is an accepted, permanent exception, not a bug:
+    // nothing outside this migration ever looks a CharacterSources row up by its own Id (only by
+    // the CharacterId/SourceId pair, both wrapped via IdClauses), so the mismatch is inert.
+    // Characters.SourceId and its UNIQUE(SourceId, Name) constraint are then
     // dropped via the rebuild-under-temporary-name pattern (SQLite cannot ALTER a UNIQUE constraint
     // or drop a column participating in one in place) — see Migration004_ImportBatchTypeUserSeed for
     // the same pattern. No new uniqueness constraint is added to Characters here; that depends on

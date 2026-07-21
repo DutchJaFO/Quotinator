@@ -6,6 +6,7 @@ using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
@@ -245,14 +246,12 @@ public sealed class SqliteImportActionService : IImportActionService
         var actions = await _actionReader.GetAllForBatchAsync(batchId);
         var adds    = actions.Where(a => a.ActionType.Parsed == ImportActionKind.Add).ToList();
 
-        // Quote ids are NOT necessarily uppercase — an explicit "id" in a source file can be any
-        // case, and QuoteIdentity.StableId (the hash-derived fallback, deliberately frozen) returns
-        // Guid.ToString()'s default lowercase format. IRestorableRepository<T>.HardDeleteAsync takes
-        // a Guid, which the registered GuidHandler always uppercases before comparing — silently
-        // matching zero rows against a lowercase-stored Quote.Id (SQLite's default TEXT comparison
-        // is case-sensitive). Sql.Quotes.Insert/SelectRawById/UpdateOnNewestWins all compare Id as a
-        // plain string with no case normalization, so raw SQL matching that same convention is used
-        // here instead — found via a genuinely red test, not assumed correct.
+        // Like Source below, a Quote Add's id can be file-authored (or QuoteIdentity.StableId-derived)
+        // rather than always freshly computed the way Character/Series/Universe's always are — it is
+        // canonicalized at ImportActionPlanner's capture point (ADR 012), so action.EntityId here is
+        // already reliably canonical, but raw SQL (not the Guid-typed repository path) is still used
+        // for consistency with Source/Person/Conversation/StageDirection/SoundCue below, all of which
+        // share this same file-authored-id shape.
         using var quoteConn = _factory.CreateConnection();
         quoteConn.Open();
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Quote))
@@ -269,8 +268,8 @@ public sealed class SqliteImportActionService : IImportActionService
 
         // Character/Person Add ids are always freshly computed via EntityIdentity (never a
         // natural-key lookup result — a natural-key match means "already exists", which is a Modify,
-        // never an Add), and EntityIdentity.StableId always uppercases — safe to use the repository's
-        // Guid-typed API here.
+        // never an Add), and EntityIdentity.StableId always canonicalizes — safe to use the
+        // repository's Guid-typed API here.
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Character))
         {
             // #179: CharacterSources carries a real FK to Characters(Id) — its link row(s) must be
@@ -283,19 +282,19 @@ public sealed class SqliteImportActionService : IImportActionService
 
         // #162: unlike Character/Person, a Source Add's id is no longer always EntityIdentity-derived
         // — an explicit sources[] entry supplies its own file-authored id, which is not guaranteed to
-        // be uppercase the way EntityIdentity.StableId is. Raw SQL, not the Guid-typed repository
-        // path, same reasoning as Conversation/StageDirection/SoundCue below.
+        // be canonically cased the way EntityIdentity.StableId is. Raw SQL, not the Guid-typed
+        // repository path, same reasoning as Conversation/StageDirection/SoundCue below.
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Source))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Sources"), new { id = action.EntityId });
 
-        // #173: a people[] entry supplies its own file-authored id, not guaranteed to be uppercase —
-        // raw SQL, not the Guid-typed repository path, same fix #162 made for Source above.
+        // #173: a people[] entry supplies its own file-authored id, not guaranteed to be canonically
+        // cased — raw SQL, not the Guid-typed repository path, same fix #162 made for Source above.
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Person))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("People"), new { id = action.EntityId });
 
         // #180: Series/Universe entries have no explicit-id file section (matched by Name only, like
         // Character/Person implicitly), so their Add id is always EntityIdentity-derived (always
-        // uppercase) — the Guid-typed repository path would be safe here too, but raw SQL is used for
+        // canonical) — the Guid-typed repository path would be safe here too, but raw SQL is used for
         // consistency with Sql.Series/Sql.Universe's own no-repository query set (#183/#187/#188 are
         // where a real IRestorableRepository<SeriesEntity>/<UniverseEntity> gets introduced).
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Series))
@@ -305,8 +304,8 @@ public sealed class SqliteImportActionService : IImportActionService
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Universe"), new { id = action.EntityId });
 
         // #68: Conversation/StageDirection/SoundCue ids are explicit-in-file, like Quote's — not
-        // EntityIdentity-derived like Character/Person's — so the same raw-SQL, no-forced-
-        // uppercase approach applies here too, not the repository's Guid-typed path. Each clears its
+        // EntityIdentity-derived like Character/Person's — so the same raw-SQL, no-forced-canonical-
+        // casing approach applies here too, not the repository's Guid-typed path. Each clears its
         // own detail rows first (ConversationLines/*Translations), same FK-blocking reason as
         // QuoteGenres/QuoteTranslations above.
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Conversation))
@@ -448,7 +447,7 @@ public sealed class SqliteImportActionService : IImportActionService
                     if (sourceRefs)
                         break;
                     // #162: raw SQL, not the Guid-typed repository path — see ClearStaleAddTargetsAsync's
-                    // remark; a Source Add's id may now be an explicit, not-necessarily-uppercase
+                    // remark; a Source Add's id may now be an explicit, not-necessarily-canonically-cased
                     // file-authored id, not always an EntityIdentity-derived one.
                     await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Sources"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "source", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
@@ -473,8 +472,8 @@ public sealed class SqliteImportActionService : IImportActionService
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.People.CountActiveReferences, action.EntityId))
                         break;
                     // #173: raw SQL, not the Guid-typed repository path — a people[] Add's id may now
-                    // be an explicit, not-necessarily-uppercase file-authored id, same fix #162 made
-                    // for Source (SqliteImportActionService.cs's Source case above).
+                    // be an explicit, not-necessarily-canonically-cased file-authored id, same fix #162
+                    // made for Source (SqliteImportActionService.cs's Source case above).
                     await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("People"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "person", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
@@ -578,8 +577,8 @@ public sealed class SqliteImportActionService : IImportActionService
         if (isAdd)
         {
             // Raw SQL, not _quoteRepository.SoftDeleteAsync — see ClearStaleAddTargetsAsync's remarks
-            // on why a Quote's own Id can't safely go through the repository's Guid-typed (forced
-            // uppercase) comparison.
+            // on why Quote uses the same raw-SQL convention as Source/Person/Conversation/
+            // StageDirection/SoundCue.
             await connection.ExecuteAsync(RepositorySql.SoftDelete("Quotes"),
                 new { now = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat), id = action.EntityId }, transaction);
             await QuoteSeedWriter.LogChangeAsync(changeLog, "quote", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, connection, transaction);
@@ -609,7 +608,7 @@ public sealed class SqliteImportActionService : IImportActionService
         if (!string.IsNullOrWhiteSpace(resolved.Character))
         {
             characterId = await connection.ExecuteScalarAsync<Guid?>(Sql.Characters.SelectIdBySourceAndName,
-                new { sourceId = sourceId.Value.ToString("D").ToUpperInvariant(), name = resolved.Character }, transaction);
+                new { sourceId = sourceId.Value.ToCanonicalId(), name = resolved.Character }, transaction);
             if (characterId is null)
                 throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Character '{resolved.Character}' no longer exists.");
         }

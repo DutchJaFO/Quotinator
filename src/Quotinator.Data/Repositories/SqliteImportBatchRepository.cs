@@ -1,6 +1,7 @@
 using Dapper;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Queries;
 
@@ -47,7 +48,7 @@ public sealed class SqliteImportBatchRepository : SqliteRepository<ImportBatch>,
     /// <inheritdoc/>
     public async Task UpdateRecordCountAsync(Guid id, int count, IUnitOfWork? unitOfWork = null)
     {
-        var param = new { count, now = SafeDateValue.Now.Raw, id = id.ToString("D").ToUpperInvariant() };
+        var param = new { count, now = SafeDateValue.Now.Raw, id = id.ToCanonicalId() };
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             await uow.Connection.ExecuteAsync(Sql.ImportBatches.UpdateRecordCount, param, uow.Transaction);

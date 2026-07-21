@@ -1,5 +1,6 @@
 using Dapper;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Helpers;
 using Quotinator.Core.Queries;
 
 namespace Quotinator.Core.Repositories;
@@ -18,7 +19,7 @@ public sealed class SeriesUniverseReferenceReader : ISeriesUniverseReferenceRead
     /// <inheritdoc/>
     public async Task<(Guid Id, string Name)?> GetUniverseReferenceAsync(Guid seriesId)
     {
-        var param = new { seriesId = seriesId.ToString("D").ToUpperInvariant() };
+        var param = new { seriesId = seriesId.ToCanonicalId() };
 
         using var conn = _factory.CreateConnection();
         conn.Open();
@@ -34,7 +35,7 @@ public sealed class SeriesUniverseReferenceReader : ISeriesUniverseReferenceRead
         if (seriesIds.Count == 0)
             return new Dictionary<Guid, (Guid Id, string Name)>();
 
-        var param = new { seriesIds = seriesIds.Select(id => id.ToString("D").ToUpperInvariant()).ToList() };
+        var param = new { seriesIds = seriesIds.Select(id => id.ToCanonicalId()).ToList() };
 
         using var conn = _factory.CreateConnection();
         conn.Open();

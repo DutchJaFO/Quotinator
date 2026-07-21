@@ -372,7 +372,7 @@ public class QuoteImportServiceTests
             new { id = SharedId });
 
         Assert.AreEqual("Import", row.InitiatedByType);
-        Assert.AreEqual(result.BatchId!.Value.ToString("D").ToUpperInvariant(), row.InitiatedById);
+        Assert.AreEqual(result.BatchId!.Value.ToString("D"), row.InitiatedById);
         Assert.AreEqual("Created", row.Action);
     }
 
@@ -395,7 +395,7 @@ public class QuoteImportServiceTests
         Assert.AreEqual(2, rows.Count, "One Created row from the first import, one Modified row from the newest-wins rewrite");
         Assert.AreEqual("Created", rows[0].Action);
         Assert.AreEqual("Modified", rows[1].Action);
-        Assert.AreEqual(result.BatchId!.Value.ToString("D").ToUpperInvariant(), rows[1].InitiatedById,
+        Assert.AreEqual(result.BatchId!.Value.ToString("D"), rows[1].InitiatedById,
             "The Modified row's InitiatedById must be the second import's own batch, not the first");
     }
 

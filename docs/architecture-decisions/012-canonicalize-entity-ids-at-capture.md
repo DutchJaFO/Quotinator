@@ -4,250 +4,179 @@
 **Date:** 2026-07-19
 **GitHub issues:** #190, #207, #209, #210
 
+This ADR states the current, settled design. It does not narrate how the design arrived here — that
+history lives in git commit messages and closed-issue discussion, not in this file.
+
 ---
 
 ## Context
 
-This project already has a documented rule (CLAUDE.md's "GUID/enum/id comparisons are case-insensitive
-by default") that every id-matching `WHERE`/`JOIN` clause must compare case-insensitively
-(`UPPER(column) = UPPER(@param)`), because `.NET` serializes `Guid` lowercase by default while stored
-values are consistently uppercase, and a curator-authored explicit id is under no obligation to match
-that casing. That rule was found and fixed piecemeal across `status`/`entityType`/`batchId` (#154), a
-conversation `{id}` route (#69), and Sources'/People's own id-first lookup (#180) before being generalised
-— each time, the fix was applied at the point a query *reads* an id.
+An entity id can enter this system from more than one place: generated internally
+(`EntityIdentity.StableId`, `QuoteIdentity.StableId`, `Guid.NewGuid()`), or supplied externally (a JSON
+import file's explicit `id` field, a URL path segment). An externally-supplied id is under no obligation
+to match this project's own casing convention, and two independently-written copies of "the same" id can
+disagree in casing without either one being wrong on its own terms.
 
-While investigating a live bug found during #190's own T2 pass (`GET /api/v1/masterdata/sources/{id}`
-404ing for a Source created with a file-authored explicit id), a second, distinct failure mode was
-found: **the read-side rule assumes the stored data is already canonical, but nothing enforces that on
-write.** `ImportActionPlanner` threads a curator-authored explicit id (`SourceEntry.Id`,
-`PersonEntry.Id`) through in-memory batch indexes (`sourceIndex`, `personIndex`) and into
-`SystemImportAction.EntityId` in whatever raw casing the file used. Every downstream insert/update that
-binds that id as a Dapper parameter does so with a plain `string`-typed parameter — never `Guid`-typed —
-so `GuidHandler`'s uppercase normalization (`.ToString("D").ToUpperInvariant()`, applied automatically to
-every `Guid`-typed parameter) never runs. The row is written to disk with whatever casing the file
-happened to use.
+That disagreement causes two distinct failure classes if left unhandled:
 
-This was masked rather than caught, because two separately-written columns that both derive from the
-same uncanonicalized in-memory value (`Sources.Id` and `Quotes.SourceId`, both sourced from the same
-`sourceIndex` entry) stay accidentally consistent with each other — a plain `JOIN Sources s ON s.Id =
-q.SourceId` still matches, because both sides carry the same wrong casing. The inconsistency only becomes
-visible when a *different* code path compares against the same column with a canonically-uppercased
-value — exactly what `GuidHandler` produces for any `Guid`-typed parameter, and exactly what surfaced the
-masterdata `GetById` 404.
+1. **A comparison fails to match.** SQLite's default `TEXT` comparison is case-sensitive, so a
+   `WHERE`/`JOIN` against an id column silently returns nothing (or joins nothing) when the two sides
+   disagree in casing, even though both refer to the same row.
+2. **A stored value renders inconsistently.** A `SELECT` with no filter or join on the column in
+   question — list every pending action, list every audit entry — never runs any comparison at all, so a
+   row written in one casing keeps rendering in that casing indefinitely, regardless of what casing new
+   writes use.
 
-**A read-side-only fix would have made this worse.** The first fix considered — wrapping the failing
-`SELECT` in `UPPER()`, matching the existing read-side rule — was rejected after tracing the actual write
-path: it would have fixed the one symptom while leaving the row non-canonical on disk, permanently
-dependent on every *other* current and future query against that column remembering to do the same
-wrapping. A second fix considered — uppercasing only the Source's own insert — was also rejected after
-finding that `Quotes.SourceId` is written from the *same* raw value: canonicalizing one side without the
-other would have broken the Quote→Source join outright, a more severe and more silent regression than the
-bug being fixed.
+These are separate problems needing separate mechanisms; a fix for one does not cover the other.
 
 ---
 
 ## Decision
 
-**An id originating outside this codebase's own generation (a JSON file's explicit `id` field, a URL path
-segment, any other externally-supplied string) is canonicalized to this project's standard uppercase form
-exactly once, at the single earliest point it is captured** — before it is used for anything: indexed
-into an in-memory lookup, staged as a value another entity's write will reference, or written to any
-table. Every value derived from that capture point (a same-batch FK reference, a staged
-`SystemImportAction.EntityId`, an inserted primary key) inherits the canonical form for free, because
-nothing downstream re-derives it from the original raw string.
+### Canonical form
 
-This is stricter than, and does not replace, the existing read-side rule. Both are required, because they
-guard against different failure modes:
+**The canonical form for every entity id, system-wide, is lowercase** — `Guid.ToString("D")`'s own
+default output, and the conventional RFC 4122 UUID string representation most tooling expects. This is a
+readability choice, not a technical requirement: the comparison mechanism below works identically
+regardless of which casing is canonical. Lowercase was chosen because it requires no explicit casing call
+when a fresh `Guid` is rendered (`.ToString("D")` alone is already canonical), whereas uppercase always
+needed an extra step a future call site could forget.
 
-- **Read-side** (`UPPER(column) = UPPER(@param)`): protects a query that compares an incoming value
-  against data that is already correctly stored, when the incoming value's casing can't be controlled
-  (a URL segment, a lookup keyed by an external system).
-- **Write-side** (this ADR): protects the *stored data itself* from ever becoming non-canonical in the
-  first place, so that every future read — whether or not its author remembered to wrap it in `UPPER()`
-  — simply works.
+**`Quotinator.Data.Helpers.GuidExtensions.ToCanonicalId(this Guid id)`** — `id.ToString("D")` — is the
+single choke point for rendering a `Guid` as this project's canonical id string. Every site that needs a
+`Guid` as a string (storage, comparison, API presentation) calls this rather than typing `.ToString("D")`
+inline.
 
-An id that is generated internally (`EntityIdentity.StableId`'s SHA-256-derived ids, `Guid.NewGuid()`)
-is already canonical by construction and needs no additional handling.
+**`Quotinator.Data.Helpers.EntityIdCanonicalizer.CanonicalizeLowercase`/`TryCanonicalizeLowercase`**
+parses a raw externally-supplied id as a `Guid` and re-renders it via `ToCanonicalId()` — canonicalizing
+it, and rejecting a malformed id at the earliest possible point rather than silently storing garbage. The
+non-throwing `Try*` form is for a capture site that must fall back gracefully rather than abort an entire
+import batch.
 
-**A `Guid`-typed parameter is not sufficient proof of canonicalization on its own.** `GuidHandler`
-normalizes any `Guid`-typed parameter at bind time, but an id that is threaded through the system as a
-plain `string` (as `SystemImportAction.EntityId` and the `*ActionPayload` records necessarily are, since
-they must also carry not-yet-existing stable ids computed before any row exists) bypasses that entirely.
-The canonicalization in this ADR must happen in application code, at capture, independent of whichever
-Dapper parameter type a downstream query happens to use.
+**A `Guid`-typed Dapper parameter is not sufficient proof of canonicalization on its own.** Dapper's
+built-in `typeMap` resolves a bare `Guid` parameter's `DbType` *before* it ever consults a registered
+`ITypeHandler` — so `Quotinator.Data.Helpers.GuidHandler`, despite being registered, is silently skipped
+for outbound `Guid`-typed parameters unless `SqlMapper.RemoveTypeMap(typeof(Guid))` runs first (it does,
+in `DatabaseConfiguration.Configure()`, as defence-in-depth — but nothing should depend on that alone). An
+id threaded through the system as a plain `string` — as a staged action's id necessarily is, since a
+not-yet-existing row's id must be computable before any `Guid` exists to type it as — bypasses `GuidHandler`
+entirely either way. `ToCanonicalId()` must be called explicitly at every capture point; it cannot be
+relied on to happen automatically.
 
-### Mechanism: a single reusable helper, not a repeated `.ToUpperInvariant()` idiom
+### Capture-time canonicalization
 
-This project already has a working precedent for turning a discipline ("always do X") into something a
-test suite can enforce, rather than trusting every future author to remember it: `Sql.cs`'s SQL
-centralization plus `SqlQueryGuardTests`, which reflects over every query-producing method and drives it
-through a full input matrix. Id canonicalization gets the same treatment, at the same layer (domain-
-agnostic infrastructure, `Quotinator.Data` — matching `Optional<T>`/`FieldMergeResolver`'s own placement
-reasoning), rather than being left as an idiom each Core call site is expected to repeat correctly:
+An id originating outside this codebase's own generation is canonicalized exactly once, at the single
+earliest point it is captured — before it is indexed into an in-memory lookup, staged as a value another
+entity's write will reference, or written to any table. Every value derived from that capture point (a
+same-batch FK reference, a staged `SystemImportAction.EntityId`, an inserted primary key) inherits the
+canonical form for free, because nothing downstream re-derives it from the original raw string.
 
-- **`Quotinator.Data.Helpers.EntityIdCanonicalizer.Canonicalize(string rawId)`** — parses `rawId` as a
-  `Guid` and returns `.ToString("D").ToUpperInvariant()`, the exact form `GuidHandler` produces for a
-  `Guid`-typed parameter. Parsing (not a bare `.ToUpperInvariant()` on the raw string) also rejects a
-  malformed id at the earliest possible point, rather than silently storing garbage. This is the single
-  place this logic is allowed to exist — a capture site calls this, it does not reimplement it.
-- **`EntityIdCanonicalizerTests`** (`Quotinator.Data.Tests`) — direct correctness coverage: casing
-  normalization, idempotence (canonicalizing an already-canonical id is a no-op), and that a malformed
-  id throws rather than silently producing a wrong value.
-- **A cross-entity regression guard**, data-driven across every entity type that accepts a file-authored
-  explicit id (Source, Person, StageDirection, SoundCue, Conversation — `[DynamicData]`-driven, one test
-  method covering all five, matching `SqlQueryGuardTests.AssembledQueryCases`'s shape rather than five
-  independently-written near-duplicate tests) — asserting the full, real invariant end to end: importing
-  a lowercase-authored explicit id results in a canonically-uppercase stored row, reachable via a
-  `Guid`-typed lookup, *and* still correctly joined to by whatever else references it in the same batch
-  (the Quote→Source join specifically, per the incident that found this bug). A helper-level unit test
-  proves the helper is correct; this guard proves the helper is actually being used everywhere it needs
-  to be — the same gap `SqlQueryGuardTests` closes for `AddOpenApi`/transformer registration, not just
-  the transformer class in isolation.
+`ImportActionPlanner`'s capture points (the quote loop, and all five `Plan*Async` methods) call
+`EntityIdCanonicalizer.TryCanonicalizeLowercase`.
 
-A stronger, purely-structural guarantee — changing `SystemImportAction.EntityId`/`*ActionPayload`'s id
-fields from `string` to `Guid` throughout, so `GuidHandler` canonicalizes every binding automatically
-with no possibility of a capture site forgetting to call `EntityIdCanonicalizer` — was considered and
-is not ruled out, but is a substantially larger refactor across the whole staged-action pipeline. It is
-noted here as a future option, not decided or required by this ADR.
+### Comparison-time case-insensitivity
 
-### Mechanism: a read-side systemic guard, `SqlIdCaseGuard` (#210)
+**`Quotinator.Data.Queries.IdClauses`** builds the standard case-insensitive SQL fragment for comparing
+an id column against a bound parameter, a parameter list, or another id column:
 
-The write-side guard above (`EntityIdCanonicalizer` + its cross-entity regression test) proves ids are
-canonicalized *at capture*. It does not, by itself, prove every *read* against an id column is safe
-against a value that — for whatever reason — did not go through that capture point (a value from before
-this ADR existed, a future call site that reads an id from somewhere other than the documented capture
-points, a defensive lookup against externally-supplied input). #210 found this gap directly: while
-implementing Quotes.Id's own capture-point fix, a broader audit (prompted by the developer's explicit
-instruction — "never assume a comparison that works won't break in the future simply because the known
-references have the same logic") found several more case-sensitive id comparisons across
-`Quotinator.Core`'s and `Quotinator.Data`'s `Sql.cs` files, `RepositorySql.cs` (the generic repository
-layer shared by every entity), and a dynamically-assembled filter clause in `SqliteQuoteService` — none
-of which the write-side guard alone could have caught, because they are read-side defects independent of
-whether the underlying data is actually canonical.
+- `Equals(column, paramName)` → `LOWER(column) = LOWER(@paramName)`
+- `In(column, paramName)` / `NotIn(column, paramName)` → `LOWER(column) IN/NOT IN @paramName` (only the
+  column side can be wrapped in SQL; the bound list's own values must already be lowercase — see
+  "IN-list binding" below)
+- `Join(leftColumn, rightColumn)` → `LOWER(leftColumn) = LOWER(rightColumn)`
 
-**`Quotinator.Data.Diagnostics.SqlIdCaseGuard`** closes this the same way `SqlAggregateGuard` (CVE-2025-6965)
-already closes its own class of SQL defect — a regex-based static analyzer, not a runtime check, applied
-to every SQL string the codebase produces:
+Every fixed query and factory method across `Quotinator.Core.Queries.Sql`, `Quotinator.Data.Queries.Sql`,
+and `RepositorySql.cs` builds its id comparisons through `IdClauses` rather than hand-typing `LOWER(...)`
+— a helper cannot forget the wrap or apply it to only one side; a hand-typed comparison can, and has. A
+fixed query that calls `IdClauses` cannot be a compile-time `const` (a method call isn't a constant
+expression) and is `static readonly` instead.
 
-- Flags any comparison between an id-named column (`\w*Id`, alias-qualified or bracket-quoted) and a bound
-  parameter (`= @param`, `IN @param`, or `NOT IN @param`) that is not wrapped `UPPER(column) = UPPER(@param)`
-  on both sides (or, for an `IN`/`NOT IN` clause, at least the column side — the parameter side of an
-  expanded list is the caller's responsibility to pre-canonicalize, not expressible as a single SQL-side
-  wrap).
-- Flags any comparison between **two id-named columns** — a JOIN `ON` condition or a correlated-subquery
-  predicate (e.g. `s.Id = q.SourceId`, `cl2.ConversationId = cl.ConversationId`) — that is not wrapped
-  `UPPER(...) = UPPER(...)` on both sides. This is defense-in-depth, not a correction of an active bug:
-  both sides are already canonical by construction once write-side canonicalization is in place. It was
-  added after the developer's explicit direction to wrap joins too, reversing this ADR's original position
-  (an earlier draft of this section reasoned joins didn't need wrapping — that reasoning is superseded).
-- A **half-protected** comparison (only one side wrapped) is still flagged in every case above — it is
-  exactly as unsafe as an unwrapped one.
-- `UPDATE ... SET` assignments are stripped before scanning (a write-side, capture-time concern this guard
-  does not cover — that is `EntityIdCanonicalizer`'s job) so a raw `SET SourceId = @sid` assignment isn't
-  misflagged as a read-side comparison.
+**Joins are wrapped unconditionally, not only where a live bug was found.** Both sides of a join between
+two id columns are already canonical by construction once capture-time canonicalization is in place, but
+`IdClauses.Join` wraps anyway — deliberate defense-in-depth, matching this project's standing rule to
+never assume a comparison stays safe just because its only known callers currently behave.
 
-**A gap in the guard's own reflection-based test enumeration was found and closed during the same pass**:
-`EnumerateSqlConstants()` (in both `SqlQueryGuardTests.cs` files) originally called only `Type.GetFields`,
-so a query declared as an arrow-bodied `static string` *property* rather than a field silently evaded
-scanning entirely — `Sql.SystemImportActions.SelectById` was exactly this case, with a real, live,
-unwrapped `WHERE Id = @id` that no test had ever exercised. `EnumerateSqlConstants()` now also calls
-`Type.GetProperties`, and the fixed query has a dedicated regression test
-(`SystemImportActionWriterReaderTests.GetByIdAsync_LowercaseStoredId_StillResolves`) that inserts a
-lowercase-stored row via raw SQL to prove the read side resolves it independent of how it was written.
+**`IdClauses` wraps in `LOWER(...)`, matching `ToCanonicalId()`'s own lowercase output**, so a value
+produced by that method binds directly into an `IN`/`NOT IN` list with no further transformation. This
+matters because SQL can only wrap the *column* side of an `IN`-list (SQLite has no syntax to transform
+every element of a bound list) — the list's own values must already agree with the wrapper's casing.
 
-It is wired into the existing guard-test infrastructure via the same `DynamicData`-driven enumeration
-methods `SqlAggregateGuard` already uses — `AllNamedSqlConstants`/`AssembledQueryCases` in both
-`Quotinator.Core.Tests.Security.SqlQueryGuardTests` and `Quotinator.Data.Tests.Security.SqlQueryGuardTests`,
-and `RepositorySqlCases` in `Quotinator.Data.Tests.Repositories.RepositorySqlGuardTests` — so every SQL
-constant, every dynamically-assembled query, and every generic-repository factory method is scanned on
-every test run, with no duplicated enumeration logic. `SqlIdCaseGuardTests`
-(`Quotinator.Data.Tests.Diagnostics`) covers the guard's own regex logic directly (bare/prefixed/aliased/
-bracket-quoted columns, half-protected wraps, `SET`-clause stripping, `IN`/`NOT IN` clauses, and both
-unwrapped and half-wrapped JOIN/correlated-subquery conditions).
+**`Quotinator.Data.Diagnostics.SqlIdCaseGuard`** is the automated backstop: a regex-based static analyzer
+(mirroring `SqlAggregateGuard`'s CVE-2025-6965 approach) that scans every SQL string this codebase
+produces and flags any id-column comparison — parameter equality, `IN`/`NOT IN`, or a JOIN/correlated-
+subquery condition between two id columns — that isn't `LOWER()`-wrapped on both sides. A half-protected
+comparison (only one side wrapped) is flagged too. `UPDATE ... SET` assignments are stripped before
+scanning (a capture-time concern, not a comparison-time one). Wired into `SqlQueryGuardTests` (both
+`Quotinator.Core.Tests` and `Quotinator.Data.Tests`) and `RepositorySqlGuardTests` via `DynamicData`
+enumeration over every SQL constant, factory method, and dynamically-assembled query — including
+arrow-bodied `static string` properties, not only fields.
 
-**This guard does not replace the write-side mechanism above — it is the read-side counterpart the
-"Read-side" bullet under Decision already called for**, now made structural instead of relying on each
-future query author remembering CLAUDE.md's case-insensitivity rule unaided.
+**IN-list binding**: never bind a raw `IReadOnlyList<Guid>` directly as an anonymous-object property.
+Dapper's list-parameter expansion does not reliably invoke a registered `ITypeHandler` per element the
+way scalar parameter binding does — pre-canonicalize every value via `.Select(id => id.ToCanonicalId())`
+before binding.
 
-### Mechanism: `IdClauses` — construct the comparison correctly, don't just catch it wrong
+### Read-time presentation normalization
 
-`SqlIdCaseGuard` catches a mistake after it's written. The developer's follow-on direction was to prevent
-the mistake from being typed in the first place: **`Quotinator.Data.Queries.IdClauses`** is a small
-public static class — `Equals(column, paramName)`, `In(column, paramName)`, `NotIn(column, paramName)`,
-`Join(leftColumn, rightColumn)` — each returning the correctly `UPPER()`-wrapped SQL fragment for that
-shape of comparison. Every fixed query and factory method across `Quotinator.Core.Queries.Sql`,
-`Quotinator.Data.Queries.Sql`, and `RepositorySql.cs` was rewritten to call it instead of hand-typing
-`UPPER(...)` text.
+Capture-time canonicalization and comparison-time case-insensitivity are not sufficient on their own: a
+`SELECT` with no filter or join on a column never runs the comparison mechanism, so a row stored under a
+prior or non-canonical casing keeps rendering that way indefinitely. **Case-insensitive matching and
+canonical presentation are two different guarantees.**
 
-A fixed query that calls `IdClauses` cannot remain a compile-time `const` — C# does not allow a method
-call in a constant expression — so every converted query became `static readonly` instead (evaluated
-once at type-init time; functionally identical to a `const` for every consumer). This is what made the
-reflection gap above ((`GetFields` only) surface: it was already a latent gap before this ADR's own
-mechanism started producing `static readonly` fields, but converting queries to call `IdClauses` is what
-made the gap load-bearing enough to matter, and specifically motivated widening the enumeration to also
-cover the pre-existing property case found along the way.
+A `Guid`-typed property gets canonical presentation for free — `System.Text.Json` always serializes a
+`Guid` struct using its own default lowercase formatting, regardless of what casing the underlying column
+held. A `string`-typed id-reference property (`SystemImportAction.BatchId`/`EntityId`/`ExistingBatchId`,
+`SystemAuditEntry.RecordId`, `SystemChangeLog.EntityId` — `string`-typed for the same reason a
+not-yet-existing row's id must be representable before any `Guid` can be typed as one) has no such safety
+net and renders exactly the casing already on disk.
 
-`IdClauses` is deliberately minimal — four methods matching the four SQL shapes this codebase actually
-uses (parameter equality, `IN`, `NOT IN`, column-to-column). It does not attempt to generate whole
-queries or clauses; it only owns the comparison fragment itself, the same scoping discipline
-`PaginationParsing`/`EntityFilterParsing` already established for other shared query-building concerns.
+**`IdClauses.SelectColumn(column, alias)`** → `LOWER(column) AS alias` — the standard SELECT-list
+fragment for returning *any* id column, primary key or foreign key, regardless of what C# type the
+caller ultimately deserializes the value into. This applies uniformly, the same way `IdClauses.Join`
+wraps unconditionally: a column that is `Guid`-typed today and renders correctly by accident of the
+serializer is not evidence it will stay that way — a downstream type can change without the query ever
+being touched (exactly what happened for `Quotinator.Core.Models.MasterDataReference.Id`, `string`-typed
+specifically because a `Guid` wasn't enough for a not-yet-existing row's id). Every `*Id`-suffixed column
+selected anywhere in this codebase goes through this method.
 
----
+**`Quotinator.Data.Diagnostics.SqlSelectPresentationGuard`** is the automated backstop, mirroring
+`SqlIdCaseGuard`'s own strip-then-scan technique rather than a registry of "columns known to need it":
+strip every already-`LOWER(...)`-wrapped column reference (including its restated alias) from a query's
+`SELECT ... FROM` span, then flag any `*Id`-suffixed column reference — bare, alias-qualified, or
+bracket-quoted — that remains. Wired into the same `SqlQueryGuardTests`/`RepositorySqlGuardTests`
+`DynamicData` enumeration `SqlIdCaseGuard` uses, so every SQL constant, factory method, and
+dynamically-assembled query is scanned on every test run.
 
-## Reasoning
+**The one exemption**: `SystemChangeLog.InitiatedById` is excluded from
+`SqlSelectPresentationGuard.ExemptColumnNames`. Unlike every other column this guard protects, it is not
+always an id — it holds an import batch UUID, an HTTP route, or an enrichment provider name (see its own
+doc comment) — so forcing it lowercase would corrupt legitimate mixed-case content in the non-id cases.
+This is the only column name excluded; every other `*Id`-suffixed column, PK or FK, must be wrapped.
 
-### Fixing the read side alone is treating a symptom, not the disease
-
-CLAUDE.md's own "No exception-based migration recovery" section already establishes this project's
-general preference: "fix the root cause instead of adding a check." A `UPPER()`-wrapped query is a check
-— it tolerates bad data instead of preventing it. Every un-audited query against the same column remains
-a landmine. Canonicalizing at capture removes the landmine entirely rather than requiring it be
-rediscovered and individually defused, query by query, indefinitely.
-
-### Two write paths deriving from one shared value must be fixed together, or not at all
-
-The Quotes.SourceId/Sources.Id incident is the concrete proof that partial fixes in this area are not
-just incomplete — they are actively dangerous. Before touching any write path that consumes an
-externally-supplied id, every other write path that consumes the *same in-memory value* must be
-identified and included in the same change. This is why the follow-on issue (#207)
-requires the fix to be verified against the Quote→Source join specifically, not only the endpoint that
-first surfaced the bug.
-
-### Verify before implementing, every time this bug class recurs
-
-This is the third time this specific bug class (id casing) has been found and generalised in this
-project's history (#154, #69/#180, and now this ADR). Each prior instance was fixed locally, at the
-query that exhibited the symptom, and each time a later instance was found in a sibling query the
-original fix hadn't covered. This ADR exists specifically so the next instance is checked against a
-written rule instead of being independently rediscovered and independently reasoned through again.
+**Structural boundary: `RepositorySql`'s generic queries.** `RepositorySql.cs` (`SelectById`,
+`SelectByIds`, `SelectPage`, etc.) is entity-agnostic by design (ADR 004) — it receives only a table
+name, never a column list, so it always queries `SELECT *`. There is no explicit column list for a
+text-based guard to rewrap. Correctness here depends on every entity's id/FK properties staying
+`Guid`-typed (which they all currently are — no domain entity in `Quotinator.Core.Entities` has a
+`string`-typed id-suffixed property; only the `Quotinator.Data`-owned `System_`-prefixed tables do, and
+those are read through explicit, non-generic queries that `SqlSelectPresentationGuard` does cover). If a
+future domain entity ever needs a `string`-typed id/FK property, it cannot go through the generic
+`SELECT *` path safely and needs its own explicit, guarded query instead.
 
 ---
 
 ## Consequences
 
-- The follow-on issue (#207, spawned from #190's T2 pass) must build `EntityIdCanonicalizer` and its
-  guard tests as described above, then canonicalize
-  `ImportActionPlanner`'s capture points for `SourceEntry.Id`/`PersonEntry.Id` through it (both the Add
-  path and, separately, the correction-match path — which has its own related risk of seeding a
-  same-batch index from the file's casing rather than the matched row's actual stored id) — and must
-  audit every `Ensure*ExistsAsync` helper and every `Sql.*.Insert`/`Update` binding an entity id as a raw
-  `string` for the same gap.
-- `docs/database-conventions.md`'s new "Entity id casing" section references this ADR alongside the
-  existing case-insensitive-query rule, so a future entity with a file-authored explicit id
-  (`StageDirection`/`SoundCue`/`Conversation` already have one; any future entity that adds one) checks
-  this ADR before assuming read-side tolerance is sufficient.
-- This does not require a schema or migration change — it is an application-code discipline, enforced at
-  the point external ids enter the system, not a database constraint.
-- #210 delivered the read-side counterpart described above (`SqlIdCaseGuard`) and used it to find and fix
-  every case-sensitive id comparison across `Quotinator.Core`/`Quotinator.Data`'s `Sql.cs` files,
-  `RepositorySql.cs`, and `SqliteQuoteService`'s dynamic filter clauses — not just Quotes.Id, the issue's
-  original scope. Any future SQL query that compares an id column to a bound parameter, another id
-  column, or an `IN`/`NOT IN` list without wrapping both sides in `UPPER(...)` now fails the build's test
-  suite automatically; this is no longer a discipline that depends on the author remembering CLAUDE.md's
-  rule.
-- #210 also delivered `IdClauses` (`Quotinator.Data.Queries`), now the required way to build any id
-  comparison in new or edited SQL — call `IdClauses.Equals`/`In`/`NotIn`/`Join`, don't hand-type
-  `UPPER(...)`. `SqlIdCaseGuard` remains the backstop for the rare case where calling it isn't practical
-  (an id embedded in a larger hand-assembled fragment), not the primary mechanism.
-- `docs/database-conventions.md`'s "Entity id casing" table was updated to reference both `IdClauses` and
-  `SqlIdCaseGuard`, and to reverse its prior "joins don't need wrapping" framing.
+- **No migration.** Every mechanism above is applied going forward, at the point of capture, comparison,
+  or read — never as a data migration or retroactive re-casing pass. `IdClauses`/`SqlIdCaseGuard` make
+  comparisons resolve correctly regardless of a row's actual stored casing; `IdClauses.SelectColumn`/
+  `SqlSelectPresentationGuard` make presentation correct regardless of stored casing too. A row written
+  under any prior convention needs no data-level fix.
+- Any new SQL query that compares an id column, joins on one, or selects one, is caught automatically by
+  the build's test suite if it doesn't go through `IdClauses`/`IdClauses.SelectColumn` — this is no
+  longer a discipline that depends on the author remembering a documented rule unaided.
+- `docs/database-conventions.md`'s "Entity id casing" section documents the ✅/❌ patterns this ADR
+  establishes, for a developer who wants the short version without reading this file.
+- A brand-new `string`-typed, `Id`-suffixed entity property must either be read through a query that
+  calls `IdClauses.SelectColumn`, or be added to `SqlSelectPresentationGuard.ExemptColumnNames` with a
+  documented reason (matching `InitiatedById`'s).

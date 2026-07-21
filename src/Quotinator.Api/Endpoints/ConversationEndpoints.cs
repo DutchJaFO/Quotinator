@@ -7,6 +7,7 @@ using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
@@ -94,7 +95,7 @@ internal static class ConversationEndpoints
 
     private static ConversationSummaryResponse ToSummaryResponse(ConversationEntity entity, int lineCount) => new()
     {
-        Id                 = entity.Id.ToString("D").ToUpperInvariant(),
+        Id                 = entity.Id.ToCanonicalId(),
         Description        = entity.Description,
         CompletenessStatus = entity.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,
         LineCount          = lineCount,

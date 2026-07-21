@@ -44,7 +44,7 @@ public class SqlQueryGuardTests
     /// <summary>
     /// Reflects over every string constant in <see cref="Sql"/> and its nested classes, and asserts
     /// none compare an id-named column to a bound parameter case-sensitively. See ADR 012 and #210 —
-    /// a canonically-stored id must still be matched via <c>UPPER(...)</c> on both sides, since
+    /// a canonically-stored id must still be matched via <c>LOWER(...)</c> on both sides, since
     /// SQLite's default TEXT comparison is case-sensitive.
     /// </summary>
     [TestMethod]
@@ -54,7 +54,7 @@ public class SqlQueryGuardTests
         var violations = SqlIdCaseGuard.FindViolations(sql);
         Assert.IsEmpty(violations,
             $"Sql.{name} contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
-            "Wrap both sides in UPPER(...) — see ADR 012.");
+            "Wrap both sides in LOWER(...) — see ADR 012.");
     }
 
     /// <summary>Same guard, applied to every dynamically-assembled query (see <see cref="AssembledQueryCases"/>).</summary>
@@ -65,7 +65,35 @@ public class SqlQueryGuardTests
         var violations = SqlIdCaseGuard.FindViolations(fullSql);
         Assert.IsEmpty(violations,
             $"Assembled query '{label}' contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
-            "Wrap both sides in UPPER(...) — see ADR 012.");
+            "Wrap both sides in LOWER(...) — see ADR 012.");
+    }
+
+    /// <summary>
+    /// Reflects over every string constant in <see cref="Sql"/> and its nested classes, and asserts
+    /// none returns any <c>*Id</c>-suffixed column unwrapped in its SELECT column list — PK or FK,
+    /// regardless of downstream C# type. See ADR 012's "read-time presentation normalization" revision.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(AllNamedSqlConstants))]
+    public void SqlConstant_PassesSelectPresentationGuard(string name, string sql)
+    {
+        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
+        Assert.IsEmpty(violations,
+            $"Sql.{name} selects {string.Join(", ", violations)} unwrapped — wrap in LOWER(...) AS " +
+            "ColumnName in the SELECT column list. See ADR 012's \"read-time presentation " +
+            "normalization\" revision.");
+    }
+
+    /// <summary>Same guard, applied to every dynamically-assembled query (see <see cref="AssembledQueryCases"/>).</summary>
+    [TestMethod]
+    [DynamicData(nameof(AssembledQueryCases))]
+    public void AssembledQuery_PassesSelectPresentationGuard(string label, string fullSql)
+    {
+        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(fullSql);
+        Assert.IsEmpty(violations,
+            $"Assembled query '{label}' selects {string.Join(", ", violations)} unwrapped — wrap in " +
+            "LOWER(...) AS ColumnName in the SELECT column list. See ADR 012's \"read-time " +
+            "presentation normalization\" revision.");
     }
 
     /// <summary>

@@ -22,7 +22,14 @@ public sealed class SystemAuditEntry : RecordBase
     /// <summary>Name of the table the operation touched, or <c>"Database"</c> for admin-level actions.</summary>
     public string TableName { get; init; } = string.Empty;
 
-    /// <summary>Guid (upper-case D format) of the affected row, or <c>null</c> for bulk or admin-level entries.</summary>
+    /// <summary>
+    /// Guid (lowercase D format) of the affected row, or <c>null</c> for bulk or admin-level entries.
+    /// A row written under an earlier revision of this project's id-casing convention may still hold
+    /// a different casing on disk — <see cref="Quotinator.Data.Queries.Sql.SystemAudit.SelectPaged"/>
+    /// reads this column through <c>LOWER(...)</c> so every consumer of this property always sees the
+    /// current canonical form regardless of what casing is actually stored (ADR 012's "read-time
+    /// presentation normalization" revision).
+    /// </summary>
     public string? RecordId { get; init; }
 
     /// <summary>One of the <see cref="AuditOperation"/> constants.</summary>

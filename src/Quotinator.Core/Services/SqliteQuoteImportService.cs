@@ -4,6 +4,7 @@ using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
@@ -70,7 +71,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             Status         = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Staged.ToString(), ImportBatchStatus.Staged),
         };
         await _importBatches.InsertAsync(batch);
-        var batchIdStr = batch.Id.ToString("D").ToUpperInvariant();
+        var batchIdStr = batch.Id.ToCanonicalId();
 
         IReadOnlyList<SystemImportAction> actions;
         using (var conn = (SqliteConnection)_factory.CreateConnection())
@@ -140,7 +141,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
     public async Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, CancellationToken cancellationToken = default)
     {
         var batch = await _importBatches.GetByIdAsync(batchId) ?? throw new ImportBatchNotFoundException(batchId);
-        var batchIdStr = batchId.ToString("D").ToUpperInvariant();
+        var batchIdStr = batchId.ToCanonicalId();
 
         var actions = await _actionReader.GetAllForBatchAsync(batchIdStr);
 

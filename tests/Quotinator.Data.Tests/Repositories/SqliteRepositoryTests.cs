@@ -116,7 +116,7 @@ public class SqliteRepositoryTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var raw = conn.QuerySingleOrDefault<Widget>(
-            "SELECT * FROM Widgets WHERE Id = @id", new { id = entity.Id.ToString("D").ToUpperInvariant() });
+            "SELECT * FROM Widgets WHERE Id = @id", new { id = entity.Id.ToString("D") });
 
         Assert.IsNotNull(raw);
         Assert.IsTrue(raw.IsDeleted);

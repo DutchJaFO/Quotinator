@@ -160,7 +160,7 @@ public class SoundCueEndpointsTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
 
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("[awkward silence]", root.GetProperty("text").GetString());
         Assert.AreEqual("silence.mp3", root.GetProperty("soundFileUrl").GetString());
 
@@ -187,16 +187,16 @@ public class SoundCueEndpointsTests
     }
 
     [TestMethod]
-    public async Task GetSoundCueById_LowercaseId_MatchesCaseInsensitively()
+    public async Task GetSoundCueById_UppercaseId_MatchesCaseInsensitively()
     {
         var id   = Guid.NewGuid();
         var repo = new FakeSoundCueRepository { ReturnById = NewSoundCue(id: id) };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/soundcues/{id.ToString("D").ToLowerInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/soundcues/{id.ToString("D").ToUpperInvariant()}");
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-        Assert.AreEqual(id.ToString("D").ToUpperInvariant(), root.GetProperty("id").GetString());
+        Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
     // ── OpenAPI: tag + rate limit, proven live ──────────────────────────────

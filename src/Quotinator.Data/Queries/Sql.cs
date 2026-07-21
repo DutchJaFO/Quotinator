@@ -98,7 +98,7 @@ internal static class Sql
     {
         /// <summary>Canonical Widget-with-Owner join query — example of the <c>IJoinStrategy&lt;TResult&gt;</c> pattern.</summary>
         internal static string WidgetWithOwner() => $"""
-            SELECT [w].[Id] AS WidgetId, [w].[Label],
+            SELECT {IdClauses.SelectColumn("[w].[Id]", "WidgetId")}, [w].[Label],
                    [o].[Name] AS OwnerName
             FROM   [Widgets] [w]
             {Joins.Inner("Owners", "o", "w", "OwnerId", "Id")}
@@ -144,9 +144,14 @@ internal static class Sql
         // COUNT base — shared by CountPaged factory method below.
         private const string CountPagedBase = "SELECT COUNT(*) FROM System_AuditEntries";
 
-        /// <summary>Paginated audit entry listing, newest first, with optional filters.</summary>
+        /// <summary>
+        /// Paginated audit entry listing, newest first, with optional filters. Every id column
+        /// (<c>Id</c>, <c>RecordId</c>) is read through <c>LOWER(...)</c> — PK and FK alike, regardless
+        /// of what C# type ultimately receives it — so a row written under any prior casing convention
+        /// still renders consistently, without needing a data migration to re-case already-stored rows.
+        /// </summary>
         internal static string SelectPaged(bool filterTable, bool filterRecordId)
-            => "SELECT Id, TableName, RecordId, Operation, Agent, PerformedAt FROM System_AuditEntries" +
+            => $"SELECT {IdClauses.SelectColumn("Id")}, TableName, {IdClauses.SelectColumn("RecordId")}, Operation, Agent, PerformedAt FROM System_AuditEntries" +
                BuildWhere(filterTable, filterRecordId) +
                " ORDER BY PerformedAt DESC LIMIT @pageSize OFFSET @offset;";
 
@@ -154,11 +159,10 @@ internal static class Sql
         internal static string CountPaged(bool filterTable, bool filterRecordId)
             => CountPagedBase + BuildWhere(filterTable, filterRecordId) + ";";
 
-        // RecordId comparison is case-insensitive (#210): RecordId is always stored canonical-uppercase
-        // (derived from the entity's own Guid Id — see SqliteRepository<T>.BuildEntry), but a caller's
-        // ?recordId= query-string value is never canonicalized before reaching here — a lowercase or
-        // mixed-case value (the default Guid.ToString() casing in most client languages) previously
-        // matched nothing. See docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
+        // RecordId comparison is case-insensitive (#210): a caller's ?recordId= query-string value is
+        // never canonicalized before reaching here — a mismatched-case value (any casing a client
+        // happens to send) previously matched nothing. See
+        // docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
         private static string BuildWhere(bool filterTable, bool filterRecordId)
         {
             var parts = new List<string>(2);
@@ -177,9 +181,13 @@ internal static class Sql
         // COUNT base — shared by CountPaged factory method below.
         private const string CountPagedBase = "SELECT COUNT(*) FROM System_ImportActions";
 
-        // Column list shared by every SELECT below.
-        private const string SelectColumns =
-            "Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, MarkCompletenessAs, DetectedAt, AppliedAt, DiscardedAt";
+        // Column list shared by every SELECT below. Every id column (Id/BatchId/EntityId/
+        // ExistingBatchId) is read through LOWER(...) — PK and FK alike, regardless of what C# type
+        // ultimately receives it — so a row written before this project settled on its current casing
+        // convention still renders consistently, without needing a data migration to re-case
+        // already-stored rows. Not a const because IdClauses.SelectColumn is a method call.
+        private static readonly string SelectColumns =
+            $"{IdClauses.SelectColumn("Id")}, {IdClauses.SelectColumn("BatchId")}, ActionType, EntityType, {IdClauses.SelectColumn("EntityId")}, {IdClauses.SelectColumn("ExistingBatchId")}, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, MarkCompletenessAs, DetectedAt, AppliedAt, DiscardedAt";
 
         /// <summary>Paginated action listing, newest first, with optional filters.</summary>
         internal static string SelectPaged(bool filterBatchId, bool filterStatus, bool filterEntityType = false)
@@ -204,10 +212,10 @@ internal static class Sql
 
         /// <summary>
         /// Every action sharing a BatchId, any status — #154's apply-batch readiness check needs the
-        /// complete set, not a page. Case-insensitive: a consumer's own batch-id response DTO may be
-        /// typed as <c>Guid</c>, which .NET serializes lowercase by default, while stored <c>BatchId</c>
-        /// values are always uppercase (<c>Guid.ToString("D").ToUpperInvariant()</c>) — a caller
-        /// round-tripping the batch id straight from such a response must still match.
+        /// complete set, not a page. Case-insensitive as a defence-in-depth measure even though stored
+        /// <c>BatchId</c> values and .NET's default <c>Guid</c> serialization are both lowercase today
+        /// (ADR 012, <see cref="Helpers.GuidExtensions.ToCanonicalId"/>) — a caller round-tripping the
+        /// batch id straight from a response should still match regardless of casing.
         /// <c>ORDER BY rowid</c> makes the result deterministic and matches insertion order — the
         /// same reasoning as <see cref="Repositories.SystemImportActionWriter"/>'s sequential writes,
         /// and load-bearing for a consumer whose <c>applyResolvedAction</c> callback (called once per
@@ -262,11 +270,20 @@ internal static class Sql
         /// <summary>Removes all change-log rows.</summary>
         internal const string DeleteAll = "DELETE FROM System_ChangeLog;";
 
-        /// <summary>Every change-log entry for a single entity, newest first.</summary>
-        // EntityId comparison is case-insensitive (#210) — same reasoning as every other id column in
-        // this codebase, applied even though no endpoint currently exposes this reader over HTTP.
+        /// <summary>
+        /// Every change-log entry for a single entity, newest first. <c>EntityId</c> comparison is
+        /// case-insensitive (#210) — same reasoning as every other id column in this codebase, applied
+        /// even though no endpoint currently exposes this reader over HTTP; <c>ISystemChangeLogReader
+        /// .GetHistoryAsync</c> is a real, DI-registered reader regardless. <c>EntityId</c> is also read
+        /// through <c>LOWER(...)</c> in the SELECT list — the same read-time presentation-normalization
+        /// mechanism as <c>Sql.SystemAudit.SelectPaged</c>/<c>Sql.SystemImportActions.SelectColumns</c>
+        /// (ADR 012). <c>InitiatedById</c> is deliberately NOT wrapped: unlike <c>EntityId</c>, which is
+        /// always an id, <c>InitiatedById</c> is polymorphic (an import batch UUID, an HTTP route, or an
+        /// enrichment provider name — see <see cref="Entities.SystemChangeLog.InitiatedById"/>), and
+        /// forcing it lowercase would corrupt meaningful casing in the non-id cases.
+        /// </summary>
         internal static readonly string SelectByEntity =
-            "SELECT Id, EntityType, EntityId, InitiatedByType, InitiatedById, Action, Field, OldValue, NewValue, OccurredAt " +
+            $"SELECT {IdClauses.SelectColumn("Id")}, EntityType, {IdClauses.SelectColumn("EntityId")}, InitiatedByType, InitiatedById, Action, Field, OldValue, NewValue, OccurredAt " +
             $"FROM System_ChangeLog WHERE EntityType = @entityType AND {IdClauses.Equals("EntityId", "entityId")} ORDER BY OccurredAt DESC;";
     }
 }

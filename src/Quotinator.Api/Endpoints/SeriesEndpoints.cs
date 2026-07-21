@@ -6,6 +6,7 @@ using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
@@ -64,7 +65,7 @@ internal static class SeriesEndpoints
 
         var items = result.Items
             .Select(s => ToResponse(s, universesBySeriesId.TryGetValue(s.Id, out var universe)
-                ? new MasterDataReference(universe.Id.ToString("D").ToUpperInvariant(), universe.Name)
+                ? new MasterDataReference(universe.Id.ToCanonicalId(), universe.Name)
                 : null))
             .ToList();
 
@@ -89,14 +90,14 @@ internal static class SeriesEndpoints
             return NotFoundResult.OkOrNotFound<SeriesResponse>(null, localizer, ApiMessages.SeriesNotFound);
 
         var universeRef = await universeReader.GetUniverseReferenceAsync(seriesId);
-        var universe     = universeRef is { } u ? new MasterDataReference(u.Id.ToString("D").ToUpperInvariant(), u.Name) : null;
+        var universe     = universeRef is { } u ? new MasterDataReference(u.Id.ToCanonicalId(), u.Name) : null;
 
         return NotFoundResult.OkOrNotFound(ToResponse(entity, universe), localizer, ApiMessages.SeriesNotFound);
     }
 
     private static SeriesResponse ToResponse(SeriesEntity entity, MasterDataReference? universe) => new()
     {
-        Id                 = entity.Id.ToString("D").ToUpperInvariant(),
+        Id                 = entity.Id.ToCanonicalId(),
         Name               = entity.Name,
         Universe           = universe,
         CompletenessStatus = entity.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,

@@ -6,6 +6,7 @@ using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
@@ -80,7 +81,7 @@ internal static class StageDirectionEndpoints
 
     private static StageDirectionResponse ToResponse(StageDirectionEntity entity) => new()
     {
-        Id                 = entity.Id.ToString("D").ToUpperInvariant(),
+        Id                 = entity.Id.ToCanonicalId(),
         Text               = entity.Text,
         ImageUrl           = entity.ImageUrl,
         CompletenessStatus = entity.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,

@@ -6,6 +6,7 @@ using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
@@ -91,9 +92,9 @@ internal static class CharacterEndpoints
 
     private static CharacterResponse ToResponse(Character character, IReadOnlyList<(Guid Id, string Name)> sources) => new()
     {
-        Id                 = character.Id.ToString("D").ToUpperInvariant(),
+        Id                 = character.Id.ToCanonicalId(),
         Name               = character.Name,
         CompletenessStatus = character.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,
-        Sources            = sources.Select(s => new MasterDataReference(s.Id.ToString("D").ToUpperInvariant(), s.Name)).ToList(),
+        Sources            = sources.Select(s => new MasterDataReference(s.Id.ToCanonicalId(), s.Name)).ToList(),
     };
 }

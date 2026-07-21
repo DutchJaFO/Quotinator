@@ -1,5 +1,6 @@
 using Quotinator.Data.Connections;
 using Quotinator.Data.Example.Common;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Example.MasterDetail;
@@ -31,7 +32,7 @@ public sealed class WidgetWithLinesRepository(
 
     protected override IReadOnlyList<WidgetLine> GetChildren(Widget parent) =>
     [
-        new WidgetLine { ParentId = parent.Id.ToString("D").ToUpperInvariant(), Value = $"{parent.Label} — Line 1" },
-        new WidgetLine { ParentId = parent.Id.ToString("D").ToUpperInvariant(), Value = $"{parent.Label} — Line 2" }
+        new WidgetLine { ParentId = parent.Id.ToCanonicalId(), Value = $"{parent.Label} — Line 1" },
+        new WidgetLine { ParentId = parent.Id.ToCanonicalId(), Value = $"{parent.Label} — Line 2" }
     ];
 }

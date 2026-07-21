@@ -2,6 +2,7 @@ using System.Reflection;
 using Dapper;
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Repositories;
@@ -112,8 +113,8 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
     {
         var param = new
         {
-            leftId  = leftId.ToString("D").ToUpperInvariant(),
-            rightId = rightId.ToString("D").ToUpperInvariant()
+            leftId  = leftId.ToCanonicalId(),
+            rightId = rightId.ToCanonicalId()
         };
         var sql = RepositorySql.SelectJunctionRow(JunctionTableName, LeftFkColumn, RightFkColumn);
 
@@ -131,7 +132,7 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
     private async Task<IReadOnlyList<TJunction>> QueryActiveByFkAsync(
         string tableName, string fkColumn, Guid id, IUnitOfWork? unitOfWork)
     {
-        var param = new { parentId = id.ToString("D").ToUpperInvariant() };
+        var param = new { parentId = id.ToCanonicalId() };
         var sql   = RepositorySql.SelectByForeignKey(tableName, fkColumn);
 
         if (unitOfWork is SqliteUnitOfWork uow)
