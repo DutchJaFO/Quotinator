@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-21 21:11 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-22 20:55 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -123,6 +123,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A source, person, stage direction, sound cue, or conversation created with a lowercase explicit id could resolve correctly through one lookup path (for example, via a related quote) but fail to be found by that same record's own individual lookup endpoint — ids are now normalised consistently wherever they're written, fixing the inconsistency (issue #209)
 - A quote created with an uppercase explicit id could resolve correctly through most lookups, but `GET /api/v1/quotes/{id}` only matched when the URL's casing exactly matched the id as originally imported — ids are now normalised consistently for quotes too, closing the last remaining case of this issue (issue #210)
 - Batch and record ids shown in `GET /api/v1/import/actions` and `GET /api/v1/admin/audit` responses could appear in a different letter casing than every other id in the same response — they're now always shown consistently, regardless of how they were originally stored (issue #210)
+- A newly-created person's date of birth and date of death were silently discarded even when the import file supplied them — only a correction to an already-existing person actually saved these dates; both are now saved correctly the first time (issue #173)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`

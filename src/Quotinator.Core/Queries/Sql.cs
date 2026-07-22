@@ -311,10 +311,14 @@ internal static class Sql
         internal static readonly string CountActiveReferences =
             $"SELECT COUNT(*) FROM Quotes WHERE {IdClauses.Equals("PersonId", "id")} AND IsDeleted = 0;";
 
-        /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
+        /// <summary>
+        /// See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.
+        /// Unlike Character/Universe/Source, Person carries two additional fields known at Add time
+        /// (<c>@DateOfBirth</c>/<c>@DateOfDeath</c>) — bound directly rather than hardcoded to NULL.
+        /// </summary>
         internal const string InsertIfNotExists =
             "INSERT OR IGNORE INTO People (Id, Name, DateOfBirth, DateOfDeath, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
-            "VALUES (@Id, @Name, NULL, NULL, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+            "VALUES (@Id, @Name, @DateOfBirth, @DateOfDeath, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
     }
 
     /// <summary>Sources table.</summary>

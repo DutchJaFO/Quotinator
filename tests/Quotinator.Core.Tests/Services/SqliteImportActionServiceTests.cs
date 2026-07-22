@@ -1430,6 +1430,35 @@ public class SqliteImportActionServiceTests
             new { Id = id, Name = name, DateOfBirth = dateOfBirth, DateOfDeath = dateOfDeath, CompletenessStatus = completenessStatus, now });
     }
 
+    /// <summary>
+    /// Regression guard: a brand-new Person (Add, not Modify) must persist its <c>dateOfBirth</c>/
+    /// <c>dateOfDeath</c> on insert. <c>EnsurePersonExistsAsync</c> previously only ever received
+    /// <c>payload.Name</c> and <c>Sql.People.InsertIfNotExists</c> hardcoded both date columns to
+    /// <c>NULL</c> in its <c>VALUES</c> clause — found live during a T2 smoke-test pass, unlike the
+    /// Modify path (<see cref="ApplyBatchAsync_PersonModify_WritesDateOfBirthAndDateOfDeath"/>), which
+    /// was already correct.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyBatchAsync_PersonAdd_WritesDateOfBirthAndDateOfDeath()
+    {
+        var id = "e6111111-1111-4111-8111-111111111173";
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [new PersonEntry { Id = id, Name = "Ada Lovelace", DateOfBirth = "1815-12-10", DateOfDeath = "1852-11-27" }]);
+        var action = actions.Single(a => a.EntityType == "Person");
+        Assert.AreEqual(ImportActionKind.Add, action.ActionType.Parsed);
+
+        var result = await _service.ApplyBatchAsync(action.BatchId);
+        Assert.IsNull(result);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (dob, dod) = await conn.QuerySingleAsync<(string? DateOfBirth, string? DateOfDeath)>(
+            "SELECT DateOfBirth, DateOfDeath FROM People WHERE UPPER(Id) = UPPER(@id)", new { id });
+        Assert.AreEqual("1815-12-10", dob);
+        Assert.AreEqual("1852-11-27", dod);
+    }
+
     [TestMethod]
     public async Task ApplyBatchAsync_PersonModify_WritesDateOfBirthAndDateOfDeath()
     {

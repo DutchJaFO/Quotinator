@@ -712,7 +712,8 @@ public sealed class SqliteImportActionService : IImportActionService
                 if (isPersonAdd)
                 {
                     var payload = JsonSerializer.Deserialize<PersonActionPayload>(action.IncomingValue!)!;
-                    await EnsurePersonExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog);
+                    await EnsurePersonExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog,
+                        payload.DateOfBirth, payload.DateOfDeath);
                 }
                 else
                 {
@@ -1029,14 +1030,15 @@ public sealed class SqliteImportActionService : IImportActionService
 
     private async Task EnsurePersonExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, string name,
-        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog,
+        string? dateOfBirth = null, string? dateOfDeath = null)
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
         var inserted = await connection.ExecuteAsync(Sql.People.InsertIfNotExists,
-            new { Id = id, Name = name, ImportBatchId = batchId, DateCreated = now }, transaction);
+            new { Id = id, Name = name, DateOfBirth = dateOfBirth, DateOfDeath = dateOfDeath, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "person", id, ChangeAction.Created,
-                oldValue: null, newValue: new { name }, connection, transaction);
+                oldValue: null, newValue: new { name, dateOfBirth, dateOfDeath }, connection, transaction);
     }
 
     /// <summary>#68: id-keyed like Quote (see <see cref="ImportActionEntityTypes.Conversation"/>'s remark), not natural-key-keyed like the three helpers above — <paramref name="id"/> is the file's own explicit id, used as-is.</summary>
