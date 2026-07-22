@@ -148,6 +148,68 @@
         "action"
       ],
       "translations": {}
+    },
+    {
+      "id": "58b445cf-b677-414a-9b51-c82bd66d2c82",
+      "quote": "We shall never surrender.",
+      "originalLanguage": "en",
+      "source": "Speech to the House of Commons",
+      "date": "1940-06-04",
+      "character": null,
+      "author": "Winston Churchill",
+      "type": "person",
+      "genres": [
+        "non-fiction"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "ef0b6973-ed07-4692-804b-b31f6bee4e7f",
+      "quote": "That's one small step for a man, one giant leap for mankind.",
+      "originalLanguage": "en",
+      "source": "Apollo 11 Moon Landing",
+      "date": "1969-07-20",
+      "character": null,
+      "author": "Neil Armstrong",
+      "type": "person",
+      "genres": [
+        "non-fiction"
+      ],
+      "translations": {}
+    },
+    {
+      "id": "8ee6bba0-f195-424d-9b56-89dbe8557057",
+      "quote": "I have a dream that my four little children will one day live in a nation where they will not be judged by the color of their skin but by the content of their character.",
+      "originalLanguage": "en",
+      "source": "I Have a Dream (March on Washington)",
+      "date": "1963-08-28",
+      "character": null,
+      "author": "Martin Luther King Jr.",
+      "type": "person",
+      "genres": [
+        "non-fiction"
+      ],
+      "translations": {}
+    }
+  ],
+  "people": [
+    {
+      "id": "7484e131-edca-4449-818b-9b0f6cffd330",
+      "name": "Winston Churchill",
+      "dateOfBirth": "1874-11-30",
+      "dateOfDeath": "1965-01-24"
+    },
+    {
+      "id": "da75fc4e-9497-412e-a88f-af13226624cb",
+      "name": "Neil Armstrong",
+      "dateOfBirth": "1930-08-05",
+      "dateOfDeath": "2012-08-25"
+    },
+    {
+      "id": "aaa94065-d403-4e4e-a0d6-d0d02db3a03d",
+      "name": "Martin Luther King Jr.",
+      "dateOfBirth": "1929-01-15",
+      "dateOfDeath": "1968-04-04"
     }
   ],
   "stageDirections": [

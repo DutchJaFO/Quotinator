@@ -851,7 +851,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    curl -s "http://localhost:8080/api/v1/quotes/search?q=love&type=person"
    ```
    Check that `/version` returns the expected version number — a missing `Directory.Build.props` in the build context silently produces `1.0.0` while `/health` still returns healthy.
-   The search queries cover: default full-text (`love` should return results), `field=source` (`Casablanca` should return results), and `field=author`, `field=character`, `type=person` — these three may return an empty `items` array with a `message` when the bundled dataset has no matching data; that is expected behaviour, not a bug.
+   The search queries cover: default full-text (`love` should return results), `field=source` (`Casablanca` should return results), and `field=author` (`Churchill` should now return the curated Winston Churchill quote — see the curated `person`-type entries added below). `field=character` (`Rick`) and `type=person&q=love` may still return an empty `items` array with a `message`, since no bundled data currently matches either; that is expected behaviour, not a bug.
 
    **Import and staged-action review workflow** (#45, #149, #152, #154) — re-imports a bundled file with `review` policy forced, so the endpoint that would otherwise auto-resolve via the default policy instead produces a genuine pending action to exercise decide/undo/apply against. `/api/v1/import/actions/*` (#154's unified staging engine) is the live mechanism — every import and seed run stages through it now.
    ```bash

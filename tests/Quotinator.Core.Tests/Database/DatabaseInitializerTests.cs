@@ -93,10 +93,10 @@ public class DatabaseInitializerTests
         var db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(796, db.QuoteCount,     "Unique quotes");
-        Assert.AreEqual(479, db.SourceCount,    "Sources");
+        Assert.AreEqual(799, db.QuoteCount,     "Unique quotes");
+        Assert.AreEqual(482, db.SourceCount,    "Sources");
         Assert.AreEqual(7,   db.CharacterCount, "Characters");
-        Assert.AreEqual(0,   db.PeopleCount,    "People");
+        Assert.AreEqual(3,   db.PeopleCount,    "People (Winston Churchill, Neil Armstrong, Martin Luther King Jr. — curated)");
     }
 
     /// <summary>Cross-file duplicates between vilaboim and NikhilNamal17 are recorded with NewestWins policy (AllFilesBatch() uses ManifestPolicy.HardcodedDefault directly, bypassing the bundled manifest.json's own "skip" override).</summary>
@@ -120,10 +120,37 @@ public class DatabaseInitializerTests
         var db    = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(10, db.QuoteCount,     "10 curated quotes (Airplane!, Holy Grail, Princess Bride, Star Wars)");
-        Assert.AreEqual(4,  db.SourceCount,    "4 sources (Airplane!, Holy Grail, Princess Bride, Star Wars)");
-        Assert.AreEqual(7,  db.CharacterCount, "7 characters across the four sources");
+        Assert.AreEqual(13, db.QuoteCount,     "10 movie/tv quotes (Airplane!, Holy Grail, Princess Bride, Star Wars) + 3 person quotes (Churchill, Armstrong, MLK)");
+        Assert.AreEqual(7,  db.SourceCount,    "4 movie sources + 3 person speech occasions");
+        Assert.AreEqual(7,  db.CharacterCount, "7 characters across the four movie sources");
+        Assert.AreEqual(3,  db.PeopleCount,    "Winston Churchill, Neil Armstrong, Martin Luther King Jr.");
         Assert.AreEqual(0,  db.LastSeedDuplicates.Count);
+    }
+
+    /// <summary>
+    /// The curated file's explicit <c>people[]</c> entries (Winston Churchill, Neil Armstrong, Martin
+    /// Luther King Jr.) carry real dateOfBirth/dateOfDeath — added specifically to exercise the Person
+    /// Add write path with real data, after a live T2 pass found it silently dropped both fields on a
+    /// brand-new Person (see <c>SqliteImportActionServiceTests.ApplyBatchAsync_PersonAdd_WritesDateOfBirthAndDateOfDeath</c>
+    /// for the isolated regression test; this is the end-to-end seeding equivalent).
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_CuratedFileOnly_SeedsPersonDatesFromExplicitEntries()
+    {
+        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        var db    = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var people = (await conn.QueryAsync<(string Name, string? DateOfBirth, string? DateOfDeath)>(
+            "SELECT Name, DateOfBirth, DateOfDeath FROM People WHERE IsDeleted = 0;")).ToList();
+
+        Assert.HasCount(3, people);
+        Assert.IsTrue(people.Any(p => p is { Name: "Winston Churchill", DateOfBirth: "1874-11-30", DateOfDeath: "1965-01-24" }));
+        Assert.IsTrue(people.Any(p => p is { Name: "Neil Armstrong", DateOfBirth: "1930-08-05", DateOfDeath: "2012-08-25" }));
+        Assert.IsTrue(people.Any(p => p is { Name: "Martin Luther King Jr.", DateOfBirth: "1929-01-15", DateOfDeath: "1968-04-04" }));
     }
 
     /// <summary>#191: a Source discovered implicitly from a quote (never named in a sources[] section) still carries that quote's own Date once seeded — the curated file's own Airplane!/1980 entries are the fixture.</summary>
