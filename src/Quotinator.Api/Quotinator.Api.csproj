@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <!-- Direct override: Microsoft.AspNetCore.OpenApi 10.0.9 transitively pulls in the
          vulnerable Microsoft.OpenApi 2.0.0 (CVE-2026-49451, GHSA-v5pm-xwqc-g5wc). Forces
          resolution to the patched version until AspNetCore.OpenApi itself bumps its floor. -->
