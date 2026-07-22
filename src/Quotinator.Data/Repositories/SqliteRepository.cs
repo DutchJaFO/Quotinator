@@ -35,12 +35,12 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var results = await uow.Connection.QueryAsync<T>(
-                RepositorySql.SelectById(TableName), param, uow.Transaction);
+                RepositorySql.SelectById(TableName, Columns), param, uow.Transaction);
             return results.FirstOrDefault();
         }
         using var conn = Factory.CreateConnection();
         conn.Open();
-        var rows = await conn.QueryAsync<T>(RepositorySql.SelectById(TableName), param);
+        var rows = await conn.QueryAsync<T>(RepositorySql.SelectById(TableName, Columns), param);
         return rows.FirstOrDefault();
     }
 
@@ -98,13 +98,13 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
     {
         if (orderBy is { Count: > 0 })
             foreach (var col in orderBy)
-                if (!ValidColumnNames.Contains(col.Name))
+                if (!Columns.ValidColumnNames.Contains(col.Name))
                     throw new ArgumentException($"'{col.Name}' is not a valid column on {typeof(T).Name}.", nameof(orderBy));
 
         var limit  = pageSize == 0 ? -1 : pageSize;
         var offset = pageSize == 0 ? 0  : (page - 1) * pageSize;
         var param  = new { limit, offset };
-        var sql    = RepositorySql.SelectPage(TableName, orderBy);
+        var sql    = RepositorySql.SelectPage(TableName, Columns, orderBy);
 
         List<T> items;
         int totalCount;

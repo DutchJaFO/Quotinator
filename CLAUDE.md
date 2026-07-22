@@ -413,7 +413,7 @@ a client edits through this endpoint. Any future CRUD work targets the core resp
 `PUT /masterdata/sources/{id}`), never a nested reference field directly.
 
 **A resolver, not the generic repository — resolving a FK to a reference always requires a join** the
-generic `IListableRepository<T>`/`IRepository<T>` (single-table, `SELECT * FROM {table}`) cannot express.
+generic `IListableRepository<T>`/`IRepository<T>` (single-table only, no join support) cannot express.
 Each masterdata issue that needs this writes its own small reader in `Quotinator.Core.Repositories`
 (e.g. `ISourceSeriesReferenceReader`, `ICharacterSourceLinkReader`) returning plain `(Guid Id, string
 Name)` tuples, not `MasterDataReference` directly — this keeps the reader a data-shape concern,
@@ -525,7 +525,7 @@ Found and fixed piecemeal across `status`/`entityType`/`batchId` (#154), a conve
 
 **The one exemption**: `SystemChangeLog.InitiatedById` is `Id`-suffixed but not always an id — it holds an import batch UUID, an HTTP route, or an enrichment provider name — so forcing it lowercase would corrupt legitimate mixed-case content in the non-id cases. It is excluded by name in `SqlSelectPresentationGuard.ExemptColumnNames`, the only entry. A reader with no HTTP endpoint yet is still in scope for this rule — a DI-registered reader with a real `SELECT` query needs correct presentation for any consumer, not only a live one.
 
-**Mechanical guard**: `Quotinator.Data.Diagnostics.SqlSelectPresentationGuard` mirrors `SqlIdCaseGuard`'s own strip-then-scan technique (not a maintained registry of "columns known to need it") — strip every already-`LOWER(...)`-wrapped column from a query's SELECT list, then flag any remaining `*Id`-suffixed reference. Wired into the same `SqlQueryGuardTests`/`RepositorySqlGuardTests` `DynamicData` enumeration `SqlIdCaseGuard` uses, so every SQL constant, factory method, and dynamically-assembled query is scanned on every test run. The one structural exception is `RepositorySql.cs`'s generic `SELECT *` queries — entity-agnostic by design (ADR 004), they never have an explicit column list for a text-based guard to rewrap, so correctness there depends on every domain entity's id/FK properties staying `Guid`-typed (true today; see ADR 012 for the boundary this creates).
+**Mechanical guard**: `Quotinator.Data.Diagnostics.SqlSelectPresentationGuard` mirrors `SqlIdCaseGuard`'s own strip-then-scan technique (not a maintained registry of "columns known to need it") — strip every already-`LOWER(...)`-wrapped column from a query's SELECT list, then flag any remaining `*Id`-suffixed reference. Wired into the same `SqlQueryGuardTests`/`RepositorySqlGuardTests` `DynamicData` enumeration `SqlIdCaseGuard` uses, so every SQL constant, factory method, and dynamically-assembled query is scanned on every test run — including `RepositorySql.cs`'s generic queries, which build an explicit column list via an `IEntityColumnMetadata` parameter rather than `SELECT *`, so they get the exact same wrap-every-id-column coverage as every hand-written query in `Sql.cs`. See ADR 012 for how `IEntityColumnMetadata`/`ReflectedColumnMetadata` work.
 
 ### Entity-scoped filter-parameter convention
 
@@ -1220,6 +1220,30 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    fixture directly (bypassing capture-time canonicalization) and reads it back through this exact query
    path — a live T2 run cannot easily manufacture pre-existing non-canonical data through the API alone,
    since every write path now canonicalizes at capture time.
+
+   **Uniform SELECT-list wrapping via `IEntityColumnMetadata`** (#210's follow-on round) — `RepositorySql.cs`'s
+   generic queries (`SelectById`, `SelectByIds`, `SelectDeleted`, `SelectByForeignKey`, `SelectJunctionRow`,
+   `SelectPage`) build an explicit column list via a caller-supplied `IEntityColumnMetadata` instead of
+   `SELECT *`, wrapping every id column the same way hand-written `Sql.cs` queries do. Confirms every
+   generic-repository-backed masterdata endpoint still returns correct data and lowercase ids after the
+   `SELECT *` removal:
+   ```bash
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources?pageSize=2"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/characters?pageSize=2"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/people?pageSize=2"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/series?pageSize=2"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/universes?pageSize=2"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/conversations?pageSize=2"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/stagedirections?pageSize=2"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/soundcues?pageSize=2"
+   ```
+   All must return `200` with populated `items` and lowercase `id` fields — these endpoints all go
+   through `SqliteRepository<T>`/`SqliteRestorableRepository<T>`'s generic `GetPageAsync`/`GetByIdAsync`,
+   the only live paths that exercise `RepositorySql`'s rewritten queries end to end (Characters'
+   `CharacterSources` many-to-many link also exercises `SqliteLinkRepository`). Also confirm
+   `GetByIdAsync`'s case-insensitive lookup survived the rewrite — fetch one of the returned ids from
+   `GET .../sources/{id}` with both its original casing and an uppercased version; both must return `200`
+   with the same, lowercase-rendered `id`.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 

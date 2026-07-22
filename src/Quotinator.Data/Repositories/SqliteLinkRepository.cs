@@ -23,6 +23,7 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
     private static readonly string LeftTableName    = GetTableName<TLeft>();
     private static readonly string RightTableName   = GetTableName<TRight>();
     private static readonly string JunctionTableName = GetTableName<TJunction>();
+    private static readonly IEntityColumnMetadata JunctionColumns = ReflectedColumnMetadata.For(typeof(TJunction));
 
     private readonly IDbConnectionFactory _factory;
     private readonly SqliteRepository<TLeft>              _leftRepo;
@@ -116,7 +117,7 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
             leftId  = leftId.ToCanonicalId(),
             rightId = rightId.ToCanonicalId()
         };
-        var sql = RepositorySql.SelectJunctionRow(JunctionTableName, LeftFkColumn, RightFkColumn);
+        var sql = RepositorySql.SelectJunctionRow(JunctionTableName, LeftFkColumn, RightFkColumn, JunctionColumns);
 
         if (unitOfWork is SqliteUnitOfWork uow)
         {
@@ -133,7 +134,7 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
         string tableName, string fkColumn, Guid id, IUnitOfWork? unitOfWork)
     {
         var param = new { parentId = id.ToCanonicalId() };
-        var sql   = RepositorySql.SelectByForeignKey(tableName, fkColumn);
+        var sql   = RepositorySql.SelectByForeignKey(tableName, fkColumn, JunctionColumns);
 
         if (unitOfWork is SqliteUnitOfWork uow)
         {
@@ -151,7 +152,7 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
         where TEntity : RecordBase
     {
         var param = new { ids };
-        var sql   = RepositorySql.SelectByIds(tableName);
+        var sql   = RepositorySql.SelectByIds(tableName, ReflectedColumnMetadata.For(typeof(TEntity)));
 
         if (unitOfWork is SqliteUnitOfWork uow)
         {

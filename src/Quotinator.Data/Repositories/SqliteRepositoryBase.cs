@@ -24,16 +24,15 @@ public abstract class SqliteRepositoryBase<T> where T : class
         ?? throw new InvalidOperationException(
             $"{typeof(T).Name} must carry a [Table(\"..\")] attribute from Dapper.Contrib.Extensions.");
 
-    // Property names double as column names for every entity today — no [Column] remapping exists
-    // anywhere in the codebase. [Write(false)]/[Computed] properties are excluded because Dapper.Contrib
-    // never persists them, so they are not real columns a query could sort by.
-    /// <summary>Column names <typeparamref name="T"/> actually persists — used to validate a caller-supplied sort column before it reaches SQL.</summary>
-    protected static readonly HashSet<string> ValidColumnNames = new(
-        typeof(T).GetProperties()
-            .Where(p => p.GetCustomAttribute<WriteAttribute>()?.Write != false
-                     && p.GetCustomAttribute<ComputedAttribute>() is null)
-            .Select(p => p.Name),
-        StringComparer.Ordinal);
+    // Resolved once per T via ReflectedColumnMetadata's own cache. Property names double as column
+    // names for every entity today — no [Column] remapping exists anywhere in the codebase.
+    /// <summary>
+    /// Column metadata for <typeparamref name="T"/> — every persisted column (used to validate a
+    /// caller-supplied sort column before it reaches SQL, and to build <see cref="RepositorySql"/>'s
+    /// explicit SELECT column list instead of <c>SELECT *</c>) and, among those, every id column that
+    /// must be read through <c>LOWER(...)</c> — see ADR 012.
+    /// </summary>
+    protected static readonly IEntityColumnMetadata Columns = ReflectedColumnMetadata.For(typeof(T));
 
     /// <summary>Initialises the base with the connection factory.</summary>
     protected SqliteRepositoryBase(IDbConnectionFactory factory)

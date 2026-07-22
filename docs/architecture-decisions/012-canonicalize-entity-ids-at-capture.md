@@ -153,15 +153,25 @@ always an id — it holds an import batch UUID, an HTTP route, or an enrichment 
 doc comment) — so forcing it lowercase would corrupt legitimate mixed-case content in the non-id cases.
 This is the only column name excluded; every other `*Id`-suffixed column, PK or FK, must be wrapped.
 
-**Structural boundary: `RepositorySql`'s generic queries.** `RepositorySql.cs` (`SelectById`,
-`SelectByIds`, `SelectPage`, etc.) is entity-agnostic by design (ADR 004) — it receives only a table
-name, never a column list, so it always queries `SELECT *`. There is no explicit column list for a
-text-based guard to rewrap. Correctness here depends on every entity's id/FK properties staying
-`Guid`-typed (which they all currently are — no domain entity in `Quotinator.Core.Entities` has a
-`string`-typed id-suffixed property; only the `Quotinator.Data`-owned `System_`-prefixed tables do, and
-those are read through explicit, non-generic queries that `SqlSelectPresentationGuard` does cover). If a
-future domain entity ever needs a `string`-typed id/FK property, it cannot go through the generic
-`SELECT *` path safely and needs its own explicit, guarded query instead.
+**`RepositorySql`'s generic queries build an explicit column list too, never `SELECT *`.**
+`RepositorySql.cs` (`SelectById`, `SelectByIds`, `SelectDeleted`, `SelectByForeignKey`,
+`SelectJunctionRow`, `SelectPage`) is entity-agnostic by design (ADR 004) — it never references a
+specific entity type — but it is not column-blind: each method takes an
+**`IEntityColumnMetadata columns`** parameter (`ValidColumnNames`, every persisted column; `IdColumnNames`,
+the subset that are id columns) and builds `SELECT {column list}`, wrapping each id column via
+`IdClauses.SelectColumn` and leaving the rest bare — the same explicit-column-list approach every
+hand-written query in `Sql.cs` uses, not a special case. **`ReflectedColumnMetadata.For(Type)`**
+(cached per type) is the default implementation: reflects over the type's persisted properties (the
+same criteria Dapper.Contrib itself uses — excluded only by `[Write(false)]`/`[Computed]`) and infers
+`IdColumnNames` as every property name ending in `Id`. `SqliteRepositoryBase<T>` exposes this as a
+`protected static Columns` field, inherited by every concrete repository; `SqliteOneToOneRepository`/
+`SqliteLinkRepository` resolve it separately for `TDetail`/`TLeft`/`TRight`/`TJunction` since those
+aren't `T`. `IEntityColumnMetadata` is an interface specifically so a future entity whose foreign key
+doesn't follow the `*Id` naming convention could supply a custom implementation instead of relying on
+`ReflectedColumnMetadata`'s inference — no such entity exists today, but the indirection means that
+exception, if ever needed, doesn't require changing `RepositorySql` itself. Verified live via
+`RepositorySqlFactory_PassesSelectPresentationGuard`, which now scans real generated column lists
+instead of vacuously passing on an empty `SELECT *`.
 
 ---
 

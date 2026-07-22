@@ -53,24 +53,37 @@ public class RepositorySqlGuardTests
             "presentation normalization\" revision.");
     }
 
+    /// <summary>
+    /// Stands in for a real entity's <see cref="ReflectedColumnMetadata"/> — covers every column name
+    /// the cases below exercise (<c>Id</c>/<c>ParentId</c>/<c>LeftId</c>/<c>RightId</c> as id columns,
+    /// <c>Label</c>/<c>DateCreated</c> as non-id columns), matching what <c>TestWidgets</c> would
+    /// reflect to if it were a real <c>[Table]</c>-attributed entity.
+    /// </summary>
+    private sealed record FakeColumnMetadata(IReadOnlyList<string> ValidColumnNames, IReadOnlyList<string> IdColumnNames)
+        : IEntityColumnMetadata;
+
+    private static readonly IEntityColumnMetadata TestColumns = new FakeColumnMetadata(
+        ValidColumnNames: ["Id", "Label", "DateCreated", "ParentId", "LeftId", "RightId"],
+        IdColumnNames:    ["Id", "ParentId", "LeftId", "RightId"]);
+
     public static IEnumerable<object[]> RepositorySqlCases()
     {
         const string t = "TestWidgets";
         return
         [
-            ["SelectById",    RepositorySql.SelectById(t)],
+            ["SelectById",    RepositorySql.SelectById(t, TestColumns)],
             ["SoftDelete",    RepositorySql.SoftDelete(t)],
-            ["SelectDeleted", RepositorySql.SelectDeleted(t)],
+            ["SelectDeleted", RepositorySql.SelectDeleted(t, TestColumns)],
             ["Restore",       RepositorySql.Restore(t)],
             ["HardDelete",           RepositorySql.HardDelete(t)],
             ["Purge",                RepositorySql.Purge(t)],
-            ["SelectByForeignKey",   RepositorySql.SelectByForeignKey(t, "ParentId")],
-            ["SelectJunctionRow",    RepositorySql.SelectJunctionRow(t, "LeftId", "RightId")],
-            ["SelectByIds",          RepositorySql.SelectByIds(t)],
-            ["SelectPage(default order)", RepositorySql.SelectPage(t)],
-            ["SelectPage(single column)", RepositorySql.SelectPage(t, [new SortColumn("Label")])],
-            ["SelectPage(descending)",    RepositorySql.SelectPage(t, [new SortColumn("Label", Descending: true)])],
-            ["SelectPage(multi-column)",  RepositorySql.SelectPage(t, [new SortColumn("Label"), new SortColumn("DateCreated", Descending: true)])],
+            ["SelectByForeignKey",   RepositorySql.SelectByForeignKey(t, "ParentId", TestColumns)],
+            ["SelectJunctionRow",    RepositorySql.SelectJunctionRow(t, "LeftId", "RightId", TestColumns)],
+            ["SelectByIds",          RepositorySql.SelectByIds(t, TestColumns)],
+            ["SelectPage(default order)", RepositorySql.SelectPage(t, TestColumns)],
+            ["SelectPage(single column)", RepositorySql.SelectPage(t, TestColumns, [new SortColumn("Label")])],
+            ["SelectPage(descending)",    RepositorySql.SelectPage(t, TestColumns, [new SortColumn("Label", Descending: true)])],
+            ["SelectPage(multi-column)",  RepositorySql.SelectPage(t, TestColumns, [new SortColumn("Label"), new SortColumn("DateCreated", Descending: true)])],
             ["CountActive",               RepositorySql.CountActive(t)],
 
             // Audit factory methods — all four filter-flag combinations.

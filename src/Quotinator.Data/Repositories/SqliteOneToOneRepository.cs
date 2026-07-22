@@ -31,11 +31,12 @@ public abstract class SqliteOneToOneRepository<TParent, TDetail>(
     where TParent : RecordBase
     where TDetail : RecordBase
 {
-    // Resolved once per TDetail — same pattern as SqliteRepositoryBase.TableName for TParent.
+    // Resolved once per TDetail — same pattern as SqliteRepositoryBase.TableName/Columns for TParent.
     private static readonly string DetailTableName =
         typeof(TDetail).GetCustomAttribute<TableAttribute>()?.Name
         ?? throw new InvalidOperationException(
             $"{typeof(TDetail).Name} must carry a [Table(\"..\")] attribute from Dapper.Contrib.Extensions.");
+    private static readonly IEntityColumnMetadata DetailColumns = ReflectedColumnMetadata.For(typeof(TDetail));
 
     /// <inheritdoc/>
     public abstract Task<TDetail?> GetDetailAsync(Guid parentId, IUnitOfWork? unitOfWork = null);
@@ -58,13 +59,13 @@ public abstract class SqliteOneToOneRepository<TParent, TDetail>(
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var rows = await uow.Connection.QueryAsync<TDetail>(
-                RepositorySql.SelectByForeignKey(DetailTableName, fkColumn), param, uow.Transaction);
+                RepositorySql.SelectByForeignKey(DetailTableName, fkColumn, DetailColumns), param, uow.Transaction);
             return rows.FirstOrDefault();
         }
         using var conn = Factory.CreateConnection();
         conn.Open();
         var result = await conn.QueryAsync<TDetail>(
-            RepositorySql.SelectByForeignKey(DetailTableName, fkColumn), param);
+            RepositorySql.SelectByForeignKey(DetailTableName, fkColumn, DetailColumns), param);
         return result.FirstOrDefault();
     }
 }

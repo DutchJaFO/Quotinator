@@ -1,9 +1,70 @@
 # #210 — Canonicalize Quotes.Id at capture, case-insensitive lookup
 
-**Status:** In progress — reopened after "Waiting for release" for a seventh round of scope expansion (see "Uniform SELECT-list wrapping" below)
+**Status:** In progress — reopened after "Waiting for release" for an eighth round of scope expansion (see "Closing the RepositorySql SELECT-list boundary" below)
 **GitHub issue:** #210
 **Tiers required:** T1, T2
 **Depends on:** none (parent tracking issue #207; shares `EntityIdCanonicalizer` with sibling sub-issue #209, which landed first)
+
+## Closing the RepositorySql SELECT-list boundary (eighth round of scope expansion)
+
+The seventh round below documented `RepositorySql.cs`'s generic `SELECT *` queries as a "structural
+boundary" — entity-agnostic by design (ADR 004), with (it was claimed) no explicit column list available
+for a text-based guard to rewrap. The developer reviewed `RepositorySql.SelectByIds`/`SelectPage` and
+`SqliteRepository.GetPageAsync` directly and rejected that framing: *"you claim that you can do nothing
+for RepositorySql, but when I trace the calls I notice that we are aware of the available columns when
+calling SelectPage. If we add an interface that allows us access to the ValidColumnNames property of a
+class then we can do validate both the order by part of the query and the column typing we require for
+Id-columns. Id-columns could be part of that interface, so classes could indicated foreign keys that were
+different from the standard."*
+
+This was correct: `SqliteRepositoryBase<T>.ValidColumnNames` (reflection-derived, already used to validate
+`GetPageAsync`'s caller-supplied `ORDER BY` column) already proved the necessary column knowledge existed
+one layer above `RepositorySql`'s static factory methods — the "no column-list knowledge available" premise
+behind the seventh round's "structural boundary" framing was simply wrong.
+
+**Fix**: a new `IEntityColumnMetadata` interface
+(`src/Quotinator.Data/Repositories/EntityColumnMetadata.cs`) exposing `ValidColumnNames` (every persisted
+column) and `IdColumnNames` (the id-column subset). `ReflectedColumnMetadata` is the default, per-`Type`-
+cached implementation — same Dapper.Contrib `[Write(false)]`/`[Computed]` exclusion criteria
+`SqliteRepositoryBase<T>` already used for `ValidColumnNames`, with `IdColumnNames` inferred as every
+persisted property ending in `Id` (matching `SqlSelectPresentationGuard`'s own naming-convention
+inference). It is an interface rather than a bare class specifically so a future entity whose FK doesn't
+follow the `*Id` convention could supply its own implementation instead of relying on reflection inference
+— directly answering the developer's "classes could indicate foreign keys that were different from the
+standard"; no such entity exists today, but the indirection means that exception, if ever needed, wouldn't
+require changing `RepositorySql` itself.
+
+`RepositorySql.BuildSelectColumns(IEntityColumnMetadata columns)` replaces every `SELECT *` with an
+explicit column list, wrapping each id column via `IdClauses.SelectColumn`. Six factory methods
+(`SelectById`, `SelectDeleted`, `SelectByForeignKey`, `SelectJunctionRow`, `SelectByIds`, `SelectPage`) now
+take an `IEntityColumnMetadata columns` parameter. `SqliteRepositoryBase<T>`'s `ValidColumnNames` field was
+replaced with `protected static readonly IEntityColumnMetadata Columns = ReflectedColumnMetadata.For(typeof(T))`,
+threaded through `SqliteRepository<T>`, `SqliteRestorableRepository<T>`, `SqliteOneToOneRepository<TParent,
+TDetail>` (resolves `TDetail`'s own metadata separately, mirroring how it already independently resolves
+`DetailTableName`), and `SqliteLinkRepository<TLeft,TRight,TJunction>` (resolves `TJunction`'s metadata for
+the class-level junction queries, and `TEntity`'s metadata per-call in the generic `QueryByIdsAsync<TEntity>`,
+since `TEntity` is a method type parameter, not tied to the class).
+
+`RepositorySqlGuardTests`/`RepositorySqlTests` needed a local `FakeColumnMetadata` test double (a synthetic
+`"TestWidgets"` table has no real `[Table]`-attributed entity behind it for `ReflectedColumnMetadata` to
+reflect over). `RepositorySqlFactory_PassesSelectPresentationGuard`/`RepositorySqlFactory_PassesIdCaseGuard`
+previously passed vacuously against empty `SELECT *` — they now scan genuine explicit column lists (e.g.
+`SELECT LOWER(Id) AS Id, Label, DateCreated, LOWER(ParentId) AS ParentId, ... FROM TestWidgets WHERE
+LOWER(Id) = LOWER(@id) AND IsDeleted = 0`), closing the exact "the guard never actually had anything to
+scan here" gap the seventh round's boundary left open.
+
+One compile fix needed along the way: `IEntityColumnMetadata` had to be `public`, not `internal` — a
+`protected` field on the `public` `SqliteRepositoryBase<T>` is inherited by `Quotinator.Data.Example`
+(a different assembly), so an `internal` field type would have been CS0052 inconsistent accessibility.
+`ReflectedColumnMetadata` itself stays `internal` — only `Quotinator.Data` calls `.For()` directly.
+
+Full suite green with zero regressions (2, 16, 598, 30, 11, 16, 967, 9, 493 — matching pre-change counts
+exactly), confirming the SELECT-list change is functionally transparent to existing behaviour while closing
+a real, previously-undetected robustness gap. T2 re-verified live: every generic-repository-backed
+masterdata endpoint (sources, characters, people, series, universes, conversations, stage directions,
+sound cues) still returns 200 with correct, lowercase-rendered data, and case-insensitive `GetByIdAsync`
+lookup still works. ADR 012 and CLAUDE.md updated to remove the now-resolved "structural boundary" claim
+and describe the actual mechanism in its place.
 
 ## Uniform SELECT-list wrapping, and squashing ADR 012's revision history (seventh round of scope expansion)
 
@@ -47,6 +108,10 @@ explicit column list for a text-based guard to rewrap. Correctness there depends
 id/FK properties staying `Guid`-typed, which is true today (confirmed: no `Quotinator.Core.Entities` type
 has a `string`-typed `Id`-suffixed property) but is now an explicit, documented constraint rather than an
 unstated assumption.
+
+**This "structural boundary" framing was itself rejected one review cycle later — see the eighth round
+above.** The premise (no column-list knowledge available at the generic-repository layer) turned out to be
+false: `ValidColumnNames` already existed one layer up and proved the knowledge was there all along.
 
 Full suite green (no pre-existing test needed changes — nothing asserted exact casing for any of the
 newly-wrapped columns). T2 re-verified live: masterdata/quotes/characters endpoints all still render
@@ -475,8 +540,8 @@ revision). T2 (Docker) run three times — see checklist row 8 for all three pas
 | 4 | ✅ | `GET /quotes/{id}` resolves regardless of URL casing — the previously fully-unmitigated gap | Unit test | `SqliteQuoteServiceTests.GetById_UppercaseUrlIdAgainstLowercaseStoredQuote_StillResolves` |
 | 5 | ✅ | `Guid`-typed vs. `string`-typed quote-id parameter bindings are consistent | Doc review + code review | Step 4's audit findings recorded above — no mismatch found, no code change needed |
 | 6 | ✅ | No regression | Unit test | Full `dotnet test --configuration Release --verbosity normal` — all green |
-| 7 | ⬜ | T1 — app starts in Visual Studio; every entity id, including quote ids, renders lowercase (the final convention — see "System-wide lowercase convention" above; superseded the round-3 uppercase-unification this row originally targeted) | Live (T1) | Pass 1 (pre-casing-unification) confirmed: clean startup, schema up to date (data v10, app v9), 796 quotes/479 sources/7 characters seeded, every touched endpoint 200. Needs a fresh confirmation covering every round through the seventh (lowercase system-wide, read-time presentation normalization, uniform SELECT-list wrap) — none of which have had a T1 pass since round 3's Pass 1. |
-| 8 | ✅ | T2 — the case-insensitive lookup gap is fixed end to end, stays fixed after the `IdClauses` refactor, and quote ids now render uppercase like every other entity | Live (T2), 3 passes | **Pass 1** (initial casing fix, pre-revision): imported a quote with explicit id `F0000210-0000-4000-8000-000000000210`; response's own `id` field came back canonically lowercase (`f0000210-...`); `GET /api/v1/quotes/{id}` returned 200 for both uppercase and lowercase URL casing. **Pass 2** (after the `IdClauses` refactor, pre-revision): baseline endpoints re-run clean; import-actions decide/apply exercised the fixed `SelectById` property; `/random?n=10` exercised the fixed `NOT IN` clause. **Pass 3** (after the casing-unification revision, fresh image rebuild): a fresh-seeded `/quotes/random` call already returned an uppercase `id` (e.g. `8AECF114-...`), confirming newly-seeded quotes are uppercase by default. Imported a quote with explicit id `f0000210-0000-4000-8000-000000000210` (lowercase) — response's own `id` came back canonically **uppercase** (`F0000210-...`), and `GET /api/v1/quotes/{id}` returned 200 for both casings. Imported a conversation whose `lines[].quoteId` (`F0000210-...-211`, uppercase) deliberately mismatched the referenced quote's own explicit id (`f0000210-...-211`, lowercase) — returned `200`, not `SQLite Error 19: FOREIGN KEY constraint failed`, and `GET /conversations/{id}` confirmed the line's embedded quote resolved correctly. Baseline search/import-actions/audit re-run clean. |
+| 7 | ⬜ | T1 — app starts in Visual Studio; every entity id, including quote ids, renders lowercase (the final convention — see "System-wide lowercase convention" above; superseded the round-3 uppercase-unification this row originally targeted) | Live (T1) | Pass 1 (pre-casing-unification) confirmed: clean startup, schema up to date (data v10, app v9), 796 quotes/479 sources/7 characters seeded, every touched endpoint 200. Needs a fresh confirmation covering every round through the eighth (lowercase system-wide, read-time presentation normalization, uniform SELECT-list wrap, `IEntityColumnMetadata`) — none of which have had a T1 pass since round 3's Pass 1. |
+| 8 | ✅ | T2 — the case-insensitive lookup gap is fixed end to end, stays fixed after the `IdClauses` refactor and the `IEntityColumnMetadata` rewrite, and quote ids now render uppercase like every other entity | Live (T2), 4 passes | **Pass 1** (initial casing fix, pre-revision): imported a quote with explicit id `F0000210-0000-4000-8000-000000000210`; response's own `id` field came back canonically lowercase (`f0000210-...`); `GET /api/v1/quotes/{id}` returned 200 for both uppercase and lowercase URL casing. **Pass 2** (after the `IdClauses` refactor, pre-revision): baseline endpoints re-run clean; import-actions decide/apply exercised the fixed `SelectById` property; `/random?n=10` exercised the fixed `NOT IN` clause. **Pass 3** (after the casing-unification revision, fresh image rebuild): a fresh-seeded `/quotes/random` call already returned an uppercase `id` (e.g. `8AECF114-...`), confirming newly-seeded quotes are uppercase by default. Imported a quote with explicit id `f0000210-0000-4000-8000-000000000210` (lowercase) — response's own `id` came back canonically **uppercase** (`F0000210-...`), and `GET /api/v1/quotes/{id}` returned 200 for both casings. Imported a conversation whose `lines[].quoteId` (`F0000210-...-211`, uppercase) deliberately mismatched the referenced quote's own explicit id (`f0000210-...-211`, lowercase) — returned `200`, not `SQLite Error 19: FOREIGN KEY constraint failed`, and `GET /conversations/{id}` confirmed the line's embedded quote resolved correctly. Baseline search/import-actions/audit re-run clean. **Pass 4** (after the `IEntityColumnMetadata` rewrite replaced every `RepositorySql` `SELECT *` with an explicit column list): every generic-repository-backed masterdata endpoint re-run — `/masterdata/sources`, `/masterdata/characters`, `/masterdata/people`, `/masterdata/series`, `/masterdata/universes`, `/conversations`, `/masterdata/stagedirections`, `/masterdata/soundcues` (`pageSize=2` each) — all 200, all ids lowercase-rendered; `GetByIdAsync`'s case-insensitive lookup re-confirmed with both original and uppercased URL casing. |
 
 ---
 

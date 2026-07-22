@@ -29,12 +29,12 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var results = await uow.Connection.QueryAsync<T>(
-                RepositorySql.SelectDeleted(TableName), transaction: uow.Transaction);
+                RepositorySql.SelectDeleted(TableName, Columns), transaction: uow.Transaction);
             return results.ToList();
         }
         using var conn = Factory.CreateConnection();
         conn.Open();
-        var rows = await conn.QueryAsync<T>(RepositorySql.SelectDeleted(TableName));
+        var rows = await conn.QueryAsync<T>(RepositorySql.SelectDeleted(TableName, Columns));
         return rows.ToList();
     }
 
