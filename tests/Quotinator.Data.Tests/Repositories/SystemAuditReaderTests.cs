@@ -75,4 +75,24 @@ public class SystemAuditReaderTests
         Assert.AreEqual(3, result.TotalCount);
         Assert.AreEqual(3, result.PageSize, "PageSize must report the effective count actually returned, not the literal 0 requested");
     }
+
+    [TestMethod]
+    public async Task GetPagedAsync_MixedCaseRecordId_ReturnsLowercase()
+    {
+        // RecordId is read back through LOWER(...) (this project's read-time normalization,
+        // independent of what casing was actually written) so a mismatched-case fixture proves the
+        // read side, not just an exact round-trip of the written value — see #210's fifth round.
+        await _writer.WriteAsync(new SystemAuditEntry
+        {
+            TableName   = "Quotes",
+            RecordId    = "F0000210-0000-4000-8000-000000000210",
+            Operation   = AuditOperation.Insert,
+            Agent       = "TestRunner/1.0",
+            PerformedAt = DateTime.UtcNow,
+        });
+
+        var result = await _reader.GetPagedAsync(null, null, 1, 20);
+
+        Assert.AreEqual("f0000210-0000-4000-8000-000000000210", result.Items.Single().RecordId);
+    }
 }
