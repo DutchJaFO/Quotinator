@@ -373,6 +373,20 @@ public class ImportActionEndpointsTests
     }
 
     [TestMethod]
+    public async Task ApplyBatch_MissingBatchId_Returns422NotGenericNumericFallback()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/apply", null);
+        var body     = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.IsFalse(body.Contains("Numeric parameters"), "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
+    }
+
+    [TestMethod]
     public async Task ApplyBatch_EveryActionDecided_Returns200()
     {
         var fake = new FakeImportActionService { ReturnApplyResult = null };
@@ -419,6 +433,20 @@ public class ImportActionEndpointsTests
     }
 
     [TestMethod]
+    public async Task DiscardBatch_MissingBatchId_Returns422NotGenericNumericFallback()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/discard", null);
+        var body     = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.IsFalse(body.Contains("Numeric parameters"), "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
+    }
+
+    [TestMethod]
     public async Task DiscardBatch_CorrectKey_Returns204()
     {
         var fake = new FakeImportActionService();
@@ -456,6 +484,20 @@ public class ImportActionEndpointsTests
         var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ReverseActions_MissingBatchId_Returns422NotGenericNumericFallback()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/reverse", null);
+        var body     = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.IsFalse(body.Contains("Numeric parameters"), "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
     }
 
     [TestMethod]

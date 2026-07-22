@@ -1245,6 +1245,32 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    `GET .../sources/{id}` with both its original casing and an uppercased version; both must return `200`
    with the same, lowercase-rendered `id`.
 
+   **`batchId` validated explicitly on `/actions/apply`, `/actions/discard`, `/actions/reverse`; request
+   logging reports the real final status code** — found live via manual Visual Studio testing (T1), not
+   this checklist: all three endpoints declared `batchId` as a required, non-nullable minimal-API
+   parameter, so an omitted `batchId` threw `BadHttpRequestException` at the binding layer before the
+   handler ever ran. The global safety net (`BadRequestExceptionHandler`) caught it and returned `422` —
+   but with a message hard-coded to numeric parameters ("Numeric parameters (yearFrom, yearTo, ...) must
+   be whole numbers"), actively wrong for a missing `batchId`. Separately, the completion log line for
+   that same request read `→ 200`, not the `422` the client actually received — `Program.cs` registered
+   `UseExceptionHandler()` before `RequestLoggingMiddleware`, so the exception unwound through the
+   logging middleware's `finally` block (which reads `context.Response.StatusCode`, still the untouched
+   default at that point) before the exception handler further out ever set the real status. Fixed by
+   declaring `batchId` as `string?` and validating it explicitly at the point of origin (mirroring the
+   "Numeric query parameter binding pattern" convention), and by moving `RequestLoggingMiddleware`'s
+   registration to before `UseExceptionHandler()` so it wraps the exception handler instead of being
+   wrapped by it.
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply"
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/discard"
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse"
+   ```
+   All three must return `422` with `"detail":"You must provide a batchId."` — never the generic
+   "Numeric parameters..." message. With `Quotinator__LogRequests=true`, `docker logs` for each of these
+   requests must show `→ 422`, not `→ 200`. Re-run a normal `apply` with a real `batchId` (see the
+   "Import and staged-action review workflow" section above) to confirm the fix didn't break the happy
+   path — still `200`.
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle

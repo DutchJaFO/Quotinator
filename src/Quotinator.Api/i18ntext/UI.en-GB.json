@@ -67,6 +67,7 @@
   "ErrorImportActionBatchInvalidState": "This batch cannot be discarded — it has already been applied, already been discarded, or has no staged actions.",
   "ErrorImportBatchNotFound": "No import batch exists with that id.",
   "ErrorImportFileOrBatchIdRequired": "You must provide either a file to import or a batchId to apply an already-staged batch.",
+  "ErrorImportActionBatchIdRequired": "You must provide a batchId.",
   "ErrorImportActionBatchNotReversible": "This batch cannot be reversed — it is not currently applied, is not the most recently applied batch still live, has no actions, or a Modify's original Source/Character/Person linkage can no longer be resolved.",
   "ErrorConversationNotFound": "No conversation with the requested ID was found.",
   "ErrorMutuallyExclusiveEntityFilter": "Specify either {0} or {1}, not both.",

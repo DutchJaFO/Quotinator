@@ -39,6 +39,7 @@ public static class ApiMessages
     public const string ImportActionBatchInvalidState    = "ErrorImportActionBatchInvalidState";
     public const string ImportBatchNotFound              = "ErrorImportBatchNotFound";
     public const string ImportFileOrBatchIdRequired      = "ErrorImportFileOrBatchIdRequired";
+    public const string ImportActionBatchIdRequired      = "ErrorImportActionBatchIdRequired";
     public const string ImportActionBatchNotReversible   = "ErrorImportActionBatchNotReversible";
     public const string ConversationNotFound             = "ErrorConversationNotFound";
     public const string MutuallyExclusiveEntityFilter    = "ErrorMutuallyExclusiveEntityFilter";

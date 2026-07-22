@@ -512,6 +512,19 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// Optional request logging — logs every endpoint call as two lines (start + end) with a
+// per-request correlation ID. Off by default. Enable with log_requests: true in the add-on
+// config (or Quotinator__LogRequests=true). All endpoints are logged; header values are never
+// captured (X-Api-Key, Authorization, Cookie must not appear in logs).
+//
+// Registered before UseExceptionHandler() so it wraps it, not the reverse — the completion log
+// line reads context.Response.StatusCode in a finally block, and an exception thrown deeper in
+// the pipeline unwinds through that finally before the response status has actually been set by
+// whichever middleware handles it. Logging registered after UseExceptionHandler would therefore
+// always report the pre-exception default (200), never the real status the client received.
+if (logRequests)
+    app.UseMiddleware<RequestLoggingMiddleware>();
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseRequestLocalization();
@@ -525,13 +538,6 @@ app.Use(async (context, next) =>
     callerContext.Agent = context.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;
     await next();
 });
-
-// Optional request logging — logs every endpoint call as two lines (start + end) with a
-// per-request correlation ID. Off by default. Enable with log_requests: true in the add-on
-// config (or Quotinator__LogRequests=true). All endpoints are logged; header values are never
-// captured (X-Api-Key, Authorization, Cookie must not appear in logs).
-if (logRequests)
-    app.UseMiddleware<RequestLoggingMiddleware>();
 
 app.MapOpenApi();
 app.MapScalarApiReference();

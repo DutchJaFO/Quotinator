@@ -217,10 +217,18 @@ internal static class ImportEndpoints
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
 
         adminGroup.MapPost("/actions/apply", async (
-            string batchId,
+            string? batchId,
             IImportActionService service,
             IApiLocalizer localizer) =>
         {
+            // Declared nullable and validated here, not bound as a required `string` — a required
+            // minimal-API parameter throws BadHttpRequestException at the binding layer when omitted,
+            // which the global safety net (BadRequestExceptionHandler) maps to a message about numeric
+            // parameters that has nothing to do with batchId. See the "Numeric query parameter binding
+            // pattern" convention this mirrors.
+            if (string.IsNullOrWhiteSpace(batchId))
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
+
             var stillPending = await service.ApplyBatchAsync(batchId);
             return stillPending is null
                 ? Results.Ok()
@@ -236,13 +244,17 @@ internal static class ImportEndpoints
             "decision recorded — mirrors git: resolving individual actions doesn't commit anything " +
             "until every action in the batch has been decided. If any are still pending, applies " +
             "nothing and returns `422` with the list of action ids still needing a decision. " +
+            "Returns `422` if `batchId` is missing. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
 
         adminGroup.MapPost("/actions/discard", async (
-            string batchId,
+            string? batchId,
             IImportActionService service,
             IApiLocalizer localizer) =>
         {
+            if (string.IsNullOrWhiteSpace(batchId))
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
+
             try
             {
                 await service.DiscardBatchAsync(batchId);
@@ -258,16 +270,20 @@ internal static class ImportEndpoints
         .WithDescription(
             "Marks every action sharing `batchId` as discarded in one statement — never touches any " +
             "domain table, since a discarded batch's Add actions never created anything to begin " +
-            "with (creation is deferred to apply time). Returns `422` if the batch has already been " +
-            "applied, already been discarded, or has no staged actions at all. " +
+            "with (creation is deferred to apply time). Returns `422` if `batchId` is missing, or if " +
+            "the batch has already been applied, already been discarded, or has no staged actions " +
+            "at all. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
 
         adminGroup.MapPost("/actions/reverse", async (
-            string batchId,
+            string? batchId,
             bool? preview,
             IImportActionService service,
             IApiLocalizer localizer) =>
         {
+            if (string.IsNullOrWhiteSpace(batchId))
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
+
             try
             {
                 await service.ReverseBatchAsync(batchId, preview ?? false);
@@ -293,9 +309,10 @@ internal static class ImportEndpoints
             "the batch is no longer live; its staged actions remain visible via `GET /import/actions`, " +
             "permanently marked Applied, as the historical record of what was done. " +
             "`?preview=true` runs every check without writing anything, so a caller can tell whether " +
-            "the real call would succeed. Returns `404` if `batchId` doesn't exist or was already " +
-            "reversed; `422` if the batch isn't currently applied, isn't the top of the stack, has no " +
-            "actions, or a Modify's original Source/Character/Person linkage can no longer be resolved. " +
+            "the real call would succeed. Returns `422` if `batchId` is missing, or if the batch isn't " +
+            "currently applied, isn't the top of the stack, has no actions, or a Modify's original " +
+            "Source/Character/Person linkage can no longer be resolved. Returns `404` if `batchId` " +
+            "doesn't exist or was already reversed. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
     }
 
