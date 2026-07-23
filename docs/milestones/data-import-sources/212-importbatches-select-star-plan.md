@@ -1,8 +1,8 @@
 # #212 — Remove ImportBatches' `SELECT *`, making it visible to SqlSelectPresentationGuard
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #212
-**Tiers required:** T2
+**Tiers required:** T1, T2
 **Depends on:** none
 
 ---
@@ -116,16 +116,15 @@ the exact SQL both methods run, Step 1 below adds direct repository-level covera
 relying solely on `GetAllAsync`'s indirect coverage and leaving `GetByTypeAsync` completely unverified
 by the very change that touches it.
 
-**Tiers required — T2 only, not T1.** This change touches `src/Quotinator.Data/Queries/Sql.cs` and
-`src/Quotinator.Data/Repositories/SqliteImportBatchRepository.cs` — no `.razor`/`.razor.cs`, no Blazor
-service, no middleware, and (confirmed by grep) no reference from
+**Tiers required — T1 and T2, both always required regardless of trigger-matching**
+(`docs/release-verification.md`'s "When required" for each tier). This change touches
+`src/Quotinator.Data/Queries/Sql.cs` and `src/Quotinator.Data/Repositories/SqliteImportBatchRepository.cs`
+— no `.razor`/`.razor.cs`, no Blazor service, no middleware, and (confirmed by grep) no reference from
 `src/Quotinator.Core/Database/QuotinatorDatabaseInitializer.cs`, which only ever calls
 `IImportBatchRepository.InsertAsync`/`UpdateAsync` (base-interface write methods), never
-`GetAllAsync`/`GetByTypeAsync`. Per `docs/release-verification.md`'s T1 "When required" list (Blazor,
-or `DatabaseInitializer`/migration/schema/reset logic), neither trigger applies, so T1 is not required.
-T2 is always required for any code change regardless of trigger-matching (`docs/release-verification.md`
-line 36), so it is declared here; the baseline smoke tests in CLAUDE.md's Pre-Push Checklist step 6
-already cover it — no new scenario needs adding to that living checklist, since `ImportBatches` has no
+`GetAllAsync`/`GetByTypeAsync` — so neither of T1's *targeted-attention* triggers applies, but T1 itself
+is never skipped on that basis. The baseline smoke tests in CLAUDE.md's Pre-Push Checklist step 6
+already cover T2 — no new scenario needs adding to that living checklist, since `ImportBatches` has no
 dedicated HTTP listing endpoint and the only externally-observable effect of this change is that
 `POST /import/actions/reverse` continues to behave exactly as it does today (already covered by that
 checklist's "Reverse (undo)" section).
@@ -220,7 +219,11 @@ No change to `Sql.ImportBatches.UpdateRecordCount` or `DeleteAll` — neither is
 
 ### 1. Write the failing tests (red) and the new repository-level coverage
 
-**Status:** Not started.
+**Status:** ✅ Done — all three genuinely-red canary tests confirmed red for the expected reason
+(`ImportBatches_SelectAllAndSelectByType_DoNotUseSelectStar`, `...WrapIdColumnViaLower`,
+`ImportBatches_SelectColumns_ReflectsEveryImportBatchProperty` — all fail against the current
+`SELECT *` text). The three new `SqliteImportBatchRepositoryTests` methods pass immediately, as
+expected — they prove existing-correct behaviour, not a bug (see Background).
 
 - `tests/Quotinator.Data.Tests/Security/SqlQueryGuardTests.cs` — two new, standalone (non-`DynamicData`)
   test methods, genuinely red before the fix per this project's canary rule (see Background):
@@ -262,7 +265,12 @@ No change to `Sql.ImportBatches.UpdateRecordCount` or `DeleteAll` — neither is
 
 ### 2. Implement the fix
 
-**Status:** Not started.
+**Status:** ✅ Done — `RepositorySql.BuildSelectColumns` promoted to `internal`;
+`Sql.ImportBatches.SelectAll`/`SelectByType` rewritten to build their column list via
+`Repositories.RepositorySql.BuildSelectColumns(Repositories.ReflectedColumnMetadata.For(typeof(Entities.ImportBatch)))`
+(sibling-namespace partial qualification resolves from `Quotinator.Data.Queries` with no new `using`
+needed — `Repositories`/`Entities` are both nested directly under the enclosing `Quotinator.Data`
+namespace). All three Step 1 tests now pass. Build clean, 0 warnings/errors.
 
 Per the Approach section above:
 1. Promote `RepositorySql.BuildSelectColumns` from `private` to `internal`.
@@ -276,7 +284,11 @@ a read-query-text-only change against an unchanged schema.
 
 ### 3. Canary-mutate the guard, confirm it actually catches an unwrapped Id, then revert
 
-**Status:** Not started.
+**Status:** ✅ Done — temporarily hardcoded `SelectColumns` to a bare, unwrapped column list;
+`SqlConstant_PassesSelectPresentationGuard` failed specifically for `ImportBatches.SelectAll`/
+`SelectByType` with the expected "selects Id unwrapped" message (29 passed, 2 failed, all other cases
+unaffected). Reverted to the reflection-based `SelectColumns`; re-ran the same test — 31/31 pass. The
+guard's coverage of `ImportBatches` is now confirmed genuine, not vacuous.
 
 Per `docs/testing-policy.md`'s canary methodology: after Step 2 is green, temporarily change
 `SelectColumns` to reference `Id` bare (unwrapped) instead of via `IdClauses.SelectColumn("Id")`, run
@@ -289,7 +301,9 @@ not in a separate Notes entry.
 
 ### 4. Full grep re-confirmation
 
-**Status:** Not started.
+**Status:** ✅ Done — both `grep -rn '"SELECT \*'` and the case-insensitive `grep -rniE 'SELECT\s*\*'`
+pass across both `Sql.cs` files return zero query-string hits after the rewrite; the only remaining
+match is the new explanatory comment mentioning "SELECT *" descriptively, not a query.
 
 Re-run `grep -rn '"SELECT \*'` and a case-insensitive `SELECT\s*\*` pass across both `src/Quotinator.Core/Queries/Sql.cs`
 and `src/Quotinator.Data/Queries/Sql.cs` after the rewrite — confirm zero remaining literal `SELECT *`
@@ -297,7 +311,11 @@ query strings anywhere in either file (comments/doc references are not query str
 
 ### 5. Full suite and build verification
 
-**Status:** Not started.
+**Status:** ✅ Done — `dotnet build --configuration Release`: 0 warnings, 0 errors.
+`dotnet test --configuration Release --verbosity normal`: every project green, 0 failures
+(`Quotinator.Data.Tests` 608/608, `Quotinator.Core.Tests` 969/969, `Quotinator.Api.Tests` 496/496,
+all others unaffected) — including the `ReverseBatchAsync_*` suite and `ImportBatchesTests`'
+seeding/schema suite named in the Approach, both unaffected by the rewrite.
 
 `dotnet build --configuration Release` (0 warnings/errors) and
 `dotnet test --configuration Release --verbosity normal` (full suite green, 0 warnings/errors),
@@ -307,7 +325,12 @@ seeding/schema suite (`tests/Quotinator.Core.Tests/Repositories/ImportBatchesTes
 
 ### 6. T2 verification
 
-**Status:** Not started.
+**Status:** ✅ Done — `docker build -f docker/Dockerfile -t quotinator:local .` succeeded. Ran the
+curated-file import (200, clean apply) + "Reverse (undo)" scenario from CLAUDE.md's Pre-Push Checklist
+step 6 against the running container: `preview=true` reverse and the real reverse both returned 200,
+exercising `SqliteImportBatchRepository.GetAllAsync` (`Sql.ImportBatches.SelectAll`, the exact query
+this issue rewrote) via `ReverseBatchAsync`'s LIFO-stack check — proves the rewritten query returns
+correct data end to end in a real container, not just under unit tests.
 
 `docker build -f docker/Dockerfile -t quotinator:local .`, then run the "Reverse (undo)" section of
 CLAUDE.md's Pre-Push Checklist step 6 smoke tests against the running container — no new scenario is
@@ -320,18 +343,19 @@ scenario still passes unchanged with the rewritten query in place.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `ImportBatches.SelectAll`/`SelectByType` no longer use `SELECT *` | Unit test | `SqlQueryGuardTests.ImportBatches_SelectAllAndSelectByType_DoNotUseSelectStar` — starts red |
-| 2 | ❌ | Both queries wrap `Id` via `LOWER(Id) AS Id` | Unit test | `SqlQueryGuardTests.ImportBatches_SelectAllAndSelectByType_WrapIdColumnViaLower` — starts red |
-| 3 | ❌ | The column list is reflection-driven, not hand-typed — stays correct if `ImportBatch` ever gains, loses, or renames a property, with zero code change to `Sql.ImportBatches` | Unit test | `SqlQueryGuardTests.ImportBatches_SelectColumns_ReflectsEveryImportBatchProperty` — starts red |
-| 4 | ❌ | Both queries genuinely pass `SqlSelectPresentationGuard` (not vacuously) | Unit test | `SqlQueryGuardTests.SqlConstant_PassesSelectPresentationGuard` (existing, `DynamicData`-driven — auto-covers `ImportBatches.SelectAll`/`SelectByType` once they're `static readonly`); canary-mutation confirmation per Step 3 |
-| 5 | ❌ | Both queries still pass the id-case guard | Unit test | `SqlQueryGuardTests.SqlConstant_PassesIdCaseGuard` (existing, `DynamicData`-driven) |
-| 6 | ❌ | No other hand-written `SELECT *` remains in either project's `Sql.cs` | Grep | `grep -rn '"SELECT \*'` and `grep -rniE 'SELECT\s*\*'` across `src/Quotinator.Core/Queries/Sql.cs` and `src/Quotinator.Data/Queries/Sql.cs` — zero query-string hits |
-| 7 | ❌ | `GetAllAsync` returns every persisted `ImportBatch` field correctly | Unit test | `SqliteImportBatchRepositoryTests.GetAllAsync_InsertedBatch_ReturnsAllPersistedFields` |
-| 8 | ❌ | `GetAllAsync` preserves the documented `ImportedAt DESC, ROWID DESC` tie-break | Unit test | `SqliteImportBatchRepositoryTests.GetAllAsync_TwoBatchesSameSecond_OrdersByRowidDescendingOnTie` |
-| 9 | ❌ | `GetByTypeAsync` filters correctly and returns full field data | Unit test | `SqliteImportBatchRepositoryTests.GetByTypeAsync_MixedTypes_ReturnsOnlyMatchingType` |
-| 10 | ❌ | No regression in `ReverseBatchAsync`'s existing indirect use of `GetAllAsync` | Unit test | `SqliteImportActionServiceTests` — full `ReverseBatchAsync_*` suite, e.g. `ReverseBatchAsync_TopOfStack_ThenNextOldest_BothSucceedInOrder`, `ReverseBatchAsync_AlreadyReversed_ThrowsImportBatchNotFoundException` |
-| 11 | ❌ | No regression overall | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 12 | ❌ | T2 — Docker image builds and the existing Reverse (undo) smoke-test scenario still passes unchanged | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + CLAUDE.md Pre-Push Checklist step 6 "Reverse (undo)" section |
+| 1 | ✅ | `ImportBatches.SelectAll`/`SelectByType` no longer use `SELECT *` | Unit test | `SqlQueryGuardTests.ImportBatches_SelectAllAndSelectByType_DoNotUseSelectStar` |
+| 2 | ✅ | Both queries wrap `Id` via `LOWER(Id) AS Id` | Unit test | `SqlQueryGuardTests.ImportBatches_SelectAllAndSelectByType_WrapIdColumnViaLower` |
+| 3 | ✅ | The column list is reflection-driven, not hand-typed — stays correct if `ImportBatch` ever gains, loses, or renames a property, with zero code change to `Sql.ImportBatches` | Unit test | `SqlQueryGuardTests.ImportBatches_SelectColumns_ReflectsEveryImportBatchProperty` |
+| 4 | ✅ | Both queries genuinely pass `SqlSelectPresentationGuard` (not vacuously) | Unit test | `SqlQueryGuardTests.SqlConstant_PassesSelectPresentationGuard` (existing, `DynamicData`-driven); canary-mutation confirmation per Step 3 (guard genuinely failed on both queries when `Id` was temporarily unwrapped) |
+| 5 | ✅ | Both queries still pass the id-case guard | Unit test | `SqlQueryGuardTests.SqlConstant_PassesIdCaseGuard` (existing, `DynamicData`-driven) |
+| 6 | ✅ | No other hand-written `SELECT *` remains in either project's `Sql.cs` | Grep | `grep -rn '"SELECT \*'` and `grep -rniE 'SELECT\s*\*'` across `src/Quotinator.Core/Queries/Sql.cs` and `src/Quotinator.Data/Queries/Sql.cs` — zero query-string hits |
+| 7 | ✅ | `GetAllAsync` returns every persisted `ImportBatch` field correctly | Unit test | `SqliteImportBatchRepositoryTests.GetAllAsync_InsertedBatch_ReturnsAllPersistedFields` |
+| 8 | ✅ | `GetAllAsync` preserves the documented `ImportedAt DESC, ROWID DESC` tie-break | Unit test | `SqliteImportBatchRepositoryTests.GetAllAsync_TwoBatchesSameSecond_OrdersByRowidDescendingOnTie` |
+| 9 | ✅ | `GetByTypeAsync` filters correctly and returns full field data | Unit test | `SqliteImportBatchRepositoryTests.GetByTypeAsync_MixedTypes_ReturnsOnlyMatchingType` |
+| 10 | ✅ | No regression in `ReverseBatchAsync`'s existing indirect use of `GetAllAsync` | Unit test | `SqliteImportActionServiceTests` — full `ReverseBatchAsync_*` suite passes (part of the 969/969 `Quotinator.Core.Tests` run) |
+| 11 | ✅ | No regression overall | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (`Quotinator.Data.Tests` 608/608, `Quotinator.Core.Tests` 969/969, `Quotinator.Api.Tests` 496/496, all others unaffected), 0 warnings, 0 errors |
+| 12 | ✅ | T2 — Docker image builds and the existing Reverse (undo) smoke-test scenario still passes unchanged | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; curated-file import (200) + `POST /import/actions/reverse` preview and real reverse (both 200) against the running container, exercising `GetAllAsync`/`Sql.ImportBatches.SelectAll` live |
+| 13 | ✅ | T1 — app starts cleanly in Visual Studio, no regression in existing endpoints | Live (T1) | Developer started the app in Visual Studio; startup log shows a clean migration check ("schema is up to date"), successful requests against `/api/v1/conversations`, `/api/v1/masterdata/series`, and `/api/v1/admin/audit` — no errors |
 
 ---
 
@@ -345,3 +369,13 @@ properties instead of listing them by hand, #213's rename from `ImportedBy` to `
 up automatically — #213 needs **zero** further code change to `Sql.ImportBatches` once this issue lands,
 not even the one-line addition originally planned. See #213's plan doc Notes for the full ownership
 split. #214 and #215 remain functionally independent of this issue.
+
+**Drive-by fix during implementation (2026-07-23):** the developer noticed `RepositorySql.cs`'s
+`SelectById`/`SoftDelete`/`Restore`/`HardDelete` each repeated the identical literal pair
+`IdClauses.Equals("Id", "id")` — four separately-typed copies of the same primary-key column/parameter
+name, in the exact file this issue was already touching (to promote `BuildSelectColumns`). Extracted to
+two `private const string` fields (`IdColumn = "Id"`, `IdParam = "id"`) and updated all four call sites
+to `IdClauses.Equals(IdColumn, IdParam)`. Zero behaviour change — the generated SQL text is byte-for-byte
+identical — confirmed by the full suite staying green (`Quotinator.Data.Tests` 608/608 unaffected) with
+no new test needed. Out of #212's own stated scope, but small, safe, and directly adjacent to code this
+issue was already editing.

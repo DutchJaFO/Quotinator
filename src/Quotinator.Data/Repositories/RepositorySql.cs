@@ -14,24 +14,33 @@ internal static class RepositorySql
     private static readonly Regex IdentifierPattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
     private static readonly IReadOnlyList<SortColumn> DefaultOrderBy = [new SortColumn("DateCreated")];
 
+    /// <summary>The primary key column name every generic query in this class compares against.</summary>
+    private const string IdColumn = "Id";
+
+    /// <summary>The bound parameter name every generic query in this class matches <see cref="IdColumn"/> against.</summary>
+    private const string IdParam = "id";
+
     /// <summary>
     /// Builds an explicit SELECT column list from <paramref name="columns"/>, wrapping every column in
     /// <paramref name="columns"/>.<see cref="IEntityColumnMetadata.IdColumnNames"/> via
     /// <see cref="IdClauses.SelectColumn(string,string?)"/> — never a bare <c>SELECT *</c>, so a
     /// string-typed id column (should one ever exist on a domain entity) gets the same read-time
     /// presentation normalization every hand-written query in <c>Sql.cs</c> already has. See ADR 012.
+    /// Also shared by <c>Sql.ImportBatches</c> (#212) — a hand-written, domain-specific query set that
+    /// needs the same reflection-driven column list this class already builds, without duplicating the
+    /// logic. <c>internal</c> rather than <c>private</c> for that reuse; behaviour is unchanged.
     /// </summary>
-    private static string BuildSelectColumns(IEntityColumnMetadata columns)
+    internal static string BuildSelectColumns(IEntityColumnMetadata columns)
         => string.Join(", ", columns.ValidColumnNames.Select(c =>
             columns.IdColumnNames.Contains(c) ? IdClauses.SelectColumn(c) : c));
 
     /// <summary>Selects an active record by primary key. Case-insensitive (#210) via <see cref="IdClauses"/> — every id-comparison query in this codebase is, per ADR 012, regardless of what casing the entity reached through this generic layer happens to already bind its Guid parameter as today.</summary>
     internal static string SelectById(string tableName, IEntityColumnMetadata columns)
-        => $"SELECT {BuildSelectColumns(columns)} FROM {tableName} WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0";
+        => $"SELECT {BuildSelectColumns(columns)} FROM {tableName} WHERE {IdClauses.Equals(IdColumn, IdParam)} AND IsDeleted = 0";
 
     /// <summary>Soft-deletes a record by primary key. Case-insensitive — see <see cref="SelectById"/>'s remark.</summary>
     internal static string SoftDelete(string tableName)
-        => $"UPDATE {tableName} SET IsDeleted = 1, DateDeleted = @now, DateModified = @now WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+        => $"UPDATE {tableName} SET IsDeleted = 1, DateDeleted = @now, DateModified = @now WHERE {IdClauses.Equals(IdColumn, IdParam)} AND IsDeleted = 0;";
 
     /// <summary>Selects all soft-deleted records in the table.</summary>
     internal static string SelectDeleted(string tableName, IEntityColumnMetadata columns)
@@ -39,11 +48,11 @@ internal static class RepositorySql
 
     /// <summary>Restores a soft-deleted record by primary key. Case-insensitive — see <see cref="SelectById"/>'s remark.</summary>
     internal static string Restore(string tableName)
-        => $"UPDATE {tableName} SET IsDeleted = 0, DateDeleted = NULL, DateModified = @now WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 1";
+        => $"UPDATE {tableName} SET IsDeleted = 0, DateDeleted = NULL, DateModified = @now WHERE {IdClauses.Equals(IdColumn, IdParam)} AND IsDeleted = 1";
 
     /// <summary>Hard-deletes a soft-deleted record by primary key. Case-insensitive — see <see cref="SelectById"/>'s remark.</summary>
     internal static string HardDelete(string tableName)
-        => $"DELETE FROM {tableName} WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 1";
+        => $"DELETE FROM {tableName} WHERE {IdClauses.Equals(IdColumn, IdParam)} AND IsDeleted = 1";
 
     /// <summary>Purges all soft-deleted records from the table.</summary>
     internal static string Purge(string tableName)

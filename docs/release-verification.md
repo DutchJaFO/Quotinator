@@ -16,7 +16,15 @@ This document defines the three verification tiers used in the Quotinator releas
 - App startup errors visible in the VS output window
 - Database/migration behaviour against a real, persistent SQLite file — unit tests run against a fresh temp database every time and can miss failure modes that only appear on an existing, previously-migrated database (e.g. a dropped table that never gets recreated, a migration that behaves differently against non-empty data)
 
-**When required:** any change that touches `.razor`, `.razor.cs`, `_Imports.razor`, Blazor services, or middleware registered before the request pipeline reaches Blazor; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`, migration SQL, or schema/table-wipe logic (reseed, reset, backup).
+**When required:** Always — every issue runs T1, not only when one of the triggers below applies. This
+mirrors T2's own "always required" rule below (see #196's precedent, where the same narrower
+trigger-matching reasoning was already corrected for T2); it's simply not how this project verifies
+releases, regardless of trigger-matching. The trigger list still matters for what to pay closest
+attention to beyond a basic "does it start and serve requests" check: any change that touches `.razor`,
+`.razor.cs`, `_Imports.razor`, Blazor services, or middleware registered before the request pipeline
+reaches Blazor; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`, migration SQL,
+or schema/table-wipe logic (reseed, reset, backup) needs a targeted check (affected page renders, the
+specific migration/reset path is exercised) on top of the baseline, not instead of it.
 
 **Gate:** user starts the app in Visual Studio and confirms it starts without error; affected pages render correctly. This is exclusively the developer's own action — an AI assistant never runs `dotnet run` itself to perform or substitute for this gate (see CLAUDE.md's Commands section).
 
@@ -89,8 +97,9 @@ or
 
 If an issue requires T3, it must go through a beta release before the final tag is pushed. See `docs/workflow/checklist.md → Milestone close` for the full gate sequence.
 
-T2 is always required (see T2's own "When required" above) — `**Tiers required:** T1` alone is not a
-valid declaration for any issue that touches code.
+T1 and T2 are always required (see each tier's own "When required" above) — `**Tiers required:** T2` alone
+or `**Tiers required:** T1` alone are not valid declarations for any issue that touches code; the minimum
+is `**Tiers required:** T1, T2`.
 
 ---
 

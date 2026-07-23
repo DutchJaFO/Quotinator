@@ -114,16 +114,25 @@ internal static class Sql
     /// </summary>
     internal static class ImportBatches
     {
+        // #212: built by reflecting over ImportBatch's own properties (Repositories.ReflectedColumnMetadata),
+        // not hand-typed — never needs updating when a property is added, removed, or renamed on
+        // ImportBatch, the same flexibility SELECT * provided, now combined with an explicit,
+        // guard-visible column list. Every *Id-suffixed column found this way is wrapped via
+        // IdClauses.SelectColumn. Not a const because this involves reflection + method calls, evaluated
+        // once per process (ReflectedColumnMetadata caches per-Type internally).
+        private static readonly string SelectColumns =
+            Repositories.RepositorySql.BuildSelectColumns(Repositories.ReflectedColumnMetadata.For(typeof(Entities.ImportBatch)));
+
         // ImportedAt has only whole-second precision, so two batches created within the same second
         // (routine in tests, and possible in fast-successive real API calls) tie under ORDER BY
         // ImportedAt DESC alone — SQLite does not guarantee a stable order for ties. ROWID DESC breaks
         // the tie deterministically in insertion order (a consumer's own strict batch-undo stack may
         // rely on this ordering being exact, not just "usually right" — found via a genuinely red test).
-        internal const string SelectAll =
-            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 ORDER BY ImportedAt DESC, ROWID DESC;";
+        internal static readonly string SelectAll =
+            $"SELECT {SelectColumns} FROM ImportBatches WHERE IsDeleted = 0 ORDER BY ImportedAt DESC, ROWID DESC;";
 
-        internal const string SelectByType =
-            "SELECT * FROM ImportBatches WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC, ROWID DESC;";
+        internal static readonly string SelectByType =
+            $"SELECT {SelectColumns} FROM ImportBatches WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC, ROWID DESC;";
 
         // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
         internal static readonly string UpdateRecordCount =

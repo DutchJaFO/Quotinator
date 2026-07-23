@@ -1,6 +1,8 @@
 using System.Reflection;
 using Quotinator.Data.Diagnostics;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Queries;
+using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Tests.Security;
 
@@ -179,6 +181,52 @@ public class SqlQueryGuardTests
         StringAssert.Contains(sql, "[OwnerId]", "Left key must be bracket-quoted");
         StringAssert.Contains(sql, "[Id]",      "Right key must be bracket-quoted");
         StringAssert.Contains(sql, "LEFT JOIN", "Fragment must be a LEFT JOIN");
+    }
+
+    // ── ImportBatches (#212) ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// #212: <c>Sql.ImportBatches.SelectAll</c>/<c>SelectByType</c> previously used <c>SELECT *</c>,
+    /// which has no column-name token for <see cref="SqlSelectPresentationGuard"/>'s text scan to find
+    /// — the guard "passed" vacuously, not genuinely. This is a positive-presence canary
+    /// (<c>docs/testing-policy.md</c>): asserting mere absence of a violation would still pass against
+    /// the pre-fix <c>SELECT *</c> text too.
+    /// </summary>
+    [TestMethod]
+    public void ImportBatches_SelectAllAndSelectByType_DoNotUseSelectStar()
+    {
+        Assert.IsFalse(Sql.ImportBatches.SelectAll.Contains("SELECT *"),
+            "Sql.ImportBatches.SelectAll must not use SELECT * — it is invisible to SqlSelectPresentationGuard's text scan.");
+        Assert.IsFalse(Sql.ImportBatches.SelectByType.Contains("SELECT *"),
+            "Sql.ImportBatches.SelectByType must not use SELECT * — it is invisible to SqlSelectPresentationGuard's text scan.");
+    }
+
+    /// <summary>#212: <c>Id</c> is the only <c>*Id</c>-suffixed column on <see cref="ImportBatch"/> — both queries must read it through <c>LOWER(...)</c> for canonical presentation. See ADR 012.</summary>
+    [TestMethod]
+    public void ImportBatches_SelectAllAndSelectByType_WrapIdColumnViaLower()
+    {
+        StringAssert.Contains(Sql.ImportBatches.SelectAll, "LOWER(Id) AS Id");
+        StringAssert.Contains(Sql.ImportBatches.SelectByType, "LOWER(Id) AS Id");
+    }
+
+    /// <summary>
+    /// #212: proves the column list is reflection-driven (<see cref="ReflectedColumnMetadata"/>), not
+    /// hand-typed — every property <see cref="ImportBatch"/> actually persists today must appear
+    /// somewhere in <c>SelectAll</c>'s text. A hand-typed column list would also pass this today, but
+    /// would silently drift the next time a property is added, removed, or renamed on
+    /// <see cref="ImportBatch"/>; this test keeps passing automatically because it reflects the same
+    /// metadata the query itself is built from, rather than asserting a fixed list.
+    /// </summary>
+    [TestMethod]
+    public void ImportBatches_SelectColumns_ReflectsEveryImportBatchProperty()
+    {
+        var columns = ReflectedColumnMetadata.For(typeof(ImportBatch));
+        foreach (var name in columns.ValidColumnNames)
+        {
+            var expected = columns.IdColumnNames.Contains(name) ? $"LOWER({name}) AS {name}" : name;
+            StringAssert.Contains(Sql.ImportBatches.SelectAll, expected,
+                $"Sql.ImportBatches.SelectAll is missing ImportBatch's '{name}' property — the column list must stay reflection-driven, not hand-typed.");
+        }
     }
 
     /// <summary>
