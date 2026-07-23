@@ -155,6 +155,10 @@
     <File Path="docs/milestones/data-import-sources/207-canonicalize-entity-ids-plan.md" />
     <File Path="docs/milestones/data-import-sources/209-canonicalize-entity-ids-part-a-plan.md" />
     <File Path="docs/milestones/data-import-sources/210-canonicalize-quote-id-plan.md" />
+    <File Path="docs/milestones/data-import-sources/212-importbatches-select-star-plan.md" />
+    <File Path="docs/milestones/data-import-sources/213-importedby-id-convention-plan.md" />
+    <File Path="docs/milestones/data-import-sources/214-guard-reflection-methods-plan.md" />
+    <File Path="docs/milestones/data-import-sources/215-joinstrategy-guard-coverage-plan.md" />
     <File Path="docs/milestones/data-import-sources/191-source-date-population-plan.md" />
     <File Path="docs/milestones/data-import-sources/174-character-global-identity-plan.md" />
     <File Path="docs/milestones/data-import-sources/175-character-modify-plan.md" />
