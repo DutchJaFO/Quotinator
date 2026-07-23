@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214, 215],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -128,7 +128,8 @@
       "De geboortedatum en overlijdensdatum van een nieuw aangemaakte persoon werden stilzwijgend genegeerd, zelfs wanneer het importbestand deze wel meegaf — alleen een correctie op een al bestaande persoon sloeg deze datums daadwerkelijk op; beide worden nu meteen bij aanmaak correct opgeslagen (issue #173)",
       "Interne bevraging van importbatch-boekhouding las elke kolom impliciet in plaats van bij naam, de laatste openstaande plek in het hierboven genoemde consistentiewerk voor id's — verholpen zonder verder merkbaar effect, aangezien het betreffende id al correct werd weergegeven (issue #212)",
       "Een intern veld voor importbatch-boekhouding volgde niet de naamgevingsconventie waarop het hierboven genoemde consistentiewerk voor id's steunt om id-kolommen automatisch te herkennen en beschermen — hernoemd voor consistentie; het veld werd nog nergens gebruikt, dus er is verder geen merkbaar effect (issue #213)",
-      "De automatische controles op id-consistentie in de interne testsuite waren voorheen afhankelijk van ontwikkelaars die bepaalde interne querybouw-methoden handmatig moesten opnemen; ze worden nu automatisch gevonden en gecontroleerd — een zuiver interne verbetering van de testdekking, zonder gevolgen voor gebruikers of gedrag (issue #214)"
+      "De automatische controles op id-consistentie in de interne testsuite waren voorheen afhankelijk van ontwikkelaars die bepaalde interne querybouw-methoden handmatig moesten opnemen; ze worden nu automatisch gevonden en gecontroleerd — een zuiver interne verbetering van de testdekking, zonder gevolgen voor gebruikers of gedrag (issue #214)",
+      "Een verwant intern mechanisme voor het samenvoegen van query's werd automatisch slechts op één van de drie interne veiligheidscontroles gecontroleerd die elders in de codebase overal worden toegepast; het wordt nu op alle drie gecontroleerd, waarmee de laatst overgebleven lacune van dit type is gedicht — een zuiver interne verbetering van de testdekking, zonder gevolgen voor gebruikers of gedrag (issue #215)"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"

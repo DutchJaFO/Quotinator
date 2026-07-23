@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214, 215],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -128,7 +128,8 @@
       "Geburtsdatum und Sterbedatum einer neu angelegten Person wurden stillschweigend verworfen, selbst wenn die Importdatei sie enthielt — nur eine Korrektur an einer bereits bestehenden Person speicherte diese Daten tatsächlich; beide werden jetzt schon bei der Anlage korrekt gespeichert (Issue #173)",
       "Interne Abfragen der Importbatch-Buchhaltung lasen jede Spalte implizit statt namentlich — die letzte offene Stelle der oben genannten ID-Konsistenzarbeit — behoben ohne weitere sichtbare Auswirkung, da die betroffene ID bereits korrekt angezeigt wurde (Issue #212)",
       "Ein internes Feld der Importbatch-Buchhaltung folgte nicht der Namenskonvention, auf die sich die oben genannte ID-Konsistenzarbeit stützt, um ID-Spalten automatisch zu erkennen und zu schützen — zur Konsistenz umbenannt; das Feld wurde bisher nirgends verwendet, daher gibt es keine weitere sichtbare Auswirkung (Issue #213)",
-      "Die automatischen ID-Konsistenzprüfungen der internen Testsuite waren bisher darauf angewiesen, dass Entwickler bestimmte interne Query-Bau-Methoden von Hand eintrugen; sie werden jetzt automatisch erkannt und geprüft — eine rein interne Verbesserung der Testabdeckung ohne Auswirkung auf Nutzer oder Verhalten (Issue #214)"
+      "Die automatischen ID-Konsistenzprüfungen der internen Testsuite waren bisher darauf angewiesen, dass Entwickler bestimmte interne Query-Bau-Methoden von Hand eintrugen; sie werden jetzt automatisch erkannt und geprüft — eine rein interne Verbesserung der Testabdeckung ohne Auswirkung auf Nutzer oder Verhalten (Issue #214)",
+      "Ein verwandter interner Mechanismus zum Verknüpfen von Abfragen wurde automatisch nur bei einer der drei internen Sicherheitsprüfungen berücksichtigt, die im restlichen Code überall angewendet werden; er wird jetzt bei allen drei geprüft, womit die letzte verbleibende Lücke dieser Art geschlossen ist — eine rein interne Verbesserung der Testabdeckung ohne Auswirkung auf Nutzer oder Verhalten (Issue #215)"
     ],
     "removed": [
       "Die Konvertornamen `nikhilnamal17` und `vilaboim` existieren nicht mehr — ein benutzerdefinierter Manifesteintrag, der einen von beiden namentlich referenziert, muss auf `basic-json-array`/`regex-array` mit den entsprechenden `converterOptions` aktualisiert werden"

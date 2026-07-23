@@ -258,6 +258,35 @@ public class SqlQueryGuardTests
             "Review the strategy and consult docs/sql-safety.md before suppressing.");
     }
 
+    /// <summary>
+    /// Same discovery as <see cref="AllJoinStrategies_BuildSql_PassesAggregateGuard"/>, checked against
+    /// <see cref="SqlIdCaseGuard"/> instead. See ADR 012 and #210, #215.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(AllJoinStrategyBuildSqlCases))]
+    public void AllJoinStrategies_BuildSql_PassesIdCaseGuard(string typeName, string sql)
+    {
+        var violations = SqlIdCaseGuard.FindViolations(sql);
+        Assert.IsEmpty(violations,
+            $"{typeName}.BuildSql() contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
+            "Wrap both sides in UPPER(...) — see ADR 012.");
+    }
+
+    /// <summary>
+    /// Same discovery as <see cref="AllJoinStrategies_BuildSql_PassesAggregateGuard"/>, checked against
+    /// <see cref="SqlSelectPresentationGuard"/> instead. See ADR 012's "read-time presentation
+    /// normalization" revision and #215.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(AllJoinStrategyBuildSqlCases))]
+    public void AllJoinStrategies_BuildSql_PassesSelectPresentationGuard(string typeName, string sql)
+    {
+        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
+        Assert.IsEmpty(violations,
+            $"{typeName}.BuildSql() selects {string.Join(", ", violations)} unwrapped — wrap in LOWER(...) AS " +
+            "ColumnName in the SELECT column list. See ADR 012's \"read-time presentation normalization\" revision.");
+    }
+
     public static IEnumerable<object[]> AllJoinStrategyBuildSqlCases()
     {
         var joinStrategyType = typeof(IJoinStrategy<>);

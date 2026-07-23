@@ -1,8 +1,8 @@
 # #215 — Extend `IJoinStrategy<T>` auto-discovery to the id-case and SELECT-presentation guards
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #215
-**Tiers required:** T2
+**Tiers required:** T1, T2
 **Depends on:** none
 
 ---
@@ -173,30 +173,25 @@ or any other existing method in the file.
 
 ### 1. Add the two new test methods
 
-**Status:** Not started.
-
-Insert `AllJoinStrategies_BuildSql_PassesIdCaseGuard` and `AllJoinStrategies_BuildSql_PassesSelectPresentationGuard`
-into `SqlQueryGuardTests.cs` exactly as shown in Approach. Run them immediately and confirm both pass
-green on first run — per Background's red-to-green nuance, this is the expected outcome (no red state),
-not a process violation; the pass itself is the proof the coverage gap is closed without uncovering a
-latent violation in `WidgetWithOwnerStrategy`.
+**Status:** ✅ Done — both methods added exactly as shown in Approach, inserted immediately before
+`AllJoinStrategyBuildSqlCases`. Both passed on first run (confirmed via `dotnet test --filter
+"FullyQualifiedName~AllJoinStrategies_BuildSql"` — 3/3 passed, including the pre-existing aggregate
+test), exactly the expected no-red-state outcome per Background.
 
 ### 2. Full suite regression check
 
-**Status:** Not started.
+**Status:** ✅ Done — `dotnet build --configuration Release`: 0 warnings, 0 errors. `dotnet test
+--configuration Release --verbosity normal`: every project green (`Quotinator.Data.Tests` 614/614, up
+from 612; `Quotinator.Core.Tests` 972/972; `Quotinator.Api.Tests` 496/496; all others unaffected), 0
+failures.
 
-`dotnet test --configuration Release --verbosity normal` — full solution, 0 failures, 0 warnings (this
-project's blanket 0-warnings policy applies to test builds too).
+### 3. T1 and T2 verification
 
-### 3. T2 Docker smoke check
-
-**Status:** Not started.
-
-Per `docs/release-verification.md`, T2 is unconditionally required for any issue that touches code,
-regardless of whether it looks like it needs it — this issue is a test-only addition with no new runtime
-behaviour, so no scenario-specific smoke command is added; `docker build -f docker/Dockerfile -t
-quotinator:local .` succeeding plus CLAUDE.md's Pre-Push Checklist → step 6 baseline smoke suite passing
-is the full gate.
+**Status:** ✅ Done — T2: `docker build -f docker/Dockerfile -t quotinator:local .` succeeded. Fresh
+container startup: clean, schema v10, no errors. Baseline smoke suite (`/health`, `/version`,
+`/quotes/random`, `/quotes/search?q=love`) all returned expected 200 responses. No new scenario needed —
+test-file-only change with no runtime effect. T1: developer confirmed clean startup in Visual Studio —
+"schema is up to date (data v10, app v10)", no errors.
 
 ---
 
@@ -204,10 +199,11 @@ is the full gate.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `AllJoinStrategies_BuildSql_PassesIdCaseGuard` exists, discovers every concrete `IJoinStrategy<TResult>` implementation via the same reflection mechanism as the aggregate-guard test, and passes | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests.AllJoinStrategies_BuildSql_PassesIdCaseGuard` |
-| 2 | ❌ | `AllJoinStrategies_BuildSql_PassesSelectPresentationGuard` exists, same discovery mechanism, passes | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests.AllJoinStrategies_BuildSql_PassesSelectPresentationGuard` |
-| 3 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 4 | ❌ | T2 — Docker image builds and baseline smoke suite passes | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + CLAUDE.md's Pre-Push Checklist → step 6 baseline commands |
+| 1 | ✅ | `AllJoinStrategies_BuildSql_PassesIdCaseGuard` exists, discovers every concrete `IJoinStrategy<TResult>` implementation via the same reflection mechanism as the aggregate-guard test, and passes | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests.AllJoinStrategies_BuildSql_PassesIdCaseGuard` |
+| 2 | ✅ | `AllJoinStrategies_BuildSql_PassesSelectPresentationGuard` exists, same discovery mechanism, passes | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests.AllJoinStrategies_BuildSql_PassesSelectPresentationGuard` |
+| 3 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (`Quotinator.Data.Tests` 614/614, `Quotinator.Core.Tests` 972/972, `Quotinator.Api.Tests` 496/496), 0 warnings, 0 errors |
+| 4 | ✅ | T2 — Docker image builds and baseline smoke suite passes | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; health/version/random/search all returned expected responses |
+| 5 | ✅ | T1 — app starts cleanly in Visual Studio (required unconditionally, same reasoning as row 4) | Live (T1) | Developer confirmed in Visual Studio — "schema is up to date (data v10, app v10)", clean startup, no errors |
 
 ---
 
@@ -233,7 +229,6 @@ own implementation) is `LOWER(...)`. This plan's Approach deliberately copies th
 verbatim into the two new tests for consistency with their siblings, rather than silently fixing a stale
 message string that's outside #215's stated scope. Worth a trivial follow-up cleanup at some point.
 
-T1 is not required — this change touches no `.razor`/`.razor.cs`/`_Imports.razor` file, no Blazor service,
-no middleware, and no `DatabaseInitializer`/`QuotinatorDatabaseInitializer`/migration/schema code (see
-`docs/release-verification.md`'s T1 trigger list). T2 is required unconditionally per that same document's
-"T2 is always required" rule, independent of any trigger match.
+T1 and T2 are both required unconditionally per `docs/release-verification.md`'s "Always" rule for each
+tier, independent of any trigger match — this change touching no `.razor`/Blazor/middleware/migration code
+means neither tier has a *targeted* scenario to add, not that either tier is skipped.

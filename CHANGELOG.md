@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-23 19:09 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-23 19:25 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -127,6 +127,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Internal import-batch bookkeeping queries read every column implicitly instead of by name, the one remaining gap in the id-consistency work above — closed with no other observable change, since the affected id already displayed correctly (issue #212)
 - An internal import-batch bookkeeping field didn't follow the naming pattern the id-consistency work above relies on to find and protect id columns automatically — renamed for consistency; the field was not yet used anywhere, so there is no other observable change (issue #213)
 - The internal test suite's automatic id-consistency checks previously relied on developers remembering to list certain internal query-building methods by hand; they are now discovered and checked automatically instead — a purely internal test-coverage improvement with no user-facing or behaviour change (issue #214)
+- A related internal query-joining mechanism was only automatically checked for one of the three internal safety checks the rest of the codebase applies everywhere else; it is now checked for all three, closing the last remaining gap of this kind — a purely internal test-coverage improvement with no user-facing or behaviour change (issue #215)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`

@@ -91,7 +91,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#212](https://github.com/DutchJaFO/Quotinator/issues/212) | `Sql.ImportBatches.SelectAll`/`SelectByType` still use `SELECT *`, invisible to `SqlSelectPresentationGuard` (sub-issue of #207) | Waiting for release | T1 ✅ T2 ✅ | [212-importbatches-select-star-plan.md](212-importbatches-select-star-plan.md) |
 | [#213](https://github.com/DutchJaFO/Quotinator/issues/213) | `ImportBatch.ImportedBy` doesn't follow the `*Id` naming convention every id-casing guard relies on — depends on #212 (sub-issue of #207) | Waiting for release | T1 ✅ T2 ✅ | [213-importedby-id-convention-plan.md](213-importedby-id-convention-plan.md) |
 | [#214](https://github.com/DutchJaFO/Quotinator/issues/214) | Guard test reflection doesn't cover static factory methods (`GetMethods`) — relies on manual enumeration (sub-issue of #207) | Waiting for release | T1 ✅ T2 ✅ | [214-guard-reflection-methods-plan.md](214-guard-reflection-methods-plan.md) |
-| [#215](https://github.com/DutchJaFO/Quotinator/issues/215) | `IJoinStrategy<T>` auto-discovery only checks the CVE aggregate guard, not id-case/presentation guards (sub-issue of #207) | Planning | T2 ⬜ | [215-joinstrategy-guard-coverage-plan.md](215-joinstrategy-guard-coverage-plan.md) |
+| [#215](https://github.com/DutchJaFO/Quotinator/issues/215) | `IJoinStrategy<T>` auto-discovery only checks the CVE aggregate guard, not id-case/presentation guards (sub-issue of #207) | Waiting for release | T1 ✅ T2 ✅ | [215-joinstrategy-guard-coverage-plan.md](215-joinstrategy-guard-coverage-plan.md) |
 | [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning | T1 ⬜ T2 ⬜ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Planning | T1 ⬜ T2 ⬜ | [175-character-modify-plan.md](175-character-modify-plan.md) |
 | [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
@@ -239,7 +239,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 55 | #212 | `Sql.ImportBatches.SelectAll`/`SelectByType` still use `SELECT *`, invisible to `SqlSelectPresentationGuard` (sub-issue of #207) | Waiting for release |
 | 56 | #213 | `ImportBatch.ImportedBy` doesn't follow the `*Id` naming convention every id-casing guard relies on — depends on #212 (sub-issue of #207) | Waiting for release |
 | 57 | #214 | Guard test reflection doesn't cover static factory methods (`GetMethods`) — relies on manual enumeration (sub-issue of #207) | Waiting for release |
-| 58 | #215 | `IJoinStrategy<T>` auto-discovery only checks the CVE aggregate guard, not id-case/presentation guards (sub-issue of #207) | Planning |
+| 58 | #215 | `IJoinStrategy<T>` auto-discovery only checks the CVE aggregate guard, not id-case/presentation guards (sub-issue of #207) | Waiting for release |
 | 59 | #191 | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Waiting for release |
 | 60 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Planning |
 | 61 | #175 | Character: explicit id, Modify/decidability | Planning |
