@@ -46,6 +46,9 @@ public class ImportBatchesTests
     }
 
     private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches, bool useBaseline = true)
+        => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline);
+
+    private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
@@ -63,7 +66,7 @@ public class ImportBatchesTests
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
-        return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
+        return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
             coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
@@ -108,7 +111,7 @@ public class ImportBatchesTests
         var columns = (await conn.QueryAsync<string>(
             "SELECT name FROM pragma_table_info('ImportBatches')")).ToHashSet();
 
-        var expected = new[] { "Id", "Name", "Type", "Url", "ImportedAt", "ImportedBy", "RecordCount",
+        var expected = new[] { "Id", "Name", "Type", "Url", "ImportedAt", "ImportedById", "RecordCount",
                                 "DateCreated", "DateModified", "DateDeleted", "IsDeleted", "ConflictPolicy" };
         foreach (var col in expected)
             Assert.IsTrue(columns.Contains(col), $"Column '{col}' missing from ImportBatches");
@@ -149,14 +152,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>App schema migration version is bumped to 9 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>App schema migration version is bumped to 10 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(9, db.SchemaVersion, "SchemaVersion should be 9 after Migration009");
+        Assert.AreEqual(10, db.SchemaVersion, "SchemaVersion should be 10 after Migration010");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────
@@ -343,5 +346,48 @@ public class ImportBatchesTests
             "SELECT ImportBatchId FROM Quotes WHERE Id = 'TEST-QUOTE-ID'");
 
         Assert.IsNull(importBatchId, "Pre-migration records must have NULL ImportBatchId");
+    }
+
+    /// <summary>
+    /// Migration010 (#213) renames <c>ImportBatches.ImportedBy</c> to <c>ImportedById</c> via a single
+    /// atomic <c>ALTER TABLE ... RENAME COLUMN</c>, preserving any pre-existing value. Builds a database
+    /// at App migration v9 (before Migration010), inserts a row using the pre-rename column name
+    /// directly, then completes migration through v10 and confirms the value survived under the new
+    /// column name — mirroring <c>Migration_SeriesUniverseSchema_PopulatesCharacterSources1to1FromExistingSourceId</c>'s
+    /// partial-migration pattern in <c>DatabaseInitializerTests.cs</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task Migration_RenameImportedByToImportedById_ColumnRenamedAndDataPreserved()
+    {
+        var partialMigrations = QuotinatorMigrations.All.Take(9).ToList();
+        var db1 = CreateInitializer([], partialMigrations, useBaseline: false);
+        await db1.InitialiseForTestingAsync(forceIncremental: true);
+
+        var batchId = Guid.NewGuid().ToString();
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            await conn.ExecuteAsync(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, ImportedBy, RecordCount, DateCreated, IsDeleted) " +
+                "VALUES (@id, 'pre-rename.json', 'Import', @now, '22222222-2222-4222-8222-222222222222', 0, @now, 0);",
+                new { id = batchId, now });
+        }
+
+        var db2 = CreateInitializer([]);
+        await db2.InitialiseAsync();
+
+        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        await verifyConn.OpenAsync();
+
+        var columns = (await verifyConn.QueryAsync<string>(
+            "SELECT name FROM pragma_table_info('ImportBatches')")).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.IsTrue(columns.Contains("ImportedById"), "ImportedById column must exist after Migration010");
+        Assert.IsFalse(columns.Contains("ImportedBy"), "ImportedBy must no longer exist after the rename");
+
+        var preservedValue = await verifyConn.ExecuteScalarAsync<string>(
+            "SELECT ImportedById FROM ImportBatches WHERE Id = @id;", new { id = batchId });
+        Assert.AreEqual("22222222-2222-4222-8222-222222222222", preservedValue,
+            "The pre-existing value must survive the rename unchanged");
     }
 }

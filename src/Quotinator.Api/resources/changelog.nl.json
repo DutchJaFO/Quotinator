@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -126,7 +126,8 @@
       "Een quote die werd aangemaakt met een hoofdlettergevoelige expliciete id kon via de meeste opzoekpaden correct worden gevonden, maar `GET /api/v1/quotes/{id}` gaf alleen een resultaat als de hoofdlettering in de URL precies overeenkwam met de oorspronkelijk geïmporteerde id — id's worden nu ook voor quotes consistent genormaliseerd, waarmee het laatste geval van dit probleem is opgelost (issue #210)",
       "Batch- en record-id's in de respons van `GET /api/v1/import/actions` en `GET /api/v1/admin/audit` konden een andere hoofdlettering tonen dan de overige id's in diezelfde respons — deze worden nu altijd consistent weergegeven, ongeacht hoe ze oorspronkelijk zijn opgeslagen (issue #210)",
       "De geboortedatum en overlijdensdatum van een nieuw aangemaakte persoon werden stilzwijgend genegeerd, zelfs wanneer het importbestand deze wel meegaf — alleen een correctie op een al bestaande persoon sloeg deze datums daadwerkelijk op; beide worden nu meteen bij aanmaak correct opgeslagen (issue #173)",
-      "Interne bevraging van importbatch-boekhouding las elke kolom impliciet in plaats van bij naam, de laatste openstaande plek in het hierboven genoemde consistentiewerk voor id's — verholpen zonder verder merkbaar effect, aangezien het betreffende id al correct werd weergegeven (issue #212)"
+      "Interne bevraging van importbatch-boekhouding las elke kolom impliciet in plaats van bij naam, de laatste openstaande plek in het hierboven genoemde consistentiewerk voor id's — verholpen zonder verder merkbaar effect, aangezien het betreffende id al correct werd weergegeven (issue #212)",
+      "Een intern veld voor importbatch-boekhouding volgde niet de naamgevingsconventie waarop het hierboven genoemde consistentiewerk voor id's steunt om id-kolommen automatisch te herkennen en beschermen — hernoemd voor consistentie; het veld werd nog nergens gebruikt, dus er is verder geen merkbaar effect (issue #213)"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"

@@ -21,7 +21,7 @@ public sealed class ImportBatch : RecordBase
     public string ImportedAt { get; init; } = string.Empty;
 
     /// <summary>UUID of the user who triggered the import. Null for seeded batches.</summary>
-    public string? ImportedBy { get; init; }
+    public string? ImportedById { get; init; }
 
     /// <summary>Number of records written in this batch. Updated after seeding completes.</summary>
     public int RecordCount { get; set; }

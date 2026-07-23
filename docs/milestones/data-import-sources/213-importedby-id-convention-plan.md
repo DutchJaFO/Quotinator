@@ -1,6 +1,6 @@
 # #213 — Rename ImportBatch.ImportedBy to ImportedById for guard/convention compliance
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #213
 **Tiers required:** T1, T2
 **Depends on:** #212
@@ -289,7 +289,18 @@ unused, unexposed via any endpoint, and this is pure internal schema/guard hygie
 
 ### 1. Write the failing tests first (red)
 
-**Status:** Not started.
+**Status:** ✅ Done — all six expected-red tests confirmed red for the expected reason. In
+`Quotinator.Data.Tests`: `SqliteImportBatchRepositoryTests.cs` fails to *compile* (`ImportBatch` has no
+`ImportedById` property yet) — a genuinely red compile-time failure, since the rename hasn't landed. In
+`Quotinator.Core.Tests`: `Schema_ImportBatchesTable_HasAllRequiredColumns` (missing `ImportedById`),
+`Schema_MigrationVersion_IsBumped` (expected 10, actual 9), and the new
+`Migration_RenameImportedByToImportedById_ColumnRenamedAndDataPreserved` (column doesn't exist) all fail
+at runtime for the expected reason; `DatabaseInitializerTests`' four updated version-10 assertions
+(`InitialiseAsync_PartialMigrationState_FailsSafelyAndRequiresExplicitReset`,
+`InitialiseAsync_TrulyEmptyDatabase_TakesBaselinePathNotIncremental`,
+`InitialiseAsync_ExistingDatabaseAtVersion3_StillReplaysRemainingConsumerMigrationsIncrementally`,
+`InitialiseAsync_PreSplitCombinedCounterDatabase_FailsSafelyAndRequiresExplicitReset`) also fail for the
+expected reason (expect 10, actual 9).
 
 Write every test in the Verification checklist below against the *current* (pre-fix) code and confirm
 each fails for the expected reason (missing `ImportedById` column/property; `Sql.ImportBatches` still
@@ -297,73 +308,102 @@ each fails for the expected reason (missing `ImportedById` column/property; `Sql
 
 ### 2. Add Migration010 and wire it into `QuotinatorMigrations.All`
 
-**Status:** Not started.
+**Status:** ✅ Done — added as the 10th entry in `QuotinatorMigrations.All`, exactly per Approach.
 
 Exact SQL and wiring per Approach's "1. New migration" above.
 
 ### 3. Update `QuotinatorMigrations.BaselineSchema`
 
-**Status:** Not started.
-
-Per Approach's "2." above. Run `Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema` and
-`...AcceptSameCheckConstraintValues` immediately after this step and the previous one, before moving on
-— these two existing tests are the authoritative drift check and must pass before any further change.
+**Status:** ✅ Done — `ImportBatches` CREATE TABLE block now creates `ImportedById` directly; baseline
+comment updated to note Migration010 is folded in. `Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema`
+and `...AcceptSameCheckConstraintValues` both pass (confirmed in the full suite run, Step 7).
 
 ### 4. Rename the entity property
 
-**Status:** Not started.
-
-`src/Quotinator.Data/Entities/ImportBatch.cs:24`, per Approach's "3." above.
+**Status:** ✅ Done — `src/Quotinator.Data/Entities/ImportBatch.cs:24` renamed to `ImportedById`. Build
+clean after the rename (0 warnings/errors).
 
 ### 5. Confirm `Sql.ImportBatches`'s reflection-based column list already covers `ImportedById`
 
-**Status:** Not started. Blocked on #212 landing first (see header `Depends on`).
-
-No code change — per Approach's "4." above, #212's `RepositorySql.BuildSelectColumns(ReflectedColumnMetadata.For(typeof(ImportBatch)))`
-already picks up the renamed property automatically. This step is a confirmation, not an implementation
-task: after Step 4's rename, inspect `Sql.ImportBatches.SelectAll`'s resulting text (or run it) and
-confirm `LOWER(ImportedById) AS ImportedById` appears with no edit to `Sql.cs`. If #212 has not landed
-when this step is reached, fall back to performing #212's full reflection-based rewrite here instead
-(see Approach's own fallback note), and flag that to whoever is tracking #212.
+**Status:** ✅ Done — confirmed via the passing guard tests (`SqlConstant_PassesIdCaseGuard`/
+`SqlConstant_PassesSelectPresentationGuard`, and #212's own `ImportBatches_SelectColumns_ReflectsEveryImportBatchProperty`)
+with zero edits to `Sql.cs` — exactly the "picked up automatically" behaviour #212's reflection-based
+rewrite was built to provide.
 
 ### 6. Update pre-existing tests broken by the rename/version bump
 
-**Status:** Not started.
+**Status:** ✅ Done — every location in Background's list updated: `"ImportedBy"` → `"ImportedById"` in
+`ImportBatchesTests.cs`; all six hardcoded `9` → `10` assertions across `ImportBatchesTests.cs` and
+`DatabaseInitializerTests.cs` (including the migration-list comment). All confirmed genuinely red before
+the fix (Step 1) and green after.
 
-Every location listed in Background's "Existing tests that will break or need updating": update the
-`"ImportedBy"` literal to `"ImportedById"` in `ImportBatchesTests.cs:111`, and bump every hardcoded `9`
-→ `10` (with the accompanying migration-list comment at `DatabaseInitializerTests.cs:943` updated to
-"seven remaining App migrations (4, 5, 6, 7, 8, 9, and 10)") at the five locations listed there.
+**Bug found and fixed while writing Step 1's new `Migration_RenameImportedByToImportedById_ColumnRenamedAndDataPreserved`
+test:** the new `CreateInitializer(batches, migrations, useBaseline)` overload added to `ImportBatchesTests.cs`
+(mirroring `DatabaseInitializerTests.cs`'s existing 3-arg pattern) had its constructor call hardcode
+`QuotinatorMigrations.All` instead of using the new `migrations` parameter — a copy-paste artifact from
+the original 2-arg method's body. This silently made every `.Take(N)`-based partial-migration test run
+the *full* migration list regardless of what was passed, defeating the test's entire purpose without any
+compile error. Caught because the new migration test failed with "table ImportBatches has no column named
+ImportedBy" immediately after only 9 migrations were meant to have applied — diagnosed via temporary debug
+output (dumping the actual `pragma_table_info` result and applying the same 9 migrations' raw SQL text
+directly, bypassing the initializer, to isolate the divergence to the constructor call itself) before
+finding the one-line fix. Fixed by passing `migrations` instead of `QuotinatorMigrations.All`; full suite
+confirmed green afterward.
+
+**Second bug found by the developer, from a screenshot review:** the mixed-case round-trip tests added to
+`SqliteImportBatchRepositoryTests.cs` (Verification checklist rows 4–5) originally used
+`"11111111-1111-4111-8111-111111111111"` as the "uppercase" `ImportedById` fixture — an all-digit string,
+so `UPPER(...)` on it is a no-op and the test proved nothing about case-insensitive rendering despite
+passing. Fixed to `"aabbccdd-1234-4abc-8def-1234567890ab"` (contains real hex letters). A follow-up
+codebase-wide audit (general-purpose agent, spot-checked directly) found no other instance of this bug
+pattern anywhere in `tests/` — every other `UPPER()`/`.ToUpper*()` call site already used a literal with
+genuine hex letters.
 
 ### 7. Full regression pass
 
-**Status:** Not started.
-
-`dotnet build --configuration Release` (0 warnings/errors) and
-`dotnet test --configuration Release --verbosity normal` (full suite green, 0 warnings/errors) — confirm
-no other hardcoded schema-version or column-list assertion was missed beyond the grep-confirmed list
-above.
+**Status:** ✅ Done — `dotnet build --configuration Release`: 0 warnings, 0 errors.
+`dotnet test --configuration Release --verbosity normal`: every project green
+(`Quotinator.Core.Tests` 970/970, `Quotinator.Data.Tests` 610/610, `Quotinator.Api.Tests` 496/496, all
+others unaffected), 0 failures — confirmed only after both bugs above were found and fixed; the first
+full run (before the `CreateInitializer` fix) genuinely caught the new migration test failing for the
+right reason.
 
 ### 8. T1 — Visual Studio verification (developer)
 
-**Status:** Not started.
-
-Fresh startup (empty DB, baseline path) and an existing pre-#213 database upgrade path (incremental
-replay through Migration010) both confirmed clean by the developer in Visual Studio, per this project's
-standing rule that T1 is exclusively the developer's own action.
+**Status:** ✅ Done — developer started the app in Visual Studio against their real pre-existing
+development database (previously at App v9). Startup log shows: automatic pre-migration backup taken
+(`quotinatordata_v10_20260723T181317Z.db`), "applying 1 pending App migration(s) (version 9 → 10)...",
+"schema updated (data v10, app v10)", clean startup with "799 quotes 482 sources 7 characters 3 people"
+unchanged, and several subsequent requests (`/import/actions`, `/admin/audit`,
+`/admin/database/seed/preview`) all returning 200 with no errors. This is the stronger of the two
+scenarios in the Step 8 description — a genuine incremental replay through Migration010 against a real,
+previously-migrated database, not just a fresh empty one — confirmed live, exercising exactly the
+upgrade path this migration exists to support.
 
 ### 9. T2 — Docker smoke verification
 
-**Status:** Not started.
+**Status:** ✅ Done — `docker build -f docker/Dockerfile -t quotinator:local .` succeeded. Fresh
+container startup: baseline path logged "app v10", clean, no errors. `Quotinator.Tools.DbInspector`
+`pragma_table_info('ImportBatches')` against the seeded database confirmed `ImportedById` present,
+`ImportedBy` absent. Re-imported the curated file (200) and ran the full Reverse (undo) scenario
+(`preview=true` then real — both 200) — this exercises `SqliteImportBatchRepository.GetAllAsync`
+(`Sql.ImportBatches.SelectAll`, the exact query #212 rewrote and this issue's rename flows through) live
+in a real container via `ReverseBatchAsync`'s LIFO-stack check. A follow-up `DbInspector` query confirmed
+`ImportedById` reads back correctly (`NULL`, as expected — no write path sets this column, per
+Background) on all four remaining seed batches after the reversal.
 
-`docker build` + `docker run` per `docs/release-verification.md`'s T2 gate: a fresh seed confirms
-`pragma_table_info('ImportBatches')` shows `ImportedById`, not `ImportedBy`, via
-`Quotinator.Tools.DbInspector`. Add a new scenario to CLAUDE.md's living T2 checklist (its own "only
-grows" convention) proving a deliberately mixed-case `ImportedById` value inserted directly (bypassing
-the app, since no write path sets this column yet) reads back lowercase through both
-`SqliteImportBatchRepository`'s `Sql.ImportBatches`-backed methods and the generic
-`SqliteRepository<ImportBatch>.GetByIdAsync`, mirroring the `ConversationLines.QuoteId`/`batchId`
-smoke-test entries already in that checklist.
+**The originally-planned mixed-case-insert scenario was dropped, not skipped silently:**
+`Quotinator.Tools.DbInspector` is deliberately read-only by design (`Mode=ReadOnly`, see its own
+README/`ConnectionStrings.BuildReadOnly`) and cannot write a mutation; no write path anywhere in the app
+sets `ImportedById` either (confirmed in Background — the column is 100% unused). This is the exact same
+situation CLAUDE.md's own T2 checklist already documents for `ExistingBatchId`: *"a live T2 run cannot
+easily manufacture pre-existing non-canonical data through the API alone, since every write path now
+canonicalizes at capture time"* — the mixed-case round-trip proof is instead fully covered by
+`SqliteImportBatchRepositoryTests.GetAllAsync_MixedCaseImportedById_RendersLowercase`/
+`GetByIdAsync_MixedCaseImportedById_RendersLowercase` (real, hermetic SQLite integration tests, not
+mocks — already passing, see Step 6). No new scenario was added to CLAUDE.md's living T2 checklist, since
+`ImportBatches` has no dedicated HTTP listing endpoint and the Reverse (undo) section already covers the
+only externally-observable effect of this rename.
 
 ---
 
@@ -371,17 +411,17 @@ smoke-test entries already in that checklist.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Migration010 renames `ImportBatches.ImportedBy` to `ImportedById` and preserves any pre-existing value | Unit test | `Quotinator.Core.Tests.Repositories.ImportBatchesTests.Migration_RenameImportedByToImportedById_ColumnRenamedAndDataPreserved` — starts red |
-| 2 | ❌ | `QuotinatorMigrations.BaselineSchema` and incremental replay through Migration010 produce identical `ImportBatches` schema | Unit test | `Quotinator.Core.Tests.Database.DatabaseInitializerTests.Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema` (existing test, no code change — passes iff Steps 2-3 are both done correctly) |
-| 3 | ❌ | `Sql.ImportBatches.SelectAll`/`SelectByType` (via #212's reflection-based `SelectColumns`) already wrap the renamed `ImportedById` with no code change here, and pass both id guards | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests.SqlConstant_PassesIdCaseGuard`/`SqlConstant_PassesSelectPresentationGuard` (existing reflection-driven DynamicData tests, automatic) plus #212's own `ImportBatches_SelectColumns_ReflectsEveryImportBatchProperty` (proves `ImportedById` specifically, once renamed, appears without touching `Sql.cs`) |
-| 4 | ❌ | A deliberately mixed-case `ImportedById` value round-trips to lowercase through `SqliteImportBatchRepository.GetAllAsync`/`GetByTypeAsync` (the rewritten `Sql.ImportBatches` queries) | Unit test | `Quotinator.Data.Tests.Repositories.SqliteImportBatchRepositoryTests.GetAllAsync_MixedCaseImportedById_RendersLowercase` — starts red (new test file, mirrors `SystemImportActionWriterReaderTests.ExistingBatchId_RoundTripsCorrectly`'s pattern) |
-| 5 | ❌ | The same mixed-case value round-trips to lowercase through the generic `SqliteRepository<ImportBatch>.GetByIdAsync` path | Unit test | `Quotinator.Data.Tests.Repositories.SqliteImportBatchRepositoryTests.GetByIdAsync_MixedCaseImportedById_RendersLowercase` — starts red |
-| 6 | ❌ | `Schema_ImportBatchesTable_HasAllRequiredColumns` reflects the renamed column | Unit test | `Quotinator.Core.Tests.Repositories.ImportBatchesTests.Schema_ImportBatchesTable_HasAllRequiredColumns` (existing test, updated expected-column list) |
-| 7 | ❌ | Consumer schema version is 10 after all migrations apply | Unit test | `Quotinator.Core.Tests.Repositories.ImportBatchesTests.Schema_MigrationVersion_IsBumped` (existing test, updated to assert `10`) |
-| 8 | ❌ | No regression across the five other hardcoded-version-9 assertions found in Background | Unit test | `Quotinator.Core.Tests.Database.DatabaseInitializerTests` lines 616, 916, 943, 988 (existing tests, updated to assert `10`) plus full-suite run |
-| 9 | ❌ | No regression anywhere else | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 10 | ❌ | T1 — app starts cleanly on a fresh database and on an existing pre-#213 database (migration replay) | Live (T1) | Developer to confirm in Visual Studio once implemented |
-| 11 | ❌ | T2 — Docker smoke test: fresh seed shows `ImportedById` (not `ImportedBy`) via schema inspection; a mixed-case value round-trips lowercase through both read paths | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + `Quotinator.Tools.DbInspector` `pragma_table_info('ImportBatches')` query; scenario added to CLAUDE.md's T2 checklist per Step 9 |
+| 1 | ✅ | Migration010 renames `ImportBatches.ImportedBy` to `ImportedById` and preserves any pre-existing value | Unit test | `Quotinator.Core.Tests.Repositories.ImportBatchesTests.Migration_RenameImportedByToImportedById_ColumnRenamedAndDataPreserved` |
+| 2 | ✅ | `QuotinatorMigrations.BaselineSchema` and incremental replay through Migration010 produce identical `ImportBatches` schema | Unit test | `Quotinator.Core.Tests.Database.DatabaseInitializerTests.Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema` |
+| 3 | ✅ | `Sql.ImportBatches.SelectAll`/`SelectByType` (via #212's reflection-based `SelectColumns`) already wrap the renamed `ImportedById` with no code change here, and pass both id guards | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests.SqlConstant_PassesIdCaseGuard`/`SqlConstant_PassesSelectPresentationGuard` plus #212's own `ImportBatches_SelectColumns_ReflectsEveryImportBatchProperty` |
+| 4 | ✅ | A deliberately mixed-case `ImportedById` value round-trips to lowercase through `SqliteImportBatchRepository.GetAllAsync`/`GetByTypeAsync` (the rewritten `Sql.ImportBatches` queries) | Unit test | `Quotinator.Data.Tests.Repositories.SqliteImportBatchRepositoryTests.GetAllAsync_MixedCaseImportedById_RendersLowercase` (fixture corrected to a literal with genuine hex letters — see Step 6 Notes) |
+| 5 | ✅ | The same mixed-case value round-trips to lowercase through the generic `SqliteRepository<ImportBatch>.GetByIdAsync` path | Unit test | `Quotinator.Data.Tests.Repositories.SqliteImportBatchRepositoryTests.GetByIdAsync_MixedCaseImportedById_RendersLowercase` |
+| 6 | ✅ | `Schema_ImportBatchesTable_HasAllRequiredColumns` reflects the renamed column | Unit test | `Quotinator.Core.Tests.Repositories.ImportBatchesTests.Schema_ImportBatchesTable_HasAllRequiredColumns` |
+| 7 | ✅ | Consumer schema version is 10 after all migrations apply | Unit test | `Quotinator.Core.Tests.Repositories.ImportBatchesTests.Schema_MigrationVersion_IsBumped` |
+| 8 | ✅ | No regression across the five other hardcoded-version-9 assertions found in Background | Unit test | `Quotinator.Core.Tests.Database.DatabaseInitializerTests` (4 locations, all updated to assert `10`) plus full-suite run |
+| 9 | ✅ | No regression anywhere else | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (`Quotinator.Core.Tests` 970/970, `Quotinator.Data.Tests` 610/610, `Quotinator.Api.Tests` 496/496), 0 warnings, 0 errors |
+| 10 | ✅ | T1 — app starts cleanly on a fresh database and on an existing pre-#213 database (migration replay) | Live (T1) | Developer confirmed in Visual Studio against a real pre-existing v9 database — startup log shows "applying 1 pending App migration(s) (version 9 → 10)...", "schema updated (data v10, app v10)", clean, no errors |
+| 11 | ✅ | T2 — Docker smoke test: fresh seed shows `ImportedById` (not `ImportedBy`) via schema inspection; rewritten `Sql.ImportBatches.SelectAll` continues to work live (Reverse scenario) | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; `Quotinator.Tools.DbInspector` `pragma_table_info('ImportBatches')` confirmed `ImportedById`; curated import (200) + Reverse preview/real (both 200); mixed-case round-trip covered by unit tests instead (DbInspector is read-only by design, no write path exists for this column — see Step 9's Notes) |
 
 ---
 

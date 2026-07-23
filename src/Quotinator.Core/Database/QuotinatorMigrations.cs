@@ -26,6 +26,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 7, Sql = Migration007_ImportBatchStagingStatus },
         new SchemaMigration { Version = 8, Sql = Migration008_Conversations },
         new SchemaMigration { Version = 9, Sql = Migration009_SeriesUniverseSchema },
+        new SchemaMigration { Version = 10, Sql = Migration010_RenameImportBatchImportedById },
     ];
 
     /// <summary>
@@ -464,6 +465,17 @@ public static class QuotinatorMigrations
         CREATE INDEX IF NOT EXISTS IX_Sources_SeriesId              ON Sources(SeriesId);
         """;
 
+    // Renames ImportBatches.ImportedBy to ImportedById (#213) — the column always held a UUID (or NULL)
+    // but its name didn't carry the *Id suffix every id-casing guard (SqlIdCaseGuard,
+    // SqlSelectPresentationGuard, ReflectedColumnMetadata) relies on to find id/FK columns by name. Single
+    // atomic RENAME COLUMN — no CHECK/UNIQUE/REFERENCES on this column, so the full create-copy-drop-rename
+    // table rebuild Migration004 needed for a CHECK-constraint change is unnecessary here. Column is
+    // unused in v1 (no auth/user management — CLAUDE.md's "What NOT to do"), so every pre-existing row's
+    // value is NULL and survives the rename unchanged.
+    private const string Migration010_RenameImportBatchImportedById = """
+        ALTER TABLE ImportBatches RENAME COLUMN ImportedBy TO ImportedById;
+        """;
+
     // Consolidated schema for a genuinely fresh database — the union of migrations 1-8's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
@@ -482,12 +494,14 @@ public static class QuotinatorMigrations
     // ADR 011) are also included verbatim — SeriesId is an ALTER TABLE ADD COLUMN on Sources, so it
     // is listed last on that table to match column order, same as every other ALTER-appended column
     // above. Characters no longer carries SourceId or UNIQUE(SourceId, Name) — both dropped by
-    // migration009's rebuild.
+    // migration009's rebuild. Migration010's ImportedBy -> ImportedById rename (#213) is folded in
+    // directly — ImportBatches.ImportedById is created under its final name, since a RENAME COLUMN
+    // has nothing left to rename against on a table that never had the old name.
     // Deliberately omits migration002's DELETE FROM QuoteGenres (data-repair for pre-existing bad
     // data — nothing to repair on a fresh database) and migration003's pre-seed INSERTs (WHERE
     // EXISTS-guarded, always a no-op before any quote has been seeded), and migration009's
     // CharacterSources backfill INSERT (nothing to backfill on a fresh database — Characters is
-    // always empty at baseline time). Kept in sync with migrations 1-9 by DatabaseInitializerTests'
+    // always empty at baseline time). Kept in sync with migrations 1-10 by DatabaseInitializerTests'
     // schema-drift comparison.
     private const string BaselineSchema = """
         CREATE TABLE IF NOT EXISTS ImportBatches (
@@ -496,7 +510,7 @@ public static class QuotinatorMigrations
             Type         TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System', 'UserSeed')),
             Url          TEXT,
             ImportedAt   TEXT    NOT NULL,
-            ImportedBy   TEXT,
+            ImportedById TEXT,
             RecordCount  INTEGER NOT NULL DEFAULT 0,
             DateCreated  TEXT    NOT NULL,
             DateModified TEXT,

@@ -613,7 +613,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(9, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+        Assert.AreEqual(10, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
     }
 
     // ── #143 — migration ownership split + baseline schema ─────────────────────
@@ -913,7 +913,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
         Assert.AreEqual(10, db.DataSchemaVersion);
-        Assert.AreEqual(9, db.SchemaVersion);
+        Assert.AreEqual(10, db.SchemaVersion);
     }
 
     /// <summary>
@@ -940,7 +940,7 @@ public class DatabaseInitializerTests
         var db2 = CreateInitializer([]);
         await db2.InitialiseAsync();
 
-        Assert.AreEqual(9, db2.SchemaVersion,      "All six remaining App migrations (4, 5, 6, 7, 8, and 9) should have replayed");
+        Assert.AreEqual(10, db2.SchemaVersion,      "All seven remaining App migrations (4, 5, 6, 7, 8, 9, and 10) should have replayed");
         Assert.AreEqual(10, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
     }
 
@@ -985,7 +985,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(9, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+        Assert.AreEqual(10, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
     // ── #179 — Series/Universe schema, Character↔Source many-to-many ───────────

@@ -39,7 +39,7 @@ public class SqliteImportBatchRepositoryTests
                 Type           TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System', 'UserSeed')),
                 Url            TEXT,
                 ImportedAt     TEXT    NOT NULL,
-                ImportedBy     TEXT,
+                ImportedById   TEXT,
                 RecordCount    INTEGER NOT NULL DEFAULT 0,
                 DateCreated    TEXT    NOT NULL,
                 DateModified   TEXT,
@@ -70,7 +70,7 @@ public class SqliteImportBatchRepositoryTests
         Type           = new SafeValue<ImportBatchType?>(type.ToString(), type),
         Url            = "https://example.test/source.json",
         ImportedAt     = importedAt ?? SafeDateValue.Now.Raw,
-        ImportedBy     = "11111111-1111-4111-8111-111111111111",
+        ImportedById   = "11111111-1111-4111-8111-111111111111",
         RecordCount    = 42,
         ConflictPolicy = new SafeValue<DuplicateResolutionPolicy?>(DuplicateResolutionPolicy.NewestWins.ToString(), DuplicateResolutionPolicy.NewestWins),
         Status         = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Applied.ToString(), ImportBatchStatus.Applied),
@@ -93,7 +93,7 @@ public class SqliteImportBatchRepositoryTests
         Assert.AreEqual(ImportBatchType.Import, result.Type.Parsed);
         Assert.AreEqual(batch.Url, result.Url);
         Assert.AreEqual(batch.ImportedAt, result.ImportedAt);
-        Assert.AreEqual(batch.ImportedBy, result.ImportedBy);
+        Assert.AreEqual(batch.ImportedById, result.ImportedById);
         Assert.AreEqual(batch.RecordCount, result.RecordCount);
         Assert.AreEqual(DuplicateResolutionPolicy.NewestWins, result.ConflictPolicy.Parsed);
         Assert.AreEqual(ImportBatchStatus.Applied, result.Status.Parsed);
@@ -118,6 +118,63 @@ public class SqliteImportBatchRepositoryTests
         Assert.HasCount(2, results);
         Assert.AreEqual(second.Id, results[0].Id, "The later-inserted row must sort first under a same-second tie");
         Assert.AreEqual(first.Id, results[1].Id);
+    }
+
+    // ── #213: ImportedById mixed-case presentation ──────────────────────────────
+
+    /// <summary>
+    /// A deliberately mixed-case <c>ImportedById</c> value, written directly (bypassing the repository —
+    /// no capture-time canonicalization exists for this column, since nothing in <c>src/</c> writes it
+    /// today per #213's own Background), renders lowercase through <see cref="SqliteImportBatchRepository.GetAllAsync"/>
+    /// (<c>Sql.ImportBatches.SelectAll</c>, the query #212 rewrote away from <c>SELECT *</c>). Mirrors
+    /// <c>SystemImportActionWriterReaderTests.ExistingBatchId_RoundTripsCorrectly</c>'s pattern.
+    /// </summary>
+    [TestMethod]
+    public async Task GetAllAsync_MixedCaseImportedById_RendersLowercase()
+    {
+        var id   = Guid.NewGuid().ToString();
+        var now  = SafeDateValue.Now.Raw;
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            conn.Open();
+            conn.Execute(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, ImportedById, DateCreated) " +
+                "VALUES (@id, 'mixed-case.json', 'Import', @now, UPPER('aabbccdd-1234-4abc-8def-1234567890ab'), @now);",
+                new { id, now });
+        }
+
+        var results = await _repository.GetAllAsync();
+        var result  = results.Single();
+
+        Assert.AreEqual("aabbccdd-1234-4abc-8def-1234567890ab", result.ImportedById,
+            "ImportedById must render lowercase regardless of the casing actually stored");
+    }
+
+    /// <summary>
+    /// The same mixed-case value round-trips lowercase through the generic
+    /// <see cref="SqliteRepository{T}.GetByIdAsync"/> path, proving both read paths — the hand-written
+    /// <c>Sql.ImportBatches</c> queries and <c>RepositorySql</c>'s reflection-driven generic queries —
+    /// present <c>ImportedById</c> consistently.
+    /// </summary>
+    [TestMethod]
+    public async Task GetByIdAsync_MixedCaseImportedById_RendersLowercase()
+    {
+        var id   = Guid.NewGuid().ToString();
+        var now  = SafeDateValue.Now.Raw;
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            conn.Open();
+            conn.Execute(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, ImportedById, DateCreated) " +
+                "VALUES (@id, 'mixed-case.json', 'Import', @now, UPPER('aabbccdd-1234-4abc-8def-1234567890ab'), @now);",
+                new { id, now });
+        }
+
+        var result = await _repository.GetByIdAsync(Guid.Parse(id));
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual("aabbccdd-1234-4abc-8def-1234567890ab", result.ImportedById,
+            "ImportedById must render lowercase through the generic repository path too");
     }
 
     // ── GetByTypeAsync ────────────────────────────────────────────────────────
