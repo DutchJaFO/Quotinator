@@ -131,10 +131,24 @@ public class SqlQueryGuardTests
             "and update the documented list in this test.");
     }
 
+    /// <summary>
+    /// #214: <see cref="EnumerateSqlConstants"/> must also discover zero-arg/all-optional <c>static</c>
+    /// factory methods (via <c>GetMethods</c>), not just fields and properties — otherwise a method like
+    /// <see cref="Quotinator.Data.Queries.Sql.Queries.WidgetWithOwner"/> is silently invisible to every
+    /// guard unless someone remembers to add it to <see cref="AssembledQueryCases"/> by hand.
+    /// </summary>
+    [TestMethod]
+    public void AllNamedSqlConstants_DiscoversZeroArgAndAllOptionalStaticFactoryMethods()
+    {
+        var names = EnumerateSqlConstants().Select(x => x.Name).ToHashSet();
+
+        Assert.Contains("Queries.WidgetWithOwner()", names);
+    }
+
     public static IEnumerable<object[]> AssembledQueryCases()
     {
-        // Sql.Queries factory methods — one case per method.
-        yield return ["Queries.WidgetWithOwner()", Sql.Queries.WidgetWithOwner()];
+        // Queries.WidgetWithOwner() is 0-arg — #214's widened EnumerateSqlConstants now discovers and
+        // guard-checks it automatically via AllNamedSqlConstants, so no manual case is needed here.
 
         // SystemAudit.SelectPaged/CountPaged — one case per filter-flag combination.
         foreach (var (filterTable, filterRecordId) in new[] { (false, false), (true, false), (false, true), (true, true) })
@@ -274,6 +288,49 @@ public class SqlQueryGuardTests
     public static IEnumerable<object[]> AllNamedSqlConstants()
         => EnumerateSqlConstants().Select(x => new object[] { x.Name, x.Sql });
 
+    /// <summary>
+    /// #214: asserts the set of <c>static</c> SQL factory methods requiring at least one non-optional
+    /// parameter matches a documented inventory — a drift detector, not a bug fix. A single synthetic
+    /// invocation cannot safely stand in for these (see #214's plan doc for why: a flag-driven method's
+    /// most dangerous branch is often exactly the one an all-default invocation would skip), so manual
+    /// <see cref="AssembledQueryCases"/> coverage remains authoritative for them. This test only ensures
+    /// a newly-added parameterized method can't silently join that group without a developer noticing.
+    /// </summary>
+    [TestMethod]
+    public void ParameterizedSqlFactoryMethods_MatchDocumentedInventory()
+    {
+        var documented = new HashSet<string>
+        {
+            "Joins.Inner",
+            "Joins.Left",
+            "SystemAudit.SelectPaged",
+            "SystemAudit.CountPaged",
+            "SystemAudit.BuildWhere",
+            "SystemImportActions.SelectPaged",
+            "SystemImportActions.CountPaged",
+            "SystemImportActions.BuildWhere",
+        };
+
+        var actual = EnumerateParameterizedSqlFactoryMethodNames().ToHashSet();
+
+        CollectionAssert.AreEquivalent(
+            documented.ToList(),
+            actual.ToList(),
+            "The set of static SQL factory methods requiring at least one parameter has changed. " +
+            "Add the new method to AssembledQueryCases with a case for every meaningfully distinct " +
+            "call shape, then update this documented list. See #214.");
+    }
+
+    private static IEnumerable<string> EnumerateParameterizedSqlFactoryMethodNames()
+        => typeof(Sql)
+            .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)
+            .SelectMany(t => t
+                .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+                .Where(m => !m.IsSpecialName
+                    && m.ReturnType == typeof(string)
+                    && m.GetParameters().Any(p => !p.IsOptional))
+                .Select(m => $"{t.Name}.{m.Name}"));
+
     private static IEnumerable<(string Name, string Sql)> EnumerateSqlConstants()
         => typeof(Sql)
             .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)
@@ -284,5 +341,21 @@ public class SqlQueryGuardTests
                 .Concat(t
                     .GetProperties(BindingFlags.NonPublic | BindingFlags.Static)
                     .Where(p => p.PropertyType == typeof(string) && p.GetMethod is not null)
-                    .Select(p => ($"{t.Name}.{p.Name}", (string)p.GetValue(null)!))));
+                    .Select(p => ($"{t.Name}.{p.Name}", (string)p.GetValue(null)!)))
+                .Concat(t
+                    // #214: zero-arg/all-optional static factory methods — GetParameters().All(IsOptional)
+                    // is vacuously true for a genuine 0-arg method, so this one filter covers both shapes
+                    // the issue names. IsSpecialName excludes compiler-generated property accessors
+                    // (get_Foo), which would otherwise duplicate coverage already provided by GetProperties
+                    // above. Methods requiring at least one non-optional parameter are deliberately excluded
+                    // — see ParameterizedSqlFactoryMethods_MatchDocumentedInventory and #214's plan doc for
+                    // why a single synthetic invocation can't safely stand in for the manual DynamicData
+                    // matrix those methods need.
+                    .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+                    .Where(m => !m.IsSpecialName
+                        && m.ReturnType == typeof(string)
+                        && m.GetParameters().All(p => p.IsOptional))
+                    .Select(m => (
+                        $"{t.Name}.{m.Name}()",
+                        (string)m.Invoke(null, m.GetParameters().Select(p => p.DefaultValue).ToArray())!))));
 }

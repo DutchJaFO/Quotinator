@@ -1,8 +1,8 @@
 # #214 — Guard test reflection doesn't cover static factory methods (`GetMethods`)
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #214
-**Tiers required:** T2
+**Tiers required:** T1, T2
 **Depends on:** None
 
 ---
@@ -254,7 +254,8 @@ already safe).
 
 ### 1. Write the auto-discovery regression tests (red)
 
-**Status:** Not started.
+**Status:** ✅ Done — both tests added and confirmed genuinely red (`Assert.Contains` failed, the
+expected name not yet present) before Step 3's widening.
 
 One new `[TestMethod]` per file, calling the existing public `AllNamedSqlConstants()` directly (no new
 helper needed for this one):
@@ -268,72 +269,58 @@ helper needed for this one):
 
 ### 2. Confirm both tests are genuinely red
 
-**Status:** Not started.
-
-Run `dotnet test --filter "FullyQualifiedName~AllNamedSqlConstants_DiscoversZeroArgAndAllOptionalStaticFactoryMethods"` and confirm both fail against the current, unwidened `EnumerateSqlConstants`.
+**Status:** ✅ Done — `dotnet test --filter "FullyQualifiedName~AllNamedSqlConstants_DiscoversZeroArgAndAllOptionalStaticFactoryMethods"` confirmed both tests failed (1/1 failed in each project) against the
+unwidened `EnumerateSqlConstants`.
 
 ### 3. Widen `EnumerateSqlConstants` in both files
 
-**Status:** Not started.
-
-Add the `GetMethods` branch from Approach to both `EnumerateSqlConstants` implementations. Re-run the
-Step 1 tests — both must now pass (green).
+**Status:** ✅ Done — the `GetMethods` branch from Approach added to both `EnumerateSqlConstants`
+implementations, exactly as drafted. Both Step 1 tests now pass.
 
 ### 4. Confirm no new guard violations from the 3 newly-discovered methods
 
-**Status:** Not started.
-
-Run the full `SqlQueryGuardTests` suite in both projects — `SqlConstant_PassesAggregateGuard`,
-`SqlConstant_PassesIdCaseGuard`, and `SqlConstant_PassesSelectPresentationGuard` now each pick up
-`Quotes.SelectById()`/`Quotes.SelectRawById()` (Core) and `Queries.WidgetWithOwner()` (Data) via their
-existing `[DynamicData(nameof(AllNamedSqlConstants))]` attribute, with no code change to the test methods
-themselves. All three must pass for all three newly-discovered names — expected, since these methods
-already go through `IdClauses` correctly (confirmed by reading their bodies in Background) and contain no
-aggregate function.
+**Status:** ✅ Done — full `SqlQueryGuardTests` suite run in both projects (539 Core, 179 Data, all
+passing) confirmed `SqlConstant_PassesAggregateGuard`/`SqlConstant_PassesIdCaseGuard`/
+`SqlConstant_PassesSelectPresentationGuard` all pass for `Quotes.SelectById()`, `Quotes.SelectRawById()`,
+and `Queries.WidgetWithOwner()` with zero violations.
 
 ### 5. Remove the redundant manual `AssembledQueryCases` entries
 
-**Status:** Not started.
-
-Delete the `"SelectById()"`/`"SelectRawById()"` cases from Core.Tests's `AssembledQueryCases` and the
-`"Queries.WidgetWithOwner()"` case from Data.Tests's `AssembledQueryCases`, per Approach. Re-run the full
-`SqlQueryGuardTests` suite in both projects — must stay fully green; the same 3 methods' SQL is now
-checked exactly once each (via `AllNamedSqlConstants`) instead of twice.
+**Status:** ✅ Done — the `"SelectById()"`/`"SelectRawById()"` cases removed from Core.Tests's
+`AssembledQueryCases` and the `"Queries.WidgetWithOwner()"` case removed from Data.Tests's
+`AssembledQueryCases`, replaced with an explanatory comment. Full `SqlQueryGuardTests` suite stayed green
+after the removal.
 
 ### 6. Add the parameterized-method closed-inventory test to both files
 
-**Status:** Not started.
-
-Add `EnumerateParameterizedSqlFactoryMethodNames` and `ParameterizedSqlFactoryMethods_MatchDocumentedInventory`
-to both `SqlQueryGuardTests.cs` files per Approach, with the documented sets populated from Background's
-real enumeration:
-
-- Core.Tests: `{ "Quotes.SelectRandom", "Quotes.SelectPaged", "Quotes.SelectSearch", "Quotes.CountRandom", "Quotes.CountGetAll" }`
-- Data.Tests: `{ "Joins.Inner", "Joins.Left", "SystemAudit.SelectPaged", "SystemAudit.CountPaged", "SystemAudit.BuildWhere", "SystemImportActions.SelectPaged", "SystemImportActions.CountPaged", "SystemImportActions.BuildWhere" }`
-
-Both tests must pass immediately (drift detector, not a bug fix — see Approach).
+**Status:** ✅ Done — `EnumerateParameterizedSqlFactoryMethodNames` and
+`ParameterizedSqlFactoryMethods_MatchDocumentedInventory` added to both files, with the documented sets
+populated exactly as planned. Both tests passed immediately (drift detector, not a bug fix).
 
 ### 7. Full build and test verification
 
-**Status:** Not started.
+**Status:** ✅ Done — `dotnet build --configuration Release`: 0 warnings, 0 errors.
+`dotnet test --configuration Release --verbosity normal`: every project green
+(`Quotinator.Core.Tests` 972/972, `Quotinator.Data.Tests` 612/612, `Quotinator.Api.Tests` 496/496, all
+others unaffected), 0 failures — including `AggregateQueries_MatchDocumentedInventory` in both projects
+(unaffected, as expected).
 
-`dotnet build --configuration Release` (0 warnings/errors) and
-`dotnet test --configuration Release --verbosity normal` (full suite green, 0 warnings/errors) — proves
-no regression anywhere else in the suite, including `AggregateQueries_MatchDocumentedInventory` in both
-projects (unaffected — none of the 3 newly-discovered methods contain an aggregate function, confirmed
-in Step 4).
+### 8. T1 and T2 verification
 
-### 8. T2 Docker smoke check
+**Status:** ✅ Done — T2: `docker build -f docker/Dockerfile -t quotinator:local .` succeeded. Fresh
+container startup: clean, schema v10, no errors. Baseline smoke suite (`/health`, `/version`,
+`/quotes/random`, `/quotes/search?q=love`, `/quotes/search?q=Casablanca&field=source`) all returned
+expected 200 responses. No new scenario needed — test-file-only change with no runtime effect. T1:
+developer confirmed clean startup in Visual Studio — "schema is up to date (data v10, app v10)", no
+errors, matching this issue's own expectation of zero runtime effect.
 
-**Status:** Not started.
-
-Per `docs/release-verification.md`: T2 is always required for any issue that touches code, regardless of
-whether a specific trigger applies — declaring `Tiers required: T1` (or, as this plan doc's own draft
-first did, `None`) alone is explicitly not a valid declaration. This issue is test-file-only with no
-runtime/production-code change, so no new scenario-specific smoke command is added; `docker build -f
-docker/Dockerfile -t quotinator:local .` succeeding plus CLAUDE.md's Pre-Push Checklist → step 6 baseline
-smoke suite passing is the full gate. T1 remains not required — no `.razor`/Blazor/middleware or
-`DatabaseInitializer`/migration/schema touch.
+Per `docs/release-verification.md`: T1 and T2 are both always required for any issue that touches code,
+regardless of whether a specific trigger applies — declaring `Tiers required: T2` alone (this plan doc's
+own original draft) is explicitly not a valid declaration. This issue is test-file-only with no
+runtime/production-code change, so no new scenario-specific smoke command is added for either tier;
+`docker build -f docker/Dockerfile -t quotinator:local .` succeeding plus CLAUDE.md's Pre-Push
+Checklist → step 6 baseline smoke suite passing is the full T2 gate, and the developer starting the app
+in Visual Studio and confirming a clean startup is the full T1 gate.
 
 ---
 
@@ -341,14 +328,15 @@ smoke suite passing is the full gate. T1 remains not required — no `.razor`/Bl
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Widened reflection auto-discovers zero-arg/all-optional static factory methods in Core | Unit test | `Quotinator.Core.Tests.Security.SqlQueryGuardTests.AllNamedSqlConstants_DiscoversZeroArgAndAllOptionalStaticFactoryMethods` — starts red |
-| 2 | ❌ | Widened reflection auto-discovers zero-arg/all-optional static factory methods in Data | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests.AllNamedSqlConstants_DiscoversZeroArgAndAllOptionalStaticFactoryMethods` — starts red |
-| 3 | ❌ | The 3 newly-discovered methods pass all three existing guards with no new violations | Unit test | `SqlConstant_PassesAggregateGuard`/`SqlConstant_PassesIdCaseGuard`/`SqlConstant_PassesSelectPresentationGuard` (both projects) — green for `Quotes.SelectById()`, `Quotes.SelectRawById()`, `Queries.WidgetWithOwner()` |
-| 4 | ❌ | Redundant manual `AssembledQueryCases` entries for the 3 methods removed, no coverage loss | Unit test | Full `SqlQueryGuardTests` suite (both projects) stays green after the removal in Step 5 |
-| 5 | ❌ | Closed-inventory test for parameterized methods matches the real method set in Core | Unit test | `Quotinator.Core.Tests.Security.SqlQueryGuardTests.ParameterizedSqlFactoryMethods_MatchDocumentedInventory` |
-| 6 | ❌ | Closed-inventory test for parameterized methods matches the real method set in Data | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests.ParameterizedSqlFactoryMethods_MatchDocumentedInventory` |
-| 7 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 8 | ❌ | T2 — Docker image builds and baseline smoke suite passes (required unconditionally per `docs/release-verification.md`, not because this issue's own change looks like it needs it) | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + CLAUDE.md's Pre-Push Checklist → step 6 baseline commands |
+| 1 | ✅ | Widened reflection auto-discovers zero-arg/all-optional static factory methods in Core | Unit test | `Quotinator.Core.Tests.Security.SqlQueryGuardTests.AllNamedSqlConstants_DiscoversZeroArgAndAllOptionalStaticFactoryMethods` |
+| 2 | ✅ | Widened reflection auto-discovers zero-arg/all-optional static factory methods in Data | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests.AllNamedSqlConstants_DiscoversZeroArgAndAllOptionalStaticFactoryMethods` |
+| 3 | ✅ | The 3 newly-discovered methods pass all three existing guards with no new violations | Unit test | `SqlConstant_PassesAggregateGuard`/`SqlConstant_PassesIdCaseGuard`/`SqlConstant_PassesSelectPresentationGuard` (both projects) — green for `Quotes.SelectById()`, `Quotes.SelectRawById()`, `Queries.WidgetWithOwner()` |
+| 4 | ✅ | Redundant manual `AssembledQueryCases` entries for the 3 methods removed, no coverage loss | Unit test | Full `SqlQueryGuardTests` suite (both projects) stays green after the removal in Step 5 |
+| 5 | ✅ | Closed-inventory test for parameterized methods matches the real method set in Core | Unit test | `Quotinator.Core.Tests.Security.SqlQueryGuardTests.ParameterizedSqlFactoryMethods_MatchDocumentedInventory` |
+| 6 | ✅ | Closed-inventory test for parameterized methods matches the real method set in Data | Unit test | `Quotinator.Data.Tests.Security.SqlQueryGuardTests.ParameterizedSqlFactoryMethods_MatchDocumentedInventory` |
+| 7 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (`Quotinator.Core.Tests` 972/972, `Quotinator.Data.Tests` 612/612, `Quotinator.Api.Tests` 496/496), 0 warnings, 0 errors |
+| 8 | ✅ | T2 — Docker image builds and baseline smoke suite passes (required unconditionally per `docs/release-verification.md`, not because this issue's own change looks like it needs it) | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; health/version/random/search all returned expected responses |
+| 9 | ✅ | T1 — app starts cleanly in Visual Studio (required unconditionally, same reasoning as row 8) | Live (T1) | Developer confirmed in Visual Studio — "schema is up to date (data v10, app v10)", clean startup, no errors |
 
 ---
 
