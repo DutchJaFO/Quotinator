@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-23 19:25 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-24 15:54 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Correcting a source, person, stage direction, sound cue, or conversation by re-importing it now only changes the fields the file actually mentions — a field left out is no longer silently reset to blank.
 - Pagination is now consistent across every list endpoint: requesting more than 500 items at once is rejected instead of silently limited, and requesting every matching item as one page (`pageSize=0`) works the same way everywhere.
 - Most films, shows, and other sources shown by quotes now include a release date — previously this was almost always left blank.
+- A character who appears across multiple entries in the same series (like a recurring character in a trilogy) is now recognised as the same character instead of being tracked separately for each entry, as long as they're the same type of media.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -97,6 +98,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The bundled `NikhilNamal17/popular-movie-quotes` and `vilaboim/movie-quotes` sources now use the new generic `basic-json-array`/`regex-array` converters, configured via `converterOptions` in `data/sources/manifest.json` instead of dedicated per-source code — output is unchanged, same quote ids and content
 - Every list endpoint's pagination now follows one consistent contract: `pageSize` above 500 is rejected (422) instead of silently capped, `pageSize=0` returns every matching row as a single page, and requesting a page past the last one is a distinct 422
 - The default page size for `GET /api/v1/admin/audit` and `GET /api/v1/import/actions` changed from 50 to 20, matching every other list endpoint
+- Character identity is no longer scoped to a single source: two characters with the same name are now treated as the same character when their sources share both media type and a known series; existing per-source duplicates are consolidated automatically on upgrade wherever a series relationship is known (issue #174)
 
 ### Fixed
 - ImportBatch rows created during seeding now record the correct `Type` (`Seed` for any bundled file, whether externally sourced with a manifest URL or internally authored) and persist the source URL; previously every seeded batch was recorded incorrectly

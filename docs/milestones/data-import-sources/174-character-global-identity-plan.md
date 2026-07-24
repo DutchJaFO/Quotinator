@@ -1,6 +1,6 @@
 # #174 — Character: migrate to global identity via new Series/Universe schema (ADR + migration)
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #174
 **Tiers required:** T1, T2
 **Depends on:** #179 (Series/Universe schema, `CharacterSources` join, `Source.Type` anchor invariant)
@@ -88,17 +88,17 @@ functional changes at all (#179 already built the apply-time plumbing genericall
 
 ### 2. Write the red tests
 
-**Status:** In progress. Unblocked now that step 1's ADR (013) has settled the exact merge algorithm.
-At minimum the seven originally-listed tests (`Migration_CharacterMerge_
-ConsolidatesSameNameRowsWithinKnownSeries`, `Migration_CharacterMerge_
-NeverMergesAcrossDifferingSourceType`, `Migration_CharacterMerge_
-LeavesUnrelatedSameNameRowsUnmergedWhenNoSeriesKnown`, `Migration_CharacterMerge_
-RepointsQuoteCharacterIdToMergedRow`, `Migration_CharacterMerge_PreservesCompletenessStatusPer
-Algorithm`, `Baseline_And_IncrementalReplay_ProduceIdenticalCharactersSchema`,
-`ResolveCharacterAsync_ExistingGlobalCharacter_ReusesRealId`), plus two more the ADR's design surfaced:
-`ResolveCharacterAsync_SeriesScopedCrossSourceMatch_AttachesNewLinkToExistingCharacter` (Decision 7)
-and `ResolveCharacterAsync_SameBatchNewSources_DoesNotMergeAcrossStillUncommittedSources` (Decision 8's
-documented limitation, asserted rather than left implicit).
+**Status:** ✅ Done. Written as `Migration_CharacterGlobalIdentity_*` (not `Migration_CharacterMerge_*`
+as originally named here, to match the migration's actual class name) in
+`DatabaseInitializerTests.cs`: `ConsolidatesSameNameRowsWithinKnownSeries`,
+`MergesDespiteDifferingNameCasing`, `NeverMergesAcrossDifferingSourceType`,
+`LeavesUnrelatedSameNameRowsUnmergedWhenNoSeriesKnown`, `RepointsQuoteCharacterIdToMergedRow`,
+`PreservesCompletenessStatusPerAlgorithm`, `BackfillsSourceTypeColumnFromLinkedSource`. Plus five
+`ResolveCharacterAsync_*` tests in `ImportActionPlannerTests.cs` covering the same-Source case,
+Series-scoped cross-Source reuse, the Type-anchor block, the conservative no-Series default, and
+case-insensitive Name matching. The originally-planned `Baseline_And_IncrementalReplay_
+ProduceIdenticalCharactersSchema` and same-batch-limitation tests were not needed as separate tests —
+see steps 6 and 8's own notes for why.
 
 ### 3. Design and write the migration
 
@@ -213,7 +213,7 @@ schema-drift test was needed; that existing test provides the coverage this row 
 | 7 | ✅ | Fresh-database baseline and incremental replay produce an identical `Characters` schema | Unit test | `Quotinator.Core.Tests.Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema` (pre-existing, iterates `ConsumerDomainTables` which includes `Characters`) — passing |
 | 8 | ✅ | `ResolveCharacterAsync` reuses an existing global Character by the new merge key (same-Source and Series-scoped cross-Source) | Unit test | `Quotinator.Core.Tests.ResolveCharacterAsync_ExistingGlobalCharacter_ReusesRealId`, `...SeriesScopedCrossSourceMatch_ReusesExistingCharacter`, `...DifferingSourceType_NeverReusesExistingCharacter`, `...NoKnownSeriesRelationship_CreatesSeparateCharacter`, `...CaseInsensitiveNameMatch_ReusesRealId` — all passing |
 | 9 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` (2026-07-24) — 2182 tests, all passed, 0 warnings, 0 errors, across every project |
-| 10 | ❌ | Migration applies cleanly against a database matching the last published release's schema, not just from-empty | Live (T1) | Per ADR 009: reconstruct or check out the last released tag's schema, run this migration against it, confirm no drift; developer confirms app opens and runs correctly in Visual Studio afterward — **not yet performed, developer's own action** |
+| 10 | ✅ | Migration applies cleanly against a database matching the last published release's schema, not just from-empty | Live (T1) | Developer confirmed (2026-07-24): real dev database at schema v10 migrated cleanly to v11 in Visual Studio, app started, `GET /api/v1/masterdata/characters` returned 200 |
 | 11 | ✅ | Live import behaviour is correct post-migration: importing a quote whose Character name already exists globally under a Source of the *same* `Type` and known `Series` reuses the existing row; a differing `Type` never merges | Live (T2) | Docker smoke test (2026-07-24): pre-committed "The Fellowship of the Ring"/"The Two Towers" (same Series, both Movie) each given an "Aragorn174" quote in separate imports → exactly one `Aragorn174` Character row linked to both Sources; identical setup with one Source `Movie` and one `Book` → two separate `Gandalf174` rows despite the shared Series. Found and fixed a real scope gap during this pass — see ADR 013 Decision 8's rewritten text. |
 
 ---

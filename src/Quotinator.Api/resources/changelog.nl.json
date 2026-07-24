@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214, 215],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 174, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214, 215],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -32,7 +32,8 @@
       "Bronnen, personages, personen, reeksen, universums, regieaanwijzingen en geluidscues kunnen nu allemaal afzonderlijk worden weergegeven en opgezocht via nieuwe eindpunten, op dezelfde manier als citaten dat al konden.",
       "Het corrigeren van een bron, persoon, regieaanwijzing, geluidscue of conversatie door deze opnieuw te importeren, wijzigt nu alleen de velden die het bestand daadwerkelijk vermeldt — een veld dat wordt weggelaten wordt niet langer stilzwijgend teruggezet naar leeg.",
       "Paginering is nu consistent bij elk lijsteindpunt: het opvragen van meer dan 500 items in één keer wordt geweigerd in plaats van stilzwijgend beperkt, en het opvragen van alle overeenkomende items als één pagina (`pageSize=0`) werkt overal op dezelfde manier.",
-      "De meeste films, series en andere bronnen die bij quotes worden getoond, hebben nu een releasedatum — voorheen was dit veld vrijwel altijd leeg."
+      "De meeste films, series en andere bronnen die bij quotes worden getoond, hebben nu een releasedatum — voorheen was dit veld vrijwel altijd leeg.",
+      "Een personage dat in meerdere delen van dezelfde reeks voorkomt (zoals een terugkerend personage in een trilogie) wordt nu herkend als hetzelfde personage in plaats van per deel apart te worden bijgehouden, zolang het om hetzelfde type media gaat."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -98,7 +99,8 @@
       "`POST /api/v1/import/preview` faseert nu een echte, inspecteerbare batch in plaats van de wijzigingen ongedaan te maken — in beide gevallen wordt er niets weggeschreven, maar de gefaseerde batch kan achteraf worden bekeken via `GET /api/v1/import/actions?batchId=`",
       "De gebundelde bronnen `NikhilNamal17/popular-movie-quotes` en `vilaboim/movie-quotes` gebruiken nu de nieuwe generieke convertors `basic-json-array`/`regex-array`, geconfigureerd via `converterOptions` in `data/sources/manifest.json` in plaats van eigen code per bron — de uitvoer is ongewijzigd, dezelfde citaat-id's en inhoud",
       "Paginering bij elk lijsteindpunt volgt nu één consistent contract: een `pageSize` boven 500 wordt geweigerd (422) in plaats van stilzwijgend beperkt, `pageSize=0` geeft alle overeenkomende rijen als één pagina terug, en het opvragen van een pagina voorbij de laatste is een aparte 422",
-      "De standaardpaginagrootte voor `GET /api/v1/admin/audit` en `GET /api/v1/import/actions` is gewijzigd van 50 naar 20, gelijk aan elk ander lijsteindpunt"
+      "De standaardpaginagrootte voor `GET /api/v1/admin/audit` en `GET /api/v1/import/actions` is gewijzigd van 50 naar 20, gelijk aan elk ander lijsteindpunt",
+      "De identiteit van een personage is niet langer beperkt tot één bron: twee personages met dezelfde naam worden nu als hetzelfde personage behandeld wanneer hun bronnen zowel hetzelfde mediatype als een bekende reeks delen; bestaande per-bron duplicaten worden bij het upgraden automatisch samengevoegd overal waar een reeksrelatie bekend is (issue #174)"
     ],
     "fixed": [
       "ImportBatch-rijen die tijdens het seeden worden aangemaakt, registreren nu het juiste `Type` (`Seed` voor elk gebundeld bestand, of het nu extern is aangeleverd met een manifest-URL of intern is samengesteld) en bewaren de bron-URL; voorheen werd elke geseede batch onjuist geregistreerd",
