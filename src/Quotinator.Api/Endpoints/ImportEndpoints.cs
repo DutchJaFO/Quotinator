@@ -186,13 +186,25 @@ internal static class ImportEndpoints
         adminGroup.MapPost("/actions/bulk-decide", async (
                 string? batchId,
                 string? format,
-                [Description("The edited export file — same flat row shape `GET /import/actions/export` produces, in the format named by `format`.")] IFormFile? file,
+                // HttpRequest, not a bound IFormFile?/[FromForm] parameter — mirrors POST /import's
+                // own fix (see that route's comment above): minimal API's automatic form binding
+                // always requires a form content-type to even attempt binding, so a request with no
+                // Content-Type/body at all fails at the framework's own routing/binding layer, not as
+                // a normal thrown exception — bypassing BadRequestExceptionHandler entirely and
+                // producing a bare, uninformative 400 instead of this endpoint's own 422s. Found live
+                // via T2 Docker testing.
+                HttpRequest request,
                 IImportActionService service,
                 IApiLocalizer localizer) =>
             {
                 if (string.IsNullOrWhiteSpace(batchId))
                     return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
 
+                if (!request.HasFormContentType)
+                    return Results.Problem(detail: localizer[ApiMessages.ImportFileMissing], statusCode: StatusCodes.Status422UnprocessableEntity);
+
+                var form = await request.ReadFormAsync();
+                var file = form.Files["file"];
                 if (file is null || file.Length == 0)
                     return Results.Problem(detail: localizer[ApiMessages.ImportFileMissing], statusCode: StatusCodes.Status422UnprocessableEntity);
 
@@ -411,6 +423,13 @@ internal static class ImportEndpoints
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
     }
 
+    // Case-insensitive: GET /import/actions/export's own JSON response uses ASP.NET's app-wide
+    // camelCase default (via ConfigureHttpJsonOptions), but element.Deserialize<T>() with no explicit
+    // options falls back to System.Text.Json's library default (case-sensitive, PascalCase-only) —
+    // found live via T2, where re-submitting an unmodified export verbatim failed every row with
+    // "missing required properties" despite the data being present under its camelCase name.
+    private static readonly JsonSerializerOptions BulkDecideRowJsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     // Row-by-row, not JsonSerializer.Deserialize<List<ImportActionFieldRow>> in one call — a single
     // malformed element would otherwise abort the whole file's parse, violating the "one bad row never
     // aborts the rest" contract (#163 spec requirement 6) for the parse stage specifically.
@@ -442,7 +461,7 @@ internal static class ImportEndpoints
             index++;
             try
             {
-                rows.Add(element.Deserialize<ImportActionFieldRow>() ?? throw new JsonException("Row is null."));
+                rows.Add(element.Deserialize<ImportActionFieldRow>(BulkDecideRowJsonOptions) ?? throw new JsonException("Row is null."));
             }
             catch (JsonException ex)
             {

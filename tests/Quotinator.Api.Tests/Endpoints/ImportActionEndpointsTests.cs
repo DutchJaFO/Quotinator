@@ -318,6 +318,14 @@ public class ImportActionEndpointsTests
             part.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
             form.Add(part, "file", "bulk-decide.json");
         }
+        else
+        {
+            // A genuinely zero-part MultipartFormDataContent serializes to a body ReadFormAsync
+            // rejects as malformed ("Form section has invalid Content-Disposition value") — the same
+            // workaround ImportEndpointTests.cs's own BuildForm helper already uses for the identical
+            // reason.
+            form.Add(new StringContent(string.Empty), "_empty");
+        }
         return form;
     }
 
@@ -355,6 +363,41 @@ public class ImportActionEndpointsTests
     }
 
     [TestMethod]
+    public async Task BulkDecide_NoBodyAndNoBatchId_Returns422()
+    {
+        // Mirrors POST /import's own bodyless-request fix (see ImportEndpoints.cs's HttpRequest
+        // parameter comment): minimal API's automatic IFormFile?/[FromForm] binding fails at the
+        // framework's routing layer — not via a thrown exception — for a request with no form
+        // content-type/body at all, producing a bare, uninformative 400 that bypasses this
+        // endpoint's own batchId/file validation entirely. Found live via T2 Docker testing, where
+        // a bare `curl -X POST .../bulk-decide` (no -F flags at all) returned 400 instead of the
+        // expected 422.
+        using var factory = CreateFactory();
+        using var client  = CreateAuthorizedClient(factory);
+
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide", content: null);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        StringAssert.Contains(body, "batchId",
+            "Must be a clear detail message naming batchId, not a bare framework 400 with no detail.");
+    }
+
+    [TestMethod]
+    public async Task BulkDecide_NoBodyButBatchIdPresent_Returns422ForMissingFile()
+    {
+        using var factory = CreateFactory();
+        using var client  = CreateAuthorizedClient(factory);
+
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", content: null);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        StringAssert.Contains(body, "file",
+            "Once batchId is present, a bodyless request must still be reported as a missing file, not a bare 400.");
+    }
+
+    [TestMethod]
     public async Task BulkDecide_UnknownFormat_Returns422()
     {
         using var factory = CreateFactory();
@@ -389,6 +432,41 @@ public class ImportActionEndpointsTests
         Assert.AreEqual("BATCH-1", fake.LastBulkDecidedBatchId);
         Assert.AreEqual(1, fake.LastBulkDecideRows!.Count);
         Assert.AreEqual(actionId, fake.LastBulkDecideRows[0].ActionId);
+    }
+
+    /// <summary>
+    /// Found live via T2 (2026-07-25): re-submitting <c>GET /import/actions/export</c>'s own JSON
+    /// output verbatim — the exact round trip the endpoint exists for — failed every row with "missing
+    /// required properties" despite the data being present. The app-wide JSON config
+    /// (<c>ConfigureHttpJsonOptions</c> in Program.cs) serializes export's response in ASP.NET's default
+    /// camelCase, but the endpoint's own request-body parsing used <c>element.Deserialize&lt;T&gt;()</c>
+    /// with no explicit options, which falls back to <see cref="JsonSerializer"/>'s library default
+    /// (case-sensitive, PascalCase-only) — the exact mismatch this test forces by hand-typing camelCase
+    /// property names, matching what a real client re-submitting the export actually sends.
+    /// </summary>
+    [TestMethod]
+    public async Task BulkDecide_CamelCaseJsonPropertyNames_MatchingExportsOwnOutput_ParsesSuccessfully()
+    {
+        var actionId = Guid.NewGuid();
+        var fake = new FakeImportActionService
+        {
+            ReturnBulkDecideResponse = new BulkDecideResponse { RowsProcessed = 1, ActionsDecided = 1 },
+        };
+        using var factory = CreateFactory(fake);
+        using var client  = CreateAuthorizedClient(factory);
+
+        var json = $$"""
+            [{"actionId":"{{actionId}}","entityId":"e0000001-0000-4000-8000-000000000001","entityType":"Person","field":"name","existingValue":"Old","incomingValue":"New","decision":"Replace"}]
+            """;
+
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json));
+        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(0, body!.Errors.Count, "camelCase property names (export's own output shape) must parse without error");
+        Assert.AreEqual(1, fake.LastBulkDecideRows!.Count);
+        Assert.AreEqual(actionId, fake.LastBulkDecideRows[0].ActionId);
+        Assert.AreEqual(FieldResolutionChoice.Replace, fake.LastBulkDecideRows[0].Decision);
     }
 
     [TestMethod]
