@@ -86,6 +86,7 @@ public static class SourceQuoteFileReader
                 Quotes          = quotesNode is null ? [] : quotesNode.Deserialize<List<SourceQuote>>(Options) ?? [],
                 Sources         = root?["sources"]?.Deserialize<List<SourceEntry>>(Options) ?? [],
                 People          = root?["people"]?.Deserialize<List<PersonEntry>>(Options) ?? [],
+                Characters      = root?["characters"]?.Deserialize<List<CharacterEntry>>(Options) ?? [],
                 StageDirections = root?["stageDirections"]?.Deserialize<List<SourceStageDirection>>(Options) ?? [],
                 SoundCues       = root?["soundCues"]?.Deserialize<List<SourceSoundCue>>(Options) ?? [],
                 Conversations   = root?["conversations"]?.Deserialize<List<SourceConversation>>(Options) ?? [],

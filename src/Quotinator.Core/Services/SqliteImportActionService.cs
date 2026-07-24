@@ -181,6 +181,30 @@ public sealed class SqliteImportActionService : IImportActionService
             return;
         }
 
+        if (action.EntityType == ImportActionEntityTypes.Character && action.ActionType.Parsed == ImportActionKind.Modify)
+        {
+            var existingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayload>(action.ExistingValue!)!;
+            var incomingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayload>(action.IncomingValue!)!;
+
+            var existingCharacterFields = ToFieldMap(existingCharacterPayload);
+            var incomingCharacterFields = ToFieldMap(incomingCharacterPayload);
+            var characterDecisions      = ToCharacterDecisionMap(request);
+
+            var characterResult = FieldMergeResolver.ResolveWithDecisions(existingCharacterFields, incomingCharacterFields, characterDecisions);
+
+            // #175: SourceId/SourceTitle/SourceType are never Modify-able (ADR 013 Decision 9) — the
+            // resolved payload carries the existing row's own values through unchanged, only Name
+            // comes from FieldMergeResolver's result.
+            var resolvedCharacterPayload = new CharacterActionPayload(
+                existingCharacterPayload.SourceId,
+                (string)characterResult.MergedFields["name"]!,
+                existingCharacterPayload.SourceTitle,
+                existingCharacterPayload.SourceType);
+
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedCharacterPayload), request.MarkCompletenessAs);
+            return;
+        }
+
         if (action.EntityType != ImportActionEntityTypes.Quote)
             throw new ImportActionNotDecidableException(actionId, action.EntityType);
 
@@ -419,6 +443,22 @@ public sealed class SqliteImportActionService : IImportActionService
                     await ReverseQuoteActionAsync(action, sqliteConnection, sqliteTransaction, uow, now, changeLog);
                     break;
                 case ImportActionEntityTypes.Character:
+                    if (action.ActionType.Parsed == ImportActionKind.Modify)
+                    {
+                        // #175: a Modify reversal restores the prior Name — it never deletes anything
+                        // (SourceId/SourceTitle/SourceType are immutable once a Character exists, ADR
+                        // 013 Decision 9, so nothing else needs restoring), so no active-reference
+                        // check is needed, mirroring Source's own Modify-reversal branch above.
+                        var existingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayload>(action.ExistingValue!)!;
+                        await sqliteConnection.ExecuteAsync(Sql.Characters.UpdateFieldsById, new
+                        {
+                            name = existingCharacterPayload.Name,
+                            dateModified = now,
+                            id = action.EntityId,
+                        }, sqliteTransaction);
+                        await QuoteSeedWriter.LogChangeAsync(changeLog, "character", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingCharacterPayload, sqliteConnection, sqliteTransaction);
+                        break;
+                    }
                     var charRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Characters.CountActiveReferences, action.EntityId);
                     if (charRefs)
                         break;
@@ -704,12 +744,33 @@ public sealed class SqliteImportActionService : IImportActionService
             }
             case ImportActionEntityTypes.Character:
             {
-                var payload = JsonSerializer.Deserialize<CharacterActionPayload>(action.IncomingValue!)!;
-                // Defensive: CharacterSources.SourceId (#179) is a real FK, but System_ImportActions
-                // rows apply in whatever order the coordinator returns them — this action's own
-                // Source may not have applied yet. Idempotent, so re-running it here is safe either way.
-                await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, payload.SourceId, payload.SourceTitle, payload.SourceType, batchId, now, changeLog);
-                await EnsureCharacterExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.SourceId, payload.Name, payload.SourceType, batchId, now, changeLog);
+                var isCharacterAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                if (isCharacterAdd)
+                {
+                    var payload = JsonSerializer.Deserialize<CharacterActionPayload>(action.IncomingValue!)!;
+                    // Defensive: CharacterSources.SourceId (#179) is a real FK, but System_ImportActions
+                    // rows apply in whatever order the coordinator returns them — this action's own
+                    // Source may not have applied yet. Idempotent, so re-running it here is safe either way.
+                    await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, payload.SourceId, payload.SourceTitle, payload.SourceType, batchId, now, changeLog);
+                    await EnsureCharacterExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.SourceId, payload.Name, payload.SourceType, batchId, now, changeLog);
+                }
+                else
+                {
+                    // #175: Modify only ever writes Name — SourceType is immutable once a Character
+                    // exists (ADR 013 Decision 9), so this never touches CharacterSources.
+                    var payload = JsonSerializer.Deserialize<CharacterActionPayload>(action.MergedFields
+                        ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
+                    await sqliteConnection.ExecuteAsync(Sql.Characters.UpdateFieldsById, new
+                    {
+                        name = payload.Name,
+                        dateModified = now,
+                        id = action.EntityId,
+                    }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "character", action.EntityId, ChangeAction.Modified,
+                        oldValue: action.ExistingValue, newValue: payload, sqliteConnection, sqliteTransaction);
+                }
+
+                await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Characters.SelectCompletenessById, Sql.Characters.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
                 break;
             }
             case ImportActionEntityTypes.Person:
@@ -1189,6 +1250,12 @@ public sealed class SqliteImportActionService : IImportActionService
                 incoming = ToFieldMap(JsonSerializer.Deserialize<PersonActionPayload>(action.IncomingValue!)!);
                 break;
             }
+            case ImportActionEntityTypes.Character:
+            {
+                existing = ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayload>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayload>(action.IncomingValue!)!);
+                break;
+            }
             case ImportActionEntityTypes.StageDirection:
             {
                 existing = ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayload>(action.ExistingValue!)!);
@@ -1303,6 +1370,21 @@ public sealed class SqliteImportActionService : IImportActionService
         Add("name", request.PersonName);
         Add("dateOfBirth", request.PersonDateOfBirth);
         Add("dateOfDeath", request.PersonDateOfDeath);
+
+        return map;
+    }
+
+    private static Dictionary<string, FieldMergeDecision> ToCharacterDecisionMap(ConflictDecisionRequest request)
+    {
+        var map = new Dictionary<string, FieldMergeDecision>();
+
+        void Add(string field, FieldDecision? decision)
+        {
+            if (decision is null) return;
+            map[field] = new FieldMergeDecision(decision.Choice, decision.Value);
+        }
+
+        Add("name", request.CharacterName);
 
         return map;
     }

@@ -88,7 +88,8 @@ public class SqliteImportActionServiceTests
         IReadOnlyList<SourceConversation>? conversations = null,
         IReadOnlyList<PersonEntry>? people = null,
         IReadOnlyList<SeriesEntry>? series = null,
-        IReadOnlyList<UniverseEntry>? universe = null)
+        IReadOnlyList<UniverseEntry>? universe = null,
+        IReadOnlyList<CharacterEntry>? characters = null)
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
@@ -100,7 +101,7 @@ public class SqliteImportActionServiceTests
             "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
             new { Id = batchId, now });
 
-        var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations, people: people, series: series, universe: universe);
+        var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations, people: people, series: series, universe: universe, characters: characters);
         await _coordinator.StageAsync(actions);
         return actions;
     }
@@ -1564,5 +1565,122 @@ public class SqliteImportActionServiceTests
             "SELECT Name, IsDeleted FROM People WHERE UPPER(Id) = UPPER(@id)", new { id });
         Assert.AreEqual(0, isDeleted, "The stale soft-deleted row must be hard-deleted, letting the fresh Add actually insert");
         Assert.AreEqual("Fresh Name After Undo", name);
+    }
+
+    // ── #175 — Character explicit id, Modify/decidability ───────────────────
+
+    private async Task<string> SeedExplicitCharacterAsync(string id, string sourceId, string name = "Gandalf", string sourceType = "Movie", string completenessStatus = "Incomplete")
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Characters (Id, Name, SourceType, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @SourceType, @CompletenessStatus, @now)",
+            new { Id = id, Name = name, SourceType = sourceType, CompletenessStatus = completenessStatus, now });
+        await conn.ExecuteAsync(
+            "INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+            new { Id = Guid.NewGuid().ToString(), CharacterId = id, SourceId = sourceId, now });
+        return id;
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_CharacterModify_ResolvesFieldDecisions()
+    {
+        var sourceId = "eb111111-1111-4111-8111-111111111175";
+        var id = "ec111111-1111-4111-8111-111111111175";
+        await SeedExplicitSourceAsync(sourceId, title: "Existing Film");
+        await SeedExplicitCharacterAsync(id, sourceId, name: "Gandalf");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            characters: [new CharacterEntry { Id = id, Name = "Gandalf the Grey", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
+        var action = actions.Single(a => a.EntityType == "Character");
+        Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, "Review policy leaves the Modify pending");
+
+        await _service.DecideAsync(action.Id, new ConflictDecisionRequest
+        {
+            CharacterName = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+
+        var found = await _actionReader.GetByIdAsync(action.Id);
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
+        Assert.IsNotNull(found.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task ReverseBatchAsync_CharacterModify_RestoresExistingValue()
+    {
+        var sourceId = "ed111111-1111-4111-8111-111111111175";
+        var id = "ee111111-1111-4111-8111-111111111175";
+        await SeedExplicitSourceAsync(sourceId, title: "Existing Film");
+        await SeedExplicitCharacterAsync(id, sourceId, name: "Gandalf");
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            characters: [new CharacterEntry { Id = id, Name = "A Completely Different Name", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var name = await conn.ExecuteScalarAsync<string>("SELECT Name FROM Characters WHERE Id = @id", new { id });
+        Assert.AreEqual("Gandalf", name, "Reversal must restore the pre-Modify name");
+    }
+
+    /// <summary>
+    /// Written against unmodified code first, per this issue's own plan doc steps 8/9 — a code trace
+    /// found the underlying repository/query fixes from this session's #200–205/#176–178 work may
+    /// have already made the prescribed raw-SQL switch unnecessary. This test's actual (not assumed)
+    /// pass/fail result is the deciding evidence.
+    /// </summary>
+    [TestMethod]
+    public async Task ClearStaleAddTargetsAsync_CharacterExplicitLowercaseId_HardDeletesCorrectly()
+    {
+        var sourceId = "ef111111-1111-4111-8111-111111111175";
+        var id = "f0111111-1111-4111-8111-111111111175"; // lowercase, explicit file-authored id
+        await SeedExplicitSourceAsync(sourceId, title: "Existing Film");
+
+        var batch1 = Guid.NewGuid();
+        await PlanAndStageAsync([], batch1, DuplicateResolutionPolicy.NewestWins,
+            characters: [new CharacterEntry { Id = id, Name = "Original Name", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
+        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batch1);
+        await _service.ReverseBatchAsync(batch1.ToString("D").ToUpperInvariant()); // soft-deletes the lowercase-id row
+
+        var batch2 = Guid.NewGuid();
+        await PlanAndStageAsync([], batch2, DuplicateResolutionPolicy.NewestWins,
+            characters: [new CharacterEntry { Id = id, Name = "Fresh Name After Undo", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
+        var result = await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant());
+        Assert.IsNull(result);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var (name, isDeleted) = await conn.QuerySingleAsync<(string Name, int IsDeleted)>(
+            "SELECT Name, IsDeleted FROM Characters WHERE UPPER(Id) = UPPER(@id)", new { id });
+        Assert.AreEqual(0, isDeleted, "The stale soft-deleted row must be hard-deleted, letting the fresh Add actually insert");
+        Assert.AreEqual("Fresh Name After Undo", name);
+    }
+
+    /// <summary>Same re-verification purpose as the test above, for the reversal-of-Add path (step 8's own concern) rather than stale-Add cleanup (step 9's).</summary>
+    [TestMethod]
+    public async Task ReverseBatchAsync_CharacterAdd_ExplicitLowercaseId_SoftDeletesCorrectly()
+    {
+        var sourceId = "f1111111-1111-4111-8111-111111111175";
+        var id = "f2111111-1111-4111-8111-111111111175"; // lowercase, explicit file-authored id
+        await SeedExplicitSourceAsync(sourceId, title: "Existing Film");
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            characters: [new CharacterEntry { Id = id, Name = "Gandalf", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var isDeleted = await conn.ExecuteScalarAsync<int>("SELECT IsDeleted FROM Characters WHERE UPPER(Id) = UPPER(@id)", new { id });
+        Assert.AreEqual(1, isDeleted, "The Add's reversal must actually soft-delete the row, not silently no-op against a lowercase explicit id");
     }
 }

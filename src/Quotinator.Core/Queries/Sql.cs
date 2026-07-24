@@ -255,6 +255,28 @@ internal static class Sql
         internal const string InsertIfNotExists =
             "INSERT OR IGNORE INTO Characters (Id, Name, SourceType, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
             "VALUES (@Id, @Name, @SourceType, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+
+        /// <summary>
+        /// #175's id-first lookup for an explicit <c>characters[]</c> entry — mirrors
+        /// <see cref="Sources.SelectExistingById"/>. Does not read <c>SourceType</c> — it is
+        /// immutable once a Character exists (ADR 013 Decision 9) and this issue never exposes it as
+        /// a Modify-able field, so there is nothing to diff it against. Case-insensitive — see
+        /// <see cref="Sources.SelectExistingById"/>'s remark.
+        /// </summary>
+        internal static readonly string SelectExistingById =
+            $"SELECT Name, CompletenessStatus FROM Characters WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+
+        /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
+        internal static readonly string SelectCompletenessById =
+            $"SELECT CompletenessStatus, NoValueKnown FROM Characters WHERE {IdClauses.Equals("Id", "id")};";
+
+        /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
+        internal static readonly string UpdateCompletenessById =
+            $"UPDATE Characters SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+
+        /// <summary>#175's Modify apply — writes an id-matched Character's corrected Name. Never touches SourceType (immutable, ADR 013 Decision 9) or CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
+        internal static readonly string UpdateFieldsById =
+            $"UPDATE Characters SET Name = @name, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
     }
 
     /// <summary>CharacterSources join table (#179) — a Character may appear in multiple Sources.</summary>
@@ -339,8 +361,19 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Sources WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Sources;";
+        /// <summary>
+        /// Case-insensitive on Title/Type — corrected 2026-07-24 (found while designing #175's
+        /// Character-driven Source resolution): the original policy treated Title/Type as free-text,
+        /// not identifiers, and kept this comparison deliberately case-sensitive. Developer decision
+        /// overturned that — any input originating from an import file, and the stable ids this
+        /// project derives from it, must be case-insensitive, so classifying an entry as "new" vs.
+        /// "already exists" carries minimal friction and a case-only difference never risks creating
+        /// an accidental duplicate. Applies uniformly to every caller of this natural key (#162's
+        /// <c>PlanSourcesAsync</c>, <c>ResolveSourceAsync</c>'s own per-quote resolution, and #175's
+        /// new Character-driven resolution), not scoped to one caller.
+        /// </summary>
         internal static readonly string SelectIdByTitleAndType =
-            $"SELECT {IdClauses.SelectColumn("Id")} FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
+            $"SELECT {IdClauses.SelectColumn("Id")} FROM Sources WHERE LOWER(Title) = LOWER(@title) AND LOWER(Type) = LOWER(@type) AND IsDeleted = 0;";
 
         /// <summary>
         /// #180's natural-key lookup for a <c>sources[]</c> entry that omits an explicit id (the
@@ -348,13 +381,11 @@ internal static class Sql
         /// the matched row's real id plus the two fields that path needs: <c>SeriesId</c> (the only
         /// field it diffs) and <c>Date</c> (carried through unchanged, so an entry that never mentions
         /// a date can't reset one). Title/Type are the lookup key here, so they are never re-read —
-        /// they cannot differ by construction. Case-sensitive on Title/Type, matching
-        /// <see cref="SelectIdByTitleAndType"/> exactly: these are free-text natural-key values, not
-        /// identifiers, and loosening them would silently merge two genuinely distinct Sources (see
-        /// #182 for that class of problem).
+        /// they cannot differ by construction. Case-insensitive on Title/Type, matching
+        /// <see cref="SelectIdByTitleAndType"/>'s own remark for why.
         /// </summary>
         internal static readonly string SelectExistingByTitleAndType =
-            $"SELECT {IdClauses.SelectColumn("Id")}, Date, {IdClauses.SelectColumn("SeriesId")}, CompletenessStatus FROM Sources WHERE Title = @title AND Type = @type AND IsDeleted = 0;";
+            $"SELECT {IdClauses.SelectColumn("Id")}, Date, {IdClauses.SelectColumn("SeriesId")}, CompletenessStatus FROM Sources WHERE LOWER(Title) = LOWER(@title) AND LOWER(Type) = LOWER(@type) AND IsDeleted = 0;";
 
         /// <summary>
         /// #162's id-first lookup for an explicit <c>sources[]</c> entry — a row already migrated to

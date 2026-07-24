@@ -588,6 +588,24 @@ public class ImportActionPlannerTests
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Nothing to enrich and nothing to correct — unchanged from #162's own natural-key behaviour");
     }
 
+    /// <summary>
+    /// #175/developer decision (2026-07-24): Sql.Sources.SelectIdByTitleAndType/
+    /// SelectExistingByTitleAndType are now case-insensitive — any input from an import file must
+    /// match regardless of casing, so classifying an entry as new-vs-existing carries minimal
+    /// friction and never risks a case-only duplicate.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoExplicitId_DifferingCasing_MatchesExistingNaturalKey()
+    {
+        using var conn = await OpenConnectionAsync();
+        await SeedExplicitSourceAsync(conn, "d1111111-1111-4111-8111-111111111111", title: "Casablanca", type: "Movie");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [BuildEnrichmentEntry(title: "CASABLANCA", type: Core.Models.QuoteType.Movie, seriesName: null)]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Differing casing must still match the existing row by natural key, not stage a duplicate Add");
+    }
+
     [TestMethod]
     public async Task PlanSourcesAsync_NoExplicitId_AlreadyTagged_NoActionStaged()
     {
@@ -1037,6 +1055,132 @@ public class ImportActionPlannerTests
             people: [BuildPersonEntry(id, name: "A completely different name")]);
 
         var action = actions.Single(a => a.EntityType == "Person");
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
+    }
+
+    // ── #175: PlanCharactersAsync (widened schema — id optional, sourceTitle/sourceType required) ──
+
+    private static CharacterEntry BuildCharacterEntry(string? id, string name = "Gandalf", string sourceTitle = "Existing Film", Core.Models.QuoteType sourceType = Core.Models.QuoteType.Movie) => new()
+    {
+        Id          = id,
+        Name        = name,
+        SourceTitle = sourceTitle,
+        SourceType  = sourceType,
+    };
+
+    [TestMethod]
+    public async Task PlanCharactersAsync_IdMatchFound_NameDiffers_StagesModifyAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        var sourceId = await SeedSourceAsync(conn, "Existing Film");
+        var characterId = await SeedGlobalCharacterAsync(conn, "Gandalf", sourceId, "Movie");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            characters: [BuildCharacterEntry(characterId, name: "Gandalf the Grey")]);
+
+        var action = actions.Single(a => a.EntityType == "Character");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed);
+        Assert.IsNotNull(action.MergedFields);
+    }
+
+    [TestMethod]
+    public async Task PlanCharactersAsync_IdMatchFound_NothingChanged_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var sourceId = await SeedSourceAsync(conn, "Existing Film");
+        var characterId = await SeedGlobalCharacterAsync(conn, "Gandalf", sourceId, "Movie");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            characters: [BuildCharacterEntry(characterId, name: "Gandalf")]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "Nothing differs — silent reuse, no action staged");
+    }
+
+    [TestMethod]
+    public async Task PlanCharactersAsync_IdDoesNotMatch_FallsBackToSameSourceCandidate_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var sourceId = await SeedSourceAsync(conn, "Existing Film");
+        await SeedGlobalCharacterAsync(conn, "Gandalf", sourceId, "Movie");
+        var bogusId = "aaaaaaaa-1111-4111-8111-111111111111";
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            characters: [BuildCharacterEntry(bogusId, name: "Gandalf", sourceTitle: "Existing Film", sourceType: Core.Models.QuoteType.Movie)]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "A declared id that matches nothing must fall back to ADR 013's real matching algorithm, same as PlanSourcesAsync's own id-not-found fallback");
+    }
+
+    [TestMethod]
+    public async Task PlanCharactersAsync_NoIdMatch_SeriesScopedCandidateFound_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var seriesId = await SeedExistingSeriesAsync(conn, "LOTR Trilogy");
+        var source1Id = await SeedSourceAsync(conn, "The Fellowship of the Ring", seriesId: seriesId);
+        await SeedGlobalCharacterAsync(conn, "Aragorn", source1Id, "Movie");
+        await SeedSourceAsync(conn, "The Two Towers", seriesId: seriesId);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            characters: [BuildCharacterEntry(null, name: "Aragorn", sourceTitle: "The Two Towers", sourceType: Core.Models.QuoteType.Movie)]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "A Series-scoped cross-Source candidate must be reused directly, matching ResolveCharacterAsync's own behaviour");
+    }
+
+    [TestMethod]
+    public async Task PlanCharactersAsync_NoIdMatch_NoCandidateFound_StagesAddAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        await SeedSourceAsync(conn, "A Brand New Film");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            characters: [BuildCharacterEntry(null, name: "A Brand New Character", sourceTitle: "A Brand New Film", sourceType: Core.Models.QuoteType.Movie)]);
+
+        var action = actions.Single(a => a.EntityType == "Character");
+        Assert.AreEqual(ImportActionKind.Add, action.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed);
+    }
+
+    [TestMethod]
+    public async Task PlanCharactersAsync_NoIdMatch_SourceDoesNotExistYet_StagesBothSourceAndCharacterAdds()
+    {
+        using var conn = await OpenConnectionAsync();
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            characters: [BuildCharacterEntry(null, name: "A Brand New Character", sourceTitle: "A Never-Before-Seen Film", sourceType: Core.Models.QuoteType.Movie)]);
+
+        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Source"), "The referenced Source must be resolved/created too, same as a quote's own ResolveSourceAsync");
+        var characterAction = actions.Single(a => a.EntityType == "Character");
+        Assert.AreEqual(ImportActionKind.Add, characterAction.ActionType.Parsed);
+    }
+
+    [TestMethod]
+    public async Task PlanCharactersAsync_CompleteStatus_StagesBlockedNotModify()
+    {
+        using var conn = await OpenConnectionAsync();
+        var sourceId = await SeedSourceAsync(conn, "Existing Film");
+        var characterId = await SeedGlobalCharacterAsync(conn, "Gandalf", sourceId, "Movie");
+        await conn.ExecuteAsync("UPDATE Characters SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = characterId });
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            characters: [BuildCharacterEntry(characterId, name: "A completely different name")]);
+
+        var action = actions.Single(a => a.EntityType == "Character");
+        Assert.AreEqual(ImportActionStatus.Blocked, action.Status.Parsed, "A Complete row must never silently accept a Modify");
+        Assert.IsNull(action.MergedFields, "Nothing is resolved yet for a Blocked action");
+    }
+
+    [TestMethod]
+    public async Task PlanCharactersAsync_CompleteStatus_SkipPolicy_DoesNotBlock()
+    {
+        using var conn = await OpenConnectionAsync();
+        var sourceId = await SeedSourceAsync(conn, "Existing Film");
+        var characterId = await SeedGlobalCharacterAsync(conn, "Gandalf", sourceId, "Movie");
+        await conn.ExecuteAsync("UPDATE Characters SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = characterId });
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Skip,
+            characters: [BuildCharacterEntry(characterId, name: "A completely different name")]);
+
+        var action = actions.Single(a => a.EntityType == "Character");
         Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
     }
 

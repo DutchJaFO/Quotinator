@@ -67,6 +67,9 @@ public sealed class ConflictDecisionRequest
     /// <summary>Decision for a Person action's name (#173).</summary>
     public FieldDecision? PersonName { get; init; }
 
+    /// <summary>Decision for a Character action's name (#175). The Character's Source link is immutable once it exists (ADR 013 Decision 9), so this is the only Modify-able field.</summary>
+    public FieldDecision? CharacterName { get; init; }
+
     /// <summary>Decision for a Person action's date of birth (#173).</summary>
     public FieldDecision? PersonDateOfBirth { get; init; }
 

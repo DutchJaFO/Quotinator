@@ -44,7 +44,8 @@ internal static class ImportActionPlanner
         IReadOnlyList<SourceConversation>? conversations = null,
         IReadOnlyList<PersonEntry>? people = null,
         IReadOnlyList<SeriesEntry>? series = null,
-        IReadOnlyList<UniverseEntry>? universe = null)
+        IReadOnlyList<UniverseEntry>? universe = null,
+        IReadOnlyList<CharacterEntry>? characters = null)
     {
         var actions        = new List<SystemImportAction>();
         var sourceIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -72,6 +73,10 @@ internal static class ImportActionPlanner
         // #173: same reasoning as Source above — a quote's author may reference a person this same
         // file also declares explicitly via people[].
         await PlanPeopleAsync(connection, people ?? [], batchIdStr, policy, personIndex, actions, now, transaction);
+
+        // #175: same reasoning as Source/Person above — a quote's character may reference a
+        // character this same file also declares explicitly via characters[].
+        await PlanCharactersAsync(connection, characters ?? [], batchIdStr, policy, sourceIndex, characterIndex, actions, now, transaction);
 
         foreach (var rawQuote in quotes)
         {
@@ -579,6 +584,16 @@ internal static class ImportActionPlanner
     private static IReadOnlyDictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["dateOfBirth"] = payload.DateOfBirth, ["dateOfDeath"] = payload.DateOfDeath };
 
+    /// <summary>
+    /// Only <c>name</c> is diffed — <c>SourceId</c>/<c>SourceTitle</c>/<c>SourceType</c> are never
+    /// Modify-able (ADR 013 Decision 9: <c>SourceType</c> is immutable once a Character exists), so
+    /// they're excluded from the diff vocabulary even though the payload itself still carries them
+    /// for audit/informational purposes. Same key name as <see cref="Quotinator.Core.Services.
+    /// SqliteImportActionService"/>'s own private overload — must stay in sync (#175).
+    /// </summary>
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
+        new Dictionary<string, object?> { ["name"] = payload.Name };
+
     // ── #173: explicit Person planning ───────────────────────────────────────
     // Same shape as PlanSourcesAsync — id-first lookup, natural-key fallback for a not-yet-migrated
     // row, personIndex populated in both branches so a same-batch quote's author resolves to the
@@ -688,6 +703,185 @@ internal static class ImportActionPlanner
                 EntityId      = canonicalId,
                 IncomingValue = JsonSerializer.Serialize(new PersonActionPayload(p.Name, p.DateOfBirth.ResolveAgainst(null), p.DateOfDeath.ResolveAgainst(null))),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt    = now,
+            });
+        }
+    }
+
+    // ── #175: explicit Character planning ────────────────────────────────────
+    // Widened schema (ADR 013-aware, developer decision 2026-07-24): unlike Person, a characters[]
+    // entry's own natural-key fallback must resolve through ADR 013's real Type-anchored,
+    // Series-scoped algorithm (Sql.Characters.SelectGlobalCandidateId), not a simple Name-only
+    // lookup — a bare Name can legitimately match more than one Character. sourceTitle/sourceType
+    // supply the Source context that algorithm needs, and are resolved/staged unconditionally (even
+    // on the Correction/id-matched path) so CharacterActionPayload's SourceId always carries a real,
+    // meaningful value for the audit trail, not just on the Add path.
+
+    private static async Task<string> ResolveOrStageSourceIdAsync(
+        SqliteConnection connection, string title, string typeStr, Dictionary<string, string> sourceIndex,
+        string batchId, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+    {
+        var key = $"{title}|{typeStr}";
+        if (sourceIndex.TryGetValue(key, out var indexed)) return indexed;
+
+        var existingId = await connection.ExecuteScalarAsync<string?>(
+            Sql.Sources.SelectIdByTitleAndType, new { title, type = typeStr }, transaction);
+        if (existingId is { } foundId)
+        {
+            sourceIndex[key] = foundId;
+            return foundId;
+        }
+
+        var stableId = EntityIdentity.SourceId(title, typeStr);
+        sourceIndex[key] = stableId;
+
+        actions.Add(new SystemImportAction
+        {
+            BatchId       = batchId,
+            ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+            EntityType    = ImportActionEntityTypes.Source,
+            EntityId      = stableId,
+            IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(title, typeStr)),
+            Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+            DetectedAt    = now,
+        });
+
+        return stableId;
+    }
+
+    private static async Task PlanCharactersAsync(
+        SqliteConnection connection, IReadOnlyList<CharacterEntry> characters, string batchId,
+        DuplicateResolutionPolicy policy, Dictionary<string, string> sourceIndex,
+        Dictionary<string, string> characterIndex, List<SystemImportAction> actions, DateTime now,
+        SqliteTransaction? transaction)
+    {
+        foreach (var c in characters)
+        {
+            var sourceTypeStr = c.SourceType.ToString();
+            var canonicalId = c.Id is { } cIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(cIdRaw, out var cIdCanonical)
+                ? cIdCanonical
+                : c.Id;
+
+            var resolvedSourceId = await ResolveOrStageSourceIdAsync(connection, c.SourceTitle, sourceTypeStr, sourceIndex, batchId, actions, now, transaction);
+
+            (string Name, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = null;
+            string? matchedId = null;
+
+            if (canonicalId is { } explicitId)
+            {
+                var byId = await connection.QuerySingleOrDefaultAsync<(string Name, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                    Sql.Characters.SelectExistingById, new { id = explicitId }, transaction);
+                if (byId is { } row)
+                {
+                    existing   = row;
+                    matchedId  = explicitId;
+                }
+            }
+
+            if (matchedId is null)
+            {
+                // No id, or a declared id that matched nothing — falls back to ADR 013's own
+                // Type-anchored, Series-scoped matching algorithm, mirroring ResolveCharacterAsync's
+                // own resolution exactly.
+                var seriesId = await connection.ExecuteScalarAsync<string?>(
+                    Sql.Sources.SelectSeriesIdById, new { id = resolvedSourceId }, transaction);
+                var candidateId = await connection.ExecuteScalarAsync<Guid?>(
+                    Sql.Characters.SelectGlobalCandidateId,
+                    new { sourceId = resolvedSourceId, name = c.Name, sourceType = sourceTypeStr, seriesId }, transaction);
+
+                if (candidateId is { } foundId)
+                {
+                    matchedId = foundId.ToCanonicalId();
+                    existing  = await connection.QuerySingleOrDefaultAsync<(string Name, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                        Sql.Characters.SelectExistingById, new { id = matchedId }, transaction);
+                }
+            }
+
+            if (matchedId is null)
+            {
+                // Genuinely new — deliberately out of scope for this entry to establish any
+                // cross-Source link beyond the one it declares (ADR 013's own Notes on #175). Mirrors
+                // PlanSourcesAsync's own Add-path precedent exactly: an explicit id that matched
+                // nothing (neither by id nor by ADR 013's own algorithm) is still honoured as the new
+                // row's id; only a genuinely id-less entry gets an EntityIdentity-derived one.
+                var stableId = canonicalId ?? EntityIdentity.CharacterId(resolvedSourceId, c.Name, sourceTypeStr);
+                characterIndex[$"{resolvedSourceId}|{c.Name}"] = stableId;
+
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchId,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                    EntityType    = ImportActionEntityTypes.Character,
+                    EntityId      = stableId,
+                    IncomingValue = JsonSerializer.Serialize(new CharacterActionPayload(resolvedSourceId, c.Name, c.SourceTitle, sourceTypeStr)),
+                    Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
+
+            var row2 = existing!.Value;
+            var existingPayload = new CharacterActionPayload(resolvedSourceId, row2.Name, c.SourceTitle, sourceTypeStr);
+            var incomingPayload = new CharacterActionPayload(resolvedSourceId, c.Name, c.SourceTitle, sourceTypeStr);
+            var existingFields  = ToFieldMap(existingPayload);
+            var incomingFields  = ToFieldMap(incomingPayload);
+
+            // Indexed under the file's own declared name (not the corrected one), mirroring Person's
+            // own Correction-path indexing (#173) — a same-batch quote referencing this exact
+            // (Source, Name) pair resolves to the matched row either way.
+            characterIndex[$"{resolvedSourceId}|{c.Name}"] = matchedId;
+
+            var changedFields = new HashSet<string>(
+                existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+            if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+            var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+            var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+            var resolved    = policy switch
+            {
+                DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
+                    new CharacterActionPayload(resolvedSourceId, (string)mergeResult!.MergedFields["name"]!, c.SourceTitle, sourceTypeStr),
+                DuplicateResolutionPolicy.Skip => existingPayload,
+                _ => incomingPayload,
+            };
+
+            // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
+            // not the raw incoming value used for the "unchanged" check above.
+            var resolvedFields        = ToFieldMap(resolved);
+            var effectiveChangedFields = new HashSet<string>(
+                existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+
+            var currentStatus = row2.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+            if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+            {
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchId,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType    = ImportActionEntityTypes.Character,
+                    EntityId      = matchedId,
+                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                    Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
+
+            var isPending = policy == DuplicateResolutionPolicy.Review;
+            var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+
+            actions.Add(new SystemImportAction
+            {
+                BatchId       = batchId,
+                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                EntityType    = ImportActionEntityTypes.Character,
+                EntityId      = matchedId,
+                ExistingValue = JsonSerializer.Serialize(existingPayload),
+                IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
                 DetectedAt    = now,
             });
         }

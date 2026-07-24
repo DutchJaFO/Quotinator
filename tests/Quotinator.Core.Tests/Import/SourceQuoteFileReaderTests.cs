@@ -159,6 +159,59 @@ public class SourceQuoteFileReaderTests
         Assert.AreEqual("1852-11-27", parsed.People[0].DateOfDeath.Value);
     }
 
+    /// <summary>
+    /// #175: characters[] gains sourceTitle/sourceType alongside id/name (widened schema, developer
+    /// decision 2026-07-24) — id is optional, unlike people[]'s always-required id.
+    /// </summary>
+    [TestMethod]
+    public void SourceQuoteFileReader_CharactersSection_ParsesCorrectly()
+    {
+        var json = """
+            {
+              "quotes": [{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello","source":"World"}],
+              "characters": [{"id":"77777777-7777-7777-7777-777777777777","name":"Gandalf","sourceTitle":"The Fellowship of the Ring","sourceType":"movie"}]
+            }
+            """;
+
+        var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual(1, parsed!.Characters.Count);
+        Assert.AreEqual("77777777-7777-7777-7777-777777777777", parsed.Characters[0].Id);
+        Assert.AreEqual("Gandalf", parsed.Characters[0].Name);
+        Assert.AreEqual("The Fellowship of the Ring", parsed.Characters[0].SourceTitle);
+        Assert.AreEqual(Core.Models.QuoteType.Movie, parsed.Characters[0].SourceType);
+    }
+
+    /// <summary>A file without a characters section parses identically to today — purely additive.</summary>
+    [TestMethod]
+    public void SourceQuoteFileReader_NoCharactersSection_DefaultsToEmpty()
+    {
+        var json = """{"quotes":[{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello","source":"World"}]}""";
+
+        var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual(0, parsed!.Characters.Count);
+    }
+
+    /// <summary>#175: characters[] entries may omit id, matched/created via ADR 013's algorithm instead.</summary>
+    [TestMethod]
+    public void SourceQuoteFileReader_CharactersSection_IdOmitted_ParsesWithNullId()
+    {
+        var json = """
+            {
+              "quotes": [],
+              "characters": [{"name":"Gandalf","sourceTitle":"The Fellowship of the Ring","sourceType":"movie"}]
+            }
+            """;
+
+        var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
+
+        Assert.IsTrue(result);
+        Assert.IsNull(parsed!.Characters[0].Id);
+    }
+
     // ── #190: absent vs. explicit-null distinguishability ────────────────────
 
     [TestMethod]

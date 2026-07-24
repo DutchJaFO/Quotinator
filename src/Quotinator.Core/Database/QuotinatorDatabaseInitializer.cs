@@ -273,7 +273,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 {
                     actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx,
                         parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
-                        parsed.Series, parsed.Universe);
+                        parsed.Series, parsed.Universe, parsed.Characters);
                     await _actionCoordinator.StageAsync(actions, connection, tx);
                     tx.Commit();
                 }
