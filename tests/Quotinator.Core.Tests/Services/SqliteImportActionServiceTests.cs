@@ -1772,4 +1772,173 @@ public class SqliteImportActionServiceTests
         Assert.AreEqual("Middle Earth", universeName,
             "The planner-staged payload must carry the Universe's own name so the defensive insert never uses the Series' name");
     }
+
+    // ── #163: ExportBatchAsync ───────────────────────────────────────────────
+
+    private async Task StageActionAsync(Guid batchId, string entityType, ImportActionKind kind, ImportActionStatus status,
+        string incomingValue, string? existingValue = null, string? mergedFields = null, string? originalDecision = null,
+        CompletenessStatus? markCompletenessAs = null)
+    {
+        await _actionWriter.WriteAsync(new SystemImportAction
+        {
+            BatchId            = batchId.ToCanonicalId(),
+            ActionType         = new SafeValue<ImportActionKind?>(kind.ToString(), kind),
+            EntityType         = entityType,
+            EntityId           = Guid.NewGuid().ToString(),
+            ExistingValue      = existingValue,
+            IncomingValue      = incomingValue,
+            MergedFields       = mergedFields,
+            OriginalDecision   = originalDecision,
+            Status             = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+            MarkCompletenessAs = markCompletenessAs is { } mc
+                ? new SafeValue<CompletenessStatus?>(mc.ToString(), mc)
+                : SafeValue<CompletenessStatus?>.Empty,
+            DetectedAt         = DateTime.UtcNow,
+        });
+    }
+
+    [TestMethod]
+    public async Task ExportBatchAsync_PendingDecidedAndBlockedModifyActions_AllIncluded()
+    {
+        var batchId = Guid.NewGuid();
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
+
+        await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
+        await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Decided, incoming, existing);
+        await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Blocked, incoming, existing);
+
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+
+        var distinctActionIds = rows.Select(r => r.ActionId).Distinct().Count();
+        Assert.AreEqual(3, distinctActionIds, "Pending, Decided, and Blocked Modify actions must all be exported");
+    }
+
+    [TestMethod]
+    public async Task ExportBatchAsync_AddAction_Excluded()
+    {
+        var batchId = Guid.NewGuid();
+        await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Add, ImportActionStatus.Decided,
+            JsonSerializer.Serialize(new PersonActionPayload("Brand New")));
+
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+
+        Assert.AreEqual(0, rows.Count, "Add actions have nothing to decide and must not appear in the export");
+    }
+
+    [TestMethod]
+    public async Task ExportBatchAsync_AppliedAndDiscardedActions_Excluded()
+    {
+        var batchId = Guid.NewGuid();
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Applied, incoming);
+        await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Discarded, incoming);
+
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+
+        Assert.AreEqual(0, rows.Count, "Already-applied or discarded actions are no longer decidable and must not appear in the export");
+    }
+
+    [TestMethod]
+    public async Task ExportBatchAsync_PersonModify_EmitsOneRowPerDecidableFieldWithExistingAndIncomingValues()
+    {
+        var batchId = Guid.NewGuid();
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name", "1990-01-01", null));
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name", "1980-01-01", null));
+        await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
+
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+
+        Assert.AreEqual(3, rows.Count, "Person has 3 decidable fields: name, dateOfBirth, dateOfDeath");
+        var nameRow = rows.Single(r => r.Field == "name");
+        Assert.AreEqual("Old Name", nameRow.ExistingValue);
+        Assert.AreEqual("New Name", nameRow.IncomingValue);
+        Assert.IsNull(nameRow.Decision, "A Pending action has no recorded decision yet");
+    }
+
+    [TestMethod]
+    public async Task ExportBatchAsync_DecidedActionWithOriginalDecision_ReflectsActualStoredChoiceNotInferred()
+    {
+        var batchId = Guid.NewGuid();
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name", "1990-01-01", null));
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name", "1980-01-01", null));
+        // The resolved value for "name" happens to equal the incoming value, but the caller's actual
+        // choice was Custom, not Replace — proves the export reads the real recorded choice rather than
+        // inferring Replace-vs-Keep by comparing MergedFields against ExistingValue/IncomingValue.
+        var originalDecision = JsonSerializer.Serialize(new Dictionary<string, FieldMergeDecision>
+        {
+            ["name"] = new FieldMergeDecision(FieldResolutionChoice.Custom, "New Name"),
+            ["dateOfBirth"] = new FieldMergeDecision(FieldResolutionChoice.Keep, null),
+        });
+        var merged = JsonSerializer.Serialize(new PersonActionPayload("New Name", "1980-01-01", null));
+        await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Decided,
+            incoming, existing, merged, originalDecision);
+
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+
+        var nameRow = rows.Single(r => r.Field == "name");
+        Assert.AreEqual(FieldResolutionChoice.Custom, nameRow.Decision);
+        Assert.AreEqual("New Name", nameRow.CustomValue);
+
+        var dobRow = rows.Single(r => r.Field == "dateOfBirth");
+        Assert.AreEqual(FieldResolutionChoice.Keep, dobRow.Decision);
+        Assert.IsNull(dobRow.CustomValue, "CustomValue is only meaningful for a Custom choice");
+
+        var dodRow = rows.Single(r => r.Field == "dateOfDeath");
+        Assert.IsNull(dodRow.Decision, "A field with no entry in OriginalDecision has no recorded choice");
+    }
+
+    [TestMethod]
+    public async Task ExportBatchAsync_QuoteGenresCustomChoice_RoundTripsThroughSemicolonEncoding()
+    {
+        var batchId = Guid.NewGuid();
+        var incomingPayload = new QuoteActionPayload { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["drama"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
+        var existingPayload = new QuoteActionPayload { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["comedy"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
+        var originalDecision = JsonSerializer.Serialize(new Dictionary<string, FieldMergeDecision>
+        {
+            ["genres"] = new FieldMergeDecision(FieldResolutionChoice.Custom, new List<string> { "drama", "comedy", "sci-fi" }),
+        });
+        await StageActionAsync(batchId, ImportActionEntityTypes.Quote, ImportActionKind.Modify, ImportActionStatus.Decided,
+            JsonSerializer.Serialize(incomingPayload), JsonSerializer.Serialize(existingPayload),
+            originalDecision: originalDecision);
+
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+
+        var genresRow = rows.Single(r => r.Field == "genres");
+        Assert.AreEqual("comedy", genresRow.ExistingValue);
+        Assert.AreEqual("drama", genresRow.IncomingValue);
+        Assert.AreEqual(FieldResolutionChoice.Custom, genresRow.Decision);
+        Assert.AreEqual("drama;comedy;sci-fi", genresRow.CustomValue);
+    }
+
+    [TestMethod]
+    public async Task ExportBatchAsync_ConversationModify_EmitsOnlyDescriptionField()
+    {
+        var batchId = Guid.NewGuid();
+        var incoming = JsonSerializer.Serialize(new ConversationActionPayload("New description", []));
+        var existing = JsonSerializer.Serialize(new ConversationActionPayload("Old description", []));
+        await StageActionAsync(batchId, ImportActionEntityTypes.Conversation, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
+
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+
+        Assert.AreEqual(1, rows.Count, "Conversation has exactly one decidable field: description");
+        Assert.AreEqual("description", rows[0].Field);
+        Assert.AreEqual("Old description", rows[0].ExistingValue);
+        Assert.AreEqual("New description", rows[0].IncomingValue);
+    }
+
+    [TestMethod]
+    public async Task ExportBatchAsync_MarkCompletenessAsSetOnAction_PopulatedOnEveryRowInTheGroup()
+    {
+        var batchId = Guid.NewGuid();
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Blocked,
+            incoming, markCompletenessAs: CompletenessStatus.Complete);
+
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+
+        Assert.IsTrue(rows.Count > 0);
+        Assert.IsTrue(rows.All(r => r.MarkCompletenessAs == CompletenessStatus.Complete),
+            "MarkCompletenessAs is one value per ActionId group, repeated on every row of that group");
+    }
 }

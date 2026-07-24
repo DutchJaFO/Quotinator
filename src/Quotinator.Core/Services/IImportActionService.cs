@@ -23,6 +23,16 @@ public interface IImportActionService
     Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns one <see cref="ImportActionFieldRow"/> per decidable field, across every <c>Modify</c>
+    /// action sharing <paramref name="batchId"/> whose status is <c>Pending</c>, <c>Decided</c>, or
+    /// <c>Blocked</c> (#163) — the flat export format <c>GET /import/actions/export</c> serialises to
+    /// CSV or JSON. An already-<c>Decided</c> action's <c>Decision</c>/<c>CustomValue</c> reflect the
+    /// caller's actual prior per-field choice (from the stored <c>OriginalDecision</c>), not an
+    /// inference from the resolved value.
+    /// </summary>
+    Task<IReadOnlyList<ImportActionFieldRow>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stages a decision for one action of a currently-decidable entity type and <c>ActionType</c>
     /// (today: Quote, and Source Modify — see <see cref="ImportActionNotDecidableException"/>'s own
     /// doc comment for which combination is current, since it changes as more entities gain

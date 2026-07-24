@@ -37,6 +37,28 @@ public static class ImportActionFieldRowMapper
             [ImportActionEntityTypes.Conversation]   = ["description"],
         };
 
+    /// <summary>
+    /// Column order for both directions of the flat CSV format (#163 spec requirement 1) — the same
+    /// order <see cref="ToCsvRow"/> emits and <c>GET /import/actions/export</c>'s CSV output starts
+    /// with as its header row.
+    /// </summary>
+    public static readonly string[] CsvHeader =
+        ["ActionId", "EntityId", "EntityType", "Field", "ExistingValue", "IncomingValue", "Decision", "CustomValue", "MarkCompletenessAs"];
+
+    /// <summary>Converts one row to plain-text fields in <see cref="CsvHeader"/> order, ready for <see cref="Quotinator.Data.Csv.CsvLineWriter"/>.</summary>
+    public static IEnumerable<string?> ToCsvRow(ImportActionFieldRow row) =>
+    [
+        row.ActionId.ToString(),
+        row.EntityId,
+        row.EntityType,
+        row.Field,
+        row.ExistingValue,
+        row.IncomingValue,
+        row.Decision?.ToString(),
+        row.CustomValue,
+        row.MarkCompletenessAs?.ToString(),
+    ];
+
     /// <summary>Encodes a genre list as a <see cref="GenresSeparator"/>-delimited string, or <c>null</c> for a <c>null</c> list.</summary>
     public static string? EncodeGenres(IReadOnlyList<string>? genres) =>
         genres is null ? null : string.Join(GenresSeparator, genres);

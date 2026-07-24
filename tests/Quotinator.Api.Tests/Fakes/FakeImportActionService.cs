@@ -8,6 +8,7 @@ namespace Quotinator.Api.Tests.Fakes;
 internal sealed class FakeImportActionService : IImportActionService
 {
     public PagedItems<ImportActionSummaryResponse>? ReturnPage { get; set; }
+    public IReadOnlyList<ImportActionFieldRow>? ReturnExportRows { get; set; }
     public Exception? ThrowOnDecide { get; set; }
     public Exception? ThrowOnUndo { get; set; }
     public Exception? ThrowOnDiscard { get; set; }
@@ -20,9 +21,16 @@ internal sealed class FakeImportActionService : IImportActionService
     public string? LastAppliedBatchId { get; private set; }
     public string? LastDiscardedBatchId { get; private set; }
     public string? LastReversedBatchId { get; private set; }
+    public string? LastExportedBatchId { get; private set; }
 
     public Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
         => Task.FromResult(ReturnPage ?? new PagedItems<ImportActionSummaryResponse>([], page, pageSize, 0));
+
+    public Task<IReadOnlyList<ImportActionFieldRow>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default)
+    {
+        LastExportedBatchId = batchId;
+        return Task.FromResult(ReturnExportRows ?? []);
+    }
 
     public Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
     {

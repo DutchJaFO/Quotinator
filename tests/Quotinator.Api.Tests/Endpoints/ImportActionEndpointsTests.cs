@@ -202,6 +202,103 @@ public class ImportActionEndpointsTests
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page beyond the last page must be rejected");
     }
 
+    // ── GET /actions/export — public, no key required (#163) ─────────────────
+
+    [TestMethod]
+    public async Task ExportActions_NoApiKey_Returns200()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ExportActions_BatchIdMissing_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions/export");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ExportActions_UnknownFormat_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1&format=xml");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ExportActions_DefaultFormat_ReturnsJsonRows()
+    {
+        var actionId = Guid.NewGuid();
+        var fake = new FakeImportActionService
+        {
+            ReturnExportRows =
+            [
+                new ImportActionFieldRow
+                {
+                    ActionId      = actionId,
+                    EntityId      = "e0000001-0000-4000-8000-000000000001",
+                    EntityType    = "Person",
+                    Field         = "name",
+                    ExistingValue = "Old Name",
+                    IncomingValue = "New Name",
+                },
+            ],
+        };
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1");
+        var rows = await response.Content.ReadFromJsonAsync<List<ImportActionFieldRow>>();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(1, rows!.Count);
+        Assert.AreEqual("name", rows[0].Field);
+        Assert.AreEqual("BATCH-1", fake.LastExportedBatchId);
+    }
+
+    [TestMethod]
+    public async Task ExportActions_CsvFormat_ReturnsCsvWithHeaderAndDataRow()
+    {
+        var fake = new FakeImportActionService
+        {
+            ReturnExportRows =
+            [
+                new ImportActionFieldRow
+                {
+                    ActionId      = Guid.NewGuid(),
+                    EntityId      = "e0000001-0000-4000-8000-000000000001",
+                    EntityType    = "Person",
+                    Field         = "name",
+                    ExistingValue = "Old Name",
+                    IncomingValue = "New Name",
+                },
+            ],
+        };
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1&format=csv");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("text/csv", response.Content.Headers.ContentType?.MediaType);
+        var lines = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.AreEqual("ActionId,EntityId,EntityType,Field,ExistingValue,IncomingValue,Decision,CustomValue,MarkCompletenessAs", lines[0]);
+        Assert.IsTrue(lines[1].Contains("Old Name") && lines[1].Contains("New Name"));
+    }
+
     // ── POST /actions/{id}/decide — requires X-Api-Key ───────────────────────
 
     [TestMethod]

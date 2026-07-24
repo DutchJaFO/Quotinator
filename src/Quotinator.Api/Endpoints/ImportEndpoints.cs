@@ -5,8 +5,10 @@ using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Core.Database;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
+using Quotinator.Data.Csv;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Api.Endpoints;
@@ -137,6 +139,48 @@ internal static class ImportEndpoints
             "includes `relatedActionIds` (the Source/Character/Person actions in the same batch a " +
             "Quote action depends on) and `ambiguousFields` (the fields genuinely needing a decision, " +
             "populated only while `status` is `Pending`). Maximum `pageSize` is 500.");
+
+        publicGroup.MapGet("/actions/export", async (
+            string? batchId,
+            string? format,
+            IImportActionService service,
+            IApiLocalizer localizer) =>
+        {
+            if (string.IsNullOrWhiteSpace(batchId))
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
+
+            var normalizedFormat = (format ?? "json").ToLowerInvariant();
+            if (normalizedFormat is not ("json" or "csv"))
+                return Results.Problem(detail: localizer[ApiMessages.ImportActionExportUnknownFormat], statusCode: StatusCodes.Status422UnprocessableEntity);
+
+            var rows = await service.ExportBatchAsync(batchId);
+
+            if (normalizedFormat == "csv")
+            {
+                var csvRows = new List<IEnumerable<string?>> { ImportActionFieldRowMapper.CsvHeader };
+                csvRows.AddRange(rows.Select(ImportActionFieldRowMapper.ToCsvRow));
+                return Results.Text(CsvLineWriter.Write(csvRows), "text/csv");
+            }
+
+            return Results.Ok(rows);
+        })
+        .Produces<IReadOnlyList<ImportActionFieldRow>>(StatusCodes.Status200OK)
+        .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
+        .WithName("ExportImportActionBatch")
+        .WithSummary("Export a staged batch's decidable fields as a flat file")
+        .WithDescription(
+            "Returns every decidable field across `batchId`'s `Pending`, `Decided`, and `Blocked` " +
+            "Modify actions, one row per field — the flat format `POST /import/actions/bulk-decide` " +
+            "reads back, for reviewing or revising many decisions at once outside the API (spreadsheet, " +
+            "script, etc.) instead of one `POST /import/actions/{id}/decide` call per action. " +
+            "`format` (`json`, the default, or `csv`) controls the response shape; both use the same " +
+            "flat `ActionId, EntityId, EntityType, Field, ExistingValue, IncomingValue, Decision, " +
+            "CustomValue, MarkCompletenessAs` row shape. A `Decided` action's `Decision`/`CustomValue` " +
+            "reflect the caller's actual prior per-field choice, not an inference from the resolved " +
+            "value. `MarkCompletenessAs` repeats the same value on every row belonging to the same " +
+            "`ActionId`. Returns `422` if `batchId` is missing or `format` isn't `json`/`csv`. An " +
+            "unknown `batchId` returns `200` with zero rows, matching `GET /import/actions`'s own " +
+            "behaviour for an unknown `batchId`. No `X-Api-Key` required, matching `GET /import/actions`'s precedent.");
 
         adminGroup.MapPost("/actions/{id}/decide", async (
             string id,

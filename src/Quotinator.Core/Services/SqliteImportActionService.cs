@@ -76,6 +76,69 @@ public sealed class SqliteImportActionService : IImportActionService
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<ImportActionFieldRow>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default)
+    {
+        var actions = await _actionReader.GetAllForBatchAsync(batchId);
+        var rows    = new List<ImportActionFieldRow>();
+
+        foreach (var action in actions)
+        {
+            if (action.ActionType.Parsed != ImportActionKind.Modify) continue;
+            if (action.Status.Parsed is not (ImportActionStatus.Pending or ImportActionStatus.Decided or ImportActionStatus.Blocked)) continue;
+            if (!ImportActionFieldRowMapper.DecidableFieldsByEntityType.TryGetValue(action.EntityType, out var fieldNames)) continue;
+
+            var existingFields  = BuildFields(action.EntityType, action.ExistingValue) ?? new Dictionary<string, object?>();
+            var incomingFields  = BuildFields(action.EntityType, action.IncomingValue) ?? new Dictionary<string, object?>();
+            var originalDecisions = action.OriginalDecision is not null
+                ? JsonSerializer.Deserialize<Dictionary<string, FieldMergeDecision>>(action.OriginalDecision)
+                : null;
+
+            foreach (var field in fieldNames)
+            {
+                FieldResolutionChoice? decision = null;
+                string? customValue = null;
+                if (originalDecisions is not null && originalDecisions.TryGetValue(field, out var stored))
+                {
+                    decision    = stored.Choice;
+                    customValue = stored.Choice == FieldResolutionChoice.Custom ? DecodedCustomValueToPlainString(field, stored.CustomValue) : null;
+                }
+
+                rows.Add(new ImportActionFieldRow
+                {
+                    ActionId           = action.Id,
+                    EntityId           = action.EntityId,
+                    EntityType         = action.EntityType,
+                    Field              = field,
+                    ExistingValue      = FieldValueToPlainString(field, existingFields.GetValueOrDefault(field)),
+                    IncomingValue      = FieldValueToPlainString(field, incomingFields.GetValueOrDefault(field)),
+                    Decision           = decision,
+                    CustomValue        = customValue,
+                    MarkCompletenessAs = action.MarkCompletenessAs.Parsed,
+                });
+            }
+        }
+
+        return rows;
+    }
+
+    private static string? FieldValueToPlainString(string field, object? value) =>
+        field == "genres" && value is List<string> genres ? ImportActionFieldRowMapper.EncodeGenres(genres) : value?.ToString();
+
+    // FieldMergeDecision.CustomValue round-trips through JsonSerializer as `object?` — on the way back
+    // out of storage, System.Text.Json has no concrete type to deserialize into, so it boxes a
+    // JsonElement rather than the original string/List<string>. Unwrapped here, the same way
+    // FieldValueToPlainString unwraps a freshly-built (never-serialized) field value.
+    private static string? DecodedCustomValueToPlainString(string field, object? customValue)
+    {
+        if (customValue is not JsonElement element || element.ValueKind == JsonValueKind.Null) return customValue?.ToString();
+
+        if (field == "genres")
+            return ImportActionFieldRowMapper.EncodeGenres(element.EnumerateArray().Select(e => e.GetString() ?? string.Empty).ToList());
+
+        return element.ValueKind == JsonValueKind.String ? element.GetString() : element.GetRawText();
+    }
+
+    /// <inheritdoc/>
     public async Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
     {
         var action = await _actionReader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);

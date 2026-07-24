@@ -324,7 +324,7 @@ commas, quotes, or newlines (a quote's own text can contain any of these).
 
 ### 9. `GET /api/v1/import/actions/export?batchId=&format=csv|json`
 
-**Status:** Not started.
+**Status:** Done.
 
 New route in `ImportEndpoints.cs`'s `publicGroup` (no `X-Api-Key`, matching `GET /actions`'s
 precedent), `RequireRateLimiting(RateLimitPolicies.Admin)` per the project's universal rate-limiting

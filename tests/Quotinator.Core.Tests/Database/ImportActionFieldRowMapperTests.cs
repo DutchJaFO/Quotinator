@@ -22,6 +22,52 @@ public class ImportActionFieldRowMapperTests
         };
 
     [TestMethod]
+    public void ToCsvRow_PopulatedRow_EmitsFieldsInCsvHeaderOrder()
+    {
+        var actionId = Guid.NewGuid();
+        var row = new ImportActionFieldRow
+        {
+            ActionId           = actionId,
+            EntityId           = "e0000001-0000-4000-8000-000000000001",
+            EntityType         = ImportActionEntityTypes.Person,
+            Field              = "name",
+            ExistingValue      = "Old Name",
+            IncomingValue      = "New Name",
+            Decision           = FieldResolutionChoice.Custom,
+            CustomValue        = "Custom Name",
+            MarkCompletenessAs = CompletenessStatus.Complete,
+        };
+
+        var fields = ImportActionFieldRowMapper.ToCsvRow(row).ToList();
+
+        CollectionAssert.AreEqual(new[]
+        {
+            actionId.ToString(), "e0000001-0000-4000-8000-000000000001", "Person", "name",
+            "Old Name", "New Name", "Custom", "Custom Name", "Complete",
+        }, fields);
+    }
+
+    [TestMethod]
+    public void ToCsvRow_UndecidedRow_EmitsNullForDecisionCustomValueAndMarkCompletenessAs()
+    {
+        var row = new ImportActionFieldRow
+        {
+            ActionId      = Guid.NewGuid(),
+            EntityId      = "e0000001-0000-4000-8000-000000000001",
+            EntityType    = ImportActionEntityTypes.Person,
+            Field         = "name",
+            ExistingValue = "Old Name",
+            IncomingValue = "New Name",
+        };
+
+        var fields = ImportActionFieldRowMapper.ToCsvRow(row).ToList();
+
+        Assert.IsNull(fields[6], "Decision");
+        Assert.IsNull(fields[7], "CustomValue");
+        Assert.IsNull(fields[8], "MarkCompletenessAs");
+    }
+
+    [TestMethod]
     public void EncodeGenres_NullList_ReturnsNull() =>
         Assert.IsNull(ImportActionFieldRowMapper.EncodeGenres(null));
 
