@@ -258,8 +258,15 @@ internal static class ImportActionPlanner
         var key = $"{sourceId}|{q.Character}";
         if (index.TryGetValue(key, out var existing)) return existing;
 
+        // #174, ADR 013: the resolving Source's own SeriesId is the Series-relatedness signal for the
+        // merge-candidate lookup below — NULL for a not-yet-existing (brand-new) Source, which
+        // correctly means "no known Series" (Decision 1(c)'s conservative default).
+        var seriesId = await connection.ExecuteScalarAsync<string?>(
+            Sql.Sources.SelectSeriesIdById, new { id = sourceId }, transaction);
+
         var existingId = await connection.ExecuteScalarAsync<Guid?>(
-            Sql.Characters.SelectIdBySourceAndName, new { sourceId, name = q.Character }, transaction);
+            Sql.Characters.SelectGlobalCandidateId,
+            new { sourceId, name = q.Character, sourceType = sourceTypeStr, seriesId }, transaction);
         if (existingId is { } foundId)
         {
             var idStr = foundId.ToCanonicalId();
@@ -267,7 +274,7 @@ internal static class ImportActionPlanner
             return idStr;
         }
 
-        var stableId = EntityIdentity.CharacterId(sourceId, q.Character);
+        var stableId = EntityIdentity.CharacterId(sourceId, q.Character, sourceTypeStr);
         index[key] = stableId;
 
         actions.Add(new SystemImportAction
@@ -1108,9 +1115,11 @@ internal sealed record UniverseActionPayload(string Name);
 /// row exists before inserting the Character — <c>System_ImportActions</c> rows apply in whatever
 /// order the coordinator returns them (no cross-entity-type ordering guarantee), and
 /// <c>CharacterSources.SourceId</c> (#179) is a real foreign key. This payload still carries a
-/// single <c>SourceId</c> per Character, unchanged by #179 — Character's many-to-many relationship
-/// to Source is #174's concern, not this one's (#179 only changes the storage mechanism, not the
-/// matching/payload shape).
+/// single <c>SourceId</c> per Character even after #174/ADR 013's global-identity merge algorithm —
+/// deliberately kept unchanged: it represents "the specific Source this particular Add action is
+/// linking" at the moment the Add is raised, which stays exactly correct under the many-to-many
+/// model (a Character can accumulate further <c>CharacterSources</c> links over time via separate
+/// resolutions, but each individual Add action only ever introduces one). See ADR 013 Decision 9.
 /// </summary>
 internal sealed record CharacterActionPayload(string SourceId, string Name, string SourceTitle, string SourceType);
 

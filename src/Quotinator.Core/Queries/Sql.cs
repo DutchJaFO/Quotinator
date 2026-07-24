@@ -217,14 +217,25 @@ internal static class Sql
         internal const string DeleteAll   = "DELETE FROM Characters;";
 
         /// <summary>
-        /// #179: Character is no longer scoped by a SourceId column — the same per-Source match is
-        /// preserved in meaning, only in mechanism, via the CharacterSources join. #174 is where the
-        /// matching key itself changes to something Source-independent.
+        /// #174, ADR 013 Decision 7: the single unified merge-candidate lookup, replacing #179's own
+        /// per-Source-only <c>SelectIdBySourceAndName</c>. A candidate Character matches when its Name
+        /// matches case-insensitively (Decision 1(a)), its <c>SourceType</c> anchor (ADR 011)
+        /// matches, and either it is already linked to this exact <c>sourceId</c> (subsumes #179's old
+        /// per-Source behaviour as a trivial case of the same <c>OR</c>) or one of its linked Sources
+        /// shares a non-null <c>SeriesId</c> with the Source being resolved (Decision 1(c)'s
+        /// conservative-by-default gate — when <c>@seriesId</c> is <c>NULL</c>, this branch can never
+        /// be true, since SQL <c>NULL = NULL</c> is unknown, not true). When more than one candidate
+        /// matches, the already-linked-to-this-Source one is preferred, then the earliest-created —
+        /// mirroring <c>Migration011_CharacterGlobalIdentity</c>'s own survivor-selection rule so the
+        /// live lookup and the one-time migration agree when both could apply.
         /// </summary>
-        internal static readonly string SelectIdBySourceAndName =
+        internal static readonly string SelectGlobalCandidateId =
             $"SELECT {IdClauses.SelectColumn("c.Id", "Id")} FROM Characters c " +
-            $"JOIN CharacterSources cs ON {IdClauses.Join("cs.CharacterId", "c.Id")} " +
-            $"WHERE {IdClauses.Equals("cs.SourceId", "sourceId")} AND c.Name = @name AND c.IsDeleted = 0 AND cs.IsDeleted = 0;";
+            $"JOIN CharacterSources cs ON {IdClauses.Join("cs.CharacterId", "c.Id")} AND cs.IsDeleted = 0 " +
+            $"JOIN Sources s2 ON {IdClauses.Join("s2.Id", "cs.SourceId")} " +
+            "WHERE LOWER(c.Name) = LOWER(@name) AND c.SourceType = @sourceType AND c.IsDeleted = 0 " +
+            $"AND ({IdClauses.Equals("cs.SourceId", "sourceId")} OR (s2.SeriesId IS NOT NULL AND {IdClauses.Equals("s2.SeriesId", "seriesId")})) " +
+            $"ORDER BY ({IdClauses.Equals("cs.SourceId", "sourceId")}) DESC, c.DateCreated ASC LIMIT 1;";
 
         /// <summary>
         /// Number of active (non-deleted) Quotes still referencing this Character — used by #59's
@@ -238,10 +249,12 @@ internal static class Sql
         // planning-time lookup) idempotently — OR IGNORE lets two concurrently-applied batches that
         // both staged an Add for the same not-yet-existing Character land safely. #179 drops SourceId
         // from this table — the caller inserts the corresponding CharacterSources row separately, in
-        // the same transaction, via CharacterSources.InsertIfNotExists.
+        // the same transaction, via CharacterSources.InsertIfNotExists. #174/ADR 013 adds SourceType
+        // (the denormalized Source.Type anchor) — always the resolving quote's own Source's Type,
+        // supplied by the caller alongside Name.
         internal const string InsertIfNotExists =
-            "INSERT OR IGNORE INTO Characters (Id, Name, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
-            "VALUES (@Id, @Name, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+            "INSERT OR IGNORE INTO Characters (Id, Name, SourceType, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @Name, @SourceType, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
     }
 
     /// <summary>CharacterSources join table (#179) — a Character may appear in multiple Sources.</summary>
@@ -362,6 +375,19 @@ internal static class Sql
         /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal static readonly string SelectCompletenessById =
             $"SELECT CompletenessStatus, NoValueKnown FROM Sources WHERE {IdClauses.Equals("Id", "id")};";
+
+        /// <summary>
+        /// #174, ADR 013 Decision 7: the raw <c>SeriesId</c> value for a resolved Source, used by
+        /// <c>ImportActionPlanner.ResolveCharacterAsync</c> as the Series-relatedness signal for its
+        /// merge-candidate lookup. Deliberately not joined through <c>Series</c> the way
+        /// <see cref="SelectSeriesReferenceForSource"/> is — a soft-deleted Series still counts as a
+        /// "known" relationship for merge purposes here, matching <c>Migration011_
+        /// CharacterGlobalIdentity</c>'s own identical, unfiltered comparison. Returns <c>NULL</c> for
+        /// a not-yet-existing (brand-new, quote-implied) Source id, which is the correct "no known
+        /// Series" answer for that case too. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.
+        /// </summary>
+        internal static readonly string SelectSeriesIdById =
+            $"SELECT {IdClauses.SelectColumn("SeriesId")} FROM Sources WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>Persists #165's decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal static readonly string UpdateCompletenessById =

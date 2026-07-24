@@ -607,8 +607,14 @@ public sealed class SqliteImportActionService : IImportActionService
         Guid? characterId = null;
         if (!string.IsNullOrWhiteSpace(resolved.Character))
         {
-            characterId = await connection.ExecuteScalarAsync<Guid?>(Sql.Characters.SelectIdBySourceAndName,
-                new { sourceId = sourceId.Value.ToCanonicalId(), name = resolved.Character }, transaction);
+            // #174/ADR 013: re-resolve via the same Series-scoped candidate lookup ResolveCharacterAsync
+            // itself uses — sourceId is already a real, existing row at this point (checked above), so
+            // its own SeriesId (if any) is the correct Series-relatedness signal here too.
+            var resolvedSourceId = sourceId.Value.ToCanonicalId();
+            var seriesId = await connection.ExecuteScalarAsync<string?>(
+                Sql.Sources.SelectSeriesIdById, new { id = resolvedSourceId }, transaction);
+            characterId = await connection.ExecuteScalarAsync<Guid?>(Sql.Characters.SelectGlobalCandidateId,
+                new { sourceId = resolvedSourceId, name = resolved.Character, sourceType = resolved.Type.ToString(), seriesId }, transaction);
             if (characterId is null)
                 throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Character '{resolved.Character}' no longer exists.");
         }
@@ -703,7 +709,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 // rows apply in whatever order the coordinator returns them — this action's own
                 // Source may not have applied yet. Idempotent, so re-running it here is safe either way.
                 await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, payload.SourceId, payload.SourceTitle, payload.SourceType, batchId, now, changeLog);
-                await EnsureCharacterExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.SourceId, payload.Name, batchId, now, changeLog);
+                await EnsureCharacterExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.SourceId, payload.Name, payload.SourceType, batchId, now, changeLog);
                 break;
             }
             case ImportActionEntityTypes.Person:
@@ -792,7 +798,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 // this quote ever introduces.
                 await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, payload.SourceId, resolved.Source, resolved.Type.ToString(), batchId, now, changeLog, resolved.Date);
                 if (payload.CharacterId is not null)
-                    await EnsureCharacterExistsAsync(sqliteConnection, sqliteTransaction, payload.CharacterId, payload.SourceId, resolved.Character!, batchId, now, changeLog);
+                    await EnsureCharacterExistsAsync(sqliteConnection, sqliteTransaction, payload.CharacterId, payload.SourceId, resolved.Character!, resolved.Type.ToString(), batchId, now, changeLog);
                 if (payload.PersonId is not null)
                     await EnsurePersonExistsAsync(sqliteConnection, sqliteTransaction, payload.PersonId, resolved.Author!, batchId, now, changeLog);
 
@@ -1012,12 +1018,15 @@ public sealed class SqliteImportActionService : IImportActionService
     }
 
     private async Task EnsureCharacterExistsAsync(
-        SqliteConnection connection, SqliteTransaction transaction, string id, string sourceId, string name,
+        SqliteConnection connection, SqliteTransaction transaction, string id, string sourceId, string name, string sourceType,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
+        // #174/ADR 013: SourceType is only ever written here, on first insert (INSERT OR IGNORE — a
+        // no-op against an already-existing row never touches its SourceType again). A Character's
+        // Type anchor never changes after creation; only which Sources it links to can grow.
         var inserted = await connection.ExecuteAsync(Sql.Characters.InsertIfNotExists,
-            new { Id = id, Name = name, ImportBatchId = batchId, DateCreated = now }, transaction);
+            new { Id = id, Name = name, SourceType = sourceType, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "character", id, ChangeAction.Created,
                 oldValue: null, newValue: new { name }, connection, transaction);

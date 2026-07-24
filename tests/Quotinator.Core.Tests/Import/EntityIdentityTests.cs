@@ -35,8 +35,8 @@ public class EntityIdentityTests
     [TestMethod]
     public void CharacterId_SameInput_IsDeterministic()
     {
-        var first  = EntityIdentity.CharacterId("some-source-id", "Rick Blaine");
-        var second = EntityIdentity.CharacterId("some-source-id", "Rick Blaine");
+        var first  = EntityIdentity.CharacterId("some-source-id", "Rick Blaine", "Movie");
+        var second = EntityIdentity.CharacterId("some-source-id", "Rick Blaine", "Movie");
 
         Assert.AreEqual(first, second);
     }
@@ -44,8 +44,18 @@ public class EntityIdentityTests
     [TestMethod]
     public void CharacterId_DifferentSourceId_NeverCollide()
     {
-        var a = EntityIdentity.CharacterId("source-a", "Rick Blaine");
-        var b = EntityIdentity.CharacterId("source-b", "Rick Blaine");
+        var a = EntityIdentity.CharacterId("source-a", "Rick Blaine", "Movie");
+        var b = EntityIdentity.CharacterId("source-b", "Rick Blaine", "Movie");
+
+        Assert.AreNotEqual(a, b);
+    }
+
+    /// <summary>#174/ADR 013 Decision 5: sourceType stays part of the hash alongside sourceId — defense-in-depth for the Source.Type anchor (ADR 011).</summary>
+    [TestMethod]
+    public void CharacterId_DifferentSourceType_NeverCollide()
+    {
+        var a = EntityIdentity.CharacterId("source-a", "Gandalf", "Movie");
+        var b = EntityIdentity.CharacterId("source-a", "Gandalf", "Book");
 
         Assert.AreNotEqual(a, b);
     }
@@ -72,7 +82,7 @@ public class EntityIdentityTests
     public void SourceId_CharacterId_PersonId_NeverCollideWithEachOtherOrQuoteIdentity()
     {
         var sourceId    = EntityIdentity.SourceId("X", "Y");
-        var characterId = EntityIdentity.CharacterId("X", "Y");
+        var characterId = EntityIdentity.CharacterId("X", "Y", "Z");
         var personId    = EntityIdentity.PersonId("X");
         var quoteId     = QuoteIdentity.StableId("X", "Y");
 

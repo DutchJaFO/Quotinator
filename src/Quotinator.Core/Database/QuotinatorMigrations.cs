@@ -27,6 +27,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 8, Sql = Migration008_Conversations },
         new SchemaMigration { Version = 9, Sql = Migration009_SeriesUniverseSchema },
         new SchemaMigration { Version = 10, Sql = Migration010_RenameImportBatchImportedById },
+        new SchemaMigration { Version = 11, Sql = Migration011_CharacterGlobalIdentity },
     ];
 
     /// <summary>
@@ -476,6 +477,96 @@ public static class QuotinatorMigrations
         ALTER TABLE ImportBatches RENAME COLUMN ImportedBy TO ImportedById;
         """;
 
+    // #174, ADR 013 — consolidates pre-existing per-Source Character rows into fewer global rows,
+    // using the merge-candidate test ADR 013 Decision 1 defines: same Name (case-insensitive —
+    // Decision 1(a)), same denormalized SourceType (the Source.Type anchor, ADR 011), and a directly
+    // shared, non-null Sources.SeriesId between the two Characters' linked Sources. At this exact
+    // point in migration history every pre-existing Character still has exactly one CharacterSources
+    // link (ADR 011 Decision 5's own migration performed zero merging), so "the Source this Character
+    // is linked to" is unambiguous for every row processed here.
+    //
+    // Backfills the new SourceType column first (from each row's single linked Source), then computes
+    // one canonical survivor per merge group directly via a correlated subquery — no window function
+    // needed, since the merge-candidate test is a direct equality test (LOWER(Name), SourceType,
+    // SeriesId), not a transitive graph walk. A Character with no Series-known linked Source (NULL
+    // SeriesId) is excluded from the merge-groups table entirely, which is what implements
+    // Decision 1(c)'s conservative-by-default fallback with no extra special-casing: it simply never
+    // becomes a merge candidate for anyone, keeping its own id unchanged.
+    //
+    // CharacterSources/Quotes.CharacterId are re-pointed to the survivor, then CompletenessStatus
+    // resolves to the most-reviewed value across the group (ADR 013 Decision 4); NoValueKnown is set
+    // to '[]' directly rather than computed via a JSON-array union (Decision 4's own remark: every
+    // pre-existing Character row already has NoValueKnown = '[]', since Character's only field is
+    // Name, so there is nothing to union yet). Merged-away rows are soft-deleted, never hard-deleted
+    // (ADR 013 Decision 3) — CharacterSources/Quotes rows have already been re-pointed away from them
+    // by this point, so no FK is left dangling.
+    private const string Migration011_CharacterGlobalIdentity = """
+        ALTER TABLE Characters ADD COLUMN SourceType TEXT NOT NULL DEFAULT 'Unknown'
+            CHECK (SourceType IN ('Unknown','Movie','Tv','Anime','Book','Person'));
+
+        UPDATE Characters
+        SET SourceType = (
+            SELECT s.Type FROM CharacterSources cs JOIN Sources s ON s.Id = cs.SourceId
+            WHERE cs.CharacterId = Characters.Id AND cs.IsDeleted = 0 LIMIT 1
+        )
+        WHERE EXISTS (
+            SELECT 1 FROM CharacterSources cs WHERE cs.CharacterId = Characters.Id AND cs.IsDeleted = 0
+        );
+
+        CREATE TEMP TABLE Character_MergeGroups AS
+        SELECT
+            c.Id AS CharacterId,
+            (
+                SELECT c2.Id
+                FROM Characters c2
+                JOIN CharacterSources cs2 ON cs2.CharacterId = c2.Id AND cs2.IsDeleted = 0
+                JOIN Sources s2          ON s2.Id = cs2.SourceId
+                WHERE c2.IsDeleted = 0
+                  AND LOWER(c2.Name) = LOWER(c.Name)
+                  AND c2.SourceType = c.SourceType
+                  AND s2.SeriesId IS NOT NULL
+                  AND s2.SeriesId = s.SeriesId
+                ORDER BY c2.DateCreated ASC, c2.Id ASC
+                LIMIT 1
+            ) AS SurvivorId
+        FROM Characters c
+        JOIN CharacterSources cs ON cs.CharacterId = c.Id AND cs.IsDeleted = 0
+        JOIN Sources s           ON s.Id = cs.SourceId
+        WHERE c.IsDeleted = 0 AND s.SeriesId IS NOT NULL;
+
+        UPDATE CharacterSources
+        SET CharacterId  = (SELECT SurvivorId FROM Character_MergeGroups WHERE CharacterId = CharacterSources.CharacterId),
+            DateModified = strftime('%Y-%m-%d %H:%M:%S', 'now')
+        WHERE CharacterId IN (SELECT CharacterId FROM Character_MergeGroups WHERE CharacterId <> SurvivorId);
+
+        UPDATE Quotes
+        SET CharacterId = (SELECT SurvivorId FROM Character_MergeGroups WHERE CharacterId = Quotes.CharacterId)
+        WHERE CharacterId IN (SELECT CharacterId FROM Character_MergeGroups WHERE CharacterId <> SurvivorId);
+
+        UPDATE Characters
+        SET CompletenessStatus = (
+                SELECT CASE MAX(CASE c2.CompletenessStatus WHEN 'Complete' THEN 3 WHEN 'NeedsReview' THEN 2 ELSE 1 END)
+                    WHEN 3 THEN 'Complete'
+                    WHEN 2 THEN 'NeedsReview'
+                    ELSE 'Incomplete'
+                END
+                FROM Character_MergeGroups g
+                JOIN Characters c2 ON c2.Id = g.CharacterId
+                WHERE g.SurvivorId = Characters.Id
+            ),
+            NoValueKnown = '[]',
+            DateModified = strftime('%Y-%m-%d %H:%M:%S', 'now')
+        WHERE Id IN (SELECT DISTINCT SurvivorId FROM Character_MergeGroups);
+
+        UPDATE Characters
+        SET IsDeleted   = 1,
+            DateDeleted  = strftime('%Y-%m-%d %H:%M:%S', 'now'),
+            DateModified = strftime('%Y-%m-%d %H:%M:%S', 'now')
+        WHERE Id IN (SELECT CharacterId FROM Character_MergeGroups WHERE CharacterId <> SurvivorId);
+
+        DROP TABLE Character_MergeGroups;
+        """;
+
     // Consolidated schema for a genuinely fresh database — the union of migrations 1-8's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
@@ -496,13 +587,16 @@ public static class QuotinatorMigrations
     // above. Characters no longer carries SourceId or UNIQUE(SourceId, Name) — both dropped by
     // migration009's rebuild. Migration010's ImportedBy -> ImportedById rename (#213) is folded in
     // directly — ImportBatches.ImportedById is created under its final name, since a RENAME COLUMN
-    // has nothing left to rename against on a table that never had the old name.
+    // has nothing left to rename against on a table that never had the old name. Migration011's
+    // Characters.SourceType (#174, ADR 013) is also included directly — again an ALTER TABLE ADD
+    // COLUMN, listed last on Characters to match column order.
     // Deliberately omits migration002's DELETE FROM QuoteGenres (data-repair for pre-existing bad
-    // data — nothing to repair on a fresh database) and migration003's pre-seed INSERTs (WHERE
-    // EXISTS-guarded, always a no-op before any quote has been seeded), and migration009's
+    // data — nothing to repair on a fresh database), migration003's pre-seed INSERTs (WHERE
+    // EXISTS-guarded, always a no-op before any quote has been seeded), migration009's
     // CharacterSources backfill INSERT (nothing to backfill on a fresh database — Characters is
-    // always empty at baseline time). Kept in sync with migrations 1-10 by DatabaseInitializerTests'
-    // schema-drift comparison.
+    // always empty at baseline time), and migration011's own merge-consolidation UPDATEs (nothing to
+    // consolidate on a fresh database — same reasoning). Kept in sync with migrations 1-11 by
+    // DatabaseInitializerTests' schema-drift comparison.
     private const string BaselineSchema = """
         CREATE TABLE IF NOT EXISTS ImportBatches (
             Id           TEXT    PRIMARY KEY,
@@ -589,7 +683,9 @@ public static class QuotinatorMigrations
             ImportBatchId TEXT   REFERENCES ImportBatches(Id),
             CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
                          CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
-            NoValueKnown TEXT    NOT NULL DEFAULT '[]'
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]',
+            SourceType   TEXT    NOT NULL DEFAULT 'Unknown'
+                         CHECK (SourceType IN ('Unknown','Movie','Tv','Anime','Book','Person'))
         );
 
         CREATE TABLE IF NOT EXISTS CharacterTranslations (

@@ -1,6 +1,6 @@
 # #174 — Character: migrate to global identity via new Series/Universe schema (ADR + migration)
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #174
 **Tiers required:** T1, T2
 **Depends on:** #179 (Series/Universe schema, `CharacterSources` join, `Source.Type` anchor invariant)
@@ -70,57 +70,43 @@ relationship.
 
 ### 1. Write the ADR deciding the merge algorithm
 
-**Status:** Not started. Unblocked — confirmed during this review (2026-07-24) that #179's structural
-pieces (`CharacterSources`, `Series`, `Universe`, the `Source.Type` anchor invariant, `Characters`
-losing its `SourceId` column) have already landed in code: `Sql.Characters.SelectIdBySourceAndName`'s
-own doc comment states "#179: Character is no longer scoped by a SourceId column... #174 is where the
-matching key itself changes," and `QuotinatorMigrations.BaselineSchema`'s `Characters` table has no
-`SourceId` column. #179 itself remains open on GitHub (not yet formally closed pending release), but
-that does not block this issue's own start — the code dependency is already satisfied.
-
-This step's output is the ADR itself — its content is **not** pre-decided by this plan doc, per the
-issue's own explicit instruction that the exact merge algorithm "was deliberately not decided during
-planning." What the ADR needs to settle, at minimum:
-
-- The exact merge key: `Name` alone is insufficient (per #169's finding) — most likely `Name` plus
-  a `Source.Type`-derived component (e.g. two Characters are merge-candidates only if every Source
-  either already links to one of them, or shares the same `Type` as every Source already linked to
-  it). The precise algorithm for evaluating this across an arbitrary number of already-linked
-  Sources per Character is this ADR's core decision.
-- How a `Series`/`Universe` relationship (where known via `Source.SeriesId`/`Series.UniverseId`)
-  scopes a safer cross-Source merge than "same Name, same Type, no other signal" — and the explicit
-  fallback behaviour when no Series relationship is known: conservative-by-default, do not merge.
-- What happens to divergent `CompletenessStatus`/`NoValueKnown` values across the rows being merged
-  (e.g. does any `Complete` row's status win, does a conflict fall back to `Incomplete`).
-- What `CharacterActionPayload`'s current `SourceId`/`SourceTitle`/`SourceType` fields mean, if
-  anything, once Character is genuinely many-to-many with Source (see step 5 below) — #179
-  deliberately left these untouched; this issue's ADR is where their post-merge shape is decided.
-- What uniqueness constraint (if any) `Characters` gains once the merge key is known — #179
-  deliberately left `Characters` without one, since it didn't know the key.
-
-Format and location: `docs/architecture-decisions/013-<short-title>.md` — confirmed the next free
-number: #179's own ADR claimed 011 (`011-series-universe-hierarchy-and-character-source-identity.md`),
-and 012 was separately claimed by #210's `012-canonicalize-entity-ids-at-capture.md`, so 013 is the
-next free slot as of this review (2026-07-24).
+**Status:** ✅ Done (2026-07-24). Written as `docs/architecture-decisions/
+013-character-merge-algorithm.md`, registered in `Quotinator.slnx`. Settles: the merge-candidate test
+(Name exact match + `Source.Type` anchor + a known, shared, non-null `SeriesId` between the candidate's
+already-linked Sources and the Source being resolved — Universe-level relationships deliberately
+excluded as a merge signal); that the identical test applies both retroactively (the migration) and
+prospectively (`ResolveCharacterAsync`, with a documented, accepted same-batch limitation); canonical
+survivor selection (earliest `DateCreated`, tie-broken by smallest `Id`); `CompletenessStatus`
+resolves to the most-reviewed value across a merged group, `NoValueKnown` to the deduplicated union;
+`EntityIdentity.CharacterId`'s new signature is `(sourceId, name, sourceType)` — **not** `(name,
+sourceType)` as this plan doc's own earlier speculation floated, which the ADR shows would be a real
+correctness bug (see the ADR's Decision 5); `Characters` gains a denormalized `SourceType` column with
+a matching `CHECK` but **no** new `UNIQUE` constraint (two independent same-Name-same-Type Characters
+can legitimately coexist when no Series connects them); a single unified SQL query replaces
+`Sql.Characters.SelectIdBySourceAndName`; and `CharacterActionPayload`/apply-time code need no
+functional changes at all (#179 already built the apply-time plumbing generically enough).
 
 ### 2. Write the red tests
 
-**Status:** Not started. Cannot be written until step 1's ADR settles the exact merge algorithm — the
-"Expected tests" table in the GitHub issue is a starting point, not exhaustive. At minimum the seven
-listed tests (`Migration_CharacterMerge_ConsolidatesSameNameRowsWithinKnownSeries`,
-`Migration_CharacterMerge_NeverMergesAcrossDifferingSourceType`, `Migration_CharacterMerge_
+**Status:** In progress. Unblocked now that step 1's ADR (013) has settled the exact merge algorithm.
+At minimum the seven originally-listed tests (`Migration_CharacterMerge_
+ConsolidatesSameNameRowsWithinKnownSeries`, `Migration_CharacterMerge_
+NeverMergesAcrossDifferingSourceType`, `Migration_CharacterMerge_
 LeavesUnrelatedSameNameRowsUnmergedWhenNoSeriesKnown`, `Migration_CharacterMerge_
 RepointsQuoteCharacterIdToMergedRow`, `Migration_CharacterMerge_PreservesCompletenessStatusPer
 Algorithm`, `Baseline_And_IncrementalReplay_ProduceIdenticalCharactersSchema`,
-`ResolveCharacterAsync_ExistingGlobalCharacter_ReusesRealId`) confirmed red against pre-fix code.
-The `NeverMergesAcrossDifferingSourceType` and `LeavesUnrelatedSameNameRowsUnmergedWhenNoSeriesKnown`
-tests are the direct regression guards for #169's corrected findings — both must exist, not just the
-positive-merge cases.
+`ResolveCharacterAsync_ExistingGlobalCharacter_ReusesRealId`), plus two more the ADR's design surfaced:
+`ResolveCharacterAsync_SeriesScopedCrossSourceMatch_AttachesNewLinkToExistingCharacter` (Decision 7)
+and `ResolveCharacterAsync_SameBatchNewSources_DoesNotMergeAcrossStillUncommittedSources` (Decision 8's
+documented limitation, asserted rather than left implicit).
 
 ### 3. Design and write the migration
 
-**Status:** Not started. Depends on #179's migration (`Migration009_...`) having landed — this
-becomes `Migration010_...` or later, whatever is next-free at implementation time.
+**Status:** ✅ Done. Implemented as `Migration011_CharacterGlobalIdentity` (Migration010 was already
+claimed by #213 this same milestone). Backfills `Characters.SourceType`, computes merge groups via a
+correlated subquery keyed on `(LOWER(Name), SourceType, SeriesId)`, re-points `CharacterSources`/
+`Quotes.CharacterId`, resolves `CompletenessStatus` to the most-reviewed value, soft-deletes
+merged-away rows.
 
 Unlike #179's own migration (zero merging, pure shape change), this migration performs real data
 consolidation: for each group of Characters sharing a `Name` (and satisfying the ADR's `Type`/
@@ -142,7 +128,12 @@ rebuild-under-temporary-name pattern #179 already used once in this migration ch
 
 ### 4. `EntityIdentity.CharacterId` and the natural-key lookup
 
-**Status:** Not started.
+**Status:** ✅ Done. `EntityIdentity.CharacterId`'s new signature is `(sourceId, name, sourceType)` —
+**not** `(name, sourceType)` as this section originally speculated; see ADR 013 Decision 5 for why
+dropping `sourceId` would have been a real correctness bug. `Sql.Characters.SelectIdBySourceAndName`
+was replaced by `Sql.Characters.SelectGlobalCandidateId` (ADR 013 Decision 7), and
+`ResolveCharacterAsync` now also reads the resolving Source's `SeriesId`
+(`Sql.Sources.SelectSeriesIdById`) as the Series-relatedness signal.
 
 - `EntityIdentity.CharacterId(string sourceId, string name)` (`src/Quotinator.Core/Import/
   EntityIdentity.cs:19`) changes signature to match whatever key step 1's ADR settles on — likely
@@ -163,8 +154,16 @@ rebuild-under-temporary-name pattern #179 already used once in this migration ch
 
 ### 5. Audit every other `Character.SourceId`/`CharacterActionPayload` call site
 
-**Status:** Not started. #179 already handled the pure mechanism-level call sites (queries now go
-through `CharacterSources`); this step is about *behaviour*, not mechanism:
+**Status:** ✅ Done. ADR 013 Decision 9 concluded `CharacterActionPayload` and the apply-time machinery
+need **no functional changes** — #179 already built `EnsureCharacterExistsAsync`/the Quote apply
+branch's defensive re-ensure generically enough to support cross-Source reuse for free. The one real
+addition: `EnsureCharacterExistsAsync` now also threads `sourceType` through to `Characters.
+InsertIfNotExists` (both existing call sites already had a `Type` string in scope). The reversal path
+(`SqliteImportActionService.cs`'s re-resolve-from-restored-text logic) was also updated to the new
+`SelectGlobalCandidateId` lookup — not originally listed in this section, found while implementing.
+Doc-comment sweep completed (`CharacterActionPayload`'s own summary, `Sql.Characters`'s query
+comments). #179 already handled the pure mechanism-level call sites (queries now go through
+`CharacterSources`); this step was about *behaviour*, not mechanism:
 
 - `CharacterActionPayload` (`ImportActionPlanner.cs:507`) — currently
   `record CharacterActionPayload(string SourceId, string Name, string SourceTitle, string SourceType)`.
@@ -190,11 +189,13 @@ through `CharacterSources`); this step is about *behaviour*, not mechanism:
 
 ### 6. Update the fresh-database baseline and schema-drift test
 
-**Status:** Not started. `QuotinatorMigrations.BaselineSchema`'s `Characters` table definition,
-already updated once by #179 (SourceId/old UNIQUE removed), gains whatever new uniqueness constraint
-step 3 establishes. New or extended schema-drift test confirming baseline and incremental replay
-agree, including the merge behaviour's resulting row counts for a fixture containing a known
-multi-Source Character group.
+**Status:** ✅ Done. `QuotinatorMigrations.BaselineSchema`'s `Characters` table gains `SourceType TEXT
+NOT NULL DEFAULT 'Unknown'` with the matching `CHECK` (ADR 008) — **no new `UNIQUE` constraint** (ADR
+013 Decision 6 concluded one would be actively wrong, since two independent same-`(Name,SourceType)`
+Characters can legitimately coexist when no Series connects them). The pre-existing
+`Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema` test (`DatabaseInitializerTests.cs`)
+already iterates `ConsumerDomainTables`, which already includes `Characters` — no new dedicated
+schema-drift test was needed; that existing test provides the coverage this row asks for.
 
 ---
 
@@ -202,17 +203,18 @@ multi-Source Character group.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Merge algorithm, its `Type`-anchor enforcement, and its conservative-by-default fallback are decided and documented | Doc | New ADR under `docs/architecture-decisions/` — exact number/filename not yet known |
-| 2 | ❌ | Characters sharing a `Name` are merged into one row only when the ADR's Series/Type conditions are satisfied | Unit test | `Quotinator.Core.Tests.Migration_CharacterMerge_ConsolidatesSameNameRowsWithinKnownSeries` — starts red |
-| 3 | ❌ | Two Characters are never merged if their linked Sources disagree on `Type` | Unit test | `Quotinator.Core.Tests.Migration_CharacterMerge_NeverMergesAcrossDifferingSourceType` — starts red |
-| 4 | ❌ | Two same-named Characters with no known Series relationship are left unmerged (conservative default) | Unit test | `Quotinator.Core.Tests.Migration_CharacterMerge_LeavesUnrelatedSameNameRowsUnmergedWhenNoSeriesKnown` — starts red |
-| 5 | ❌ | Every `Quotes.CharacterId` referencing a merged-away row is re-pointed to the surviving row | Unit test | `Quotinator.Core.Tests.Migration_CharacterMerge_RepointsQuoteCharacterIdToMergedRow` — starts red |
-| 6 | ❌ | Divergent `CompletenessStatus`/`NoValueKnown` values across merged rows are resolved per the ADR's algorithm | Unit test | `Quotinator.Core.Tests.Migration_CharacterMerge_PreservesCompletenessStatusPerAlgorithm` — starts red |
-| 7 | ❌ | Fresh-database baseline and incremental replay produce an identical `Characters` schema | Unit test | `Quotinator.Core.Tests.Baseline_And_IncrementalReplay_ProduceIdenticalCharactersSchema` — starts red |
-| 8 | ❌ | `ResolveCharacterAsync` reuses an existing global Character by the new merge key | Unit test | `Quotinator.Core.Tests.ResolveCharacterAsync_ExistingGlobalCharacter_ReusesRealId` — starts red |
-| 9 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 10 | ❌ | Migration applies cleanly against a database matching the last published release's schema, not just from-empty | Live (T1) | Per ADR 009: reconstruct or check out the last released tag's schema, run this migration against it, confirm no drift; developer confirms app opens and runs correctly in Visual Studio afterward |
-| 11 | ❌ | Live import behaviour is correct post-migration: importing a quote whose Character name already exists globally under a Source of the *same* `Type` and known `Series` reuses the existing row; a differing `Type` never merges | Live (T2) | Docker smoke test — import two quotes with the same Character name under two Sources of differing `Type`, confirm two separate `Characters` rows persist; repeat with matching `Type` and a shared `Series`, confirm one row |
+| 1 | ✅ | Merge algorithm, its `Type`-anchor enforcement, and its conservative-by-default fallback are decided and documented | Doc | `docs/architecture-decisions/013-character-merge-algorithm.md` |
+| 2 | ✅ | Characters sharing a `Name` are merged into one row only when the ADR's Series/Type conditions are satisfied | Unit test | `Quotinator.Core.Tests.Migration_CharacterGlobalIdentity_ConsolidatesSameNameRowsWithinKnownSeries` — passing |
+| 3 | ✅ | Two Characters are never merged if their linked Sources disagree on `Type` | Unit test | `Quotinator.Core.Tests.Migration_CharacterGlobalIdentity_NeverMergesAcrossDifferingSourceType` — passing |
+| 4 | ✅ | Two same-named Characters with no known Series relationship are left unmerged (conservative default) | Unit test | `Quotinator.Core.Tests.Migration_CharacterGlobalIdentity_LeavesUnrelatedSameNameRowsUnmergedWhenNoSeriesKnown` — passing |
+| 5 | ✅ | Every `Quotes.CharacterId` referencing a merged-away row is re-pointed to the surviving row | Unit test | `Quotinator.Core.Tests.Migration_CharacterGlobalIdentity_RepointsQuoteCharacterIdToMergedRow` — passing |
+| 6 | ✅ | Divergent `CompletenessStatus`/`NoValueKnown` values across merged rows are resolved per the ADR's algorithm | Unit test | `Quotinator.Core.Tests.Migration_CharacterGlobalIdentity_PreservesCompletenessStatusPerAlgorithm` — passing |
+| 6b | ✅ | Name matching is case-insensitive; storage preserves original casing (developer correction, 2026-07-24) | Unit test | `Quotinator.Core.Tests.Migration_CharacterGlobalIdentity_MergesDespiteDifferingNameCasing` — passing |
+| 7 | ✅ | Fresh-database baseline and incremental replay produce an identical `Characters` schema | Unit test | `Quotinator.Core.Tests.Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema` (pre-existing, iterates `ConsumerDomainTables` which includes `Characters`) — passing |
+| 8 | ✅ | `ResolveCharacterAsync` reuses an existing global Character by the new merge key (same-Source and Series-scoped cross-Source) | Unit test | `Quotinator.Core.Tests.ResolveCharacterAsync_ExistingGlobalCharacter_ReusesRealId`, `...SeriesScopedCrossSourceMatch_ReusesExistingCharacter`, `...DifferingSourceType_NeverReusesExistingCharacter`, `...NoKnownSeriesRelationship_CreatesSeparateCharacter`, `...CaseInsensitiveNameMatch_ReusesRealId` — all passing |
+| 9 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` (2026-07-24) — 2182 tests, all passed, 0 warnings, 0 errors, across every project |
+| 10 | ❌ | Migration applies cleanly against a database matching the last published release's schema, not just from-empty | Live (T1) | Per ADR 009: reconstruct or check out the last released tag's schema, run this migration against it, confirm no drift; developer confirms app opens and runs correctly in Visual Studio afterward — **not yet performed, developer's own action** |
+| 11 | ✅ | Live import behaviour is correct post-migration: importing a quote whose Character name already exists globally under a Source of the *same* `Type` and known `Series` reuses the existing row; a differing `Type` never merges | Live (T2) | Docker smoke test (2026-07-24): pre-committed "The Fellowship of the Ring"/"The Two Towers" (same Series, both Movie) each given an "Aragorn174" quote in separate imports → exactly one `Aragorn174` Character row linked to both Sources; identical setup with one Source `Movie` and one `Book` → two separate `Gandalf174` rows despite the shared Series. Found and fixed a real scope gap during this pass — see ADR 013 Decision 8's rewritten text. |
 
 ---
 

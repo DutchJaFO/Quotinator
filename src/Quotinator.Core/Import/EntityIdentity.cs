@@ -15,8 +15,21 @@ public static class EntityIdentity
     /// <summary>Derives a stable id for a Source from its title and type.</summary>
     public static string SourceId(string title, string type) => StableId("source", title, type);
 
-    /// <summary>Derives a stable id for a Character from its owning Source's id and its name.</summary>
-    public static string CharacterId(string sourceId, string name) => StableId("character", sourceId, name);
+    /// <summary>
+    /// Derives a stable id for a Character from the resolving Source's id, the Character's Name, and
+    /// the resolving Source's Type. Used only as the fallback when <see cref="Quotinator.Core.Database.
+    /// ImportActionPlanner.ResolveCharacterAsync"/> finds no existing match at all (ADR 013 Decision
+    /// 5/7) — an actual match (same-Source or Series-scoped cross-Source) always reuses the found
+    /// row's real id, never this hash. <c>sourceType</c> is included for defense-in-depth/self-
+    /// documentation of the Type anchor (ADR 011) even though it is technically derivable from
+    /// <c>sourceId</c> alone; <c>sourceId</c> itself must stay part of the hash — dropping it in
+    /// favour of <c>(name, sourceType)</c> alone (as an earlier draft of this issue's plan doc
+    /// speculated) would deterministically collide two independent, Series-unrelated Characters onto
+    /// the same id the moment each is introduced for the first time, since two such Characters can
+    /// legitimately share <c>(Name, SourceType)</c> under ADR 013's Series-scoped merge semantics (see
+    /// ADR 013 Decision 5 for the full reasoning).
+    /// </summary>
+    public static string CharacterId(string sourceId, string name, string sourceType) => StableId("character", sourceId, name, sourceType);
 
     /// <summary>Derives a stable id for a Person from their name.</summary>
     public static string PersonId(string name) => StableId("person", name);

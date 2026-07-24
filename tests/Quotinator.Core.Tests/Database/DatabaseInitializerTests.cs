@@ -613,7 +613,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(10, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+        Assert.AreEqual(11, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
     }
 
     // ── #143 — migration ownership split + baseline schema ─────────────────────
@@ -913,7 +913,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
         Assert.AreEqual(10, db.DataSchemaVersion);
-        Assert.AreEqual(10, db.SchemaVersion);
+        Assert.AreEqual(11, db.SchemaVersion);
     }
 
     /// <summary>
@@ -940,7 +940,7 @@ public class DatabaseInitializerTests
         var db2 = CreateInitializer([]);
         await db2.InitialiseAsync();
 
-        Assert.AreEqual(10, db2.SchemaVersion,      "All seven remaining App migrations (4, 5, 6, 7, 8, 9, and 10) should have replayed");
+        Assert.AreEqual(11, db2.SchemaVersion,      "All eight remaining App migrations (4, 5, 6, 7, 8, 9, 10, and 11) should have replayed");
         Assert.AreEqual(10, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
     }
 
@@ -985,7 +985,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(10, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+        Assert.AreEqual(11, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
     // ── #179 — Series/Universe schema, Character↔Source many-to-many ───────────
@@ -1089,6 +1089,237 @@ public class DatabaseInitializerTests
             Assert.IsFalse(idxCols.Contains("SourceId", StringComparer.OrdinalIgnoreCase),
                 $"Index '{idx}' still references SourceId — the old UNIQUE(SourceId, Name) constraint must be gone");
         }
+    }
+
+    // ── #174: Migration011_CharacterGlobalIdentity (ADR 013) ────────────────────
+
+    /// <summary>
+    /// Seeds a pre-#174 database at App migration v10 (Migration009's CharacterSources join landed,
+    /// Migration011's merge has not) with two Sources and two same-named Characters, each linked to
+    /// exactly one Source (the shape ADR 011 Decision 5 guarantees at this point in migration
+    /// history), then completes migration through v11 and returns the survivor lookup for assertions.
+    /// </summary>
+    private async Task<(string source1Id, string source2Id, string character1Id, string character2Id)> SeedPreMergeCharactersAsync(
+        string name = "Gandalf", string? name2 = null, string type1 = "Movie", string type2 = "Movie",
+        string? seriesId1 = null, string? seriesId2 = null,
+        string completeness1 = "Incomplete", string completeness2 = "Incomplete",
+        string dateCreated1 = "2026-01-01 00:00:00", string dateCreated2 = "2026-01-02 00:00:00")
+    {
+        name2 ??= name;
+        var partialMigrations = QuotinatorMigrations.All.Take(10).ToList();
+        var db1 = CreateInitializer([], partialMigrations, useBaseline: false);
+        await db1.InitialiseForTestingAsync(forceIncremental: true);
+
+        var source1Id    = Guid.NewGuid().ToString();
+        var source2Id    = Guid.NewGuid().ToString();
+        var character1Id = Guid.NewGuid().ToString();
+        var character2Id = Guid.NewGuid().ToString();
+
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+
+            // Sources.SeriesId is a real FK to Series(Id) — a Series row must exist first.
+            foreach (var seriesId in new[] { seriesId1, seriesId2 }.Where(s => s is not null).Distinct())
+                await conn.ExecuteAsync(
+                    "INSERT OR IGNORE INTO Series (Id, Name, DateCreated, IsDeleted) VALUES (@id, @name, @now, 0);",
+                    new { id = seriesId, name = $"Series {seriesId}", now = dateCreated1 });
+
+            await conn.ExecuteAsync(
+                "INSERT INTO Sources (Id, Title, Type, SeriesId, DateCreated, IsDeleted) VALUES (@id, @title, @type, @seriesId, @now, 0);",
+                new { id = source1Id, title = "Source One", type = type1, seriesId = seriesId1, now = dateCreated1 });
+            await conn.ExecuteAsync(
+                "INSERT INTO Sources (Id, Title, Type, SeriesId, DateCreated, IsDeleted) VALUES (@id, @title, @type, @seriesId, @now, 0);",
+                new { id = source2Id, title = "Source Two", type = type2, seriesId = seriesId2, now = dateCreated2 });
+
+            await conn.ExecuteAsync(
+                "INSERT INTO Characters (Id, Name, CompletenessStatus, DateCreated, IsDeleted) VALUES (@id, @name, @completeness, @now, 0);",
+                new { id = character1Id, name, completeness = completeness1, now = dateCreated1 });
+            await conn.ExecuteAsync(
+                "INSERT INTO Characters (Id, Name, CompletenessStatus, DateCreated, IsDeleted) VALUES (@id, @name, @completeness, @now, 0);",
+                new { id = character2Id, name = name2, completeness = completeness2, now = dateCreated2 });
+
+            await conn.ExecuteAsync(
+                "INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated, IsDeleted) VALUES (@id, @characterId, @sourceId, @now, 0);",
+                new { id = Guid.NewGuid().ToString(), characterId = character1Id, sourceId = source1Id, now = dateCreated1 });
+            await conn.ExecuteAsync(
+                "INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated, IsDeleted) VALUES (@id, @characterId, @sourceId, @now, 0);",
+                new { id = Guid.NewGuid().ToString(), characterId = character2Id, sourceId = source2Id, now = dateCreated2 });
+        }
+
+        var db2 = CreateInitializer([]);
+        await db2.InitialiseAsync();
+
+        return (source1Id, source2Id, character1Id, character2Id);
+    }
+
+    [TestMethod]
+    public async Task Migration_CharacterGlobalIdentity_ConsolidatesSameNameRowsWithinKnownSeries()
+    {
+        var seriesId = Guid.NewGuid().ToString();
+        var (source1Id, source2Id, character1Id, character2Id) =
+            await SeedPreMergeCharactersAsync(seriesId1: seriesId, seriesId2: seriesId);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var survivorCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Characters WHERE Name = 'Gandalf' AND IsDeleted = 0;");
+        Assert.AreEqual(1, survivorCount, "Two same-named Characters whose Sources share a Series must consolidate into one row");
+
+        var survivorId = await conn.ExecuteScalarAsync<string>(
+            "SELECT Id FROM Characters WHERE Name = 'Gandalf' AND IsDeleted = 0;");
+        Assert.AreEqual(character1Id, survivorId, "The earlier-DateCreated row must survive");
+
+        var linkedSourceCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM CharacterSources WHERE CharacterId = @id AND IsDeleted = 0;", new { id = survivorId });
+        Assert.AreEqual(2, linkedSourceCount, "The survivor must carry links to both original Sources");
+
+        var mergedAwayDeleted = await conn.ExecuteScalarAsync<int>(
+            "SELECT IsDeleted FROM Characters WHERE Id = @id;", new { id = character2Id });
+        Assert.AreEqual(1, mergedAwayDeleted, "The merged-away row must be soft-deleted, never hard-deleted");
+    }
+
+    /// <summary>
+    /// Character storage always preserves the exact casing a Name was originally written with, but the
+    /// merge-candidate comparison itself is case-insensitive (confirmed directly by the developer
+    /// during ADR 013's authoring — corrects an initial draft that wrongly extended Sources.Title's
+    /// case-sensitive precedent to Character).
+    /// </summary>
+    [TestMethod]
+    public async Task Migration_CharacterGlobalIdentity_MergesDespiteDifferingNameCasing()
+    {
+        var seriesId = Guid.NewGuid().ToString();
+        var (_, _, character1Id, character2Id) = await SeedPreMergeCharactersAsync(
+            name: "Gandalf", name2: "GANDALF", seriesId1: seriesId, seriesId2: seriesId);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var survivorCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Characters WHERE LOWER(Name) = 'gandalf' AND IsDeleted = 0;");
+        Assert.AreEqual(1, survivorCount, "Differing casing of the same Name must still merge — only storage preserves original casing, not the comparison");
+
+        var survivorName = await conn.ExecuteScalarAsync<string>(
+            "SELECT Name FROM Characters WHERE Id = @id;", new { id = character1Id });
+        Assert.AreEqual("Gandalf", survivorName, "The surviving row's own original casing must be preserved, never rewritten to match the merged-away row's casing");
+
+        var mergedAwayDeleted = await conn.ExecuteScalarAsync<int>(
+            "SELECT IsDeleted FROM Characters WHERE Id = @id;", new { id = character2Id });
+        Assert.AreEqual(1, mergedAwayDeleted);
+    }
+
+    [TestMethod]
+    public async Task Migration_CharacterGlobalIdentity_NeverMergesAcrossDifferingSourceType()
+    {
+        var seriesId = Guid.NewGuid().ToString();
+        await SeedPreMergeCharactersAsync(name: "Gandalf", type1: "Movie", type2: "Book",
+            seriesId1: seriesId, seriesId2: seriesId);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var survivorCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Characters WHERE Name = 'Gandalf' AND IsDeleted = 0;");
+        Assert.AreEqual(2, survivorCount, "A shared Series must never override the Source.Type anchor invariant (ADR 011)");
+    }
+
+    [TestMethod]
+    public async Task Migration_CharacterGlobalIdentity_LeavesUnrelatedSameNameRowsUnmergedWhenNoSeriesKnown()
+    {
+        await SeedPreMergeCharactersAsync(name: "Sam", seriesId1: null, seriesId2: null);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var survivorCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Characters WHERE Name = 'Sam' AND IsDeleted = 0;");
+        Assert.AreEqual(2, survivorCount, "Same Name, same Type, but no known Series relationship — conservative default must leave both rows separate");
+    }
+
+    [TestMethod]
+    public async Task Migration_CharacterGlobalIdentity_RepointsQuoteCharacterIdToMergedRow()
+    {
+        var seriesId = Guid.NewGuid().ToString();
+        var partialMigrations = QuotinatorMigrations.All.Take(10).ToList();
+        var db1 = CreateInitializer([], partialMigrations, useBaseline: false);
+        await db1.InitialiseForTestingAsync(forceIncremental: true);
+
+        var source1Id    = Guid.NewGuid().ToString();
+        var source2Id    = Guid.NewGuid().ToString();
+        var character1Id = Guid.NewGuid().ToString();
+        var character2Id = Guid.NewGuid().ToString();
+        var quoteId       = Guid.NewGuid().ToString();
+
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync(
+                "INSERT INTO Series (Id, Name, DateCreated, IsDeleted) VALUES (@id, @name, '2026-01-01 00:00:00', 0);",
+                new { id = seriesId, name = $"Series {seriesId}" });
+            await conn.ExecuteAsync(
+                "INSERT INTO Sources (Id, Title, Type, SeriesId, DateCreated, IsDeleted) VALUES (@id, 'Source One', 'Movie', @seriesId, '2026-01-01 00:00:00', 0);",
+                new { id = source1Id, seriesId });
+            await conn.ExecuteAsync(
+                "INSERT INTO Sources (Id, Title, Type, SeriesId, DateCreated, IsDeleted) VALUES (@id, 'Source Two', 'Movie', @seriesId, '2026-01-02 00:00:00', 0);",
+                new { id = source2Id, seriesId });
+            await conn.ExecuteAsync(
+                "INSERT INTO Characters (Id, Name, CompletenessStatus, DateCreated, IsDeleted) VALUES (@id, 'Gandalf', 'Incomplete', '2026-01-01 00:00:00', 0);",
+                new { id = character1Id });
+            await conn.ExecuteAsync(
+                "INSERT INTO Characters (Id, Name, CompletenessStatus, DateCreated, IsDeleted) VALUES (@id, 'Gandalf', 'Incomplete', '2026-01-02 00:00:00', 0);",
+                new { id = character2Id });
+            await conn.ExecuteAsync(
+                "INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated, IsDeleted) VALUES (@id, @characterId, @sourceId, '2026-01-01 00:00:00', 0);",
+                new { id = Guid.NewGuid().ToString(), characterId = character1Id, sourceId = source1Id });
+            await conn.ExecuteAsync(
+                "INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated, IsDeleted) VALUES (@id, @characterId, @sourceId, '2026-01-02 00:00:00', 0);",
+                new { id = Guid.NewGuid().ToString(), characterId = character2Id, sourceId = source2Id });
+            await conn.ExecuteAsync(
+                "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, DateCreated, IsDeleted) VALUES (@id, 'A line.', 'en', @sourceId, @characterId, '2026-01-02 00:00:00', 0);",
+                new { id = quoteId, sourceId = source2Id, characterId = character2Id });
+        }
+
+        var db2 = CreateInitializer([]);
+        await db2.InitialiseAsync();
+
+        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        await verifyConn.OpenAsync();
+
+        var resolvedCharacterId = await verifyConn.ExecuteScalarAsync<string>(
+            "SELECT CharacterId FROM Quotes WHERE Id = @id;", new { id = quoteId });
+        Assert.AreEqual(character1Id, resolvedCharacterId, "The quote's CharacterId must be re-pointed to the surviving row, not left dangling on the merged-away one");
+    }
+
+    [TestMethod]
+    public async Task Migration_CharacterGlobalIdentity_PreservesCompletenessStatusPerAlgorithm()
+    {
+        var seriesId = Guid.NewGuid().ToString();
+        var (_, _, character1Id, _) = await SeedPreMergeCharactersAsync(
+            seriesId1: seriesId, seriesId2: seriesId,
+            completeness1: "Incomplete", completeness2: "Complete");
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var survivorStatus = await conn.ExecuteScalarAsync<string>(
+            "SELECT CompletenessStatus FROM Characters WHERE Id = @id;", new { id = character1Id });
+        Assert.AreEqual("Complete", survivorStatus, "The most-reviewed CompletenessStatus across the merged group must win");
+    }
+
+    [TestMethod]
+    public async Task Migration_CharacterGlobalIdentity_BackfillsSourceTypeColumnFromLinkedSource()
+    {
+        var (_, _, character1Id, character2Id) = await SeedPreMergeCharactersAsync(
+            name: "Sam", type1: "Movie", type2: "Book", seriesId1: null, seriesId2: null);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var type1 = await conn.ExecuteScalarAsync<string>("SELECT SourceType FROM Characters WHERE Id = @id;", new { id = character1Id });
+        var type2 = await conn.ExecuteScalarAsync<string>("SELECT SourceType FROM Characters WHERE Id = @id;", new { id = character2Id });
+        Assert.AreEqual("Movie", type1);
+        Assert.AreEqual("Book", type2);
     }
 
     /// <summary>Every table added by #179 carries RecordBase's four audit columns — ADR 002 applies without exception, including the CharacterSources junction table.</summary>

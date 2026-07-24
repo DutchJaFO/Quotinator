@@ -63,7 +63,7 @@ public class ImportActionPlannerTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private static SourceQuote BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null, string quoteText = "Here's looking at you, kid.", string? date = null) => new()
+    private static SourceQuote BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null, string quoteText = "Here's looking at you, kid.", string? date = null, Core.Models.QuoteType type = Core.Models.QuoteType.Movie) => new()
     {
         Id               = id,
         QuoteText        = quoteText,
@@ -71,7 +71,7 @@ public class ImportActionPlannerTests
         Source           = source,
         Character        = character,
         Author           = author,
-        Type             = Core.Models.QuoteType.Movie,
+        Type             = type,
         Date             = date,
     };
 
@@ -101,7 +101,8 @@ public class ImportActionPlannerTests
         Assert.AreEqual(EntityIdentity.SourceId("Casablanca", "Movie"), sourceAction.EntityId);
 
         var characterAction = actions.Single(a => a.EntityType == "Character");
-        Assert.AreEqual(EntityIdentity.CharacterId(sourceAction.EntityId, "Rick Blaine"), characterAction.EntityId);
+        // #174/ADR 013: CharacterId's stable-id derivation is (sourceId, name, sourceType).
+        Assert.AreEqual(EntityIdentity.CharacterId(sourceAction.EntityId, "Rick Blaine", "Movie"), characterAction.EntityId);
 
         var personAction = actions.Single(a => a.EntityType == "Person");
         Assert.AreEqual(EntityIdentity.PersonId("Someone"), personAction.EntityId);
@@ -129,7 +130,8 @@ public class ImportActionPlannerTests
         var realPersonId    = Guid.NewGuid();
         await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
             new { Id = realSourceId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
-        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, DateCreated) VALUES (@Id, 'Rick Blaine', @now)",
+        // #174: Characters.SourceType is NOT NULL as of Migration011 (ADR 013).
+        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, SourceType, DateCreated) VALUES (@Id, 'Rick Blaine', 'Movie', @now)",
             new { Id = realCharacterId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
         // #179: Character<->Source is many-to-many via CharacterSources, not a Characters.SourceId column.
         await conn.ExecuteAsync("INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
@@ -150,6 +152,108 @@ public class ImportActionPlannerTests
         Assert.AreEqual(realSourceId.ToString("D"), payload.SourceId, "Must resolve to the real existing Source id, not a stable id");
         Assert.AreEqual(realCharacterId.ToString("D"), payload.CharacterId);
         Assert.AreEqual(realPersonId.ToString("D"), payload.PersonId);
+    }
+
+    // ── #174/ADR 013: Character global identity, Series-scoped cross-Source resolution ──────────
+
+    private async Task<string> SeedGlobalCharacterAsync(SqliteConnection conn, string name, string sourceId, string sourceType)
+    {
+        var characterId = Guid.NewGuid();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, SourceType, DateCreated) VALUES (@Id, @Name, @SourceType, @now)",
+            new { Id = characterId, Name = name, SourceType = sourceType, now });
+        await conn.ExecuteAsync("INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+            new { Id = Guid.NewGuid(), CharacterId = characterId, SourceId = sourceId, now });
+        return characterId.ToString("D");
+    }
+
+    private async Task<string> SeedSourceAsync(SqliteConnection conn, string title, string type = "Movie", string? seriesId = null)
+    {
+        var sourceId = Guid.NewGuid();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, SeriesId, DateCreated) VALUES (@Id, @Title, @Type, @SeriesId, @now)",
+            new { Id = sourceId, Title = title, Type = type, SeriesId = seriesId, now });
+        return sourceId.ToString("D");
+    }
+
+    [TestMethod]
+    public async Task ResolveCharacterAsync_ExistingGlobalCharacter_ReusesRealId()
+    {
+        using var conn = await OpenConnectionAsync();
+        var existingSourceId = await SeedSourceAsync(conn, "Existing Film");
+        var existingCharacterId = await SeedGlobalCharacterAsync(conn, "Gandalf", existingSourceId, "Movie");
+
+        var quote = BuildQuote("e1111111-1111-4111-8111-111111111111", source: "Existing Film", character: "Gandalf");
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "Already linked to this exact Source — silently reused, no Add staged");
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        Assert.AreEqual(existingCharacterId, payload.CharacterId);
+    }
+
+    /// <summary>ADR 013 Decision 7: a same-Name, same-Type Character already linked to a DIFFERENT Source that shares this quote's Source's Series must be reused, not duplicated.</summary>
+    [TestMethod]
+    public async Task ResolveCharacterAsync_SeriesScopedCrossSourceMatch_ReusesExistingCharacter()
+    {
+        using var conn = await OpenConnectionAsync();
+        var seriesId = await SeedExistingSeriesAsync(conn, "The Lord of the Rings");
+        var film1Id = await SeedSourceAsync(conn, "The Fellowship of the Ring", seriesId: seriesId);
+        var existingCharacterId = await SeedGlobalCharacterAsync(conn, "Gandalf", film1Id, "Movie");
+        await SeedSourceAsync(conn, "The Two Towers", seriesId: seriesId); // not directly referenced — proves the match isn't keyed off a specific pre-known Source row
+
+        var quote = BuildQuote("e2111111-1111-4111-8111-111111111111", source: "The Two Towers", character: "Gandalf");
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "A Series-scoped cross-Source match is reused directly, like the same-Source case");
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        Assert.AreEqual(existingCharacterId, payload.CharacterId, "Must resolve to the existing global Character, not stage a duplicate");
+    }
+
+    [TestMethod]
+    public async Task ResolveCharacterAsync_DifferingSourceType_NeverReusesExistingCharacter()
+    {
+        using var conn = await OpenConnectionAsync();
+        var seriesId = await SeedExistingSeriesAsync(conn, "Middle Earth Adaptations");
+        var movieSourceId = await SeedSourceAsync(conn, "The Fellowship of the Ring (Film)", type: "Movie", seriesId: seriesId);
+        await SeedGlobalCharacterAsync(conn, "Gandalf", movieSourceId, "Movie");
+        await SeedSourceAsync(conn, "The Fellowship of the Ring (Book)", type: "Book", seriesId: seriesId);
+
+        var quote = BuildQuote("e3111111-1111-4111-8111-111111111111", source: "The Fellowship of the Ring (Book)", character: "Gandalf", type: Core.Models.QuoteType.Book);
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Character"), "Source.Type anchor (ADR 011) must never be crossed, even within a shared Series");
+    }
+
+    [TestMethod]
+    public async Task ResolveCharacterAsync_NoKnownSeriesRelationship_CreatesSeparateCharacter()
+    {
+        using var conn = await OpenConnectionAsync();
+        var unrelatedSourceId = await SeedSourceAsync(conn, "An Unrelated Movie", seriesId: null);
+        await SeedGlobalCharacterAsync(conn, "Sam", unrelatedSourceId, "Movie");
+        await SeedSourceAsync(conn, "A Different Unrelated Movie", seriesId: null);
+
+        var quote = BuildQuote("e4111111-1111-4111-8111-111111111111", source: "A Different Unrelated Movie", character: "Sam");
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Character"), "Same Name, same Type, but no known Series relationship — conservative default must create a new, separate Character");
+    }
+
+    [TestMethod]
+    public async Task ResolveCharacterAsync_ExistingGlobalCharacter_CaseInsensitiveNameMatch_ReusesRealId()
+    {
+        using var conn = await OpenConnectionAsync();
+        var existingSourceId = await SeedSourceAsync(conn, "Existing Film");
+        var existingCharacterId = await SeedGlobalCharacterAsync(conn, "Gandalf", existingSourceId, "Movie");
+
+        var quote = BuildQuote("e5111111-1111-4111-8111-111111111111", source: "Existing Film", character: "GANDALF");
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "Name matching is case-insensitive — storage keeps original casing, comparison does not");
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        Assert.AreEqual(existingCharacterId, payload.CharacterId);
     }
 
     [TestMethod]
