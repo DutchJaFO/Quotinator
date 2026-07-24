@@ -1,15 +1,19 @@
 using System.Text;
 
-namespace Quotinator.Converters.Csv;
+namespace Quotinator.Data.Csv;
 
 /// <summary>
 /// Minimal RFC 4180 CSV parser — handles quoted fields containing commas, newlines, and escaped
-/// (<c>""</c>) quotes. No external dependency is justified for a flat, fixed-column format.
+/// (<c>""</c>) quotes. No external dependency is justified for a flat, fixed-column format. Shared
+/// between <c>Quotinator.Converters.Csv</c> (source-file import) and #163's bulk-decide export/import
+/// (developer decision: DRY, extracted rather than duplicated) — moved here from
+/// <c>Quotinator.Converters.Csv</c> so it is reachable from that project, <c>Quotinator.Core</c>, and
+/// <c>Quotinator.Api</c> alike.
 /// </summary>
-internal static class CsvLineParser
+public static class CsvLineParser
 {
     /// <summary>Parses <paramref name="content"/> into rows of raw string fields. The first row is not treated specially — callers decide which row is the header.</summary>
-    internal static List<List<string>> Parse(string content)
+    public static List<List<string>> Parse(string content)
     {
         var rows      = new List<List<string>>();
         var row       = new List<string>();

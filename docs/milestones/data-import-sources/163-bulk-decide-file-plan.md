@@ -311,7 +311,7 @@ today, kept only as the forward-compatibility guard requirement 5 describes.
 
 ### 8. CSV read/write — extract shared parser, add writer
 
-**Status:** Not started.
+**Status:** Done.
 
 Per resolved decision 3: extract `CsvLineParser`'s logic (`src/Quotinator.Converters.Csv/CsvLineParser.cs`)
 into a shared, non-`internal` location — `Quotinator.Data` (confirm final placement against existing
