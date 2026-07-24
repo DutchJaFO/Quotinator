@@ -3,7 +3,7 @@
 **Status:** Planning
 **GitHub issue:** #175
 **Tiers required:** T1, T2
-**Depends on:** #174 (must land first — see Notes)
+**Depends on:** #174
 
 ---
 
@@ -15,16 +15,19 @@
 2. New `CharacterEntry.cs` record in `Quotinator.Core.Import`, doc-commented like
    `PersonEntry`/`SourceEntry`. `ParsedSourceFile` gains `Characters` (defaults `[]`).
    `SourceQuoteFileReader.TryParseExtended` gains the new root-key parse.
-3. `Sql.Characters` (`src/Quotinator.Engine/Queries/Sql.cs`) gains `SelectExistingById` (returns
+3. `Sql.Characters` (`src/Quotinator.Core/Queries/Sql.cs`) gains `SelectExistingById` (returns
    `Name`, `CompletenessStatus`), `UpdateFieldsById`, `SelectCompletenessById`,
    `UpdateCompletenessById`.
-4. New `PlanCharactersAsync` (`src/Quotinator.Engine/Database/ImportActionPlanner.cs`), mirroring
+4. New `PlanCharactersAsync` (`src/Quotinator.Core/Database/ImportActionPlanner.cs`), mirroring
    #173's `PlanPeopleAsync` shape exactly: id-match lookup → field-map diff (`name` only) →
    unchanged-check → policy-based resolution → `CompletenessGuard.ShouldBlock` evaluated against
-   the policy-**resolved** value → stage `Blocked` or `Modify`. Falls back to
-   `Sql.Characters.SelectIdByName` (added by #174) when no id match. A character discovered only
-   implicitly through a Quote's `character` string (no explicit `characters[]` entry) stays
-   Add-only forever, same rule as Person.
+   the policy-**resolved** value → stage `Blocked` or `Modify`. **The natural-key fallback for a
+   no-id-match case is an open design question, not settled — see Notes.** #174 did not add a
+   simple `Sql.Characters.SelectIdByName`; it added `Sql.Characters.SelectGlobalCandidateId`, which
+   requires `sourceId`/`sourceType`/`seriesId` (ADR 013) — parameters a bare `characters[]` entry
+   (id + name only, per step 1) has no way to supply. A character discovered only implicitly
+   through a Quote's `character` string (no explicit `characters[]` entry) stays Add-only forever,
+   same rule as Person.
 5. `ApplyResolvedActionAsync`'s Character case splits on `ActionType`: `Add` unchanged; `Modify`
    calls the new `Sql.Characters.UpdateFieldsById`.
 6. `DecideAsync` gains an `EntityType == Character && ActionType == Modify` branch.
@@ -33,9 +36,11 @@
    soft-delete-if-unreferenced; `Modify` restores `Name` via `UpdateFieldsById` from
    `ExistingValue`.
 9. `ClearStaleAddTargetsAsync`'s Character cleanup branch switches from the Guid-typed repository
-   path to the raw-SQL, case-preserving pattern — same fix #162 made for Source and #173 will make
-   for Person, needed because an explicit `characters[]` id is file-authored and not guaranteed
-   uppercase.
+   path to the raw-SQL, case-preserving pattern — same fix #162 made for Source and #173 made for
+   Person — needed because an explicit `characters[]` id is file-authored and not guaranteed
+   canonically cased. **Whether this switch is still actually necessary for Character, given fixes
+   this session made to the underlying repository/query layer, is now an open question — see step
+   9's own note.**
 10. `ConflictDecisionRequest` gains `CharacterName` (nullable `FieldDecision?`).
 
 ---
@@ -50,9 +55,11 @@ Add a top-level `characters` array to `schemas/source-extended.schema.json` (sam
 as `sources`/`stageDirections`/`soundCues`/`conversations`) referencing a new `character` `$def`
 under `$defs`. Fields: `id` (required, UUID-v4 pattern, same regex as the other explicit-id
 `$def`s) and `name` (required). Deliberately **no** `sourceTitle`/`sourceType`/any Source linkage —
-once #174 lands, Character is source-independent, mirroring the (not-yet-added, #173-pending)
-`person` `$def`'s shape rather than the current `source` `$def`'s shape. Purely additive — a file
-without a `characters` section parses identically to today.
+Character is source-independent as of #174, mirroring the `person` `$def`'s shape (already shipped
+by #173, confirmed present in the schema during this review) rather than the `source` `$def`'s
+shape. Purely additive — a file without a `characters` section parses identically to today. **This
+id+name-only shape is exactly what step 4's Notes flag as the source of the open no-id-match design
+question — revisit this step too if that question resolves toward widening the schema.**
 
 ### 2. `CharacterEntry.cs` DTO and reader wiring
 
@@ -70,18 +77,27 @@ four/five-section pattern (`sources`, `stageDirections`, `soundCues`, `conversat
 
 **Status:** Not started.
 
-Add to the `Sql.Characters` nested class in `src/Quotinator.Engine/Queries/Sql.cs`:
+Add to the `Sql.Characters` nested class in `src/Quotinator.Core/Queries/Sql.cs`:
 - `SelectExistingById` — `SELECT Name, CompletenessStatus FROM Characters WHERE Id = @id AND IsDeleted = 0;`
-  (mirrors `Sql.Sources.SelectExistingById`'s shape, minus `Title`/`Type`/`Date`).
+  (mirrors `Sql.Sources.SelectExistingById`'s shape, minus `Title`/`Type`/`Date`). Correctly scoped
+  to id-only lookup — `SourceType` is immutable after creation (ADR 013 Decision 9's remark on
+  `EnsureCharacterExistsAsync`) and this issue never exposes it as a Modify-able field, so this
+  query doesn't need to read or compare it.
 - `UpdateFieldsById` — `UPDATE Characters SET Name = @name, DateModified = @dateModified WHERE Id = @id;`
   (mirrors `Sql.Sources.UpdateFieldsById`; never touches `CompletenessStatus`/`NoValueKnown` — see
   its own remark on `UpdateCompletenessById` for why that's separate).
 - `SelectCompletenessById` / `UpdateCompletenessById` — same shape as `Sql.Sources`'s and
   `Sql.Quotes`'s own pair, used by `ApplyCompletenessAsync`'s existing before/after read-and-write.
 
-This step assumes `#174` has already added `Sql.Characters.SelectIdByName` (replacing today's
-`SelectIdBySourceAndName`) as part of its own natural-key fallback — this issue only adds the four
-id-keyed queries above, not the natural-key one.
+**This step's own original assumption was wrong, found during this review (2026-07-24):** it
+previously said "#174 has already added `Sql.Characters.SelectIdByName`... this issue only adds the
+four id-keyed queries above, not the natural-key one." #174 did not add any such method. It added
+`Sql.Characters.SelectGlobalCandidateId(sourceId, name, sourceType, seriesId)` (ADR 013 Decision 7)
+— a lookup that requires Source context, not a bare Name lookup, because Character's identity is no
+longer simply global-by-Name the way Person's is (two different Characters can legitimately share a
+Name when no Series connects their Sources — ADR 013 Decision 5/6). **This step alone doesn't
+resolve step 4's fallback question — see Notes for why a real design decision is needed before
+implementation starts, not just a rename.**
 
 ### 4. `PlanCharactersAsync` in `ImportActionPlanner.cs`
 
@@ -91,14 +107,31 @@ New private method mirroring `PlanSourcesAsync`'s control flow (id-match → fie
 early-continue → policy-resolved value → `CompletenessGuard.ShouldBlock` against the *resolved*
 diff, per #168's rule → `Blocked`/`Modify`/`Pending` per policy), but with a single-field
 (`name`-only) field map instead of Source's three-field one — the same simplification #173's
-`PlanPeopleAsync` is expected to make relative to `PlanSourcesAsync`. Falls back to
-`Sql.Characters.SelectIdByName` (added by #174) when no id-match, same natural-key-fallback
-contract `PlanSourcesAsync` already has for `Sql.Sources.SelectIdByTitleAndType`. Called from
-`PlanAsync` alongside the existing `PlanSourcesAsync`/`PlanStageDirectionsAsync`/etc. calls, indexing
-into the same `characterIndex` dictionary `ResolveCharacterAsync` already populates/consults, so a
-same-batch quote referencing an explicitly-declared character resolves to the corrected id (same
-gap `PlanSourcesAsync_QuoteReferencesExplicitlyDeclaredSource_ResolvesToItsId` caught for Source in
+`PlanPeopleAsync` made relative to `PlanSourcesAsync`. Called from `PlanAsync` alongside the
+existing `PlanSourcesAsync`/`PlanStageDirectionsAsync`/etc. calls, indexing into the same
+`characterIndex` dictionary `ResolveCharacterAsync` already populates/consults, so a same-batch
+quote referencing an explicitly-declared character resolves to the corrected id (same gap
+`PlanSourcesAsync_QuoteReferencesExplicitlyDeclaredSource_ResolvesToItsId` caught for Source in
 #162).
+
+**No-id-match fallback — open design question, not decided by this plan doc (found during this
+review, 2026-07-24):** the original text here said this method "falls back to
+`Sql.Characters.SelectIdByName`... when no id-match, same natural-key-fallback contract
+`PlanSourcesAsync` already has." That method doesn't exist, and a simple Name-only lookup would be
+semantically wrong even if it did — see step 3's note. Concretely, when a `characters[]` entry's
+declared id matches no existing row, `PlanCharactersAsync` has no Source/Type/Series context to run
+ADR 013's real matching algorithm against, because step 1's schema (id + name only) never carries
+that context. Two candidate resolutions, neither decided here:
+  - Drop the natural-key fallback entirely — a `characters[]` entry is only ever for *correcting* an
+    already-known Character (this issue's own title: "explicit id, Modify/decidability"), never for
+    creating one; a Character can only ever come into existence via `ResolveCharacterAsync`'s
+    Source-driven flow (`EnsureCharacterExistsAsync` always requires a `sourceId`/`sourceType`). An
+    id that matches nothing would then be an error or a no-op, not an Add.
+  - Widen step 1's schema to carry enough Source/Series context for a `characters[]` entry to
+    participate in real ADR 013 matching — a much bigger scope change than this issue currently
+    describes.
+  Whoever picks this issue up next must settle this before writing `PlanCharactersAsync`, not
+  assume the original "same as Source/Person" framing still holds.
 
 A character discovered only implicitly through `SourceQuote.Character` (no matching
 `characters[]` entry) is never touched by this method and stays Add-only via the existing
@@ -146,13 +179,31 @@ restores `Name` via `Sql.Characters.UpdateFieldsById` from `ExistingValue`, with
 check (a Modify reversal never deletes anything) — same shape as the existing Source `Modify` branch
 in this same method.
 
-**`Add` is *not* unchanged — it also needs the raw-SQL, case-preserving fix.** #173's own plan doc
-originally said the same thing this step used to say ("keep today's soft-delete-if-unreferenced
-behaviour unchanged") and was wrong: found live via T2 that
-`_personRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow)` has the identical
-case-sensitivity bug as `ClearStaleAddTargetsAsync` (step 9) — `GuidHandler` force-uppercases the
-parameter before binding, so it silently matches zero rows against a lowercase-stored explicit id,
-and the reversal becomes a no-op that looks like it worked. Switch this branch to
+**`Add` is *not* unchanged — it also needs the raw-SQL, case-preserving fix — but this whole
+premise needs live re-verification before implementing, not blind trust in this text (found during
+this review, 2026-07-24, and deliberately not resolved here).** #173's own plan doc originally said
+the same thing this step used to say ("keep today's soft-delete-if-unreferenced behaviour
+unchanged") and was wrong: found live via T2 that
+`_personRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow)` had the identical
+case-sensitivity bug as `ClearStaleAddTargetsAsync` (step 9) at the time #173 shipped — `GuidHandler`
+then force-*uppercased* the parameter (stale direction; #210's later system-wide lowercase revision
+flipped this to force-*lowercase*, per ADR 012's final form).
+
+**Traced live during this review, not just corrected for casing direction:** `SqliteRepository<T>.
+SoftDeleteAsync`/`SqliteRestorableRepository<T>.HardDeleteAsync` (`src/Quotinator.Data/Repositories/
+SqliteRepository.cs`, `SqliteRestorableRepository.cs`) already call `id.ToCanonicalId()` explicitly
+before binding, and the `RepositorySql.SoftDelete`/`HardDelete` queries they call already wrap the
+id comparison in `IdClauses.Equals` (case-insensitive `LOWER(...) = LOWER(...)`) — both fixed by
+this session's #200–205 (`RepositorySql` → `IdClauses`) and #176–178 (`ToCanonicalId()` choke point)
+work, which postdates #173's own incident. Tracing the code suggests the Guid-typed repository path
+may now be safe regardless of input casing — but this is a code trace, not a passing test, and this
+plan doc has already been burned once by an untested assumption in this exact spot (that's the whole
+reason step 8 exists in the first place). **Do not silently keep or silently remove the raw-SQL
+switch based on this trace — write `ReverseBatchAsync_CharacterAdd_ExplicitLowercaseId_
+SoftDeletesCorrectly` (verification row 10) against the *unmodified* repository-path code first; if
+it already passes, the raw-SQL switch below may be unnecessary for Character specifically (though
+still worth keeping for consistency with Source/Person's own already-shipped fix) — record the
+actual result before deciding, don't assume either way.** If a raw-SQL switch is still made, use:
 `sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Characters"), new { now, id = action.EntityId }, sqliteTransaction)`
 — the same raw-SQL pattern Source's own `Add` reversal already uses — from the start, rather than
 finding the gap the hard way via this issue's own T2 pass. See
@@ -174,10 +225,23 @@ foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.C
 ```
 
 This is the Guid-typed repository path — safe today only because every Character Add id is
-currently `EntityIdentity`-derived (always uppercase by construction). An explicit `characters[]`
-id is file-authored and not guaranteed uppercase, the same gap #162 found and fixed for Source and
-#173 has now actually fixed for Person (`SqliteImportActionService.cs`'s `ClearStaleAddTargetsAsync`
-Person branch, committed `8756b37`). Switch to the raw-SQL, case-preserving pattern already used for
+currently `EntityIdentity`-derived (always canonical by construction, per ADR 012 — corrected from
+this text's original "always uppercase," stale since #210's system-wide lowercase revision). An
+explicit `characters[]` id is file-authored and not guaranteed canonically cased, the same gap #162
+found and fixed for Source and #173 has now actually fixed for Person (`SqliteImportActionService.cs`'s
+`ClearStaleAddTargetsAsync` Person branch, committed `8756b37`).
+
+**Same re-verification caveat as step 8 above, traced during this review (2026-07-24) — do not
+assume the raw-SQL switch is still needed without checking.** `SqliteRestorableRepository<T>.
+HardDeleteAsync` already calls `id.ToCanonicalId()` before binding, and `RepositorySql.HardDelete`
+already wraps its comparison in `IdClauses.Equals` — both fixed since #173's own incident. The
+"proposed fix" below binds `action.EntityId` (already canonicalized at #175's own capture point, per
+ADR 012) as a raw string with no further C#-side canonicalization, relying entirely on
+`IdClauses.Equals`'s SQL-level `LOWER()` wrapping — which the repository path *also* goes through,
+via the same `RepositorySql.HardDelete` string. Tracing the code, both paths appear equally safe
+today; write `ClearStaleAddTargetsAsync_CharacterExplicitLowercaseId_HardDeletesCorrectly`
+(verification row 9) against the *unmodified* repository-path code first and record the actual
+result, same as step 8. If a raw-SQL switch is still made, use the pattern already used for
 Source/Conversation/StageDirection/SoundCue/Person:
 `quoteConn.ExecuteAsync(RepositorySql.HardDelete("Characters"), new { id = action.EntityId })`.
 
@@ -199,15 +263,15 @@ Character-specific decision-map builder used by step 6/7 above.
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ❌ | A file without a `characters` section parses identically to today | Unit test | `Quotinator.Core.Tests.SourceQuoteFileReader_CharactersSection_ParsesCorrectly` |
-| 2 | ❌ | An id-match with a differing `name` stages a `Modify` action | Unit test | `Quotinator.Engine.Tests.PlanCharactersAsync_IdMatchFound_NameDiffers_StagesModifyAction` |
-| 3 | ❌ | An id-match with nothing changed stages no action | Unit test | `Quotinator.Engine.Tests.PlanCharactersAsync_IdMatchFound_NothingChanged_NoActionStaged` |
-| 4 | ❌ | No id-match falls back to the natural-key (`Name`-only) lookup | Unit test | `Quotinator.Engine.Tests.PlanCharactersAsync_NoIdMatch_FallsBackToNaturalKey_NoActionStaged` |
-| 5 | ❌ | A `Complete`-status id-matched row stages `Blocked`, not `Modify` | Unit test | `Quotinator.Engine.Tests.PlanCharactersAsync_CompleteStatus_StagesBlockedNotModify` |
-| 6 | ❌ | A `Complete`-status row under `Skip` policy never blocks (#168 rule) | Unit test | `Quotinator.Engine.Tests.PlanCharactersAsync_CompleteStatus_SkipPolicy_DoesNotBlock` |
-| 7 | ❌ | Decide endpoint accepts a Character `Modify` field decision | Unit test | `Quotinator.Engine.Tests.DecideAsync_CharacterModify_ResolvesFieldDecisions` |
-| 8 | ❌ | Reversing a Character `Modify` restores `ExistingValue`'s `Name` | Unit test | `Quotinator.Engine.Tests.ReverseBatchAsync_CharacterModify_RestoresExistingValue` |
-| 9 | ❌ | A lowercase-authored explicit Character id hard-deletes correctly on stale-Add cleanup | Unit test | `Quotinator.Engine.Tests.ClearStaleAddTargetsAsync_CharacterExplicitLowercaseId_HardDeletesCorrectly` |
-| 10 | ❌ | A lowercase-authored explicit Character id soft-deletes correctly when its `Add` action is reversed (the second of #173's two-call-site case-sensitivity fix — see step 8) | Unit test | `Quotinator.Engine.Tests.ReverseBatchAsync_CharacterAdd_ExplicitLowercaseId_SoftDeletesCorrectly` |
+| 2 | ❌ | An id-match with a differing `name` stages a `Modify` action | Unit test | `Quotinator.Core.Tests.PlanCharactersAsync_IdMatchFound_NameDiffers_StagesModifyAction` |
+| 3 | ❌ | An id-match with nothing changed stages no action | Unit test | `Quotinator.Core.Tests.PlanCharactersAsync_IdMatchFound_NothingChanged_NoActionStaged` |
+| 4 | ❌ | No-id-match behaviour — **not decided, see step 4's Notes** | Unit test | Test name/shape depends on which of step 4's two open options is chosen; `PlanCharactersAsync_NoIdMatch_FallsBackToNaturalKey_NoActionStaged` (the original name) assumed a resolution this review found unsupported by #174's actual implementation |
+| 5 | ❌ | A `Complete`-status id-matched row stages `Blocked`, not `Modify` | Unit test | `Quotinator.Core.Tests.PlanCharactersAsync_CompleteStatus_StagesBlockedNotModify` |
+| 6 | ❌ | A `Complete`-status row under `Skip` policy never blocks (#168 rule) | Unit test | `Quotinator.Core.Tests.PlanCharactersAsync_CompleteStatus_SkipPolicy_DoesNotBlock` |
+| 7 | ❌ | Decide endpoint accepts a Character `Modify` field decision | Unit test | `Quotinator.Core.Tests.DecideAsync_CharacterModify_ResolvesFieldDecisions` |
+| 8 | ❌ | Reversing a Character `Modify` restores `ExistingValue`'s `Name` | Unit test | `Quotinator.Core.Tests.ReverseBatchAsync_CharacterModify_RestoresExistingValue` |
+| 9 | ❌ | A lowercase-authored explicit Character id hard-deletes correctly on stale-Add cleanup | Unit test | `Quotinator.Core.Tests.ClearStaleAddTargetsAsync_CharacterExplicitLowercaseId_HardDeletesCorrectly` |
+| 10 | ❌ | A lowercase-authored explicit Character id soft-deletes correctly when its `Add` action is reversed (the second of #173's two-call-site case-sensitivity fix — see step 8) | Unit test | `Quotinator.Core.Tests.ReverseBatchAsync_CharacterAdd_ExplicitLowercaseId_SoftDeletesCorrectly` |
 | 11 | ❌ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release` → all projects passing |
 | 12 | ❌ | Live: a `characters[]` correction is staged/decided/applied via `POST /api/v1/import`, and a `Complete` Character's `name` cannot be silently overwritten | Live (T2) | Docker smoke test against `docker build -f docker/Dockerfile -t quotinator:local .`, same shape as #162's own T2 row: stage/decide/apply an explicit-`characters[]` `Modify`; separately confirm a `Complete` Character under `Skip` policy is not blocked; additionally, exercise a lowercase-id Add → reverse → re-add cycle live and confirm the row's `IsDeleted` flag actually flips (not just assumed) between steps, matching #173's own T2 canary for this exact bug class |
 | 13 | ❌ | App still opens and builds in Visual Studio after the schema/migration surface from #174 this issue builds on | Live (T1) | Developer's own Visual Studio pass — app starts cleanly, database reset/reseed both succeed |
@@ -217,22 +281,47 @@ Character-specific decision-map builder used by step 6/7 above.
 ## Notes
 
 T1 and T2 are both required — per this project's blanket rule (no exemption for a change with real
-C# logic and a data-model surface). **This issue cannot start until #174 lands.** Its exact
-technical specifics — the new `Sql.Characters` query shapes beyond what's listed here,
-`EntityIdentity.CharacterId`'s post-migration signature, `ResolveCharacterAsync`'s replacement, and
-whatever `CharacterActionPayload` ends up carrying once its `SourceId`/`SourceTitle`/`SourceType`
-fields are audited — depend on decisions #174 makes as part of its own ADR and migration design,
-which are deliberately not finalized yet (#174's own issue body: "The exact merge algorithm is this
-issue's own design work — it was deliberately not decided during planning"). This plan doc describes
-the intended shape assuming #174 lands as scoped (global, `Name`-keyed, no `SourceId`) — revisit
-this plan doc's specifics if #174's actual implementation differs from that assumption.
+C# logic and a data-model surface).
 
-**Reconciled against #173's actual shipped implementation (2026-07-14), now that it exists.** This
-plan doc's original projection matches what #173 actually shipped on every point already checked:
+**#174 has now landed (2026-07-24) — this issue is unblocked, but its actual shipped shape differs
+from what this plan doc originally assumed, and one open design question blocks starting
+implementation.** This plan doc's own Background/spec framing said "once Character is global (no
+`SourceId`), this issue is structurally a near-copy of Person's own... issue — no linkage/scoping
+design question remains, since Character now shares Person's exact shape — a single global entity
+keyed by `Name`." **That premise is false as shipped.** #174's ADR 013 settled on a
+Type-anchored, Series-scoped identity, not a flat global-by-Name one like Person's: two Characters
+with the same Name can legitimately remain separate rows when their Sources don't share a Series.
+`EntityIdentity.CharacterId` gained a third parameter (`sourceType`), not the two-parameter
+`(name, sourceType)` this plan doc's own step 3/4 originally speculated. `Sql.Characters` gained
+`SelectGlobalCandidateId(sourceId, name, sourceType, seriesId)`, not a simple `SelectIdByName`.
+`CharacterActionPayload` needed **no changes at all** (ADR 013 Decision 9) — the plan doc's step 5
+already correctly anticipated this as a possible outcome ("this step assumes that shape is already
+in place"), so no correction was needed there. See `docs/architecture-decisions/
+013-character-merge-algorithm.md` for the full algorithm.
+
+**The consequence for this issue: step 4's no-id-match fallback is a genuine open design question,
+not a mechanical port of Person's shape — see step 4's own note.** A bare `characters[]` entry (id +
+name only, per step 1) carries no Source/Type/Series context, so it cannot run ADR 013's real
+matching algorithm if its declared id doesn't match an existing row. Whoever picks this issue up
+next must settle this — drop the fallback entirely (an unmatched id is an error/no-op, since Character
+can now only ever be *created* via `ResolveCharacterAsync`'s Source-driven flow) or widen step 1's
+schema to carry Source/Series context — before writing `PlanCharactersAsync`.
+
+**Also found during this review: steps 8/9's prescribed raw-SQL fix may already be moot, not just
+mis-explained.** Tracing `SqliteRepository<T>.SoftDeleteAsync`/`SqliteRestorableRepository<T>.
+HardDeleteAsync` shows both already call `id.ToCanonicalId()` before binding, and the
+`RepositorySql.SoftDelete`/`HardDelete` queries they call already wrap the id comparison in
+`IdClauses.Equals` — both fixed by this session's #200–205/#176–178 work, which postdates #173's own
+incident this plan doc's steps 8/9 are built on. This is a code trace, not a passing test — see
+steps 8/9's own notes for the exact re-verification each needs before deciding whether the raw-SQL
+switch is still necessary for Character.
+
+**Reconciled against #173's actual shipped implementation (2026-07-14).** This plan doc's original
+projection matches what #173 actually shipped on every point already checked:
 `PlanPeopleAsync`'s id-match/natural-key-fallback/`personIndex`-threading shape (direct template for
-`PlanCharactersAsync`, step 4), `ConflictDecisionRequest`'s per-field-decision naming convention
+`PlanCharactersAsync`, step 4 — though the fallback's own target query turned out different, see
+above), `ConflictDecisionRequest`'s per-field-decision naming convention
 (`PersonName`/`PersonDateOfBirth`/`PersonDateOfDeath` → this issue's own `CharacterName`), the
 `ToPersonDecisionMap`/`ToFieldMap` helper pattern, plain-`string?` payload fields (never `SafeValue`,
 matching `Source.Date`'s convention), and the `ApplyCompletenessAsync` wiring in the `Modify` apply
-branch (step 5). **The one place the projection was wrong is steps 8/9 above** — the case-sensitivity
-fix needed at two call sites, not the one originally listed. That gap is now closed in this doc.
+branch (step 5).
