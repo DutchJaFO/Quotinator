@@ -1271,6 +1271,84 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    "Import and staged-action review workflow" section above) to confirm the fix didn't break the happy
    path — still `200`.
 
+   **Character Modify/decidability via the widened `characters[]` schema, explicit-id-honoured-on-Add,
+   case-insensitive Source natural-key matching** (#175) — before this issue, `characters[]` only ever
+   supported Correction (`id` present, matched by id) or brand-new-via-natural-key; there was no way to
+   correct an existing Character's `Name` through the staging/decide pipeline the way Source/Person/
+   StageDirection/SoundCue already could. The widened schema adds `sourceTitle`/`sourceType` (required
+   unconditionally, mirroring `source`'s own shape) so a no-id entry can resolve through ADR 013's real
+   Type-anchored, Series-scoped matching algorithm rather than a bare Name lookup. Also proves a real
+   T2-only bug this issue's own re-verification pass found and fixed: an explicit `characters[]` id that
+   matches nothing was being silently discarded in favour of a freshly-computed `EntityIdentity`-derived
+   id — unlike `PlanSourcesAsync`'s own established `canonicalId ?? EntityIdentity.SourceId(...)`
+   precedent, which a unit-test-only pass would not have caught (the unit suite's own two tests for this
+   were written and initially passed against the *bug*, since they never independently verified which id
+   actually landed in the database — the T2 walkthrough below is what surfaces it).
+   ```bash
+   cat > .claude/temp/smoke-175-add.json <<'EOF'
+   {
+     "quotes": [{"id":"a1111175-0000-4000-8000-000000000001","quote":"A #175 smoke test creation quote.","originalLanguage":"en","source":"Airplane!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+     "characters": [{"name":"Smoke Test New Character","sourceTitle":"Airplane!","sourceType":"movie"}]
+   }
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-add.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+   ```
+   Must return `200`. `GET /api/v1/masterdata/characters` must now include "Smoke Test New Character"
+   linked to the existing `Airplane!` Source (no id supplied — resolved via ADR 013's algorithm finding
+   no candidate, then a genuine Add). Next, correct an existing Character by id under `review`:
+   ```bash
+   cat > .claude/temp/smoke-175-modify.json <<'EOF'
+   {
+     "quotes": [{"id":"a1111175-0000-4000-8000-000000000002","quote":"A #175 smoke test modify-trigger quote.","originalLanguage":"en","source":"Airplane!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+     "characters": [{"id":"<an existing Character id from the query above>","name":"Renamed Via Smoke Test","sourceTitle":"Airplane!","sourceType":"movie"}]
+   }
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-modify.json" -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+   ```
+   Must return `202` with one pending id, and `GET /api/v1/import/actions?status=pending` must show
+   `"ambiguousFields":["name"]` only — not `sourceId`, confirming the Modify payload's unchanged
+   `SourceId` doesn't spuriously trip `FieldMergeResolver`. Decide and apply:
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" -d '{"characterName":{"choice":"replace"},"markCompletenessAs":"Complete"}' "http://localhost:8080/api/v1/import/actions/<id>/decide"
+   curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+   curl -s "http://localhost:8080/api/v1/masterdata/characters/<id>"
+   ```
+   `name` must read "Renamed Via Smoke Test" and `completenessStatus` must be `Complete`. Re-attempt
+   another Modify against the same id under `review` — must now stage `Blocked`, not `Pending`
+   (`GET /api/v1/import/actions?status=Blocked`), and the on-disk name must be unchanged, proving a
+   `Complete` Character can no longer be silently overwritten (the same guarantee Source/Person/
+   StageDirection/SoundCue already have). Next, the explicit-id-honoured-on-Add fix itself:
+   ```bash
+   cat > .claude/temp/smoke-175-explicit-add.json <<'EOF'
+   {
+     "quotes": [{"id":"a1111175-0000-4000-8000-000000000005","quote":"A #175 smoke test explicit-id-add quote.","originalLanguage":"en","source":"Airplane!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+     "characters": [{"id":"F5111175-0000-4000-8000-000000000175","name":"Explicit Id Character","sourceTitle":"Airplane!","sourceType":"movie"}]
+   }
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-explicit-add.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/characters/f5111175-0000-4000-8000-000000000175"
+   ```
+   The import's own file uses the id in uppercase; the masterdata lookup uses the canonical lowercase
+   form. Both must succeed, and the returned `id` must be the lowercase-canonicalized form of the file's
+   own id — never an unrelated `EntityIdentity`-derived one. Finally, the case-insensitive Source
+   natural-key fix (`Sql.Sources.SelectIdByTitleAndType`/`SelectExistingByTitleAndType`):
+   ```bash
+   cat > .claude/temp/smoke-175-source-casing.json <<'EOF'
+   {
+     "quotes": [{"id":"a1111175-0000-4000-8000-000000000006","quote":"A #175 smoke test source-casing quote.","originalLanguage":"en","source":"AIRPLANE!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+     "characters": [{"name":"Case Insensitive Source Character","sourceTitle":"AIRPLANE!","sourceType":"movie"}]
+   }
+   EOF
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-source-casing.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+   curl -s "http://localhost:8080/api/v1/masterdata/sources?pageSize=500"
+   ```
+   Despite `AIRPLANE!` appearing in both the quote's own `source` and the character's `sourceTitle`,
+   there must still be exactly one `"title":"Airplane!"` row in the Sources list — proving the entry
+   resolved to the pre-existing Source rather than creating a case-sensitive duplicate. Clean up:
+   ```bash
+   rm -f .claude/temp/smoke-175-*.json
+   ```
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle

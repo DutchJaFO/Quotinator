@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-24 15:54 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-24 18:39 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Pagination is now consistent across every list endpoint: requesting more than 500 items at once is rejected instead of silently limited, and requesting every matching item as one page (`pageSize=0`) works the same way everywhere.
 - Most films, shows, and other sources shown by quotes now include a release date — previously this was almost always left blank.
 - A character who appears across multiple entries in the same series (like a recurring character in a trilogy) is now recognised as the same character instead of being tracked separately for each entry, as long as they're the same type of media.
+- A character's name can now be corrected after the fact too, the same way a source's, person's, stage direction's, sound cue's, and conversation's details already could.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -85,6 +86,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New `GET /api/v1/conversations` endpoint lists conversations, paginated
 - New `GET /api/v1/masterdata/stagedirections` and `.../stagedirections/{id}` endpoints list and look up stage directions individually
 - New `GET /api/v1/masterdata/soundcues` and `.../soundcues/{id}` endpoints list and look up sound cues individually
+- `characters[]` entries can now stage a `Modify` action instead of only ever being added once — matched by an optional explicit id, or resolved via the same type-anchored, series-scoped matching algorithm used to recognise a character across sources, using a new `sourceTitle`/`sourceType` pair on the entry; the same policy-resolved diff and completeness-guard blocking every other correctable entity already uses (issue #175)
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
@@ -130,6 +132,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - An internal import-batch bookkeeping field didn't follow the naming pattern the id-consistency work above relies on to find and protect id columns automatically — renamed for consistency; the field was not yet used anywhere, so there is no other observable change (issue #213)
 - The internal test suite's automatic id-consistency checks previously relied on developers remembering to list certain internal query-building methods by hand; they are now discovered and checked automatically instead — a purely internal test-coverage improvement with no user-facing or behaviour change (issue #214)
 - A related internal query-joining mechanism was only automatically checked for one of the three internal safety checks the rest of the codebase applies everywhere else; it is now checked for all three, closing the last remaining gap of this kind — a purely internal test-coverage improvement with no user-facing or behaviour change (issue #215)
+- Matching a source by its title and type during import was case-sensitive, so re-importing the same source with different letter casing (e.g. from a differently-formatted file) could create a duplicate instead of updating the existing one; matching is now case-insensitive, consistent with how every other identifier in the system is already matched (issue #175)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`

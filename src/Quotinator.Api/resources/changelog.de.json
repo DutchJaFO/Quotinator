@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 174, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214, 215],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214, 215],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -33,7 +33,8 @@
       "Das Korrigieren einer Quelle, Person, Regieanweisung, eines Toncues oder einer Konversation durch erneuten Import ändert jetzt nur die Felder, die die Datei tatsächlich angibt — ein weggelassenes Feld wird nicht mehr stillschweigend auf leer zurückgesetzt.",
       "Die Paginierung ist jetzt bei jedem Listen-Endpunkt konsistent: Das Anfordern von mehr als 500 Elementen auf einmal wird abgelehnt statt stillschweigend begrenzt, und das Anfordern aller passenden Elemente als eine Seite (`pageSize=0`) funktioniert überall gleich.",
       "Die meisten Filme, Serien und anderen Quellen, die bei Zitaten angezeigt werden, enthalten jetzt ein Erscheinungsdatum — zuvor war dieses Feld fast immer leer.",
-      "Ein Charakter, der in mehreren Teilen derselben Reihe vorkommt (etwa ein wiederkehrender Charakter in einer Trilogie), wird jetzt als derselbe Charakter erkannt, statt pro Teil separat erfasst zu werden, solange es sich um denselben Medientyp handelt."
+      "Ein Charakter, der in mehreren Teilen derselben Reihe vorkommt (etwa ein wiederkehrender Charakter in einer Trilogie), wird jetzt als derselbe Charakter erkannt, statt pro Teil separat erfasst zu werden, solange es sich um denselben Medientyp handelt.",
+      "Der Name eines Charakters kann jetzt ebenfalls nachträglich korrigiert werden, genau wie es bei einer Quelle, einer Person, einer Regieanweisung, einem Toncue und einem Dialog bereits möglich war."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -86,7 +87,8 @@
       "Neue Endpunkte `GET /api/v1/masterdata/universes` und `.../universes/{id}` listen Universen einzeln auf und schlagen sie nach",
       "Neuer Endpunkt `GET /api/v1/conversations` listet Konversationen paginiert auf",
       "Neue Endpunkte `GET /api/v1/masterdata/stagedirections` und `.../stagedirections/{id}` listen Regieanweisungen einzeln auf und schlagen sie nach",
-      "Neue Endpunkte `GET /api/v1/masterdata/soundcues` und `.../soundcues/{id}` listen Toncues einzeln auf und schlagen sie nach"
+      "Neue Endpunkte `GET /api/v1/masterdata/soundcues` und `.../soundcues/{id}` listen Toncues einzeln auf und schlagen sie nach",
+      "`characters[]`-Einträge können jetzt eine `Modify`-Aktion auslösen, statt immer nur neu angelegt zu werden — zugeordnet über eine optionale explizite ID oder über denselben typverankerten, reihenbegrenzten Abgleichsalgorithmus, der einen Charakter über Quellen hinweg erkennt, mithilfe eines neuen `sourceTitle`/`sourceType`-Paars am Eintrag; derselbe richtliniengesteuerte Abgleich und dieselbe Vollständigkeitssperre, die jede andere korrigierbare Entität bereits verwendet (Issue #175)"
     ],
     "changed": [
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",
@@ -131,7 +133,8 @@
       "Interne Abfragen der Importbatch-Buchhaltung lasen jede Spalte implizit statt namentlich — die letzte offene Stelle der oben genannten ID-Konsistenzarbeit — behoben ohne weitere sichtbare Auswirkung, da die betroffene ID bereits korrekt angezeigt wurde (Issue #212)",
       "Ein internes Feld der Importbatch-Buchhaltung folgte nicht der Namenskonvention, auf die sich die oben genannte ID-Konsistenzarbeit stützt, um ID-Spalten automatisch zu erkennen und zu schützen — zur Konsistenz umbenannt; das Feld wurde bisher nirgends verwendet, daher gibt es keine weitere sichtbare Auswirkung (Issue #213)",
       "Die automatischen ID-Konsistenzprüfungen der internen Testsuite waren bisher darauf angewiesen, dass Entwickler bestimmte interne Query-Bau-Methoden von Hand eintrugen; sie werden jetzt automatisch erkannt und geprüft — eine rein interne Verbesserung der Testabdeckung ohne Auswirkung auf Nutzer oder Verhalten (Issue #214)",
-      "Ein verwandter interner Mechanismus zum Verknüpfen von Abfragen wurde automatisch nur bei einer der drei internen Sicherheitsprüfungen berücksichtigt, die im restlichen Code überall angewendet werden; er wird jetzt bei allen drei geprüft, womit die letzte verbleibende Lücke dieser Art geschlossen ist — eine rein interne Verbesserung der Testabdeckung ohne Auswirkung auf Nutzer oder Verhalten (Issue #215)"
+      "Ein verwandter interner Mechanismus zum Verknüpfen von Abfragen wurde automatisch nur bei einer der drei internen Sicherheitsprüfungen berücksichtigt, die im restlichen Code überall angewendet werden; er wird jetzt bei allen drei geprüft, womit die letzte verbleibende Lücke dieser Art geschlossen ist — eine rein interne Verbesserung der Testabdeckung ohne Auswirkung auf Nutzer oder Verhalten (Issue #215)",
+      "Der Abgleich einer Quelle anhand von Titel und Typ beim Import war groß-/kleinschreibungsabhängig, sodass ein erneuter Import derselben Quelle mit abweichender Schreibweise (z. B. aus einer anders formatierten Datei) ein Duplikat statt einer Aktualisierung der bestehenden Quelle erzeugen konnte; der Abgleich erfolgt jetzt unabhängig von Groß-/Kleinschreibung, konsistent damit, wie jede andere Kennung im System bereits verglichen wird (Issue #175)"
     ],
     "removed": [
       "Die Konvertornamen `nikhilnamal17` und `vilaboim` existieren nicht mehr — ein benutzerdefinierter Manifesteintrag, der einen von beiden namentlich referenziert, muss auf `basic-json-array`/`regex-array` mit den entsprechenden `converterOptions` aktualisiert werden"

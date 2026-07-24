@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 174, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214, 215],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214, 215],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -33,7 +33,8 @@
       "Het corrigeren van een bron, persoon, regieaanwijzing, geluidscue of conversatie door deze opnieuw te importeren, wijzigt nu alleen de velden die het bestand daadwerkelijk vermeldt — een veld dat wordt weggelaten wordt niet langer stilzwijgend teruggezet naar leeg.",
       "Paginering is nu consistent bij elk lijsteindpunt: het opvragen van meer dan 500 items in één keer wordt geweigerd in plaats van stilzwijgend beperkt, en het opvragen van alle overeenkomende items als één pagina (`pageSize=0`) werkt overal op dezelfde manier.",
       "De meeste films, series en andere bronnen die bij quotes worden getoond, hebben nu een releasedatum — voorheen was dit veld vrijwel altijd leeg.",
-      "Een personage dat in meerdere delen van dezelfde reeks voorkomt (zoals een terugkerend personage in een trilogie) wordt nu herkend als hetzelfde personage in plaats van per deel apart te worden bijgehouden, zolang het om hetzelfde type media gaat."
+      "Een personage dat in meerdere delen van dezelfde reeks voorkomt (zoals een terugkerend personage in een trilogie) wordt nu herkend als hetzelfde personage in plaats van per deel apart te worden bijgehouden, zolang het om hetzelfde type media gaat.",
+      "De naam van een personage kan nu ook achteraf worden gecorrigeerd, op dezelfde manier als de gegevens van een bron, persoon, regieaanwijzing, geluidscue en conversatie dat al konden."
     ],
     "added": [
       "Er wordt nu automatisch een `manifest.json` aangemaakt in de gebruikersimportmap als die ontbreekt, met de gevonden bestanden alfabetisch vermeld; te regelen via de configuratiesleutel `Quotinator__CreateMissingManifest` (standaard `true`)",
@@ -86,7 +87,8 @@
       "Nieuwe eindpunten `GET /api/v1/masterdata/universes` en `.../universes/{id}` tonen en zoeken universums afzonderlijk op",
       "Nieuw eindpunt `GET /api/v1/conversations` toont een gepagineerde lijst van conversaties",
       "Nieuwe eindpunten `GET /api/v1/masterdata/stagedirections` en `.../stagedirections/{id}` tonen en zoeken regieaanwijzingen afzonderlijk op",
-      "Nieuwe eindpunten `GET /api/v1/masterdata/soundcues` en `.../soundcues/{id}` tonen en zoeken geluidscues afzonderlijk op"
+      "Nieuwe eindpunten `GET /api/v1/masterdata/soundcues` en `.../soundcues/{id}` tonen en zoeken geluidscues afzonderlijk op",
+      "`characters[]`-items kunnen nu een `Modify`-actie in gang zetten in plaats van altijd alleen te worden toegevoegd — gekoppeld via een optioneel expliciet id, of herkend via hetzelfde type-verankerde, reeks-begrensde matchingalgoritme dat een personage over bronnen heen herkent, met een nieuw `sourceTitle`/`sourceType`-paar op het item; hetzelfde beleidsgestuurde verschil en de volledigheidsblokkering die elke andere corrigeerbare entiteit al gebruikt (issue #175)"
     ],
     "changed": [
       "Een gloednieuwe database maakt het schema nu in één stap aan in plaats van elke historische upgradestap na elkaar te doorlopen; bestaande databases zijn niet beïnvloed en worden zoals voorheen stapsgewijs bijgewerkt",
@@ -131,7 +133,8 @@
       "Interne bevraging van importbatch-boekhouding las elke kolom impliciet in plaats van bij naam, de laatste openstaande plek in het hierboven genoemde consistentiewerk voor id's — verholpen zonder verder merkbaar effect, aangezien het betreffende id al correct werd weergegeven (issue #212)",
       "Een intern veld voor importbatch-boekhouding volgde niet de naamgevingsconventie waarop het hierboven genoemde consistentiewerk voor id's steunt om id-kolommen automatisch te herkennen en beschermen — hernoemd voor consistentie; het veld werd nog nergens gebruikt, dus er is verder geen merkbaar effect (issue #213)",
       "De automatische controles op id-consistentie in de interne testsuite waren voorheen afhankelijk van ontwikkelaars die bepaalde interne querybouw-methoden handmatig moesten opnemen; ze worden nu automatisch gevonden en gecontroleerd — een zuiver interne verbetering van de testdekking, zonder gevolgen voor gebruikers of gedrag (issue #214)",
-      "Een verwant intern mechanisme voor het samenvoegen van query's werd automatisch slechts op één van de drie interne veiligheidscontroles gecontroleerd die elders in de codebase overal worden toegepast; het wordt nu op alle drie gecontroleerd, waarmee de laatst overgebleven lacune van dit type is gedicht — een zuiver interne verbetering van de testdekking, zonder gevolgen voor gebruikers of gedrag (issue #215)"
+      "Een verwant intern mechanisme voor het samenvoegen van query's werd automatisch slechts op één van de drie interne veiligheidscontroles gecontroleerd die elders in de codebase overal worden toegepast; het wordt nu op alle drie gecontroleerd, waarmee de laatst overgebleven lacune van dit type is gedicht — een zuiver interne verbetering van de testdekking, zonder gevolgen voor gebruikers of gedrag (issue #215)",
+      "Het matchen van een bron op titel en type tijdens het importeren was hoofdlettergevoelig, waardoor het opnieuw importeren van dezelfde bron met een andere schrijfwijze (bijvoorbeeld uit een anders opgemaakt bestand) een duplicaat kon aanmaken in plaats van de bestaande bron bij te werken; matchen is nu niet meer hoofdlettergevoelig, consistent met hoe elke andere identifier in het systeem al wordt vergeleken (issue #175)"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"
