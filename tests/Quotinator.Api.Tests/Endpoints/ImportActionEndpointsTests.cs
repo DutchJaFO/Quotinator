@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -44,6 +45,13 @@ public class ImportActionEndpointsTests
                 });
             });
         });
+    }
+
+    private static HttpClient CreateAuthorizedClient(WebApplicationFactory<Program> factory)
+    {
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+        return client;
     }
 
     // ── GET /actions — public, no key required ───────────────────────────────
@@ -297,6 +305,140 @@ public class ImportActionEndpointsTests
         var lines = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.AreEqual("ActionId,EntityId,EntityType,Field,ExistingValue,IncomingValue,Decision,CustomValue,MarkCompletenessAs", lines[0]);
         Assert.IsTrue(lines[1].Contains("Old Name") && lines[1].Contains("New Name"));
+    }
+
+    // ── POST /actions/bulk-decide — requires X-Api-Key (#163) ────────────────
+
+    private static MultipartFormDataContent BuildBulkDecideForm(string fileContent, bool includeFile = true)
+    {
+        var form = new MultipartFormDataContent();
+        if (includeFile)
+        {
+            var part = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(fileContent));
+            part.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            form.Add(part, "file", "bulk-decide.json");
+        }
+        return form;
+    }
+
+    [TestMethod]
+    public async Task BulkDecide_NoApiKey_Returns401()
+    {
+        using var factory = CreateFactory(adminApiKey: TestKey);
+        using var client  = factory.CreateClient();
+
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm("[]"));
+
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task BulkDecide_BatchIdMissing_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = CreateAuthorizedClient(factory);
+
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide", BuildBulkDecideForm("[]"));
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task BulkDecide_FileMissing_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = CreateAuthorizedClient(factory);
+
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm("", includeFile: false));
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task BulkDecide_UnknownFormat_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = CreateAuthorizedClient(factory);
+
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1&format=xml", BuildBulkDecideForm("[]"));
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task BulkDecide_ValidJsonRows_CallsServiceAndReturnsResponse()
+    {
+        var actionId = Guid.NewGuid();
+        var fake = new FakeImportActionService
+        {
+            ReturnBulkDecideResponse = new BulkDecideResponse { RowsProcessed = 1, ActionsDecided = 1 },
+        };
+        using var factory = CreateFactory(fake);
+        using var client  = CreateAuthorizedClient(factory);
+
+        var json = JsonSerializer.Serialize(new[]
+        {
+            new { ActionId = actionId, EntityId = "e0000001-0000-4000-8000-000000000001", EntityType = "Person", Field = "name", Decision = "Replace" },
+        });
+
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json));
+        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(1, body!.ActionsDecided);
+        Assert.AreEqual("BATCH-1", fake.LastBulkDecidedBatchId);
+        Assert.AreEqual(1, fake.LastBulkDecideRows!.Count);
+        Assert.AreEqual(actionId, fake.LastBulkDecideRows[0].ActionId);
+    }
+
+    [TestMethod]
+    public async Task BulkDecide_MalformedJsonRow_ReportedAsErrorWithoutAbortingValidRows()
+    {
+        var validActionId = Guid.NewGuid();
+        var fake = new FakeImportActionService
+        {
+            ReturnBulkDecideResponse = new BulkDecideResponse { RowsProcessed = 1, ActionsDecided = 1 },
+        };
+        using var factory = CreateFactory(fake);
+        using var client  = CreateAuthorizedClient(factory);
+
+        // First element has an unrecognised Decision value; second is well-formed.
+        var json = $$"""
+            [
+              {"ActionId":"{{Guid.NewGuid()}}","EntityId":"e0000001-0000-4000-8000-000000000001","EntityType":"Person","Field":"name","Decision":"NotARealChoice"},
+              {"ActionId":"{{validActionId}}","EntityId":"e0000001-0000-4000-8000-000000000001","EntityType":"Person","Field":"name","Decision":"Replace"}
+            ]
+            """;
+
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json));
+        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>();
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(1, body!.Errors.Count, "The malformed row must be reported as an error");
+        Assert.AreEqual(1, fake.LastBulkDecideRows!.Count, "Only the well-formed row reaches the service");
+        Assert.AreEqual(validActionId, fake.LastBulkDecideRows[0].ActionId);
+    }
+
+    [TestMethod]
+    public async Task BulkDecide_CsvFormat_ParsesRowsAndCallsService()
+    {
+        var actionId = Guid.NewGuid();
+        var fake = new FakeImportActionService
+        {
+            ReturnBulkDecideResponse = new BulkDecideResponse { RowsProcessed = 1, ActionsDecided = 1 },
+        };
+        using var factory = CreateFactory(fake);
+        using var client  = CreateAuthorizedClient(factory);
+
+        var csv = "ActionId,EntityId,EntityType,Field,ExistingValue,IncomingValue,Decision,CustomValue,MarkCompletenessAs\r\n" +
+                  $"{actionId},e0000001-0000-4000-8000-000000000001,Person,name,Old Name,New Name,Replace,,\r\n";
+
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1&format=csv", BuildBulkDecideForm(csv));
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(1, fake.LastBulkDecideRows!.Count);
+        Assert.AreEqual(actionId, fake.LastBulkDecideRows[0].ActionId);
+        Assert.AreEqual(FieldResolutionChoice.Replace, fake.LastBulkDecideRows[0].Decision);
     }
 
     // ── POST /actions/{id}/decide — requires X-Api-Key ───────────────────────

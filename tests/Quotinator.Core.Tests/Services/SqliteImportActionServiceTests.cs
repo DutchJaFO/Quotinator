@@ -1775,11 +1775,11 @@ public class SqliteImportActionServiceTests
 
     // ── #163: ExportBatchAsync ───────────────────────────────────────────────
 
-    private async Task StageActionAsync(Guid batchId, string entityType, ImportActionKind kind, ImportActionStatus status,
+    private async Task<SystemImportAction> StageActionAsync(Guid batchId, string entityType, ImportActionKind kind, ImportActionStatus status,
         string incomingValue, string? existingValue = null, string? mergedFields = null, string? originalDecision = null,
         CompletenessStatus? markCompletenessAs = null)
     {
-        await _actionWriter.WriteAsync(new SystemImportAction
+        var action = new SystemImportAction
         {
             BatchId            = batchId.ToCanonicalId(),
             ActionType         = new SafeValue<ImportActionKind?>(kind.ToString(), kind),
@@ -1794,7 +1794,9 @@ public class SqliteImportActionServiceTests
                 ? new SafeValue<CompletenessStatus?>(mc.ToString(), mc)
                 : SafeValue<CompletenessStatus?>.Empty,
             DetectedAt         = DateTime.UtcNow,
-        });
+        };
+        await _actionWriter.WriteAsync(action);
+        return action;
     }
 
     [TestMethod]
@@ -1940,5 +1942,161 @@ public class SqliteImportActionServiceTests
         Assert.IsTrue(rows.Count > 0);
         Assert.IsTrue(rows.All(r => r.MarkCompletenessAs == CompletenessStatus.Complete),
             "MarkCompletenessAs is one value per ActionId group, repeated on every row of that group");
+    }
+
+    // ── #163: BulkDecideAsync ────────────────────────────────────────────────
+
+    private static ImportActionFieldRow Field(Guid actionId, string entityId, string entityType, string field,
+        FieldResolutionChoice? decision = null, string? customValue = null, CompletenessStatus? markCompletenessAs = null) =>
+        new()
+        {
+            ActionId           = actionId,
+            EntityId           = entityId,
+            EntityType         = entityType,
+            Field              = field,
+            Decision           = decision,
+            CustomValue        = customValue,
+            MarkCompletenessAs = markCompletenessAs,
+        };
+
+    [TestMethod]
+    public async Task BulkDecideAsync_ValidRows_DecidesTheAction()
+    {
+        var batchId = Guid.NewGuid();
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
+
+        var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace) };
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+
+        Assert.AreEqual(1, response.RowsProcessed);
+        Assert.AreEqual(1, response.ActionsDecided);
+        Assert.AreEqual(0, response.Errors.Count);
+
+        var reread = await _actionReader.GetByIdAsync(action.Id);
+        Assert.AreEqual(ImportActionStatus.Decided, reread!.Status.Parsed);
+    }
+
+    [TestMethod]
+    public async Task BulkDecideAsync_ActionIdNotInBatch_ReportedAsErrorWithoutAbortingOtherRows()
+    {
+        var batchId = Guid.NewGuid();
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
+
+        var unknownActionId = Guid.NewGuid();
+        var rows = new[]
+        {
+            Field(unknownActionId, "e0000001-0000-4000-8000-000000000001", ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace),
+            Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace),
+        };
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+
+        Assert.AreEqual(2, response.RowsProcessed);
+        Assert.AreEqual(1, response.ActionsDecided, "The valid action must still be decided despite the other group failing");
+        Assert.AreEqual(1, response.Errors.Count);
+        Assert.AreEqual(unknownActionId, response.Errors[0].ActionId);
+    }
+
+    [TestMethod]
+    public async Task BulkDecideAsync_EntityTypeMismatch_ReportedAsError()
+    {
+        var batchId = Guid.NewGuid();
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
+
+        var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Character, "name", FieldResolutionChoice.Replace) };
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+
+        Assert.AreEqual(0, response.ActionsDecided);
+        Assert.AreEqual(1, response.Errors.Count);
+        Assert.AreEqual(action.Id, response.Errors[0].ActionId);
+    }
+
+    [TestMethod]
+    public async Task BulkDecideAsync_UnknownFieldForEntityType_ReportedAsError()
+    {
+        var batchId = Guid.NewGuid();
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
+
+        var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "quoteText", FieldResolutionChoice.Replace) };
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+
+        Assert.AreEqual(0, response.ActionsDecided);
+        Assert.AreEqual(1, response.Errors.Count);
+    }
+
+    [TestMethod]
+    public async Task BulkDecideAsync_BlockedAction_DecidesJustLikePending()
+    {
+        var batchId = Guid.NewGuid();
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Blocked, incoming, existing);
+
+        var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace, markCompletenessAs: CompletenessStatus.Complete) };
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+
+        Assert.AreEqual(1, response.ActionsDecided);
+        Assert.AreEqual(0, response.Errors.Count);
+    }
+
+    [TestMethod]
+    public async Task BulkDecideAsync_MultipleFieldsForSameAction_AppliesAllAsOneDecision()
+    {
+        var batchId = Guid.NewGuid();
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name", "1980-01-01", null));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name", "1990-01-01", null));
+        var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
+
+        var rows = new[]
+        {
+            Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace),
+            Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "dateOfBirth", FieldResolutionChoice.Keep),
+        };
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+
+        Assert.AreEqual(1, response.ActionsDecided);
+        Assert.AreEqual(0, response.Errors.Count);
+    }
+
+    /// <summary>
+    /// #163 spec requirement 7: GET .../export's output round-trips through POST .../bulk-decide
+    /// unmodified with zero errors — the baseline correctness check before any real edits are made.
+    /// Decides a Pending action for real, exports it (so Decision/CustomValue come from the genuinely
+    /// stored OriginalDecision, not a hand-built row), then feeds those exact rows straight back into
+    /// BulkDecideAsync and confirms they apply cleanly.
+    /// </summary>
+    [TestMethod]
+    public async Task ExportThenBulkDecide_UnmodifiedExportedRows_RoundTripsWithZeroErrors()
+    {
+        var batchId = Guid.NewGuid();
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name", "1980-01-01", null));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name", "1990-01-01", null));
+        var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
+
+        await _service.DecideAsync(action.Id, new ConflictDecisionRequest
+        {
+            PersonName        = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+            PersonDateOfBirth = new FieldDecision { Choice = FieldResolutionChoice.Keep },
+        });
+
+        var exportedRows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        Assert.AreEqual(3, exportedRows.Count, "Person has 3 decidable fields: name, dateOfBirth, dateOfDeath");
+        Assert.AreEqual(FieldResolutionChoice.Replace, exportedRows.Single(r => r.Field == "name").Decision,
+            "Export must reflect the actual recorded decision, not an inference");
+        Assert.AreEqual(FieldResolutionChoice.Keep, exportedRows.Single(r => r.Field == "dateOfBirth").Decision);
+        Assert.IsNull(exportedRows.Single(r => r.Field == "dateOfDeath").Decision,
+            "dateOfDeath was never actually decided (both sides null, auto-resolved) — no entry in OriginalDecision");
+
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), exportedRows);
+
+        Assert.AreEqual(0, response.Errors.Count, "The unmodified export must round-trip through bulk-decide with zero errors");
+        Assert.AreEqual(1, response.ActionsDecided);
     }
 }

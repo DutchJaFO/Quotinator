@@ -22,6 +22,9 @@ internal sealed class FakeImportActionService : IImportActionService
     public string? LastDiscardedBatchId { get; private set; }
     public string? LastReversedBatchId { get; private set; }
     public string? LastExportedBatchId { get; private set; }
+    public string? LastBulkDecidedBatchId { get; private set; }
+    public IReadOnlyList<ImportActionFieldRow>? LastBulkDecideRows { get; private set; }
+    public BulkDecideResponse? ReturnBulkDecideResponse { get; set; }
 
     public Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
         => Task.FromResult(ReturnPage ?? new PagedItems<ImportActionSummaryResponse>([], page, pageSize, 0));
@@ -30,6 +33,13 @@ internal sealed class FakeImportActionService : IImportActionService
     {
         LastExportedBatchId = batchId;
         return Task.FromResult(ReturnExportRows ?? []);
+    }
+
+    public Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRow> rows, CancellationToken cancellationToken = default)
+    {
+        LastBulkDecidedBatchId = batchId;
+        LastBulkDecideRows     = rows;
+        return Task.FromResult(ReturnBulkDecideResponse ?? new BulkDecideResponse { RowsProcessed = rows.Count, ActionsDecided = 0 });
     }
 
     public Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)

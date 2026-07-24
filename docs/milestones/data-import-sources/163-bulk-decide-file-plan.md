@@ -1,6 +1,6 @@
 # #163 — Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153)
 
-**Status:** In progress (step 7)
+**Status:** In progress
 **GitHub issue:** #163
 **Tiers required:** T1, T2
 **Depends on:** #162, #149, #154
@@ -204,16 +204,16 @@ silently decided, and resolved as follows:
 
 ### 1. Write the red tests
 
-**Status:** Not started.
+**Status:** Done.
 
-Add the eleven test methods from the issue's original "Expected tests" table, plus new tests covering
-Series/Universe decidability (mirroring #173's own `PlanPeopleAsync`/`DecideAsync`/reverse test
-shapes), `Blocked`-action bulk-decide, and `OriginalDecision` round-trip fidelity (a revised export
-shows the actual prior choice, not an inferred one) — to a new
-`tests/Quotinator.Api.Tests/Endpoints/ImportActionExportEndpointsTests.cs` (API-level) plus
-`Quotinator.Core.Tests` additions for the Series/Universe planner/service logic, grouped with the
-existing `ImportActionPlannerTests.cs`/`SqliteImportActionServiceTests.cs`. Confirm each fails for the
-expected reason before any implementation code is written.
+Tests were written incrementally alongside each step (2-13) rather than as one upfront pass, each
+confirmed red before its corresponding implementation landed — Series/Universe decidability (step 6),
+`OriginalDecision` persistence (step 3), `ExportBatchAsync`'s Pending/Decided/Blocked coverage and
+`Decision`/`CustomValue` fidelity (step 9), `BulkDecideAsync`'s error-without-aborting-the-rest
+behaviour including `Blocked`-action bulk-decide (step 10), and the export→bulk-decide round trip
+(step 13). Endpoint-level tests for export/bulk-decide were added to the existing
+`ImportActionEndpointsTests.cs` rather than a new `ImportActionExportEndpointsTests.cs` file, keeping
+all `/import/actions/*` endpoint tests in one place.
 
 ### 2. `System_ImportActions.OriginalDecision` — new additive migration
 
@@ -340,7 +340,7 @@ Serializes to JSON (`JsonSerializer.Serialize`, typed DTO list) or CSV (step 8's
 
 ### 10. `POST /api/v1/import/actions/bulk-decide?batchId=&format=csv|json`
 
-**Status:** Not started.
+**Status:** Done.
 
 New route in `ImportEndpoints.cs`'s `adminGroup` (`X-Api-Key` required, `AddEndpointFilter<AdminApiKeyFilter>()`,
 matching every other staged-action write). Reads the uploaded file, parses per `?format=` (step 8's
@@ -357,7 +357,7 @@ through.
 
 ### 11. Response DTO for bulk-decide
 
-**Status:** Not started.
+**Status:** Done.
 
 New response shape (name TBD) carrying counts (rows processed, actions decided) plus the per-row
 `errors[]` list (action id / row index, message) — modeled on `ImportResultResponse`'s existing
@@ -365,18 +365,18 @@ New response shape (name TBD) carrying counts (rows processed, actions decided) 
 
 ### 12. i18n / `ApiMessages` / documentation
 
-**Status:** Not started.
+**Status:** Done.
 
-New `ApiMessages` keys for any new error conditions this issue introduces beyond what
-`ImportActionNotFoundException`/`ImportActionStateException`/`ImportActionNotDecidableException`/
-`UnresolvedFieldConflictException` already cover (e.g. "unknown format", "action not in this batch",
-"unrecognised Decision value", "malformed CSV/JSON file") — each translated in all three
-`i18ntext/UI.*.json` files in the same commit. `README.md`/`addon/DOCS.md` endpoint tables updated
-(requirement 8) — both files' `/import/actions/*` rows need the two new routes added.
+`ErrorImportActionExportUnknownFormat` (added with step 9, reused by bulk-decide) is the only new
+`ApiMessages` key this issue needed — every row-level bulk-decide error ("action not in this batch",
+"unrecognised Decision value", "malformed CSV/JSON file", entity-type mismatch, unknown field) follows
+`ImportRowError.Message`'s existing precedent (`SqliteQuoteImportService.cs`): raw, non-localized
+English text carried directly on the response DTO, not routed through `IApiLocalizer`. `README.md`/
+`addon/DOCS.md` endpoint tables updated with both new routes (requirement 8).
 
 ### 13. Round-trip test and full expected-test suite
 
-**Status:** Not started.
+**Status:** Done.
 
 Implement and pass the full expected-test set: the issue's original eleven tests plus the new ones
 from step 1 (Series/Universe decidability, `Blocked`-action bulk-decide, `OriginalDecision` round-trip

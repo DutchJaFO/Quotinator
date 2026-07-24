@@ -33,6 +33,19 @@ public interface IImportActionService
     Task<IReadOnlyList<ImportActionFieldRow>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Applies a bulk-decide file's already-parsed rows (#163) — the reverse of
+    /// <see cref="ExportBatchAsync"/>. Rows are grouped by <c>ActionId</c>; each group is validated
+    /// (belongs to <paramref name="batchId"/>, <c>EntityType</c> matches the action's actual stored
+    /// type) and turned into a <see cref="ConflictDecisionRequest"/> via
+    /// <see cref="Quotinator.Core.Database.ImportActionFieldRowMapper.BuildRequest"/>, then applied
+    /// through the same <see cref="DecideAsync"/> every other decide path uses — no new validation
+    /// logic. A group that fails is reported in the response's <c>Errors</c> list without aborting the
+    /// rest of the file, matching <c>POST /import</c>'s existing "one bad row never aborts the rest"
+    /// model. Deciding a <c>Blocked</c> action works exactly like deciding a <c>Pending</c> one.
+    /// </summary>
+    Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRow> rows, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stages a decision for one action of a currently-decidable entity type and <c>ActionType</c>
     /// (today: Quote, and Source Modify — see <see cref="ImportActionNotDecidableException"/>'s own
     /// doc comment for which combination is current, since it changes as more entities gain

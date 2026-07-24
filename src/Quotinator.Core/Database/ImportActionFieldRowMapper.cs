@@ -1,6 +1,7 @@
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Database;
 
@@ -58,6 +59,51 @@ public static class ImportActionFieldRowMapper
         row.CustomValue,
         row.MarkCompletenessAs?.ToString(),
     ];
+
+    /// <summary>
+    /// Parses one CSV data row (in <see cref="CsvHeader"/> column order) back to a row — the reverse
+    /// of <see cref="ToCsvRow"/>, for <c>POST /import/actions/bulk-decide</c>. An empty field is
+    /// treated as <c>null</c> for every optional column — CSV has no way to distinguish an empty
+    /// string from a genuinely absent value, an accepted limitation of this flat format.
+    /// </summary>
+    /// <exception cref="FormatException"><paramref name="fields"/> doesn't have exactly 9 columns, or <c>ActionId</c>/<c>Decision</c>/<c>MarkCompletenessAs</c> isn't a recognised value.</exception>
+    public static ImportActionFieldRow FromCsvRow(IReadOnlyList<string> fields)
+    {
+        if (fields.Count != CsvHeader.Length)
+            throw new FormatException($"Expected {CsvHeader.Length} columns, found {fields.Count}.");
+
+        if (!Guid.TryParse(fields[0], out var actionId))
+            throw new FormatException($"'{fields[0]}' is not a valid ActionId.");
+
+        FieldResolutionChoice? decision = null;
+        if (fields[6].Length > 0)
+        {
+            if (!Enum.TryParse<FieldResolutionChoice>(fields[6], ignoreCase: true, out var parsedDecision))
+                throw new FormatException($"'{fields[6]}' is not a recognised Decision value.");
+            decision = parsedDecision;
+        }
+
+        CompletenessStatus? markCompletenessAs = null;
+        if (fields[8].Length > 0)
+        {
+            if (!Enum.TryParse<CompletenessStatus>(fields[8], ignoreCase: true, out var parsedStatus))
+                throw new FormatException($"'{fields[8]}' is not a recognised MarkCompletenessAs value.");
+            markCompletenessAs = parsedStatus;
+        }
+
+        return new ImportActionFieldRow
+        {
+            ActionId           = actionId,
+            EntityId           = fields[1],
+            EntityType         = fields[2],
+            Field              = fields[3],
+            ExistingValue      = fields[4].Length == 0 ? null : fields[4],
+            IncomingValue      = fields[5].Length == 0 ? null : fields[5],
+            Decision           = decision,
+            CustomValue        = fields[7].Length == 0 ? null : fields[7],
+            MarkCompletenessAs = markCompletenessAs,
+        };
+    }
 
     /// <summary>Encodes a genre list as a <see cref="GenresSeparator"/>-delimited string, or <c>null</c> for a <c>null</c> list.</summary>
     public static string? EncodeGenres(IReadOnlyList<string>? genres) =>

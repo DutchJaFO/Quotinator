@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Filters;
@@ -182,6 +183,56 @@ internal static class ImportEndpoints
             "unknown `batchId` returns `200` with zero rows, matching `GET /import/actions`'s own " +
             "behaviour for an unknown `batchId`. No `X-Api-Key` required, matching `GET /import/actions`'s precedent.");
 
+        adminGroup.MapPost("/actions/bulk-decide", async (
+                string? batchId,
+                string? format,
+                [Description("The edited export file — same flat row shape `GET /import/actions/export` produces, in the format named by `format`.")] IFormFile? file,
+                IImportActionService service,
+                IApiLocalizer localizer) =>
+            {
+                if (string.IsNullOrWhiteSpace(batchId))
+                    return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
+
+                if (file is null || file.Length == 0)
+                    return Results.Problem(detail: localizer[ApiMessages.ImportFileMissing], statusCode: StatusCodes.Status422UnprocessableEntity);
+
+                var normalizedFormat = (format ?? "json").ToLowerInvariant();
+                if (normalizedFormat is not ("json" or "csv"))
+                    return Results.Problem(detail: localizer[ApiMessages.ImportActionExportUnknownFormat], statusCode: StatusCodes.Status422UnprocessableEntity);
+
+                using var reader = new StreamReader(file.OpenReadStream());
+                var content = await reader.ReadToEndAsync();
+
+                var (parsedRows, parseErrors) = normalizedFormat == "csv" ? ParseCsvRows(content) : ParseJsonRows(content);
+                var result = await service.BulkDecideAsync(batchId, parsedRows);
+
+                return Results.Ok(new BulkDecideResponse
+                {
+                    RowsProcessed  = parsedRows.Count + parseErrors.Count,
+                    ActionsDecided = result.ActionsDecided,
+                    Errors         = [.. parseErrors, .. result.Errors],
+                });
+            })
+            .DisableAntiforgery()
+            .Accepts<IFormFile>("multipart/form-data")
+            .Produces<BulkDecideResponse>(StatusCodes.Status200OK)
+            .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
+            .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
+            .WithName("BulkDecideImportActions")
+            .WithSummary("Apply many staged-action decisions from an edited export file")
+            .WithDescription(
+                "Reads the uploaded, edited `GET /import/actions/export` file back and applies each " +
+                "row's `Decision`/`CustomValue`, grouped by `ActionId` — one `POST /import/actions/{id}" +
+                "/decide` call per action, reusing the same validation that endpoint already applies " +
+                "(no new validation logic). Deciding a `Blocked` action works exactly like deciding a " +
+                "`Pending` one. A malformed row (bad `ActionId`, unrecognised `Decision`, malformed " +
+                "CSV/JSON) or an action group that fails validation (unknown `ActionId`, `ActionId` not " +
+                "part of `batchId`, `EntityType` mismatch, `Field` not decidable for that `EntityType`) " +
+                "is reported in the response's `errors` list without aborting the rest of the file, " +
+                "matching `POST /import`'s existing \"one bad row never aborts the rest\" model. " +
+                "Returns `422` if `batchId`/`file` is missing or `format` isn't `json`/`csv`. " +
+                "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
+
         adminGroup.MapPost("/actions/{id}/decide", async (
             string id,
             ConflictDecisionRequest request,
@@ -358,6 +409,71 @@ internal static class ImportEndpoints
             "Source/Character/Person linkage can no longer be resolved. Returns `404` if `batchId` " +
             "doesn't exist or was already reversed. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
+    }
+
+    // Row-by-row, not JsonSerializer.Deserialize<List<ImportActionFieldRow>> in one call — a single
+    // malformed element would otherwise abort the whole file's parse, violating the "one bad row never
+    // aborts the rest" contract (#163 spec requirement 6) for the parse stage specifically.
+    private static (List<ImportActionFieldRow> Rows, List<BulkDecideRowError> Errors) ParseJsonRows(string content)
+    {
+        var rows   = new List<ImportActionFieldRow>();
+        var errors = new List<BulkDecideRowError>();
+
+        JsonElement root;
+        try
+        {
+            root = JsonDocument.Parse(content).RootElement;
+        }
+        catch (JsonException ex)
+        {
+            errors.Add(new BulkDecideRowError { Message = $"Malformed JSON: {ex.Message}" });
+            return (rows, errors);
+        }
+
+        if (root.ValueKind != JsonValueKind.Array)
+        {
+            errors.Add(new BulkDecideRowError { Message = "Expected a JSON array of rows." });
+            return (rows, errors);
+        }
+
+        var index = 0;
+        foreach (var element in root.EnumerateArray())
+        {
+            index++;
+            try
+            {
+                rows.Add(element.Deserialize<ImportActionFieldRow>() ?? throw new JsonException("Row is null."));
+            }
+            catch (JsonException ex)
+            {
+                errors.Add(new BulkDecideRowError { Message = $"Row {index}: {ex.Message}" });
+            }
+        }
+
+        return (rows, errors);
+    }
+
+    // Same per-row resilience as ParseJsonRows — one malformed CSV line is reported and skipped, not
+    // an aborted parse of the whole file.
+    private static (List<ImportActionFieldRow> Rows, List<BulkDecideRowError> Errors) ParseCsvRows(string content)
+    {
+        var rows   = new List<ImportActionFieldRow>();
+        var errors = new List<BulkDecideRowError>();
+        var lines  = CsvLineParser.Parse(content);
+
+        for (var i = 1; i < lines.Count; i++) // row 0 is the header
+        {
+            try
+            {
+                rows.Add(ImportActionFieldRowMapper.FromCsvRow(lines[i]));
+            }
+            catch (FormatException ex)
+            {
+                errors.Add(new BulkDecideRowError { Message = $"Row {i}: {ex.Message}" });
+            }
+        }
+
+        return (rows, errors);
     }
 
     private static async Task<IResult> HandleImportAsync(

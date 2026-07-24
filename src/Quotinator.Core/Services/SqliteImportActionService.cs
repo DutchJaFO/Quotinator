@@ -121,6 +121,42 @@ public sealed class SqliteImportActionService : IImportActionService
         return rows;
     }
 
+    /// <inheritdoc/>
+    public async Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRow> rows, CancellationToken cancellationToken = default)
+    {
+        var batchActions = (await _actionReader.GetAllForBatchAsync(batchId)).ToDictionary(a => a.Id);
+        var errors  = new List<BulkDecideRowError>();
+        var decided = 0;
+
+        foreach (var group in rows.GroupBy(r => r.ActionId))
+        {
+            var actionId   = group.Key;
+            var groupRows  = group.ToList();
+
+            try
+            {
+                if (!batchActions.TryGetValue(actionId, out var action))
+                    throw new InvalidOperationException($"Action '{actionId}' is not part of batch '{batchId}'.");
+
+                var mismatched = groupRows.FirstOrDefault(r => r.EntityType != action.EntityType);
+                if (mismatched is not null)
+                    throw new InvalidOperationException($"Row EntityType '{mismatched.EntityType}' does not match action '{actionId}''s actual entity type '{action.EntityType}'.");
+
+                var request = ImportActionFieldRowMapper.BuildRequest(action.EntityType, groupRows);
+                await DecideAsync(actionId, request, cancellationToken);
+                decided++;
+            }
+            catch (Exception ex) when (ex is ImportActionUnknownEntityTypeException or ImportActionUnknownFieldException
+                or InvalidOperationException or ImportActionNotFoundException or ImportActionStateException
+                or ImportActionNotDecidableException or UnresolvedFieldConflictException)
+            {
+                errors.Add(new BulkDecideRowError { ActionId = actionId, Message = ex.Message });
+            }
+        }
+
+        return new BulkDecideResponse { RowsProcessed = rows.Count, ActionsDecided = decided, Errors = errors };
+    }
+
     private static string? FieldValueToPlainString(string field, object? value) =>
         field == "genres" && value is List<string> genres ? ImportActionFieldRowMapper.EncodeGenres(genres) : value?.ToString();
 

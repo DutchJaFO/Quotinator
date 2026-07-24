@@ -68,6 +68,73 @@ public class ImportActionFieldRowMapperTests
     }
 
     [TestMethod]
+    public void ToCsvRow_ThenFromCsvRow_RoundTripsAllFields()
+    {
+        var row = new ImportActionFieldRow
+        {
+            ActionId           = Guid.NewGuid(),
+            EntityId           = "e0000001-0000-4000-8000-000000000001",
+            EntityType         = ImportActionEntityTypes.Person,
+            Field              = "name",
+            ExistingValue      = "Old Name",
+            IncomingValue      = "New Name",
+            Decision           = FieldResolutionChoice.Custom,
+            CustomValue        = "Custom Name",
+            MarkCompletenessAs = CompletenessStatus.Complete,
+        };
+
+        var fields = ImportActionFieldRowMapper.ToCsvRow(row).ToList();
+        var parsed = ImportActionFieldRowMapper.FromCsvRow(fields!);
+
+        Assert.AreEqual(row.ActionId, parsed.ActionId);
+        Assert.AreEqual(row.EntityId, parsed.EntityId);
+        Assert.AreEqual(row.EntityType, parsed.EntityType);
+        Assert.AreEqual(row.Field, parsed.Field);
+        Assert.AreEqual(row.ExistingValue, parsed.ExistingValue);
+        Assert.AreEqual(row.IncomingValue, parsed.IncomingValue);
+        Assert.AreEqual(row.Decision, parsed.Decision);
+        Assert.AreEqual(row.CustomValue, parsed.CustomValue);
+        Assert.AreEqual(row.MarkCompletenessAs, parsed.MarkCompletenessAs);
+    }
+
+    [TestMethod]
+    public void FromCsvRow_EmptyOptionalFields_ParsedAsNull()
+    {
+        var parsed = ImportActionFieldRowMapper.FromCsvRow(
+            [Guid.NewGuid().ToString(), "e0000001-0000-4000-8000-000000000001", "Person", "name", "", "", "", "", ""]);
+
+        Assert.IsNull(parsed.ExistingValue);
+        Assert.IsNull(parsed.IncomingValue);
+        Assert.IsNull(parsed.Decision);
+        Assert.IsNull(parsed.CustomValue);
+        Assert.IsNull(parsed.MarkCompletenessAs);
+    }
+
+    [TestMethod]
+    public void FromCsvRow_MalformedActionId_ThrowsFormatException() =>
+        Assert.ThrowsExactly<FormatException>(() => ImportActionFieldRowMapper.FromCsvRow(
+            ["not-a-guid", "e0000001-0000-4000-8000-000000000001", "Person", "name", "", "", "", "", ""]));
+
+    [TestMethod]
+    public void FromCsvRow_MalformedDecision_ThrowsFormatException() =>
+        Assert.ThrowsExactly<FormatException>(() => ImportActionFieldRowMapper.FromCsvRow(
+            [Guid.NewGuid().ToString(), "e0000001-0000-4000-8000-000000000001", "Person", "name", "", "", "NotARealChoice", "", ""]));
+
+    [TestMethod]
+    public void FromCsvRow_MalformedMarkCompletenessAs_ThrowsFormatException() =>
+        Assert.ThrowsExactly<FormatException>(() => ImportActionFieldRowMapper.FromCsvRow(
+            [Guid.NewGuid().ToString(), "e0000001-0000-4000-8000-000000000001", "Person", "name", "", "", "", "", "NotAStatus"]));
+
+    [TestMethod]
+    public void FromCsvRow_WrongColumnCount_ThrowsFormatException() =>
+        Assert.ThrowsExactly<FormatException>(() => ImportActionFieldRowMapper.FromCsvRow(["too", "few", "columns"]));
+
+    [TestMethod]
+    public void FromCsvRow_DecisionCaseInsensitive_Parses() =>
+        Assert.AreEqual(FieldResolutionChoice.Replace, ImportActionFieldRowMapper.FromCsvRow(
+            [Guid.NewGuid().ToString(), "e0000001-0000-4000-8000-000000000001", "Person", "name", "", "", "replace", "", ""]).Decision);
+
+    [TestMethod]
     public void EncodeGenres_NullList_ReturnsNull() =>
         Assert.IsNull(ImportActionFieldRowMapper.EncodeGenres(null));
 
