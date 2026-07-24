@@ -70,8 +70,13 @@ relationship.
 
 ### 1. Write the ADR deciding the merge algorithm
 
-**Status:** Not started. Blocked on #179 landing (needs `CharacterSources`, `Series`, `Universe` to
-exist before this ADR can reference them concretely).
+**Status:** Not started. Unblocked — confirmed during this review (2026-07-24) that #179's structural
+pieces (`CharacterSources`, `Series`, `Universe`, the `Source.Type` anchor invariant, `Characters`
+losing its `SourceId` column) have already landed in code: `Sql.Characters.SelectIdBySourceAndName`'s
+own doc comment states "#179: Character is no longer scoped by a SourceId column... #174 is where the
+matching key itself changes," and `QuotinatorMigrations.BaselineSchema`'s `Characters` table has no
+`SourceId` column. #179 itself remains open on GitHub (not yet formally closed pending release), but
+that does not block this issue's own start — the code dependency is already satisfied.
 
 This step's output is the ADR itself — its content is **not** pre-decided by this plan doc, per the
 issue's own explicit instruction that the exact merge algorithm "was deliberately not decided during
@@ -93,10 +98,10 @@ planning." What the ADR needs to settle, at minimum:
 - What uniqueness constraint (if any) `Characters` gains once the merge key is known — #179
   deliberately left `Characters` without one, since it didn't know the key.
 
-Format and location: `docs/architecture-decisions/NNN-<short-title>.md`, next sequential number
-after the current highest at implementation time (011 or later, depending on whether #179's own ADR
-has already claimed the next slot — #179 is sequenced before this issue, so its ADR number should
-already exist by the time this step starts).
+Format and location: `docs/architecture-decisions/013-<short-title>.md` — confirmed the next free
+number: #179's own ADR claimed 011 (`011-series-universe-hierarchy-and-character-source-identity.md`),
+and 012 was separately claimed by #210's `012-canonicalize-entity-ids-at-capture.md`, so 013 is the
+next free slot as of this review (2026-07-24).
 
 ### 2. Write the red tests
 
@@ -198,13 +203,13 @@ multi-Source Character group.
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ❌ | Merge algorithm, its `Type`-anchor enforcement, and its conservative-by-default fallback are decided and documented | Doc | New ADR under `docs/architecture-decisions/` — exact number/filename not yet known |
-| 2 | ❌ | Characters sharing a `Name` are merged into one row only when the ADR's Series/Type conditions are satisfied | Unit test | `Quotinator.Engine.Tests.Migration_CharacterMerge_ConsolidatesSameNameRowsWithinKnownSeries` — starts red |
-| 3 | ❌ | Two Characters are never merged if their linked Sources disagree on `Type` | Unit test | `Quotinator.Engine.Tests.Migration_CharacterMerge_NeverMergesAcrossDifferingSourceType` — starts red |
-| 4 | ❌ | Two same-named Characters with no known Series relationship are left unmerged (conservative default) | Unit test | `Quotinator.Engine.Tests.Migration_CharacterMerge_LeavesUnrelatedSameNameRowsUnmergedWhenNoSeriesKnown` — starts red |
-| 5 | ❌ | Every `Quotes.CharacterId` referencing a merged-away row is re-pointed to the surviving row | Unit test | `Quotinator.Engine.Tests.Migration_CharacterMerge_RepointsQuoteCharacterIdToMergedRow` — starts red |
-| 6 | ❌ | Divergent `CompletenessStatus`/`NoValueKnown` values across merged rows are resolved per the ADR's algorithm | Unit test | `Quotinator.Engine.Tests.Migration_CharacterMerge_PreservesCompletenessStatusPerAlgorithm` — starts red |
-| 7 | ❌ | Fresh-database baseline and incremental replay produce an identical `Characters` schema | Unit test | `Quotinator.Engine.Tests.Baseline_And_IncrementalReplay_ProduceIdenticalCharactersSchema` — starts red |
-| 8 | ❌ | `ResolveCharacterAsync` reuses an existing global Character by the new merge key | Unit test | `Quotinator.Engine.Tests.ResolveCharacterAsync_ExistingGlobalCharacter_ReusesRealId` — starts red |
+| 2 | ❌ | Characters sharing a `Name` are merged into one row only when the ADR's Series/Type conditions are satisfied | Unit test | `Quotinator.Core.Tests.Migration_CharacterMerge_ConsolidatesSameNameRowsWithinKnownSeries` — starts red |
+| 3 | ❌ | Two Characters are never merged if their linked Sources disagree on `Type` | Unit test | `Quotinator.Core.Tests.Migration_CharacterMerge_NeverMergesAcrossDifferingSourceType` — starts red |
+| 4 | ❌ | Two same-named Characters with no known Series relationship are left unmerged (conservative default) | Unit test | `Quotinator.Core.Tests.Migration_CharacterMerge_LeavesUnrelatedSameNameRowsUnmergedWhenNoSeriesKnown` — starts red |
+| 5 | ❌ | Every `Quotes.CharacterId` referencing a merged-away row is re-pointed to the surviving row | Unit test | `Quotinator.Core.Tests.Migration_CharacterMerge_RepointsQuoteCharacterIdToMergedRow` — starts red |
+| 6 | ❌ | Divergent `CompletenessStatus`/`NoValueKnown` values across merged rows are resolved per the ADR's algorithm | Unit test | `Quotinator.Core.Tests.Migration_CharacterMerge_PreservesCompletenessStatusPerAlgorithm` — starts red |
+| 7 | ❌ | Fresh-database baseline and incremental replay produce an identical `Characters` schema | Unit test | `Quotinator.Core.Tests.Baseline_And_IncrementalReplay_ProduceIdenticalCharactersSchema` — starts red |
+| 8 | ❌ | `ResolveCharacterAsync` reuses an existing global Character by the new merge key | Unit test | `Quotinator.Core.Tests.ResolveCharacterAsync_ExistingGlobalCharacter_ReusesRealId` — starts red |
 | 9 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
 | 10 | ❌ | Migration applies cleanly against a database matching the last published release's schema, not just from-empty | Live (T1) | Per ADR 009: reconstruct or check out the last released tag's schema, run this migration against it, confirm no drift; developer confirms app opens and runs correctly in Visual Studio afterward |
 | 11 | ❌ | Live import behaviour is correct post-migration: importing a quote whose Character name already exists globally under a Source of the *same* `Type` and known `Series` reuses the existing row; a differing `Type` never merges | Live (T2) | Docker smoke test — import two quotes with the same Character name under two Sources of differing `Type`, confirm two separate `Characters` rows persist; repeat with matching `Type` and a shared `Series`, confirm one row |
@@ -224,10 +229,18 @@ deliverable (the ADR, step 1), operating within #179's structural boundary. See 
 the schema/concept work this issue depends on, and #169's plan doc/closing comment for the corrected
 research findings that reshaped this issue's scope on 2026-07-14.
 
-**Not this issue's concern, but relevant context for whoever picks up #175 next:** #173 (Person)
-found that its `_personRepository`-based Add-reversal and stale-Add-cleanup code paths were both on
-the Guid-typed repository API, which silently no-ops against a lowercase, file-authored explicit id
-(`GuidHandler` force-uppercases before comparing). This issue doesn't introduce an explicit Character
-id itself, so it isn't exposed — but #175 (which does) inherits the identical exposure at the
-identical two call sites, and its own plan doc has been updated accordingly (see
-`175-character-modify-plan.md`'s steps 8/9). No action needed here.
+**Note found stale during this review (2026-07-24), not corrected here — out of #174's own scope:** the
+paragraph below (written 2026-07-16) described a `GuidHandler` bug where it "force-uppercases before
+comparing." #210's subsequent work this milestone flipped the system-wide id-casing convention entirely
+— `GuidHandler` and every other id-presentation choke point now canonicalize to **lowercase**, not
+uppercase (see ADR 012's final "system-wide lowercase" revision). The specific uppercase-comparison
+exposure described below no longer exists in that form. Whoever picks up #175 next should re-verify its
+own plan doc's steps 8/9 against current `GuidHandler`/`ToCanonicalId()` behaviour before relying on
+this now-outdated description — not something to fix as part of #174.
+
+**Original note (superseded, kept for context):** #173 (Person) found that its `_personRepository`-based
+Add-reversal and stale-Add-cleanup code paths were both on the Guid-typed repository API, which silently
+no-ops against a lowercase, file-authored explicit id (`GuidHandler` force-uppercases before comparing).
+This issue doesn't introduce an explicit Character id itself, so it isn't exposed — but #175 (which
+does) inherits the identical exposure at the identical two call sites, and its own plan doc has been
+updated accordingly (see `175-character-modify-plan.md`'s steps 8/9). No action needed here.
