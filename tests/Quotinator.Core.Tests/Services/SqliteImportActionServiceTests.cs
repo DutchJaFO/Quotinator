@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Csv;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Helpers;
@@ -1687,6 +1688,118 @@ public class SqliteImportActionServiceTests
         Assert.AreEqual(1, isDeleted, "The Add's reversal must actually soft-delete the row, not silently no-op against a lowercase explicit id");
     }
 
+    // ── #163: Series/Universe explicit-id Modify/decidability — stage → decide → apply → verify-on-disk ──
+
+    private async Task<string> SeedExplicitSeriesAsync(string id, string name = "The Hobbit", string? universeId = null, string completenessStatus = "Incomplete")
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Series (Id, Name, UniverseId, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @UniverseId, @CompletenessStatus, @now)",
+            new { Id = id, Name = name, UniverseId = universeId, CompletenessStatus = completenessStatus, now });
+        return id;
+    }
+
+    private async Task<string> SeedExplicitUniverseAsync(string id, string name = "Middle Earth", string completenessStatus = "Incomplete")
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @CompletenessStatus, @now)",
+            new { Id = id, Name = name, CompletenessStatus = completenessStatus, now });
+        return id;
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_SeriesModify_ResolvesFieldDecisionsAndAppliesToDisk()
+    {
+        var id = "f3111111-1111-4111-8111-111111111175";
+        await SeedExplicitSeriesAsync(id, name: "The Hobbit");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            series: [new SeriesEntry { Id = id, Name = "The Hobbit Trilogy" }]);
+        var action = actions.Single(a => a.EntityType == "Series");
+        Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, "Review policy leaves the Modify pending");
+
+        await _service.DecideAsync(action.Id, new ConflictDecisionRequest
+        {
+            SeriesName = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+        var stillPending = await _service.ApplyBatchAsync(action.BatchId);
+        Assert.IsNull(stillPending, "The batch must apply cleanly once its only action is decided");
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var name = await conn.ExecuteScalarAsync<string>("SELECT Name FROM Series WHERE Id = @id", new { id });
+        Assert.AreEqual("The Hobbit Trilogy", name, "The decided name must actually be written to the Series row");
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_UniverseModify_ResolvesFieldDecisionsAndAppliesToDisk()
+    {
+        var id = "f4111111-1111-4111-8111-111111111175";
+        await SeedExplicitUniverseAsync(id, name: "Middle Earth");
+
+        var actions = await PlanAndStageAsync([], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            universe: [new UniverseEntry { Id = id, Name = "Middle-earth" }]);
+        var action = actions.Single(a => a.EntityType == "Universe");
+        Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, "Review policy leaves the Modify pending");
+
+        await _service.DecideAsync(action.Id, new ConflictDecisionRequest
+        {
+            UniverseName = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+        var stillPending = await _service.ApplyBatchAsync(action.BatchId);
+        Assert.IsNull(stillPending, "The batch must apply cleanly once its only action is decided");
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var name = await conn.ExecuteScalarAsync<string>("SELECT Name FROM Universe WHERE Id = @id", new { id });
+        Assert.AreEqual("Middle-earth", name, "The decided name must actually be written to the Universe row");
+    }
+
+    [TestMethod]
+    public async Task ReverseBatchAsync_SeriesModify_RestoresExistingValue()
+    {
+        var id = "f5111111-1111-4111-8111-111111111175";
+        await SeedExplicitSeriesAsync(id, name: "The Hobbit");
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            series: [new SeriesEntry { Id = id, Name = "A Completely Different Name" }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var name = await conn.ExecuteScalarAsync<string>("SELECT Name FROM Series WHERE Id = @id", new { id });
+        Assert.AreEqual("The Hobbit", name, "Reversal must restore the pre-Modify name");
+    }
+
+    [TestMethod]
+    public async Task ReverseBatchAsync_UniverseModify_RestoresExistingValue()
+    {
+        var id = "f6111111-1111-4111-8111-111111111175";
+        await SeedExplicitUniverseAsync(id, name: "Middle Earth");
+
+        var batchId = Guid.NewGuid();
+        await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
+            universe: [new UniverseEntry { Id = id, Name = "A Completely Different Name" }]);
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await MarkImportBatchAppliedAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var name = await conn.ExecuteScalarAsync<string>("SELECT Name FROM Universe WHERE Id = @id", new { id });
+        Assert.AreEqual("Middle Earth", name, "Reversal must restore the pre-Modify name");
+    }
+
     /// <summary>
     /// Found in passing during #163's Series/Universe implementation, not part of #163's own scope:
     /// ApplyResolvedActionAsync's defensive EnsureUniverseExistsAsync call (guarding against a Series
@@ -2098,5 +2211,71 @@ public class SqliteImportActionServiceTests
 
         Assert.AreEqual(0, response.Errors.Count, "The unmodified export must round-trip through bulk-decide with zero errors");
         Assert.AreEqual(1, response.ActionsDecided);
+    }
+
+    /// <summary>
+    /// Same baseline correctness check as <see cref="ExportThenBulkDecide_UnmodifiedExportedRows_RoundTripsWithZeroErrors"/>,
+    /// but through the exact JSON wire serialization <c>GET /import/actions/export</c> and
+    /// <c>POST /import/actions/bulk-decide</c> actually use (<see cref="JsonSerializer"/> over
+    /// <see cref="ImportActionFieldRow"/>), not the in-memory C# objects directly.
+    /// </summary>
+    [TestMethod]
+    public async Task ExportThenBulkDecide_ViaJsonWireFormat_RoundTripsWithZeroErrors()
+    {
+        var batchId = Guid.NewGuid();
+        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
+
+        await _service.DecideAsync(action.Id, new ConflictDecisionRequest
+        {
+            PersonName = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+
+        var exportedRows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var json          = JsonSerializer.Serialize(exportedRows);
+        var deserialized  = JsonSerializer.Deserialize<List<ImportActionFieldRow>>(json)!;
+
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), deserialized);
+
+        Assert.AreEqual(0, response.Errors.Count, "The JSON-serialized export must round-trip through bulk-decide with zero errors");
+        Assert.AreEqual(1, response.ActionsDecided);
+    }
+
+    /// <summary>
+    /// Same baseline correctness check, through the exact CSV wire format
+    /// <c>GET /import/actions/export?format=csv</c> and <c>POST /import/actions/bulk-decide?format=csv</c>
+    /// actually use (<see cref="ImportActionFieldRowMapper.ToCsvRow"/>/<see cref="CsvLineWriter"/> writing,
+    /// <see cref="CsvLineParser"/>/<see cref="ImportActionFieldRowMapper.FromCsvRow"/> reading).
+    /// </summary>
+    [TestMethod]
+    public async Task ExportThenBulkDecide_ViaCsvWireFormat_RoundTripsWithZeroErrors()
+    {
+        var batchId = Guid.NewGuid();
+        var existingPayload = new QuoteActionPayload { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["comedy"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
+        var incomingPayload = new QuoteActionPayload { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["drama", "sci-fi"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
+        var action = await StageActionAsync(batchId, ImportActionEntityTypes.Quote, ImportActionKind.Modify, ImportActionStatus.Pending,
+            JsonSerializer.Serialize(incomingPayload), JsonSerializer.Serialize(existingPayload));
+
+        await _service.DecideAsync(action.Id, new ConflictDecisionRequest
+        {
+            Genres = new GenresFieldDecision { Choice = FieldResolutionChoice.Custom, Value = ["drama", "comedy", "sci-fi"] },
+        });
+
+        var exportedRows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var csvRows = new List<IEnumerable<string?>> { ImportActionFieldRowMapper.CsvHeader };
+        csvRows.AddRange(exportedRows.Select(ImportActionFieldRowMapper.ToCsvRow));
+        var csv = CsvLineWriter.Write(csvRows);
+
+        var parsedLines = CsvLineParser.Parse(csv);
+        var parsedRows  = parsedLines.Skip(1).Select(ImportActionFieldRowMapper.FromCsvRow).ToList();
+
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), parsedRows);
+
+        Assert.AreEqual(0, response.Errors.Count, "The CSV-serialized export (including a comma-containing genre list) must round-trip through bulk-decide with zero errors");
+        Assert.AreEqual(1, response.ActionsDecided);
+
+        var genresRow = parsedRows.Single(r => r.Field == "genres");
+        Assert.AreEqual("drama;comedy;sci-fi", genresRow.CustomValue);
     }
 }

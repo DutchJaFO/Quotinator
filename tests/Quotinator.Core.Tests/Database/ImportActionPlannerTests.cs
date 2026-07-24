@@ -440,6 +440,16 @@ public class ImportActionPlannerTests
         return id;
     }
 
+    private static async Task<string> SeedExistingUniverseAsync(SqliteConnection conn, string name = "Middle Earth")
+    {
+        var id  = Guid.NewGuid().ToString("D");
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
+            new { Id = id, Name = name, now });
+        return id;
+    }
+
     [TestMethod]
     public async Task PlanUniverseAsync_NoMatchAtAll_StagesAddAction()
     {
@@ -468,6 +478,23 @@ public class ImportActionPlannerTests
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Universe"), "Already exists by name — silently reused, no action staged");
     }
 
+    /// <summary>#163: Universe's own two-shape widening — explicit id present, matched by that id, name differs.</summary>
+    [TestMethod]
+    public async Task PlanUniverseAsync_ExplicitIdMatchFound_NameDiffers_StagesModifyAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = await SeedExistingUniverseAsync(conn, "Middle Earth");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            universe: [new UniverseEntry { Id = id, Name = "Middle-earth (corrected)" }]);
+
+        var universeAction = actions.Single(a => a.EntityType == "Universe");
+        Assert.AreEqual(ImportActionKind.Modify, universeAction.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, universeAction.Status.Parsed);
+        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayload>(universeAction.MergedFields!)!;
+        Assert.AreEqual("Middle-earth (corrected)", merged.Name);
+    }
+
     [TestMethod]
     public async Task PlanSeriesAsync_NoMatchAtAll_StagesAddAction()
     {
@@ -479,6 +506,41 @@ public class ImportActionPlannerTests
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionKind.Add, seriesAction.ActionType.Parsed);
         Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed);
+    }
+
+    /// <summary>#163: Series' own two-shape widening — explicit id present, matched by that id, name differs.</summary>
+    [TestMethod]
+    public async Task PlanSeriesAsync_ExplicitIdMatchFound_NameDiffers_StagesModifyAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = await SeedExistingSeriesAsync(conn, "The Hobbit");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            series: [new SeriesEntry { Id = id, Name = "The Hobbit Trilogy" }]);
+
+        var seriesAction = actions.Single(a => a.EntityType == "Series");
+        Assert.AreEqual(ImportActionKind.Modify, seriesAction.ActionType.Parsed);
+        Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed);
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.MergedFields!)!;
+        Assert.AreEqual("The Hobbit Trilogy", merged.Name);
+    }
+
+    /// <summary>#163: Series' own two-shape widening — explicit id present, matched by that id, universeId differs.</summary>
+    [TestMethod]
+    public async Task PlanSeriesAsync_ExplicitIdMatchFound_UniverseIdDiffers_StagesModifyAction()
+    {
+        using var conn = await OpenConnectionAsync();
+        var originalUniverseId = await SeedExistingUniverseAsync(conn, "Middle Earth");
+        var newUniverseId      = await SeedExistingUniverseAsync(conn, "The Shire Cinematic Universe");
+        var id = await SeedExistingSeriesAsync(conn, "The Hobbit", universeId: originalUniverseId);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            series: [new SeriesEntry { Id = id, Name = "The Hobbit", UniverseName = "The Shire Cinematic Universe" }]);
+
+        var seriesAction = actions.Single(a => a.EntityType == "Series");
+        Assert.AreEqual(ImportActionKind.Modify, seriesAction.ActionType.Parsed);
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.MergedFields!)!;
+        Assert.AreEqual(newUniverseId.ToUpperInvariant(), merged.UniverseId?.ToUpperInvariant());
     }
 
     [TestMethod]
