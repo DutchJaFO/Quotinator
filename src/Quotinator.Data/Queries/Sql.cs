@@ -196,7 +196,7 @@ internal static class Sql
         // convention still renders consistently, without needing a data migration to re-case
         // already-stored rows. Not a const because IdClauses.SelectColumn is a method call.
         private static readonly string SelectColumns =
-            $"{IdClauses.SelectColumn("Id")}, {IdClauses.SelectColumn("BatchId")}, ActionType, EntityType, {IdClauses.SelectColumn("EntityId")}, {IdClauses.SelectColumn("ExistingBatchId")}, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, MarkCompletenessAs, DetectedAt, AppliedAt, DiscardedAt";
+            $"{IdClauses.SelectColumn("Id")}, {IdClauses.SelectColumn("BatchId")}, ActionType, EntityType, {IdClauses.SelectColumn("EntityId")}, {IdClauses.SelectColumn("ExistingBatchId")}, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, OriginalDecision, MarkCompletenessAs, DetectedAt, AppliedAt, DiscardedAt";
 
         /// <summary>Paginated action listing, newest first, with optional filters.</summary>
         internal static string SelectPaged(bool filterBatchId, bool filterStatus, bool filterEntityType = false)

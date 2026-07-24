@@ -224,6 +224,27 @@ public class SystemImportActionWriterReaderTests
         Assert.AreEqual("\"second\"", found.MergedFields);
     }
 
+    /// <summary>
+    /// Found in passing during #163's export/bulk-decide work: the OriginalDecision column (added in
+    /// this same issue, step 2) was being written by MarkDecidedAsync but SystemImportAction had no
+    /// property to bind it back to, so the reflection-driven SELECT column list (ReflectedColumnMetadata)
+    /// never selected it — every existing MarkDecidedAsync test passed null for this parameter, so the
+    /// gap went uncaught. Proves the round trip now works: write a non-null value, read it back.
+    /// </summary>
+    [TestMethod]
+    public async Task MarkDecidedAsync_WithOriginalDecision_RoundTripsThroughGetByIdAsync()
+    {
+        var entry = BuildPendingModify("BATCH-1");
+        await _writer.WriteAsync(entry);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        await _writer.MarkDecidedAsync(entry.Id, """{"date":{"choice":"Replace"}}""", null, """{"date":{"choice":"Replace"}}""", conn);
+
+        var found = await _reader.GetByIdAsync(entry.Id);
+        Assert.AreEqual("""{"date":{"choice":"Replace"}}""", found!.OriginalDecision);
+    }
+
     [TestMethod]
     public async Task ClearDecisionAsync_RevertsToPendingAndClearsMergedFields()
     {

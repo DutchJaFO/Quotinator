@@ -50,6 +50,13 @@ public sealed class SystemImportAction : RecordBase
     /// <summary>Opaque JSON blob recording, per field, which side won — populated at staging time for every Modify (ambiguous or not), never for an Add.</summary>
     public string? MergedFields { get; init; }
 
+    /// <summary>
+    /// Opaque JSON blob recording the caller's actual per-field <c>Keep</c>/<c>Replace</c>/<c>Custom</c>
+    /// choice, as supplied to <c>DecideAsync</c> — distinct from <see cref="MergedFields"/>, which
+    /// stores only the resolved value, not which choice produced it (#163). Null until decided.
+    /// </summary>
+    public string? OriginalDecision { get; init; }
+
     /// <summary>The action's current state. <see cref="SafeValue{T}.Raw"/> preserves an unrecognised stored value for diagnosis.</summary>
     public SafeValue<ImportActionStatus?> Status { get; init; } = SafeValue<ImportActionStatus?>.Empty;
 
