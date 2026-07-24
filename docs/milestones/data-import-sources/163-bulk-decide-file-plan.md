@@ -286,7 +286,7 @@ Mirroring #173's own Person work exactly, for both Series and Universe:
 
 ### 7. Define the flat row DTO and the field-name ↔ `ConflictDecisionRequest` mapping
 
-**Status:** Not started.
+**Status:** Done.
 
 New DTO (name TBD, e.g. `ImportActionFieldRow`) in `Quotinator.Core.Models`:
 `ActionId` (Guid), `EntityId` (string), `EntityType` (string), `Field` (string), `ExistingValue`
