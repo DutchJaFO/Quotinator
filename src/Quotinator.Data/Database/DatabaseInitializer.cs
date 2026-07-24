@@ -34,6 +34,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 8, Sql = ImportActionMigrations.CreateImportActionsTable },
         new SchemaMigration { Version = 9, Sql = ImportConflictMigrations.AddStatusCheckConstraint },
         new SchemaMigration { Version = 10, Sql = ImportActionMigrations.AddBlockedStatusAndMarkCompletenessAs },
+        new SchemaMigration { Version = 11, Sql = ImportActionMigrations.AddOriginalDecision },
     ];
 
     // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and
@@ -102,7 +103,8 @@ public class DatabaseInitializer : IDatabaseInitializer
             DateCreated        TEXT    NOT NULL,
             DateModified       TEXT,
             DateDeleted        TEXT,
-            IsDeleted          INTEGER NOT NULL DEFAULT 0
+            IsDeleted          INTEGER NOT NULL DEFAULT 0,
+            OriginalDecision   TEXT
         );
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_BatchId ON System_ImportActions (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_Status ON System_ImportActions (Status);

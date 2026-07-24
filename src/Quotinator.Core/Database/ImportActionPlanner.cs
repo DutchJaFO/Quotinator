@@ -62,8 +62,8 @@ internal static class ImportActionPlanner
         // #180: Universe then Series are planned before Source — a declared series[] entry's own
         // universeName must resolve against an already-built universe index, and a sources[] entry's
         // seriesName must resolve against an already-built series index.
-        await PlanUniverseAsync(connection, universe ?? [], batchIdStr, universeIndex, actions, now, transaction);
-        await PlanSeriesAsync(connection, series ?? [], batchIdStr, universeIndex, seriesIndex, actions, now, transaction);
+        await PlanUniverseAsync(connection, universe ?? [], batchIdStr, policy, universeIndex, actions, now, transaction);
+        await PlanSeriesAsync(connection, series ?? [], batchIdStr, policy, universeIndex, seriesIndex, actions, now, transaction);
 
         // #162: explicit Source declarations are planned before quotes resolve — a quote may
         // reference a source this same file also declares explicitly, mirroring the existing
@@ -594,6 +594,14 @@ internal static class ImportActionPlanner
     private static IReadOnlyDictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name };
 
+    /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#163).</summary>
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(SeriesActionPayload payload) =>
+        new Dictionary<string, object?> { ["name"] = payload.Name, ["universeId"] = payload.UniverseId };
+
+    /// <summary>Same key name as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#163).</summary>
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(UniverseActionPayload payload) =>
+        new Dictionary<string, object?> { ["name"] = payload.Name };
+
     // ── #173: explicit Person planning ───────────────────────────────────────
     // Same shape as PlanSourcesAsync — id-first lookup, natural-key fallback for a not-yet-migrated
     // row, personIndex populated in both branches so a same-batch quote's author resolves to the
@@ -893,12 +901,93 @@ internal static class ImportActionPlanner
     // a Universe/Series entry that already exists by name is simply reused (indexed for a dependent
     // Series/Source to resolve against), never diffed or re-staged.
 
+    // ── #163: Universe/Series widened to the two-shape (Correction/Creation) pattern ────────
+    // Mirrors PlanPeopleAsync's shape exactly (id-match → field-map diff → unchanged-check →
+    // policy-based resolution → CompletenessGuard.ShouldBlock → stage Blocked/Modify), plus
+    // PlanSourcesAsync's own explicit-id-honoured-on-Add precedent (canonicalId ?? EntityIdentity...)
+    // for the genuinely-new Add path — the same fix #175 found missing for Character.
+
     private static async Task PlanUniverseAsync(
         SqliteConnection connection, IReadOnlyList<UniverseEntry> universes, string batchId,
-        Dictionary<string, string> universeIndex, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        DuplicateResolutionPolicy policy, Dictionary<string, string> universeIndex,
+        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var u in universes)
         {
+            var canonicalId = u.Id is { } uIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(uIdRaw, out var uIdCanonical)
+                ? uIdCanonical
+                : u.Id;
+
+            var existing = canonicalId is { } explicitId
+                ? await connection.QuerySingleOrDefaultAsync<(string Name, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                    Sql.Universe.SelectExistingById, new { id = explicitId }, transaction)
+                : null;
+
+            if (existing is { } row)
+            {
+                var matchedId       = canonicalId!;
+                var existingPayload = new UniverseActionPayload(row.Name);
+                var incomingPayload = new UniverseActionPayload(u.Name);
+                var existingFields  = ToFieldMap(existingPayload);
+                var incomingFields  = ToFieldMap(incomingPayload);
+
+                universeIndex[u.Name] = matchedId;
+
+                var changedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                var resolved    = policy switch
+                {
+                    DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
+                        new UniverseActionPayload((string)mergeResult!.MergedFields["name"]!),
+                    DuplicateResolutionPolicy.Skip => existingPayload,
+                    _ => incomingPayload,
+                };
+
+                var resolvedFields        = ToFieldMap(resolved);
+                var effectiveChangedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+
+                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.Universe,
+                        EntityId      = matchedId,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                var isPending = policy == DuplicateResolutionPolicy.Review;
+                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchId,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType    = ImportActionEntityTypes.Universe,
+                    EntityId      = matchedId,
+                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
+
+            // Falls back to natural-key: an id-less entry, or a declared id that matched nothing.
             var matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
                 Sql.Universe.SelectIdByName, new { name = u.Name }, transaction);
             if (matchesByKey is not null)
@@ -907,7 +996,7 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            var stableId = EntityIdentity.UniverseId(u.Name);
+            var stableId = canonicalId ?? EntityIdentity.UniverseId(u.Name);
             universeIndex[u.Name] = stableId;
 
             actions.Add(new SystemImportAction
@@ -932,11 +1021,104 @@ internal static class ImportActionPlanner
     /// </summary>
     private static async Task PlanSeriesAsync(
         SqliteConnection connection, IReadOnlyList<SeriesEntry> series, string batchId,
-        Dictionary<string, string> universeIndex, Dictionary<string, string> seriesIndex,
-        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        DuplicateResolutionPolicy policy, Dictionary<string, string> universeIndex,
+        Dictionary<string, string> seriesIndex, List<SystemImportAction> actions, DateTime now,
+        SqliteTransaction? transaction)
     {
         foreach (var s in series)
         {
+            var canonicalId = s.Id is { } sIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(sIdRaw, out var sIdCanonical)
+                ? sIdCanonical
+                : s.Id;
+
+            async Task<string?> ResolveUniverseIdAsync(string? universeName) =>
+                universeName is null
+                    ? null
+                    : universeIndex.TryGetValue(universeName, out var indexed)
+                        ? indexed
+                        : await connection.ExecuteScalarAsync<Guid?>(Sql.Universe.SelectIdByName, new { name = universeName }, transaction) is { } found
+                            ? found.ToCanonicalId()
+                            : null;
+
+            var existing = canonicalId is { } explicitId
+                ? await connection.QuerySingleOrDefaultAsync<(string Name, string? UniverseId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                    Sql.Series.SelectExistingById, new { id = explicitId }, transaction)
+                : null;
+
+            if (existing is { } row)
+            {
+                var matchedId       = canonicalId!;
+                var incomingUniverseId = await ResolveUniverseIdAsync(s.UniverseName);
+                // UniverseName is only ever carried on the incoming side: EnsureUniverseExistsAsync's
+                // defensive re-insert (guarding against Series applying before its own Universe within
+                // the same batch) only genuinely fires when the resolved UniverseId is the incoming one
+                // — the existing side's Universe row is already known to exist, so the insert there is
+                // always a safe no-op regardless of what name is passed.
+                var existingPayload = new SeriesActionPayload(row.Name, row.UniverseId);
+                var incomingPayload = new SeriesActionPayload(s.Name, incomingUniverseId, s.UniverseName);
+                var existingFields  = ToFieldMap(existingPayload);
+                var incomingFields  = ToFieldMap(incomingPayload);
+
+                seriesIndex[s.Name] = matchedId;
+
+                var changedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                var resolved    = policy switch
+                {
+                    DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
+                        new SeriesActionPayload(
+                            (string)mergeResult!.MergedFields["name"]!,
+                            (string?)mergeResult.MergedFields["universeId"],
+                            (string?)mergeResult.MergedFields["universeId"] == incomingUniverseId ? s.UniverseName : null),
+                    DuplicateResolutionPolicy.Skip => existingPayload,
+                    _ => incomingPayload,
+                };
+
+                var resolvedFields        = ToFieldMap(resolved);
+                var effectiveChangedFields = new HashSet<string>(
+                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+
+                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.Series,
+                        EntityId      = matchedId,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                var isPending = policy == DuplicateResolutionPolicy.Review;
+                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+
+                actions.Add(new SystemImportAction
+                {
+                    BatchId       = batchId,
+                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType    = ImportActionEntityTypes.Series,
+                    EntityId      = matchedId,
+                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt    = now,
+                });
+                continue;
+            }
+
+            // Falls back to natural-key: an id-less entry, or a declared id that matched nothing.
             var matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
                 Sql.Series.SelectIdByName, new { name = s.Name }, transaction);
             if (matchesByKey is not null)
@@ -945,15 +1127,8 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            string? universeId = null;
-            if (s.UniverseName is { } universeName)
-                universeId = universeIndex.TryGetValue(universeName, out var indexed)
-                    ? indexed
-                    : await connection.ExecuteScalarAsync<Guid?>(Sql.Universe.SelectIdByName, new { name = universeName }, transaction) is { } found
-                        ? found.ToCanonicalId()
-                        : null;
-
-            var stableId = EntityIdentity.SeriesId(s.Name);
+            var universeId = await ResolveUniverseIdAsync(s.UniverseName);
+            var stableId   = canonicalId ?? EntityIdentity.SeriesId(s.Name);
             seriesIndex[s.Name] = stableId;
 
             actions.Add(new SystemImportAction
@@ -962,7 +1137,7 @@ internal static class ImportActionPlanner
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType    = ImportActionEntityTypes.Series,
                 EntityId      = stableId,
-                IncomingValue = JsonSerializer.Serialize(new SeriesActionPayload(s.Name, universeId)),
+                IncomingValue = JsonSerializer.Serialize(new SeriesActionPayload(s.Name, universeId, s.UniverseName)),
                 Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt    = now,
             });
@@ -1298,7 +1473,7 @@ internal sealed class QuoteActionPayload
 internal sealed record SourceActionPayload(string Title, string Type, string? Date = null, string? SeriesId = null);
 
 /// <summary>Staged payload for a Series Add <see cref="SystemImportAction"/> (#180). <see cref="UniverseId"/> is a resolved id, not the file's own <c>universeName</c> text.</summary>
-internal sealed record SeriesActionPayload(string Name, string? UniverseId = null);
+internal sealed record SeriesActionPayload(string Name, string? UniverseId = null, string? UniverseName = null);
 
 /// <summary>Staged payload for a Universe Add <see cref="SystemImportAction"/> (#180).</summary>
 internal sealed record UniverseActionPayload(string Name);

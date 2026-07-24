@@ -108,4 +108,18 @@ public static class ImportActionMigrations
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_BatchId ON System_ImportActions (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_Status ON System_ImportActions (Status);
         """;
+
+    /// <summary>
+    /// #163: adds a nullable <c>OriginalDecision</c> column, storing the caller's actual per-field
+    /// <c>FieldDecision</c> choices (serialized) at <c>DecideAsync</c> time — separately from
+    /// <c>MergedFields</c>, which continues to store only the resolved value, untouched by this
+    /// migration and unread by any new code this issue adds. A genuine additive column — SQLite's
+    /// <c>ALTER TABLE ... ADD COLUMN</c> has no <c>IF NOT EXISTS</c> form (verified against sqlite.org),
+    /// so this migration is idempotent only in the sense every migration here already is: applied
+    /// exactly once, tracked by <c>System_SchemaVersion</c>, never replayed against a database that
+    /// already has this column.
+    /// </summary>
+    public const string AddOriginalDecision = """
+        ALTER TABLE System_ImportActions ADD COLUMN OriginalDecision TEXT;
+        """;
 }

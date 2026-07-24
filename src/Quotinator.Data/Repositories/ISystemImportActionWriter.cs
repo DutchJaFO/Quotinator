@@ -30,8 +30,11 @@ public interface ISystemImportActionWriter
     /// same action overwrites the prior decision (the "change your mind before apply" path).
     /// <paramref name="markCompletenessAs"/> (#165) is always written, including <c>null</c> —
     /// resubmitting a decide call without the override clears a previously-set one.
+    /// <paramref name="originalDecisionJson"/> (#163) is always written too, including <c>null</c> —
+    /// the caller's actual per-field choices, serialized, separately from the resolved
+    /// <paramref name="decisionsJson"/> value, so a later export can show exactly what was decided.
     /// </summary>
-    Task MarkDecidedAsync(Guid id, string decisionsJson, CompletenessStatus? markCompletenessAs, IDbConnection connection, IDbTransaction? transaction = null);
+    Task MarkDecidedAsync(Guid id, string decisionsJson, CompletenessStatus? markCompletenessAs, string? originalDecisionJson, IDbConnection connection, IDbTransaction? transaction = null);
 
     /// <summary>
     /// Reverts a staged decision back to <c>Pending</c> and clears the stored decision

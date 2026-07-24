@@ -41,13 +41,13 @@ public static class ImportActionEntityTypes
     public const string SoundCue = "SoundCue";
 
     /// <summary>
-    /// A <c>Series</c> row (#180). Add-only, natural-key-keyed by <c>Name</c> like
-    /// <see cref="Source"/>/<see cref="Person"/> — but with no Modify/decidability surface, since a
-    /// Series has only a Name (plus its Universe link).
+    /// A <c>Series</c> row (#180). Natural-key-keyed by <c>Name</c> like
+    /// <see cref="Source"/>/<see cref="Person"/>. Gained full Modify/decidability (Name and its
+    /// Universe link) in #163, matching every other entity type.
     /// </summary>
     public const string Series = "Series";
 
-    /// <summary>A <c>Universe</c> row (#180). Add-only, natural-key-keyed by <c>Name</c> — see <see cref="Series"/>'s remark.</summary>
+    /// <summary>A <c>Universe</c> row (#180). Natural-key-keyed by <c>Name</c> — see <see cref="Series"/>'s remark; gained Modify/decidability (Name) in #163.</summary>
     public const string Universe = "Universe";
 
     /// <summary>All nine values.</summary>

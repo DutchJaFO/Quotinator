@@ -529,7 +529,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(0, legacyCount, "The legacy SchemaVersion table must no longer exist after the rename");
         Assert.AreEqual(1, preservedRow, "The pre-existing version-history row must survive the rename, not be wiped");
-        Assert.AreEqual(10, db2.DataSchemaVersion, "Data migrations 2-10 (the rename, System_ImportConflicts, System_ChangeLog, both RecordBase retrofits, ExistingBatchId, System_ImportActions, the Status CHECK constraint, and Blocked/MarkCompletenessAs) should all have replayed after the legacy rename");
+        Assert.AreEqual(11, db2.DataSchemaVersion, "Data migrations 2-11 (the rename, System_ImportConflicts, System_ChangeLog, both RecordBase retrofits, ExistingBatchId, System_ImportActions, the Status CHECK constraint, Blocked/MarkCompletenessAs, and OriginalDecision) should all have replayed after the legacy rename");
     }
 
     /// <summary>Data migration 2 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
@@ -912,7 +912,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(10, db.DataSchemaVersion);
+        Assert.AreEqual(11, db.DataSchemaVersion);
         Assert.AreEqual(11, db.SchemaVersion);
     }
 
@@ -941,7 +941,7 @@ public class DatabaseInitializerTests
         await db2.InitialiseAsync();
 
         Assert.AreEqual(11, db2.SchemaVersion,      "All eight remaining App migrations (4, 5, 6, 7, 8, 9, 10, and 11) should have replayed");
-        Assert.AreEqual(10, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
+        Assert.AreEqual(11, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
     }
 
     /// <summary>

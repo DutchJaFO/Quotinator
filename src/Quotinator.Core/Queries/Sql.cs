@@ -475,6 +475,14 @@ internal static class Sql
         internal const string DeleteAll   = "DELETE FROM Series;";
         internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM Series WHERE Name = @name AND IsDeleted = 0;";
 
+        /// <summary>#163's id-first lookup for an explicit <c>series[]</c> entry — mirrors <see cref="People.SelectExistingById"/>. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark. UniverseId is wrapped per ADR 012's uniform SELECT-list rule (every selected id-suffixed column, not only ones known to be string-typed today).</summary>
+        internal static readonly string SelectExistingById =
+            $"SELECT Name, {IdClauses.SelectColumn("UniverseId")}, CompletenessStatus FROM Series WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+
+        /// <summary>#163's Modify apply — writes an id-matched Series' corrected Name/UniverseId. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
+        internal static readonly string UpdateFieldsById =
+            $"UPDATE Series SET Name = @name, UniverseId = @universeId, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale. UniverseId (nullable) is resolved by name at planning time, same as Sources.SeriesId.</summary>
         internal const string InsertIfNotExists =
             "INSERT OR IGNORE INTO Series (Id, Name, UniverseId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
@@ -520,6 +528,14 @@ internal static class Sql
         internal const string CountActive = "SELECT COUNT(*) FROM Universe WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Universe;";
         internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM Universe WHERE Name = @name AND IsDeleted = 0;";
+
+        /// <summary>#163's id-first lookup for an explicit <c>universe[]</c> entry — mirrors <see cref="People.SelectExistingById"/>. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
+        internal static readonly string SelectExistingById =
+            $"SELECT Name, CompletenessStatus FROM Universe WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+
+        /// <summary>#163's Modify apply — writes an id-matched Universe's corrected Name. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
+        internal static readonly string UpdateFieldsById =
+            $"UPDATE Universe SET Name = @name, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
         internal const string InsertIfNotExists =

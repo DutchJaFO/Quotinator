@@ -97,7 +97,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 (string?)sourceResult.MergedFields["date"],
                 (string?)sourceResult.MergedFields["seriesId"]);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSourcePayload), request.MarkCompletenessAs);
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSourcePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(sourceDecisions));
             return;
         }
 
@@ -117,7 +117,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 (string?)stageDirectionResult.MergedFields["imageUrl"],
                 existingStageDirectionPayload.Translations);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedStageDirectionPayload), request.MarkCompletenessAs);
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedStageDirectionPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(stageDirectionDecisions));
             return;
         }
 
@@ -138,7 +138,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 (string?)soundCueResult.MergedFields["imageUrl"],
                 existingSoundCuePayload.Translations);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSoundCuePayload), request.MarkCompletenessAs);
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSoundCuePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(soundCueDecisions));
             return;
         }
 
@@ -157,7 +157,7 @@ public sealed class SqliteImportActionService : IImportActionService
 
             var resolvedConversationPayload = new ConversationActionPayload((string?)conversationResult.MergedFields["description"], []);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedConversationPayload), request.MarkCompletenessAs);
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedConversationPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(conversationDecisions));
             return;
         }
 
@@ -177,7 +177,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 (string?)personResult.MergedFields["dateOfBirth"],
                 (string?)personResult.MergedFields["dateOfDeath"]);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPersonPayload), request.MarkCompletenessAs);
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPersonPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(personDecisions));
             return;
         }
 
@@ -201,7 +201,47 @@ public sealed class SqliteImportActionService : IImportActionService
                 existingCharacterPayload.SourceTitle,
                 existingCharacterPayload.SourceType);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedCharacterPayload), request.MarkCompletenessAs);
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedCharacterPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(characterDecisions));
+            return;
+        }
+
+        if (action.EntityType == ImportActionEntityTypes.Series && action.ActionType.Parsed == ImportActionKind.Modify)
+        {
+            var existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayload>(action.ExistingValue!)!;
+            var incomingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayload>(action.IncomingValue!)!;
+
+            var existingSeriesFields = ToFieldMap(existingSeriesPayload);
+            var incomingSeriesFields = ToFieldMap(incomingSeriesPayload);
+            var seriesDecisions      = ToSeriesDecisionMap(request);
+
+            var seriesResult = FieldMergeResolver.ResolveWithDecisions(existingSeriesFields, incomingSeriesFields, seriesDecisions);
+
+            // UniverseName only carries through when the resolved universeId is the incoming one — see
+            // the matching comment in ImportActionPlanner.PlanSeriesAsync's merge branch.
+            var resolvedSeriesUniverseId = (string?)seriesResult.MergedFields["universeId"];
+            var resolvedSeriesPayload = new SeriesActionPayload(
+                (string)seriesResult.MergedFields["name"]!,
+                resolvedSeriesUniverseId,
+                resolvedSeriesUniverseId == incomingSeriesPayload.UniverseId ? incomingSeriesPayload.UniverseName : null);
+
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSeriesPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(seriesDecisions));
+            return;
+        }
+
+        if (action.EntityType == ImportActionEntityTypes.Universe && action.ActionType.Parsed == ImportActionKind.Modify)
+        {
+            var existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayload>(action.ExistingValue!)!;
+            var incomingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayload>(action.IncomingValue!)!;
+
+            var existingUniverseFields = ToFieldMap(existingUniversePayload);
+            var incomingUniverseFields = ToFieldMap(incomingUniversePayload);
+            var universeDecisions      = ToUniverseDecisionMap(request);
+
+            var universeResult = FieldMergeResolver.ResolveWithDecisions(existingUniverseFields, incomingUniverseFields, universeDecisions);
+
+            var resolvedUniversePayload = new UniverseActionPayload((string)universeResult.MergedFields["name"]!);
+
+            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedUniversePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(universeDecisions));
             return;
         }
 
@@ -229,7 +269,7 @@ public sealed class SqliteImportActionService : IImportActionService
             PersonId    = incomingPayload.PersonId,
         };
 
-        await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPayload), request.MarkCompletenessAs);
+        await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(decisions));
     }
 
     /// <inheritdoc/>
@@ -518,16 +558,45 @@ public sealed class SqliteImportActionService : IImportActionService
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "person", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Series:
-                    // #180: Add-only, no Modify branch — a Series is never anything but soft-deleted
-                    // on reversal, guarded by the same active-reference check as Source/Person's own
-                    // Add branch (a Source this same batch didn't touch may still point at it).
+                    if (action.ActionType.Parsed == ImportActionKind.Modify)
+                    {
+                        // #163: a Modify reversal restores the prior field values — it never deletes
+                        // anything, so no active-reference check is needed (unlike an Add reversal).
+                        var existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayload>(action.ExistingValue!)!;
+                        await sqliteConnection.ExecuteAsync(Sql.Series.UpdateFieldsById, new
+                        {
+                            name = existingSeriesPayload.Name,
+                            universeId = existingSeriesPayload.UniverseId,
+                            dateModified = now,
+                            id = action.EntityId,
+                        }, sqliteTransaction);
+                        await QuoteSeedWriter.LogChangeAsync(changeLog, "series", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingSeriesPayload, sqliteConnection, sqliteTransaction);
+                        break;
+                    }
+                    // A Series Add is soft-deleted, guarded by the same active-reference check as
+                    // Source/Person's own Add branch (a Source this same batch didn't touch may still
+                    // point at it).
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Series.CountActiveReferences, action.EntityId))
                         break;
                     await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Series"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "series", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Universe:
-                    // #180: Add-only, no Modify branch — see Series' remark above.
+                    if (action.ActionType.Parsed == ImportActionKind.Modify)
+                    {
+                        // #163: a Modify reversal restores the prior Name — it never deletes anything,
+                        // so no active-reference check is needed (unlike an Add reversal).
+                        var existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayload>(action.ExistingValue!)!;
+                        await sqliteConnection.ExecuteAsync(Sql.Universe.UpdateFieldsById, new
+                        {
+                            name = existingUniversePayload.Name,
+                            dateModified = now,
+                            id = action.EntityId,
+                        }, sqliteTransaction);
+                        await QuoteSeedWriter.LogChangeAsync(changeLog, "universe", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingUniversePayload, sqliteConnection, sqliteTransaction);
+                        break;
+                    }
+                    // A Universe Add is soft-deleted — see Series' remark above.
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Universe.CountActiveReferences, action.EntityId))
                         break;
                     await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Universe"), new { now, id = action.EntityId }, sqliteTransaction);
@@ -803,22 +872,66 @@ public sealed class SqliteImportActionService : IImportActionService
             }
             case ImportActionEntityTypes.Universe:
             {
-                // #180: Add-only — no Modify branch exists, unlike Source/Person above.
-                var payload = JsonSerializer.Deserialize<UniverseActionPayload>(action.IncomingValue!)!;
-                await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog);
+                var isUniverseAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                if (isUniverseAdd)
+                {
+                    var payload = JsonSerializer.Deserialize<UniverseActionPayload>(action.IncomingValue!)!;
+                    await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog);
+                }
+                else
+                {
+                    var payload = JsonSerializer.Deserialize<UniverseActionPayload>(action.MergedFields
+                        ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
+                    await sqliteConnection.ExecuteAsync(Sql.Universe.UpdateFieldsById, new
+                    {
+                        name = payload.Name,
+                        dateModified = now,
+                        id = action.EntityId,
+                    }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "universe", action.EntityId, ChangeAction.Modified,
+                        oldValue: action.ExistingValue, newValue: payload, sqliteConnection, sqliteTransaction);
+                }
+
                 await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Universe.SelectCompletenessById, Sql.Universe.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
                 break;
             }
             case ImportActionEntityTypes.Series:
             {
-                // #180: Add-only — no Modify branch exists, unlike Source/Person above.
-                var payload = JsonSerializer.Deserialize<SeriesActionPayload>(action.IncomingValue!)!;
-                // Defensive: Series.UniverseId (#179) is a real FK, but System_ImportActions rows
-                // apply in whatever order the coordinator returns them — this action's own Universe
-                // may not have applied yet. Idempotent, so re-running it here is safe either way.
-                if (payload.UniverseId is not null)
-                    await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, payload.UniverseId, payload.Name, batchId, now, changeLog);
-                await EnsureSeriesExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, payload.UniverseId, batchId, now, changeLog);
+                var isSeriesAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                if (isSeriesAdd)
+                {
+                    var payload = JsonSerializer.Deserialize<SeriesActionPayload>(action.IncomingValue!)!;
+                    // Defensive: Series.UniverseId (#179) is a real FK, but System_ImportActions rows
+                    // apply in whatever order the coordinator returns them — this action's own Universe
+                    // may not have applied yet. Idempotent, so re-running it here is safe either way.
+                    // Uses payload.UniverseName (the Universe's own name), not payload.Name (the
+                    // Series' own name) — passing the wrong one would create the Universe row under
+                    // the Series' name if this defensive insert ever genuinely fires.
+                    if (payload.UniverseId is not null)
+                        await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, payload.UniverseId, payload.UniverseName, batchId, now, changeLog);
+                    await EnsureSeriesExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, payload.UniverseId, batchId, now, changeLog);
+                }
+                else
+                {
+                    // #163: Modify writes Name and UniverseId — unlike Character's SourceType, a
+                    // Series' UniverseId is not documented as immutable, so both are correctable.
+                    var payload = JsonSerializer.Deserialize<SeriesActionPayload>(action.MergedFields
+                        ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
+                    // Uses payload.UniverseName (the Universe's own name), not payload.Name (the
+                    // Series' own name) — see the matching comment in the Add branch above.
+                    if (payload.UniverseId is not null)
+                        await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, payload.UniverseId, payload.UniverseName, batchId, now, changeLog);
+                    await sqliteConnection.ExecuteAsync(Sql.Series.UpdateFieldsById, new
+                    {
+                        name = payload.Name,
+                        universeId = payload.UniverseId,
+                        dateModified = now,
+                        id = action.EntityId,
+                    }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "series", action.EntityId, ChangeAction.Modified,
+                        oldValue: action.ExistingValue, newValue: payload, sqliteConnection, sqliteTransaction);
+                }
+
                 await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Series.SelectCompletenessById, Sql.Series.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
                 break;
             }
@@ -1068,7 +1181,7 @@ public sealed class SqliteImportActionService : IImportActionService
     }
 
     private async Task EnsureUniverseExistsAsync(
-        SqliteConnection connection, SqliteTransaction transaction, string id, string name,
+        SqliteConnection connection, SqliteTransaction transaction, string id, string? name,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
         var inserted = await connection.ExecuteAsync(Sql.Universe.InsertIfNotExists,
@@ -1198,6 +1311,8 @@ public sealed class SqliteImportActionService : IImportActionService
             "StageDirection" => ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayload>(json)!),
             "SoundCue"       => ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayload>(json)!),
             "Conversation"   => ToFieldMap(JsonSerializer.Deserialize<ConversationActionPayload>(json)!),
+            "Series"         => ToFieldMap(JsonSerializer.Deserialize<SeriesActionPayload>(json)!),
+            "Universe"       => ToFieldMap(JsonSerializer.Deserialize<UniverseActionPayload>(json)!),
             _                => null,
         };
     }
@@ -1219,6 +1334,14 @@ public sealed class SqliteImportActionService : IImportActionService
 
     private static IReadOnlyDictionary<string, object?> ToFieldMap(ConversationActionPayload payload) =>
         new Dictionary<string, object?> { ["description"] = payload.Description, ["lineCount"] = payload.Lines.Count };
+
+    /// <summary>Same key names as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload — must stay in sync (#163).</summary>
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(SeriesActionPayload payload) =>
+        new Dictionary<string, object?> { ["name"] = payload.Name, ["universeId"] = payload.UniverseId };
+
+    /// <summary>Same key name as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload — must stay in sync (#163).</summary>
+    private static IReadOnlyDictionary<string, object?> ToFieldMap(UniverseActionPayload payload) =>
+        new Dictionary<string, object?> { ["name"] = payload.Name };
 
     private static IReadOnlyList<string> ComputeAmbiguousFields(SystemImportAction action)
     {
@@ -1274,6 +1397,18 @@ public sealed class SqliteImportActionService : IImportActionService
                 var incomingPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.IncomingValue!)!;
                 existing = new Dictionary<string, object?> { ["description"] = existingPayload.Description };
                 incoming = new Dictionary<string, object?> { ["description"] = incomingPayload.Description };
+                break;
+            }
+            case ImportActionEntityTypes.Series:
+            {
+                existing = ToFieldMap(JsonSerializer.Deserialize<SeriesActionPayload>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<SeriesActionPayload>(action.IncomingValue!)!);
+                break;
+            }
+            case ImportActionEntityTypes.Universe:
+            {
+                existing = ToFieldMap(JsonSerializer.Deserialize<UniverseActionPayload>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<UniverseActionPayload>(action.IncomingValue!)!);
                 break;
             }
             default:
@@ -1385,6 +1520,37 @@ public sealed class SqliteImportActionService : IImportActionService
         }
 
         Add("name", request.CharacterName);
+
+        return map;
+    }
+
+    private static Dictionary<string, FieldMergeDecision> ToSeriesDecisionMap(ConflictDecisionRequest request)
+    {
+        var map = new Dictionary<string, FieldMergeDecision>();
+
+        void Add(string field, FieldDecision? decision)
+        {
+            if (decision is null) return;
+            map[field] = new FieldMergeDecision(decision.Choice, decision.Value);
+        }
+
+        Add("name", request.SeriesName);
+        Add("universeId", request.SeriesUniverseId);
+
+        return map;
+    }
+
+    private static Dictionary<string, FieldMergeDecision> ToUniverseDecisionMap(ConflictDecisionRequest request)
+    {
+        var map = new Dictionary<string, FieldMergeDecision>();
+
+        void Add(string field, FieldDecision? decision)
+        {
+            if (decision is null) return;
+            map[field] = new FieldMergeDecision(decision.Choice, decision.Value);
+        }
+
+        Add("name", request.UniverseName);
 
         return map;
     }

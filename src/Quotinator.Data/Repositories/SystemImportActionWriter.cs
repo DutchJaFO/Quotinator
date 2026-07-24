@@ -39,7 +39,7 @@ public sealed class SystemImportActionWriter : SqliteRepositoryBase<SystemImport
         => await connection.InsertAsync(entries, transaction);
 
     /// <inheritdoc/>
-    public async Task MarkDecidedAsync(Guid id, string decisionsJson, CompletenessStatus? markCompletenessAs, IDbConnection connection, IDbTransaction? transaction = null)
+    public async Task MarkDecidedAsync(Guid id, string decisionsJson, CompletenessStatus? markCompletenessAs, string? originalDecisionJson, IDbConnection connection, IDbTransaction? transaction = null)
         => await connection.ExecuteAsync(
             Sql.SystemImportActions.MarkDecided,
             new
@@ -48,6 +48,7 @@ public sealed class SystemImportActionWriter : SqliteRepositoryBase<SystemImport
                 status             = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 mergedFields       = decisionsJson,
                 markCompletenessAs = markCompletenessAs?.ToString(),
+                originalDecision   = originalDecisionJson,
                 dateModified       = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat),
             },
             transaction);

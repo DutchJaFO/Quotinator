@@ -272,9 +272,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync();
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(10, dataRows,
+        Assert.AreEqual(11, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(10, db.DataSchemaVersion);
+        Assert.AreEqual(11, db.DataSchemaVersion);
     }
 
     /// <summary>
@@ -332,7 +332,7 @@ public class DatabaseInitializerOwnershipTests
 
         await db.InitialiseAsync();
 
-        Assert.AreEqual(10, db.DataSchemaVersion, "Migration 10 must have applied on top of the existing v9 database");
+        Assert.AreEqual(11, db.DataSchemaVersion, "Migrations 10 and 11 must have applied on top of the existing v9 database");
 
         using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
         await conn.OpenAsync();

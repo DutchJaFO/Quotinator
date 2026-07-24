@@ -240,10 +240,14 @@ internal static class Sql
         /// payload. Idempotent: resubmitting overwrites the prior decision.
         /// <c>MarkCompletenessAs</c> (#165) is always written, including <c>NULL</c> — resubmitting
         /// a decide call without the override must clear a previously-set one, not leave it stale.
+        /// <c>OriginalDecision</c> (#163) is always written too, including <c>NULL</c> — it stores the
+        /// caller's actual per-field <c>Keep</c>/<c>Replace</c>/<c>Custom</c> choices (serialized),
+        /// separately from <c>MergedFields</c>'s resolved value, so a later export can show exactly
+        /// what was decided rather than inferring it from the resolved value alone.
         /// </summary>
         // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
         internal static readonly string MarkDecided =
-            $"UPDATE System_ImportActions SET Status = @status, MergedFields = @mergedFields, MarkCompletenessAs = @markCompletenessAs, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+            $"UPDATE System_ImportActions SET Status = @status, MergedFields = @mergedFields, MarkCompletenessAs = @markCompletenessAs, OriginalDecision = @originalDecision, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>Reverts a staged decision back to Pending (#154's undo-before-apply) — clears MergedFields. Case-insensitive — see <see cref="MarkDecided"/>.</summary>
         internal static readonly string ClearDecision =

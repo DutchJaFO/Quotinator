@@ -54,7 +54,8 @@ public class ImportActionResolutionCoordinatorTests
                 DateCreated        TEXT    NOT NULL,
                 DateModified       TEXT,
                 DateDeleted        TEXT,
-                IsDeleted          INTEGER NOT NULL DEFAULT 0
+                IsDeleted          INTEGER NOT NULL DEFAULT 0,
+                OriginalDecision   TEXT
             );
             """);
 

@@ -47,7 +47,8 @@ public class SystemImportActionWriterReaderTests
                 DateCreated        TEXT    NOT NULL,
                 DateModified       TEXT,
                 DateDeleted        TEXT,
-                IsDeleted          INTEGER NOT NULL DEFAULT 0
+                IsDeleted          INTEGER NOT NULL DEFAULT 0,
+                OriginalDecision   TEXT
             );
             """);
 
@@ -200,7 +201,7 @@ public class SystemImportActionWriterReaderTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        await _writer.MarkDecidedAsync(entry.Id, """{"date":{"choice":"Replace"}}""", null, conn);
+        await _writer.MarkDecidedAsync(entry.Id, """{"date":{"choice":"Replace"}}""", null, null, conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -215,8 +216,8 @@ public class SystemImportActionWriterReaderTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        await _writer.MarkDecidedAsync(entry.Id, "\"first\"", null, conn);
-        await _writer.MarkDecidedAsync(entry.Id, "\"second\"", null, conn);
+        await _writer.MarkDecidedAsync(entry.Id, "\"first\"", null, null, conn);
+        await _writer.MarkDecidedAsync(entry.Id, "\"second\"", null, null, conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -231,7 +232,7 @@ public class SystemImportActionWriterReaderTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        await _writer.MarkDecidedAsync(entry.Id, "\"decision\"", null, conn);
+        await _writer.MarkDecidedAsync(entry.Id, "\"decision\"", null, null, conn);
         await _writer.ClearDecisionAsync(entry.Id, conn);
 
         var found = await _reader.GetByIdAsync(entry.Id);

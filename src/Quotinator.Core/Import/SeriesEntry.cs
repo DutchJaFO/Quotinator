@@ -4,12 +4,16 @@ namespace Quotinator.Core.Import;
 
 /// <summary>
 /// An explicit Series declaration deserialized from a Quotinator source file's <c>series</c> section
-/// (#180). Matched by <see cref="Name"/> only — unlike <see cref="SourceEntry"/>/<see cref="PersonEntry"/>,
-/// a Series entry carries no explicit <c>id</c>, since <see cref="EntityIdentity.SeriesId"/> derives it
-/// from the name alone.
+/// (#180). Widened by #163 to the same two-shape pattern <see cref="SourceEntry"/>/<see cref="PersonEntry"/>
+/// use: <see cref="Id"/> present → Correction, matched by that id; <see cref="Id"/> absent →
+/// Creation/Enrichment, matched/created by <see cref="Name"/> via <see cref="EntityIdentity.SeriesId"/>.
 /// </summary>
 public sealed class SeriesEntry
 {
+    /// <summary>Explicit stable id (#163). Present → Correction shape, matched by this id.</summary>
+    [JsonPropertyName("id")]
+    public string? Id { get; init; }
+
     /// <summary>The series' name. Unique.</summary>
     [JsonPropertyName("name")]
     public required string Name { get; init; }

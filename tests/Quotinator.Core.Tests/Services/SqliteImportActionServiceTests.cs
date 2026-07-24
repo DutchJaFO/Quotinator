@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -8,10 +9,12 @@ using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
+using Quotinator.Core.Helpers;
 using Quotinator.Core.Services;
 
 namespace Quotinator.Core.Tests.Services;
@@ -1682,5 +1685,91 @@ public class SqliteImportActionServiceTests
         conn.Open();
         var isDeleted = await conn.ExecuteScalarAsync<int>("SELECT IsDeleted FROM Characters WHERE UPPER(Id) = UPPER(@id)", new { id });
         Assert.AreEqual(1, isDeleted, "The Add's reversal must actually soft-delete the row, not silently no-op against a lowercase explicit id");
+    }
+
+    /// <summary>
+    /// Found in passing during #163's Series/Universe implementation, not part of #163's own scope:
+    /// ApplyResolvedActionAsync's defensive EnsureUniverseExistsAsync call (guarding against a Series
+    /// action applying before its own linked Universe action within the same batch) used to pass the
+    /// Series' own Name as the Universe's name — if the Universe genuinely didn't exist yet, the
+    /// defensive insert would create it with the wrong name. Staged directly (bypassing the planner)
+    /// to force the out-of-order scenario deterministically: a Series Add referencing a Universe id
+    /// that was never itself staged or applied in this batch.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyBatchAsync_SeriesAddReferencesUnappliedUniverse_EnsuresUniverseWithCorrectName()
+    {
+        var batchId    = Guid.NewGuid();
+        var seriesId   = "a3111111-1111-4111-8111-111111111163";
+        var universeId = "a4111111-1111-4111-8111-111111111163"; // never staged/applied in this batch — simulates the out-of-order case
+
+        using (var setupConn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await setupConn.OpenAsync();
+            var setupNow = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            await setupConn.ExecuteAsync(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
+                new { Id = batchId, now = setupNow });
+        }
+
+        var payload = new SeriesActionPayload("The Lord of the Rings", universeId, "Middle Earth");
+        await _actionWriter.WriteAsync(new SystemImportAction
+        {
+            BatchId       = batchId.ToCanonicalId(),
+            ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+            EntityType    = ImportActionEntityTypes.Series,
+            EntityId      = seriesId,
+            IncomingValue = JsonSerializer.Serialize(payload),
+            Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+            DetectedAt    = DateTime.UtcNow,
+        });
+
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var universeName = await conn.ExecuteScalarAsync<string>(
+            "SELECT Name FROM Universe WHERE UPPER(Id) = UPPER(@id)", new { id = universeId });
+        Assert.AreEqual("Middle Earth", universeName,
+            "The defensively-created Universe row must use the Universe's own name, not the Series' name");
+    }
+
+    /// <summary>
+    /// Same bug as <see cref="ApplyBatchAsync_SeriesAddReferencesUnappliedUniverse_EnsuresUniverseWithCorrectName"/>,
+    /// but exercises the real <c>ImportActionPlanner.PlanSeriesAsync</c> construction path instead of a
+    /// hand-built <see cref="SeriesActionPayload"/> — proving the planner itself now populates
+    /// <c>UniverseName</c> on the incoming-side payload it stages, not just that the applier reads it
+    /// correctly when it happens to be present. Only the Series action is staged, simulating its own
+    /// Universe action never having applied within this batch.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyBatchAsync_SeriesAddViaPlanner_ReferencesUnappliedUniverse_EnsuresUniverseWithCorrectName()
+    {
+        var batchId = Guid.NewGuid();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        var setupNow = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
+            new { Id = batchId, now = setupNow });
+
+        var actions = await ImportActionPlanner.PlanAsync(
+            conn, [], batchId, DuplicateResolutionPolicy.NewestWins,
+            series: [new SeriesEntry { Name = "The Lord of the Rings", UniverseName = "Middle Earth" }],
+            universe: [new UniverseEntry { Name = "Middle Earth" }]);
+
+        var seriesAction = actions.Single(a => a.EntityType == ImportActionEntityTypes.Series);
+        var stagedUniverseId = ((SeriesActionPayload)JsonSerializer.Deserialize(seriesAction.IncomingValue!, typeof(SeriesActionPayload))!).UniverseId;
+
+        // Deliberately skip staging the Universe action — simulates it never having applied in this batch.
+        await _actionWriter.WriteAsync(seriesAction);
+
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+
+        var universeName = await conn.ExecuteScalarAsync<string>(
+            "SELECT Name FROM Universe WHERE UPPER(Id) = UPPER(@id)", new { id = stagedUniverseId });
+        Assert.AreEqual("Middle Earth", universeName,
+            "The planner-staged payload must carry the Universe's own name so the defensive insert never uses the Series' name");
     }
 }

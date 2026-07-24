@@ -1,6 +1,6 @@
 # #163 — Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153)
 
-**Status:** Planning
+**Status:** In progress (step 7)
 **GitHub issue:** #163
 **Tiers required:** T1, T2
 **Depends on:** #162, #149, #154
@@ -217,7 +217,7 @@ expected reason before any implementation code is written.
 
 ### 2. `System_ImportActions.OriginalDecision` — new additive migration
 
-**Status:** Not started.
+**Status:** Done.
 
 New Quotinator.Data-owned migration in `src/Quotinator.Data/Database/ImportActionMigrations.cs`
 (`ALTER TABLE System_ImportActions ADD COLUMN OriginalDecision TEXT;` — nullable, one schema change,
@@ -228,7 +228,7 @@ baseline vs. incremental replay for `System_ImportActions`.
 
 ### 3. `DecideAsync` persists the original per-field decision
 
-**Status:** Not started.
+**Status:** Done.
 
 Every existing branch in `SqliteImportActionService.DecideAsync` (Source, StageDirection, SoundCue,
 Conversation, Person, Character, Quote) additionally serializes the resolved
@@ -241,7 +241,7 @@ does with `MergedFields`. Confirm this doesn't affect `ApplyResolvedActionAsync`
 
 ### 4. Series/Universe: widen `series[]`/`universe[]` schema to the two-shape pattern
 
-**Status:** Not started.
+**Status:** Done.
 
 `schemas/source-extended.schema.json`'s `series`/`universe` `$def`s gain an optional `id` (UUID v4,
 same pattern as `source`/`character`/`person`). `SeriesEntry.cs`/`UniverseEntry.cs` gain a nullable
@@ -250,7 +250,7 @@ Creation-via-Name behaviour, unchanged.
 
 ### 5. Series/Universe: `Sql.Series`/`Sql.Universe` new queries and planner Modify branches
 
-**Status:** Not started.
+**Status:** Done.
 
 Add `SelectExistingById`, `UpdateFieldsById`, `SelectCompletenessById`, `UpdateCompletenessById` to
 both `Sql.Series` and `Sql.Universe` nested classes (`src/Quotinator.Core/Queries/Sql.cs`), mirroring
@@ -267,7 +267,7 @@ precedent (the same bug #175 found and fixed for Character — do not repeat it 
 
 ### 6. Series/Universe: apply/decide/ambiguous-fields/reverse/cleanup branches
 
-**Status:** Not started.
+**Status:** Done.
 
 Mirroring #173's own Person work exactly, for both Series and Universe:
 - `ApplyResolvedActionAsync`'s Series/Universe cases split on `ActionType`: `Add` unchanged; `Modify`

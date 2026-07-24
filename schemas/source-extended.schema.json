@@ -112,7 +112,9 @@
       "type": "object",
       "required": ["name"],
       "additionalProperties": false,
+      "description": "Two shapes (#163). CORRECTION: include 'id' — the Series is matched by that explicit id, so 'name'/'universeName' can both be corrected. CREATION/ENRICHMENT: omit 'id' — the Series is matched, or if genuinely new created, by natural key (name).",
       "properties": {
+        "id":           { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive (#163). Optional — omit it to match by natural key (name) instead." },
         "name":         { "type": "string", "minLength": 1 },
         "universeName": { "type": ["string", "null"], "description": "Name of the Universe (#180) this Series belongs to, if any. Resolved to a Universe id at import time, same as Source.seriesName." }
       }
@@ -121,7 +123,9 @@
       "type": "object",
       "required": ["name"],
       "additionalProperties": false,
+      "description": "Two shapes (#163). CORRECTION: include 'id' — the Universe is matched by that explicit id, so 'name' can be corrected. CREATION/ENRICHMENT: omit 'id' — the Universe is matched, or if genuinely new created, by natural key (name).",
       "properties": {
+        "id":   { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive (#163). Optional — omit it to match by natural key (name) instead." },
         "name": { "type": "string", "minLength": 1 }
       }
     },
