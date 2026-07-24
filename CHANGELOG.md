@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-24 18:39 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-24 22:50 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -33,6 +33,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Most films, shows, and other sources shown by quotes now include a release date — previously this was almost always left blank.
 - A character who appears across multiple entries in the same series (like a recurring character in a trilogy) is now recognised as the same character instead of being tracked separately for each entry, as long as they're the same type of media.
 - A character's name can now be corrected after the fact too, the same way a source's, person's, stage direction's, sound cue's, and conversation's details already could.
+- A series's or universe's name (and a series's linked universe) can now be corrected after the fact too, the same way a source's, person's, character's, stage direction's, sound cue's, and conversation's details already could.
+- Quotes waiting for review after an import can now be resolved all at once by exporting them to a file, editing the decisions, and importing the file back — instead of deciding each one individually through the API.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -87,6 +89,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New `GET /api/v1/masterdata/stagedirections` and `.../stagedirections/{id}` endpoints list and look up stage directions individually
 - New `GET /api/v1/masterdata/soundcues` and `.../soundcues/{id}` endpoints list and look up sound cues individually
 - `characters[]` entries can now stage a `Modify` action instead of only ever being added once — matched by an optional explicit id, or resolved via the same type-anchored, series-scoped matching algorithm used to recognise a character across sources, using a new `sourceTitle`/`sourceType` pair on the entry; the same policy-resolved diff and completeness-guard blocking every other correctable entity already uses (issue #175)
+- `series[]` and `universe[]` entries can now stage a `Modify` action instead of only ever being added once — matched by an optional explicit id, the same policy-resolved diff and completeness-guard blocking every other correctable entity already uses (issue #163)
+- New `GET /api/v1/import/actions/export` endpoint exports every field awaiting a decision in a staged import batch — including ones currently held for review — as a CSV or JSON file (issue #163)
+- New `POST /api/v1/import/actions/bulk-decide` endpoint accepts an edited export file back and applies every decision it contains in one call, reporting any row that couldn't be applied without affecting the rest of the file (issue #163)
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before

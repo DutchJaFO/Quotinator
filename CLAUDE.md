@@ -1349,6 +1349,80 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    rm -f .claude/temp/smoke-175-*.json
    ```
 
+   **Bulk-decide a staged batch via file export/import — CSV and JSON** (#163) — `GET
+   /import/actions/export` flattens every decidable field of a batch's Pending/Decided/Blocked Modify
+   actions into rows; `POST /import/actions/bulk-decide` reads an edited version of that export back
+   and applies each row's decision. Proves the export→edit→bulk-decide→apply round trip works over the
+   real wire format in both directions, plus two live-only bugs found and fixed during this issue's own
+   T2 pass that no unit test could catch (see below).
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" \
+     -F "file=@data/sources/quotinator-curated.json" \
+     -F 'settings={"duplicateResolution":{"default":"review"}}' \
+     "http://localhost:8080/api/v1/import"
+   ```
+   Note the returned `batchId` (must be `202`, with pending Quote Modify actions to export).
+   ```bash
+   curl -s "http://localhost:8080/api/v1/import/actions/export?batchId=<batchId>&format=json" -o /tmp/export.json
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+     -F "batchId=<batchId>" -F "file=@/tmp/export.json" \
+     "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<batchId>"
+   ```
+   Must return `200` with `errors: []` and `actionsDecided` matching the batch's own pending-action
+   count — submitting export's own unmodified JSON output back into bulk-decide must always round-trip
+   cleanly with zero errors. **This is the exact scenario that caught the first live-only bug**: ASP.NET's
+   app-wide camelCase JSON default (`ConfigureHttpJsonOptions` in `Program.cs`) means export's own output
+   is genuinely camelCase, but `ParseJsonRows`'s `element.Deserialize<ImportActionFieldRow>()` call had no
+   explicit `JsonSerializerOptions`, silently falling back to `System.Text.Json`'s case-sensitive,
+   PascalCase-only library default — every row failed with "missing required properties" despite the data
+   being present. Every unit-test-level round trip used bare `JsonSerializer` calls on both sides, which
+   silently agreed on PascalCase and never exercised the app's real camelCase configuration — only a live
+   HTTP round trip through the actual pipeline surfaces this class of bug. Fixed via a dedicated
+   `JsonSerializerOptions { PropertyNameCaseInsensitive = true }` passed explicitly to the `Deserialize`
+   call. Apply the batch and repeat via CSV to confirm the second wire format too:
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+   ```
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" \
+     -F "file=@data/sources/quotinator-curated.json" \
+     -F 'settings={"duplicateResolution":{"default":"review"}}' \
+     "http://localhost:8080/api/v1/import"
+   curl -s "http://localhost:8080/api/v1/import/actions/export?batchId=<new batchId>&format=csv" -o /tmp/export.csv
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+     -F "batchId=<new batchId>" -F "file=@/tmp/export.csv" -F "format=csv" \
+     "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<new batchId>&format=csv"
+   ```
+   Must also return `200` with `errors: []`. Malformed-row resilience — edit one row of the CSV to an
+   invalid `Decision` value, leave the rest untouched, resubmit:
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+     -F "batchId=<new batchId>" -F "file=@/tmp/export-with-one-bad-row.csv" -F "format=csv" \
+     "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<new batchId>&format=csv"
+   ```
+   Must return `200` (never `422` for the whole request) with exactly one entry in `errors[]` naming the
+   bad row's `actionId`, and every other row's action still decided — "one bad row never aborts the
+   rest of the file", matching `POST /import`'s own established contract. Unknown-format and missing-key
+   checks:
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<batchId>&format=xml"
+   curl -s -w "\n%{http_code}\n" -X POST -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<batchId>"
+   ```
+   Must return `422` (unknown `format`) and `401` (no `X-Api-Key`) respectively. **The second live-only
+   bug**: a request with neither `batchId` nor a multipart body at all —
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/bulk-decide"
+   ```
+   Must return `422` with `"detail":"You must provide a batchId."` — before the fix this returned a bare,
+   uninformative `400` with no `detail` at all, because the endpoint originally bound `IFormFile? file`
+   directly as a minimal-API parameter, which requires a form content-type to even attempt binding; a
+   request with no `Content-Type`/body fails that check at the framework's own routing/binding layer, not
+   as a normal thrown exception, bypassing `BadRequestExceptionHandler` entirely — the exact same bug
+   class `POST /import` fixed earlier (see "Bodyless request validation" (#154) above) but never retrofitted
+   onto this newer endpoint. Fixed by switching the parameter to `HttpRequest request` and checking
+   `batchId`, then `request.HasFormContentType`, manually before ever attempting to read the form — mirroring
+   `HandleImportFromRequestAsync`'s existing pattern exactly.
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle

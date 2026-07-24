@@ -95,7 +95,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Waiting for release | T1 ✅ T2 ✅ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
 | [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [175-character-modify-plan.md](175-character-modify-plan.md) |
 | [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
-| [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | In progress | T1 ⬜ T2 ⬜ | [163-bulk-decide-file-plan.md](163-bulk-decide-file-plan.md) |
+| [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Waiting for release | T1 ✅ T2 ✅ | [163-bulk-decide-file-plan.md](163-bulk-decide-file-plan.md) |
 | [#181](https://github.com/DutchJaFO/Quotinator/issues/181) | Minimal per-source conflict-resolution rule file + curated field-override preload | Planning | T1 ⬜ T2 ⬜ | [181-minimal-conflict-resolution-rule-file-plan.md](181-minimal-conflict-resolution-rule-file-plan.md) |
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning | T1 ⬜ T2 ⬜ | [153-declarative-conflict-resolution-plan.md](153-declarative-conflict-resolution-plan.md) |
 | [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Waiting for release | T1 ✅ T2 ✅ | [154-import-staging-plan.md](154-import-staging-plan.md) |
@@ -244,7 +244,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 60 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Waiting for release |
 | 61 | #175 | Character: explicit id, Modify/decidability | Waiting for release |
 | 62 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
-| 63 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | In progress |
+| 63 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Waiting for release |
 | 64 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload | Planning |
 | 65 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
 | 66 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |

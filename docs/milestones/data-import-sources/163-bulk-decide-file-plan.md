@@ -1,6 +1,6 @@
 # #163 — Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153)
 
-**Status:** In progress
+**Status:** Done
 **GitHub issue:** #163
 **Tiers required:** T1, T2
 **Depends on:** #162, #149, #154
@@ -410,7 +410,7 @@ across the full nine-entity-type surface, not just Quote/Source.
 | 16 | ✅ | `README.md`/`addon/DOCS.md` document both new endpoints | Live (review) | Manual diff review — both tables list `GET /import/actions/export` and `POST /import/actions/bulk-decide` with accurate parameter/status-code descriptions |
 | 17 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite passes, 0 warnings, 0 errors |
 | 18 | ✅ | T1 — app starts in Visual Studio; schema migration (`OriginalDecision` column, v10 → v11) applies cleanly against a real dev database | Live (T1) | Developer's own pass, confirmed via pasted startup log (2026-07-25): clean startup, "applying 1 pending Data migration(s) (version 10 → 11)... schema updated (data v11, app v11)", `GET /api/v1/quotes?universe=` and masterdata/conversations endpoints all `200` |
-| 19 | ❌ | T2 — Docker smoke test: export a batch (including a `Blocked` action), edit the file, bulk-decide it, confirm the fields (and completeness) reflect the edited decisions | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` then curl-based export → edit → bulk-decide → `GET /import/actions/apply` cycle against a container-run instance, per CLAUDE.md's smoke-test conventions |
+| 19 | ✅ | T2 — Docker smoke test: export a batch (including a `Blocked` action), edit the file, bulk-decide it, confirm the fields (and completeness) reflect the edited decisions | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` then curl-based export → edit → bulk-decide → apply cycle against a container-run instance (JSON and CSV, unmodified round trip, `Blocked`-action resolution via edited CSV, malformed-row resilience, unknown-format/missing-key checks, bodyless-request check) — see CLAUDE.md's "Bulk-decide a staged batch via file export/import — CSV and JSON" (#163) smoke-test section |
 
 ---
 
@@ -431,3 +431,25 @@ or #173 individually), and (b) changes what `DecideAsync` persists so a decision
 (a real schema change, not just new read/write endpoints). Both were flagged as open questions rather
 than assumed, and both were explicitly confirmed rather than picked unilaterally — see "Resolved
 decisions" above for the full reasoning behind each.
+
+**T2 found and fixed two live-only bugs no unit test had caught, for two different reasons.** (1)
+`ParseJsonRows`'s `element.Deserialize<ImportActionFieldRow>()` call had no explicit
+`JsonSerializerOptions`, so it silently fell back to `System.Text.Json`'s case-sensitive, PascalCase-only
+library default — while `Program.cs`'s `ConfigureHttpJsonOptions` makes every real HTTP response
+(including export's own output) camelCase. Every row failed with "missing required properties" when
+export's own unmodified output was resubmitted. This was invisible to unit tests because the round-trip
+test used bare `JsonSerializer.Serialize`/`Deserialize` calls on both sides, which silently agreed on
+PascalCase and never exercised the app's real camelCase configuration — genuinely T2-only, since the bug
+was specifically about what the framework does differently from a raw `JsonSerializer` call. Fixed via a
+dedicated `JsonSerializerOptions { PropertyNameCaseInsensitive = true }`. (2) `POST bulk-decide` bound
+`IFormFile? file` directly as a minimal-API parameter; a request with no `Content-Type`/body at all fails
+that binding at the framework's routing layer, bypassing `BadRequestExceptionHandler` and producing a
+bare `400` instead of the endpoint's own `422`. This mirrors `POST /import`'s own historical bug
+(CLAUDE.md's "Bodyless request validation" (#154)) exactly, but the fix was never retrofitted onto this
+newer endpoint. Unlike (1), this one turned out not to require Docker to reproduce — once a
+`PostAsync(url, content: null)`-style test was written (mirroring `ImportEndpointTests.
+Import_NoBodyAndNoBatchId_Returns422`'s existing pattern), it failed in-process too; the gap was that no
+such test existed yet for this endpoint, not that the bug was fundamentally undetectable outside a live
+container. Fixed by switching to `HttpRequest request` and checking `HasFormContentType` manually, same
+as `POST /import`. Both are documented in CLAUDE.md's T2 smoke-test checklist and covered by regression
+tests.
