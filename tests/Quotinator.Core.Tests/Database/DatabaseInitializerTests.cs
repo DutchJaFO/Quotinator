@@ -235,6 +235,83 @@ public class DatabaseInitializerTests
         Assert.AreEqual(13, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ConversationLines WHERE IsDeleted = 0;"));
     }
 
+    // ── #181: per-source conflict-resolution rule file ──────────────────────────
+
+    /// <summary>
+    /// End-to-end seeding proof: a second file re-introducing an already-seeded quote under Review
+    /// policy, with a matching per-source rule (Keep) for the only field that differs, auto-resolves
+    /// and applies immediately at startup instead of leaving a Pending action stuck in
+    /// System_ImportActions — no manual decide/apply step needed.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_SecondFileReviewPolicyMatchingRule_AutoResolvesNoPendingActionLeft()
+    {
+        const string quoteId = "d1111111-1111-4111-8111-111111111111";
+        var baselinePath = Path.Combine(_tempDir, "baseline.json");
+        var conflictPath = Path.Combine(_tempDir, "conflict.json");
+        var rulesPath    = Path.Combine(_tempDir, "conflict-rules.json");
+
+        File.WriteAllText(baselinePath,
+            """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
+                .Replace("QUOTE_ID", quoteId));
+        File.WriteAllText(conflictPath,
+            """[{"id":"QUOTE_ID","quote":"Changed text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
+                .Replace("QUOTE_ID", quoteId));
+        File.WriteAllText(rulesPath,
+            """{"rules":[{"quoteId":"QUOTE_ID","field":"quoteText","resolution":"Keep"}]}"""
+                .Replace("QUOTE_ID", quoteId));
+
+        var batch = new SeedBatch(
+            [
+                new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
+                new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: rulesPath),
+            ],
+            ManifestPolicy.HardcodedDefault, "rule-file-test");
+
+        var db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions WHERE Status = 'Pending';"),
+            "The rule fully covers the only ambiguous field — nothing should be left Pending");
+        Assert.AreEqual("Original text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id;", new { id = quoteId }),
+            "Keep must resolve to the existing (baseline) value");
+    }
+
+    /// <summary>Regression guard: the same scenario with no rule file at all must behave exactly as before #181 — Pending, nothing overwritten.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_SecondFileReviewPolicyNoRuleFile_StagesPendingAsBefore()
+    {
+        const string quoteId = "d2111111-1111-4111-8111-111111111111";
+        var baselinePath = Path.Combine(_tempDir, "baseline2.json");
+        var conflictPath = Path.Combine(_tempDir, "conflict2.json");
+
+        File.WriteAllText(baselinePath,
+            """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
+                .Replace("QUOTE_ID", quoteId));
+        File.WriteAllText(conflictPath,
+            """[{"id":"QUOTE_ID","quote":"Changed text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
+                .Replace("QUOTE_ID", quoteId));
+
+        var batch = new SeedBatch(
+            [
+                new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
+                new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
+            ],
+            ManifestPolicy.HardcodedDefault, "no-rule-file-test");
+
+        var db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions WHERE Status = 'Pending';"),
+            "No rule file was referenced — behaviour must be unchanged from before #181");
+    }
+
     /// <summary>No source files configured — database is created but stays empty.</summary>
     [TestMethod]
     public async Task InitialiseAsync_EmptyBatches_DatabaseIsEmpty()

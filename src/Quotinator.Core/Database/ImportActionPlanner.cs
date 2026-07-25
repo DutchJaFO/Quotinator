@@ -45,7 +45,8 @@ internal static class ImportActionPlanner
         IReadOnlyList<PersonEntry>? people = null,
         IReadOnlyList<SeriesEntry>? series = null,
         IReadOnlyList<UniverseEntry>? universe = null,
-        IReadOnlyList<CharacterEntry>? characters = null)
+        IReadOnlyList<CharacterEntry>? characters = null,
+        ConflictRuleLookup? conflictRules = null)
     {
         var actions        = new List<SystemImportAction>();
         var sourceIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -179,9 +180,41 @@ internal static class ImportActionPlanner
                 continue;
             }
 
+            // #181: a matching per-source rule auto-resolves an otherwise-ambiguous field instead of
+            // leaving it Pending for a human. Only relevant under Review — every other policy already
+            // resolves deterministically without one. A rule never bypasses CompletenessGuard above —
+            // a Complete row still blocks regardless of whether a rule could have resolved the change.
+            FieldMergeResult? ruleResolved = null;
+            if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
+            {
+                var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
+                foreach (var field in existingFields.Keys)
+                {
+                    if (conflictRules.TryResolve(q.Id, field, out var choice))
+                        ruleDecisions[field] = new FieldMergeDecision(choice, null);
+                }
+
+                if (ruleDecisions.Count > 0)
+                {
+                    try
+                    {
+                        ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions);
+                    }
+                    catch (UnresolvedFieldConflictException)
+                    {
+                        // Not every ambiguous field has a matching rule — fall through to normal Pending staging.
+                    }
+                }
+            }
+
+            if (ruleResolved is not null)
+                resolved = QuoteFieldMerge.ApplyMergedFields(ruleResolved.MergedFields, q);
+
             // Review is the only policy left Pending; every other policy is Decided at detection
             // time, with the final resolved values already computed so apply never needs policy logic.
-            var isPending = policy == DuplicateResolutionPolicy.Review;
+            // A fully rule-resolved Review action is also Decided immediately — nothing is left for a
+            // human to decide.
+            var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
             var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
             actions.Add(new SystemImportAction

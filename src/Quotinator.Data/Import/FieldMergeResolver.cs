@@ -158,15 +158,38 @@ public static class FieldMergeResolver
     /// Compares two field values for equality, treating list/array-valued fields (e.g. <c>genres</c>)
     /// by sequence content rather than reference identity — <see cref="List{T}"/> doesn't override
     /// <see cref="object.Equals(object)"/>, so two equal-content-but-different-instance lists would
-    /// otherwise compare unequal. Used both for merge resolution and for any changed-field diff a
-    /// caller computes outside this class (e.g. <c>ImportActionPlanner</c>'s completeness-blocking
-    /// check, #168).
+    /// otherwise compare unequal. String values (scalar or within a collection) compare
+    /// case-insensitively, matching this project's case-insensitive-by-default convention already
+    /// applied to id/enum comparisons — a value arriving from an outside source (an import file, in
+    /// this case) must never be treated as a "conflict" purely because of letter casing (e.g. "star
+    /// wars" vs "Star Wars"), the same reasoning <c>QuoteIdentity.StableId</c> already applies when
+    /// generating a quote's own id. Applied uniformly to every field, including free-text ones — a
+    /// casing-only correction to a field's own content is treated the same as any other non-conflict.
+    /// Used both for merge resolution and for any changed-field diff a caller computes outside this
+    /// class (e.g. <c>ImportActionPlanner</c>'s completeness-blocking check, #168).
     /// </summary>
     public static bool ValuesEqual(object? a, object? b)
     {
         if (a is IEnumerable ea && a is not string && b is IEnumerable eb && b is not string)
-            return ea.Cast<object?>().SequenceEqual(eb.Cast<object?>());
-        return Equals(a, b);
+            return ea.Cast<object?>().SequenceEqual(eb.Cast<object?>(), ScalarComparer.Instance);
+        return ScalarComparer.Instance.Equals(a, b);
+    }
+
+    /// <summary>Scalar equality with case-insensitive string comparison; delegates to <see cref="object.Equals(object)"/> for every other type.</summary>
+    private sealed class ScalarComparer : IEqualityComparer<object?>
+    {
+        public static readonly ScalarComparer Instance = new();
+
+        public new bool Equals(object? a, object? b) => a is string sa && b is string sb
+            ? string.Equals(sa, sb, StringComparison.OrdinalIgnoreCase)
+            : object.Equals(a, b);
+
+        public int GetHashCode(object? obj) => obj switch
+        {
+            string s => StringComparer.OrdinalIgnoreCase.GetHashCode(s),
+            null     => 0,
+            _        => obj.GetHashCode(),
+        };
     }
 }
 

@@ -11,6 +11,7 @@ namespace Quotinator.Data.Import;
 /// <param name="Converter">Optional name of an <see cref="IQuoteSourceConverter"/> plugin that transforms this source's raw upstream format into Quotinator's canonical schema before it is cached. Only meaningful alongside <paramref name="DownloadUrl"/>.</param>
 /// <param name="ConverterOptions">Optional configuration passed through verbatim to <paramref name="Converter"/>'s <c>ConvertAsync</c>. Shape is entirely converter-specific, so this stays an opaque, undeserialized payload. Only meaningful alongside <paramref name="Converter"/>.</param>
 /// <param name="Policy">Optional per-file duplicate-resolution policy override, taking priority over the owning <see cref="SeedBatch"/>'s <see cref="SeedBatch.Policy"/> when present.</param>
+/// <param name="RuleFilePath">Absolute path to this source's own per-source conflict-resolution rule file (#181), resolved from the manifest entry's <c>ruleFile</c> property the same way <paramref name="FilePath"/> is resolved from <c>file</c>. <see langword="null"/> when the manifest entry has none.</param>
 public record SeedFile(
     string FilePath,
     string? Url,
@@ -19,4 +20,5 @@ public record SeedFile(
     DownloadTarget? DownloadTarget = null,
     string? Converter = null,
     JsonElement? ConverterOptions = null,
-    ManifestPolicy? Policy = null);
+    ManifestPolicy? Policy = null,
+    string? RuleFilePath = null);

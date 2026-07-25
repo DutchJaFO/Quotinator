@@ -38,4 +38,12 @@ internal sealed class ManifestFileEntryDto : SourceImportSettingsDto
     /// <summary>GitHub coordinates this source is fetched from, if hosted there. <see cref="Url"/>/<see cref="DownloadUrl"/> are computed from these, not set directly.</summary>
     [JsonPropertyName("github")]
     public ManifestGithubDto? Github { get; init; }
+
+    /// <summary>
+    /// Filename (relative to this manifest's directory, same convention as <see cref="File"/>) of this
+    /// source's own per-source conflict-resolution rule file (#181) — a <see cref="ConflictResolutionRuleFile"/>.
+    /// Absent means no rules are loaded for this source (equivalent to an empty rule file).
+    /// </summary>
+    [JsonPropertyName("ruleFile")]
+    public string? RuleFile { get; init; }
 }

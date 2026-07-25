@@ -115,6 +115,46 @@ public class FieldMergeResolverTests
         CollectionAssert.DoesNotContain(result.FieldsFromIncoming.ToList(), "genres");
     }
 
+    // ── Case-insensitive value comparison ────────────────────────────────────
+
+    [TestMethod]
+    [DataRow("Star Wars", "star wars")]
+    [DataRow("Luke", "luke")]
+    [DataRow("THE SIMPSONS MOVIE", "the simpsons movie")]
+    public void ValuesEqual_ScalarStringsDifferOnlyByCase_ReturnsTrue(string a, string b)
+        => Assert.IsTrue(FieldMergeResolver.ValuesEqual(a, b));
+
+    [TestMethod]
+    public void ValuesEqual_ScalarStringsGenuinelyDiffer_ReturnsFalse()
+        => Assert.IsFalse(FieldMergeResolver.ValuesEqual("Star Wars", "Star Trek"));
+
+    [TestMethod]
+    public void ValuesEqual_ArrayOfStringsDifferOnlyByCase_ReturnsTrue()
+        => Assert.IsTrue(FieldMergeResolver.ValuesEqual(new List<string> { "Drama", "Sci-Fi" }, new List<string> { "drama", "sci-fi" }));
+
+    [TestMethod]
+    public void Resolve_ScalarStringsDifferOnlyByCase_TreatedAsEqual_KeepsExistingCasing()
+    {
+        var existing = new Dictionary<string, object?> { ["source"] = "The Simpsons Movie" };
+        var incoming = new Dictionary<string, object?> { ["source"] = "the simpsons movie" };
+
+        var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
+
+        Assert.AreEqual("The Simpsons Movie", result.MergedFields["source"], "A casing-only difference is not a true conflict — the existing side's casing is kept, not silently replaced");
+        CollectionAssert.DoesNotContain(result.FieldsFromIncoming.ToList(), "source");
+    }
+
+    [TestMethod]
+    public void ResolveWithDecisions_FieldsDifferOnlyByCase_NotTreatedAsAmbiguous()
+    {
+        var existing = new Dictionary<string, object?> { ["source"] = "Star Wars" };
+        var incoming = new Dictionary<string, object?> { ["source"] = "star wars" };
+
+        var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
+
+        Assert.AreEqual("Star Wars", result.MergedFields["source"]);
+    }
+
     // ── ResolveWithDecisions (#149) ──────────────────────────────────────────
 
     [TestMethod]

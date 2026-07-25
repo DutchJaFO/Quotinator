@@ -425,6 +425,43 @@ public class ManifestSeedPlannerTests
         Assert.IsNull(files.Single().Policy, "No per-file override — falls through to the manifest/config tiers instead");
     }
 
+    // ── #181: ruleFile ───────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void PlanSeed_FileEntryHasRuleFile_ResolvedToAbsolutePathSameConventionAsFile()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "a.json",
+                ["name"] = "a",
+                ["ruleFile"] = "a-conflict-rules.json",
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.AreEqual(Path.Combine(_tempDir, "a-conflict-rules.json"), files.Single().RuleFilePath);
+    }
+
+    [TestMethod]
+    public void PlanSeed_FileEntryOmitsRuleFile_RuleFilePathIsNull()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject { ["file"] = "a.json", ["name"] = "a" })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.IsNull(files.Single().RuleFilePath);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void WriteFile(string name, string content)

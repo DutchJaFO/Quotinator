@@ -87,6 +87,11 @@
               }
             },
             "description": "GitHub coordinates this source is fetched from. url and downloadUrl are computed from these using the standard github.com and raw.githubusercontent.com conventions — do not also set url/downloadUrl on the same entry; use a plain url for non-GitHub external sources instead."
+          },
+          "ruleFile": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filename (relative to this manifest's directory, same convention as file) of this source's own per-source conflict-resolution rule file (#181) — a set of quoteId+field rules that auto-resolve a genuinely ambiguous field instead of leaving it staged Pending under the review policy. Omit for a source with no known recurring conflicts, equivalent to an empty rule file."
           }
         }
       }
@@ -96,7 +101,7 @@
     "policy": {
       "type": "string",
       "enum": ["skip", "newest-wins", "merge-ours", "merge-theirs", "review"],
-      "description": "skip — keep the first occurrence and ignore later files with the same ID. newest-wins — replace the existing record with the version from the later file. merge-ours — auto-fill blank fields from either side; keep the existing value on a true conflict. merge-theirs — auto-fill blank fields from either side; take the incoming value on a true conflict. review — do not auto-resolve; behaves like skip today, reserved for a future manual review workflow."
+      "description": "skip — keep the first occurrence and ignore later files with the same ID. newest-wins — replace the existing record with the version from the later file. merge-ours — auto-fill blank fields from either side; keep the existing value on a true conflict. merge-theirs — auto-fill blank fields from either side; take the incoming value on a true conflict. review — do not auto-resolve; stages the conflicting record Pending for manual decision via the import/actions decide endpoint, unless a per-source conflict-resolution rule file (see ruleFile above) already covers every ambiguous field, in which case it resolves immediately the same way a human decision would."
     },
     "policySet": {
       "type": "object",

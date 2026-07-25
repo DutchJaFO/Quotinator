@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -261,6 +262,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 var quotes          = parsed.Quotes;
                 var filePolicy      = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
                 var policy          = filePolicy.ForQuotes;
+                var conflictRules   = LoadConflictRules(seedFile.RuleFilePath);
 
                 Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
                     quotes.Count, fileName, batch.Label);
@@ -273,7 +275,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 {
                     actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx,
                         parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
-                        parsed.Series, parsed.Universe, parsed.Characters);
+                        parsed.Series, parsed.Universe, parsed.Characters, conflictRules);
                     await _actionCoordinator.StageAsync(actions, connection, tx);
                     tx.Commit();
                 }
@@ -447,4 +449,38 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
     private static string TruncateLabel(string text, int maxLen = 60)
         => text.Length <= maxLen ? text : text[..maxLen] + "…";
+
+    private static readonly JsonSerializerOptions ConflictRuleReadOptions = new() { PropertyNameCaseInsensitive = true };
+
+    /// <summary>
+    /// #181: loads a source's own per-source conflict-resolution rule file, referenced by the
+    /// manifest entry's <c>ruleFile</c> property. Missing/absent/invalid all resolve to
+    /// <see cref="ConflictRuleLookup.Empty"/> — a rule file is an optimisation, never a hard
+    /// requirement for seeding to proceed, matching <see cref="LoadSourceFileAsync"/>'s own
+    /// fail-open convention for the source file itself.
+    /// </summary>
+    private ConflictRuleLookup LoadConflictRules(string? ruleFilePath)
+    {
+        if (ruleFilePath is null) return ConflictRuleLookup.Empty;
+
+        if (!File.Exists(ruleFilePath))
+        {
+            Logger.LogWarning("[Database - Seed] conflict-resolution rule file {File} referenced in manifest but not found — continuing without rules",
+                Path.GetFileName(ruleFilePath));
+            return ConflictRuleLookup.Empty;
+        }
+
+        try
+        {
+            var json     = File.ReadAllText(ruleFilePath);
+            var ruleFile = JsonSerializer.Deserialize<ConflictResolutionRuleFile>(json, ConflictRuleReadOptions);
+            return new ConflictRuleLookup(ruleFile?.Rules ?? []);
+        }
+        catch (JsonException ex)
+        {
+            Logger.LogWarning(ex, "[Database - Seed] conflict-resolution rule file {File} is not valid JSON — continuing without rules",
+                Path.GetFileName(ruleFilePath));
+            return ConflictRuleLookup.Empty;
+        }
+    }
 }

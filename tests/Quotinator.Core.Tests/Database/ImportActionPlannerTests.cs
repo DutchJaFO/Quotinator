@@ -316,6 +316,100 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "Skip's resolved value always equals the existing row — nothing would change, so a Complete row must never block");
     }
 
+    // ── #181: per-source conflict-resolution rule lookup ───────────────────────
+
+    [TestMethod]
+    public async Task PlanAsync_ReviewPolicy_MatchingRuleCoversTheOnlyChangedField_StagesDecidedNotPending()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "c1111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(conn, id);
+
+        var quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
+        var rules = new ConflictRuleLookup([
+            new ConflictResolutionRule { QuoteId = id, Field = "quoteText", Resolution = FieldResolutionChoice.Keep },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "A matching rule for the only changed field must auto-resolve instead of leaving it Pending");
+        Assert.IsNotNull(quoteAction.MergedFields, "An auto-resolved action already has its final values computed, the same as any other Decided action");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.MergedFields!)!;
+        Assert.AreEqual("Original text", payload.Fields.QuoteText, "Keep must resolve to the existing side's value");
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_ReviewPolicy_RuleCoversOnlySomeChangedFields_StillStagesPending()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "c2111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteWithCharacterAsync(conn, id, quoteText: "Original text", characterName: "Rick Blaine");
+
+        var quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.", character: "Ilsa Lund");
+        var rules = new ConflictRuleLookup([
+            new ConflictResolutionRule { QuoteId = id, Field = "quoteText", Resolution = FieldResolutionChoice.Keep },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Pending, quoteAction.Status.Parsed, "The character field is also ambiguous and has no matching rule — a partial rule match must not auto-resolve the whole action");
+        Assert.IsNull(quoteAction.MergedFields, "Pending actions have no resolved values yet");
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_ReviewPolicy_NonMatchingRuleLookup_StagesPendingAsToday()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "c3111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(conn, id);
+
+        var quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
+        var rules = new ConflictRuleLookup([
+            new ConflictResolutionRule { QuoteId = "00000000-0000-4000-8000-000000000000", Field = "quoteText", Resolution = FieldResolutionChoice.Keep },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Pending, quoteAction.Status.Parsed, "A rule for a different quote id must not affect this one — regression guard matching pre-#181 behaviour");
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_ReviewPolicy_MatchingRuleButCompletenessGuardBlocks_StillStagesBlockedNotDecided()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "c4111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(conn, id, completenessStatus: "Complete");
+
+        var quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
+        var rules = new ConflictRuleLookup([
+            new ConflictResolutionRule { QuoteId = id, Field = "quoteText", Resolution = FieldResolutionChoice.Keep },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Blocked, quoteAction.Status.Parsed, "A matching rule must never bypass CompletenessGuard — a Complete row still blocks a silent overwrite");
+    }
+
+    private static async Task SeedExistingQuoteWithCharacterAsync(SqliteConnection conn, string id, string quoteText, string characterName)
+    {
+        var now          = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        var sourceId     = Guid.NewGuid();
+        var characterId  = Guid.NewGuid();
+        var characterSourceId = Guid.NewGuid();
+        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
+        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, DateCreated) VALUES (@Id, @characterName, @now)", new { Id = characterId, characterName, now });
+        await conn.ExecuteAsync(
+            "INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+            new { Id = characterSourceId, CharacterId = characterId, SourceId = sourceId, now });
+        await conn.ExecuteAsync(
+            "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, DateCreated) VALUES (@Id, @quoteText, 'en', @SourceId, @CharacterId, @now)",
+            new { Id = id, quoteText, SourceId = sourceId, CharacterId = characterId, now });
+    }
+
     [TestMethod]
     public async Task PlanAsync_TwoQuotesInSameBatchReferencingSameNewSource_StagesOnlyOneSourceAddAction()
     {

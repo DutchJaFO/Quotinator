@@ -52,7 +52,8 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
                     var path               = Path.Combine(dir, e.File);
                     var (url, downloadUrl) = ResolveUrls(e);
                     var filePolicy         = e.DuplicateResolution is null ? null : ToManifestPolicy(e.DuplicateResolution);
-                    return new SeedFile(path, url, downloadUrl, e.RefreshIntervalHours, e.DownloadTarget, e.Converter, e.ConverterOptions, filePolicy);
+                    var ruleFilePath       = e.RuleFile is null ? null : Path.Combine(dir, e.RuleFile);
+                    return new SeedFile(path, url, downloadUrl, e.RefreshIntervalHours, e.DownloadTarget, e.Converter, e.ConverterOptions, filePolicy, ruleFilePath);
                 })
                 .Where(f => File.Exists(f.FilePath))
                 .ToList();
