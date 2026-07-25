@@ -63,8 +63,8 @@ internal static class ImportActionPlanner
         // #180: Universe then Series are planned before Source — a declared series[] entry's own
         // universeName must resolve against an already-built universe index, and a sources[] entry's
         // seriesName must resolve against an already-built series index.
-        await PlanUniverseAsync(connection, universe ?? [], batchIdStr, policy, universeIndex, actions, now, transaction);
-        await PlanSeriesAsync(connection, series ?? [], batchIdStr, policy, universeIndex, seriesIndex, actions, now, transaction);
+        await PlanUniverseAsync(connection, universe ?? [], batchIdStr, policy, universeIndex, actions, now, transaction, conflictRules);
+        await PlanSeriesAsync(connection, series ?? [], batchIdStr, policy, universeIndex, seriesIndex, actions, now, transaction, conflictRules);
 
         // #162: explicit Source declarations are planned before quotes resolve — a quote may
         // reference a source this same file also declares explicitly, mirroring the existing
@@ -180,18 +180,20 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            // #181: a matching per-source rule auto-resolves an otherwise-ambiguous field instead of
-            // leaving it Pending for a human. Only relevant under Review — every other policy already
-            // resolves deterministically without one. A rule never bypasses CompletenessGuard above —
-            // a Complete row still blocks regardless of whether a rule could have resolved the change.
+            // #181: a matching per-source rule auto-resolves a field instead of leaving it Pending for
+            // a human — either an otherwise-ambiguous field, or (via Custom) a field that's simply
+            // wrong/missing on both sides and needs a value neither side actually has. Only relevant
+            // under Review — every other policy already resolves deterministically without one. A rule
+            // never bypasses CompletenessGuard above — a Complete row still blocks regardless of
+            // whether a rule could have resolved the change.
             FieldMergeResult? ruleResolved = null;
             if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
             {
                 var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
                 foreach (var field in existingFields.Keys)
                 {
-                    if (conflictRules.TryResolve(q.Id, field, out var choice))
-                        ruleDecisions[field] = new FieldMergeDecision(choice, null);
+                    if (conflictRules.TryResolve(q.Id, field, out var decision))
+                        ruleDecisions[field] = decision;
                 }
 
                 if (ruleDecisions.Count > 0)
@@ -943,7 +945,8 @@ internal static class ImportActionPlanner
     private static async Task PlanUniverseAsync(
         SqliteConnection connection, IReadOnlyList<UniverseEntry> universes, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> universeIndex,
-        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction,
+        ConflictRuleLookup? conflictRules = null)
     {
         foreach (var u in universes)
         {
@@ -968,7 +971,21 @@ internal static class ImportActionPlanner
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
-                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+                // #181: build the rule-decisions map before the "nothing changed" early exit below —
+                // a Custom rule can correct a field that's identical (e.g. missing) on both sides, which
+                // must still get a chance to apply rather than being skipped as "unchanged".
+                var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
+                if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
+                {
+                    foreach (var field in existingFields.Keys)
+                    {
+                        if (conflictRules.TryResolve(matchedId, field, out var decision))
+                            ruleDecisions[field] = decision;
+                    }
+                }
+
+                if (changedFields.Count == 0 && ruleDecisions.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
 
                 var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -1001,7 +1018,18 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isPending = policy == DuplicateResolutionPolicy.Review;
+                // #181: a rule never bypasses CompletenessGuard above — only tried once we know this
+                // action isn't Blocked.
+                FieldMergeResult? ruleResolved = null;
+                if (ruleDecisions.Count > 0)
+                {
+                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
+                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                }
+                if (ruleResolved is not null)
+                    resolved = new UniverseActionPayload((string)ruleResolved.MergedFields["name"]!);
+
+                var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new SystemImportAction
@@ -1056,7 +1084,7 @@ internal static class ImportActionPlanner
         SqliteConnection connection, IReadOnlyList<SeriesEntry> series, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> universeIndex,
         Dictionary<string, string> seriesIndex, List<SystemImportAction> actions, DateTime now,
-        SqliteTransaction? transaction)
+        SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
     {
         foreach (var s in series)
         {
@@ -1096,7 +1124,21 @@ internal static class ImportActionPlanner
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
-                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+                // #181: build the rule-decisions map before the "nothing changed" early exit below —
+                // a Custom rule can correct a field that's identical (e.g. missing) on both sides, which
+                // must still get a chance to apply rather than being skipped as "unchanged".
+                var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
+                if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
+                {
+                    foreach (var field in existingFields.Keys)
+                    {
+                        if (conflictRules.TryResolve(matchedId, field, out var decision))
+                            ruleDecisions[field] = decision;
+                    }
+                }
+
+                if (changedFields.Count == 0 && ruleDecisions.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
 
                 var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -1132,7 +1174,24 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isPending = policy == DuplicateResolutionPolicy.Review;
+                // #181: a rule never bypasses CompletenessGuard above — only tried once we know this
+                // action isn't Blocked.
+                FieldMergeResult? ruleResolved = null;
+                if (ruleDecisions.Count > 0)
+                {
+                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
+                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                }
+                if (ruleResolved is not null)
+                {
+                    var resolvedUniverseId = (string?)ruleResolved.MergedFields["universeId"];
+                    resolved = new SeriesActionPayload(
+                        (string)ruleResolved.MergedFields["name"]!,
+                        resolvedUniverseId,
+                        resolvedUniverseId == incomingUniverseId ? s.UniverseName : null);
+                }
+
+                var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new SystemImportAction

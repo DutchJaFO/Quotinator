@@ -1,0 +1,149 @@
+{
+  "rules": [
+    {
+      "entityId": "088603c0-b35a-1b48-977d-ca08489a0cbb",
+      "existingRecord": {
+        "quoteText": "Life is a banquet, and most poor suckers are starving to death!",
+        "source": "Auntie Mame",
+        "date": "1958",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Life is a banquet, and most poor suckers are starving to death!",
+        "source": "Auntie Mame",
+        "date": "2005",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Keep" }
+      ]
+    },
+    {
+      "entityId": "c124e692-04fc-7b49-af53-b6bcc0692dbe",
+      "existingRecord": {
+        "quoteText": "Even the smallest person can change the course of the future.",
+        "source": "The Lord of the Rings: The Fellowship of the Ring",
+        "date": "2001",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Even the smallest person can change the course of the future.",
+        "source": "The Lord of the Rings: The Fellowship of the Ring",
+        "date": "2002",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Keep" },
+        { "field": "character", "resolution": "Custom", "customValue": "Galadriel" }
+      ]
+    },
+    {
+      "entityId": "5d01c814-f62d-c041-818b-23b16e700d26",
+      "existingRecord": {
+        "quoteText": "Spider-Pig, Spider-Pig. Does whatever a Spider-Pig does. Can he swing from a web? No he can't, he's a pig. Look out! He is a Spider-Pig!",
+        "source": "The Simpsons movie",
+        "date": "2007",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Spider-Pig, Spider-Pig. Does whatever a Spider-Pig does. Can he swing from a web? No he can't, he's a pig. Look out! He is a Spider-Pig!",
+        "source": "The Simpsons Movie",
+        "date": "2019",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Keep" }
+      ]
+    },
+    {
+      "entityId": "84410252-b07f-0441-b710-0546836caf1e",
+      "existingRecord": {
+        "quoteText": "Following's not really my style.",
+        "source": "Marvel's The Avengers",
+        "date": "2012",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Following's not really my style.",
+        "source": "Marvel's The Avengers",
+        "date": "2019",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Keep" }
+      ]
+    },
+    {
+      "entityId": "a38c6022-6ffa-ff47-b16e-7287df826731",
+      "existingRecord": {
+        "quoteText": "I have nothing to prove to you",
+        "source": "Captain Marvel",
+        "date": "2013",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "I have nothing to prove to you",
+        "source": "Captain Marvel",
+        "date": "2019",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Replace" }
+      ]
+    },
+    {
+      "entityId": "10e3fb48-6ff3-0949-a98e-100f01b8d4ce",
+      "existingRecord": {
+        "quoteText": "Life's a little bit messy. We all make mistakes. No matter what type of animal you are, change starts with you.",
+        "source": "Zootopia",
+        "date": "2016",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Life's a little bit messy. We all make mistakes. No matter what type of animal you are, change starts with you.",
+        "source": "Zootopia",
+        "date": "2016",
+        "character": null,
+        "author": null,
+        "type": "anime",
+        "genres": []
+      },
+      "fields": [
+        { "field": "type", "resolution": "Keep" }
+      ]
+    }
+  ]
+}

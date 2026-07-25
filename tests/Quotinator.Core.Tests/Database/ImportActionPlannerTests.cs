@@ -318,6 +318,16 @@ public class ImportActionPlannerTests
 
     // ── #181: per-source conflict-resolution rule lookup ───────────────────────
 
+    private static readonly System.Text.Json.JsonElement EmptyConflictRuleRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("{}");
+
+    private static ConflictResolutionRule BuildQuoteTextKeepRule(string quoteId) => new()
+    {
+        EntityId = quoteId,
+        ExistingRecord = EmptyConflictRuleRecord,
+        IncomingRecord = EmptyConflictRuleRecord,
+        Fields = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Keep }],
+    };
+
     [TestMethod]
     public async Task PlanAsync_ReviewPolicy_MatchingRuleCoversTheOnlyChangedField_StagesDecidedNotPending()
     {
@@ -326,9 +336,7 @@ public class ImportActionPlannerTests
         await SeedExistingQuoteAsync(conn, id);
 
         var quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
-        var rules = new ConflictRuleLookup([
-            new ConflictResolutionRule { QuoteId = id, Field = "quoteText", Resolution = FieldResolutionChoice.Keep },
-        ]);
+        var rules = new ConflictRuleLookup([BuildQuoteTextKeepRule(id)]);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -347,9 +355,7 @@ public class ImportActionPlannerTests
         await SeedExistingQuoteWithCharacterAsync(conn, id, quoteText: "Original text", characterName: "Rick Blaine");
 
         var quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.", character: "Ilsa Lund");
-        var rules = new ConflictRuleLookup([
-            new ConflictResolutionRule { QuoteId = id, Field = "quoteText", Resolution = FieldResolutionChoice.Keep },
-        ]);
+        var rules = new ConflictRuleLookup([BuildQuoteTextKeepRule(id)]);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -366,9 +372,7 @@ public class ImportActionPlannerTests
         await SeedExistingQuoteAsync(conn, id);
 
         var quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
-        var rules = new ConflictRuleLookup([
-            new ConflictResolutionRule { QuoteId = "00000000-0000-4000-8000-000000000000", Field = "quoteText", Resolution = FieldResolutionChoice.Keep },
-        ]);
+        var rules = new ConflictRuleLookup([BuildQuoteTextKeepRule("00000000-0000-4000-8000-000000000000")]);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -384,9 +388,7 @@ public class ImportActionPlannerTests
         await SeedExistingQuoteAsync(conn, id, completenessStatus: "Complete");
 
         var quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
-        var rules = new ConflictRuleLookup([
-            new ConflictResolutionRule { QuoteId = id, Field = "quoteText", Resolution = FieldResolutionChoice.Keep },
-        ]);
+        var rules = new ConflictRuleLookup([BuildQuoteTextKeepRule(id)]);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -590,6 +592,62 @@ public class ImportActionPlannerTests
     }
 
     [TestMethod]
+    public async Task PlanUniverseAsync_ReviewPolicy_MatchingRule_StagesDecidedNotPending()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = await SeedExistingUniverseAsync(conn, "Middle Earth");
+        var rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId = id,
+                ExistingRecord = EmptyConflictRuleRecord,
+                IncomingRecord = EmptyConflictRuleRecord,
+                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            universe: [new UniverseEntry { Id = id, Name = "Middle-earth (corrected)" }], conflictRules: rules);
+
+        var universeAction = actions.Single(a => a.EntityType == "Universe");
+        Assert.AreEqual(ImportActionStatus.Decided, universeAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayload>(universeAction.MergedFields!)!;
+        Assert.AreEqual("Middle Earth", merged.Name, "Keep must resolve to the existing side's value");
+    }
+
+    /// <summary>
+    /// #181: proves the early-exit fix — a Custom rule fixing a field that's identical on both sides
+    /// (nothing "changed" in the ordinary sense) must still get a chance to apply, not be silently
+    /// skipped by the "unchanged — silent reuse" early exit that runs before the rule lookup.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanUniverseAsync_ReviewPolicy_CustomRuleOnUnchangedField_StillApplies()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = await SeedExistingUniverseAsync(conn, "Middle Earth");
+        var rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId = id,
+                ExistingRecord = EmptyConflictRuleRecord,
+                IncomingRecord = EmptyConflictRuleRecord,
+                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Custom, CustomValue = "Middle-earth" }],
+            },
+        ]);
+
+        // Name is identical between existing and incoming — would hit the "unchanged" early exit
+        // before #181, and never even reach the rule lookup.
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            universe: [new UniverseEntry { Id = id, Name = "Middle Earth" }], conflictRules: rules);
+
+        var universeAction = actions.SingleOrDefault(a => a.EntityType == "Universe");
+        Assert.IsNotNull(universeAction, "The Custom rule must produce an action even though nothing 'changed' in the ordinary sense");
+        Assert.AreEqual(ImportActionStatus.Decided, universeAction!.Status.Parsed);
+        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayload>(universeAction.MergedFields!)!;
+        Assert.AreEqual("Middle-earth", merged.Name, "Custom must resolve to customValue, not either side's actual value");
+    }
+
+    [TestMethod]
     public async Task PlanSeriesAsync_NoMatchAtAll_StagesAddAction()
     {
         using var conn = await OpenConnectionAsync();
@@ -635,6 +693,30 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionKind.Modify, seriesAction.ActionType.Parsed);
         var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.MergedFields!)!;
         Assert.AreEqual(newUniverseId.ToUpperInvariant(), merged.UniverseId?.ToUpperInvariant());
+    }
+
+    [TestMethod]
+    public async Task PlanSeriesAsync_ReviewPolicy_MatchingRule_StagesDecidedNotPending()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = await SeedExistingSeriesAsync(conn, "The Hobbit");
+        var rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId = id,
+                ExistingRecord = EmptyConflictRuleRecord,
+                IncomingRecord = EmptyConflictRuleRecord,
+                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            series: [new SeriesEntry { Id = id, Name = "The Hobbit Trilogy" }], conflictRules: rules);
+
+        var seriesAction = actions.Single(a => a.EntityType == "Series");
+        Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.MergedFields!)!;
+        Assert.AreEqual("The Hobbit", merged.Name, "Keep must resolve to the existing side's value");
     }
 
     [TestMethod]

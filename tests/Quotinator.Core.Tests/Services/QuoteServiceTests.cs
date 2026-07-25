@@ -13,6 +13,9 @@ public class QuoteServiceTests
         Directory.Exists(SourcesDir)
             ? Directory.EnumerateFiles(SourcesDir, "*.json")
                        .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
+                       // #181: a per-source conflict-resolution rule file (e.g. nikhilnamal17-conflict-rules.json)
+                       // is a different shape entirely (quoteId/field rules, not quotes) — never a quote source.
+                       .Where(f => !Path.GetFileName(f).EndsWith("-conflict-rules.json", StringComparison.OrdinalIgnoreCase))
             : [];
 
     /// <summary>

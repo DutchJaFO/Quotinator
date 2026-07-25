@@ -258,7 +258,7 @@ public class DatabaseInitializerTests
             """[{"id":"QUOTE_ID","quote":"Changed text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
                 .Replace("QUOTE_ID", quoteId));
         File.WriteAllText(rulesPath,
-            """{"rules":[{"quoteId":"QUOTE_ID","field":"quoteText","resolution":"Keep"}]}"""
+            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
         var batch = new SeedBatch(

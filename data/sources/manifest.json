@@ -6,7 +6,19 @@
   "files": [
     {
       "file": "quotinator-curated.json",
-      "name": "quotinator/curated"
+      "name": "quotinator/curated",
+      "duplicateResolution": {
+        "default": "review"
+      },
+      "ruleFile": "quotinator-curated-conflict-rules.json"
+    },
+    {
+      "file": "quotinator-series-universe.json",
+      "name": "quotinator/series-universe",
+      "duplicateResolution": {
+        "default": "review"
+      },
+      "ruleFile": "quotinator-series-universe-conflict-rules.json"
     },
     {
       "file": "NikhilNamal17_popular-movie-quotes.json",
@@ -23,7 +35,11 @@
           "source": "movie",
           "date": "year"
         }
-      }
+      },
+      "duplicateResolution": {
+        "default": "review"
+      },
+      "ruleFile": "nikhilnamal17-conflict-rules.json"
     },
     {
       "file": "vilaboim_movie-quotes.json",
@@ -41,14 +57,11 @@
           "quote": 1,
           "source": 2
         }
-      }
-    },
-    {
-      "file": "quotinator-series-universe.json",
-      "name": "quotinator/series-universe",
+      },
       "duplicateResolution": {
         "default": "review"
-      }
+      },
+      "ruleFile": "vilaboim-conflict-rules.json"
     }
   ]
 }

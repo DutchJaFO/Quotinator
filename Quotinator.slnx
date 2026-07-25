@@ -50,9 +50,13 @@
   <Folder Name="/data/sources/">
     <File Path="data/sources/manifest.json" />
     <File Path="data/sources/quotinator-curated.json" />
+    <File Path="data/sources/quotinator-curated-conflict-rules.json" />
     <File Path="data/sources/quotinator-series-universe.json" />
+    <File Path="data/sources/quotinator-series-universe-conflict-rules.json" />
     <File Path="data/sources/vilaboim_movie-quotes.json" />
+    <File Path="data/sources/vilaboim-conflict-rules.json" />
     <File Path="data/sources/NikhilNamal17_popular-movie-quotes.json" />
+    <File Path="data/sources/nikhilnamal17-conflict-rules.json" />
   </Folder>
   <Folder Name="/docker/">
     <File Path="docker/Dockerfile" />
@@ -230,6 +234,7 @@
     <File Path="schemas/upstream-quoted-string.schema.json" />
     <File Path="schemas/upstream-object-array.schema.json" />
     <File Path="schemas/changelog.schema.json" />
+    <File Path="schemas/conflict-resolution-rules.schema.json" />
   </Folder>
   <Folder Name="/scripts/">
     <File Path="scripts/README.md" />
