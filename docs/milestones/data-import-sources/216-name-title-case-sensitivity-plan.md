@@ -1,6 +1,6 @@
 # #216 — Series/Universe name-filter case sensitivity (confirmed bug) + audit all Name/Title natural-key comparisons
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #216
 **Tiers required:** T1, T2
 **Depends on:** Nothing — independent of #211 (see Background for the deliberate scope split); no
@@ -243,7 +243,7 @@ to #222. `docs/database-conventions.md`'s cross-reference to the section's old t
 | 8 | ✅ | LIKE-based free-text search's ASCII-only case-folding either fixed for full Unicode parity or explicitly accepted as-is | Live (review) | Developer decision recorded 2026-07-25: accepted as-is for now (no translations currently exercise it); follow-up fix tracked separately as [#222](https://github.com/DutchJaFO/Quotinator/issues/222) in the v1.8.0 maintenance milestone |
 | 9 | ✅ | CLAUDE.md updated | Live (review) | Section renamed and broadened, see Step 4 |
 | 10 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — Quotinator.Core.Tests (1118), Quotinator.Data.Tests (655), Quotinator.Api.Tests (511) all green, 0 warnings, 0 errors |
-| 11 | ❌ | T1 — app starts in Visual Studio, mixed-case series/universe filter matches | Live (T1) | Developer to confirm in Visual Studio |
+| 11 | ✅ | T1 — app starts in Visual Studio, mixed-case series/universe filter matches | Live (T1) | Confirmed 2026-07-25: after `POST /admin/database/reset` (genuine reseed, 799 quotes/464 sources), `GET /quotes/random?n=22&universe=james+bond` (lowercase) returned Dr. No's quotes ("My name is Bond, James Bond.", "Bond. James Bond.") alongside Goldfinger's — matching T2's result exactly. The developer's first T1 attempt (against a stale, already-seeded dev DB) initially showed only 2 Goldfinger quotes with no Dr. No — not a bug, see the T2 row and Notes below for why an already-seeded DB doesn't pick up updated bundled source content until reset. |
 | 12 | ✅ | T2 — Docker smoke test: mixed-case `series=`/`universe=` filter, mixed-case `table=` resolve correctly against bundled data; `lang=` case-insensitivity confirmed with no regression | Live (T2) | `docker build` + fresh reseed (799 quotes/464 sources) — `curl ".../quotes/random?n=20&universe=james+bond"` (lowercase) returned `totalMatching: 5` including all 3 Dr. No quotes (this is the exact data-completeness gap the developer's own T1 run surfaced against a stale dev DB — a fresh reseed resolves it); `curl ".../quotes/random?n=20&series=sean+connery+era"` (lowercase) same 5 results; `curl ".../quotes/{id}?lang=NL"` returned 200 with a graceful original-language fallback (no translation exists anywhere in bundled data to positive-match against — see row 5); `curl ".../admin/audit?table=quotes"` (lowercase GET) matched the PascalCase-stored rows; `curl -X DELETE ".../admin/audit?table=quotes"` (lowercase) returned 204 and genuinely deleted the matching rows, confirmed via a follow-up GET showing only the purge sentinel remaining — this is the exact silent-no-op bug Finding B described |
 
 ---
@@ -267,8 +267,28 @@ as-is for now rather than fix here — tracked separately as
 Step 2 for the full findings table.
 
 **All code/doc work complete 2026-07-25** — Steps 3a–3d and 4 all Done, full test suite green
-(Quotinator.Core.Tests 1118, Quotinator.Data.Tests 655, Quotinator.Api.Tests 511). T2 complete; only
-T1 remains before this issue is `Waiting for release`.
+(Quotinator.Core.Tests 1118, Quotinator.Data.Tests 655, Quotinator.Api.Tests 511). T1 and T2 both
+confirmed 2026-07-25 — every Verification checklist row is ✅.
+
+**Red-green correction (2026-07-25)**: all four fixes (3a–3d) were originally implemented fix-first,
+test-second — violating this project's red-green requirement for bug fixes. Caught when asked directly
+whether the rule had been followed. Corrected retroactively rather than left as an unverified assumption:
+reverted `Sql.cs` (Core and Data) to their pre-fix state (keeping the already-committed tests in place)
+and reran the affected tests — `SeriesNameResolver_DifferingCasing_StillResolvesId`,
+`UniverseNameResolver_DifferingCasing_StillResolvesId`, `PlanSeriesAsync_ExistingByName_DifferingCasing_NoActionStaged`,
+`PlanUniverseAsync_ExistingByName_DifferingCasing_NoActionStaged`,
+`PlanPeopleAsync_NoIdMatch_DifferingCasing_FallsBackToNaturalKey_NoActionStaged`,
+`GetById_UppercaseLang_StillMatchesLowercaseStoredTranslation`,
+`GetPagedAsync_LowercaseTableFilter_StillMatchesPascalCaseStoredRows`,
+`ClearAsync_WithLowercaseTable_StillDeletesMatchingEntries`, and
+`GetHistoryAsync_MixedCaseEntityType_StillMatches` all failed as expected, while every control test
+(`ExactCasing`/`NoMatch`, and #180's pre-existing Sources natural-key test) correctly stayed green. For
+`TryNormalizeLang` itself — brand-new API surface with no pre-fix equivalent to revert to — temporarily
+stubbed out its lowercasing call instead; exactly the three `TryNormalizeLang_ValidCode_*` data rows
+whose input actually changes case (`EN`, `En-Gb`, `ZH-HANS`) failed, while the already-lowercase `nl`
+row and the null/invalid-code tests correctly stayed green. All files restored via `git checkout HEAD`
+afterward and the full suite reconfirmed green, matching the already-committed state exactly (`git
+status` showed no source diff).
 
 **T2 finding, resolved as expected behaviour, not a bug (2026-07-25)**: while building a live fixture to
 positive-match test the `lang=` fix, discovered that `QuoteSeedWriter.InsertTranslationsAsync` — the
