@@ -4,9 +4,9 @@
 **GitHub issue:** #153
 **Tiers required:** T1, T2
 **Depends on:** #149, #154 (both shipped); #163 (shipped — its flat export row shape is real code now,
-not prose); #181 (not yet implemented — this issue's rule generation/staleness/endpoint work builds on
-#181's shipped rule-file format, so #181 must land first in the dependency order #217 (parent tracking
-issue) establishes: #177 → #181 → #153)
+not prose); #181 (**shipped 2026-07-25** — see the "Scope note" below: #181 ended up shipping *two*
+separate rule mechanisms, not the one this plan doc was written against; every step below needs a
+fresh read against both before implementation starts)
 
 ---
 
@@ -21,18 +21,36 @@ ImportActionFieldRow.cs`) — `ActionId`, `EntityId`, `EntityType`, `Field`, `Ex
 5's generation step, both previously blocked on this shape existing, are resolved/designable below
 against the real thing, not prose speculation.
 
-**Superseded in part by #181 (filed 2026-07-15, not yet implemented as of this rewrite):** #181 ships
-a minimal, hand-authored version of exactly the "parts that can be designed independently of #163"
-named in the original scope note — a per-source rule-file format, its manifest reference, and
-lookup/auto-apply wiring into `ImportActionPlanner.PlanAsync` (this plan doc's own Step 2 and Step 6,
-below) — scoped, per #217 (the parent tracking issue both #181 and this issue now sit under), to all 4
-currently-bundled files rather than the 2 #181 originally named. **When this issue is eventually
-implemented, it builds Step 5's generation, Step 4's staleness detection, and Step 6's endpoint on top
-of #181's shipped rule-file format — it does not re-design or replace that format.** Steps 2 and 6
-below should be read as "confirm #181's shipped shape still fits" once #181 has actually landed, not
-"design from scratch." `PlanAsync_MatchingRuleExists_AutoResolvesWithoutPending` and
-`PlanAsync_NoMatchingRule_StagesPendingAsToday` (this issue's own Expected tests table) will be shipped
-by #181 — this issue inherits them as regression guards once #181 lands, not fresh tests to write here.
+**Superseded in part by #181 (shipped 2026-07-25).** #181 ships a minimal, hand-authored version of
+exactly the "parts that can be designed independently of #163" named in the original scope note — a
+per-source rule-file format, its manifest reference, and lookup/auto-apply wiring into
+`ImportActionPlanner.PlanAsync` (this plan doc's own Step 2 and Step 6, below) — scoped, per #217 (the
+parent tracking issue both #181 and this issue now sit under), to all 4 currently-bundled files rather
+than the 2 #181 originally named. **When this issue is implemented, it builds Step 5's generation,
+Step 4's staleness detection, and Step 6's endpoint on top of #181's shipped rule-file format — it does
+not re-design or replace that format.** `PlanAsync_MatchingRuleExists_AutoResolvesWithoutPending` and
+`PlanAsync_NoMatchingRule_StagesPendingAsToday` (this issue's own Expected tests table) were shipped
+by #181 — this issue inherits them as regression guards, not fresh tests to write here.
+
+**Re-verified 2026-07-25 against #181's *actual* final shipped shape — this is a bigger correction
+than "confirm it still fits."** #181's own live verification (via #217's Docker methodology) found
+that a single rule mechanism keyed by entity id could not prevent duplicate Source rows caused by a
+misspelled/inconsistent title — a `ConflictResolutionRule` only ever corrects what a Quote's own field
+*displays* in its `MergedFields` audit trail, never which Source row it actually links to, because
+`ResolveSourceAsync` resolves a Source from the *raw* incoming title/type before any entity-id-keyed
+rule ever runs. #181 therefore shipped **two separate mechanisms**, not one:
+
+1. `ConflictResolutionRule`/`ruleFile` — keyed by **entity id + field name**, consulted only on the
+   Modify path (an already-seen id), the mechanism this plan doc's Steps 1–6 were written around.
+2. `SourceAliasRule`/`sourceAliasFile` — keyed by **raw `(title, type)`**, not an entity id at all,
+   consulted at the very top of `PlanAsync`'s Quote loop *before* `ResolveSourceAsync` ever runs, so it
+   applies uniformly to both a first-seen Add and a re-seen Modify.
+
+This plan doc's Steps 2, 3, 4, and 5 were designed with only mechanism 1 in mind. **Every one of them
+needs a fresh read, not a "still fits" confirmation**, to decide whether #153's rule-generation and
+staleness-detection scope extends to mechanism 2 as well, or deliberately stays limited to mechanism 1
+— this is exactly the kind of scope decision this project's own convention says must not be silently
+picked (see each step's own note below, and the open question logged in Notes).
 
 ---
 
@@ -113,14 +131,23 @@ per this project's DRY convention.
 
 ### 2. Rule file storage location and manifest reference
 
-**Status:** Superseded by #181 — confirm its shipped shape still fits rather than designing fresh.
+**Status:** Superseded by #181, but with a scope gap re-verification found (2026-07-25) — #181
+resolved the placement question for **both** of its mechanisms, but this issue's own rule-generation
+scope (Step 5) needs an explicit decision about which one it targets.
 
-Per item 2, the rule file lives alongside the file it governs, not a new separate location. This is
-independently designable now (does not depend on #163). **#181 already ships this**: one rule file
-per source (`vilaboim`'s and `NikhilNamal17`'s own), a manifest reference alongside each, hand-
-authored rather than generated. What's below is the original preliminary design reasoning, kept for
-context on the open placement question (`SourceImportSettingsDto` vs. file-entry-only) that #181's
-implementation actually resolved — check its shipped code for the answer before re-deciding:
+Per item 2, the rule file lives alongside the file it governs, not a new separate location. #181 ships
+this for **both** of its mechanisms, file-entry-only (not manifest-level), settling the open placement
+question below the same way for each: `ManifestFileEntryDto.RuleFile`/`ruleFile` for
+`ConflictResolutionRule`, and a second, independent `ManifestFileEntryDto.SourceAliasFile`/
+`sourceAliasFile` for `SourceAliasRule` — one bundled file can reference either, both, or neither. **Open
+question this step must resolve, not inherited from #181's own design**: does this issue's rule
+*generation* (Step 5) ever produce a `SourceAliasRule`/`sourceAliasFile` entry, or does it only ever
+generate `ConflictResolutionRule`/`ruleFile` entries? See Step 5's own note — the two mechanisms are
+populated by fundamentally different processes (one from decided import actions, the other from manual
+title-verification research), which may mean this issue's generation scope should deliberately stay
+limited to the first. What's below is the original preliminary design reasoning, kept for context on
+the open placement question (`SourceImportSettingsDto` vs. file-entry-only) that #181's implementation
+actually resolved (file-entry-only, for both mechanisms) — check its shipped code before re-deciding:
 
 - Extend `ManifestFileEntryDto` (`src/Quotinator.Data/Import/ManifestFileEntryDto.cs`) with a new
   optional property, analogous in spirit to its existing `duplicateResolution` override — but this is
@@ -139,7 +166,13 @@ implementation actually resolved — check its shipped code for the answer befor
 
 ### 3. Rule file schema and `FieldMergeResolver` reuse
 
-**Status:** Not started.
+**Status:** Not started. **Re-verified 2026-07-25: this step's reasoning below only ever applies to
+`ConflictResolutionRule`, not `SourceAliasRule`.** `SourceAliasRule` is a straight `(title, type)` →
+`(canonicalTitle, canonicalType)` substitution — it has no `FieldResolutionChoice`/`FieldMergeDecision`
+concept at all, is consulted *before* any Quote exists in the existing/incoming-field-diff sense
+`FieldMergeResolver` operates on, and cannot be expressed as a decision map. If this issue's scope
+extends to `SourceAliasRule` at all (see Step 2's open question), it needs its own, separate reuse
+story — not a variation on `FieldMergeResolver.ResolveWithDecisions`.
 
 `FieldMergeResolver.ResolveWithDecisions` (`src/Quotinator.Data/Import/FieldMergeResolver.cs:84-146`)
 already takes an `IReadOnlyDictionary<string, FieldMergeDecision>` — a decision always wins for that
@@ -166,7 +199,13 @@ CLAUDE.md's authoritative-sources rule says should not be silently picked.
 
 ### 4. Staleness detection
 
-**Status:** Not started.
+**Status:** Not started. **Re-verified 2026-07-25: the mechanism below is designed against
+`ConflictResolutionRule`'s existing/incoming-value shape only.** Whether `SourceAliasRule` needs its
+own staleness concept at all is a separate, unresolved question — a plausible failure mode is a
+canonical title itself later changing (e.g. a further correction renames "The Fate of the Furious"),
+which would silently leave every alias still pointing at the old canonical string with no field-value
+comparison to catch it, since aliases have no "existing vs incoming" shape to diff in the first place.
+Decide during implementation whether this is in scope at all, or deliberately deferred.
 
 Item 4 is a firm requirement: a rule must be flagged invalid/stale when the underlying source's
 shape changes enough that silently reapplying it would produce a wrong result. No existing mechanism
@@ -187,8 +226,17 @@ silently discarding or silently applying).
 
 ### 5. Rule generation from decided batch actions, with merge-not-overwrite semantics
 
-**Status:** Not started. No longer blocked on #163 (shipped) — blocked on #181 landing first
-(dependency order), since this step's rule format inherits #181's shipped shape (Step 1 above).
+**Status:** Not started. No longer blocked on #163 or #181 (both shipped). **Re-verified 2026-07-25:
+this step can most plausibly only ever generate `ConflictResolutionRule` entries, not
+`SourceAliasRule` ones — recommend making this scope limit explicit rather than leaving it implicit.**
+The reasoning: every alias entry #181 actually shipped came from *manual title-verification research*
+(a web search per title, per `docs/workflow/source-verification.md`) confirming what a film's real
+canonical title is — that judgment isn't derivable from "a batch's already-decided actions" the way a
+`ConflictResolutionRule` is, since a decided Modify action already carries a Keep/Replace/Custom choice
+a generation step can mechanically read back, while an alias is a judgment call about ground truth with
+no existing decided-action shape to read it from. If a future need for *generating* aliases emerges
+(e.g. from a Data Enrichment milestone match against an external database), that is a materially
+different mechanism from this step and should get its own issue rather than being folded in here.
 
 Item 5's generation step consumes "a batch's already-decided actions" — this is precisely #163's real,
 shipped export shape: `GET /import/actions/export` already returns one `ImportActionFieldRow` per
@@ -208,30 +256,36 @@ convention; final placement confirmed at implementation time.
 
 ### 6. Rule lookup and auto-apply during staging
 
-**Status:** Not started — blocked on #181 landing first (not yet implemented as of this rewrite,
-despite the prior version of this plan doc assuming it had already shipped). Once #181 lands, this
-step's remaining scope is adding staleness-awareness on top of what #181 built, not writing the
-lookup from scratch.
+**Status:** Not started — unblocked, #181 has shipped. This step's remaining scope is adding
+staleness-awareness on top of what #181 built, not writing the lookup from scratch — **but "what #181
+built" is now two separate lookup call sites, not one, and the note below (originally about
+Quote-only vs. multi-entity scope) is fully resolved rather than open.**
 
-Wires into `ImportActionPlanner.PlanAsync`'s Quote Modify branch (`src/Quotinator.Core/Database/
-ImportActionPlanner.cs` — line numbers not cited here; the file has grown substantially since this
-plan doc was first written, from #171–#180's Series/Universe/Character/StageDirection/SoundCue/
-Conversation work landing, and #181 will add its own rule-lookup wiring before this step touches it —
-confirm the current shape at implementation time rather than trusting any line number written here
-today): today, a `Review`-policy duplicate is staged `Pending` unconditionally when a field differs.
-This step adds staleness-awareness on top of #181's own rule lookup — if a matching but *stale* rule
-exists, the action stages `Pending` (not silently applied) rather than #181's simpler "matching rule
-always applies" behaviour. `PlanAsync_MatchingRuleExists_AutoResolvesWithoutPending` and
-`PlanAsync_NoMatchingRule_StagesPendingAsToday` (both listed in the issue's expected-tests table) are
-shipped by #181 already, once #181 lands — this issue inherits them as regression guards for the
-non-stale case, adding new tests only for the stale-rule case Step 4 introduces.
+Wires into `ImportActionPlanner.PlanAsync`'s Quote Modify branch — `ConflictRuleLookup.TryResolve` is
+now consulted from four sites: the Quote loop itself, and `PlanSeriesAsync`/`PlanUniverseAsync`/
+`PlanSourcesAsync` (all four confirmed live in the current codebase, not line numbers to re-verify
+against drift). Today, a `Review`-policy duplicate is staged `Pending` unconditionally when a field
+differs and no rule resolves it. This step adds staleness-awareness on top of #181's own rule lookup —
+if a matching but *stale* rule exists, the action stages `Pending` (not silently applied) rather than
+#181's simpler "matching rule always applies" behaviour. `PlanAsync_MatchingRuleExists_AutoResolvesWithoutPending`
+and `PlanAsync_NoMatchingRule_StagesPendingAsToday` (both listed in the issue's expected-tests table)
+are shipped by #181 already — this issue inherits them as regression guards for the non-stale case,
+adding new tests only for the stale-rule case Step 4 introduces.
 
-**Note — Quote-only vs. multi-entity scope.** #181's own rule-file scope (Step 1 above) covers all 4
-bundled files under #217, not just Quote-level conflicts — if `quotinator-series-universe.json`
-produces genuine Series/Universe conflicts once #217's per-file Docker scenarios actually run it, #181
-(and therefore this step) needs rule-lookup wiring in `PlanSeriesAsync`/`PlanUniverseAsync` too, not
-only the Quote-level branch this step's original text assumed was the only site. Confirm against
-#181's actual shipped scope before assuming "the Quote branch" is the only integration point.
+**A second, separate lookup this step must also account for**: `SourceAliasLookup.TryResolve` is
+consulted once, at the very top of `PlanAsync`'s Quote loop, before `ResolveSourceAsync` ever runs —
+structurally a different integration point from anything `ConflictRuleLookup` touches (it runs before
+the existing-quote lookup, before any Modify/Add branch is even decided). If Step 4's staleness concept
+extends to `SourceAliasRule` (see Step 4's own open question), this is where it would need its own,
+separate staleness check — not an extension of the `ConflictRuleLookup` staleness check this step's
+original text assumed was the only one needed.
+
+**Note — Quote-only vs. multi-entity scope: resolved, no longer open.** #181's own rule-file scope
+(Step 1 above) covers all 4 bundled files under #217; live #217 verification confirmed a genuine
+cross-file Source enrichment conflict (a Source created by one file, later assigned a Series by
+another) with no way to auto-resolve, which is exactly why `PlanSourcesAsync` is now wired alongside
+`PlanSeriesAsync`/`PlanUniverseAsync` — this step inherits all four sites already wired, not just the
+Quote branch this step's original text assumed.
 
 ### 7. Documentation
 
@@ -262,7 +316,7 @@ implementation lands.
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | "Same conflict" identity scheme decided and documented | Live (review) | Resolved in this rewrite's Step 1: Id + field name, matching #181's precedent and #163's `ImportActionFieldRow` shape |
-| 2 | ❌ | Manifest gains a rule-file reference; schema updated; file lives alongside the file/manifest it governs | Unit test | TBD — likely a `ManifestSeedPlanner`/manifest-schema validation test mirroring existing `duplicateResolution` coverage; confirm #181's shipped shape first |
+| 2 | ✅ | Manifest gains a rule-file reference; schema updated; file lives alongside the file/manifest it governs | Live (review) | Shipped by #181 for both mechanisms: `ruleFile` and `sourceAliasFile`, both file-entry-only on `ManifestFileEntryDto`, both in `schemas/manifest.schema.json`. This issue inherits the placement, not a new decision |
 | 3 | ❌ | Rule application reuses `FieldMergeResolver.ResolveWithDecisions` rather than a parallel mechanism | Unit test | Code review + a test asserting the rule-lookup path calls into the existing method, not a new duplicate one |
 | 4 | ❌ | A rule is flagged (not silently applied, not silently discarded) when the underlying source's shape has changed enough to invalidate it | Unit test | `Quotinator.Core.Tests.RuleGeneration_StaleSourceShape_FlagsRuleRatherThanApplying` |
 | 5 | ❌ | Rule generation from a batch's decided actions produces candidate rules, worst case one per action | Unit test | `Quotinator.Core.Tests.GenerateRuleFile_FromDecidedBatchActions_ProducesCandidateRules` |
@@ -284,31 +338,41 @@ T1 and T2 are both required per this project's blanket rule (CLAUDE.md, reinforc
 **Re-verified 2026-07-25, as part of setting up #217 (parent tracking issue for #177/#181/#153).** #163
 has since shipped in full — this plan doc's original "genuinely blocked on #163" framing throughout
 Steps 1 and 5 is resolved; both are now designed against #163's real, shipped shape rather than
-prose. What remains blocking is #181, not #163: #181 (Not yet implemented, per its own plan doc) ships
-the rule-file format and lookup wiring this issue builds on — #217 establishes the dependency order
-#177 → #181 → #153 explicitly, so this issue cannot start implementation before #181 lands. All
-`Quotinator.Engine`/`Quotinator.Engine.Tests` references throughout this plan doc (stale since #206's
-project merge) have been corrected to `Quotinator.Core`/`Quotinator.Core.Tests` in this same pass.
+prose. All `Quotinator.Engine`/`Quotinator.Engine.Tests` references throughout this plan doc (stale
+since #206's project merge) have been corrected to `Quotinator.Core`/`Quotinator.Core.Tests` in this
+same pass.
+
+**Re-verified again 2026-07-25, after #181 actually shipped.** #181 landed with two mechanisms, not
+the one this plan doc was designed around (see the Scope note at the top, and Steps 2–6's individual
+re-verification notes). This issue is now genuinely unblocked and can start implementation, but **the
+single biggest open question is no longer any of the ones listed below — it's whether this issue's
+scope extends to `SourceAliasRule` generation/staleness at all, or deliberately stays limited to
+`ConflictResolutionRule`.** Recommend deciding this explicitly, in writing, before Step 5
+implementation starts, since it changes the shape of the rule-generation algorithm, the staleness
+mechanism, and the rule-file endpoint's own response shape.
 
 Other open questions surfaced during investigation, not resolved here (flagged per this project's
 "gap resolution is the developer's decision" rule — do not decide these unprompted):
 
 - Whether the rule file's source of truth is a hand-edited on-disk artifact re-parsed at staging
   time, or ingested into a DB table with the file only ever a human-facing export/import format (see
-  Step 3). This materially changes the implementation shape (file-watcher/parse-on-demand vs. a new
-  migration and table) and should be decided explicitly before implementation starts — #181's own
-  shipped choice (once it lands) may settle this by precedent.
+  Step 3). **Settled by #181's shipped precedent**: both of #181's mechanisms are on-disk, hand-edited
+  files re-parsed at every seed/staging run (no DB ingestion) — this issue should follow the same
+  precedent unless a specific reason emerges not to.
 - Whether the manifest's rule-file reference is a per-file-entry property, a manifest-level property
-  covering every listed file, or both (see Step 2) — the issue's "matching whichever folder ... is
-  already in" phrasing is ambiguous between these readings; #181's shipped shape (once it lands)
-  should settle this too.
+  covering every listed file, or both (see Step 2). **Settled by #181's shipped precedent**:
+  file-entry-only, for both mechanisms — no manifest-level property was built.
 - The rule-generalization heuristic in Step 5 ("worst case one rule per action, best case a single
   rule covers an entire recurring batch") has no algorithm specified in either issue — needs its own
-  design pass against real decided-action data, most plausibly generated during #217's own per-file
-  conflict-resolution work.
+  design pass against real decided-action data, now genuinely available from #217's own completed
+  per-file conflict-resolution work (`nikhilnamal17-conflict-rules.json`'s 9 hand-authored entries,
+  `vilaboim-conflict-rules.json`'s 36, both real examples of what a generation algorithm would need to
+  reproduce).
 - Whether "flags a rule as invalid/stale" (item 4) means the rule is held for human review via a new
   status surfaced on an existing or new endpoint, or something else — the issue does not specify the
   user-facing mechanics of a stale flag, only that reapplying a stale rule silently must not happen.
+  Still open; #181 shipped no staleness concept for either of its own mechanisms to draw precedent
+  from.
 
 **Considered and rejected (2026-07-14), while scoping #179's Series/Universe schema:** generalizing
 this issue's declarative rule-file mechanism to also cover curator-only enrichment injection (a rule
