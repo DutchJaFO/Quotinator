@@ -97,7 +97,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
 | [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Waiting for release | T1 ✅ T2 ✅ | [163-bulk-decide-file-plan.md](163-bulk-decide-file-plan.md) |
 | [#217](https://github.com/DutchJaFO/Quotinator/issues/217) | Establish conflict-resolution coverage for every bundled source file (parent of #177, #181, #153) | Planning | — (parent) | [217-conflict-resolution-coverage-plan.md](217-conflict-resolution-coverage-plan.md) |
-| [#177](https://github.com/DutchJaFO/Quotinator/issues/177) | ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal | Planning | T1 ⬜ T2 ⬜ | [177-import-batch-status-applied-plan.md](177-import-batch-status-applied-plan.md) |
+| [#177](https://github.com/DutchJaFO/Quotinator/issues/177) | ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal | In progress | T1 ⬜ T2 ✅ | [177-import-batch-status-applied-plan.md](177-import-batch-status-applied-plan.md) |
 | [#181](https://github.com/DutchJaFO/Quotinator/issues/181) | Minimal per-source conflict-resolution rule file + curated field-override preload (all 4 bundled files) | Planning | T1 ⬜ T2 ⬜ | [181-minimal-conflict-resolution-rule-file-plan.md](181-minimal-conflict-resolution-rule-file-plan.md) |
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning | T1 ⬜ T2 ⬜ | [153-declarative-conflict-resolution-plan.md](153-declarative-conflict-resolution-plan.md) |
 | [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Waiting for release | T1 ✅ T2 ✅ | [154-import-staging-plan.md](154-import-staging-plan.md) |
@@ -248,7 +248,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 62 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
 | 63 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Waiting for release |
 | 64 | #217 | Establish conflict-resolution coverage for every bundled source file (parent of #177, #181, #153) | Planning |
-| 65 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Planning |
+| 65 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | In progress |
 | 66 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload (all 4 bundled files) | Planning |
 | 67 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
 | 68 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |

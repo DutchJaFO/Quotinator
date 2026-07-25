@@ -881,6 +881,24 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    ```
    After `decide`, `status=Decided` must show it; after `undo`, it must be back under `status=Pending`; after `decide` again, ready to apply. **If the curated file's re-import produces more than one pending action** (it currently produces two — both `Airplane!` quotes), `apply` at this point correctly returns `422` with a `pendingActionIds` array listing the ones still undecided — this is the batch-apply-atomicity contract working as designed, not a bug. Decide each remaining id the same way, then re-run `apply` until it returns `200` and the quote's field reflects the decision. Applying with a deliberately lowercased `batchId` here also re-confirms the case-insensitive fix.
 
+   **Two-phase decide→apply reversal** (#177) — a batch applied entirely through the staged
+   review→decide→apply flow (i.e. via `POST /import/actions/apply` directly, not `POST /import`'s own
+   single-shot path) previously never had its own `ImportBatches.Status` set to `Applied`, so
+   `POST /import/actions/reverse` always rejected it with a bare `422` even though the batch had
+   genuinely applied. Re-import the curated file under `review` again and decide every pending action
+   from the sequence above (repeat the `decide` call for each remaining `id` until none are left
+   pending), then:
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
+   ```
+   `apply` must return `200`; both `reverse` calls (preview and real) must also return `200` — never the
+   `422` this issue reported. If this ever regresses, `SqliteImportActionService.ApplyBatchAsync`'s own
+   `MarkImportBatchAppliedAsync` call (gated on `TryApplyBatchAsync` returning `null`) is the one place
+   that sets `Status`/`AppliedAt` for every caller — check it wasn't bypassed by a new caller of
+   `ApplyBatchAsync` or `TryApplyBatchAsync` added elsewhere.
+
    **`batchId`-mode alias** (#154) — `POST /import` can apply an already-staged batch directly, without re-uploading a file:
    ```bash
    curl -s -X POST -H "X-Api-Key: <your admin key>" \

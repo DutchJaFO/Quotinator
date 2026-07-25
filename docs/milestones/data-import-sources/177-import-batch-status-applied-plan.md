@@ -1,6 +1,6 @@
 # #177 — ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #177
 **Tiers required:** T1, T2
 **Depends on:** none technically; sequenced first under #217 because the resolve→apply→reverse→retry
@@ -20,13 +20,11 @@ cycle #181/#153's own testing methodology relies on needs a working `POST /impor
    no longer be needed once the real production path sets this itself — remove it and let those tests
    exercise the real path instead of working around the gap.
 
-**Note on the issue's own text**: it still names `Quotinator.Engine.Tests.Services.
-SqliteImportActionServiceTests` throughout (both the "Failing tests" table and the
-`MarkImportBatchAppliedAsync` reference) — stale since #206 merged `Quotinator.Engine` into
-`Quotinator.Core`. The real location today is `tests/Quotinator.Core.Tests/Services/
-SqliteImportActionServiceTests.cs`, confirmed present with the described helper still in place
-(lines 480, 493, 514, 580, 635). The issue body should be corrected to the current path before/while
-implementing.
+**Note on the issue's own text**: re-checked live on GitHub (2026-07-25) — the issue body already reads
+`Quotinator.Core.Tests.Services.SqliteImportActionServiceTests` throughout, with no `Engine` references
+remaining. This plan doc's earlier draft of this note was itself stale — the correction had already
+been made to the issue body in an earlier session (per #217's own creation, which corrected all three
+sub-issue bodies together). No further GitHub issue edit is needed for this.
 
 **Expected tests** (from the issue's own table, both starting red):
 
@@ -83,8 +81,8 @@ directly with no such wrapper, gets none of it.
 **Recommendation: approach 2** — it fixes the reported bug and removes the pre-existing duplication in
 the same change, matching this project's established choke-point pattern (`IdClauses`,
 `GuidExtensions.ToCanonicalId`). `SqliteImportActionService` already has `_importBatchRepository`
-injected (`SqliteImportActionService.cs:33`), so no new dependency is needed. Confirm this approach
-before implementing — a different design isn't wrong, but this is the one this plan doc assumes below.
+injected (`SqliteImportActionService.cs:33`), so no new dependency is needed. **Confirmed with the
+developer (2026-07-25): approach 2.**
 
 **This is entity-agnostic, confirming the issue's own framing.** `TryApplyBatchAsync`/`ApplyBatchAsync`
 have no entity-specific branching at the batch-status level — a Source, StageDirection, or SoundCue
@@ -98,7 +96,26 @@ representative entity type (Quote, matching the issue's own reproduction steps) 
 
 ### 1. Write the red tests
 
-**Status:** Not started.
+**Status:** Done. Both tests confirmed red for the right reason:
+`ApplyBatchAsync_TwoPhaseFlow_MarksImportBatchStatusApplied` failed on `Assert.AreEqual("Applied",
+status)` (actual: `"Staged"`); `ReverseBatchAsync_TwoPhaseFlowBatch_SucceedsWithoutManualStatusOverride`
+threw `ImportBatchStateException: ... is not currently applied (status: Staged)`.
+
+**Live-only fixture gap found while confirming red**: the shared `PlanAndStageAsync` test helper's raw
+`INSERT INTO ImportBatches` never set `Status`, silently relying on the column's own schema default
+(`DEFAULT 'Applied'`, added retroactively for pre-#154 rows). This meant every batch this helper created
+started life already `Applied` — before anything was ever actually applied — which is exactly why the
+first draft of `ReverseBatchAsync_TwoPhaseFlowBatch_SucceedsWithoutManualStatusOverride` passed
+immediately with no fix in place: `ReverseBatchAsync`'s batch-level `Status != Applied` guard was
+trivially satisfied by the fixture itself, not by any real production behaviour. Production always sets
+`Status = 'Staged'` explicitly at batch creation (`SqliteQuoteImportService.cs`,
+`QuotinatorDatabaseInitializer.cs`) — the helper's INSERT was corrected to match
+(`tests/Quotinator.Core.Tests/Services/SqliteImportActionServiceTests.cs`'s `PlanAndStageAsync`), which
+is also why `ReverseBatchAsync_NotApplied_ThrowsImportBatchStateException` (pre-existing, unrelated to
+this issue) now throws via the correct batch-level guard rather than the coincidental action-level one
+it was silently relying on before. Full file re-run after the fixture correction: 92/94 passing, only the
+two new tests red, confirming no other test in the file was relying on the stale 'Applied'-by-default
+behaviour.
 
 `ApplyBatchAsync_TwoPhaseFlow_MarksImportBatchStatusApplied`: stage a batch under `review` policy with
 one changed field, decide it, call `ApplyBatchAsync`, then assert (via `_importBatchRepository.
@@ -112,35 +129,31 @@ without any manual `Status` override in the test itself. Confirm red first.
 
 ### 2. Remove the test-only workaround
 
-**Status:** Not started.
-
-Delete `SqliteImportActionServiceTests.MarkImportBatchAppliedAsync` and every call site (lines 480,
-493, 514, 580, 635 as of this plan doc) once the real fix makes it unnecessary — these existing tests
-should continue passing through the real production path instead of the raw-SQL workaround. This is
-itself a form of red/green validation: if any of these tests still needs the helper after the fix
-lands, the fix is incomplete.
+**Status:** Done. The plan doc's own line-number list (480, 493, 514, 580, 635) turned out to
+significantly undercount the real scope — the helper actually had ~20 direct call sites plus two
+wrapper helpers (`StageApplyAndMarkAppliedAsync`, `StageApplyAndMarkAppliedConversationAsync`) used
+across ~15 more tests. All were removed; the two wrappers were renamed to `StageAndApplyAsync`/
+`StageAndApplyConversationAsync` (their old names were actively misleading once they no longer marked
+anything applied themselves — `ApplyBatchAsync` does that now). Every test that previously called the
+workaround now exercises the real production path unchanged.
 
 ### 3. Implement the fix
 
-**Status:** Not started.
-
-Per the recommended approach above: move `Status = Applied`/`AppliedAt` population into
-`SqliteImportActionService.ApplyBatchAsync`, gated on `TryApplyBatchAsync` returning `null` (the
-existing "nothing left pending" signal both `SqliteQuoteImportService.cs` call sites already check).
-Remove the now-duplicate `batch.Status`/`batch.AppliedAt` lines from `SqliteQuoteImportService.cs`'s
-two call sites, keeping only their `RecordCount` update (via `_importBatches.UpdateRecordCountAsync`
-directly, replacing the `GetByIdAsync`-then-mutate-then-`UpdateAsync` round trip if that simplification
-doesn't change observable behaviour — confirm via the existing `SqliteQuoteImportService` test suite
-staying green).
+**Status:** Done. Per the confirmed approach: `SqliteImportActionService.ApplyBatchAsync` now calls a
+new private `MarkImportBatchAppliedAsync(string batchId)` helper (same name, now for real — the
+production choke point) whenever `TryApplyBatchAsync` returns `null` ("nothing left pending"). It
+parses `batchId`, loads the `ImportBatch` via `_importBatchRepository.GetByIdAsync`, sets `Status =
+Applied` and `AppliedAt`, and calls `UpdateAsync`. `SqliteQuoteImportService.cs`'s two call sites
+(`ImportAsync`'s non-preview branch, `ApplyStagedBatchAsync`) had their now-duplicate `batch.Status`/
+`batch.AppliedAt` lines removed, keeping only their Quote-specific `RecordCount` update — simplified to
+call `_importBatches.UpdateRecordCountAsync(batch.Id, imported + updated)` directly instead of the prior
+mutate-then-`UpdateAsync` round trip.
 
 ### 4. Confirm no regression in related tests
 
-**Status:** Not started.
-
-Full suite green, particular attention to every existing `ReverseBatchAsync`/`ApplyBatchAsync` test in
-`SqliteImportActionServiceTests.cs` and `SqliteQuoteImportServiceTests.cs` (or wherever
-`SqliteQuoteImportService`'s own tests live) — the `RecordCount` simplification in step 3 must not
-change any asserted value.
+**Status:** Done. Full solution suite: 30/30 test projects green (2,313 tests across all `dotnet test`
+runs), `dotnet build --configuration Release` 0 Warning(s) 0 Error(s). No asserted value changed in any
+existing `SqliteQuoteImportService`/`SqliteImportActionService` test.
 
 ---
 
@@ -148,13 +161,13 @@ change any asserted value.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A two-phase decide→apply batch sets `ImportBatches.Status = Applied` and populates `AppliedAt` | Unit test | `Quotinator.Core.Tests.Services.SqliteImportActionServiceTests.ApplyBatchAsync_TwoPhaseFlow_MarksImportBatchStatusApplied` — starts red |
-| 2 | ❌ | A two-phase-applied batch can be reversed without a manual status override | Unit test | `Quotinator.Core.Tests.Services.SqliteImportActionServiceTests.ReverseBatchAsync_TwoPhaseFlowBatch_SucceedsWithoutManualStatusOverride` — starts red |
-| 3 | ❌ | The single-shot direct-apply path's own `Status`/`AppliedAt`/`RecordCount` behaviour is unchanged after the fix consolidates it | Unit test | Existing `SqliteQuoteImportService` apply-path tests stay green, no assertions changed |
-| 4 | ❌ | The test-only `MarkImportBatchAppliedAsync` workaround is removed and no longer needed | Live (review) | `grep -rn "MarkImportBatchAppliedAsync" tests/` returns no results |
-| 5 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 6 | ❌ | T1 — app starts in Visual Studio; a manual two-phase decide→apply→reverse cycle works end to end | Live (T1) | Developer to confirm in Visual Studio once implemented |
-| 7 | ❌ | T2 — Docker smoke test: reproduce the issue's own repro steps 1-5, confirm step 5 now returns `200` instead of `422` | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + the issue's own curl sequence; add to CLAUDE.md's T2 checklist per this project's living-checklist convention |
+| 1 | ✅ | A two-phase decide→apply batch sets `ImportBatches.Status = Applied` and populates `AppliedAt` | Unit test | `Quotinator.Core.Tests.Services.SqliteImportActionServiceTests.ApplyBatchAsync_TwoPhaseFlow_MarksImportBatchStatusApplied` |
+| 2 | ✅ | A two-phase-applied batch can be reversed without a manual status override | Unit test | `Quotinator.Core.Tests.Services.SqliteImportActionServiceTests.ReverseBatchAsync_TwoPhaseFlowBatch_SucceedsWithoutManualStatusOverride` |
+| 3 | ✅ | The single-shot direct-apply path's own `Status`/`AppliedAt`/`RecordCount` behaviour is unchanged after the fix consolidates it | Unit test | Existing `SqliteQuoteImportService` apply-path tests stay green, no assertions changed |
+| 4 | ✅ | The test-only `MarkImportBatchAppliedAsync` workaround is removed and no longer needed | Live (review) | `grep -rn "MarkImportBatchAppliedAsync" tests/` returns no results outside `bin`/`obj` build artifacts (which reference the new *production* method of the same name) |
+| 5 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 30/30 projects green, 0 warnings, 0 errors |
+| 6 | ❌ | T1 — app starts in Visual Studio; a manual two-phase decide→apply→reverse cycle works end to end | Live (T1) | Developer to confirm in Visual Studio |
+| 7 | ✅ | T2 — Docker smoke test: reproduce the issue's own repro steps 1-5, confirm step 5 now returns `200` instead of `422` | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + import (review policy) → decide all 13 pending actions → `POST /import/actions/apply?batchId=` (200) → `POST /import/actions/reverse?batchId=` (200, both preview and real — previously 422). Added to CLAUDE.md's T2 checklist per this project's living-checklist convention |
 
 ---
 
@@ -169,7 +182,6 @@ cycle for iterative conflict-resolution testing — without this fix, no batch s
 policy (exactly the policy #217's methodology forces on every bundled file) could ever be reversed and
 retried.
 
-The issue's own "Failing tests" table and `MarkImportBatchAppliedAsync` reference both name
-`Quotinator.Engine.Tests` — stale since #206's project merge. Correct the issue body to
-`Quotinator.Core.Tests` during implementation (draft-review-approve, per this project's standing
-workflow rule), not silently.
+The issue body's "Failing tests" table already names `Quotinator.Core.Tests` — no GitHub edit was
+needed (see "Note on the issue's own text" above; this plan doc's earlier draft incorrectly claimed
+otherwise).
