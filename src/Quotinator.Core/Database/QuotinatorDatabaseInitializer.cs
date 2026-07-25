@@ -263,6 +263,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 var filePolicy      = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
                 var policy          = filePolicy.ForQuotes;
                 var conflictRules   = LoadConflictRules(seedFile.RuleFilePath);
+                var sourceAliases   = LoadSourceAliases(seedFile.SourceAliasFilePath);
 
                 Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
                     quotes.Count, fileName, batch.Label);
@@ -275,7 +276,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 {
                     actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx,
                         parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
-                        parsed.Series, parsed.Universe, parsed.Characters, conflictRules);
+                        parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases);
                     await _actionCoordinator.StageAsync(actions, connection, tx);
                     tx.Commit();
                 }
@@ -481,6 +482,36 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             Logger.LogWarning(ex, "[Database - Seed] conflict-resolution rule file {File} is not valid JSON — continuing without rules",
                 Path.GetFileName(ruleFilePath));
             return ConflictRuleLookup.Empty;
+        }
+    }
+
+    /// <summary>
+    /// #181: loads a source's own per-source title-alias file, referenced by the manifest entry's
+    /// <c>sourceAliasFile</c> property. Missing/absent/invalid all resolve to
+    /// <see cref="SourceAliasLookup.Empty"/> — same fail-open convention as <see cref="LoadConflictRules"/>.
+    /// </summary>
+    private SourceAliasLookup LoadSourceAliases(string? sourceAliasFilePath)
+    {
+        if (sourceAliasFilePath is null) return SourceAliasLookup.Empty;
+
+        if (!File.Exists(sourceAliasFilePath))
+        {
+            Logger.LogWarning("[Database - Seed] source-alias file {File} referenced in manifest but not found — continuing without aliases",
+                Path.GetFileName(sourceAliasFilePath));
+            return SourceAliasLookup.Empty;
+        }
+
+        try
+        {
+            var json      = File.ReadAllText(sourceAliasFilePath);
+            var aliasFile = JsonSerializer.Deserialize<SourceAliasRuleFile>(json, ConflictRuleReadOptions);
+            return new SourceAliasLookup(aliasFile?.Aliases ?? []);
+        }
+        catch (JsonException ex)
+        {
+            Logger.LogWarning(ex, "[Database - Seed] source-alias file {File} is not valid JSON — continuing without aliases",
+                Path.GetFileName(sourceAliasFilePath));
+            return SourceAliasLookup.Empty;
         }
     }
 }

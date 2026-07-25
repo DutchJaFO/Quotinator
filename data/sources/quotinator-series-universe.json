@@ -2,8 +2,9 @@
   "quotes": [],
   "sources": [
     {
-      "title": "Back to the future",
+      "title": "Back to the Future",
       "type": "movie",
+      "date": "1985",
       "seriesName": "Back to the Future"
     },
     {
@@ -22,7 +23,7 @@
       "seriesName": "Batman (1989)"
     },
     {
-      "title": "BATMAN V SUPERMAN: DAWN OF JUSTICE",
+      "title": "Batman v Superman: Dawn of Justice",
       "type": "movie",
       "seriesName": "Batman v Superman: Dawn of Justice"
     },
@@ -67,8 +68,9 @@
       "seriesName": "Fast & Furious"
     },
     {
-      "title": "The Fast and The Furious 8",
+      "title": "The Fate of the Furious",
       "type": "movie",
+      "date": "2017",
       "seriesName": "Fast & Furious"
     },
     {
@@ -127,11 +129,6 @@
       "seriesName": "Harry Potter"
     },
     {
-      "title": "Harry Potter and the Sorcerer's Stone",
-      "type": "movie",
-      "seriesName": "Harry Potter"
-    },
-    {
       "title": "Iron Man",
       "type": "movie",
       "seriesName": "Iron Man"
@@ -142,12 +139,12 @@
       "seriesName": "John Wick"
     },
     {
-      "title": "John Wick 2",
+      "title": "John Wick: Chapter 2",
       "type": "movie",
       "seriesName": "John Wick"
     },
     {
-      "title": "John Wick 3: Parabellum",
+      "title": "John Wick: Chapter 3 – Parabellum",
       "type": "movie",
       "seriesName": "John Wick"
     },
@@ -172,12 +169,7 @@
       "seriesName": "Naruto"
     },
     {
-      "title": "Adonis, Creed II",
-      "type": "movie",
-      "seriesName": "Rocky"
-    },
-    {
-      "title": "Creed 2",
+      "title": "Creed II",
       "type": "movie",
       "seriesName": "Rocky"
     },
@@ -197,54 +189,34 @@
       "seriesName": "Spider-Man: Homecoming"
     },
     {
-      "title": "Star Wars",
+      "title": "Star Wars: Episode IV - A New Hope",
       "type": "movie",
-      "seriesName": "Star Wars"
-    },
-    {
-      "title": "Star Wars Episode 6 : Return Of The Jedi",
-      "type": "movie",
-      "seriesName": "Star Wars"
-    },
-    {
-      "title": "Star Wars Episode IV - A New Hope",
-      "type": "movie",
-      "seriesName": "Star Wars"
-    },
-    {
-      "title": "Star Wars, Empire Strikes Back",
-      "type": "movie",
-      "seriesName": "Star Wars"
+      "seriesName": "Original Trilogy"
     },
     {
       "title": "Star Wars: Episode I – The Phantom Menace",
       "type": "movie",
-      "seriesName": "Star Wars"
+      "seriesName": "Prequel Trilogy"
     },
     {
       "title": "Star Wars: Episode III – Revenge of the Sith",
       "type": "movie",
-      "seriesName": "Star Wars"
+      "seriesName": "Prequel Trilogy"
     },
     {
       "title": "Star Wars: Episode V - The Empire Strikes Back",
       "type": "movie",
-      "seriesName": "Star Wars"
+      "seriesName": "Original Trilogy"
+    },
+    {
+      "title": "Star Wars: Episode VI - Return of the Jedi",
+      "type": "movie",
+      "seriesName": "Original Trilogy"
     },
     {
       "title": "Star Wars: Episode VII - The Force Awakens",
       "type": "movie",
-      "seriesName": "Star Wars"
-    },
-    {
-      "title": "Star Wars: Return of Jedi",
-      "type": "movie",
-      "seriesName": "Star Wars"
-    },
-    {
-      "title": "Star Wars: The Force Awakens",
-      "type": "movie",
-      "seriesName": "Star Wars"
+      "seriesName": "Sequel Trilogy"
     },
     {
       "title": "Terminator 2: Judgment Day",
@@ -257,12 +229,7 @@
       "seriesName": "Terminator"
     },
     {
-      "title": "Avengers - Age of Ultron",
-      "type": "movie",
-      "seriesName": "The Avengers"
-    },
-    {
-      "title": "Avengers : Infinity War",
+      "title": "Avengers: Age of Ultron",
       "type": "movie",
       "seriesName": "The Avengers"
     },
@@ -273,11 +240,6 @@
     },
     {
       "title": "Avengers: Infinity War",
-      "type": "movie",
-      "seriesName": "The Avengers"
-    },
-    {
-      "title": "Marvel's The Avengers",
       "type": "movie",
       "seriesName": "The Avengers"
     },
@@ -297,11 +259,6 @@
       "seriesName": "The Dark Knight Trilogy"
     },
     {
-      "title": "Batman: The Dark Knight",
-      "type": "movie",
-      "seriesName": "The Dark Knight Trilogy"
-    },
-    {
       "title": "Dark Knight Rises",
       "type": "movie",
       "seriesName": "The Dark Knight Trilogy"
@@ -313,11 +270,6 @@
     },
     {
       "title": "The Godfather",
-      "type": "movie",
-      "seriesName": "The Godfather"
-    },
-    {
-      "title": "The Godfather II",
       "type": "movie",
       "seriesName": "The Godfather"
     },
@@ -347,11 +299,6 @@
       "seriesName": "The Hobbit"
     },
     {
-      "title": "Lord Of The Ring - The Fellowships Of The Ring",
-      "type": "movie",
-      "seriesName": "The Lord of the Rings"
-    },
-    {
       "title": "The Lord of the Rings: Return of the King",
       "type": "movie",
       "seriesName": "The Lord of the Rings"
@@ -367,6 +314,12 @@
       "seriesName": "The Lord of the Rings"
     },
     {
+      "title": "The Matrix",
+      "type": "movie",
+      "date": "1999",
+      "seriesName": "The Matrix Trilogy"
+    },
+    {
       "title": "X-men",
       "type": "movie",
       "seriesName": "X-Men"
@@ -374,7 +327,30 @@
     {
       "title": "X-Men: Days of Future Past",
       "type": "movie",
+      "date": "2014",
       "seriesName": "X-Men"
+    },
+    {
+      "title": "Dr. No",
+      "type": "movie",
+      "date": "1962",
+      "seriesName": "Sean Connery Era"
+    },
+    {
+      "title": "Goldfinger",
+      "type": "movie",
+      "date": "1964",
+      "seriesName": "Sean Connery Era"
+    },
+    {
+      "title": "The Wolf of Wall Street",
+      "type": "movie",
+      "date": "2013"
+    },
+    {
+      "title": "The Silence of the Lambs",
+      "type": "movie",
+      "date": "1991"
     }
   ],
   "series": [
@@ -439,7 +415,15 @@
       "universeName": "Marvel Cinematic Universe"
     },
     {
-      "name": "Star Wars",
+      "name": "Original Trilogy",
+      "universeName": "Star Wars"
+    },
+    {
+      "name": "Prequel Trilogy",
+      "universeName": "Star Wars"
+    },
+    {
+      "name": "Sequel Trilogy",
       "universeName": "Star Wars"
     },
     {
@@ -469,12 +453,23 @@
       "universeName": "Middle Earth"
     },
     {
+      "name": "The Matrix Trilogy",
+      "universeName": "The Matrix"
+    },
+    {
       "name": "X-Men"
+    },
+    {
+      "name": "Sean Connery Era",
+      "universeName": "James Bond"
     }
   ],
   "universe": [
     {
       "name": "Batman"
+    },
+    {
+      "name": "James Bond"
     },
     {
       "name": "Marvel Cinematic Universe"
@@ -484,6 +479,9 @@
     },
     {
       "name": "Star Wars"
+    },
+    {
+      "name": "The Matrix"
     },
     {
       "name": "Wizarding World"

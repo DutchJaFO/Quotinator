@@ -53,13 +53,23 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
                     var (url, downloadUrl) = ResolveUrls(e);
                     var filePolicy         = e.DuplicateResolution is null ? null : ToManifestPolicy(e.DuplicateResolution);
                     var ruleFilePath       = e.RuleFile is null ? null : Path.Combine(dir, e.RuleFile);
-                    return new SeedFile(path, url, downloadUrl, e.RefreshIntervalHours, e.DownloadTarget, e.Converter, e.ConverterOptions, filePolicy, ruleFilePath);
+                    var sourceAliasFilePath = e.SourceAliasFile is null ? null : Path.Combine(dir, e.SourceAliasFile);
+                    return new SeedFile(path, url, downloadUrl, e.RefreshIntervalHours, e.DownloadTarget, e.Converter, e.ConverterOptions, filePolicy, ruleFilePath, sourceAliasFilePath);
                 })
                 .Where(f => File.Exists(f.FilePath))
                 .ToList();
 
+            // #181: a manifest entry's own ruleFile/sourceAliasFile (different shapes entirely — neither
+            // is a quotes array) must never be treated as an unlisted quote source just because it sits
+            // in the same directory and isn't itself listed under files[].file.
             var listedPaths = new HashSet<string>(listed.Select(f => f.FilePath), StringComparer.OrdinalIgnoreCase);
-            var unlisted     = allJson.Where(f => !listedPaths.Contains(f.FilePath)).ToList();
+            var ruleFilePaths = new HashSet<string>(
+                manifest.Files.Where(e => e.RuleFile is not null).Select(e => Path.Combine(dir, e.RuleFile!)),
+                StringComparer.OrdinalIgnoreCase);
+            var sourceAliasFilePaths = new HashSet<string>(
+                manifest.Files.Where(e => e.SourceAliasFile is not null).Select(e => Path.Combine(dir, e.SourceAliasFile!)),
+                StringComparer.OrdinalIgnoreCase);
+            var unlisted = allJson.Where(f => !listedPaths.Contains(f.FilePath) && !ruleFilePaths.Contains(f.FilePath) && !sourceAliasFilePaths.Contains(f.FilePath)).ToList();
             if (unlisted.Count > 0)
                 logger.LogInformation("[Database - Init] {Count} file(s) not listed in manifest will be appended: {Files}",
                     unlisted.Count, string.Join(", ", unlisted.Select(f => Path.GetFileName(f.FilePath))));

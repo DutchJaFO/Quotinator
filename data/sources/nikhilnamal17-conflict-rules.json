@@ -122,6 +122,78 @@
       ]
     },
     {
+      "entityId": "3233fab3-71c2-084f-b1b6-dc5a08310e6d",
+      "existingRecord": {
+        "quoteText": "Some men just want to watch the world burn.",
+        "source": "The Dark Knight",
+        "date": "2008",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Some men just want to watch the world burn.",
+        "source": "The Dark Knight",
+        "date": "2008",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "quoteText", "resolution": "Keep" }
+      ]
+    },
+    {
+      "entityId": "8091703e-6445-c948-9416-356cea88dee6",
+      "existingRecord": {
+        "quoteText": "It's not about what I want. It's about what's fair!",
+        "source": "The Dark Knight",
+        "date": "2008",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "It's not about what I want. It's about what's fair!",
+        "source": "The Dark Knight",
+        "date": "2008",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "quoteText", "resolution": "Keep" }
+      ]
+    },
+    {
+      "entityId": "b34d90ef-4db3-8a4b-9117-840607aa6897",
+      "existingRecord": {
+        "quoteText": "If you want to get crazy. We can get crazy.",
+        "source": "Us",
+        "date": "2019",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "If you want to get crazy. We can get crazy.",
+        "source": "Us",
+        "date": "2019",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "quoteText", "resolution": "Keep" }
+      ]
+    },
+    {
       "entityId": "10e3fb48-6ff3-0949-a98e-100f01b8d4ce",
       "existingRecord": {
         "quoteText": "Life's a little bit messy. We all make mistakes. No matter what type of animal you are, change starts with you.",
@@ -138,11 +210,11 @@
         "date": "2016",
         "character": null,
         "author": null,
-        "type": "anime",
+        "type": "movie",
         "genres": []
       },
       "fields": [
-        { "field": "type", "resolution": "Keep" }
+        { "field": "quoteText", "resolution": "Keep" }
       ]
     }
   ]

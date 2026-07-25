@@ -46,4 +46,12 @@ internal sealed class ManifestFileEntryDto : SourceImportSettingsDto
     /// </summary>
     [JsonPropertyName("ruleFile")]
     public string? RuleFile { get; init; }
+
+    /// <summary>
+    /// Filename (relative to this manifest's directory, same convention as <see cref="File"/>) of this
+    /// source's own per-source title-alias file (#181) — a <see cref="SourceAliasRuleFile"/>. Absent
+    /// means no aliases are loaded for this source (equivalent to an empty alias file).
+    /// </summary>
+    [JsonPropertyName("sourceAliasFile")]
+    public string? SourceAliasFile { get; init; }
 }

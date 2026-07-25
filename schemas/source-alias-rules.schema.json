@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/DutchJaFO/Quotinator/main/schemas/source-alias-rules.schema.json",
+  "title": "Quotinator Per-Source Title-Alias File",
+  "description": "A minimal, hand-authored set of raw-(title,type) substitutions (#181) consulted before Source resolution runs, so a bundled source's own misspelled/inconsistent title or type resolves to the already-canonical Source instead of creating or matching a duplicate. One alias file per bundled source, referenced from that source's own manifest.json entry via sourceAliasFile.",
+  "type": "object",
+  "required": ["aliases"],
+  "additionalProperties": false,
+  "properties": {
+    "aliases": {
+      "type": "array",
+      "description": "Every raw-(title,type) substitution this file declares. Empty for a source with no known title/type inconsistencies.",
+      "items": {
+        "type": "object",
+        "required": ["title", "type", "canonicalTitle", "canonicalType"],
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The raw title as this bundled source file actually spells it (matched case-insensitively)."
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The raw type as this bundled source file actually carries it (matched case-insensitively)."
+          },
+          "canonicalTitle": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The correct title to resolve/create the Source under instead."
+          },
+          "canonicalType": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The correct type to resolve/create the Source under instead."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "aliases": [
+    { "title": "Avengers : Infinity War", "type": "movie", "canonicalTitle": "Avengers: Infinity War", "canonicalType": "movie" },
+    { "title": "Batman: The Dark Knight", "type": "movie", "canonicalTitle": "The Dark Knight", "canonicalType": "movie" },
+    { "title": "Marvel's The Avengers", "type": "movie", "canonicalTitle": "The Avengers", "canonicalType": "movie" },
+    { "title": "Lord Of The Ring - The Fellowships Of The Ring", "type": "movie", "canonicalTitle": "The Lord of the Rings: The Fellowship of the Ring", "canonicalType": "movie" },
+    { "title": "Harry Potter and the Sorcerer's Stone", "type": "movie", "canonicalTitle": "Harry Potter and the Philosopher's Stone", "canonicalType": "movie" },
+    { "title": "Adonis, Creed II", "type": "movie", "canonicalTitle": "Creed II", "canonicalType": "movie" },
+    { "title": "Creed 2", "type": "movie", "canonicalTitle": "Creed II", "canonicalType": "movie" },
+    { "title": "The Fast and The Furious 8", "type": "movie", "canonicalTitle": "The Fate of the Furious", "canonicalType": "movie" },
+    { "title": "John Wick 2", "type": "movie", "canonicalTitle": "John Wick: Chapter 2", "canonicalType": "movie" },
+    { "title": "John Wick 3: Parabellum", "type": "movie", "canonicalTitle": "John Wick: Chapter 3 – Parabellum", "canonicalType": "movie" },
+    { "title": "Zootopia", "type": "anime", "canonicalTitle": "Zootopia", "canonicalType": "movie" },
+    { "title": "Devil wears Prada", "type": "movie", "canonicalTitle": "The Devil Wears Prada", "canonicalType": "movie" },
+    { "title": "Fault in our stars", "type": "movie", "canonicalTitle": "The Fault in Our Stars", "canonicalType": "movie" },
+    { "title": "Matrix", "type": "movie", "canonicalTitle": "The Matrix", "canonicalType": "movie" },
+    { "title": "Mr.Robot", "type": "tv", "canonicalTitle": "Mr. Robot", "canonicalType": "tv" },
+    { "title": "Shawshank Redemption", "type": "movie", "canonicalTitle": "The Shawshank Redemption", "canonicalType": "movie" },
+    { "title": "Spider Man", "type": "movie", "canonicalTitle": "Spider-Man", "canonicalType": "movie" },
+    { "title": "Spiderman", "type": "movie", "canonicalTitle": "Spider-Man", "canonicalType": "movie" },
+    { "title": "Wolf of the Wall Street", "type": "movie", "canonicalTitle": "The Wolf of Wall Street", "canonicalType": "movie" },
+    { "title": "The Godfather II", "type": "movie", "canonicalTitle": "The Godfather Part II", "canonicalType": "movie" },
+    { "title": "Star Wars", "type": "movie", "canonicalTitle": "Star Wars: Episode IV - A New Hope", "canonicalType": "movie" },
+    { "title": "Star Wars Episode IV - A New Hope", "type": "movie", "canonicalTitle": "Star Wars: Episode IV - A New Hope", "canonicalType": "movie" },
+    { "title": "Star Wars, Empire Strikes Back", "type": "movie", "canonicalTitle": "Star Wars: Episode V - The Empire Strikes Back", "canonicalType": "movie" },
+    { "title": "Star Wars: Return of Jedi", "type": "movie", "canonicalTitle": "Star Wars: Episode VI - Return of the Jedi", "canonicalType": "movie" },
+    { "title": "Star Wars Episode 6 : Return Of The Jedi", "type": "movie", "canonicalTitle": "Star Wars: Episode VI - Return of the Jedi", "canonicalType": "movie" },
+    { "title": "Star Wars: The Force Awakens", "type": "movie", "canonicalTitle": "Star Wars: Episode VII - The Force Awakens", "canonicalType": "movie" }
+  ]
+}

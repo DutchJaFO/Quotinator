@@ -312,6 +312,43 @@ public class DatabaseInitializerTests
             "No rule file was referenced — behaviour must be unchanged from before #181");
     }
 
+    /// <summary>
+    /// End-to-end proof of #181's source-title alias mechanism: a second file's quote references a
+    /// misspelled Source title that an alias file maps to the first file's already-established
+    /// canonical Source — must resolve to that one Source, never create a duplicate.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_SecondFileMisspelledSourceWithMatchingAlias_ResolvesToExistingSourceNoDuplicate()
+    {
+        var canonicalPath = Path.Combine(_tempDir, "canonical.json");
+        var misspeltPath  = Path.Combine(_tempDir, "misspelt.json");
+        var aliasPath     = Path.Combine(_tempDir, "source-aliases.json");
+
+        File.WriteAllText(canonicalPath,
+            """[{"id":"e1111111-1111-4111-8111-111111111111","quote":"First quote.","originalLanguage":"en","source":"The Avengers","date":"2012","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]""");
+        File.WriteAllText(misspeltPath,
+            """[{"id":"e2222222-2222-4222-8222-222222222222","quote":"Second quote.","originalLanguage":"en","source":"Marvel's The Avengers","date":"2012","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]""");
+        File.WriteAllText(aliasPath,
+            """{"aliases":[{"title":"Marvel's The Avengers","type":"movie","canonicalTitle":"The Avengers","canonicalType":"movie"}]}""");
+
+        var batch = new SeedBatch(
+            [
+                new SeedFile(canonicalPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
+                new SeedFile(misspeltPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), SourceAliasFilePath: aliasPath),
+            ],
+            ManifestPolicy.HardcodedDefault, "source-alias-test");
+
+        var db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE Title = 'The Avengers';"),
+            "The alias must resolve the misspelled title to the already-existing canonical Source — no duplicate");
+        Assert.AreEqual(2, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes;"), "Both quotes must still be seeded");
+    }
+
     /// <summary>No source files configured — database is created but stays empty.</summary>
     [TestMethod]
     public async Task InitialiseAsync_EmptyBatches_DatabaseIsEmpty()

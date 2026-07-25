@@ -396,6 +396,80 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionStatus.Blocked, quoteAction.Status.Parsed, "A matching rule must never bypass CompletenessGuard — a Complete row still blocks a silent overwrite");
     }
 
+    // ── #181: source-title alias lookup ────────────────────────────────────────
+
+    private static async Task SeedExistingQuoteWithSourceAsync(SqliteConnection conn, string quoteId, string sourceId, string sourceTitle, string sourceType, string quoteText)
+    {
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, @sourceTitle, @sourceType, @now)",
+            new { Id = sourceId, sourceTitle, sourceType, now });
+        await conn.ExecuteAsync(
+            "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, DateCreated) VALUES (@Id, @quoteText, 'en', @SourceId, @now)",
+            new { Id = quoteId, quoteText, SourceId = sourceId, now });
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_SourceAliasMatches_ResolvesToExistingCanonicalSource_NoSpuriousSourceAdd()
+    {
+        using var conn = await OpenConnectionAsync();
+        var canonicalSourceId = Guid.NewGuid().ToString();
+        await SeedExplicitSourceAsync(conn, canonicalSourceId, title: "The Avengers", type: "Movie", date: null);
+
+        var quote   = BuildQuote("d1111111-1111-4111-8111-111111111111", source: "Marvel's The Avengers", character: null);
+        var aliases = new SourceAliasLookup([
+            new SourceAliasRule { Title = "Marvel's The Avengers", Type = "movie", CanonicalTitle = "The Avengers", CanonicalType = "movie" },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
+
+        Assert.IsFalse(actions.Any(a => a.EntityType == "Source"), "The alias must resolve to the already-existing canonical Source — no new Source Add should be staged");
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var payload     = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        Assert.AreEqual(canonicalSourceId, payload.SourceId, "The quote must link to the existing canonical Source, not a spurious alias-derived one");
+    }
+
+    /// <summary>
+    /// Reproduces the Zootopia-class bug found live during #181's own title-consistency review: a
+    /// ConflictResolutionRule correcting a Quote's own displayed `type` field ran too late to prevent
+    /// ResolveSourceAsync from already having staged a spurious Source Add under the wrong raw type.
+    /// The alias mechanism fixes this by normalising type before ResolveSourceAsync ever runs, so no
+    /// ConflictResolutionRule is even needed for this case any more.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_ModifyPathWithTypeMismatch_AliasAppliedBeforeSourceResolution_NoSpuriousSourceCreated()
+    {
+        using var conn = await OpenConnectionAsync();
+        var quoteId  = "e1111111-1111-4111-8111-111111111111";
+        var sourceId = Guid.NewGuid().ToString();
+        await SeedExistingQuoteWithSourceAsync(conn, quoteId, sourceId, "Zootopia", "Movie", "Original text.");
+
+        var quote   = BuildQuote(quoteId, source: "Zootopia", quoteText: "Original text.", type: Core.Models.QuoteType.Anime);
+        var aliases = new SourceAliasLookup([
+            new SourceAliasRule { Title = "Zootopia", Type = "anime", CanonicalTitle = "Zootopia", CanonicalType = "movie" },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
+
+        Assert.IsFalse(actions.Any(a => a.EntityType == "Source"), "The alias must normalise type before Source resolution runs — no spurious anime-typed Source should ever be staged");
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed);
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.MergedFields!)!;
+        Assert.AreEqual(sourceId, payload.SourceId, "Must resolve to the original existing Source id, not a new alias-derived one");
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_NoSourceAliasesProvided_RawTitleUsedAsBefore()
+    {
+        using var conn = await OpenConnectionAsync();
+        var quote = BuildQuote("d2111111-1111-4111-8111-111111111111", source: "Marvel's The Avengers", character: null);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        Assert.AreEqual("Marvel's The Avengers", payload.Title, "With no alias lookup provided, the raw incoming title is used unchanged — regression guard matching pre-#181 behaviour");
+    }
+
     private static async Task SeedExistingQuoteWithCharacterAsync(SqliteConnection conn, string id, string quoteText, string characterName)
     {
         var now          = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
@@ -791,6 +865,53 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed, "A natural-key match must stage a Modify, not be silently skipped");
         var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
         Assert.AreEqual(seriesId, merged.SeriesId);
+    }
+
+    /// <summary>
+    /// #181: found live via Docker during #217's own verification — a Source established implicitly by
+    /// one bundled file (e.g. quotinator-curated.json, via a quote) and later enriched with a Series
+    /// link by another (quotinator-series-universe.json's own sources[] entry) is a genuine,
+    /// expected cross-file Modify that previously had no way to auto-resolve under Review, since
+    /// PlanSourcesAsync was one of the sites deliberately left unwired pending an observed conflict.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoExplicitId_ReviewPolicy_NoMatchingRule_StagesPending()
+    {
+        using var conn = await OpenConnectionAsync();
+        await SeedExistingSeriesAsync(conn, "The Hobbit");
+        await SeedExplicitSourceAsync(conn, "ce111111-1111-4111-8111-111111111111", title: "Casablanca", date: "1942", seriesId: null);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "The Hobbit")]);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Pending, sourceAction.Status.Parsed, "No rule exists for this Source's seriesId enrichment under Review — regression guard matching pre-#181 behaviour for this site");
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_NoExplicitId_ReviewPolicy_MatchingRule_StagesDecided()
+    {
+        using var conn = await OpenConnectionAsync();
+        await SeedExistingSeriesAsync(conn, "The Hobbit");
+        var sourceId = "cf111111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", date: "1942", seriesId: null);
+        var rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId = sourceId,
+                ExistingRecord = EmptyConflictRuleRecord,
+                IncomingRecord = EmptyConflictRuleRecord,
+                Fields = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Replace }],
+            },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "The Hobbit")], conflictRules: rules);
+
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed, "A matching rule must auto-resolve the Source's seriesId enrichment instead of leaving it Pending");
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        Assert.IsNotNull(merged.SeriesId);
     }
 
     /// <summary>

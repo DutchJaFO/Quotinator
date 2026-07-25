@@ -51,12 +51,16 @@
     <File Path="data/sources/manifest.json" />
     <File Path="data/sources/quotinator-curated.json" />
     <File Path="data/sources/quotinator-curated-conflict-rules.json" />
+    <File Path="data/sources/quotinator-curated-source-aliases.json" />
     <File Path="data/sources/quotinator-series-universe.json" />
     <File Path="data/sources/quotinator-series-universe-conflict-rules.json" />
+    <File Path="data/sources/quotinator-series-universe-source-aliases.json" />
     <File Path="data/sources/vilaboim_movie-quotes.json" />
     <File Path="data/sources/vilaboim-conflict-rules.json" />
+    <File Path="data/sources/vilaboim-source-aliases.json" />
     <File Path="data/sources/NikhilNamal17_popular-movie-quotes.json" />
     <File Path="data/sources/nikhilnamal17-conflict-rules.json" />
+    <File Path="data/sources/nikhilnamal17-source-aliases.json" />
   </Folder>
   <Folder Name="/docker/">
     <File Path="docker/Dockerfile" />
@@ -223,6 +227,7 @@
     <File Path="docs/workflow/issue-closure.md" />
     <File Path="docs/workflow/issues.md" />
     <File Path="docs/workflow/process.md" />
+    <File Path="docs/workflow/source-verification.md" />
     <File Path="docs/workflow/release.md" />
     <File Path="docs/workflow/cve.md" />
     <File Path="docs/workflow/cve-template.md" />
@@ -235,6 +240,7 @@
     <File Path="schemas/upstream-object-array.schema.json" />
     <File Path="schemas/changelog.schema.json" />
     <File Path="schemas/conflict-resolution-rules.schema.json" />
+    <File Path="schemas/source-alias-rules.schema.json" />
   </Folder>
   <Folder Name="/scripts/">
     <File Path="scripts/README.md" />

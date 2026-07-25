@@ -10,7 +10,8 @@
       "duplicateResolution": {
         "default": "review"
       },
-      "ruleFile": "quotinator-curated-conflict-rules.json"
+      "ruleFile": "quotinator-curated-conflict-rules.json",
+      "sourceAliasFile": "quotinator-curated-source-aliases.json"
     },
     {
       "file": "quotinator-series-universe.json",
@@ -18,7 +19,8 @@
       "duplicateResolution": {
         "default": "review"
       },
-      "ruleFile": "quotinator-series-universe-conflict-rules.json"
+      "ruleFile": "quotinator-series-universe-conflict-rules.json",
+      "sourceAliasFile": "quotinator-series-universe-source-aliases.json"
     },
     {
       "file": "NikhilNamal17_popular-movie-quotes.json",
@@ -39,7 +41,8 @@
       "duplicateResolution": {
         "default": "review"
       },
-      "ruleFile": "nikhilnamal17-conflict-rules.json"
+      "ruleFile": "nikhilnamal17-conflict-rules.json",
+      "sourceAliasFile": "nikhilnamal17-source-aliases.json"
     },
     {
       "file": "vilaboim_movie-quotes.json",
@@ -61,7 +64,8 @@
       "duplicateResolution": {
         "default": "review"
       },
-      "ruleFile": "vilaboim-conflict-rules.json"
+      "ruleFile": "vilaboim-conflict-rules.json",
+      "sourceAliasFile": "vilaboim-source-aliases.json"
     }
   ]
 }

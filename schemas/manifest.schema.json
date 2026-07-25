@@ -92,6 +92,11 @@
             "type": "string",
             "minLength": 1,
             "description": "Filename (relative to this manifest's directory, same convention as file) of this source's own per-source conflict-resolution rule file (#181) — a set of quoteId+field rules that auto-resolve a genuinely ambiguous field instead of leaving it staged Pending under the review policy. Omit for a source with no known recurring conflicts, equivalent to an empty rule file."
+          },
+          "sourceAliasFile": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filename (relative to this manifest's directory, same convention as file) of this source's own per-source title-alias file (#181) — a set of raw-(title,type) substitutions consulted before Source resolution runs, so a misspelled/inconsistent title or type resolves to the already-canonical Source instead of creating a duplicate. Omit for a source with no known title/type inconsistencies, equivalent to an empty alias file."
           }
         }
       }

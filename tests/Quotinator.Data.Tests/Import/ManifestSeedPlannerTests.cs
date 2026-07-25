@@ -462,6 +462,93 @@ public class ManifestSeedPlannerTests
         Assert.IsNull(files.Single().RuleFilePath);
     }
 
+    /// <summary>
+    /// Found live via T2 during #181: a rule file sits in the same directory as its owning source file
+    /// but is referenced only via ruleFile, never files[].file — the "unlisted files get appended
+    /// alphabetically" fallback must not sweep it up and try to import it as if it were a quote source.
+    /// </summary>
+    [TestMethod]
+    public void PlanSeed_RuleFileReferencedButNotListedAsFile_NotTreatedAsUnlisted()
+    {
+        WriteFile("a.json", "[]");
+        WriteFile("a-conflict-rules.json", """{"rules":[]}""");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "a.json",
+                ["name"] = "a",
+                ["ruleFile"] = "a-conflict-rules.json",
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        CollectionAssert.AreEqual(new[] { "a.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList(),
+            "The rule file must not be appended as an unlisted quote source");
+    }
+
+    // ── #181: sourceAliasFile ────────────────────────────────────────────────
+
+    [TestMethod]
+    public void PlanSeed_FileEntryHasSourceAliasFile_ResolvedToAbsolutePathSameConventionAsFile()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "a.json",
+                ["name"] = "a",
+                ["sourceAliasFile"] = "a-source-aliases.json",
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.AreEqual(Path.Combine(_tempDir, "a-source-aliases.json"), files.Single().SourceAliasFilePath);
+    }
+
+    [TestMethod]
+    public void PlanSeed_FileEntryOmitsSourceAliasFile_SourceAliasFilePathIsNull()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject { ["file"] = "a.json", ["name"] = "a" })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.IsNull(files.Single().SourceAliasFilePath);
+    }
+
+    /// <summary>Same exclusion as PlanSeed_RuleFileReferencedButNotListedAsFile_NotTreatedAsUnlisted, for sourceAliasFile.</summary>
+    [TestMethod]
+    public void PlanSeed_SourceAliasFileReferencedButNotListedAsFile_NotTreatedAsUnlisted()
+    {
+        WriteFile("a.json", "[]");
+        WriteFile("a-source-aliases.json", """{"aliases":[]}""");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "a.json",
+                ["name"] = "a",
+                ["sourceAliasFile"] = "a-source-aliases.json",
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        CollectionAssert.AreEqual(new[] { "a.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList(),
+            "The source-alias file must not be appended as an unlisted quote source");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void WriteFile(string name, string content)

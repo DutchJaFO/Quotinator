@@ -26,6 +26,9 @@ public class SourceDataIntegrityTests
     private static readonly JsonSchema ConflictResolutionRuleSchema =
         JsonSchema.FromFile(Path.Combine(SchemasDir, "conflict-resolution-rules.schema.json"));
 
+    private static readonly JsonSchema SourceAliasRuleSchema =
+        JsonSchema.FromFile(Path.Combine(SchemasDir, "source-alias-rules.schema.json"));
+
     private static readonly EvaluationOptions StrictOptions = new()
     {
         OutputFormat = OutputFormat.List
@@ -41,15 +44,27 @@ public class SourceDataIntegrityTests
             .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
     }
 
+    /// <summary>Every *.json file listed in a manifest entry's own `sourceAliasFile` property (#181) — a different shape from a source file, validated separately.</summary>
+    private static HashSet<string> SourceAliasFilesListedInManifest()
+    {
+        var root = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
+        return root["files"]!.AsArray()
+            .Select(e => e!["sourceAliasFile"]?.GetValue<string>())
+            .Where(name => name is not null)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+    }
+
     private static IEnumerable<string> SourceFiles
     {
         get
         {
             if (!Directory.Exists(SourcesDir)) return [];
             var ruleFiles = RuleFilesListedInManifest();
+            var aliasFiles = SourceAliasFilesListedInManifest();
             return Directory.EnumerateFiles(SourcesDir, "*.json")
                 .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
-                .Where(f => !ruleFiles.Contains(Path.GetFileName(f)));
+                .Where(f => !ruleFiles.Contains(Path.GetFileName(f)))
+                .Where(f => !aliasFiles.Contains(Path.GetFileName(f)));
         }
     }
 
@@ -61,6 +76,17 @@ public class SourceDataIntegrityTests
             var ruleFiles = RuleFilesListedInManifest();
             return Directory.EnumerateFiles(SourcesDir, "*.json")
                 .Where(f => ruleFiles.Contains(Path.GetFileName(f)));
+        }
+    }
+
+    private static IEnumerable<string> SourceAliasFiles
+    {
+        get
+        {
+            if (!Directory.Exists(SourcesDir)) return [];
+            var aliasFiles = SourceAliasFilesListedInManifest();
+            return Directory.EnumerateFiles(SourcesDir, "*.json")
+                .Where(f => aliasFiles.Contains(Path.GetFileName(f)));
         }
     }
 
@@ -123,6 +149,19 @@ public class SourceDataIntegrityTests
             var name    = Path.GetFileName(file);
             var element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(file));
             var result  = ConflictResolutionRuleSchema.Evaluate(element, StrictOptions);
+            Assert.IsTrue(result.IsValid, FormatErrors(name, result));
+        }
+    }
+
+    /// <summary>Each per-source title-alias file (#181) conforms to schemas/source-alias-rules.schema.json.</summary>
+    [TestMethod]
+    public void SourceAliasFiles_ConformToSchema()
+    {
+        foreach (var file in SourceAliasFiles)
+        {
+            var name    = Path.GetFileName(file);
+            var element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(file));
+            var result  = SourceAliasRuleSchema.Evaluate(element, StrictOptions);
             Assert.IsTrue(result.IsValid, FormatErrors(name, result));
         }
     }
@@ -195,7 +234,7 @@ public class SourceDataIntegrityTests
         }
     }
 
-    /// <summary>Every *.json source file in data/sources/ (excluding manifest) is listed in the manifest, either as a source file's own `file` entry or as some entry's `ruleFile` (#181).</summary>
+    /// <summary>Every *.json source file in data/sources/ (excluding manifest) is listed in the manifest, either as a source file's own `file` entry or as some entry's `ruleFile`/`sourceAliasFile` (#181).</summary>
     [TestMethod]
     public void SourceFiles_AllListedInManifest()
     {
@@ -204,12 +243,13 @@ public class SourceDataIntegrityTests
                         .Select(e => e!["file"]!.GetValue<string>())
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
         listed.UnionWith(RuleFilesListedInManifest());
+        listed.UnionWith(SourceAliasFilesListedInManifest());
 
         foreach (var file in Directory.EnumerateFiles(SourcesDir, "*.json"))
         {
             var name = Path.GetFileName(file);
             if (name.Equals("manifest.json", StringComparison.OrdinalIgnoreCase)) continue;
-            Assert.IsTrue(listed.Contains(name), $"'{name}' exists in data/sources/ but is not listed in manifest.json (as either 'file' or 'ruleFile')");
+            Assert.IsTrue(listed.Contains(name), $"'{name}' exists in data/sources/ but is not listed in manifest.json (as either 'file', 'ruleFile', or 'sourceAliasFile')");
         }
     }
 

@@ -46,7 +46,8 @@ internal static class ImportActionPlanner
         IReadOnlyList<SeriesEntry>? series = null,
         IReadOnlyList<UniverseEntry>? universe = null,
         IReadOnlyList<CharacterEntry>? characters = null,
-        ConflictRuleLookup? conflictRules = null)
+        ConflictRuleLookup? conflictRules = null,
+        SourceAliasLookup? sourceAliases = null)
     {
         var actions        = new List<SystemImportAction>();
         var sourceIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -69,7 +70,7 @@ internal static class ImportActionPlanner
         // #162: explicit Source declarations are planned before quotes resolve — a quote may
         // reference a source this same file also declares explicitly, mirroring the existing
         // conversations/stageDirections/soundCues ordering.
-        await PlanSourcesAsync(connection, sources ?? [], batchIdStr, policy, sourceIndex, seriesIndex, actions, now, transaction);
+        await PlanSourcesAsync(connection, sources ?? [], batchIdStr, policy, sourceIndex, seriesIndex, actions, now, transaction, conflictRules);
 
         // #173: same reasoning as Source above — a quote's author may reference a person this same
         // file also declares explicitly via people[].
@@ -103,6 +104,30 @@ internal static class ImportActionPlanner
                     Translations     = rawQuote.Translations,
                 }
                 : rawQuote;
+
+            // #181: a source-title alias, when one matches, substitutes the raw incoming source/type
+            // for the already-canonical pair *before* ResolveSourceAsync ever runs — unlike a
+            // ConflictResolutionRule (entity-id-keyed, Modify-path only), this must run first: it
+            // determines which Source row the quote resolves to at all, not just what a Quote's own
+            // field displays in its audit trail. See #181's plan doc, Step 10, for the Zootopia-class
+            // bug this closes (a rule that only corrected the displayed field left the quote linked to
+            // a spurious, alias-derived Source row).
+            if (sourceAliases is not null && sourceAliases.TryResolve(q.Source, q.Type.ToString(), out var canonical))
+            {
+                q = new SourceQuote
+                {
+                    Id               = q.Id,
+                    QuoteText        = q.QuoteText,
+                    OriginalLanguage = q.OriginalLanguage,
+                    Source           = canonical.CanonicalTitle,
+                    Date             = q.Date,
+                    Character        = q.Character,
+                    Author           = q.Author,
+                    Type             = QuoteSeedWriter.ParseQuoteType(canonical.CanonicalType),
+                    Genres           = q.Genres,
+                    Translations     = q.Translations,
+                };
+            }
 
             var sourceId    = await ResolveSourceAsync(connection, q, sourceIndex, batchIdStr, actions, now, transaction);
             var characterId = await ResolveCharacterAsync(connection, q, sourceId, characterIndex, batchIdStr, actions, now, transaction);
@@ -387,7 +412,7 @@ internal static class ImportActionPlanner
         SqliteConnection connection, IReadOnlyList<SourceEntry> sources, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> sourceIndex,
         Dictionary<string, string> seriesIndex, List<SystemImportAction> actions, DateTime now,
-        SqliteTransaction? transaction)
+        SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
     {
         foreach (var s in sources)
         {
@@ -446,7 +471,20 @@ internal static class ImportActionPlanner
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
-                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+
+                // #181: build the rule-decisions map before the "nothing changed" early exit below —
+                // a Custom rule can correct a field that's identical (e.g. missing) on both sides.
+                var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
+                if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
+                {
+                    foreach (var field in existingFields.Keys)
+                    {
+                        if (conflictRules.TryResolve(matchedId, field, out var decision))
+                            ruleDecisions[field] = decision;
+                    }
+                }
+
+                if (changedFields.Count == 0 && ruleDecisions.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
 
                 var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -483,7 +521,18 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isPending = policy == DuplicateResolutionPolicy.Review;
+                // #181: a rule never bypasses CompletenessGuard above — only tried once we know this
+                // action isn't Blocked.
+                FieldMergeResult? ruleResolved = null;
+                if (ruleDecisions.Count > 0)
+                {
+                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
+                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                }
+                if (ruleResolved is not null)
+                    resolved = new SourceActionPayload((string)ruleResolved.MergedFields["title"]!, (string)ruleResolved.MergedFields["type"]!, (string?)ruleResolved.MergedFields["date"], (string?)ruleResolved.MergedFields["seriesId"]);
+
+                var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new SystemImportAction
@@ -530,7 +579,20 @@ internal static class ImportActionPlanner
 
                 var changedFields = new HashSet<string>(
                     keyExistingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, keyIncomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
-                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as the explicit-id branch above.
+
+                // #181: build the rule-decisions map before the "nothing changed" early exit below —
+                // a Custom rule can correct a field that's identical (e.g. missing) on both sides.
+                var keyRuleDecisions = new Dictionary<string, FieldMergeDecision>();
+                if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
+                {
+                    foreach (var field in keyExistingFields.Keys)
+                    {
+                        if (conflictRules.TryResolve(keyRow.Id, field, out var decision))
+                            keyRuleDecisions[field] = decision;
+                    }
+                }
+
+                if (changedFields.Count == 0 && keyRuleDecisions.Count == 0) continue; // Unchanged — silent reuse, same as the explicit-id branch above.
 
                 // #190 drive-by fix: this branch previously never consulted FieldMergeResolver.Resolve
                 // for MergeOurs/MergeTheirs at all — it always took keyIncomingPayload for any policy
@@ -570,7 +632,18 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var keyIsPending = policy == DuplicateResolutionPolicy.Review;
+                // #181: a rule never bypasses CompletenessGuard above — only tried once we know this
+                // action isn't Blocked.
+                FieldMergeResult? keyRuleResolved = null;
+                if (keyRuleDecisions.Count > 0)
+                {
+                    try { keyRuleResolved = FieldMergeResolver.ResolveWithDecisions(keyExistingFields, keyIncomingFields, keyRuleDecisions); }
+                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                }
+                if (keyRuleResolved is not null)
+                    resolved = new SourceActionPayload((string)keyRuleResolved.MergedFields["title"]!, (string)keyRuleResolved.MergedFields["type"]!, (string?)keyRuleResolved.MergedFields["date"], (string?)keyRuleResolved.MergedFields["seriesId"]);
+
+                var keyIsPending = policy == DuplicateResolutionPolicy.Review && keyRuleResolved is null;
                 var keyStatus    = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new SystemImportAction
