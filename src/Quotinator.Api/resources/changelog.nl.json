@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214, 215],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 154, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 212, 213, 214, 215],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -139,7 +139,8 @@
       "Een intern veld voor importbatch-boekhouding volgde niet de naamgevingsconventie waarop het hierboven genoemde consistentiewerk voor id's steunt om id-kolommen automatisch te herkennen en beschermen — hernoemd voor consistentie; het veld werd nog nergens gebruikt, dus er is verder geen merkbaar effect (issue #213)",
       "De automatische controles op id-consistentie in de interne testsuite waren voorheen afhankelijk van ontwikkelaars die bepaalde interne querybouw-methoden handmatig moesten opnemen; ze worden nu automatisch gevonden en gecontroleerd — een zuiver interne verbetering van de testdekking, zonder gevolgen voor gebruikers of gedrag (issue #214)",
       "Een verwant intern mechanisme voor het samenvoegen van query's werd automatisch slechts op één van de drie interne veiligheidscontroles gecontroleerd die elders in de codebase overal worden toegepast; het wordt nu op alle drie gecontroleerd, waarmee de laatst overgebleven lacune van dit type is gedicht — een zuiver interne verbetering van de testdekking, zonder gevolgen voor gebruikers of gedrag (issue #215)",
-      "Het matchen van een bron op titel en type tijdens het importeren was hoofdlettergevoelig, waardoor het opnieuw importeren van dezelfde bron met een andere schrijfwijze (bijvoorbeeld uit een anders opgemaakt bestand) een duplicaat kon aanmaken in plaats van de bestaande bron bij te werken; matchen is nu niet meer hoofdlettergevoelig, consistent met hoe elke andere identifier in het systeem al wordt vergeleken (issue #175)"
+      "Het matchen van een bron op titel en type tijdens het importeren was hoofdlettergevoelig, waardoor het opnieuw importeren van dezelfde bron met een andere schrijfwijze (bijvoorbeeld uit een anders opgemaakt bestand) een duplicaat kon aanmaken in plaats van de bestaande bron bij te werken; matchen is nu niet meer hoofdlettergevoelig, consistent met hoe elke andere identifier in het systeem al wordt vergeleken (issue #175)",
+      "Een import die was afgerond via het gefaseerde beoordeel-en-beslis-werkproces (`POST /api/v1/import/actions/apply`) werd nooit als toegepast geregistreerd, waardoor het achteraf ongedaan maken ervan (`POST /api/v1/import/actions/reverse`) altijd mislukte, ook al was de import zelf wel geslaagd; de batch wordt nu correct als toegepast gemarkeerd en kan net als elke andere worden teruggedraaid (issue #177)"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"

@@ -1,6 +1,6 @@
 # #177 — ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #177
 **Tiers required:** T1, T2
 **Depends on:** none technically; sequenced first under #217 because the resolve→apply→reverse→retry
@@ -166,7 +166,7 @@ existing `SqliteQuoteImportService`/`SqliteImportActionService` test.
 | 3 | ✅ | The single-shot direct-apply path's own `Status`/`AppliedAt`/`RecordCount` behaviour is unchanged after the fix consolidates it | Unit test | Existing `SqliteQuoteImportService` apply-path tests stay green, no assertions changed |
 | 4 | ✅ | The test-only `MarkImportBatchAppliedAsync` workaround is removed and no longer needed | Live (review) | `grep -rn "MarkImportBatchAppliedAsync" tests/` returns no results outside `bin`/`obj` build artifacts (which reference the new *production* method of the same name) |
 | 5 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 30/30 projects green, 0 warnings, 0 errors |
-| 6 | ❌ | T1 — app starts in Visual Studio; a manual two-phase decide→apply→reverse cycle works end to end | Live (T1) | Developer to confirm in Visual Studio |
+| 6 | ✅ | T1 — app starts in Visual Studio; a manual two-phase decide→apply→reverse cycle works end to end | Live (T1) | Developer confirmed in Visual Studio (2026-07-25) |
 | 7 | ✅ | T2 — Docker smoke test: reproduce the issue's own repro steps 1-5, confirm step 5 now returns `200` instead of `422` | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + import (review policy) → decide all 13 pending actions → `POST /import/actions/apply?batchId=` (200) → `POST /import/actions/reverse?batchId=` (200, both preview and real — previously 422). Added to CLAUDE.md's T2 checklist per this project's living-checklist convention |
 
 ---

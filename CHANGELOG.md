@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-24 22:50 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-25 08:32 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -138,6 +138,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The internal test suite's automatic id-consistency checks previously relied on developers remembering to list certain internal query-building methods by hand; they are now discovered and checked automatically instead — a purely internal test-coverage improvement with no user-facing or behaviour change (issue #214)
 - A related internal query-joining mechanism was only automatically checked for one of the three internal safety checks the rest of the codebase applies everywhere else; it is now checked for all three, closing the last remaining gap of this kind — a purely internal test-coverage improvement with no user-facing or behaviour change (issue #215)
 - Matching a source by its title and type during import was case-sensitive, so re-importing the same source with different letter casing (e.g. from a differently-formatted file) could create a duplicate instead of updating the existing one; matching is now case-insensitive, consistent with how every other identifier in the system is already matched (issue #175)
+- An import finished through the staged review-and-decide workflow (`POST /api/v1/import/actions/apply`) was never recorded as applied, so undoing it afterwards (`POST /api/v1/import/actions/reverse`) always failed even though the import itself had succeeded; the batch is now correctly marked applied and can be undone like any other (issue #177)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`
