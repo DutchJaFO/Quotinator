@@ -1,6 +1,6 @@
 # #181 — Minimal per-source conflict-resolution rule file + curated field-override preload
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #181
 **Tiers required:** T1, T2
 **Depends on:** #177 (dependency order established by #217, the parent tracking issue: #177 → #181 →
@@ -101,7 +101,36 @@ corrections to rows seeded from elsewhere). It's what a source's own rule file r
 
 ### 1. Design the minimal rule-file schema
 
-**Status:** Not started.
+**Status:** Done. `Quotinator.Data.Import.ConflictResolutionRule`/`ConflictResolutionRuleFile` (POCOs,
+`JsonSerializer.Deserialize<T>`-compatible per this project's JSON parsing policy) reuse
+`FieldResolutionChoice` directly for `resolution` — confirmed `Keep` already matches this issue's
+"keep-existing" need exactly, no new enum member added. `ConflictRuleLookup` wraps a loaded rule file
+for O(1) `quoteId + field` lookup, case-insensitive on quote id per this project's id-comparison
+convention. Live at `src/Quotinator.Data/Import/ConflictResolutionRule.cs`,
+`ConflictResolutionRuleFile.cs`, `ConflictRuleLookup.cs`.
+
+**Scope-verification finding (re-verified live against the actual bundled file, not just #147's own
+summary table)**: of the 9 NikhilNamal17 pairs #147 lists, only 6 have a genuine field conflict once
+checked directly — 3 pairs (`"It's not about what I want..."`, `"Some men just want..."`, `"If you want
+to get crazy..."`) are byte-for-byte identical on every field between their two occurrences and need no
+rule at all. Two findings #147 never surfaced, because it only compared `date`: the Simpsons Movie pair
+also differs on `source` casing (`"The Simpsons movie"` vs `"The Simpsons Movie"`), and the Zootopia
+pair — which #147 calls "identical row" since both dates already agree — actually differs on `type`
+(`movie` vs `anime`, the second occurrence is wrong). Both were folded into this issue's own rule-file
+work rather than split out, since the mechanism is identical (developer decision, 2026-07-25).
+
+**Cross-cutting fix folded in (developer decision, 2026-07-25)**: while investigating the Simpsons Movie
+casing difference, found `FieldMergeResolver.ValuesEqual` (`src/Quotinator.Data/Import/
+FieldMergeResolver.cs`) did a plain, case-sensitive `Equals(a, b)` for every scalar string field —
+inconsistent with `QuoteIdentity.StableId`'s own case-insensitive normalisation for the *same* imported
+value, and with this project's established case-insensitive-by-default convention (CLAUDE.md). Fixed to
+compare case-insensitively via a private `ScalarComparer`, applied uniformly to every field (including
+free-text ones like `quoteText`) rather than only identity-like fields — a deliberate developer decision
+weighing the (small, accepted) risk of a pure-casing-only quote-text correction going unregistered
+against the alternative of a growing per-field exemption list. Documented in CLAUDE.md alongside the
+existing GUID/enum/id case-insensitivity section. This also means the Simpsons Movie pair no longer
+needs a separate `source` rule — case-insensitive comparison already treats the two castings as equal,
+leaving only its `date` conflict to resolve via a rule.
 
 Keyed by quote id + field name — the simpler of the two options #153's own plan doc weighs (id+field
 vs. content hash), justified here specifically because this issue's conflict set is small and fully
@@ -126,29 +155,49 @@ mechanism #153's own Step 3 already flags as the requirement to reuse).
 
 ### 2. Manifest reference
 
-**Status:** Not started.
-
-Add a `ruleFile` (or similar) property to the relevant `ManifestFileEntryDto` entries for
-`vilaboim_movie-quotes.json` and `NikhilNamal17_popular-movie-quotes.json` in
-`data/sources/manifest.json`, pointing at each source's own rule file. Add the corresponding property
-to `schemas/manifest.schema.json` (both files' entries need it; `additionalProperties: false` means
-the schema must be updated in the same commit or manifest validation rejects the new property).
+**Status:** Done — and fully wired end to end, not just schema. `ManifestFileEntryDto.RuleFile`
+(`ruleFile` in JSON) added, `schemas/manifest.schema.json` updated in the same commit (also corrected
+its stale `review` policy description while touching this section — it claimed review "behaves like
+skip today", no longer true since #154). `SeedFile.RuleFilePath` carries the resolved absolute path
+(same `Path.Combine(dir, ...)` convention as `FilePath` itself) from `ManifestSeedPlanner.PlanSeed`
+through to `QuotinatorDatabaseInitializer.SeedIfEmptyInternalAsync`, which loads it via a new
+`LoadConflictRules` helper (fail-open: missing/invalid file → `ConflictRuleLookup.Empty`, matching
+`LoadSourceFileAsync`'s own convention for the source file itself) and passes the resulting
+`ConflictRuleLookup` into `PlanAsync`. Proven end to end (not just unit-level) by
+`DatabaseInitializerTests.InitialiseAsync_SecondFileReviewPolicyMatchingRule_AutoResolvesNoPendingActionLeft`
+— a two-file seed batch where the second file's rule file resolves its only conflicting field and the
+action applies immediately at startup with zero rows left `Pending`, plus a regression-guard sibling
+test proving the no-rule-file case is unchanged.
 
 ### 3. Rule lookup and auto-apply wiring
 
-**Status:** Not started.
+**Status:** Done for the Quote-level site (`PlanAsync` itself). `ImportActionPlanner.cs` is confirmed at
+1511 lines, at `src/Quotinator.Core/Database/ImportActionPlanner.cs` (not `Import/` as an earlier draft
+of this doc assumed). **Correction to this step's own premise**: `isPending = policy ==
+DuplicateResolutionPolicy.Review` (line 184, pre-change) is unconditional — it does **not** check
+whether any field actually differs first. Re-importing an existing quote under `review` with every
+field identical still stages a `Pending` Modify action (with an empty `ambiguousFields` set once
+decided). The rule lookup added here doesn't change that unconditional-staging behaviour; it only
+changes whether a genuinely *ambiguous* field can be pre-resolved.
 
-`ImportActionPlanner.cs` has grown to 1500+ lines since this step was first written (#171–#180's
-Character/Series/Universe/Person/StageDirection/SoundCue/Conversation work each added their own
-`isPending` check) — there is no single shared "conflict-staging branch" left; each entity-specific
-`Plan*Async` method (`PlanAsync` itself for Quote, `PlanSourcesAsync`, `PlanPeopleAsync`,
-`PlanCharactersAsync`, `PlanSeriesAsync`, `PlanUniverseAsync`, `PlanStageDirectionsAsync`,
-`PlanSoundCuesAsync`, `PlanConversationsAsync`) has its own `isPending = policy ==
-DuplicateResolutionPolicy.Review` check that currently stages `Pending` unconditionally when true and
-a field differs. This step adds a rule lookup before that check — if a loaded rule matches the field,
-the action stages `Decided` with the rule's resolution already applied, instead of `Pending`. No
-staleness detection (that's #153's own later addition) — a rule that no longer matches current data
-simply doesn't match and falls through to normal `Pending` staging, a safe default.
+Implementation: before the `isPending`/`status` computation, build a per-field decisions map from
+`ConflictRuleLookup.TryResolve(quoteId, field)` for every key in `existingFields`, then call the
+already-existing `FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, decisions)` —
+reusing #149's own decide-machinery rather than writing new merge logic. If every genuinely-ambiguous
+field has a matching rule, this succeeds and the action stages `Decided` with the rule-resolved
+`MergedFields`, exactly like a human-decided action. If any ambiguous field has no rule,
+`ResolveWithDecisions` throws `UnresolvedFieldConflictException` (caught, discarded) and staging falls
+through to normal `Pending`, unaffected — a safe default matching this step's original design. The rule
+lookup runs *after* `CompletenessGuard.ShouldBlock`, never before — a rule never bypasses the guard; a
+`Complete` row still blocks a silent overwrite regardless of whether a rule could have resolved the
+change (`PlanAsync_ReviewPolicy_MatchingRuleButCompletenessGuardBlocks_StillStagesBlockedNotDecided`).
+No staleness detection (that's #153's own later addition).
+
+Four new tests in `ImportActionPlannerTests.cs` cover: full rule coverage → `Decided` with correct
+merged value; partial coverage (one of two ambiguous fields has a rule) → still `Pending`, regression
+guard; a rule for a different quote id → no effect, regression guard matching pre-#181 behaviour; a
+matching rule against a `Complete` row → still `Blocked`. Full solution suite green (30/30 projects,
+0 warnings/errors) after this step.
 
 **Scope per the widening above**: the originally-known conflicts (NikhilNamal17's 9) are Quote-level
 only, so the top-level `PlanAsync` Quote logic is the minimum needed for the original 2-file scope.

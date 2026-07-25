@@ -527,6 +527,20 @@ Found and fixed piecemeal across `status`/`entityType`/`batchId` (#154), a conve
 
 **Mechanical guard**: `Quotinator.Data.Diagnostics.SqlSelectPresentationGuard` mirrors `SqlIdCaseGuard`'s own strip-then-scan technique (not a maintained registry of "columns known to need it") — strip every already-`LOWER(...)`-wrapped column from a query's SELECT list, then flag any remaining `*Id`-suffixed reference. Wired into the same `SqlQueryGuardTests`/`RepositorySqlGuardTests` `DynamicData` enumeration `SqlIdCaseGuard` uses, so every SQL constant, factory method, and dynamically-assembled query is scanned on every test run — including `RepositorySql.cs`'s generic queries, which build an explicit column list via an `IEntityColumnMetadata` parameter rather than `SELECT *`, so they get the exact same wrap-every-id-column coverage as every hand-written query in `Sql.cs`. See ADR 012 for how `IEntityColumnMetadata`/`ReflectedColumnMetadata` work.
 
+**The same convention extends beyond SQL to in-memory field-value comparison during import.**
+`FieldMergeResolver.ValuesEqual` (`src/Quotinator.Data/Import/FieldMergeResolver.cs`) — the shared
+comparison every entity's conflict/merge detection goes through (Quote, Source, Person, Character,
+Series, Universe, StageDirection, SoundCue, Conversation) — compares string values (scalar or within a
+list) case-insensitively, applied uniformly to every field including free-text content, not just
+identity-like ones. Found while implementing #181: a plain `Equals(a, b)` meant an import file's own
+casing variance (e.g. `"star wars"` vs `"Star Wars"`) was treated as a genuine field conflict, even
+though `QuoteIdentity.StableId` already normalises casing away when generating the same quote's id —
+an inconsistency between two adjacent mechanisms governing the same imported value. Deliberately applies
+uniformly rather than only to source/character/author-style fields: a future import correcting only a
+quote's own casing (e.g. an all-caps entry) is expected to be rare enough that requiring an accompanying
+non-casing change (or an explicit `markCompletenessAs`) to register the correction is an acceptable
+trade-off against the alternative of a growing per-field exemption list.
+
 ### Entity-scoped filter-parameter convention
 
 Any endpoint that filters by a related masterdata entity (e.g. "quotes from this Source", "characters in
