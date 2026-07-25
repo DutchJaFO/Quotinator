@@ -147,8 +147,11 @@ internal static class Sql
         /// <summary>Removes all audit entries.</summary>
         internal const string DeleteAll     = "DELETE FROM System_AuditEntries;";
 
-        /// <summary>Removes audit entries for a specific table name.</summary>
-        internal const string DeleteByTable = "DELETE FROM System_AuditEntries WHERE TableName = @table;";
+        /// <summary>Removes audit entries for a specific table name. Case-insensitive (#216) — a
+        /// lowercase <c>?table=</c> (the natural spelling given this endpoint's own JSON casing
+        /// conventions) previously matched nothing and silently deleted zero rows, looking like
+        /// success while doing nothing.</summary>
+        internal const string DeleteByTable = "DELETE FROM System_AuditEntries WHERE LOWER(TableName) = LOWER(@table);";
 
         // COUNT base — shared by CountPaged factory method below.
         private const string CountPagedBase = "SELECT COUNT(*) FROM System_AuditEntries";
@@ -172,10 +175,11 @@ internal static class Sql
         // never canonicalized before reaching here — a mismatched-case value (any casing a client
         // happens to send) previously matched nothing. See
         // docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
+        // TableName comparison is case-insensitive too (#216) — same reasoning as DeleteByTable above.
         private static string BuildWhere(bool filterTable, bool filterRecordId)
         {
             var parts = new List<string>(2);
-            if (filterTable)    parts.Add("TableName = @table");
+            if (filterTable)    parts.Add("LOWER(TableName) = LOWER(@table)");
             if (filterRecordId) parts.Add(IdClauses.Equals("RecordId", "recordId"));
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
@@ -293,10 +297,12 @@ internal static class Sql
         /// (ADR 012). <c>InitiatedById</c> is deliberately NOT wrapped: unlike <c>EntityId</c>, which is
         /// always an id, <c>InitiatedById</c> is polymorphic (an import batch UUID, an HTTP route, or an
         /// enrichment provider name — see <see cref="Entities.SystemChangeLog.InitiatedById"/>), and
-        /// forcing it lowercase would corrupt meaningful casing in the non-id cases.
+        /// forcing it lowercase would corrupt meaningful casing in the non-id cases. <c>EntityType</c>
+        /// is case-insensitive too (#216) — same class of gap as <c>EntityId</c> on this very query,
+        /// found during a comprehensive audit before any endpoint ever exposed this reader.
         /// </summary>
         internal static readonly string SelectByEntity =
             $"SELECT {IdClauses.SelectColumn("Id")}, EntityType, {IdClauses.SelectColumn("EntityId")}, InitiatedByType, InitiatedById, Action, Field, OldValue, NewValue, OccurredAt " +
-            $"FROM System_ChangeLog WHERE EntityType = @entityType AND {IdClauses.Equals("EntityId", "entityId")} ORDER BY OccurredAt DESC;";
+            $"FROM System_ChangeLog WHERE LOWER(EntityType) = LOWER(@entityType) AND {IdClauses.Equals("EntityId", "entityId")} ORDER BY OccurredAt DESC;";
     }
 }

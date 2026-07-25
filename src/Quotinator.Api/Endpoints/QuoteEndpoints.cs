@@ -77,9 +77,11 @@ internal static class QuoteEndpoints
     }
 
     // Returns a 400 problem result when lang or field are invalid, null when both are fine.
-    private static IResult? ValidateCommon(IApiLocalizer localizer, string? lang, string? field = null)
+    // Also lowercases lang in place (#216) — the single choke point normalizing every ?lang= value
+    // before it reaches a SQL comparison or gets echoed back as EffectiveLanguage.
+    private static IResult? ValidateCommon(IApiLocalizer localizer, ref string? lang, string? field = null)
     {
-        if (lang is not null && !InputValidation.IsValidLang(lang))
+        if (!InputValidation.TryNormalizeLang(ref lang))
             return Results.Problem(
                 detail: localizer[ApiMessages.LangInvalid],
                 statusCode: StatusCodes.Status400BadRequest);
@@ -196,7 +198,7 @@ internal static class QuoteEndpoints
     {
         logger.LogInformation("[Api - Random] n={N} type={Type} genre={Genre} lang={Lang}", n, type, genre, lang);
 
-        if (ValidateCommon(localizer, lang) is { } err) return err;
+        if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
         var count = QueryParamDefaults.RandomCount;
         if (n is not null && (!int.TryParse(n, out count) || count < 1 || count > 100))
@@ -275,7 +277,7 @@ internal static class QuoteEndpoints
     {
         logger.LogInformation("[Api - GetById] id={Id} lang={Lang}", id, lang);
 
-        if (ValidateCommon(localizer, lang) is { } err) return err;
+        if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
         var quote = service.GetById(id, lang);
         return NotFoundResult.OkOrNotFound(quote, localizer, ApiMessages.QuoteNotFound);
@@ -304,7 +306,7 @@ internal static class QuoteEndpoints
     {
         logger.LogInformation("[Api - Search] q={Q} field={Field} limit={Limit} type={Type} lang={Lang}", q, field, limit, type, lang);
 
-        if (ValidateCommon(localizer, lang, field) is { } err) return err;
+        if (ValidateCommon(localizer, ref lang, field) is { } err) return err;
 
         if (string.IsNullOrWhiteSpace(q))
             return Results.Problem(
@@ -398,7 +400,7 @@ internal static class QuoteEndpoints
     {
         logger.LogInformation("[Api - GetAll] page={Page} pageSize={PageSize} type={Type} lang={Lang}", page, pageSize, type, lang);
 
-        if (ValidateCommon(localizer, lang) is { } err) return err;
+        if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;

@@ -56,7 +56,12 @@ internal static class Sql
         // between two id columns is LOWER()-wrapped via IdClauses.Join — defense-in-depth, since
         // both sides are already canonical by construction once write-side canonicalization
         // (EntityIdCanonicalizer) is in place, per the developer's "never assume" directive (#210).
-        // @lang is always bound — null when no translation is requested.
+        // @lang is always bound — null when no translation is requested. The three Language JOIN
+        // conditions are LOWER()-wrapped too (#216) — InputValidation.TryNormalizeLang already
+        // lowercases the incoming ?lang= value, but a translation's Language column is never
+        // canonicalized at capture (its value is whatever casing an import file's translation-object
+        // key used, see QuoteSeedWriter.InsertTranslationsAsync), so the SQL side still needs its own
+        // wrap, unlike an id column.
         private static readonly string SelectBase = $"""
             SELECT
                 {IdClauses.SelectColumn("q.Id", "Id")},
@@ -67,7 +72,7 @@ internal static class Sql
                 s.Type                                 AS SourceType,
                 COALESCE(ct.Name,       c.Name)        AS Character,
                 p.Name                                 AS Author,
-                CASE WHEN qt.QuoteText IS NOT NULL THEN @lang ELSE q.OriginalLanguage END AS EffectiveLanguage,
+                CASE WHEN qt.QuoteText IS NOT NULL THEN LOWER(@lang) ELSE q.OriginalLanguage END AS EffectiveLanguage,
                 {IdClauses.SelectColumn("ser.Id", "SeriesId")},
                 ser.Name                               AS SeriesName,
                 {IdClauses.SelectColumn("uni.Id", "UniverseId")},
@@ -76,9 +81,9 @@ internal static class Sql
             JOIN   Sources         s  ON  {IdClauses.Join("s.Id", "q.SourceId")}                                          AND s.IsDeleted  = 0
             LEFT JOIN Characters   c  ON  {IdClauses.Join("c.Id", "q.CharacterId")}                                       AND c.IsDeleted  = 0
             LEFT JOIN People       p  ON  {IdClauses.Join("p.Id", "q.PersonId")}                                          AND p.IsDeleted  = 0
-            LEFT JOIN QuoteTranslations    qt ON {IdClauses.Join("qt.QuoteId", "q.Id")} AND qt.Language = @lang        AND qt.IsDeleted = 0
-            LEFT JOIN SourceTranslations   st ON {IdClauses.Join("st.SourceId", "s.Id")} AND st.Language = @lang        AND st.IsDeleted = 0
-            LEFT JOIN CharacterTranslations ct ON {IdClauses.Join("ct.CharacterId", "c.Id")} AND ct.Language = @lang       AND ct.IsDeleted = 0
+            LEFT JOIN QuoteTranslations    qt ON {IdClauses.Join("qt.QuoteId", "q.Id")} AND LOWER(qt.Language) = LOWER(@lang) AND qt.IsDeleted = 0
+            LEFT JOIN SourceTranslations   st ON {IdClauses.Join("st.SourceId", "s.Id")} AND LOWER(st.Language) = LOWER(@lang) AND st.IsDeleted = 0
+            LEFT JOIN CharacterTranslations ct ON {IdClauses.Join("ct.CharacterId", "c.Id")} AND LOWER(ct.Language) = LOWER(@lang) AND ct.IsDeleted = 0
             LEFT JOIN Series       ser ON {IdClauses.Join("ser.Id", "s.SeriesId")}                                         AND ser.IsDeleted = 0
             LEFT JOIN Universe     uni ON {IdClauses.Join("uni.Id", "ser.UniverseId")}                                     AND uni.IsDeleted = 0
             """;
@@ -200,8 +205,10 @@ internal static class Sql
     internal static class SourceTranslations
     {
         internal const string DeleteAll = "DELETE FROM SourceTranslations;";
+
+        /// <summary>Case-insensitive on Language (#216) — see <see cref="Quotes.SelectBase"/>'s remark on why the SQL side still needs its own wrap despite input-side normalization.</summary>
         internal static readonly string CountForSource =
-            $"SELECT COUNT(*) FROM SourceTranslations WHERE {IdClauses.Equals("SourceId", "sid")} AND Language = @lang AND IsDeleted = 0;";
+            $"SELECT COUNT(*) FROM SourceTranslations WHERE {IdClauses.Equals("SourceId", "sid")} AND LOWER(Language) = LOWER(@lang) AND IsDeleted = 0;";
     }
 
     /// <summary>CharacterTranslations table.</summary>
@@ -318,7 +325,12 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM People WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM People;";
-        internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM People WHERE Name = @name AND IsDeleted = 0;";
+        /// <summary>
+        /// Case-insensitive on Name (#216 fix, matching <see cref="Sources.SelectIdByTitleAndType"/>'s
+        /// #180 precedent) — Name is a natural-key lookup, not free text, so a case-only difference
+        /// must never be treated as a distinct Person.
+        /// </summary>
+        internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM People WHERE LOWER(Name) = LOWER(@name) AND IsDeleted = 0;";
 
         /// <summary>
         /// #173's id-first lookup for an explicit <c>people[]</c> entry — mirrors
@@ -473,7 +485,12 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Series WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Series;";
-        internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM Series WHERE Name = @name AND IsDeleted = 0;";
+        /// <summary>
+        /// Case-insensitive on Name (#216 fix, matching <see cref="Sources.SelectIdByTitleAndType"/>'s
+        /// #180 precedent) — Name is a natural-key lookup, not free text, so a case-only difference
+        /// must never be treated as a distinct Series.
+        /// </summary>
+        internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM Series WHERE LOWER(Name) = LOWER(@name) AND IsDeleted = 0;";
 
         /// <summary>#163's id-first lookup for an explicit <c>series[]</c> entry — mirrors <see cref="People.SelectExistingById"/>. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark. UniverseId is wrapped per ADR 012's uniform SELECT-list rule (every selected id-suffixed column, not only ones known to be string-typed today).</summary>
         internal static readonly string SelectExistingById =
@@ -527,7 +544,12 @@ internal static class Sql
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Universe WHERE IsDeleted = 0;";
         internal const string DeleteAll   = "DELETE FROM Universe;";
-        internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM Universe WHERE Name = @name AND IsDeleted = 0;";
+        /// <summary>
+        /// Case-insensitive on Name (#216 fix, matching <see cref="Sources.SelectIdByTitleAndType"/>'s
+        /// #180 precedent) — Name is a natural-key lookup, not free text, so a case-only difference
+        /// must never be treated as a distinct Universe.
+        /// </summary>
+        internal static readonly string SelectIdByName = $"SELECT {IdClauses.SelectColumn("Id")} FROM Universe WHERE LOWER(Name) = LOWER(@name) AND IsDeleted = 0;";
 
         /// <summary>#163's id-first lookup for an explicit <c>universe[]</c> entry — mirrors <see cref="People.SelectExistingById"/>. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark.</summary>
         internal static readonly string SelectExistingById =
@@ -740,14 +762,15 @@ internal static class Sql
         /// Quotes) — #67's schema never added one, since every bundled stage direction is English;
         /// EffectiveLanguage hardcodes the <c>'en'</c> fallback that <c>Quote.OriginalLanguage</c>
         /// otherwise defaults to. Revisit with a real migration if non-English stage directions are
-        /// ever needed.
+        /// ever needed. The translation JOIN's Language condition is case-insensitive (#216) — see
+        /// <see cref="Quotes.SelectBase"/>'s remark on why the SQL side still needs its own wrap.
         /// </summary>
         internal static readonly string SelectByIdWithTranslation =
             $"""
             SELECT {IdClauses.SelectColumn("sd.Id", "Id")}, COALESCE(sdt.Text, sd.Text) AS Text, sd.ImageUrl,
-                   CASE WHEN sdt.Text IS NOT NULL THEN @lang ELSE 'en' END AS EffectiveLanguage
+                   CASE WHEN sdt.Text IS NOT NULL THEN LOWER(@lang) ELSE 'en' END AS EffectiveLanguage
             FROM StageDirections sd
-            LEFT JOIN StageDirectionTranslations sdt ON {IdClauses.Join("sdt.StageDirectionId", "sd.Id")} AND sdt.Language = @lang AND sdt.IsDeleted = 0
+            LEFT JOIN StageDirectionTranslations sdt ON {IdClauses.Join("sdt.StageDirectionId", "sd.Id")} AND LOWER(sdt.Language) = LOWER(@lang) AND sdt.IsDeleted = 0
             WHERE {IdClauses.Equals("sd.Id", "id")} AND sd.IsDeleted = 0;
             """;
     }
@@ -809,9 +832,9 @@ internal static class Sql
         internal static readonly string SelectByIdWithTranslation =
             $"""
             SELECT {IdClauses.SelectColumn("sc.Id", "Id")}, COALESCE(sct.Text, sc.Text) AS Text, sc.SoundFileUrl, sc.ImageUrl,
-                   CASE WHEN sct.Text IS NOT NULL THEN @lang ELSE 'en' END AS EffectiveLanguage
+                   CASE WHEN sct.Text IS NOT NULL THEN LOWER(@lang) ELSE 'en' END AS EffectiveLanguage
             FROM SoundCues sc
-            LEFT JOIN SoundCueTranslations sct ON {IdClauses.Join("sct.SoundCueId", "sc.Id")} AND sct.Language = @lang AND sct.IsDeleted = 0
+            LEFT JOIN SoundCueTranslations sct ON {IdClauses.Join("sct.SoundCueId", "sc.Id")} AND LOWER(sct.Language) = LOWER(@lang) AND sct.IsDeleted = 0
             WHERE {IdClauses.Equals("sc.Id", "id")} AND sc.IsDeleted = 0;
             """;
     }

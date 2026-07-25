@@ -4,6 +4,6 @@ namespace Quotinator.Core.Repositories;
 /// #196 entity-scoped filter convention for #192's quote-read-path Universe filter.</summary>
 public interface IUniverseNameResolver
 {
-    /// <summary>The active Universe id with this exact name, or <c>null</c> if none exists.</summary>
+    /// <summary>The active Universe id with this name (case-insensitive, #216), or <c>null</c> if none exists.</summary>
     Task<Guid?> ResolveIdByNameAsync(string name);
 }

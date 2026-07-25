@@ -95,4 +95,26 @@ public class SystemAuditReaderTests
 
         Assert.AreEqual("f0000210-0000-4000-8000-000000000210", result.Items.Single().RecordId);
     }
+
+    /// <summary>
+    /// #216 fix: `?table=quotes` (lowercase — the natural spelling given this endpoint's own JSON
+    /// casing conventions) must still match the PascalCase-stored "Quotes" rows, not silently filter
+    /// to zero results.
+    /// </summary>
+    [TestMethod]
+    public async Task GetPagedAsync_LowercaseTableFilter_StillMatchesPascalCaseStoredRows()
+    {
+        await _writer.WriteAsync(new SystemAuditEntry
+        {
+            TableName   = "Quotes",
+            RecordId    = Guid.NewGuid().ToString("D"),
+            Operation   = AuditOperation.Insert,
+            Agent       = "TestRunner/1.0",
+            PerformedAt = DateTime.UtcNow,
+        });
+
+        var result = await _reader.GetPagedAsync("quotes", null, 1, 20);
+
+        Assert.AreEqual(1, result.Items.Count, "Lowercase ?table=quotes must still match the stored 'Quotes' row");
+    }
 }

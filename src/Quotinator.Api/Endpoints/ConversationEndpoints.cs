@@ -84,7 +84,7 @@ internal static class ConversationEndpoints
     {
         logger.LogInformation("[Api - GetConversationById] id={Id} lang={Lang}", id, lang);
 
-        if (lang is not null && !InputValidation.IsValidLang(lang))
+        if (!InputValidation.TryNormalizeLang(ref lang))
             return Results.Problem(
                 detail: localizer[ApiMessages.LangInvalid],
                 statusCode: StatusCodes.Status400BadRequest);

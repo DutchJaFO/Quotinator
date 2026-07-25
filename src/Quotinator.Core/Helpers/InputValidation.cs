@@ -63,6 +63,26 @@ public static partial class InputValidation
     public static bool IsValidLang(string lang) =>
         lang.Length <= 8 && LangPattern().IsMatch(lang);
 
+    /// <summary>
+    /// Validates and lowercases <paramref name="lang"/> in place — the single choke point every
+    /// <c>?lang=</c>-accepting endpoint must call (#216 fix). Returns <c>false</c> (leaving
+    /// <paramref name="lang"/> untouched) when the value fails <see cref="IsValidLang"/>; a
+    /// <c>null</c> value is always valid and passes through unchanged. Case-insensitive matching
+    /// against a stored <c>Language</c> column requires both sides normalized — the DB side is
+    /// wrapped in <c>LOWER()</c> at every comparison, and this method is the corresponding input-side
+    /// half, so a case-only difference between the query parameter and however a translation's
+    /// language key was originally authored in an import file never fails to match. Lowercasing here
+    /// (rather than only on the SQL side) also keeps `EffectiveLanguage`'s echoed value canonical,
+    /// matching this project's presentation convention elsewhere.
+    /// </summary>
+    public static bool TryNormalizeLang(ref string? lang)
+    {
+        if (lang is null) return true;
+        if (!IsValidLang(lang)) return false;
+        lang = lang.ToLowerInvariant();
+        return true;
+    }
+
     /// <summary>Returns <c>true</c> if <paramref name="value"/> matches known SQL injection patterns.</summary>
     public static bool IsSuspiciousInput(string value) =>
         SuspiciousInputPattern().IsMatch(value);

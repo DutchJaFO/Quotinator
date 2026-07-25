@@ -1,6 +1,6 @@
 # #216 — Series/Universe name-filter case sensitivity (confirmed bug) + audit all Name/Title natural-key comparisons
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #216
 **Tiers required:** T1, T2
 **Depends on:** Nothing — independent of #211 (see Background for the deliberate scope split); no
@@ -148,49 +148,84 @@ WHERE/JOIN at all.
 
 ### 3a. Fix Series/Universe/People `SelectIdByName` — case-insensitive
 
-**Status:** Not started. (Renumbered from the original Step 1 — kept as its own step since it's the
-issue's own confirmed, named bug.)
+**Status:** Done. (Renumbered from the original Step 1 — kept as its own step since it's the issue's
+own confirmed, named bug.)
 
-Wrap all three as `WHERE LOWER(Name) = LOWER(@name) AND IsDeleted = 0`, matching `IdClauses`-style
-wrapping and #180's own `Sources.SelectIdByTitleAndType` precedent exactly. Fixes items 1 and 3 of the
-original spec simultaneously for these three entities, per Background.
+Wrapped all three as `WHERE LOWER(Name) = LOWER(@name) AND IsDeleted = 0`, matching #180's own
+`Sources.SelectIdByTitleAndType` precedent exactly (hand-written `LOWER()`, not `IdClauses.Equals` —
+`IdClauses` is reserved for id columns; Name/Title columns follow Sources' own established pattern
+instead). Fixes items 1 and 3 of the original spec simultaneously for these three entities, per
+Background. `ISeriesNameResolver`/`IUniverseNameResolver`'s XML doc comments updated from "this exact
+name" to "this name (case-insensitive, #216)".
+
+Tests: `PlanUniverseAsync_ExistingByName_DifferingCasing_NoActionStaged`,
+`PlanSeriesAsync_ExistingByName_DifferingCasing_NoActionStaged`,
+`PlanPeopleAsync_NoIdMatch_DifferingCasing_FallsBackToNaturalKey_NoActionStaged` (all in
+`ImportActionPlannerTests.cs`, real-SQLite, proves the import-time natural-key path) plus a new
+`SeriesUniverseNameResolverTests.cs` (real-SQLite, proves `SeriesNameResolver`/`UniverseNameResolver`
+themselves — the actual classes `EntityFilterParsing.ResolveAsync` calls for the `series=`/`universe=`
+query filters — since `QuoteEndpointsTests.cs`'s existing series/universe coverage substitutes a Fake
+resolver and would not have exercised the real SQL fix).
 
 ### 3b. Fix `lang` query-parameter case-sensitivity (Finding A)
 
-**Status:** Not started.
+**Status:** Done.
 
-Recommend normalizing `lang` to lowercase **once, centrally** (e.g. at the point every endpoint reads
-the raw query-string value, or inside a single shared helper), rather than wrapping 6 separate SQL
-`Language = @lang` fragments individually — cheaper, and matches this project's own preference for one
-choke point over N scattered fixes (the same reasoning `GuidExtensions.ToCanonicalId()` and
-`IdClauses` were built around). Confirm during implementation whether `LOWER()`-wrapping the SQL side
-is still warranted as defense-in-depth even after centralizing the input normalization.
+Implemented **both halves**, not input-normalization alone — confirmed during implementation that the
+SQL side still needed its own wrap: a translation's `Language` column is never canonicalized at capture
+(its value is whatever casing an import file's translation-object key used, per
+`QuoteSeedWriter.InsertTranslationsAsync`), unlike an id column, so a stored `Language` value can
+genuinely be mixed-case independent of what casing a caller's `?lang=` happens to use.
+
+- Added `InputValidation.TryNormalizeLang(ref string? lang)` (`Quotinator.Core.Helpers`) — validates
+  and lowercases in one step, the single choke point every `?lang=`-accepting endpoint now calls.
+  `QuoteEndpoints.ValidateCommon` takes `ref lang` and calls it (used by `GetRandom`/`GetById`/
+  `Search`/`GetAll`); `ConversationEndpoints.GetById`'s own inline check calls it too.
+- Wrapped all 6 SQL `Language = @lang` fragments as `LOWER(...) = LOWER(@lang)`
+  (`Sql.Quotes.SelectBase`'s three translation JOINs, `Sql.SourceTranslations.CountForSource`,
+  `Sql.StageDirections.SelectByIdWithTranslation`, `Sql.SoundCues.SelectByIdWithTranslation`) —
+  defense-in-depth per the project's established "wrap both sides, never rely on capture-time
+  canonicalization alone" convention.
+- Also wrapped the 3 `CASE WHEN ... THEN @lang ELSE ... END AS EffectiveLanguage` fragments as
+  `LOWER(@lang)` — without this, a raw uppercase `@lang` would still echo back uncanonicalized in the
+  response even after the JOIN condition itself matched correctly.
+
+Tests: `InputValidationTests.TryNormalizeLang_*` (validation + lowercasing behaviour in isolation) and
+`SqliteQuoteServiceTests.GetById_UppercaseLang_StillMatchesLowercaseStoredTranslation` (real-SQLite,
+calls `SqliteQuoteService.GetById` directly with a raw uppercase `lang` — bypassing the endpoint-layer
+normalization entirely — to prove the SQL-side fix holds on its own, not just in combination with the
+input-side one).
 
 ### 3c. Fix `SystemAudit.TableName` case-sensitivity (Finding B)
 
-**Status:** Not started.
+**Status:** Done.
 
-Wrap both `BuildWhere` and `DeleteByTable` as `LOWER(TableName) = LOWER(@table)`. The DELETE endpoint's
-silent-no-op failure mode makes this a genuine correctness bug, not just a query-filter miss.
+Wrapped both `BuildWhere` and `DeleteByTable` as `LOWER(TableName) = LOWER(@table)`. The DELETE
+endpoint's silent-no-op failure mode makes this a genuine correctness bug, not just a query-filter miss.
+
+Tests: `SystemAuditReaderTests.GetPagedAsync_LowercaseTableFilter_StillMatchesPascalCaseStoredRows`,
+`SystemAuditWriterTests.ClearAsync_WithLowercaseTable_StillDeletesMatchingEntries` (both real-SQLite).
 
 ### 3d. Fix `SystemChangeLog.EntityType` case-sensitivity (Finding C)
 
-**Status:** Not started.
+**Status:** Done.
 
-Wrap `SelectByEntity`'s `EntityType = @entityType` the same way its own `EntityId` column on the same
-query already is. No live endpoint exercises this today, so no regression risk beyond the unit-test
-level — cheap, proactive fix while the pattern is already documented here.
+Wrapped `SelectByEntity`'s `EntityType = @entityType` the same way its own `EntityId` column on the
+same query already is. No live endpoint exercises this today, so no regression risk beyond the
+unit-test level.
+
+Tests: `SystemChangeLogWriterReaderTests.GetHistoryAsync_MixedCaseEntityType_StillMatches` (real-SQLite).
 
 ### 4. Update CLAUDE.md
 
-**Status:** Not started.
+**Status:** Done.
 
-Extend the existing "GUID/enum/id comparisons are case-insensitive by default" section (or add an
-adjacent one) to explicitly state Name/Title natural-key columns are covered by the same rule, and
-document the `lang`/`TableName`/`EntityType` findings as further recurrences of the same pattern,
-citing #216 and #180 as precedent, matching how the section already cites #154/#69/#180/#175. Also
-note the LIKE/Unicode borderline finding was deliberately left unfixed here — accepted as-is per
-developer decision, with the actual fix tracked separately as #222.
+Renamed the section header to "GUID/enum/id/Name/Title comparisons are case-insensitive by default"
+and broadened its first paragraph to explicitly cover Name/Title natural-key columns (citing
+`Sources.SelectIdByTitleAndType`/`Series`/`Universe`/`People`'s `SelectIdByName`), documented the
+`lang`/`TableName`/`EntityType` findings as further recurrences in the "found and fixed piecemeal"
+paragraph, and added a new paragraph recording the LIKE/Unicode exception as deliberate and pointing
+to #222. `docs/database-conventions.md`'s cross-reference to the section's old title updated to match.
 
 ---
 
@@ -198,18 +233,18 @@ developer decision, with the actual fix tracked separately as #222.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `series=`/`universe=` query filters match case-insensitively | Unit test | `QuoteEndpointsTests.GetRandom_MixedCaseSeriesFilter_MatchesCaseInsensitively` (or `/search`/`GetAll`) |
-| 2 | ❌ | `Sql.Series.SelectIdByName`/`Sql.Universe.SelectIdByName` match case-insensitively at the SQL level | Unit test | `SelectIdByName_MixedCaseInput_MatchesExistingRow` (Series and Universe) |
-| 3 | ❌ | `Sql.People.SelectIdByName` matches case-insensitively | Unit test | Equivalent test for People |
+| 1 | ✅ | `series=`/`universe=` query filters match case-insensitively | Unit test | `SeriesUniverseNameResolverTests.SeriesNameResolver_DifferingCasing_StillResolvesId`/`UniverseNameResolver_DifferingCasing_StillResolvesId` (real-SQLite, exercises the actual resolver classes `EntityFilterParsing.ResolveAsync` calls) |
+| 2 | ✅ | `Sql.Series.SelectIdByName`/`Sql.Universe.SelectIdByName` match case-insensitively at the SQL level | Unit test | Same as row 1, plus `ImportActionPlannerTests.PlanSeriesAsync_ExistingByName_DifferingCasing_NoActionStaged`/`PlanUniverseAsync_ExistingByName_DifferingCasing_NoActionStaged` (import-time natural-key path) |
+| 3 | ✅ | `Sql.People.SelectIdByName` matches case-insensitively | Unit test | `ImportActionPlannerTests.PlanPeopleAsync_NoIdMatch_DifferingCasing_FallsBackToNaturalKey_NoActionStaged` |
 | 4 | ✅ | Comprehensive audit of every string/text property across every entity, not just the issue's 4 named queries | Live (review) | Done — see Step 2's findings table (Findings A/B/C + the LIKE/Unicode borderline case) |
-| 5 | ❌ | `?lang=` case mismatch no longer silently falls back to the original language (Finding A) | Unit test + Live | New test on at least one translated-content endpoint; T2 `curl` with uppercase `lang=` against a known-translated quote |
-| 6 | ❌ | `GET`/`DELETE /admin/audit?table=` match case-insensitively (Finding B) | Unit test | New test asserting a lowercase `table=` filters/deletes the same as the stored PascalCase value |
-| 7 | ❌ | `SystemChangeLog.SelectByEntity`'s `EntityType` matches case-insensitively (Finding C) | Unit test | New test at the reader level (no live endpoint exists yet to test through) |
+| 5 | ✅ | `?lang=` case mismatch no longer silently falls back to the original language (Finding A) | Unit test + Live | `InputValidationTests.TryNormalizeLang_*`, `SqliteQuoteServiceTests.GetById_UppercaseLang_StillMatchesLowercaseStoredTranslation` (real-SQLite, proves the positive-match case). Live T2 only confirms no regression (`?lang=NL` returns 200, falls back gracefully) — a live positive-match proof isn't currently possible against real data: no import path can persist a translation yet (`QuoteSeedWriter.InsertTranslationsAsync` has zero callers anywhere in the codebase — a prepared-but-not-yet-wired-up capability per developer confirmation 2026-07-25, out of scope for #216) — see Notes. |
+| 6 | ✅ | `GET`/`DELETE /admin/audit?table=` match case-insensitively (Finding B) | Unit test | `SystemAuditReaderTests.GetPagedAsync_LowercaseTableFilter_StillMatchesPascalCaseStoredRows`, `SystemAuditWriterTests.ClearAsync_WithLowercaseTable_StillDeletesMatchingEntries` |
+| 7 | ✅ | `SystemChangeLog.SelectByEntity`'s `EntityType` matches case-insensitively (Finding C) | Unit test | `SystemChangeLogWriterReaderTests.GetHistoryAsync_MixedCaseEntityType_StillMatches` |
 | 8 | ✅ | LIKE-based free-text search's ASCII-only case-folding either fixed for full Unicode parity or explicitly accepted as-is | Live (review) | Developer decision recorded 2026-07-25: accepted as-is for now (no translations currently exercise it); follow-up fix tracked separately as [#222](https://github.com/DutchJaFO/Quotinator/issues/222) in the v1.8.0 maintenance milestone |
-| 9 | ❌ | CLAUDE.md updated | Live (review) | Manual diff review |
-| 10 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
+| 9 | ✅ | CLAUDE.md updated | Live (review) | Section renamed and broadened, see Step 4 |
+| 10 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — Quotinator.Core.Tests (1118), Quotinator.Data.Tests (655), Quotinator.Api.Tests (511) all green, 0 warnings, 0 errors |
 | 11 | ❌ | T1 — app starts in Visual Studio, mixed-case series/universe filter matches | Live (T1) | Developer to confirm in Visual Studio |
-| 12 | ❌ | T2 — Docker smoke test: mixed-case `series=`/`universe=` filter, mixed-case `lang=`, mixed-case `table=` all resolve correctly against bundled data | Live (T2) | `docker build` + `curl "http://localhost:8080/api/v1/quotes/random?series=original%20trilogy"` (lowercase, against #181's now-correctly-cased "Original Trilogy") + `curl ".../quotes/{id}?lang=NL"` + `curl "http://localhost:8080/api/v1/admin/audit?table=quotes"` |
+| 12 | ✅ | T2 — Docker smoke test: mixed-case `series=`/`universe=` filter, mixed-case `table=` resolve correctly against bundled data; `lang=` case-insensitivity confirmed with no regression | Live (T2) | `docker build` + fresh reseed (799 quotes/464 sources) — `curl ".../quotes/random?n=20&universe=james+bond"` (lowercase) returned `totalMatching: 5` including all 3 Dr. No quotes (this is the exact data-completeness gap the developer's own T1 run surfaced against a stale dev DB — a fresh reseed resolves it); `curl ".../quotes/random?n=20&series=sean+connery+era"` (lowercase) same 5 results; `curl ".../quotes/{id}?lang=NL"` returned 200 with a graceful original-language fallback (no translation exists anywhere in bundled data to positive-match against — see row 5); `curl ".../admin/audit?table=quotes"` (lowercase GET) matched the PascalCase-stored rows; `curl -X DELETE ".../admin/audit?table=quotes"` (lowercase) returned 204 and genuinely deleted the matching rows, confirmed via a follow-up GET showing only the purge sentinel remaining — this is the exact silent-no-op bug Finding B described |
 
 ---
 
@@ -230,3 +265,17 @@ this project's Unicode-aware case-insensitivity everywhere else) that the develo
 as-is for now rather than fix here — tracked separately as
 [#222](https://github.com/DutchJaFO/Quotinator/issues/222) in the v1.8.0 maintenance milestone. See
 Step 2 for the full findings table.
+
+**All code/doc work complete 2026-07-25** — Steps 3a–3d and 4 all Done, full test suite green
+(Quotinator.Core.Tests 1118, Quotinator.Data.Tests 655, Quotinator.Api.Tests 511). T2 complete; only
+T1 remains before this issue is `Waiting for release`.
+
+**T2 finding, resolved as expected behaviour, not a bug (2026-07-25)**: while building a live fixture to
+positive-match test the `lang=` fix, discovered that `QuoteSeedWriter.InsertTranslationsAsync` — the
+only code that ever writes to `QuoteTranslations`/`SourceTranslations`/`CharacterTranslations` — has no
+callers anywhere in the codebase. A quote's `translations` object is never persisted today, via either
+the initial seed or the live `/import` path. Raised with the developer; confirmed this is expected —
+translations are a prepared-but-not-yet-wired-up capability (the schema/model/read-path exist; the
+import feature to actually populate them does not yet). Not a regression, not in scope for #216, and no
+GitHub issue needed per the developer's explicit call. Documented here only so a future reader
+encountering the same "why doesn't my translation import" question doesn't need to rediscover this.

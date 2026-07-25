@@ -648,6 +648,23 @@ public class ImportActionPlannerTests
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Universe"), "Already exists by name — silently reused, no action staged");
     }
 
+    /// <summary>
+    /// #216 fix: Sql.Universe.SelectIdByName is now case-insensitive, matching #180's own
+    /// Sql.Sources.SelectIdByTitleAndType precedent — a case-only difference must never stage a
+    /// duplicate Universe.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanUniverseAsync_ExistingByName_DifferingCasing_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        await SeedExistingUniverseAsync(conn, "Middle Earth");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            universe: [BuildUniverseEntry("MIDDLE EARTH")]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Universe"), "Differing casing must still match the existing row by natural key, not stage a duplicate Add");
+    }
+
     /// <summary>#163: Universe's own two-shape widening — explicit id present, matched by that id, name differs.</summary>
     [TestMethod]
     public async Task PlanUniverseAsync_ExplicitIdMatchFound_NameDiffers_StagesModifyAction()
@@ -732,6 +749,23 @@ public class ImportActionPlannerTests
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionKind.Add, seriesAction.ActionType.Parsed);
         Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed);
+    }
+
+    /// <summary>
+    /// #216 fix: Sql.Series.SelectIdByName is now case-insensitive, matching #180's own
+    /// Sql.Sources.SelectIdByTitleAndType precedent — a case-only difference must never stage a
+    /// duplicate Series.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSeriesAsync_ExistingByName_DifferingCasing_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        await SeedExistingSeriesAsync(conn, "The Lord of the Rings");
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            series: [BuildSeriesEntry("THE LORD OF THE RINGS")]);
+
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Series"), "Differing casing must still match the existing row by natural key, not stage a duplicate Add");
     }
 
     /// <summary>#163: Series' own two-shape widening — explicit id present, matched by that id, name differs.</summary>
@@ -1386,6 +1420,26 @@ public class ImportActionPlannerTests
             people: [BuildPersonEntry(newFileId, name: "Ada Lovelace")]);
 
         Assert.AreEqual(0, actions.Count, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#173 scope boundary, same as #162's)");
+    }
+
+    /// <summary>
+    /// #216 fix: Sql.People.SelectIdByName is now case-insensitive, matching #180's own
+    /// Sql.Sources.SelectIdByTitleAndType precedent — a case-only difference must still find the
+    /// existing row via natural key, not stage a duplicate Add.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanPeopleAsync_NoIdMatch_DifferingCasing_FallsBackToNaturalKey_NoActionStaged()
+    {
+        using var conn = await OpenConnectionAsync();
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync("INSERT INTO People (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
+            new { Id = Guid.NewGuid(), now });
+
+        var newFileId = "e3211111-1111-4111-8111-111111111173";
+        var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [BuildPersonEntry(newFileId, name: "ADA LOVELACE")]);
+
+        Assert.AreEqual(0, actions.Count, "Differing casing must still match the existing row via natural key, not stage a duplicate Add");
     }
 
     [TestMethod]

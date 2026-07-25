@@ -195,6 +195,26 @@ public class SystemAuditWriterTests
         Assert.AreEqual(AuditOperation.Purge, widgetsEntry.Operation, "Purge entry TableName must be the cleared table");
     }
 
+    /// <summary>
+    /// #216 fix: a lowercase `?table=` (the natural spelling given this endpoint's own JSON casing
+    /// conventions) must still delete the matching rows — before the fix it silently deleted nothing,
+    /// looking like success while doing nothing, since the stored TableName is written PascalCase.
+    /// </summary>
+    [TestMethod]
+    public async Task ClearAsync_WithLowercaseTable_StillDeletesMatchingEntries()
+    {
+        await _writer.WriteAsync(BuildEntry(AuditOperation.Insert)); // TableName = "Widgets"
+
+        await _writer.ClearAsync("widgets");
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var remaining = conn.Query<SystemAuditEntry>("SELECT * FROM System_AuditEntries;").ToList();
+
+        Assert.AreEqual(1, remaining.Count, "Only the purge sentinel entry should remain — the lowercase filter must still match the PascalCase-stored 'Widgets' row");
+        Assert.AreEqual(AuditOperation.Purge, remaining[0].Operation);
+    }
+
     // ── Repository audit writes ──────────────────────────────────────────────
 
     [TestMethod]

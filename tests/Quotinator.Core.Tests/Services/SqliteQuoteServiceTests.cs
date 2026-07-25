@@ -167,6 +167,41 @@ public class SqliteQuoteServiceTests
         return quote;
     }
 
+    private async Task InsertQuoteTranslationAsync(Guid quoteId, string language, string quoteText)
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await conn.ExecuteAsync(Sql.QuoteTranslations.Insert, new
+        {
+            Id          = Guid.NewGuid().ToString(),
+            QuoteId     = quoteId.ToString("D"),
+            Language    = language,
+            QuoteText   = quoteText,
+            DateCreated = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+        });
+    }
+
+    /// <summary>
+    /// #216 fix: `?lang=NL` must match a translation stored under `Language = 'nl'` the same way
+    /// `?lang=nl` does — before the fix, the JOIN's `Language = @lang` comparison was case-sensitive,
+    /// so an uppercase query parameter silently fell back to the original language instead of
+    /// returning the translation.
+    /// </summary>
+    [TestMethod]
+    public async Task GetById_UppercaseLang_StillMatchesLowercaseStoredTranslation()
+    {
+        var source = await InsertSourceAsync("A Film With A Dutch Translation");
+        var quote  = await InsertQuoteAsync(source.Id, "Original English text.");
+        await InsertQuoteTranslationAsync(quote.Id, "nl", "Nederlandse tekst.");
+
+        var result = _service.GetById(quote.Id.ToString("D"), lang: "NL");
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual("Nederlandse tekst.", result.Quote, "Uppercase ?lang=NL must still resolve the lowercase-stored 'nl' translation");
+        Assert.AreEqual("nl", result.Language, "The returned Language must be canonically lowercase, not echo the caller's uppercase casing");
+        Assert.IsTrue(result.IsTranslated);
+    }
+
     [TestMethod]
     public async Task GetById_SourceInSeriesWithUniverse_ResponseCarriesBoth()
     {

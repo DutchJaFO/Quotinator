@@ -87,6 +87,30 @@ public class SystemChangeLogWriterReaderTests
     }
 
     /// <summary>
+    /// #216 fix: EntityType comparison is case-insensitive, matching EntityId's own #210 precedent on
+    /// this same query — a caller passing a differently-cased EntityType than what was written must
+    /// still find the row.
+    /// </summary>
+    [TestMethod]
+    public async Task GetHistoryAsync_MixedCaseEntityType_StillMatches()
+    {
+        var entry = new SystemChangeLog
+        {
+            Id              = Guid.NewGuid(),
+            EntityType      = "Quote",
+            EntityId        = "entity-2",
+            InitiatedByType = new SafeValue<InitiatorType?>(InitiatorType.Seed.ToString(), InitiatorType.Seed),
+            Action          = new SafeValue<ChangeAction?>(ChangeAction.Created.ToString(), ChangeAction.Created),
+            OccurredAt      = DateTime.UtcNow,
+        };
+        await _writer.LogAsync(entry);
+
+        var history = await _reader.GetHistoryAsync("QUOTE", "entity-2");
+
+        Assert.HasCount(1, history, "?entityType=QUOTE must still match the stored 'Quote' row");
+    }
+
+    /// <summary>
     /// <c>InitiatedById</c> is deliberately NOT normalized — it is polymorphic (an import batch UUID,
     /// an HTTP route, or an enrichment provider name), so forcing it lowercase would corrupt
     /// legitimate mixed-case content. Confirms the read side genuinely preserves it as-is.

@@ -39,6 +39,48 @@ public class InputValidationTests
 
     #endregion
 
+    #region TryNormalizeLang
+
+    /// <summary>#216 fix: a mixed/upper-case lang value must be validated and lowercased in one step.</summary>
+    [TestMethod]
+    [DataRow("EN", "en")]
+    [DataRow("nl", "nl")]
+    [DataRow("En-Gb", "en-gb")]
+    [DataRow("ZH-HANS", "zh-hans")]
+    public void TryNormalizeLang_ValidCode_ReturnsTrueAndLowercases(string input, string expected)
+    {
+        string? lang = input;
+        var ok = InputValidation.TryNormalizeLang(ref lang);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(expected, lang);
+    }
+
+    [TestMethod]
+    public void TryNormalizeLang_Null_ReturnsTrueAndLeavesNull()
+    {
+        string? lang = null;
+        var ok = InputValidation.TryNormalizeLang(ref lang);
+
+        Assert.IsTrue(ok);
+        Assert.IsNull(lang);
+    }
+
+    [TestMethod]
+    [DataRow("english")]
+    [DataRow("en_GB")]
+    [DataRow("123")]
+    public void TryNormalizeLang_InvalidCode_ReturnsFalseAndLeavesUnchanged(string input)
+    {
+        string? lang = input;
+        var ok = InputValidation.TryNormalizeLang(ref lang);
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual(input, lang, "Must not mutate the value on a failed validation");
+    }
+
+    #endregion
+
     #region ValidTypes
 
     [TestMethod]

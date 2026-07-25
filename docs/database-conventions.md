@@ -43,7 +43,7 @@ and read-time presentation normalization are three separate mechanisms, not one.
 | ❌ Don't | Assume a comparison is safe because its only known caller already supplies matching casing — the guard exists precisely because a *future* caller is not bound by today's callers' behaviour. Wrap every id comparison in `LOWER(...)` regardless of whether it looks safe today. |
 
 📖 [ADR 012](architecture-decisions/012-canonicalize-entity-ids-at-capture.md), CLAUDE.md's
-"GUID/enum/id comparisons are case-insensitive by default"
+"GUID/enum/id/Name/Title comparisons are case-insensitive by default"
 
 ---
 
