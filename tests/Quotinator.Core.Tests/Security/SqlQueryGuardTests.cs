@@ -1,5 +1,6 @@
 using System.Reflection;
 using Quotinator.Data.Diagnostics;
+using Quotinator.Core.Entities;
 using Quotinator.Core.Queries;
 using Quotinator.Core.Services;
 
@@ -8,6 +9,17 @@ namespace Quotinator.Core.Tests.Security;
 [TestClass]
 public class SqlQueryGuardTests
 {
+    /// <summary>
+    /// Every non-id text column Core's own entities carry — discovered via reflection, not a
+    /// hand-maintained list (#211, mirroring #210's own rejection of a hand-maintained id-column
+    /// registry). Computed once and reused by every text-case-guard test in this class.
+    /// </summary>
+    private static readonly IReadOnlySet<string> CoreTextColumnNames = SqlTextCaseGuard.DiscoverTextColumnNames(
+        typeof(Character), typeof(CharacterTranslation), typeof(ConversationEntity), typeof(Person),
+        typeof(QuoteEntity), typeof(QuoteTranslationEntity), typeof(SeriesEntity), typeof(SoundCueEntity),
+        typeof(SoundCueTranslationEntity), typeof(Source), typeof(SourceTranslation),
+        typeof(StageDirectionEntity), typeof(StageDirectionTranslationEntity), typeof(UniverseEntity));
+
     /// <summary>
     /// Reflects over every string constant in <see cref="Sql"/> and its nested classes,
     /// and asserts that none match the CVE-2025-6965 vulnerable aggregate pattern
@@ -94,6 +106,33 @@ public class SqlQueryGuardTests
             $"Assembled query '{label}' selects {string.Join(", ", violations)} unwrapped — wrap in " +
             "LOWER(...) AS ColumnName in the SELECT column list. See ADR 012's \"read-time " +
             "presentation normalization\" revision.");
+    }
+
+    /// <summary>
+    /// Reflects over every string constant in <see cref="Sql"/> and its nested classes, and asserts
+    /// none compare a non-id text column (Name/Title natural key, Language code, etc.) to a bound
+    /// parameter case-sensitively. See #211 — the same class of gap #210 found for id columns,
+    /// extended to everything CLAUDE.md's "case-insensitive by default" rule covers beyond ids.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(AllNamedSqlConstants))]
+    public void SqlConstant_PassesTextCaseGuard(string name, string sql)
+    {
+        var violations = SqlTextCaseGuard.FindViolations(sql, CoreTextColumnNames);
+        Assert.IsEmpty(violations,
+            $"Sql.{name} contains a case-sensitive text comparison: {string.Join(", ", violations)}. " +
+            "Wrap both sides via TextClauses.Equals(...) — see #211.");
+    }
+
+    /// <summary>Same guard, applied to every dynamically-assembled query (see <see cref="AssembledQueryCases"/>).</summary>
+    [TestMethod]
+    [DynamicData(nameof(AssembledQueryCases))]
+    public void AssembledQuery_PassesTextCaseGuard(string label, string fullSql)
+    {
+        var violations = SqlTextCaseGuard.FindViolations(fullSql, CoreTextColumnNames);
+        Assert.IsEmpty(violations,
+            $"Assembled query '{label}' contains a case-sensitive text comparison: " +
+            $"{string.Join(", ", violations)}. Wrap both sides via TextClauses.Equals(...) — see #211.");
     }
 
     /// <summary>

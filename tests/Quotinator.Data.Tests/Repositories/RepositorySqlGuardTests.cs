@@ -54,6 +54,24 @@ public class RepositorySqlGuardTests
     }
 
     /// <summary>
+    /// Verifies that every SQL string produced by <see cref="RepositorySql"/> factory methods does not
+    /// compare a non-id text column case-sensitively. #211's own investigation confirmed
+    /// <see cref="RepositorySql"/> has no such comparison today (every comparison goes through
+    /// <see cref="IdClauses"/> against <c>Id</c>/FK columns) — this test exists so a future generic
+    /// name-based lookup gets the same protection automatically, matching every other guard already
+    /// wired into this file.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(RepositorySqlCases))]
+    public void RepositorySqlFactory_PassesTextCaseGuard(string name, string sql)
+    {
+        var violations = SqlTextCaseGuard.FindViolations(sql, ["Label"]);
+        Assert.IsEmpty(violations,
+            $"RepositorySql.{name} contains a case-sensitive text comparison: {string.Join(", ", violations)}. " +
+            "Wrap both sides via TextClauses.Equals(...) — see #211.");
+    }
+
+    /// <summary>
     /// Stands in for a real entity's <see cref="ReflectedColumnMetadata"/> — covers every column name
     /// the cases below exercise (<c>Id</c>/<c>ParentId</c>/<c>LeftId</c>/<c>RightId</c> as id columns,
     /// <c>Label</c>/<c>DateCreated</c> as non-id columns), matching what <c>TestWidgets</c> would

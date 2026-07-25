@@ -151,7 +151,7 @@ internal static class Sql
         /// lowercase <c>?table=</c> (the natural spelling given this endpoint's own JSON casing
         /// conventions) previously matched nothing and silently deleted zero rows, looking like
         /// success while doing nothing.</summary>
-        internal const string DeleteByTable = "DELETE FROM System_AuditEntries WHERE LOWER(TableName) = LOWER(@table);";
+        internal static readonly string DeleteByTable = $"DELETE FROM System_AuditEntries WHERE {TextClauses.Equals("TableName", "table")};";
 
         // COUNT base — shared by CountPaged factory method below.
         private const string CountPagedBase = "SELECT COUNT(*) FROM System_AuditEntries";
@@ -179,7 +179,7 @@ internal static class Sql
         private static string BuildWhere(bool filterTable, bool filterRecordId)
         {
             var parts = new List<string>(2);
-            if (filterTable)    parts.Add("LOWER(TableName) = LOWER(@table)");
+            if (filterTable)    parts.Add(TextClauses.Equals("TableName", "table"));
             if (filterRecordId) parts.Add(IdClauses.Equals("RecordId", "recordId"));
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
@@ -275,8 +275,8 @@ internal static class Sql
         {
             var parts = new List<string>(3);
             if (filterBatchId)    parts.Add(IdClauses.Equals("BatchId", "batchId"));
-            if (filterStatus)     parts.Add("UPPER(Status) = UPPER(@status)");
-            if (filterEntityType) parts.Add("UPPER(EntityType) = UPPER(@entityType)");
+            if (filterStatus)     parts.Add(TextClauses.Equals("Status", "status"));
+            if (filterEntityType) parts.Add(TextClauses.Equals("EntityType", "entityType"));
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
     }
@@ -303,6 +303,6 @@ internal static class Sql
         /// </summary>
         internal static readonly string SelectByEntity =
             $"SELECT {IdClauses.SelectColumn("Id")}, EntityType, {IdClauses.SelectColumn("EntityId")}, InitiatedByType, InitiatedById, Action, Field, OldValue, NewValue, OccurredAt " +
-            $"FROM System_ChangeLog WHERE LOWER(EntityType) = LOWER(@entityType) AND {IdClauses.Equals("EntityId", "entityId")} ORDER BY OccurredAt DESC;";
+            $"FROM System_ChangeLog WHERE {TextClauses.Equals("EntityType", "entityType")} AND {IdClauses.Equals("EntityId", "entityId")} ORDER BY OccurredAt DESC;";
     }
 }
