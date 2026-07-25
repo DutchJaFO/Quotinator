@@ -109,6 +109,46 @@ for O(1) `quoteId + field` lookup, case-insensitive on quote id per this project
 convention. Live at `src/Quotinator.Data/Import/ConflictResolutionRule.cs`,
 `ConflictResolutionRuleFile.cs`, `ConflictRuleLookup.cs`.
 
+**Shape revised twice from the original per-field-flat design above, both times from developer
+feedback during implementation review** — the schema actually shipped is:
+```json
+{
+  "rules": [
+    {
+      "quoteId": "<guid>",
+      "existingRecord": { "quoteText": "...", "source": "...", "date": "...", "...": "..." },
+      "incomingRecord": { "quoteText": "...", "source": "...", "date": "...", "...": "..." },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    }
+  ]
+}
+```
+Round 1: a bare `quoteId` conveys nothing to a human maintaining the file, so a per-field
+`existingValue`/`incomingValue` pair was added. Round 2: even that wasn't enough — the developer pointed
+out a human still has to guess which *other* fields might also differ, since only the one ruled field's
+values were shown. Replaced with `existingRecord`/`incomingRecord` holding each side's **complete**
+field set (an opaque `JsonElement`, not a typed `SourceQuote` — `Quotinator.Data` stays free of any
+dependency on `Quotinator.Core`'s Quote-specific shape, per ADR 004), so a reviewer sees the whole
+row on both sides and can judge for themselves whether an unruled field also genuinely differs. `fields`
+is grouped by quote (one entry, `fields: [...]`) rather than flattened to one entry per field, since a
+single quote can have more than one field in conflict at once (`ConflictRuleLookup`'s constructor
+flattens this into its own internal per-field index). `schemas/conflict-resolution-rules.schema.json`
+added to match, and wired into `SourceDataIntegrityTests` (new `RuleFiles_ConformToSchema` test,
+`SourceFiles`/`SourceFiles_AllListedInManifest` updated to recognise a manifest entry's `ruleFile`
+as a different shape from an entry's own `file`, not another quote source).
+
+**Round 3 (same review pass)**: `Custom` resolution added — `Keep`/`Replace` can only pick a side's
+existing value, but a field can be wrong/missing on *both* sides (e.g. the LOTR Fellowship quote's
+`character` is `null` on both occurrences in the raw file; it's actually Galadriel). Reuses
+`FieldMergeResolver.ResolveWithDecisions`'s existing "a decision always wins, ambiguous or not" contract
+— no new merge logic needed, just a `customValue` field (required iff `resolution: "Custom"`, schema
+enforces via `if`/`then`/`else`) threaded through `ConflictRuleLookup` as a `FieldMergeDecision`. Also
+renamed `quoteId` → `entityId` (schema, DTOs, rule files) so one rule file can mix ids from more than
+one entity type, and wired the same rule lookup into `PlanSeriesAsync`/`PlanUniverseAsync` — both had an
+`if (changedFields.Count == 0) continue` early exit Quote's loop doesn't have, which would have skipped
+a `Custom` rule entirely for a field that isn't ambiguous; fixed by computing `ruleDecisions` before that
+exit and gating it on `changedFields.Count == 0 && ruleDecisions.Count == 0` instead.
+
 **Scope-verification finding (re-verified live against the actual bundled file, not just #147's own
 summary table)**: of the 9 NikhilNamal17 pairs #147 lists, only 6 have a genuine field conflict once
 checked directly — 3 pairs (`"It's not about what I want..."`, `"Some men just want..."`, `"If you want
@@ -199,48 +239,52 @@ guard; a rule for a different quote id → no effect, regression guard matching 
 matching rule against a `Complete` row → still `Blocked`. Full solution suite green (30/30 projects,
 0 warnings/errors) after this step.
 
-**Scope per the widening above**: the originally-known conflicts (NikhilNamal17's 9) are Quote-level
-only, so the top-level `PlanAsync` Quote logic is the minimum needed for the original 2-file scope.
-Confirm via #217's own Docker scenarios (run against all 4 files) whether `quotinator-series-
-universe.json` surfaces any real Series/Universe-level conflicts — if it does, `PlanSeriesAsync`/
-`PlanUniverseAsync` need the same lookup wired in too; if it doesn't, only the Quote site is needed for
-this issue's actual shipped scope, and the other entity types' sites are left unwired until a real
-conflict from one of them is observed (matching this project's "don't build speculatively" convention).
+**Scope widened beyond Quote (developer decision during review, ahead of any observed Series/Universe
+conflict — a deliberate exception to "don't build speculatively", since the wiring cost was small and
+known upfront)**: `PlanSeriesAsync`/`PlanUniverseAsync` also wired, with the early-exit fix from Round 3
+above. Source/Person/Character/StageDirection/SoundCue/Conversation sites remain unwired — still gated
+on an observed real conflict.
 
 ### 4. Manifest policy change
 
-**Status:** Not started.
-
-`data/sources/manifest.json`: set `duplicateResolution: { default: "review" }` for **all 4
-currently-bundled files** — `quotinator-curated.json`, `quotinator-series-universe.json`,
-`NikhilNamal17_popular-movie-quotes.json`, `vilaboim_movie-quotes.json` (widened from the original
-2-file scope) — overriding the top-level bundled default of `skip`.
+**Status:** Done. All 4 files set to `duplicateResolution: { default: "review" }` in
+`data/sources/manifest.json` (`quotinator-series-universe.json` already had it). File order also
+reordered to match the confirmed kickoff order — `quotinator-curated.json`,
+`quotinator-series-universe.json`, `NikhilNamal17_popular-movie-quotes.json`,
+`vilaboim_movie-quotes.json` — since manifest file order is the actual seed order, needed for #217's
+layered Docker scenarios to test in that sequence. Each entry also references its own `ruleFile`.
 
 ### 5. Curated field-override preload file
 
-**Status:** Not started.
-
-`data/sources/quotinator-source-overrides.json` — same flat-quote schema shape as
-`quotinator-curated.json` (per `schemas/source-flat.schema.json`), but populated only with the 9
-NikhilNamal17 quote ids and their corrected `date` field, sourced directly from #147's findings
-table (the correct year per pair — #147 itself doesn't state which of the two dates is authoritative
-for every pair; where #147 doesn't already make this obvious, this step's own judgement call is
-recorded here at implementation time, not silently assumed). Added to the manifest and seeded
-*before* `NikhilNamal17_popular-movie-quotes.json` in seed order, so the correct value exists as the
-"existing" row by the time NikhilNamal17's own (conflicting) row is processed.
+**Status:** Not needed — found during implementation, not built. #147's own text describes these as
+**internal duplicates within `NikhilNamal17_popular-movie-quotes.json` itself** ("a duplicate whose
+`firstSeenInFile` and `conflictFile` were both `NikhilNamal17_popular-movie-quotes.json`"), not a
+cross-file collision against some other pre-existing row. Tracing `PlanAsync`'s Quote loop directly: the
+*first* occurrence of a given quote id within one file's own import always stages as a fresh `Add`
+(`existing is null`, unconditional, before any `isPending` logic runs at all) and immediately becomes
+the in-memory `seenQuotes` baseline for any *later* occurrence of the same id **within that same
+file/batch**. So the first-seen row already serves as the "existing" side for the second-seen row — no
+separate pre-seeded override file is needed to establish a baseline; the rule file alone (`Keep` for
+whichever side happens to be first-seen and correct, `Replace` for the one exception where the
+second-seen value is the correct one) fully resolves all 6 genuine NikhilNamal17 conflicts. Re-confirmed
+directly against the real bundled file line-by-line for all 6 (see step 6's rule file) before writing a
+single rule — 5 of 6 need `Keep` (first-seen row correct); Captain Marvel's `date` needs `Replace` (the
+*second*-seen row, 2019, is the film's real release year — the one pair where first-seen order and
+correctness diverge). Verify this reasoning holds live in step 7 before treating it as settled — the
+mechanism has never been exercised end to end against the real 732-entry file, only against small
+synthetic fixtures in unit tests so far.
 
 ### 6. Author rule files for all 4 bundled files
 
-**Status:** Not started.
-
-`data/sources/nikhilnamal17-conflict-rules.json` (or similar naming, confirm at implementation time
-against this project's existing bundled-file naming convention): 9 entries, one per known conflict,
-each `"resolution": "keep-existing"` pointing at the value step 5's override file establishes.
-`data/sources/vilaboim-conflict-rules.json`, `data/sources/quotinator-curated-conflict-rules.json`,
-`data/sources/quotinator-series-universe-conflict-rules.json`: each initially empty (`rules: []`),
-added purely so the manifest reference and lookup path are exercised identically for all 4 bundled
-files, and so a real conflict later found via #217's own Docker scenarios (should one arise for any of
-these three) has a file already in place to receive it (widened from the original 2-file scope).
+**Status:** Done, but shape changed during review (see step 1's "Shape revised twice" note — grouped by
+quote, full `existingRecord`/`incomingRecord`, not the flat `field`+`resolution`-only shape drafted
+here originally). `data/sources/nikhilnamal17-conflict-rules.json`: 6 entries (not 9 — see step 1's
+"Scope-verification finding": 3 of #147's 9 listed pairs are byte-for-byte identical on every field and
+need no rule at all). `data/sources/vilaboim-conflict-rules.json`,
+`data/sources/quotinator-curated-conflict-rules.json`,
+`data/sources/quotinator-series-universe-conflict-rules.json`: each empty (`{"rules":[]}`), in place so
+the manifest reference and lookup path are exercised identically for all 4 bundled files and so a real
+conflict later found via #217's own Docker scenarios has a file already there to receive it.
 
 ### 7. Live verification
 
@@ -248,11 +292,11 @@ these three) has a file already in place to receive it (widened from the origina
 
 Reseed (or fresh-seed) with all 4 files' `review` policy and rule files in place — confirm
 `GET /import/actions?status=pending` returns zero entries for any of the 4 batches, and
-`Quotinator.Tools.DbInspector` shows all 9 previously-conflicting NikhilNamal17 quotes now hold the
-override-file's corrected `date` value (widened from the original 2-file scope). Cross-reference
-against #217's own per-file Docker scenario methodology (Background section) — this step's live
-verification and that methodology's scenario (a)/(b) runs are largely the same exercise, not two
-separate verification passes.
+`Quotinator.Tools.DbInspector` shows all 6 previously-conflicting NikhilNamal17 quotes now hold the
+rule file's corrected values (`date`, `type`, and Galadriel's `character` — see step 5 for why no
+separate override file is needed). Cross-reference against #217's own per-file Docker scenario
+methodology (Background section) — this step's live verification and that methodology's scenario
+(a)/(b) runs are largely the same exercise, not two separate verification passes.
 
 ### 8. Smoke-test fixtures and T2 checklist
 
