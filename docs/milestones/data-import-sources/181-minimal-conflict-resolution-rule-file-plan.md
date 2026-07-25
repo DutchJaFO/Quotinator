@@ -3,29 +3,72 @@
 **Status:** Planning
 **GitHub issue:** #181
 **Tiers required:** T1, T2
-**Depends on:** none technically; unrelated to #179/#174/#180's Character/Series work; a hand-authored
-precursor to #153 (see Notes)
+**Depends on:** #177 (dependency order established by #217, the parent tracking issue: #177 → #181 →
+#153 — #177's `ImportBatches.Status` fix is needed first so the resolve→apply→reverse→retry cycle this
+issue's own per-file conflict-resolution testing methodology relies on actually works); otherwise
+unrelated to #179/#174/#180's Character/Series work; a hand-authored precursor to #153 (see Notes)
 
 ---
 
-## Spec requirements (from the GitHub issue)
+## Scope widened by #217 (2026-07-25) — 4 bundled files, not 2
+
+**This issue's original scope (both the issue body below and this plan doc as first written) covers
+only the two external bundled files (`vilaboim_movie-quotes.json`, `NikhilNamal17_popular-movie-
+quotes.json`).** #217 (the parent tracking issue this issue now sits under, alongside #177 and #153)
+widens that to **all 4 currently-bundled files**: `quotinator-curated.json` and `quotinator-series-
+universe.json` (internally-authored) in addition to the two external ones. Rationale, per #217's own
+Background: we cannot predict how a new bundled file will interact with data already seeded from
+another one, and forcing every bundled file through `review` policy with its own conflict-resolution
+file is what makes that interaction tractable — limiting this to only the two files that happen to
+have externally-sourced conflicts today would leave the internally-authored files unverified against
+the same standard. Items 4, 6, and 7 below are corrected accordingly; items 1, 2, 3, 5, 8, 9 are
+unaffected by the widening (they describe mechanism, not a fixed file count).
+
+**#217's per-file testing methodology also applies here**: each file (external-first exception aside)
+goes through both a standalone Docker scenario (clean database, only that file) and, for every file
+after the first, a layered scenario (clean database, every previously-processed file's conflicts
+already resolved, then this file) — see #217's Background for the full methodology, including the
+export-to-file-plus-markdown-presentation review process and the non-conflicting-field-correction
+testing goal. File order: internal first (`quotinator-curated.json`, `quotinator-series-universe.json`),
+then external (`NikhilNamal17_popular-movie-quotes.json`, `vilaboim_movie-quotes.json`) — exact order
+within each pair confirmed at kickoff.
+
+## Spec requirements (from the GitHub issue, corrected per the widened scope above)
 
 1. Design the minimal rule-file schema, keyed by quote id + field name, matching #153's own Step 1
    discussion (content-hash keying is unnecessary for this issue's fully-known, small conflict set).
 2. Add a manifest reference for each bundled file's rule file — lives alongside the file it governs.
-3. Wire rule lookup into `ImportActionPlanner.PlanAsync`'s existing conflict-staging branch — if a
-   matching rule exists, the action resolves automatically instead of staging `Pending`.
-4. Set `duplicateResolution: review` for both `vilaboim_movie-quotes.json` and
-   `NikhilNamal17_popular-movie-quotes.json` in `data/sources/manifest.json`.
+3. Wire rule lookup into `ImportActionPlanner.PlanAsync`'s conflict-staging logic — if a matching rule
+   exists, the action resolves automatically instead of staging `Pending`. **Corrected from the
+   original single-branch framing**: the file has grown substantially since this issue was filed
+   (#171–#180's Character/Series/Universe/Person/StageDirection/SoundCue/Conversation work each added
+   their own `isPending` check) — there is no longer one shared "conflict-staging branch," but a
+   separate `isPending` site per entity-specific `Plan*Async` method. #181's originally-known conflicts
+   (NikhilNamal17's 9) are all Quote-level, so only `PlanAsync`'s own top-level Quote logic strictly
+   needs the rule lookup for the original 2-file scope — but the widened 4-file scope may surface
+   Series/Universe-level conflicts from `quotinator-series-universe.json` too, which would need the
+   lookup wired into `PlanSeriesAsync`/`PlanUniverseAsync` as well. Confirm which sites actually need
+   it once #217's Docker scenarios have run against all 4 files, rather than assuming Quote-only.
+4. Set `duplicateResolution: review` for **all 4 currently-bundled files** in `data/sources/
+   manifest.json` — `quotinator-curated.json`, `quotinator-series-universe.json`,
+   `NikhilNamal17_popular-movie-quotes.json`, `vilaboim_movie-quotes.json` (widened from the original
+   2-file scope).
 5. Create `data/sources/quotinator-source-overrides.json` with the correct values for NikhilNamal17's
-   9 known conflicts, sourced from #147's own findings table.
-6. One rule file per source — a rule file for `NikhilNamal17` (9 entries) and a separate one for
-   `vilaboim` (currently empty).
-7. Confirm live: reseeding with `review` set for both files produces zero staged `Pending` actions.
+   9 known conflicts, sourced from #147's own findings table. Unaffected by the widening — #147's own
+   known-conflict data is specific to NikhilNamal17 regardless of how many other files also move to
+   `review`.
+6. **One rule file per bundled file, all 4** — a rule file for `NikhilNamal17` (9 known entries), and
+   initially-empty rule files for `vilaboim`, `quotinator-curated`, and `quotinator-series-universe`
+   (populated as #217's own Docker scenarios surface real conflicts for each, widened from the
+   original 2-file scope).
+7. Confirm live: reseeding with `review` set for all 4 files produces zero staged `Pending` actions
+   (widened from the original 2-file scope).
 8. These per-source rule files double as smoke-test fixtures — add scenarios to CLAUDE.md's T2
    checklist in the same commit.
 9. Update `153-declarative-conflict-resolution-plan.md` to note #153 builds on this issue's shipped
-   format rather than inventing a new one.
+   format rather than inventing a new one — **already done** in this session's #153 rewrite
+   (2026-07-25), ahead of this issue's own implementation; re-confirm the shipped shape still matches
+   once #181 is actually implemented.
 
 ---
 
@@ -95,22 +138,34 @@ the schema must be updated in the same commit or manifest validation rejects the
 
 **Status:** Not started.
 
-`ImportActionPlanner.PlanAsync`'s existing conflict-staging branch (`ImportActionPlanner.cs:96-140`)
-stages `Pending` unconditionally today when policy is `Review` and a field differs
-(`ImportActionPlanner.cs:140`'s `isPending` check). This step adds a rule lookup before that check:
-if a loaded rule matches the field, the action stages `Decided` with the rule's resolution already
-applied, instead of `Pending`. No staleness detection (that's #153's own later addition) — a rule
-that no longer matches current data (e.g. the conflict shape has changed) simply doesn't match and
-falls through to normal `Pending` staging, which is a safe default in the absence of staleness logic,
-not a gap this issue needs to close.
+`ImportActionPlanner.cs` has grown to 1500+ lines since this step was first written (#171–#180's
+Character/Series/Universe/Person/StageDirection/SoundCue/Conversation work each added their own
+`isPending` check) — there is no single shared "conflict-staging branch" left; each entity-specific
+`Plan*Async` method (`PlanAsync` itself for Quote, `PlanSourcesAsync`, `PlanPeopleAsync`,
+`PlanCharactersAsync`, `PlanSeriesAsync`, `PlanUniverseAsync`, `PlanStageDirectionsAsync`,
+`PlanSoundCuesAsync`, `PlanConversationsAsync`) has its own `isPending = policy ==
+DuplicateResolutionPolicy.Review` check that currently stages `Pending` unconditionally when true and
+a field differs. This step adds a rule lookup before that check — if a loaded rule matches the field,
+the action stages `Decided` with the rule's resolution already applied, instead of `Pending`. No
+staleness detection (that's #153's own later addition) — a rule that no longer matches current data
+simply doesn't match and falls through to normal `Pending` staging, a safe default.
+
+**Scope per the widening above**: the originally-known conflicts (NikhilNamal17's 9) are Quote-level
+only, so the top-level `PlanAsync` Quote logic is the minimum needed for the original 2-file scope.
+Confirm via #217's own Docker scenarios (run against all 4 files) whether `quotinator-series-
+universe.json` surfaces any real Series/Universe-level conflicts — if it does, `PlanSeriesAsync`/
+`PlanUniverseAsync` need the same lookup wired in too; if it doesn't, only the Quote site is needed for
+this issue's actual shipped scope, and the other entity types' sites are left unwired until a real
+conflict from one of them is observed (matching this project's "don't build speculatively" convention).
 
 ### 4. Manifest policy change
 
 **Status:** Not started.
 
-`data/sources/manifest.json`: set `duplicateResolution: { default: "review" }` for both
-`vilaboim_movie-quotes.json` and `NikhilNamal17_popular-movie-quotes.json` entries, overriding the
-top-level bundled default of `skip`.
+`data/sources/manifest.json`: set `duplicateResolution: { default: "review" }` for **all 4
+currently-bundled files** — `quotinator-curated.json`, `quotinator-series-universe.json`,
+`NikhilNamal17_popular-movie-quotes.json`, `vilaboim_movie-quotes.json` (widened from the original
+2-file scope) — overriding the top-level bundled default of `skip`.
 
 ### 5. Curated field-override preload file
 
@@ -125,25 +180,30 @@ recorded here at implementation time, not silently assumed). Added to the manife
 *before* `NikhilNamal17_popular-movie-quotes.json` in seed order, so the correct value exists as the
 "existing" row by the time NikhilNamal17's own (conflicting) row is processed.
 
-### 6. Author the two per-source rule files
+### 6. Author rule files for all 4 bundled files
 
 **Status:** Not started.
 
 `data/sources/nikhilnamal17-conflict-rules.json` (or similar naming, confirm at implementation time
 against this project's existing bundled-file naming convention): 9 entries, one per known conflict,
 each `"resolution": "keep-existing"` pointing at the value step 5's override file establishes.
-`data/sources/vilaboim-conflict-rules.json`: empty `rules: []`, added purely so the manifest
-reference and lookup path are exercised identically for both bundled files, and so a future vilaboim
-conflict (should one ever arise from an upstream refresh) has a file already in place to receive it.
+`data/sources/vilaboim-conflict-rules.json`, `data/sources/quotinator-curated-conflict-rules.json`,
+`data/sources/quotinator-series-universe-conflict-rules.json`: each initially empty (`rules: []`),
+added purely so the manifest reference and lookup path are exercised identically for all 4 bundled
+files, and so a real conflict later found via #217's own Docker scenarios (should one arise for any of
+these three) has a file already in place to receive it (widened from the original 2-file scope).
 
 ### 7. Live verification
 
 **Status:** Not started.
 
-Reseed (or fresh-seed) with both files' `review` policy and rule files in place — confirm
-`GET /import/actions?status=pending` returns zero entries for the NikhilNamal17/vilaboim batches,
-and `Quotinator.Tools.DbInspector` shows all 9 previously-conflicting quotes now hold the
-override-file's corrected `date` value.
+Reseed (or fresh-seed) with all 4 files' `review` policy and rule files in place — confirm
+`GET /import/actions?status=pending` returns zero entries for any of the 4 batches, and
+`Quotinator.Tools.DbInspector` shows all 9 previously-conflicting NikhilNamal17 quotes now hold the
+override-file's corrected `date` value (widened from the original 2-file scope). Cross-reference
+against #217's own per-file Docker scenario methodology (Background section) — this step's live
+verification and that methodology's scenario (a)/(b) runs are largely the same exercise, not two
+separate verification passes.
 
 ### 8. Smoke-test fixtures and T2 checklist
 
@@ -169,13 +229,13 @@ written there, updating further only if implementation reveals a genuine deviati
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A matching rule auto-resolves without staging `Pending` | Unit test | `Quotinator.Engine.Tests.PlanAsync_MatchingRuleExists_AutoResolvesWithoutPending` — starts red |
-| 2 | ❌ | No matching rule still stages `Pending` as today (regression guard) | Unit test | `Quotinator.Engine.Tests.PlanAsync_NoMatchingRule_StagesPendingAsToday` — starts red |
-| 3 | ❌ | All 9 known NikhilNamal17 conflicts auto-resolve via the rule file on seeding | Unit test | `Quotinator.Engine.Tests.SeedNikhilNamal17_AllNineKnownConflicts_AutoResolveViaRuleFile` — starts red |
-| 4 | ❌ | Vilaboim seeding under `review` policy produces zero staged actions | Unit test | `Quotinator.Engine.Tests.SeedVilaboim_ReviewPolicy_NoStagedActions` — starts red |
+| 1 | ❌ | A matching rule auto-resolves without staging `Pending` | Unit test | `Quotinator.Core.Tests.PlanAsync_MatchingRuleExists_AutoResolvesWithoutPending` — starts red |
+| 2 | ❌ | No matching rule still stages `Pending` as today (regression guard) | Unit test | `Quotinator.Core.Tests.PlanAsync_NoMatchingRule_StagesPendingAsToday` — starts red |
+| 3 | ❌ | All 9 known NikhilNamal17 conflicts auto-resolve via the rule file on seeding | Unit test | `Quotinator.Core.Tests.SeedNikhilNamal17_AllNineKnownConflicts_AutoResolveViaRuleFile` — starts red |
+| 4 | ❌ | Vilaboim, quotinator-curated, and quotinator-series-universe seeding under `review` policy each produce zero staged actions (widened from vilaboim-only) | Unit test | `Quotinator.Core.Tests.SeedVilaboim_ReviewPolicy_NoStagedActions`, plus equivalents for the other two internally-authored files — starts red |
 | 5 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 6 | ❌ | T1 — app starts in Visual Studio, both bundled files seed cleanly with zero pending actions | Live (T1) | Developer to confirm in Visual Studio once implemented |
-| 7 | ❌ | T2 — Docker smoke test: fresh seed produces zero pending actions for both files; a rule-file edit changes the resolved outcome on next reseed; a field with no matching rule still stages `Pending` | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + `GET /import/actions?status=pending` + `Quotinator.Tools.DbInspector`; scenarios added to CLAUDE.md's T2 checklist per step 8 |
+| 6 | ❌ | T1 — app starts in Visual Studio, all 4 bundled files seed cleanly with zero pending actions | Live (T1) | Developer to confirm in Visual Studio once implemented |
+| 7 | ❌ | T2 — Docker smoke test: fresh seed produces zero pending actions for all 4 files; a rule-file edit changes the resolved outcome on next reseed; a field with no matching rule still stages `Pending`; #217's own per-file scenario (a)/(b) Docker runs exercise this live for each file in turn | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + `GET /import/actions?status=pending` + `Quotinator.Tools.DbInspector`; scenarios added to CLAUDE.md's T2 checklist per step 8 |
 
 ---
 
@@ -184,14 +244,21 @@ written there, updating further only if implementation reveals a genuine deviati
 T1 and T2 are both required — this issue changes startup seeding behaviour and adds new bundled data
 files (per this project's blanket T1/T2 rule).
 
-This issue has no dependency on #179/#174/#180's Character/Series work — it is purely about
-Source/Quote-level conflict resolution for the two currently-bundled external sources, and could be
-implemented independently, in any order relative to that work. It is sequenced in `overview.md`
-directly before #153 because #153's own plan doc now explicitly builds on this issue's shipped
-format — the ordering reflects that relationship, not a hard technical blocking dependency in either
-direction (#181 doesn't need #153 or #163 to exist first, and #153 doesn't strictly need #181 either,
-though skipping it would mean #153 designs its rule-file format from zero instead of confirming an
-already-working one).
+This issue has no technical dependency on #179/#174/#180's Character/Series work — it is purely about
+conflict resolution for the 4 currently-bundled files, and could be implemented independently of that
+work's own internals. It now sits under **#217** (parent tracking issue, created 2026-07-25) alongside
+#177 and #153, in the dependency order #177 → #181 → #153 — #177 first because #181's own testing
+methodology (resolve → apply → reverse → retry, per #217's Background) needs a working
+`POST /import/actions/reverse`, which #177 fixes. #181 before #153 because #153's own plan doc
+(rewritten 2026-07-25, same session as this correction) explicitly builds on this issue's shipped
+rule-file format rather than designing one from scratch.
+
+**Scope widened 2026-07-25 (this correction), by #217's own explicit decision**: from 2 bundled files
+to all 4. See the "Scope widened by #217" section near the top of this doc for the full reasoning —
+in short, the two internally-authored files (`quotinator-curated.json`, `quotinator-series-
+universe.json`) get the same `review`-policy-plus-rule-file treatment as the two external ones, so
+every bundled file is verified against the same conflict-resolution standard rather than only the
+ones that happened to have known external conflicts already.
 
 #147 (the 9 known NikhilNamal17 conflicts, "Data Enrichment" milestone) is deliberately left open and
 untouched by this issue — this issue is pipeline/mechanism work that happens to resolve #147's known
