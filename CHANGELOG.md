@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-25 08:32 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-25 16:54 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -35,6 +35,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A character's name can now be corrected after the fact too, the same way a source's, person's, stage direction's, sound cue's, and conversation's details already could.
 - A series's or universe's name (and a series's linked universe) can now be corrected after the fact too, the same way a source's, person's, character's, stage direction's, sound cue's, and conversation's details already could.
 - Quotes waiting for review after an import can now be resolved all at once by exporting them to a file, editing the decisions, and importing the file back — instead of deciding each one individually through the API.
+- Known, recurring conflicts between bundled quote sources are now resolved automatically on import instead of requiring the same manual decision every time the data is reprocessed.
+- A number of duplicate entries caused by inconsistent movie titles across bundled data sources have been merged into one accurate entry each — including every Star Wars film, several Marvel films, The Godfather Part II, and Creed II, among others.
+- James Bond has been added as a supported film franchise, alongside The Matrix.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -92,6 +95,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `series[]` and `universe[]` entries can now stage a `Modify` action instead of only ever being added once — matched by an optional explicit id, the same policy-resolved diff and completeness-guard blocking every other correctable entity already uses (issue #163)
 - New `GET /api/v1/import/actions/export` endpoint exports every field awaiting a decision in a staged import batch — including ones currently held for review — as a CSV or JSON file (issue #163)
 - New `POST /api/v1/import/actions/bulk-decide` endpoint accepts an edited export file back and applies every decision it contains in one call, reporting any row that couldn't be applied without affecting the rest of the file (issue #163)
+- New per-source conflict-resolution rule file (`ruleFile` manifest property) lets a known, recurring field disagreement between two occurrences of the same record auto-resolve under the `review` policy instead of always staging for manual decision (issue #181)
+- New per-source title-alias file (`sourceAliasFile` manifest property) corrects a misspelled or inconsistent Source title/type to its canonical form before it's matched against existing data — applies to both a brand-new record and a re-imported one, preventing a duplicate Source from ever being created for the same real film/show under a different spelling (issue #181)
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
@@ -139,6 +144,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A related internal query-joining mechanism was only automatically checked for one of the three internal safety checks the rest of the codebase applies everywhere else; it is now checked for all three, closing the last remaining gap of this kind — a purely internal test-coverage improvement with no user-facing or behaviour change (issue #215)
 - Matching a source by its title and type during import was case-sensitive, so re-importing the same source with different letter casing (e.g. from a differently-formatted file) could create a duplicate instead of updating the existing one; matching is now case-insensitive, consistent with how every other identifier in the system is already matched (issue #175)
 - An import finished through the staged review-and-decide workflow (`POST /api/v1/import/actions/apply`) was never recorded as applied, so undoing it afterwards (`POST /api/v1/import/actions/reverse`) always failed even though the import itself had succeeded; the batch is now correctly marked applied and can be undone like any other (issue #177)
+- Several bundled Sources existed as duplicate rows for the same real film due to inconsistent title spelling across data sources (e.g. every Star Wars episode, several Marvel films, The Godfather Part II, Creed II) — consolidated to one canonical Source each (issue #181)
+- A Source was resolved from a quote's raw incoming title/type before any conflict-resolution rule had a chance to run, so a rule correcting a Quote's own displayed field never actually prevented — and in one case (Zootopia) actively caused — a duplicate Source row under the uncorrected spelling; Source resolution now consults the new title-alias mechanism first (issue #181)
+- `PlanSourcesAsync` (the Source-correction planning path) had never been wired to the per-source conflict-resolution rule file mechanism, so a legitimate cross-file Source enrichment (e.g. a curated quote establishing a Source, a later file assigning it to a series) had no way to auto-resolve under the `review` policy and always required manual decision (issue #181)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`

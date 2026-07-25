@@ -98,7 +98,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Waiting for release | T1 ✅ T2 ✅ | [163-bulk-decide-file-plan.md](163-bulk-decide-file-plan.md) |
 | [#217](https://github.com/DutchJaFO/Quotinator/issues/217) | Establish conflict-resolution coverage for every bundled source file (parent of #177, #181, #153) | Planning | — (parent) | [217-conflict-resolution-coverage-plan.md](217-conflict-resolution-coverage-plan.md) |
 | [#177](https://github.com/DutchJaFO/Quotinator/issues/177) | ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal | Waiting for release | T1 ✅ T2 ✅ | [177-import-batch-status-applied-plan.md](177-import-batch-status-applied-plan.md) |
-| [#181](https://github.com/DutchJaFO/Quotinator/issues/181) | Minimal per-source conflict-resolution rule file + curated field-override preload (all 4 bundled files) | Planning | T1 ⬜ T2 ⬜ | [181-minimal-conflict-resolution-rule-file-plan.md](181-minimal-conflict-resolution-rule-file-plan.md) |
+| [#181](https://github.com/DutchJaFO/Quotinator/issues/181) | Minimal per-source conflict-resolution rule file + curated field-override preload (all 4 bundled files) | Waiting for release | T1 ✅ T2 ✅ | [181-minimal-conflict-resolution-rule-file-plan.md](181-minimal-conflict-resolution-rule-file-plan.md) |
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning | T1 ⬜ T2 ⬜ | [153-declarative-conflict-resolution-plan.md](153-declarative-conflict-resolution-plan.md) |
 | [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Waiting for release | T1 ✅ T2 ✅ | [154-import-staging-plan.md](154-import-staging-plan.md) |
 | [#155](https://github.com/DutchJaFO/Quotinator/issues/155) | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning | T1 ⬜ T2 ⬜ | [155-migration-review-plan.md](155-migration-review-plan.md) |
@@ -249,7 +249,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 63 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Waiting for release |
 | 64 | #217 | Establish conflict-resolution coverage for every bundled source file (parent of #177, #181, #153) | Planning |
 | 65 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Waiting for release |
-| 66 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload (all 4 bundled files) | Planning |
+| 66 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload (all 4 bundled files) | Waiting for release |
 | 67 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning |
 | 68 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning |
 

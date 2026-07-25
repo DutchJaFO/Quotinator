@@ -660,6 +660,27 @@ Both are attributed in `SOURCES.md`. Each source's raw upstream format is conver
 
 Manually curated and verified entries live in `data/sources/quotinator-curated.json`. All entries must be accurately attributed and verified before adding.
 
+### Verifying title/date corrections (`*-conflict-rules.json`, `*-source-aliases.json`)
+
+A `ConflictResolutionRule` or `SourceAliasRule` entry encodes a factual claim about a real film, show,
+or book — a canonical title, a release date, which real-world work two differently-spelled Source rows
+both refer to. **Verify each such claim before adding the rule or alias — see
+[`docs/workflow/source-verification.md`](docs/workflow/source-verification.md) for the required
+procedure and source priority order.** Do not rely on unstated model/training knowledge, even for
+well-known mainstream titles, and do not search sources in an arbitrary/inconsistent order — the linked
+procedure defines which sources to check first and when to widen the search.
+
+**Why this matters even for "obvious" facts**: correctness is this project's top priority (see Project
+Priorities above) — quotes must be real and accurately attributed, and that guarantee is only as good
+as the data feeding it. An uncited "I recognize this movie" claim is not reproducible or auditable the
+way this project's other correctness work is (red-green tests, cited CVEs).
+
+**Two known, deliberately unresolved exceptions**, left as future work rather than "fixed" here:
+- A film with more than one legitimate official title (e.g. Harry Potter's Philosopher's/Sorcerer's
+  Stone, UK vs US) has no way to record the alternate as anything but "corrected away" — see #218.
+- A bundled quote that cannot be verified against any real source at all (not a title/date
+  inconsistency, a genuine "does this quote exist" question) has no exclusion mechanism — see #219.
+
 ---
 
 ## Testing Policy
@@ -728,6 +749,7 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `docs/data-access.md` | Repository/join-query usage patterns (how to use the infrastructure `database-conventions.md` governs) |
 | `docs/testing-policy.md` | Testing standards — test project pairing, CVE folder rule, parallel execution |
 | `docs/workflow/process.md` | Milestone workflow — starting, executing, closing, living and maintenance milestones |
+| `docs/workflow/source-verification.md` | Procedure, source priority order, and escalation rules for verifying a title/date/attribution claim before a data correction |
 | `docs/workflow/checklist.md` | Issue filing, session-start, issue-closing, and milestone-close checklists |
 | `docs/workflow/cve.md` | CVE handling workflow; template is at `docs/workflow/cve-template.md` |
 | `docs/security/README.md` | Summary of all known CVEs and their current status across all projects |
@@ -1454,6 +1476,64 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    onto this newer endpoint. Fixed by switching the parameter to `HttpRequest request` and checking
    `batchId`, then `request.HasFormContentType`, manually before ever attempting to read the form — mirroring
    `HandleImportFromRequestAsync`'s existing pattern exactly.
+
+   **Per-source conflict-resolution rule files and title-alias files (#181) — fresh 4-file seed
+   produces zero pending actions.** Every bundled file (`quotinator-curated.json`,
+   `quotinator-series-universe.json`, `NikhilNamal17_popular-movie-quotes.json`,
+   `vilaboim_movie-quotes.json`) runs under `review` policy with its own `ruleFile`/`sourceAliasFile`.
+   A `ConflictResolutionRule` auto-resolves a genuinely ambiguous field on an already-seen entity id
+   (Modify path only); a `SourceAliasRule` corrects a misspelled/inconsistent raw `(title, type)` to
+   the already-canonical Source *before* Source resolution ever runs, so it applies to both a
+   first-seen Add and a re-seen Modify, and prevents a duplicate Source row from being created for
+   the wrong spelling in the first place (a `ConflictResolutionRule` alone cannot do this — it only
+   ever corrects what a Quote's own field *displays*, never which Source row it links to). Confirm a
+   fresh container with a stock image:
+   ```bash
+   docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+   curl -s http://localhost:8080/api/v1/version
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?status=pending"
+   ```
+   `/version` must show `quotes: 799` (the current bundled-data total). `/import/actions?status=pending`
+   must return `200` with an **empty** `items` array — no file should be left "staged awaiting review".
+   If any are, `docker logs` will show `"<file>" left staged awaiting review — batch "<id>", N action(s)
+   pending a decision`; inspect via `GET /import/actions?batchId=<id>` to see which entity/field lacks a
+   rule or alias. Cross-check for duplicate Sources directly, using `Quotinator.Tools.DbInspector`
+   against a copy of the running container's database (`docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db`):
+   ```bash
+   dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
+     --sql "SELECT Title, Type, COUNT(*) AS c FROM Sources WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
+   ```
+   Must return **no rows** — any row here is a genuine duplicate Source that slipped through both the
+   rule and alias mechanisms.
+
+   **Proves the lookup genuinely reads the rule file's live content, not a cached or hardcoded value —
+   live-verified 2026-07-25.** Temporarily delete the Auntie Mame rule entirely from
+   `nikhilnamal17-conflict-rules.json` (`entityId: 088603c0-...`), then rebuild and run a fresh
+   container:
+   ```bash
+   docker build -f docker/Dockerfile -t quotinator:local .
+   docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+   curl -s "http://localhost:8080/api/v1/import/actions?status=pending"
+   ```
+   With the rule removed, that one quote's conflict must now stage `Pending` again (confirmed:
+   `ambiguousFields: ["date"]`) — proving the mechanism actually consults the file's content on every
+   seed, not a cached decision from an earlier run. Restore the rule, then change its `resolution` from
+   `Keep` to `Replace` and reseed again — `GET /quotes/{id}` will **not** show the change (`date` is
+   Source-derived, read via JOIN from `Sources.Date`, and the Source was already fixed at the film's
+   correct year by whichever occurrence was seen first — a per-quote rule only ever affects that Quote's
+   own `MergedFields` audit trail, never a Source-owned field's real stored value, the same limitation
+   #181's own Step 10 addendum documents). Check via `Quotinator.Tools.DbInspector` instead:
+   ```bash
+   docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db
+   dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
+     --sql "SELECT MergedFields FROM System_ImportActions WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
+   ```
+   The row for the batch matching NikhilNamal17's own rule file must show `"date":"2005"` (the incoming
+   value — Replace won), confirmed changed from `"date":"1958"` under the original `Keep` rule; a
+   *second* row may appear for vilaboim's own separate cross-file duplicate of the same quote id,
+   resolved by its own unmodified rule in `vilaboim-conflict-rules.json` — unaffected by this change,
+   since each bundled file's rule file only governs that file's own batch. Revert both edits before
+   committing — this is a temporary local mutation to prove the mechanism, not a real data change.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 

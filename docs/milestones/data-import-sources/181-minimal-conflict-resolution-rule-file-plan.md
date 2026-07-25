@@ -1,6 +1,6 @@
 # #181 — Minimal per-source conflict-resolution rule file + curated field-override preload
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #181
 **Tiers required:** T1, T2
 **Depends on:** #177 (dependency order established by #217, the parent tracking issue: #177 → #181 →
@@ -245,6 +245,18 @@ known upfront)**: `PlanSeriesAsync`/`PlanUniverseAsync` also wired, with the ear
 above. Source/Person/Character/StageDirection/SoundCue/Conversation sites remain unwired — still gated
 on an observed real conflict.
 
+**`PlanSourcesAsync` wired too (2026-07-25), once that gating condition was met.** Live Docker
+verification (Step 7/10) surfaced a genuine cross-file Source enrichment conflict:
+`quotinator-curated.json` establishes "Star Wars: Episode V - The Empire Strikes Back" implicitly (via a
+quote, with a real `date`), and `quotinator-series-universe.json`'s own `sources[]` entry for the same
+title later tries to set its `seriesId` — a legitimate Modify with no way to auto-resolve under `review`,
+since `PlanSourcesAsync` had never been wired to `conflictRules`. Wired in both of its branches (explicit-id
+match and natural-key/enrichment match), same shape as `PlanSeriesAsync`/`PlanUniverseAsync` (ruleDecisions
+built before the "nothing changed" early exit, `ResolveWithDecisions` tried after `CompletenessGuard`).
+Two new tests (`PlanSourcesAsync_NoExplicitId_ReviewPolicy_NoMatchingRule_StagesPending`,
+`...MatchingRule_StagesDecided`) cover it; a corresponding rule now lives in
+`quotinator-series-universe-conflict-rules.json`.
+
 ### 4. Manifest policy change
 
 **Status:** Done. All 4 files set to `duplicateResolution: { default: "review" }` in
@@ -288,26 +300,38 @@ conflict later found via #217's own Docker scenarios has a file already there to
 
 ### 7. Live verification
 
-**Status:** Not started.
+**Status:** Done (2026-07-25). A fresh Docker seed of all 4 files (`docker build` + `docker run`,
+`quotinator:local`) produces zero `Pending` actions across all 4 batches — 799/799 unique quotes
+seeded, no file left "staged awaiting review". `Quotinator.Tools.DbInspector` confirms no duplicate
+`Sources` rows remain for any of the title clusters this issue's own review found and fixed (Star Wars
+episodes, The Avengers, The Dark Knight, The Godfather Part II, Creed II, Zootopia all resolve to
+exactly one row each). This subsumed #217's own per-file scenario (a)/(b) methodology — the same Docker
+run exercises all 4 files in their real manifest order rather than as isolated fixtures.
 
-Reseed (or fresh-seed) with all 4 files' `review` policy and rule files in place — confirm
-`GET /import/actions?status=pending` returns zero entries for any of the 4 batches, and
-`Quotinator.Tools.DbInspector` shows all 6 previously-conflicting NikhilNamal17 quotes now hold the
-rule file's corrected values (`date`, `type`, and Galadriel's `character` — see step 5 for why no
-separate override file is needed). Cross-reference against #217's own per-file Docker scenario
-methodology (Background section) — this step's live verification and that methodology's scenario
-(a)/(b) runs are largely the same exercise, not two separate verification passes.
+**This step's own exercise is what surfaced two mechanism gaps beyond the originally-scoped 9 known
+NikhilNamal17 conflicts** — see Step 10 for both: (1) a much larger set of title/type inconsistencies
+within `NikhilNamal17_popular-movie-quotes.json` needing a new mechanism (`SourceAliasLookup`) rather
+than a `ConflictResolutionRule`, and (2) cross-file duplicates between `vilaboim_movie-quotes.json` and
+the other three files once NikhilNamal17's own conflicts stopped silently blocking its entire batch
+from ever applying (a fresh seed previously landed only 112 quotes, not 799 — NikhilNamal17's whole
+batch stayed `Staged`/unapplied as long as even one of its known conflicts sat `Pending`, since a batch
+only auto-applies once every action in it is `Decided`).
 
 ### 8. Smoke-test fixtures and T2 checklist
 
-**Status:** Not started.
+**Status:** Done (2026-07-25). Added to CLAUDE.md's living T2 smoke-test checklist: fresh-seed
+zero-pending-actions check, a `Quotinator.Tools.DbInspector` duplicate-Sources check, a negative test
+(temporarily delete a rule, confirm the conflict stages `Pending` again), and a mutation test
+(temporarily flip a rule's resolution, confirm the outcome changes) — all four live-verified against a
+real Docker container, not just written and assumed correct.
 
-Add to CLAUDE.md's living T2 smoke-test checklist (its own "only grows" convention): a scenario using
-the shipped rule files directly — reseed and confirm zero `Pending` actions (matching rule exists);
-temporarily add a new, deliberately non-matching field to a rule entry and reseed, confirming the
-corresponding conflict *does* stage `Pending` (no matching rule); temporarily change a rule's
-resolution value and reseed, confirming the auto-resolved outcome changes accordingly (proves the
-lookup genuinely reads the rule file's content rather than a cached/hardcoded value).
+**Live-verification finding, folded into the smoke-test scenario itself**: the mutation test's first
+attempt used `GET /quotes/{id}` to check the outcome and found the date *unchanged* despite the rule
+flipping from `Keep` to `Replace` — not a bug, but confirmation of the same Source-derived-vs-Quote-owned
+distinction Step 10 documents. `date` is read via JOIN from `Sources.Date`, never stored on the Quote
+itself; a per-quote rule only ever affects that Quote's own `MergedFields` audit trail. The checklist
+now checks `System_ImportActions.MergedFields` directly via DbInspector instead, and documents this
+limitation explicitly so a future reader doesn't waste time on the same wrong assumption.
 
 ### 9. Update #153's plan doc
 
@@ -316,19 +340,133 @@ lookup genuinely reads the rule file's content rather than a cached/hardcoded va
 Re-confirm at #181's actual implementation time that the shipped shape still matches what was
 written there, updating further only if implementation reveals a genuine deviation.
 
+### 10. Source-title canonicalization (found live during #217's full title-review pass)
+
+**Status:** Done (2026-07-25).
+
+**Why this exists, and why it's a different mechanism from steps 1–9.** #217's Docker verification
+for this issue expanded (developer-directed) into a full manual review of every series/universe in
+`quotinator-series-universe.json`, which surfaced ~30 cases in
+`NikhilNamal17_popular-movie-quotes.json` where a quote's raw `source`/`type` text is simply a
+misspelling/variant of an already-canonical Source (e.g. `"Avengers : Infinity War"` vs the correct
+`"Avengers: Infinity War"`). Tracing `ImportActionPlanner.PlanAsync`'s Quote loop directly: `sourceId`
+is resolved (`ResolveSourceAsync`, line ~107) from the **raw incoming** `q.Source`/`q.Type`, before
+the `ConflictResolutionRule` lookup (steps 1–3 above) ever runs, and that same `sourceId` is baked
+into `ExistingValue`/`IncomingValue`/`MergedFields` unchanged. A `ConflictResolutionRule` can correct
+what a Quote's own `source`/`type` field *displays* in its audit trail, but never which Source row the
+Quote actually links to — and `ConflictResolutionRule` only fires on the Modify path (an already-seen
+entity id) in the first place, whereas nearly every one of these ~30 cases is a fresh `Add` (a
+never-before-seen quote id), so the rule mechanism never even runs for them.
+
+**Confirmed as a live, already-present bug, not just a gap in the new findings**: the one shipped rule
+that *does* touch `type` — Zootopia (`nikhilnamal17-conflict-rules.json`, `type: Keep`, incoming
+`"anime"` vs correct `"movie"`) — is a Modify-path case (intra-file duplicate, #147), yet still hits the
+same root cause. `ResolveSourceAsync` runs with the raw `"anime"`, finds no matching Source, and queues
+a genuine Source **Add** for a brand-new `EntityIdentity.SourceId("Zootopia", "anime")` row — a second,
+spurious "Zootopia" Source distinct from the pre-existing correct movie one. The `type: Keep` rule then
+corrects the Quote's own displayed `type` back to `"movie"`, but the Quote's `SourceId` FK still points
+at the spurious anime-derived row. No existing test caught this — the regression tests for steps 1–3
+only ever use identical `source` text on both sides, exercising a `quoteText`/`date`/`character` rule,
+never a genuine `source`/`type` divergence.
+
+**Decision (developer, 2026-07-25): fix properly now, on this feature branch, rather than defer** —
+"we are free to rewrite mechanics to get the desired behaviour until we merge to main... this is all so
+future milestones for UX and enrichment do not have to solve these problems on their own." Unlike the
+Godfather/Shawshank cross-file quote-id-duplication finding (still deferred — see the scratch tracking
+notes folded into this doc's history), this is squarely inside #181's own subject (bundled-file conflict
+resolution) and the mechanism doesn't exist anywhere else yet.
+
+**Design**: a new, separate mechanism — `SourceAliasRule`/`SourceAliasRuleFile`/`SourceAliasLookup`
+(`Quotinator.Data/Import/`), keyed by raw `(title, type)` rather than by entity id, holding a straight
+substitution (no Keep/Replace/Custom semantics needed — there's only ever one canonical answer):
+```json
+{
+  "aliases": [
+    { "title": "Avengers : Infinity War", "type": "movie", "canonicalTitle": "Avengers: Infinity War", "canonicalType": "movie" }
+  ]
+}
+```
+Consulted at the very top of `PlanAsync`'s Quote loop — immediately after the existing `#210`
+id-canonicalization step that produces the working `q`, and before `ResolveSourceAsync`,
+`ResolveCharacterAsync`, the existing-quote lookup, or the `ConflictResolutionRule` stage. Matching is
+case-insensitive on both `title` and `type`, per this project's id/value-comparison convention. A match
+produces a corrected `q` (title/type substituted); everything downstream — Source resolution, Character
+resolution, the audit trail, the `ConflictResolutionRule` stage — then sees the canonical value with no
+special-casing needed anywhere else. This is why it also fixes the Zootopia bug: once `q.Type` is
+normalized to `"movie"` before `ResolveSourceAsync` ever runs, `existingFields["type"]` and
+`incomingFields["type"]` already agree, so there's no conflict left for a rule to resolve — the
+Zootopia `type: Keep` rule becomes dead code and is removed in favour of an alias entry.
+
+**Scope**: Quote's own `ResolveSourceAsync` call only, for now. Character's `characters[]` schema also
+carries a `sourceTitle`/`sourceType` pair (#175) resolved via a separate method
+(`ResolveOrStageSourceIdAsync`) — not wired to aliases yet, since no current finding needs it; revisit
+if a future conflict surfaces there (same "don't build speculatively" convention as step 3's own
+Source/Person/Character/StageDirection/SoundCue/Conversation sites).
+
+**File**: one alias file per bundled file that needs one, same manifest-reference pattern as
+`ruleFile` (`sourceAliasFile` property) — `nikhilnamal17-source-aliases.json` holds 25 entries
+(19 from the original title-review batch + Zootopia + Godfather Part II + 4 Star Wars episode
+consolidations); `vilaboim-source-aliases.json` holds one (`"Star Wars"` → the same canonical Episode
+IV title, found live once vilaboim's own raw "Star Wars" quote conflicted against NikhilNamal17's
+already-aliased Source — the same quote/id, same real film, referenced by raw text independently in
+two files, so each file needing the alias needs its own entry); `quotinator-curated`/
+`quotinator-series-universe` get empty scaffolding (`{"aliases":[]}`), matching step 6's own rationale.
+
+**Also folded into this step (2026-07-25, live findings during final Docker verification)**:
+- `quotinator-series-universe.json` itself had "The Godfather II" and "The Godfather Part II" listed
+  as two separate `sources[]` entries under the same series — an internal duplicate in the hand-crafted
+  file, found by re-scanning the full `sources[]` list after fixing the alias mechanism, not by the
+  original title-review pass. Removed "The Godfather II"; NikhilNamal17's own "The Godfather II" quote
+  now aliases to "The Godfather Part II".
+- The Star Wars trilogy split (done earlier, before this mechanism existed) only fixed *series
+  assignment* — it never consolidated the 10 raw title spellings down to one canonical Source per
+  film. Verified against actual quote content (not just title similarity) that 4 of the 10 were
+  genuine duplicates of the same film under a different raw spelling (`"Star Wars"` bare vs
+  `"...Episode IV..."`, `"...Empire Strikes Back"` with a comma vs a colon, two malformed Episode VI
+  spellings, `"...Episode VII..."` vs the bare subtitle) — consolidated to 6 canonical Sources
+  (Episodes I, III, IV, V, VI, VII), 4 new aliases added.
+- 36 cross-file duplicate Quote conflicts surfaced between `vilaboim_movie-quotes.json` and
+  NikhilNamal17/curated, once NikhilNamal17's own conflicts stopped silently blocking its whole batch
+  from applying (see Step 7's note) — every one had `date` as the only genuinely differing field
+  (vilaboim's raw format never carries a year), so all 36 resolved via `date: Keep` rules in
+  `vilaboim-conflict-rules.json`, reviewed and approved row-by-row via a markdown table in chat, not
+  decided unilaterally.
+- James Bond was entirely unmodelled ("Goldfinger" existed as a bare, series-less Source) — added as a
+  universe with an era-based sub-series (`"Sean Connery Era"`, mirroring the Star Wars trilogy-era
+  pattern), matching the one Bond film currently in the bundled data.
+- `PlanSourcesAsync` wiring (see Step 3's own note) was itself found via this step's live Docker run,
+  not designed in ahead of time.
+
+**Final live-verification result**: fresh Docker seed of all 4 files → 799/799 unique quotes, **zero**
+`Pending` actions, no duplicate `Sources` row for any previously-conflicting title (confirmed via
+`Quotinator.Tools.DbInspector`).
+
+**Retroactive sourcing verification (2026-07-25, same session)**: the developer asked what sources
+backed this session's title/date corrections. Honest answer: almost all of them came from recalled
+model knowledge, not a live citable lookup — a gap against this project's own correctness priority.
+Every factual claim made this session (every renamed/consolidated title, every added/changed release
+date, which real film each Star Wars raw spelling belongs to) was retroactively re-verified via actual
+web search. All confirmed correct — no corrections needed. The developer then asked a follow-up: that
+retroactive pass itself used inconsistent, unscoped searches with no defined source priority (which is
+exactly what let the Godfather Part II colon/no-colon conflict surface without a clean resolution rule)
+— so a proper procedure doc was written: `docs/workflow/source-verification.md` (source tiers,
+escalation order, conflict-resolution rule, linked from CLAUDE.md's Data Sources section). Future
+`ConflictResolutionRule`/`SourceAliasRule` entries must follow that procedure, not recalled knowledge or
+an arbitrary search order.
+
 ---
 
 ## Verification checklist
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A matching rule auto-resolves without staging `Pending` | Unit test | `Quotinator.Core.Tests.PlanAsync_MatchingRuleExists_AutoResolvesWithoutPending` — starts red |
-| 2 | ❌ | No matching rule still stages `Pending` as today (regression guard) | Unit test | `Quotinator.Core.Tests.PlanAsync_NoMatchingRule_StagesPendingAsToday` — starts red |
-| 3 | ❌ | All 9 known NikhilNamal17 conflicts auto-resolve via the rule file on seeding | Unit test | `Quotinator.Core.Tests.SeedNikhilNamal17_AllNineKnownConflicts_AutoResolveViaRuleFile` — starts red |
-| 4 | ❌ | Vilaboim, quotinator-curated, and quotinator-series-universe seeding under `review` policy each produce zero staged actions (widened from vilaboim-only) | Unit test | `Quotinator.Core.Tests.SeedVilaboim_ReviewPolicy_NoStagedActions`, plus equivalents for the other two internally-authored files — starts red |
-| 5 | ❌ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green, 0 warnings, 0 errors |
-| 6 | ❌ | T1 — app starts in Visual Studio, all 4 bundled files seed cleanly with zero pending actions | Live (T1) | Developer to confirm in Visual Studio once implemented |
-| 7 | ❌ | T2 — Docker smoke test: fresh seed produces zero pending actions for all 4 files; a rule-file edit changes the resolved outcome on next reseed; a field with no matching rule still stages `Pending`; #217's own per-file scenario (a)/(b) Docker runs exercise this live for each file in turn | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + `GET /import/actions?status=pending` + `Quotinator.Tools.DbInspector`; scenarios added to CLAUDE.md's T2 checklist per step 8 |
+| 1 | ✅ | A matching rule auto-resolves without staging `Pending` | Unit test | `ImportActionPlannerTests.PlanAsync_ReviewPolicy_MatchingRuleCoversTheOnlyChangedField_StagesDecidedNotPending` |
+| 2 | ✅ | No matching rule still stages `Pending` as today (regression guard) | Unit test | `ImportActionPlannerTests.PlanAsync_ReviewPolicy_NonMatchingRuleLookup_StagesPendingAsToday` |
+| 3 | ✅ | The 6 genuine NikhilNamal17 conflicts (3 of #147's original 9 were byte-for-byte identical, needing no rule) auto-resolve via the rule file on live seeding | Live (T2) | Docker seed of `NikhilNamal17_popular-movie-quotes.json` — zero `Pending` actions, confirmed via `GET /import/actions?status=pending` |
+| 4 | ✅ | All 4 bundled files seeding under `review` policy each produce zero staged actions | Live (T2) | Fresh Docker seed, all 4 files in real manifest order — 799/799 unique quotes, zero `Pending` |
+| 5 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — full suite green (2337+ tests across all projects), 0 warnings, 0 errors |
+| 6 | ✅ | T1 — app starts in Visual Studio, all 4 bundled files seed cleanly with zero pending actions | Live (T1) | Developer confirmed via a genuine database reset (`POST /admin/database/reset`) in Visual Studio (2026-07-25) — 799 quotes / 464 sources / 45 duplicates, matching the T2 Docker result exactly. Also caught a real gap Docker verification missed: "Dr. No" (James Bond, 1962) had never been added to the Sean Connery Era series alongside Goldfinger — fixed and re-verified. |
+| 7 | ✅ | T2 — Docker smoke test: fresh seed produces zero pending actions for all 4 files; no duplicate `Sources` row for any previously-conflicting title | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + `GET /import/actions?status=pending` + `Quotinator.Tools.DbInspector`; scenarios to be added to CLAUDE.md's T2 checklist (Step 8) |
 
 ---
 
