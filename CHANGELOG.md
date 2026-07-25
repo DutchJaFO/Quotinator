@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-25 19:35 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-25 21:50 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -148,6 +148,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A Source was resolved from a quote's raw incoming title/type before any conflict-resolution rule had a chance to run, so a rule correcting a Quote's own displayed field never actually prevented — and in one case (Zootopia) actively caused — a duplicate Source row under the uncorrected spelling; Source resolution now consults the new title-alias mechanism first (issue #181)
 - `PlanSourcesAsync` (the Source-correction planning path) had never been wired to the per-source conflict-resolution rule file mechanism, so a legitimate cross-file Source enrichment (e.g. a curated quote establishing a Source, a later file assigning it to a series) had no way to auto-resolve under the `review` policy and always required manual decision (issue #181)
 - Filtering quotes by `series=`/`universe=` name (rather than id), matching a Series/Universe/Person by name during import, the `lang` query parameter, and `GET`/`DELETE /api/v1/admin/audit`'s `table` filter all matched case-sensitively — a lowercase or differently-cased value (e.g. `?universe=james bond` against a stored `"James Bond"`) silently returned no results, or in the `DELETE` case silently deleted nothing while still reporting success; all four now match case-insensitively, consistent with every other identifier in the system (issue #216)
+- Case-insensitive matching for Source titles, Series/Universe/Person names, and a few internal status filters was implemented as separate hand-written SQL in each place, and one of them (import-action status/entity-type filtering) had drifted onto the opposite letter-case convention from everywhere else; consolidated onto one shared, tested mechanism with no change to actual matching behaviour, plus an automated check that catches a future comparison of this kind if it's ever added without the same case-insensitive handling (issue #211)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`

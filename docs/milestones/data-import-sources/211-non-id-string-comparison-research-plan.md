@@ -1,6 +1,6 @@
 # #211 — Research: evaluate non-id string comparisons in SQL queries for the same class of gap as #210
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #211
 **Tiers required:** T1, T2 (revised 2026-07-25 — the investigation itself needs none, but Steps 5–8's
 `TextClauses`/`SqlTextCaseGuard` implementation is real code, unlike #169's pure-research precedent)
@@ -362,8 +362,8 @@ directly within this issue (Steps 5–8), not filed separately.
 | 7 | ✅ | Guard genuinely catches a real regression, not just synthetic test strings | Live (review) | Retroactive red-green: reverted `Series.SelectIdByName` to `Name = @name`, confirmed `SqlConstant_PassesTextCaseGuard` failed, restored, confirmed it passed again |
 | 8 | ✅ | CLAUDE.md and `docs/database-conventions.md` updated | Live (review) | See Step 8 |
 | 9 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — Core.Tests 1304, Data.Tests 751, Api.Tests 511, all green, 0 warnings, 0 errors |
-| 10 | ❌ | T1 — app starts in Visual Studio | Live (T1) | Developer to confirm in Visual Studio |
-| 11 | ❌ | T2 — Docker smoke test | Live (T2) | Not yet run |
+| 10 | ✅ | T1 — app starts in Visual Studio | Live (T1) | Confirmed 2026-07-25: app started cleanly against the existing dev DB (799 quotes/464 sources); `GET /quotes/search` correctly returned 400 (`SearchQueryRequired`) for a request missing `q`, and 200 once `q` was supplied alongside `universe=` — pre-existing, unrelated-to-#211 behaviour confirmed still correct, not a regression |
+| 11 | ✅ | T2 — Docker smoke test: every migrated comparison still matches correctly post-refactor | Live (T2) | `docker build` + fresh reseed (799 quotes/464 sources) — `curl ".../quotes/random?n=5&universe=james+bond"` (lowercase) still matched "James Bond"; a staged import batch's `curl ".../import/actions?status=pending"` and `?entityType=quote` (lowercase) both matched despite the `UPPER()`→`LOWER()` flip; `curl ".../admin/audit?table=quotes"` (lowercase) still matched the PascalCase-stored rows; Source title resolution (`Airplane!`) unaffected |
 
 ---
 
@@ -373,10 +373,11 @@ T1/T2 required (revised 2026-07-25) — Steps 5–8 are real code, not pure rese
 
 **Next steps:**
 1. ~~Implement Steps 5–8~~ Done.
-2. Post the findings above as a comment on #211 once implementation is done (draft the comment text,
-   present it in chat, wait for approval per this project's draft-then-review rule, then post).
-3. Tick #211's own Definition of Done checkboxes.
-4. T1/T2, then close #211 once both pass — same flow as #216.
+2. ~~T1/T2~~ Both confirmed 2026-07-25.
+3. Post the findings above as a comment on #211 (draft the comment text, present it in chat, wait for
+   approval per this project's draft-then-review rule, then post) — not yet done.
+4. Tick #211's own Definition of Done checkboxes — not yet done.
+5. Close #211 once the above two are done — same flow as #216.
 
 Written 2026-07-25, after #216 shipped (Waiting for release). Investigation is complete as of this
 writing — independently re-verified rather than assumed from #216's own summary, per this project's
