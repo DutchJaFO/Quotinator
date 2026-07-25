@@ -383,9 +383,33 @@ public sealed class SqliteImportActionService : IImportActionService
         var pending = await _coordinator.TryApplyBatchAsync(
             batchId, (action, conn, tx) => ApplyResolvedActionAsync(action, conn, tx, initiatedByType), cancellationToken);
 
+        if (pending is null)
+            await MarkImportBatchAppliedAsync(batchId);
+
         return pending is null
             ? null
             : new ImportActionBatchStatusResponse { BatchId = batchId, PendingActionIds = pending };
+    }
+
+    /// <summary>
+    /// #177: every caller of <see cref="ApplyBatchAsync"/> — the direct <c>/actions/apply</c> route and
+    /// both call sites in <see cref="SqliteQuoteImportService"/> — must mark the owning
+    /// <see cref="ImportBatch"/> <see cref="ImportBatchStatus.Applied"/> once every one of its actions
+    /// has genuinely applied, or it can never satisfy <see cref="ReverseBatchAsync"/>'s own
+    /// <c>Status == Applied</c> precondition. This is the single shared choke point for that write.
+    /// </summary>
+    private async Task MarkImportBatchAppliedAsync(string batchId)
+    {
+        if (!Guid.TryParse(batchId, out var batchGuid))
+            return;
+
+        var batch = await _importBatchRepository.GetByIdAsync(batchGuid);
+        if (batch is null)
+            return;
+
+        batch.Status    = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Applied.ToString(), ImportBatchStatus.Applied);
+        batch.AppliedAt = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+        await _importBatchRepository.UpdateAsync(batch);
     }
 
     /// <summary>

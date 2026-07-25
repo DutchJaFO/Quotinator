@@ -107,10 +107,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, cancellationToken);
             if (applyResult is null)
             {
-                batch.Status    = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Applied.ToString(), ImportBatchStatus.Applied);
-                batch.AppliedAt = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
-                batch.RecordCount = imported + updated;
-                await _importBatches.UpdateAsync(batch);
+                // #177: Status/AppliedAt are now set by ApplyBatchAsync itself, the shared choke point
+                // every caller goes through — this call site only owns its own Quote-specific RecordCount.
+                await _importBatches.UpdateRecordCountAsync(batch.Id, imported + updated);
             }
             else
             {
@@ -160,10 +159,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         IReadOnlyList<Guid> pendingActionIds = [];
         if (applyResult is null)
         {
-            batch.Status      = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Applied.ToString(), ImportBatchStatus.Applied);
-            batch.AppliedAt   = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
-            batch.RecordCount = imported + updated;
-            await _importBatches.UpdateAsync(batch);
+            // #177: Status/AppliedAt are now set by ApplyBatchAsync itself, the shared choke point
+            // every caller goes through — this call site only owns its own Quote-specific RecordCount.
+            await _importBatches.UpdateRecordCountAsync(batch.Id, imported + updated);
         }
         else
         {

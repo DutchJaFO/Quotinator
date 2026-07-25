@@ -100,9 +100,15 @@ public class SqliteImportActionServiceTests
 
         // Sources.ImportBatchId (and Characters/People/Quotes) is a real FK to ImportBatches — the
         // applier's writes need a genuine row to reference, same as production's own batch-first flow.
+        // #177: Status must be set explicitly to 'Staged' here, matching what SqliteQuoteImportService
+        // and QuotinatorDatabaseInitializer both do at real batch creation — the ImportBatches.Status
+        // column's own schema default is 'Applied' (added retroactively for pre-#154 rows), so omitting
+        // it here silently gave every batch this helper creates a starting Status of 'Applied' before
+        // anything was ever actually applied, masking #177's own bug from every test in this file that
+        // exercises ReverseBatchAsync without going through the real production insert path.
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
+            "INSERT INTO ImportBatches (Id, Name, Type, Status, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', 'Staged', @now, @now)",
             new { Id = batchId, now });
 
         var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations, people: people, series: series, universe: universe, characters: characters);
@@ -277,6 +283,38 @@ public class SqliteImportActionServiceTests
         Assert.AreEqual(1, result!.PendingActionIds.Count);
     }
 
+    /// <summary>
+    /// #177: the two-phase review→decide→apply flow must set <c>ImportBatches.Status</c> to
+    /// <c>Applied</c> (and populate <c>AppliedAt</c>) the same way the single-shot direct-apply path
+    /// already does — previously only <see cref="SqliteQuoteImportService"/>'s own callers did this,
+    /// leaving a batch applied entirely through <see cref="SqliteImportActionService.ApplyBatchAsync"/>
+    /// (i.e. via <c>POST /import/actions/apply</c>) stuck at <c>Pending</c> forever.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyBatchAsync_TwoPhaseFlow_MarksImportBatchStatusApplied()
+    {
+        var id = "c1111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+
+        var actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var batchId = quoteAction.BatchId;
+
+        await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
+        {
+            QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+        var result = await _service.ApplyBatchAsync(batchId);
+        Assert.IsNull(result, "The batch's only action was decided — nothing should remain pending");
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var status    = await conn.ExecuteScalarAsync<string>("SELECT Status FROM ImportBatches WHERE UPPER(Id) = UPPER(@id)", new { id = batchId });
+        var appliedAt = await conn.ExecuteScalarAsync<string?>("SELECT AppliedAt FROM ImportBatches WHERE UPPER(Id) = UPPER(@id)", new { id = batchId });
+        Assert.AreEqual("Applied", status);
+        Assert.IsNotNull(appliedAt);
+    }
+
     [TestMethod]
     public async Task ApplyBatchAsync_TwoBatchesReferencingSameNewSource_IdempotentNoDuplicateSourceRow()
     {
@@ -351,7 +389,7 @@ public class SqliteImportActionServiceTests
     public async Task ReverseBatchAsync_ThenReImport_QuoteWithGenres_ResurrectsWithoutForeignKeyViolation()
     {
         var quote   = BuildQuote("b2111111-1111-4111-8111-111111111111", genres: ["comedy"]);
-        var batchId = await StageApplyAndMarkAppliedAsync(quote, DuplicateResolutionPolicy.NewestWins);
+        var batchId = await StageAndApplyAsync(quote, DuplicateResolutionPolicy.NewestWins);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -477,25 +515,21 @@ public class SqliteImportActionServiceTests
 
     // ── #59 — ReverseBatchAsync ──────────────────────────────────────────────
 
-    private async Task MarkImportBatchAppliedAsync(Guid batchId)
-    {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
-        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("UPDATE ImportBatches SET Status = 'Applied', AppliedAt = @now WHERE Id = @id", new { id = batchId, now });
-    }
-
-    private async Task<Guid> StageApplyAndMarkAppliedAsync(SourceQuote quote, DuplicateResolutionPolicy policy)
+    /// <summary>
+    /// #177: previously followed by a test-only raw-SQL <c>UPDATE ImportBatches SET Status =
+    /// 'Applied'</c> workaround — removed now that <see cref="SqliteImportActionService.ApplyBatchAsync"/>
+    /// itself sets <c>Status</c>/<c>AppliedAt</c> once nothing remains pending.
+    /// </summary>
+    private async Task<Guid> StageAndApplyAsync(SourceQuote quote, DuplicateResolutionPolicy policy)
     {
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([quote], batchId, policy);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
         return batchId;
     }
 
-    /// <summary>#68: stages+applies+marks-applied a Quote, one StageDirection, and a Conversation whose only line is that StageDirection, in one batch.</summary>
-    private async Task<Guid> StageApplyAndMarkAppliedConversationAsync(string quoteId, string stageDirectionId, string conversationId)
+    /// <summary>#68: stages+applies a Quote, one StageDirection, and a Conversation whose only line is that StageDirection, in one batch.</summary>
+    private async Task<Guid> StageAndApplyConversationAsync(string quoteId, string stageDirectionId, string conversationId)
     {
         var batchId = Guid.NewGuid();
         var quote = BuildQuote(quoteId);
@@ -511,8 +545,38 @@ public class SqliteImportActionServiceTests
         };
         await PlanAndStageAsync([quote], batchId, DuplicateResolutionPolicy.NewestWins, stageDirections: [stageDirection], conversations: [conversation]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
         return batchId;
+    }
+
+    /// <summary>
+    /// #177: a batch applied entirely through the two-phase review→decide→apply flow (no call to the
+    /// test-only raw-SQL status-override workaround) must be reversible — proves
+    /// <see cref="SqliteImportActionService.ApplyBatchAsync"/> itself now sets
+    /// <c>ImportBatches.Status = Applied</c>, which <see cref="SqliteImportActionService.ReverseBatchAsync"/>
+    /// requires before it will proceed.
+    /// </summary>
+    [TestMethod]
+    public async Task ReverseBatchAsync_TwoPhaseFlowBatch_SucceedsWithoutManualStatusOverride()
+    {
+        var id = "c2111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+
+        var actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var batchId = quoteAction.BatchId;
+
+        await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
+        {
+            QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        });
+        await _service.ApplyBatchAsync(batchId);
+
+        await _service.ReverseBatchAsync(batchId);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        var textAfterReverse = await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id", new { id });
+        Assert.AreEqual("Original text", textAfterReverse, "Reversal must restore the original field value");
     }
 
     /// <summary>
@@ -527,7 +591,7 @@ public class SqliteImportActionServiceTests
         var quoteId          = "d1111111-1111-4111-8111-111111111111";
         var stageDirectionId = "d2222222-2222-4222-8222-222222222222";
         var conversationId   = "d3333333-3333-4333-8333-333333333333";
-        var batchId = await StageApplyAndMarkAppliedConversationAsync(quoteId, stageDirectionId, conversationId);
+        var batchId = await StageAndApplyConversationAsync(quoteId, stageDirectionId, conversationId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -557,7 +621,7 @@ public class SqliteImportActionServiceTests
         var conversation1Id = "d7777777-7777-4777-8777-777777777777";
         var conversation2Id = "d8888888-8888-4888-8888-888888888888";
 
-        await StageApplyAndMarkAppliedConversationAsync(quote1Id, sharedStageDirectionId, conversation1Id);
+        await StageAndApplyConversationAsync(quote1Id, sharedStageDirectionId, conversation1Id);
 
         // A second batch reuses the same StageDirection id in its own conversation — Add-detection by
         // id means only the Conversation and Quote are genuinely new here; the StageDirection Add is
@@ -577,7 +641,6 @@ public class SqliteImportActionServiceTests
             stageDirections: [new SourceStageDirection { Id = sharedStageDirectionId, Text = "[A stage direction]" }],
             conversations: [conversation2]);
         await _service.ApplyBatchAsync(newerBatchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(newerBatchId);
 
         await _service.ReverseBatchAsync(newerBatchId.ToString("D").ToUpperInvariant());
 
@@ -593,7 +656,7 @@ public class SqliteImportActionServiceTests
     public async Task ReverseBatchAsync_QuoteAdd_SoftDeletesQuote()
     {
         var id = "a1111111-1111-4111-8111-111111111111";
-        var batchId = await StageApplyAndMarkAppliedAsync(BuildQuote(id), DuplicateResolutionPolicy.NewestWins);
+        var batchId = await StageAndApplyAsync(BuildQuote(id), DuplicateResolutionPolicy.NewestWins);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -608,7 +671,7 @@ public class SqliteImportActionServiceTests
     public async Task ReverseBatchAsync_QuoteAdd_SoftDeletesOrphanedSourceAndCharacter()
     {
         var id = "a2111111-1111-4111-8111-111111111111";
-        var batchId = await StageApplyAndMarkAppliedAsync(BuildQuote(id), DuplicateResolutionPolicy.NewestWins);
+        var batchId = await StageAndApplyAsync(BuildQuote(id), DuplicateResolutionPolicy.NewestWins);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -632,9 +695,7 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([BuildQuote(olderId, character: "Rick Blaine")], olderBatch, DuplicateResolutionPolicy.NewestWins);
         await PlanAndStageAsync([BuildQuote(newerId, character: "Ilsa Lund")], newerBatch, DuplicateResolutionPolicy.NewestWins);
         await _service.ApplyBatchAsync(olderBatch.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(olderBatch);
         await _service.ApplyBatchAsync(newerBatch.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(newerBatch);
 
         await _service.ReverseBatchAsync(newerBatch.ToString("D").ToUpperInvariant());
 
@@ -653,7 +714,7 @@ public class SqliteImportActionServiceTests
         var id = "a5111111-1111-4111-8111-111111111111";
         await SeedExistingQuoteAsync(id, "Original text");
 
-        var batchId = await StageApplyAndMarkAppliedAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
+        var batchId = await StageAndApplyAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -675,7 +736,7 @@ public class SqliteImportActionServiceTests
             originalSourceId = await conn.ExecuteScalarAsync<Guid>("SELECT SourceId FROM Quotes WHERE Id = @id", new { id });
         }
 
-        var batchId = await StageApplyAndMarkAppliedAsync(
+        var batchId = await StageAndApplyAsync(
             BuildQuote(id, source: "A Different Movie", character: null, quoteText: "Casablanca line"),
             DuplicateResolutionPolicy.NewestWins);
 
@@ -709,7 +770,7 @@ public class SqliteImportActionServiceTests
         var id = "b3111111-1111-4111-8111-111111111111";
         await SeedExistingQuoteAsync(id, "Casablanca line");
 
-        var batchId = await StageApplyAndMarkAppliedAsync(
+        var batchId = await StageAndApplyAsync(
             BuildQuote(id, source: "A Different Movie", character: null, quoteText: "Casablanca line"),
             DuplicateResolutionPolicy.NewestWins);
 
@@ -736,7 +797,7 @@ public class SqliteImportActionServiceTests
             new { Id = originalBatchId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
         await setupConn.ExecuteAsync("UPDATE Quotes SET ImportBatchId = @batchId WHERE Id = @id", new { batchId = originalBatchId, id });
 
-        var modifyBatchId = await StageApplyAndMarkAppliedAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
+        var modifyBatchId = await StageAndApplyAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
 
         await _service.ReverseBatchAsync(modifyBatchId.ToString("D").ToUpperInvariant());
 
@@ -763,7 +824,7 @@ public class SqliteImportActionServiceTests
             await conn.ExecuteAsync("UPDATE Quotes SET CompletenessStatus = 'NeedsReview' WHERE Id = @id", new { id });
         }
 
-        var batchId = await StageApplyAndMarkAppliedAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
+        var batchId = await StageAndApplyAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -779,7 +840,7 @@ public class SqliteImportActionServiceTests
         var id = "a9111111-1111-4111-8111-111111111111";
         await SeedExistingQuoteAsync(id, "Original text");
 
-        var batchId = await StageApplyAndMarkAppliedAsync(BuildQuote(id, character: null, quoteText: "Would-be modified text"), DuplicateResolutionPolicy.Skip);
+        var batchId = await StageAndApplyAsync(BuildQuote(id, character: null, quoteText: "Would-be modified text"), DuplicateResolutionPolicy.Skip);
 
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
@@ -820,7 +881,7 @@ public class SqliteImportActionServiceTests
     [TestMethod]
     public async Task ReverseBatchAsync_AlreadyReversed_ThrowsImportBatchNotFoundException()
     {
-        var batchId = await StageApplyAndMarkAppliedAsync(BuildQuote("ab111111-1111-4111-8111-111111111111"), DuplicateResolutionPolicy.NewestWins);
+        var batchId = await StageAndApplyAsync(BuildQuote("ab111111-1111-4111-8111-111111111111"), DuplicateResolutionPolicy.NewestWins);
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
         await Assert.ThrowsExactlyAsync<ImportBatchNotFoundException>(
@@ -830,8 +891,8 @@ public class SqliteImportActionServiceTests
     [TestMethod]
     public async Task ReverseBatchAsync_NotTopOfStack_ThrowsImportBatchStateException()
     {
-        var olderBatch = await StageApplyAndMarkAppliedAsync(BuildQuote("ac111111-1111-4111-8111-111111111111", character: "Rick Blaine"), DuplicateResolutionPolicy.NewestWins);
-        await StageApplyAndMarkAppliedAsync(BuildQuote("ad111111-1111-4111-8111-111111111111", character: "Ilsa Lund"), DuplicateResolutionPolicy.NewestWins);
+        var olderBatch = await StageAndApplyAsync(BuildQuote("ac111111-1111-4111-8111-111111111111", character: "Rick Blaine"), DuplicateResolutionPolicy.NewestWins);
+        await StageAndApplyAsync(BuildQuote("ad111111-1111-4111-8111-111111111111", character: "Ilsa Lund"), DuplicateResolutionPolicy.NewestWins);
 
         var ex = await Assert.ThrowsExactlyAsync<ImportBatchStateException>(
             () => _service.ReverseBatchAsync(olderBatch.ToString("D").ToUpperInvariant()));
@@ -841,8 +902,8 @@ public class SqliteImportActionServiceTests
     [TestMethod]
     public async Task ReverseBatchAsync_TopOfStack_ThenNextOldest_BothSucceedInOrder()
     {
-        var olderBatch = await StageApplyAndMarkAppliedAsync(BuildQuote("ae111111-1111-4111-8111-111111111111", character: "Rick Blaine"), DuplicateResolutionPolicy.NewestWins);
-        var newerBatch = await StageApplyAndMarkAppliedAsync(BuildQuote("af111111-1111-4111-8111-111111111111", character: "Ilsa Lund"), DuplicateResolutionPolicy.NewestWins);
+        var olderBatch = await StageAndApplyAsync(BuildQuote("ae111111-1111-4111-8111-111111111111", character: "Rick Blaine"), DuplicateResolutionPolicy.NewestWins);
+        var newerBatch = await StageAndApplyAsync(BuildQuote("af111111-1111-4111-8111-111111111111", character: "Ilsa Lund"), DuplicateResolutionPolicy.NewestWins);
 
         await _service.ReverseBatchAsync(newerBatch.ToString("D").ToUpperInvariant());
         await _service.ReverseBatchAsync(olderBatch.ToString("D").ToUpperInvariant());
@@ -856,7 +917,7 @@ public class SqliteImportActionServiceTests
     public async Task ReverseBatchAsync_ImportBatchIsSoftDeleted_ActionsRemainApplied()
     {
         var id = "b0111111-1111-4111-8111-111111111111";
-        var batchId = await StageApplyAndMarkAppliedAsync(BuildQuote(id), DuplicateResolutionPolicy.NewestWins);
+        var batchId = await StageAndApplyAsync(BuildQuote(id), DuplicateResolutionPolicy.NewestWins);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -872,7 +933,7 @@ public class SqliteImportActionServiceTests
     [TestMethod]
     public async Task ReverseBatchAsync_WritesSystemChangeLogEntries()
     {
-        var batchId = await StageApplyAndMarkAppliedAsync(BuildQuote("b1111111-1111-4111-8111-111111111111"), DuplicateResolutionPolicy.NewestWins);
+        var batchId = await StageAndApplyAsync(BuildQuote("b1111111-1111-4111-8111-111111111111"), DuplicateResolutionPolicy.NewestWins);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -1033,7 +1094,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             sources: [new SourceEntry { Id = id, Title = "Casablanca (Corrected)", Type = QuoteType.Movie, Date = "1942-11-26" }]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -1053,7 +1113,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             sources: [new SourceEntry { Id = newFileId, Title = "A Brand New Film", Type = QuoteType.Movie }]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -1282,7 +1341,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             stageDirections: [new SourceStageDirection { Id = id, Text = "A different action entirely.", ImageUrl = "https://example.com/corrected.jpg" }]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -1351,7 +1409,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             soundCues: [new SourceSoundCue { Id = id, Text = "A completely different sound.", SoundFileUrl = "https://example.com/corrected.mp3" }]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -1410,7 +1467,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             conversations: [new SourceConversation { Id = id, Description = "A completely different scene.", Lines = [] }]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -1519,7 +1575,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             people: [new PersonEntry { Id = id, Name = "A Completely Different Name", DateOfBirth = "1900-01-01", DateOfDeath = "1980-01-01" }]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -1548,7 +1603,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batch1, DuplicateResolutionPolicy.NewestWins,
             people: [new PersonEntry { Id = id, Name = "Original Name" }]);
         await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batch1);
         await _service.ReverseBatchAsync(batch1.ToString("D").ToUpperInvariant()); // soft-deletes the lowercase-id row
 
         var batch2 = Guid.NewGuid();
@@ -1622,7 +1676,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             characters: [new CharacterEntry { Id = id, Name = "A Completely Different Name", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -1649,7 +1702,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batch1, DuplicateResolutionPolicy.NewestWins,
             characters: [new CharacterEntry { Id = id, Name = "Original Name", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
         await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batch1);
         await _service.ReverseBatchAsync(batch1.ToString("D").ToUpperInvariant()); // soft-deletes the lowercase-id row
 
         var batch2 = Guid.NewGuid();
@@ -1678,7 +1730,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             characters: [new CharacterEntry { Id = id, Name = "Gandalf", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -1770,7 +1821,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             series: [new SeriesEntry { Id = id, Name = "A Completely Different Name" }]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
@@ -1790,7 +1840,6 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             universe: [new UniverseEntry { Id = id, Name = "A Completely Different Name" }]);
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        await MarkImportBatchAppliedAsync(batchId);
 
         await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
 
