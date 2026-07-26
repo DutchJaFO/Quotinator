@@ -12,7 +12,7 @@ namespace Quotinator.Data.Entities;
 /// mechanism produced (<see cref="ContentHash"/> matches what's actually on disk) rather than
 /// inferring it from file existence alone. Named with today's dominant <c>System_</c> convention,
 /// understood to be a temporary name pending a broader <c>Import_</c>-prefix standardization pass
-/// across every import-related table, tracked separately (not #153's own scope).
+/// across every import-related table, tracked separately in #227 (not #153's own scope).
 /// </summary>
 [Table("System_SourceFileOverrides")]
 public sealed class SourceFileOverride : RecordBase

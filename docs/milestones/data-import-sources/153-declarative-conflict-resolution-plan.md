@@ -403,19 +403,48 @@ skipping the verification step this project requires for a factual title claim.
 
 ### 14. Rule-file endpoints
 
-**Status:** Not started. Two distinct endpoints, since the two mechanisms have fundamentally different
-generation semantics (Step 11's mechanical read-back vs. Step 13's suggest-only scan):
-- `ConflictResolutionRule`: GET serves the current rule file for a source; POST triggers Step 11+12
-  (generate from a given `batchId`, merge, persist) — a genuine write endpoint.
-- `SourceAliasRule`: GET returns Step 13's candidate-duplicate suggestions for a source — read-only,
-  never writes an alias entry itself.
+**Status:** Partially done — design settled 2026-07-26, registry table implemented, path resolver and
+endpoints themselves not started yet.
 
-Route placement TBD (likely under `/api/v1/import` alongside `/actions/export`, matching the existing
-route-group convention) — confirmed at implementation time. Both need the standard admin-auth
-treatment every write endpoint in this project already has (`X-Api-Key`); the alias-candidate GET may
-not need admin auth at all since it's read-only and produces no side effect, matching this project's
-existing pattern of admin-gating writes rather than reads — confirm against `/import/actions/export`'s
-own auth requirement as precedent before deciding either way.
+**Design finding that changed this step's shape**: the bundled sources directory (`data/sources/`) is
+not on the persistent volume — it's baked into the Docker image (`Program.cs`'s `bundledSourcesDir =
+Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SourcesFolder)`, not under `dataDir`), and
+read-only in the HA add-on deployment. A generate-and-persist endpoint cannot write there. The existing
+auto-update mechanism already solves exactly this for the main data file: `SourceCacheUpdater` caches a
+downloaded/refreshed copy under `{dataDir}/sources/download/` (bundled) or `{dataDir}/imports/download/`
+(user-added) — genuinely persistent, writable in every deployment. This step reuses the same two
+directories as the override target for `ruleFile`/`sourceAliasFile`, rather than writing to the
+bundled/image path.
+
+**Registry table, implemented 2026-07-26**: `System_SourceFileOverrides` (entity `SourceFileOverride`,
+migration `SourceFileOverrideMigrations.CreateSourceFileOverridesTable`, `ISourceFileOverrideRegistry`)
+records, per (`FileName`, `SeedBatchOrigin`), the override's content hash and originating batch id —
+an upsert, not a history log. This is what lets the seeding pipeline know for certain whether an
+override on disk is genuinely one this project's own generation mechanism produced, rather than
+inferring it from file existence alone. Named with today's `System_` convention; a broader
+`Import_`-prefix table-naming standardization pass (and a separate, general import-file
+content-provenance mechanism) is tracked in #227, not this issue's own scope.
+
+**Still to build**:
+- A path-resolution service (`Quotinator.Data.Paths`) that takes a plain filename (no directory
+  segments — rejected outright, plus a resolved-path containment check as defence in depth) and a
+  `SeedBatchOrigin`, and returns the safe, absolute override path under the correct download directory.
+  DI-registered via the factory-overload pattern (`dataDir` is a runtime-computed value).
+- Read-side wiring: before `QuotinatorDatabaseInitializer.LoadConflictRules`/`LoadSourceAliases` load a
+  bundled file's `ruleFile`/`sourceAliasFile` from the image path, check the registry + override
+  location first (hash must match what's registered) and prefer it when present and valid.
+- The two endpoints:
+  - `ConflictResolutionRule`: `GET` returns the current effective rule file (override if registered and
+    valid, else the bundled/image copy) for a given filename+origin; `POST` generates from a `batchId`
+    (Steps 11–12), merges, writes to the override location, registers the new hash, and returns the
+    result. A `DELETE` to remove a registered override (revert to the bundled copy) is a natural,
+    low-cost addition once the registry and path resolver exist.
+  - `SourceAliasRule`: `GET` returns Step 13's candidate-duplicate suggestions — read-only, never
+    writes an alias entry itself.
+- Route placement: under `/api/v1/import`, alongside `/actions/export`, matching the existing
+  route-group convention. Every write (`POST`/`DELETE`) requires `X-Api-Key`, matching every other
+  mutating endpoint in this group; the candidate-suggestion `GET` needs no key, matching
+  `/actions/export`'s own precedent for a read-only, no-side-effect endpoint.
 
 ### 15. Tests — rule generation (both mechanisms)
 
