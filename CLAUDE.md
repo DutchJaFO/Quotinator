@@ -1592,6 +1592,52 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    0` — every real bundled alias's canonical Source either already exists under its exact recorded
    title, or is being legitimately created for the first time; none has actually been renamed away.
 
+   **Rule-file override endpoints** (#153) — `GET`/`POST /generate`/`DELETE` under
+   `/api/v1/import/rules/conflict`, and the read-only `GET /api/v1/import/rules/alias`. A fresh
+   container has no registered override for any bundled rule file, so the effective content is always
+   the bundled copy at first:
+   ```bash
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
+   ```
+   Must return `200` with `isOverrideActive: false` and the bundled file's own rules. Re-import the
+   curated file under `review` (same fixture as the "Import and staged-action review workflow" section
+   above) to get a real batch with a decided field to generate from:
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" \
+     -F "file=@data/sources/quotinator-curated.json" \
+     -F 'settings={"duplicateResolution":{"default":"review"}}' \
+     "http://localhost:8080/api/v1/import"
+   curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=1"
+   ```
+   Copy one pending action's `id` and the response's own `batchId`, decide it, then generate:
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+     -d '{"quoteText":{"choice":"keep"}}' \
+     "http://localhost:8080/api/v1/import/actions/<id>/decide"
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+     "http://localhost:8080/api/v1/import/rules/conflict/generate?fileName=quotinator-curated-conflict-rules.json&origin=Bundled&batchId=<batchId>"
+   ```
+   Must return `200` with `isOverrideActive: true`, `rulesAdded` at least `1`, and the response's own
+   `rules` array must still contain every rule the bundled file already had — the merge-preserves-
+   existing-rules guarantee `EffectiveRuleFileResolver` exists for. Re-run the first `GET` call from
+   this section again — it must now return `isOverrideActive: true` too, proving the override actually
+   took effect for reads. Clean up the override so it doesn't affect any later section of this
+   checklist:
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
+     "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
+   ```
+   Must return `204`; a repeat `DELETE` of the same file must now return `404` (nothing left to
+   remove). Finally, the alias-candidate suggestion endpoint — read-only, no `X-Api-Key` needed:
+   ```bash
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/alias?fileName=quotinator-curated-source-aliases.json&origin=Bundled"
+   ```
+   Must return `200` with a `candidates` array — on the current bundled dataset this is expected to be
+   empty (`#181`'s own alias file already covers every known real duplicate), which itself confirms the
+   endpoint runs cleanly against the full live `Sources` table without erroring; a non-empty result here
+   on an otherwise-unmodified checkout would mean a new duplicate has entered the bundled data unnoticed
+   and should be investigated before release.
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle

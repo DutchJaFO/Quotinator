@@ -203,7 +203,25 @@ This downloads and converts every source with a `downloadUrl`, including the new
 `{dataDir}/sources/download/` (or `imports/download/` for a user-imports entry). Copy the resulting
 file into `data/sources/`, verify it against `schemas/source-flat.schema.json`, and commit it.
 
-### 6. Add attribution to `SOURCES.md`
+### 6. Check for near-duplicate Source titles
+
+A new source is exactly when a duplicate-title risk is highest — the same film/show/book might already
+exist under a slightly different spelling (a trailing `!`, a curly vs. straight apostrophe, doubled
+whitespace) from an already-bundled source. After seeding the new file locally, call:
+
+```bash
+curl "http://localhost:5000/api/v1/import/rules/alias?fileName=<any bundled source's own sourceAliasFile>&origin=Bundled"
+```
+
+(#153) — this scans every Source currently in the database, not just the new file's own rows, so any
+bundled `sourceAliasFile` name works as the `fileName`. Review `candidates` for a genuine duplicate
+introduced by the new source; if found, verify the correct canonical title per
+`docs/workflow/source-verification.md` before hand-authoring a `SourceAliasRule` entry in the new
+source's own alias file (add a `sourceAliasFile` reference to its manifest entry, per
+`schemas/manifest.schema.json`, if it doesn't have one yet). This is a suggestion tool only — it never
+writes an alias entry itself.
+
+### 7. Add attribution to `SOURCES.md`
 
 Add an entry to the **Quote datasets** section in [`SOURCES.md`](../SOURCES.md) at the repo root.
 Include the file path, schema reference, repository URL, author, license, and contents.

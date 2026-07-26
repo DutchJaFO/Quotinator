@@ -512,8 +512,18 @@ file — asserted by hashing file content before/after the call, not just checki
 
 ### 16. Rule lookup and auto-apply during staging
 
-**Status:** Lookup and auto-apply themselves are Done via #181, for both mechanisms. Only
-staleness-awareness (Steps 5–9) remains.
+**Status:** Done — lookup/auto-apply/staleness-awareness (via #181 + Steps 5–9) all confirmed, and
+re-verified 2026-07-26 against the override layer Steps 13–14 added after this status was first
+written.
+
+**Re-verification finding**: the override layer sits entirely underneath `LoadConflictRulesAsync`/
+`LoadSourceAliasesAsync` — both still return the exact same `ConflictRuleLookup`/`SourceAliasLookup`
+types they always did, just built from whichever path `EffectiveRuleFileResolver` resolves to. Every
+downstream call site (`ImportActionPlanner.PlanAsync` and its four consulting methods, listed below)
+is unchanged and unaware an override even exists. The two new `DatabaseInitializerTests` added in Step
+14 (`InitialiseAsync_RegisteredOverrideWithMatchingHash_IsPreferredOverBundledRuleFile` and its
+fallback sibling) already prove this end to end — an override actually changes which quote text gets
+applied through this exact wiring, not just which file gets read.
 
 Wires into `ImportActionPlanner.PlanAsync`'s Quote Modify branch — `ConflictRuleLookup.TryResolve` is
 consulted from four methods (five literal call sites — `PlanSourcesAsync` calls it twice, once per
@@ -541,16 +551,23 @@ already wired, not just the Quote branch.
 
 ### 17. Documentation
 
-**Status:** Not started.
+**Status:** Done, implemented 2026-07-26.
 
-Per item 6 and CLAUDE.md's "Keeping API documentation in sync" section: update `README.md`'s and
-`addon/DOCS.md`'s endpoint tables and the `[Description]` attributes for both new endpoints (Step 14),
-and document the new `Stale` status value (Step 6) everywhere `ImportActionStatus`'s existing values
-are already documented (endpoint descriptions, the `status=` query parameter's own description).
-`schemas/manifest.schema.json` needs no change (Step 2 — no new manifest property).
-`scripts/SOURCES.md`'s source-adding workflow doc should mention the new alias-candidate-suggestion
-endpoint (Step 13) as part of adding a new source, since that's exactly when a duplicate-title risk is
-highest.
+`README.md` and `addon/DOCS.md`: added the four new rule-file endpoint rows (`GET`/`POST /generate`/
+`DELETE /conflict`, `GET /alias`); found and fixed two pre-existing gaps while re-verifying `Stale`
+coverage — both files' `GET /import/actions` row and `GET /import/actions/export` row were missing
+`Stale` from their `status`/eligible-action-status lists (the endpoints' own `[Description]` text in
+`ImportEndpoints.cs` already had it correctly; only these two docs had drifted). `schemas/
+manifest.schema.json` needed no change, confirmed (Step 2 — no new manifest property). `scripts/
+SOURCES.md` gained a new step 6 ("Check for near-duplicate Source titles") in the source-adding
+workflow, pointing at `GET /import/rules/alias` right after generating a new source's initial file —
+exactly when a duplicate-title risk is highest, per the original plan for this step; existing steps 6-7
+renumbered to 7 accordingly (this doc had **no** prior mention of `ruleFile`/`sourceAliasFile` at all,
+not just a missing endpoint reference). `CLAUDE.md`'s living T2 smoke-test checklist gained a new
+section exercising all four endpoints against real bundled data (`quotinator-curated-conflict-rules.json`/
+`quotinator-curated-source-aliases.json`), including the override-preference and merge-preserves-
+existing-rules guarantees end to end, per this project's "every new endpoint ships with a T2 smoke test"
+convention.
 
 ### 18. Tests — overall
 
