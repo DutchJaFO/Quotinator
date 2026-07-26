@@ -173,6 +173,67 @@ public class DatabaseInitializerOwnershipTests
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
+    /// <summary>Same drift check as above, for <c>System_SourceFileOverrides</c> (#153).</summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemSourceFileOverridesSchema()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync();
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync();
+
+        var schemaA = await DumpTableSchemaAsync(connA, "System_SourceFileOverrides");
+        var schemaB = await DumpTableSchemaAsync(connB, "System_SourceFileOverrides");
+
+        CollectionAssert.AreEqual(schemaB, schemaA,
+            "System_SourceFileOverrides schema differs between Data's baseline and incremental paths — " +
+            "update DataBaselineSql to match DataOwnedMigrations' final result.");
+    }
+
+    /// <summary>
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural round-trip
+    /// closes that gap for <c>System_SourceFileOverrides.Origin</c>'s enum values.
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameSourceFileOverridesCheckConstraintValues()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync();
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync();
+
+        foreach (var conn in new[] { connA, connB })
+        {
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+
+            await conn.ExecuteAsync(
+                "INSERT INTO System_SourceFileOverrides (Id, FileName, Origin, ContentHash, DateCreated) " +
+                "VALUES (@id, 'vilaboim-conflict-rules.json', 'Bundled', 'abc123', @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_SourceFileOverrides (Id, FileName, Origin, ContentHash, DateCreated) " +
+                "VALUES (@id, 'x.json', 'NotARealOrigin', 'abc123', @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+        }
+    }
+
     /// <summary>
     /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural
     /// round-trip closes that gap for <c>System_ImportActions.Status</c>'s <c>Blocked</c> value and
@@ -279,9 +340,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync();
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(12, dataRows,
+        Assert.AreEqual(13, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(12, db.DataSchemaVersion);
+        Assert.AreEqual(13, db.DataSchemaVersion);
     }
 
     /// <summary>
@@ -339,7 +400,7 @@ public class DatabaseInitializerOwnershipTests
 
         await db.InitialiseAsync();
 
-        Assert.AreEqual(12, db.DataSchemaVersion, "Migrations 10, 11, and 12 must have applied on top of the existing v9 database");
+        Assert.AreEqual(13, db.DataSchemaVersion, "Migrations 10, 11, 12, and 13 must have applied on top of the existing v9 database");
 
         using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
         await conn.OpenAsync();

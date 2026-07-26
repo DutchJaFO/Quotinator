@@ -305,4 +305,20 @@ internal static class Sql
             $"SELECT {IdClauses.SelectColumn("Id")}, EntityType, {IdClauses.SelectColumn("EntityId")}, InitiatedByType, InitiatedById, Action, Field, OldValue, NewValue, OccurredAt " +
             $"FROM System_ChangeLog WHERE {TextClauses.Equals("EntityType", "entityType")} AND {IdClauses.Equals("EntityId", "entityId")} ORDER BY OccurredAt DESC;";
     }
+
+    /// <summary>
+    /// System_SourceFileOverrides table (#153). INSERT/UPDATE are handled by Dapper.Contrib via
+    /// <see cref="Repositories.SourceFileOverrideRegistry"/>; only the lookup needs hand-written SQL.
+    /// </summary>
+    internal static class SystemSourceFileOverrides
+    {
+        /// <summary>
+        /// The one row for a given (FileName, Origin) pair, if a generated override has ever been
+        /// registered for it. Case-insensitive on both — a filename/origin round-tripped through a
+        /// caller is never guaranteed to match the exact casing originally stored.
+        /// </summary>
+        internal static readonly string SelectByFileNameAndOrigin =
+            $"SELECT {IdClauses.SelectColumn("Id")}, FileName, Origin, ContentHash, {IdClauses.SelectColumn("SourceBatchId")}, DateCreated, DateModified, DateDeleted, IsDeleted " +
+            $"FROM System_SourceFileOverrides WHERE {TextClauses.Equals("FileName", "fileName")} AND {TextClauses.Equals("Origin", "origin")} AND IsDeleted = 0;";
+    }
 }

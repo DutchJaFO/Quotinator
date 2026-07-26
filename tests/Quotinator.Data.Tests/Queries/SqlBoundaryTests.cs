@@ -19,7 +19,7 @@ public class SqlBoundaryTests
     [TestMethod]
     public void Sql_ContainsOnlyGenericInfrastructureQueries()
     {
-        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches" };
+        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides" };
 
         var actual = typeof(Sql)
             .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)

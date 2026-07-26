@@ -49,6 +49,9 @@ public abstract class DatabaseConfiguration
         // CompletenessStatus (#165) is assigned/transitioned entirely by this project's own
         // CompletenessGuard — same category as ImportActionStatus above, not a consumer's domain enum.
         RegisterEnumHandler<CompletenessStatus>();
+        // SeedBatchOrigin (#153) backs System_SourceFileOverrides.Origin — pure import/seed
+        // bookkeeping, the same category as ImportBatchType/ImportBatchStatus above.
+        RegisterEnumHandler<SeedBatchOrigin>();
         RegisterDomainHandlers();
     }
 

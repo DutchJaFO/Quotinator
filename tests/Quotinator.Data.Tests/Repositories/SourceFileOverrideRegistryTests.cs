@@ -1,0 +1,110 @@
+using Dapper;
+using Microsoft.Data.Sqlite;
+using Quotinator.Data.Connections;
+using Quotinator.Data.Database;
+using Quotinator.Data.Import;
+using Quotinator.Data.Repositories;
+
+namespace Quotinator.Data.Tests.Repositories;
+
+[TestClass]
+public class SourceFileOverrideRegistryTests
+{
+    private string _tempDir = null!;
+    private string _dbPath  = null!;
+    private SourceFileOverrideRegistry _registry = null!;
+
+    [TestInitialize]
+    public void TestInitialize()
+    {
+        _tempDir = Directory.CreateTempSubdirectory("quotinator_sourcefileoverride_test_").FullName;
+        _dbPath  = Path.Combine(_tempDir, "test.db");
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        conn.Execute(SourceFileOverrideMigrations.CreateSourceFileOverridesTable);
+
+        _registry = new SourceFileOverrideRegistry(new SqliteConnectionFactory(_dbPath));
+    }
+
+    [TestCleanup]
+    public void TestCleanup()
+    {
+        SqliteConnection.ClearAllPools();
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, recursive: true);
+    }
+
+    [TestMethod]
+    public async Task FindAsync_NoRegistration_ReturnsNull()
+        => Assert.IsNull(await _registry.FindAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled));
+
+    [TestMethod]
+    public async Task RegisterAsync_NewFile_CanBeFoundAfterward()
+    {
+        await _registry.RegisterAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled, "abc123", sourceBatchId: "b1");
+
+        var found = await _registry.FindAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled);
+
+        Assert.IsNotNull(found);
+        Assert.AreEqual("vilaboim-conflict-rules.json", found!.FileName);
+        Assert.AreEqual(SeedBatchOrigin.Bundled, found.Origin.Parsed);
+        Assert.AreEqual("abc123", found.ContentHash);
+        Assert.AreEqual("b1", found.SourceBatchId);
+    }
+
+    [TestMethod]
+    public async Task RegisterAsync_SameFileTwice_UpdatesExistingRowRatherThanDuplicating()
+    {
+        await _registry.RegisterAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled, "hash-v1", sourceBatchId: "b1");
+        var firstId = (await _registry.FindAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled))!.Id;
+
+        await _registry.RegisterAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled, "hash-v2", sourceBatchId: "b2");
+        var second = await _registry.FindAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled);
+
+        Assert.AreEqual(firstId, second!.Id, "A re-registration must update the same row, not insert a second one");
+        Assert.AreEqual("hash-v2", second.ContentHash);
+        Assert.AreEqual("b2", second.SourceBatchId);
+    }
+
+    [TestMethod]
+    public async Task RegisterAsync_SameFileNameDifferentOrigin_TracksIndependently()
+    {
+        await _registry.RegisterAsync("shared-name.json", SeedBatchOrigin.Bundled, "bundled-hash", sourceBatchId: null);
+        await _registry.RegisterAsync("shared-name.json", SeedBatchOrigin.UserImports, "userimports-hash", sourceBatchId: null);
+
+        var bundled = await _registry.FindAsync("shared-name.json", SeedBatchOrigin.Bundled);
+        var imports = await _registry.FindAsync("shared-name.json", SeedBatchOrigin.UserImports);
+
+        Assert.AreEqual("bundled-hash", bundled!.ContentHash);
+        Assert.AreEqual("userimports-hash", imports!.ContentHash);
+    }
+
+    [TestMethod]
+    public async Task RemoveAsync_ExistingRegistration_ReturnsTrueAndSoftDeletes()
+    {
+        await _registry.RegisterAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled, "abc123", sourceBatchId: null);
+
+        var removed = await _registry.RemoveAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled);
+
+        Assert.IsTrue(removed);
+        Assert.IsNull(await _registry.FindAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled), "A soft-deleted registration must no longer be found");
+    }
+
+    [TestMethod]
+    public async Task RemoveAsync_NoRegistration_ReturnsFalse()
+        => Assert.IsFalse(await _registry.RemoveAsync("never-registered.json", SeedBatchOrigin.Bundled));
+
+    [TestMethod]
+    public async Task RegisterAsync_AfterRemoval_CanBeReRegistered()
+    {
+        await _registry.RegisterAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled, "hash-v1", sourceBatchId: null);
+        await _registry.RemoveAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled);
+
+        await _registry.RegisterAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled, "hash-v2", sourceBatchId: null);
+
+        var found = await _registry.FindAsync("vilaboim-conflict-rules.json", SeedBatchOrigin.Bundled);
+        Assert.IsNotNull(found, "Re-registering after a soft-deleted prior row must not be blocked by the partial unique index");
+        Assert.AreEqual("hash-v2", found!.ContentHash);
+    }
+}

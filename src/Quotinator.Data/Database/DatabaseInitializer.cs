@@ -36,6 +36,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 10, Sql = ImportActionMigrations.AddBlockedStatusAndMarkCompletenessAs },
         new SchemaMigration { Version = 11, Sql = ImportActionMigrations.AddOriginalDecision },
         new SchemaMigration { Version = 12, Sql = ImportActionMigrations.AddStaleStatus },
+        new SchemaMigration { Version = 13, Sql = SourceFileOverrideMigrations.CreateSourceFileOverridesTable },
     ];
 
     // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and
@@ -109,6 +110,21 @@ public class DatabaseInitializer : IDatabaseInitializer
         );
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_BatchId ON System_ImportActions (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_Status ON System_ImportActions (Status);
+
+        CREATE TABLE IF NOT EXISTS System_SourceFileOverrides (
+            Id            TEXT    NOT NULL PRIMARY KEY,
+            FileName      TEXT    NOT NULL,
+            Origin        TEXT    NOT NULL
+                          CHECK (Origin IN ('Bundled', 'UserImports')),
+            ContentHash   TEXT    NOT NULL,
+            SourceBatchId TEXT,
+            DateCreated   TEXT    NOT NULL,
+            DateModified  TEXT,
+            DateDeleted   TEXT,
+            IsDeleted     INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS UX_System_SourceFileOverrides_FileName_Origin
+            ON System_SourceFileOverrides (FileName, Origin) WHERE IsDeleted = 0;
 
         CREATE TABLE IF NOT EXISTS System_ChangeLog (
             Id               TEXT NOT NULL PRIMARY KEY,

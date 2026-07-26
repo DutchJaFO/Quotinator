@@ -1,0 +1,78 @@
+using Dapper;
+using Dapper.Contrib.Extensions;
+using Quotinator.Data.Connections;
+using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
+using Quotinator.Data.Import;
+using Quotinator.Data.Models;
+using Quotinator.Data.Queries;
+
+namespace Quotinator.Data.Repositories;
+
+/// <summary>SQLite implementation of <see cref="ISourceFileOverrideRegistry"/>.</summary>
+public sealed class SourceFileOverrideRegistry : SqliteRepositoryBase<SourceFileOverride>, ISourceFileOverrideRegistry
+{
+    /// <summary>Initialises the registry with the connection factory.</summary>
+    public SourceFileOverrideRegistry(IDbConnectionFactory factory) : base(factory) { }
+
+    /// <inheritdoc/>
+    public async Task<SourceFileOverride?> FindAsync(string fileName, SeedBatchOrigin origin, CancellationToken cancellationToken = default)
+    {
+        using var conn = Factory.CreateConnection();
+        conn.Open();
+        var command = new CommandDefinition(
+            Sql.SystemSourceFileOverrides.SelectByFileNameAndOrigin,
+            new { fileName, origin = origin.ToString() },
+            cancellationToken: cancellationToken);
+        return await conn.QuerySingleOrDefaultAsync<SourceFileOverride>(command);
+    }
+
+    /// <inheritdoc/>
+    public async Task RegisterAsync(string fileName, SeedBatchOrigin origin, string contentHash, string? sourceBatchId, CancellationToken cancellationToken = default)
+    {
+        using var conn = Factory.CreateConnection();
+        conn.Open();
+
+        var existing = await FindAsync(fileName, origin, cancellationToken);
+        var originValue = new SafeValue<SeedBatchOrigin?>(origin.ToString(), origin);
+
+        if (existing is not null)
+        {
+            await conn.UpdateAsync(new SourceFileOverride
+            {
+                Id            = existing.Id,
+                FileName      = fileName,
+                Origin        = originValue,
+                ContentHash   = contentHash,
+                SourceBatchId = sourceBatchId,
+                DateCreated   = existing.DateCreated,
+                DateModified  = SafeDateValue.Now,
+            });
+            return;
+        }
+
+        await conn.InsertAsync(new SourceFileOverride
+        {
+            FileName      = fileName,
+            Origin        = originValue,
+            ContentHash   = contentHash,
+            SourceBatchId = sourceBatchId,
+        });
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> RemoveAsync(string fileName, SeedBatchOrigin origin, CancellationToken cancellationToken = default)
+    {
+        var existing = await FindAsync(fileName, origin, cancellationToken);
+        if (existing is null) return false;
+
+        using var conn = Factory.CreateConnection();
+        conn.Open();
+        var command = new CommandDefinition(
+            RepositorySql.SoftDelete(TableName),
+            new { now = SafeDateValue.Now.Raw, id = existing.Id.ToCanonicalId() },
+            cancellationToken: cancellationToken);
+        await conn.ExecuteAsync(command);
+        return true;
+    }
+}

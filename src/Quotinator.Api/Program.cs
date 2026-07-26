@@ -280,6 +280,7 @@ builder.Services.AddSingleton<ISystemChangeLogWriter, SystemChangeLogWriter>();
 builder.Services.AddSingleton<ISystemChangeLogReader, SystemChangeLogReader>();
 builder.Services.AddSingleton<ISystemImportActionWriter, SystemImportActionWriter>();
 builder.Services.AddSingleton<ISystemImportActionReader, SystemImportActionReader>();
+builder.Services.AddSingleton<ISourceFileOverrideRegistry, SourceFileOverrideRegistry>();
 builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
 builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
 
