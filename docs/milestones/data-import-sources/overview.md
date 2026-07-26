@@ -104,7 +104,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Waiting for release | T1 ✅ T2 ✅ | [153-declarative-conflict-resolution-plan.md](153-declarative-conflict-resolution-plan.md) |
 | [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Waiting for release | T1 ✅ T2 ✅ | [154-import-staging-plan.md](154-import-staging-plan.md) |
 | [#155](https://github.com/DutchJaFO/Quotinator/issues/155) | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Planning | T1 ⬜ T2 ⬜ | [155-migration-review-plan.md](155-migration-review-plan.md) |
-| [#221](https://github.com/DutchJaFO/Quotinator/issues/221) | Per-file, per-entity-type import/seed report (replace the misleading flat "duplicates" count) | Planning | T1 ⬜ T2 ⬜ | No plan doc |
+| [#221](https://github.com/DutchJaFO/Quotinator/issues/221) | Per-file, per-entity-type import/seed report (replace the misleading flat "duplicates" count) | Planning | T1 ⬜ T2 ⬜ | [221-per-file-entity-type-import-report-plan.md](221-per-file-entity-type-import-report-plan.md) |
 
 ---
 

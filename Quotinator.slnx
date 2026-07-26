@@ -180,6 +180,7 @@
     <File Path="docs/milestones/data-import-sources/177-import-batch-status-applied-plan.md" />
     <File Path="docs/milestones/data-import-sources/181-minimal-conflict-resolution-rule-file-plan.md" />
     <File Path="docs/milestones/data-import-sources/153-declarative-conflict-resolution-plan.md" />
+    <File Path="docs/milestones/data-import-sources/221-per-file-entity-type-import-report-plan.md" />
     <File Path="docs/milestones/data-import-sources/155-migration-review-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/">
