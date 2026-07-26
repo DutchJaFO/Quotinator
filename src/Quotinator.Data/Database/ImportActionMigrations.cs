@@ -122,4 +122,57 @@ public static class ImportActionMigrations
     public const string AddOriginalDecision = """
         ALTER TABLE System_ImportActions ADD COLUMN OriginalDecision TEXT;
         """;
+
+    /// <summary>
+    /// #153: adds <c>Stale</c> to <c>Status</c>'s CHECK constraint — a matching per-source rule whose
+    /// recorded snapshot no longer matches the current staging run's own values (the underlying source
+    /// changed shape since the rule was authored) stages this status instead of being silently
+    /// reapplied. Same full-table-rebuild technique as <see cref="AddBlockedStatusAndMarkCompletenessAs"/>
+    /// (SQLite's <c>ALTER TABLE</c> cannot widen an inline CHECK constraint) — this rebuild must also
+    /// carry <c>OriginalDecision</c> through, since migration 11 added it after the last rebuild.
+    /// </summary>
+    public const string AddStaleStatus = """
+        CREATE TABLE System_ImportActions_New (
+            Id                 TEXT    NOT NULL PRIMARY KEY,
+            BatchId            TEXT    NOT NULL,
+            ActionType         TEXT    NOT NULL
+                               CHECK (ActionType IN ('Add', 'Modify')),
+            EntityType         TEXT    NOT NULL,
+            EntityId           TEXT    NOT NULL,
+            ExistingBatchId    TEXT,
+            ExistingValue      TEXT,
+            IncomingValue      TEXT    NOT NULL,
+            AppliedPolicy      TEXT,
+            Status             TEXT    NOT NULL
+                               CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked', 'Stale')),
+            MergedFields       TEXT,
+            MarkCompletenessAs TEXT
+                               CHECK (MarkCompletenessAs IS NULL OR MarkCompletenessAs IN ('Incomplete', 'NeedsReview', 'Complete')),
+            DetectedAt         TEXT    NOT NULL,
+            AppliedAt          TEXT,
+            DiscardedAt        TEXT,
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0,
+            OriginalDecision   TEXT
+        );
+
+        INSERT INTO System_ImportActions_New (
+            Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue,
+            IncomingValue, AppliedPolicy, Status, MergedFields, MarkCompletenessAs, DetectedAt,
+            AppliedAt, DiscardedAt, DateCreated, DateModified, DateDeleted, IsDeleted, OriginalDecision)
+        SELECT
+            Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue,
+            IncomingValue, AppliedPolicy, Status, MergedFields, MarkCompletenessAs, DetectedAt,
+            AppliedAt, DiscardedAt, DateCreated, DateModified, DateDeleted, IsDeleted, OriginalDecision
+        FROM System_ImportActions;
+
+        DROP TABLE System_ImportActions;
+
+        ALTER TABLE System_ImportActions_New RENAME TO System_ImportActions;
+
+        CREATE INDEX IF NOT EXISTS IX_System_ImportActions_BatchId ON System_ImportActions (BatchId);
+        CREATE INDEX IF NOT EXISTS IX_System_ImportActions_Status ON System_ImportActions (Status);
+        """;
 }

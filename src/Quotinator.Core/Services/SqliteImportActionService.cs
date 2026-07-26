@@ -84,7 +84,7 @@ public sealed class SqliteImportActionService : IImportActionService
         foreach (var action in actions)
         {
             if (action.ActionType.Parsed != ImportActionKind.Modify) continue;
-            if (action.Status.Parsed is not (ImportActionStatus.Pending or ImportActionStatus.Decided or ImportActionStatus.Blocked)) continue;
+            if (action.Status.Parsed is not (ImportActionStatus.Pending or ImportActionStatus.Decided or ImportActionStatus.Blocked or ImportActionStatus.Stale)) continue;
             if (!ImportActionFieldRowMapper.DecidableFieldsByEntityType.TryGetValue(action.EntityType, out var fieldNames)) continue;
 
             var existingFields  = BuildFields(action.EntityType, action.ExistingValue) ?? new Dictionary<string, object?>();

@@ -1539,6 +1539,33 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    since each bundled file's rule file only governs that file's own batch. Revert both edits before
    committing — this is a temporary local mutation to prove the mechanism, not a real data change.
 
+   **`ConflictResolutionRule` staleness → new `Stale` status** (#153) — a rule whose recorded
+   `existingRecord`/`incomingRecord` snapshot no longer matches the current staging run's real field
+   values is never silently reapplied; the action stages `Stale` instead of `Decided`. **Live-verified
+   2026-07-26 against a genuine, pre-existing data bug this mechanism caught on its first real run,
+   not a contrived fixture**: `nikhilnamal17-conflict-rules.json`'s Zootopia rule
+   (`entityId: 10e3fb48-...`, governing `quoteText` with `Keep`) had its `existingRecord`/
+   `incomingRecord` snapshot recorded with a straight apostrophe (`Life's`), while the real bundled
+   `NikhilNamal17_popular-movie-quotes.json` entry uses a curly one (`Life’s`, `’`) — a genuine
+   drift between the rule's recorded assumption and reality. Reproduce on the *unfixed* text to see the
+   mechanism catch it, matching the state before this issue's own fix landed:
+   ```bash
+   docker build -f docker/Dockerfile -t quotinator:local .
+   docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+   curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
+   curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
+   ```
+   **Important**: check `/api/v1/version` first and wait for the full bundled count (`quotes: 799`)
+   before querying — a `status=stale`/`status=pending` check against a container that hasn't finished
+   its initial multi-file seed yet will read a partially-seeded, misleading state. The initial
+   container boot only ever stages `Add` actions for a brand-new database (nothing exists yet to
+   conflict with); `POST /admin/database/reseed` is what re-plans every bundled file against the
+   now-populated database and genuinely exercises the `Modify`/rule path — the same thing a real
+   redeployment against an already-seeded volume does. With the apostrophe mismatch present, `status=
+   stale` must return the Zootopia entity; with it fixed (current `main`), it returns an empty list —
+   confirm via `git stash`/checkout of the pre-fix rule file only if you need to see the "before" state
+   again, since the shipped rule file is already corrected.
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle

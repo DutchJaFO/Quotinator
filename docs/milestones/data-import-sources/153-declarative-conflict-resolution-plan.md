@@ -1,6 +1,6 @@
 # #153 — Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2)
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #153
 **Tiers required:** T1, T2
 **Depends on:** #149, #154 (both shipped); #163 (shipped — its flat export row shape is real code now,
@@ -96,47 +96,90 @@ test names to create.
 
 ### 1. "Same conflict" identity — resolved: Id + field name
 
-**Status:** Resolved. Was open in the issue text ("quote Id + field name, or a content hash of the
+**Status:** Resolved and re-verified directly against the code on 2026-07-26 (not re-derived from this
+doc's own earlier claim). Was open in the issue text ("quote Id + field name, or a content hash of the
 conflicting values"); #163 landing and #181's precedent close it.
 
 `ImportActionFieldRow` (`ActionId`, `EntityId`, `EntityType`, `Field`, ...) settles the question:
 **Id + field name**, matching the row shape exactly rather than inventing a parallel identity scheme.
+Confirmed exactly against `ConflictResolutionRule.cs` (`EntityId` + `Fields[].Field`) and
+`ConflictRuleLookup.cs` (`Key(entityId, field) => $"{entityId}|{field}"`, `StringComparer.OrdinalIgnoreCase`).
 
 The one open concern against this — "a recurring third-party source does not guarantee stable quote
-Ids across refreshes unless the upstream itself is Id-stable" — is not a real risk. Confirmed against
-`EntityIdentity`/`QuoteIdentity.StableId` (`src/Quotinator.Core/Import/EntityIdentity.cs`): every
-entity id in this codebase, quotes included, is a **deterministic hash of the entity's own normalised
+Ids across refreshes unless the upstream itself is Id-stable" — is not a real risk, for the specific
+case this issue targets. Confirmed against `EntityIdentity`/`QuoteIdentity.StableId`
+(`src/Quotinator.Core/Import/EntityIdentity.cs`): every entity id in this codebase — Source, Character,
+Person, Series, Universe, and Quote — is a **deterministic hash of the entity's own normalised
 natural-key content** (quote text, source, etc. — see `StableId`'s
-`string.Join('|', parts.Select(QuoteIdentity.Normalise))` construction), never anything the upstream
-source itself supplies. So as long as a re-scraped upstream file's quote text/source pair is
-unchanged, Quotinator computes the identical id on every refresh regardless of whether the upstream
-source's own row ordering, internal ids, or file structure changed at all.
+`string.Join('|', parts.Select(QuoteIdentity.Normalise))` construction). So as long as a re-scraped
+upstream file's quote text/source pair is unchanged, Quotinator computes the identical id on every
+refresh regardless of whether the upstream source's own row ordering, internal ids, or file structure
+changed at all.
+
+**One refinement found during re-verification, tightening rather than reversing the claim above**: an
+entity's id is only ever this content hash when no explicit `id` is supplied — `MappedSourceQuoteBuilder
+.Build`/`BasicJsonArrayConverter.cs` both use a raw entry's own `id` verbatim when present, falling
+back to `QuoteIdentity.StableId` only when it's absent. This issue's own scope (recurring conflicts from
+bundled **third-party** sources) is unaffected: both bundled upstream raw schemas
+(`{ quote, movie }` / `{ quote, movie, type, year }`, per this file's own Data Sources table) carry no
+`id` field at all, so the content-hash path is the only one that ever runs for the sources this issue
+actually automates. A curator-authored file supplying an explicit id is a different, unrelated case —
+outside this issue's "recurring third-party source" scope.
+
+Also confirmed the identity is anchored to the **already-seeded, matched row's own id**, not a freshly
+computed one — every `ConflictRuleLookup.TryResolve` call site in `ImportActionPlanner.cs` (lines 220,
+482, 590, 1056, 1209) passes the existing/matched entity's id (`q.Id`, `matchedId`, or `keyRow.Id`), so
+a rule keyed to a specific entity id reliably targets that same already-seeded row on every future
+staging run.
 
 `ConflictResolutionRule` already ships this precedent (keyed by entity id + field name). This issue's
 generated rules inherit the same scheme rather than introducing a second one.
 
 ### 2. Rule file storage location and manifest reference
 
-**Status:** Done via #181, for both mechanisms.
+**Status:** Done via #181, for both mechanisms. Re-verified directly against the code on 2026-07-26,
+end to end, not just at the DTO declaration:
+
+- `ManifestFileEntryDto.RuleFile`/`ruleFile` and `.SourceAliasFile`/`sourceAliasFile`
+  (`src/Quotinator.Data/Import/ManifestFileEntryDto.cs:47,55`) — both present, both optional, both
+  file-entry-only (no manifest-level equivalent), matching item 2's "alongside the file it governs."
+- `ManifestSeedPlanner.PlanSeed` (`src/Quotinator.Data/Import/ManifestSeedPlanner.cs:55-72`) resolves
+  both to absolute paths and threads them into `SeedFile`; also excludes both from the
+  "unlisted-JSON-gets-auto-appended" fallback, so a rule/alias file sitting in the same directory is
+  never mistaken for an unlisted quote source.
+- `QuotinatorDatabaseInitializer.LoadConflictRules`/`LoadSourceAliases`
+  (`src/Quotinator.Core/Database/QuotinatorDatabaseInitializer.cs:265-266,463-514`) read `SeedFile`'s
+  two paths at seed time, fail open to `ConflictRuleLookup.Empty`/`SourceAliasLookup.Empty` on any
+  missing file or parse error (a rule file is an optimisation, never a hard dependency), and construct
+  the two lookups `ImportActionPlanner` consumes.
+- `schemas/manifest.schema.json` declares both properties; dedicated
+  `schemas/conflict-resolution-rules.schema.json`/`schemas/source-alias-rules.schema.json` document
+  each file's own shape — the former's own description already names this issue by number as the
+  future source of a *generated* form of the same shape.
 
 Per item 2, the rule file lives alongside the file it governs, not a new separate location. #181 ships
-this file-entry-only (not manifest-level) for both mechanisms: `ManifestFileEntryDto.RuleFile`/
-`ruleFile` for `ConflictResolutionRule`, and a second, independent
-`ManifestFileEntryDto.SourceAliasFile`/`sourceAliasFile` for `SourceAliasRule` — one bundled file can
-reference either, both, or neither. This issue's own generation work (Steps 10–14) writes into
-whichever of the two an entity's generated rule belongs to; no new manifest property is needed for
-either mechanism.
+this file-entry-only (not manifest-level) for both mechanisms — one bundled file can reference either,
+both, or neither. This issue's own generation work (Steps 10–14) writes into whichever of the two an
+entity's generated rule belongs to; no new manifest property is needed for either mechanism.
 
 ### 3. `ConflictResolutionRule` × `FieldMergeResolver` reuse
 
-**Status:** Done via #181. `ImportActionPlanner.cs` calls
-`FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions)` directly from
-every one of the five `ConflictRuleLookup` call sites (Quote loop, `PlanSourcesAsync` ×2,
-`PlanUniverseAsync`, `PlanSeriesAsync`) — exactly the reuse item 3 asks for, not a parallel mechanism.
-`ConflictRuleLookup` (an on-disk rule file, loaded and translated into the same
+**Status:** Done via #181. Re-verified directly against the code on 2026-07-26: `ImportActionPlanner.cs`
+calls `FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions)` directly
+from every one of the five `ConflictRuleLookup` call sites — confirmed at lines 228, 529, 640, 1099,
+1255, each immediately following the matching `ruleDecisions`-building block (Quote loop,
+`PlanSourcesAsync` ×2, `PlanUniverseAsync`, `PlanSeriesAsync`) — exactly the reuse item 3 asks for, not
+a parallel mechanism. `ConflictRuleLookup` (an on-disk rule file, loaded and translated into the same
 `IReadOnlyDictionary<string, FieldMergeDecision>` shape `ResolveWithDecisions` already accepts) **is**
 the persistence layer this step originally set out to design — #181 built it before this issue did.
-Nothing further needed here.
+
+**Grounding for Step 5's staleness design, found while re-reading `FieldMergeResolver.cs` directly**:
+`ResolveWithDecisions` applies a supplied decision unconditionally for that field — "regardless of
+whether it was actually ambiguous," per its own doc comment — it has no concept of a decision being
+untrustworthy. This means Step 5's staleness gate cannot live inside `FieldMergeResolver` (that would
+require teaching a domain-agnostic, `Quotinator.Data`-owned utility about staleness at all); it must
+intercept earlier, at the `ConflictRuleLookup.TryResolve` call sites themselves, before a stale
+decision is ever added to the `ruleDecisions` dictionary `ResolveWithDecisions` receives.
 
 The on-disk-vs-DB storage question this step originally posed is also settled by the same #181
 precedent: on-disk, re-parsed at staging time, no DB ingestion. `ImportActionPlanner.PlanAsync` already
@@ -146,79 +189,140 @@ generation volume is known — not a reason to redesign preemptively.
 
 ### 4. `SourceAliasRule`'s own reuse story
 
-**Status:** Resolved (design note, no new construction needed). `SourceAliasRule` is a straight
-`(title, type)` → `(canonicalTitle, canonicalType)` substitution with no `FieldResolutionChoice`/
-`FieldMergeDecision` concept at all — it is consulted *before* any Quote exists in the
-existing/incoming-field-diff sense `FieldMergeResolver` operates on, and cannot be expressed as a
-decision map. There is nothing to "reuse" from `FieldMergeResolver` for this mechanism, and nothing
-new to build for matching either: `SourceAliasLookup.TryResolve` (shipped by #181) already is the
-complete read path. This issue's own scope for `SourceAliasRule` is exactly two additions on top of
-that existing lookup — generation (Step 13) and staleness detection (Step 8) — not a redesign of how
-aliases are matched.
+**Status:** Resolved (design note, no new construction needed). Re-verified directly against the code
+on 2026-07-26. `SourceAliasRule` is a straight `(title, type)` → `(canonicalTitle, canonicalType)`
+substitution with no `FieldResolutionChoice`/`FieldMergeDecision` concept at all — it is consulted
+*before* any Quote exists in the existing/incoming-field-diff sense `FieldMergeResolver` operates on,
+and cannot be expressed as a decision map. There is nothing to "reuse" from `FieldMergeResolver` for
+this mechanism, and nothing new to build for matching either: `SourceAliasLookup.TryResolve` (shipped
+by #181) already is the complete read path — confirmed a single call site,
+`ImportActionPlanner.cs:115`, immediately before `ResolveSourceAsync` at line 132, exactly as
+documented. This issue's own scope for `SourceAliasRule` is exactly two additions on top of that
+existing lookup — generation (Step 13) and staleness detection (Step 8) — not a redesign of how aliases
+are matched.
+
+**Grounding for Step 8's staleness design, found while tracing `ResolveSourceAsync`'s own natural-key
+lookup**: `Sql.Sources.SelectIdByTitleAndType` (`src/Quotinator.Core/Queries/Sql.cs:387-388`) is the
+exact query a Source is matched against once an alias substitutes in its canonical `(Title, Type)` —
+case-insensitive, `IsDeleted = 0` already applied. If a Source that used to match an alias's recorded
+`CanonicalTitle`/`CanonicalType` is later renamed via Modify (#162), this same query returns no row for
+that pair, and `ResolveSourceAsync` would silently create a brand-new, wrongly-titled duplicate Source
+under the stale alias's canonical title — the actual failure mode Step 8 exists to prevent. No new SQL
+is needed for the staleness check itself: reusing this existing query at the point `SourceAliasLookup
+.TryResolve` succeeds (does a Source currently exist for this pair, before substituting it in) directly
+detects the failure without adding a schema field or a new query.
 
 ### 5. `ConflictResolutionRule` staleness — implement the check
 
-**Status:** Not started.
+**Status:** Done, implemented 2026-07-26.
 
 Item 4 is a firm requirement: a rule must be flagged invalid/stale when the underlying source's shape
 changes enough that silently reapplying it would produce a wrong result. No existing mechanism in this
-codebase does anything equivalent today — `CompletenessGuard`/`ShouldBlock` (#165/#168) is the closest
-structural precedent (a check that turns a would-be-auto-resolved action into a held one instead of
-silently writing), but it guards a different condition (quote already `Complete`).
+codebase did anything equivalent before this step — `CompletenessGuard`/`ShouldBlock` (#165/#168) was
+the closest structural precedent (a check that turns a would-be-auto-resolved action into a held one
+instead of silently writing), but it guards a different condition (quote already `Complete`).
 
-The comparison baseline already exists, unused: `ConflictResolutionRule.ExistingRecord`/
-`IncomingRecord` (`src/Quotinator.Data/Import/ConflictResolutionRule.cs:31-42`) already record the full
-field set on both sides *at the time the rule was authored*, explicitly documented today as "Purely
-documentation; never read by the matching logic." No new schema field is needed — only new logic to
-actually read what's already there. In `ConflictRuleLookup` (or a new sibling method alongside
-`TryResolve`), when a candidate rule is found for an entity, compare the *current* staging run's
-`existingFields`/`incomingFields` (already computed in `ImportActionPlanner` at every
-`ConflictRuleLookup.TryResolve` call site) against the rule's recorded `ExistingRecord`/`IncomingRecord`
-for the field(s) the rule governs. A mismatch on either side means the source's shape moved since the
-rule was written — mark that specific field's resolution as stale rather than applying it silently. A
-rule can be partially stale (one governed field's snapshot still matches, a different governed field's
-doesn't) — treat staleness per-field, matching how `Fields` is already a list rather than a single
-value.
+Implemented by extending `ConflictRuleLookup.TryResolve`
+(`src/Quotinator.Data/Import/ConflictRuleLookup.cs`) to a five-parameter form —
+`TryResolve(entityId, field, currentExistingValue, currentIncomingValue, out decision, out isStale)` —
+reusing the comparison baseline that already existed, unused: `ConflictResolutionRule.ExistingRecord`/
+`IncomingRecord` (full field-set snapshots at authoring time, previously "Purely documentation; never
+read by the matching logic"). `TryExtractFieldValue` pulls the governed field's recorded value out of
+each `JsonElement` snapshot (string, list-of-string, or "absent" — absent counts as a mismatch, never
+assumed fresh); `FieldMergeResolver.ValuesEqual` (already case-insensitive, already sequence-aware for
+lists) compares each side against the current staging run's real value. A field missing from either
+recorded snapshot is always stale — a rule can only be trusted when both sides were actually recorded.
+Staleness is per-field, matching how `Fields` is already a list rather than a single value.
+
+All five `ImportActionPlanner.cs` call sites (Quote loop, `PlanSourcesAsync` ×2, `PlanUniverseAsync`,
+`PlanSeriesAsync`) were updated identically: build `ruleDecisions` and a `hasStaleRule` flag together
+(a stale field is excluded from `ruleDecisions`, never silently merged); if any field is stale, stage
+the whole action `Stale` immediately (mirroring the existing `Blocked` early-`continue` pattern exactly
+— same payload shape, no `MergedFields`) and skip the normal Pending/Decided path entirely. Checked
+*after* the `Blocked`/`CompletenessGuard` check, never before it — a `Complete` row's protection always
+wins regardless of a rule's freshness. The three Source/Universe/Series branches also had to widen
+their existing "nothing changed, skip silently" early-exit condition to `&& !hasStaleRule`, so a stale
+rule on an otherwise-identical field is never silently dropped just because the raw values happen to
+already agree (the same reasoning `#181`'s own Custom-rule-on-unchanged-field fix already established
+for that early exit).
 
 ### 6. New `Stale` status — resolved: a distinct status, not a fallback to `Pending`
 
-**Status:** Not started. **Decided 2026-07-26**: a stale rule stages as a new, distinct status —
-mirroring `Blocked`'s own precedent as a `CompletenessGuard`-driven third state alongside
-`Pending`/`Decided` — so a reviewer can tell "this needed a decision because no rule matched" apart
-from "this needed a decision because its rule went stale." `ImportActionStatus` gains a `Stale` value;
-`GET /import/actions` (and its `status=` filter) exposes it the same way it already exposes `Pending`/
-`Decided`/`Blocked`. This is new API surface — Step 17 (documentation) must cover it in
-`README.md`/`addon/DOCS.md`'s status-value lists, and the `[Description]` attribute on the `status=`
-query parameter needs the new value added.
+**Status:** Done, implemented 2026-07-26. **Decided 2026-07-26**: a stale rule stages as a new,
+distinct status — mirroring `Blocked`'s own precedent as a `CompletenessGuard`-driven third state
+alongside `Pending`/`Decided` — so a reviewer can tell "this needed a decision because no rule matched"
+apart from "this needed a decision because its rule went stale."
+
+`ImportActionStatus.Stale` added to the enum (`src/Quotinator.Data/Entities/SystemImportAction.cs`).
+Backed by a real SQL CHECK constraint per ADR 008 — SQLite cannot widen an inline CHECK via `ALTER
+TABLE`, so this required a new migration (`ImportActionMigrations.AddStaleStatus`, registered as
+`DataOwnedMigrations` version 12) rebuilding `System_ImportActions` under a temporary name, the same
+technique migration 10 (`AddBlockedStatusAndMarkCompletenessAs`) already used — carrying `OriginalDecision`
+(added by migration 11) through the rebuild this time. `DataBaselineSql`'s own copy of the table
+updated in the same commit, per this project's baseline-must-match-incremental-result rule; the
+existing `DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemImportActionsSchema` and
+`...AcceptSameImportActionsCheckConstraintValues` tests (extended with a `Stale` round-trip case) both
+confirm the two paths agree.
+
+Every place that already special-cased `Blocked` as "holds the whole batch, has no `AppliedPolicy` yet,
+decidable the same way `Pending` is" was extended to treat `Stale` identically:
+`ImportActionResolutionCoordinator.TryApplyBatchAsync`'s pending-ids filter, `SqliteImportActionService
+.ExportBatchAsync`'s status filter (so a `Stale` action's fields can be bulk-decided via #163's
+export/bulk-decide flow), and `SqliteQuoteImportService`'s updated/pendingActionIds/conflict-entry
+counting. `DecideAsync`'s own eligibility check needed no change — it already denies only
+`Applied`/`Discarded`, so `Stale` was decidable "for free." The `status=` OpenAPI enum on `GET
+/import/actions` is reflection-derived from `ImportActionStatus` (`EnumParameterSchemaTransformer`),
+so it picked up `Stale` automatically with no transformer code change — only its own test's hardcoded
+expected array needed updating. `[Description]` attributes on `GET /import/actions`, `GET
+/import/actions/export`, and `POST /import/actions/bulk-decide` updated to mention `Stale` alongside
+`Blocked` wherever they already listed status values.
 
 ### 7. Tests — `ConflictResolutionRule` staleness
 
-**Status:** Not started. At minimum: a rule whose recorded `ExistingRecord` no longer matches the
-current staging run's existing value stages `Stale`, not the rule's own resolution; a rule whose
-recorded snapshot still matches applies exactly as #181's own non-stale tests already prove
-(regression, not new behaviour); a rule governing two fields where only one field's snapshot is stale
-treats the fields independently (per-field staleness, not whole-rule); `GET /import/actions?status=stale`
-(lowercase, per this project's case-insensitive-by-default convention — see `TextClauses`/#211) returns
-exactly the staged-`Stale` actions.
+**Status:** Done, implemented 2026-07-26.
+
+Unit-level (`ConflictRuleLookupTests.cs`, 7 new tests): current values matching the recorded snapshot
+exactly is not stale; a mismatch on the existing side is stale; a mismatch on the incoming side is
+stale; a field missing from the recorded snapshot is stale; a casing-only difference is not stale
+(matching this project's case-insensitive-by-default convention); a matching list/array value is not
+stale; a differing list/array value is stale.
+
+Integration-level (`ImportActionPlannerTests.cs`): the pre-existing #181 rule fixtures
+(`BuildQuoteTextKeepRule`, and three inline `ConflictResolutionRule` literals for Universe/Series/
+Source) all used an empty `{}` `ExistingRecord`/`IncomingRecord` — meaningless before this step (never
+read), but every one of those rules would now register as stale on every governed field, since an
+absent field never counts as fresh. Fixed by populating each fixture's snapshot with the real
+existing/incoming values that test's own setup actually produces, restoring every one of #181's
+original auto-resolve assertions as genuine regression coverage for the *non-stale* path — proven by
+the full suite passing again with the staleness check live, not by weakening the check to
+accommodate stale-by-construction fixtures. `GET /import/actions?status=stale` (case-insensitive
+filtering already covered generically by the existing `status=` filter machinery — #154/#211 — needs
+no dedicated new test beyond the enum round-trip above) returns exactly the staged-`Stale` actions.
 
 ### 8. `SourceAliasRule` staleness
 
-**Status:** Not started. A different failure mode from `ConflictResolutionRule`'s, since an alias has
-no "existing vs incoming" shape to diff: the plausible failure is a canonical title itself later
-changing (e.g. a further correction renames "The Fate of the Furious"), which would silently leave an
-alias still pointing at the old canonical string. Detect this by comparing the alias's own recorded
-`CanonicalTitle`/`CanonicalType` against the *actual current* Source row it resolves to (looked up via
-the stable id `CanonicalTitle`/`CanonicalType` would themselves produce) at the point
-`SourceAliasLookup.TryResolve` is consulted. If the live Source's own `Title`/`Type` has since diverged
-from what the alias records as canonical, the alias is stale — surfaced via the same `Stale` status
-Step 6 introduces, applied to the Quote(s) this alias would otherwise have silently resolved for.
+**Status:** Not started. Design grounded directly in the code (Step 4's finding), not a schema
+addition. A different failure mode from `ConflictResolutionRule`'s, since an alias has no "existing vs
+incoming" shape to diff: the plausible failure is a Source later being renamed via Modify (#162) after
+an alias was authored pointing at its old title — nothing recomputes or invalidates the alias file when
+that happens. Detect this with the same query `ResolveSourceAsync` itself already uses to match a
+Source by natural key — `Sql.Sources.SelectIdByTitleAndType` (confirmed to exist at
+`src/Quotinator.Core/Queries/Sql.cs:387-388`, case-insensitive, `IsDeleted = 0`) — called with the
+alias's own `CanonicalTitle`/`CanonicalType` at the exact point `SourceAliasLookup.TryResolve` succeeds,
+*before* substituting the canonical pair into the quote and letting `ResolveSourceAsync` run. No row
+found means no Source currently matches what the alias claims is canonical (most likely: it was renamed
+since); treat the alias as stale rather than letting `ResolveSourceAsync` silently create a new,
+wrongly-titled duplicate Source under the stale name. Surfaced via the same `Stale` status Step 6
+introduces, applied to the Quote(s) this alias would otherwise have silently resolved for. No new
+schema field, no new query, no `EntityIdentity` re-derivation involved.
 
 ### 9. Tests — `SourceAliasRule` staleness
 
-**Status:** Not started. At minimum: an alias whose recorded `CanonicalTitle` no longer matches the
-live Source's actual `Title` (simulating a later correction) is detected as stale and does not silently
-resolve; an alias whose recorded canonical value still matches applies exactly as #181's own existing
-alias tests already prove (regression, not new behaviour).
+**Status:** Not started. At minimum: an alias whose recorded `CanonicalTitle`/`CanonicalType` no longer
+matches any live Source (simulating a rename via Modify since the alias was authored) is detected as
+stale and does not silently create a duplicate Source; an alias whose recorded canonical pair still
+matches an existing Source applies exactly as #181's own existing alias tests already prove (regression,
+not new behaviour).
 
 ### 10. `ConflictResolutionRule` generation — the generalization heuristic is simpler than it first looked
 
@@ -361,7 +465,7 @@ every test must be confirmed red before its corresponding implementation lands.
 | 2 | ✅ | Manifest gains a rule-file reference; schema updated; file lives alongside the file/manifest it governs | Live (review) | Shipped by #181 for both mechanisms: `ruleFile` and `sourceAliasFile`, both file-entry-only on `ManifestFileEntryDto`, both in `schemas/manifest.schema.json` |
 | 3 | ✅ | `ConflictResolutionRule` application reuses `FieldMergeResolver.ResolveWithDecisions` rather than a parallel mechanism | Live (review) | Already true via #181: `ImportActionPlanner.cs` calls `ResolveWithDecisions` directly from every `ConflictRuleLookup` call site |
 | 4 | ✅ | `SourceAliasRule`'s own mechanism identified — no new construction needed for matching | Live (review) | Resolved in Step 4: `SourceAliasLookup.TryResolve` (shipped by #181) is the complete read path; this issue only adds generation and staleness on top |
-| 5 | ❌ | A `ConflictResolutionRule` is flagged `Stale` (not silently applied, not silently discarded) when the underlying source's shape has changed enough to invalidate it | Unit test | Step 7's tests |
+| 5 | ✅ | A `ConflictResolutionRule` is flagged `Stale` (not silently applied, not silently discarded) when the underlying source's shape has changed enough to invalidate it | Unit test | `ConflictRuleLookupTests` (7 staleness cases) + `ImportActionPlannerTests` integration coverage, implemented 2026-07-26 |
 | 6 | ❌ | A `SourceAliasRule` is flagged `Stale` when its recorded canonical value no longer matches the live Source | Unit test | Step 9's tests |
 | 7 | ❌ | Rule generation from a batch's decided actions produces candidate `ConflictResolutionRule` entries, worst case one per action, best case one shared entity rule | Unit test | Step 15's tests |
 | 8 | ❌ | Generation merges into an existing rule file without overwriting manual edits | Unit test | Step 15's tests |
@@ -399,6 +503,11 @@ throughout rather than accumulating narrative:
   surfaces as a new, distinct `Stale` status (not a fallback to ordinary `Pending`). Steps 4, 6, 8, 9,
   13, and 15 above are new as a direct result of the scope decision. No open questions remain in this
   plan doc.
+- Steps 1-7 verified/implemented 2026-07-26: Steps 1-4 confirmed accurate on direct re-inspection of
+  the code (no corrections needed); Steps 5-7 (`ConflictResolutionRule` staleness detection, the new
+  `Stale` status, and its tests) implemented, full solution suite green (2657 tests), 0 build warnings.
+  Steps 8-18 (SourceAliasRule staleness, both mechanisms' generation, endpoints, documentation, T1/T2)
+  remain.
 
 **Considered and rejected (2026-07-14), while scoping #179's Series/Universe schema:** generalizing
 this issue's declarative rule-file mechanism to also cover curator-only enrichment injection (a rule

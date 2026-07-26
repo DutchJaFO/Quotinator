@@ -204,6 +204,13 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Blocked', 'Complete', @now, @now);",
                 new { id, now });
 
+            // #153: Stale must be accepted identically by both paths too — migration 12 widened the
+            // CHECK constraint the same way migration 10 widened it for Blocked.
+            await conn.ExecuteAsync(
+                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Stale', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
                 "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'NotARealStatus', @now, @now);",
@@ -272,9 +279,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync();
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(11, dataRows,
+        Assert.AreEqual(12, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(11, db.DataSchemaVersion);
+        Assert.AreEqual(12, db.DataSchemaVersion);
     }
 
     /// <summary>
@@ -332,7 +339,7 @@ public class DatabaseInitializerOwnershipTests
 
         await db.InitialiseAsync();
 
-        Assert.AreEqual(11, db.DataSchemaVersion, "Migrations 10 and 11 must have applied on top of the existing v9 database");
+        Assert.AreEqual(12, db.DataSchemaVersion, "Migrations 10, 11, and 12 must have applied on top of the existing v9 database");
 
         using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
         await conn.OpenAsync();

@@ -59,15 +59,16 @@ public interface IImportActionCoordinator
 
     /// <summary>
     /// Attempts to apply every action sharing <paramref name="batchId"/>. If any are still
-    /// <see cref="ImportActionStatus.Pending"/> or <see cref="ImportActionStatus.Blocked"/> (#165 —
-    /// no decision recorded, or held for completeness review), returns their ids and applies nothing
-    /// — a <c>Blocked</c> action holds the entire batch, not just itself. Otherwise, in one
-    /// transaction: for every <see cref="ImportActionStatus.Decided"/> action, invokes
-    /// <paramref name="applyResolvedAction"/> (the caller-supplied domain-specific step), then marks
+    /// <see cref="ImportActionStatus.Pending"/>, <see cref="ImportActionStatus.Blocked"/> (#165 —
+    /// no decision recorded, or held for completeness review), or <see cref="ImportActionStatus.Stale"/>
+    /// (#153 — held because a matching rule's recorded snapshot no longer matches reality), returns
+    /// their ids and applies nothing — a <c>Blocked</c> or <c>Stale</c> action holds the entire batch,
+    /// not just itself. Otherwise, in one transaction: for every <see cref="ImportActionStatus.Decided"/>
+    /// action, invokes <paramref name="applyResolvedAction"/> (the caller-supplied domain-specific step), then marks
     /// the action <see cref="ImportActionStatus.Applied"/>. Commits once, for the whole batch, only
     /// after every action's callback has completed without throwing.
     /// </summary>
-    /// <returns><c>null</c> if the whole batch was applied; otherwise the ids still <see cref="ImportActionStatus.Pending"/> or <see cref="ImportActionStatus.Blocked"/>.</returns>
+    /// <returns><c>null</c> if the whole batch was applied; otherwise the ids still <see cref="ImportActionStatus.Pending"/>, <see cref="ImportActionStatus.Blocked"/>, or <see cref="ImportActionStatus.Stale"/>.</returns>
     Task<IReadOnlyList<Guid>?> TryApplyBatchAsync(
         string batchId,
         Func<SystemImportAction, IDbConnection, IDbTransaction, Task> applyResolvedAction,

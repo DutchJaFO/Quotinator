@@ -24,8 +24,8 @@ public interface IImportActionService
 
     /// <summary>
     /// Returns one <see cref="ImportActionFieldRow"/> per decidable field, across every <c>Modify</c>
-    /// action sharing <paramref name="batchId"/> whose status is <c>Pending</c>, <c>Decided</c>, or
-    /// <c>Blocked</c> (#163) — the flat export format <c>GET /import/actions/export</c> serialises to
+    /// action sharing <paramref name="batchId"/> whose status is <c>Pending</c>, <c>Decided</c>,
+    /// <c>Blocked</c> (#163), or <c>Stale</c> (#153) — the flat export format <c>GET /import/actions/export</c> serialises to
     /// CSV or JSON. An already-<c>Decided</c> action's <c>Decision</c>/<c>CustomValue</c> reflect the
     /// caller's actual prior per-field choice (from the stored <c>OriginalDecision</c>), not an
     /// inference from the resolved value.
@@ -41,7 +41,7 @@ public interface IImportActionService
     /// through the same <see cref="DecideAsync"/> every other decide path uses — no new validation
     /// logic. A group that fails is reported in the response's <c>Errors</c> list without aborting the
     /// rest of the file, matching <c>POST /import</c>'s existing "one bad row never aborts the rest"
-    /// model. Deciding a <c>Blocked</c> action works exactly like deciding a <c>Pending</c> one.
+    /// model. Deciding a <c>Blocked</c> or <c>Stale</c> action works exactly like deciding a <c>Pending</c> one.
     /// </summary>
     Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRow> rows, CancellationToken cancellationToken = default);
 

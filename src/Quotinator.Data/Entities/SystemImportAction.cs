@@ -104,7 +104,18 @@ public enum ImportActionStatus
     /// whole-batch apply purposes (see <see cref="Import.ImportActionResolutionCoordinator.TryApplyBatchAsync"/>),
     /// but is a distinct, filterable status so a caller can tell the two apart.
     /// </summary>
-    Blocked
+    Blocked,
+
+    /// <summary>
+    /// A per-source conflict-resolution rule matched this field, but the rule's own recorded snapshot
+    /// (#181's <c>ExistingRecord</c>/<c>IncomingRecord</c>) no longer matches this staging run's actual
+    /// values — the underlying source's shape moved since the rule was authored, so silently reapplying
+    /// it could produce a wrong result (#153). Behaves like <see cref="Pending"/> for whole-batch apply
+    /// purposes, same as <see cref="Blocked"/>, but is a distinct, filterable status so a caller can
+    /// tell "needs a decision because no rule matched" apart from "needs a decision because its rule
+    /// went stale."
+    /// </summary>
+    Stale
 }
 
 /// <summary>

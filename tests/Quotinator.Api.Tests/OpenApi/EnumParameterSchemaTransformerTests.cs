@@ -61,7 +61,7 @@ public class EnumParameterSchemaTransformerTests
     public async Task Status_OnImportActions_PatchedToEnum()
     {
         var schema = await TransformAndGetSchema(ScalarParam("status"), "api/v1/import/actions");
-        CollectionAssert.AreEquivalent(new[] { "Pending", "Decided", "Applied", "Discarded", "Blocked" },
+        CollectionAssert.AreEquivalent(new[] { "Pending", "Decided", "Applied", "Discarded", "Blocked", "Stale" },
             schema!.Enum!.Select(v => v!.ToString()).ToArray());
     }
 

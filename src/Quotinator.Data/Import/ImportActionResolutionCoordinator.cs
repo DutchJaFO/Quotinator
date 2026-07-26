@@ -83,9 +83,10 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
 
         // Blocked (#165) holds the whole batch exactly like Pending — a row a human has marked
         // Complete must never be silently modified, and that protection must not be bypassable just
-        // because the rest of the batch happens to be ready.
+        // because the rest of the batch happens to be ready. Stale (#153) holds it the same way — a
+        // rule whose recorded snapshot no longer matches reality must never be silently reapplied.
         var pending = actions
-            .Where(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked)
+            .Where(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale)
             .Select(a => a.Id)
             .ToList();
         if (pending.Count > 0)

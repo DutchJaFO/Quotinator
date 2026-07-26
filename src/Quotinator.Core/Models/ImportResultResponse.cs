@@ -24,10 +24,11 @@ public sealed class ImportResultResponse
     public IReadOnlyList<ImportConflictEntry> Conflicts { get; init; } = [];
 
     /// <summary>
-    /// Ids of every staged action (any entity type — Quote, Source, etc.) still <c>Pending</c> or
-    /// <c>Blocked</c> after this call. Non-empty means the batch was not (fully) applied — the
-    /// authoritative "did this actually succeed" signal, unlike <see cref="Conflicts"/> (Quote-only,
-    /// predates #165's <c>Blocked</c> status and non-Quote decidable entities).
+    /// Ids of every staged action (any entity type — Quote, Source, etc.) still <c>Pending</c>,
+    /// <c>Blocked</c>, or <c>Stale</c> after this call. Non-empty means the batch was not (fully)
+    /// applied — the authoritative "did this actually succeed" signal, unlike <see cref="Conflicts"/>
+    /// (Quote-only, predates #165's <c>Blocked</c> status, #153's <c>Stale</c> status, and non-Quote
+    /// decidable entities).
     /// </summary>
     public IReadOnlyList<Guid> PendingActionIds { get; init; } = [];
 

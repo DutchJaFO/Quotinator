@@ -320,11 +320,16 @@ public class ImportActionPlannerTests
 
     private static readonly System.Text.Json.JsonElement EmptyConflictRuleRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("{}");
 
+    // #153: every call site below pairs this rule with existing quoteText "Original text" (from
+    // SeedExistingQuoteAsync/SeedExistingQuoteWithCharacterAsync) and incoming "A changed line." — the
+    // recorded snapshot must match both real values, or the new staleness check (comparing this
+    // snapshot against the current staging run's actual field values) would treat every one of these
+    // rules as stale and never reach the auto-resolve behaviour these tests exist to prove.
     private static ConflictResolutionRule BuildQuoteTextKeepRule(string quoteId) => new()
     {
         EntityId = quoteId,
-        ExistingRecord = EmptyConflictRuleRecord,
-        IncomingRecord = EmptyConflictRuleRecord,
+        ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"Original text"}"""),
+        IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"A changed line."}"""),
         Fields = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Keep }],
     };
 
@@ -691,8 +696,8 @@ public class ImportActionPlannerTests
             new ConflictResolutionRule
             {
                 EntityId = id,
-                ExistingRecord = EmptyConflictRuleRecord,
-                IncomingRecord = EmptyConflictRuleRecord,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle-earth (corrected)"}"""),
                 Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
             },
         ]);
@@ -720,8 +725,8 @@ public class ImportActionPlannerTests
             new ConflictResolutionRule
             {
                 EntityId = id,
-                ExistingRecord = EmptyConflictRuleRecord,
-                IncomingRecord = EmptyConflictRuleRecord,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
                 Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Custom, CustomValue = "Middle-earth" }],
             },
         ]);
@@ -812,8 +817,8 @@ public class ImportActionPlannerTests
             new ConflictResolutionRule
             {
                 EntityId = id,
-                ExistingRecord = EmptyConflictRuleRecord,
-                IncomingRecord = EmptyConflictRuleRecord,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Hobbit"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Hobbit Trilogy"}"""),
                 Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
             },
         ]);
@@ -926,15 +931,15 @@ public class ImportActionPlannerTests
     public async Task PlanSourcesAsync_NoExplicitId_ReviewPolicy_MatchingRule_StagesDecided()
     {
         using var conn = await OpenConnectionAsync();
-        await SeedExistingSeriesAsync(conn, "The Hobbit");
+        var hobbitSeriesId = await SeedExistingSeriesAsync(conn, "The Hobbit");
         var sourceId = "cf111111-1111-4111-8111-111111111111";
         await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", date: "1942", seriesId: null);
         var rules = new ConflictRuleLookup([
             new ConflictResolutionRule
             {
                 EntityId = sourceId,
-                ExistingRecord = EmptyConflictRuleRecord,
-                IncomingRecord = EmptyConflictRuleRecord,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"seriesId":null}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{hobbitSeriesId}}"}"""),
                 Fields = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Replace }],
             },
         ]);

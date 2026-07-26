@@ -215,10 +215,33 @@ internal static class ImportActionPlanner
             if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
             {
                 var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
+                var hasStaleRule  = false;
                 foreach (var field in existingFields.Keys)
                 {
-                    if (conflictRules.TryResolve(q.Id, field, out var decision))
-                        ruleDecisions[field] = decision;
+                    if (!conflictRules.TryResolve(q.Id, field, existingFields[field], incomingFields.GetValueOrDefault(field), out var decision, out var isStale))
+                        continue;
+                    if (isStale) hasStaleRule = true;
+                    else ruleDecisions[field] = decision;
+                }
+
+                // #153: a stale rule holds the whole action for review, the same way a Blocked action
+                // does above — never silently reapplied, and never mixed with a partial auto-resolve
+                // of the action's other fields.
+                if (hasStaleRule)
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId         = batchIdStr,
+                        ExistingBatchId = existingBatchId,
+                        ActionType      = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType      = ImportActionEntityTypes.Quote,
+                        EntityId        = q.Id,
+                        ExistingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                        IncomingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                        Status          = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
+                        DetectedAt      = now,
+                    });
+                    continue;
                 }
 
                 if (ruleDecisions.Count > 0)
@@ -475,16 +498,21 @@ internal static class ImportActionPlanner
                 // #181: build the rule-decisions map before the "nothing changed" early exit below —
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides.
                 var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
+                var hasStaleRule  = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
                     foreach (var field in existingFields.Keys)
                     {
-                        if (conflictRules.TryResolve(matchedId, field, out var decision))
-                            ruleDecisions[field] = decision;
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out var decision, out var isStale))
+                            continue;
+                        if (isStale) hasStaleRule = true;
+                        else ruleDecisions[field] = decision;
                     }
                 }
 
-                if (changedFields.Count == 0 && ruleDecisions.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+                // #153: a stale rule must still be surfaced even when nothing else changed — never
+                // silently skipped just because the raw fields themselves happen to already agree.
+                if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule) continue; // Unchanged — silent reuse, same as a natural-key match.
 
                 var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -516,6 +544,24 @@ internal static class ImportActionPlanner
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
                         Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                // #153: a stale rule holds the whole action for review, same as Blocked above —
+                // checked only once we know this action isn't already Blocked.
+                if (hasStaleRule)
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.Source,
+                        EntityId      = matchedId,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
                         DetectedAt    = now,
                     });
                     continue;
@@ -583,16 +629,20 @@ internal static class ImportActionPlanner
                 // #181: build the rule-decisions map before the "nothing changed" early exit below —
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides.
                 var keyRuleDecisions = new Dictionary<string, FieldMergeDecision>();
+                var keyHasStaleRule  = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
                     foreach (var field in keyExistingFields.Keys)
                     {
-                        if (conflictRules.TryResolve(keyRow.Id, field, out var decision))
-                            keyRuleDecisions[field] = decision;
+                        if (!conflictRules.TryResolve(keyRow.Id, field, keyExistingFields[field], keyIncomingFields.GetValueOrDefault(field), out var decision, out var isStale))
+                            continue;
+                        if (isStale) keyHasStaleRule = true;
+                        else keyRuleDecisions[field] = decision;
                     }
                 }
 
-                if (changedFields.Count == 0 && keyRuleDecisions.Count == 0) continue; // Unchanged — silent reuse, same as the explicit-id branch above.
+                // #153: a stale rule must still be surfaced even when nothing else changed.
+                if (changedFields.Count == 0 && keyRuleDecisions.Count == 0 && !keyHasStaleRule) continue; // Unchanged — silent reuse, same as the explicit-id branch above.
 
                 // #190 drive-by fix: this branch previously never consulted FieldMergeResolver.Resolve
                 // for MergeOurs/MergeTheirs at all — it always took keyIncomingPayload for any policy
@@ -627,6 +677,23 @@ internal static class ImportActionPlanner
                         ExistingValue = JsonSerializer.Serialize(keyExistingPayload),
                         IncomingValue = JsonSerializer.Serialize(keyIncomingPayload),
                         Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                // #153: a stale rule holds the whole action for review, same as Blocked above.
+                if (keyHasStaleRule)
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.Source,
+                        EntityId      = keyRow.Id,
+                        ExistingValue = JsonSerializer.Serialize(keyExistingPayload),
+                        IncomingValue = JsonSerializer.Serialize(keyIncomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
                         DetectedAt    = now,
                     });
                     continue;
@@ -1049,16 +1116,20 @@ internal static class ImportActionPlanner
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides, which
                 // must still get a chance to apply rather than being skipped as "unchanged".
                 var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
+                var hasStaleRule  = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
                     foreach (var field in existingFields.Keys)
                     {
-                        if (conflictRules.TryResolve(matchedId, field, out var decision))
-                            ruleDecisions[field] = decision;
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out var decision, out var isStale))
+                            continue;
+                        if (isStale) hasStaleRule = true;
+                        else ruleDecisions[field] = decision;
                     }
                 }
 
-                if (changedFields.Count == 0 && ruleDecisions.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+                // #153: a stale rule must still be surfaced even when nothing else changed.
+                if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule) continue; // Unchanged — silent reuse, same as a natural-key match.
 
                 var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -1086,6 +1157,23 @@ internal static class ImportActionPlanner
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
                         Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                // #153: a stale rule holds the whole action for review, same as Blocked above.
+                if (hasStaleRule)
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.Universe,
+                        EntityId      = matchedId,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
                         DetectedAt    = now,
                     });
                     continue;
@@ -1202,16 +1290,20 @@ internal static class ImportActionPlanner
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides, which
                 // must still get a chance to apply rather than being skipped as "unchanged".
                 var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
+                var hasStaleRule  = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
                     foreach (var field in existingFields.Keys)
                     {
-                        if (conflictRules.TryResolve(matchedId, field, out var decision))
-                            ruleDecisions[field] = decision;
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out var decision, out var isStale))
+                            continue;
+                        if (isStale) hasStaleRule = true;
+                        else ruleDecisions[field] = decision;
                     }
                 }
 
-                if (changedFields.Count == 0 && ruleDecisions.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+                // #153: a stale rule must still be surfaced even when nothing else changed.
+                if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule) continue; // Unchanged — silent reuse, same as a natural-key match.
 
                 var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -1242,6 +1334,23 @@ internal static class ImportActionPlanner
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
                         Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt    = now,
+                    });
+                    continue;
+                }
+
+                // #153: a stale rule holds the whole action for review, same as Blocked above.
+                if (hasStaleRule)
+                {
+                    actions.Add(new SystemImportAction
+                    {
+                        BatchId       = batchId,
+                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType    = ImportActionEntityTypes.Series,
+                        EntityId      = matchedId,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
                         DetectedAt    = now,
                     });
                     continue;

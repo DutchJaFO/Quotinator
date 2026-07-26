@@ -35,6 +35,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 9, Sql = ImportConflictMigrations.AddStatusCheckConstraint },
         new SchemaMigration { Version = 10, Sql = ImportActionMigrations.AddBlockedStatusAndMarkCompletenessAs },
         new SchemaMigration { Version = 11, Sql = ImportActionMigrations.AddOriginalDecision },
+        new SchemaMigration { Version = 12, Sql = ImportActionMigrations.AddStaleStatus },
     ];
 
     // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and
@@ -93,7 +94,7 @@ public class DatabaseInitializer : IDatabaseInitializer
             IncomingValue      TEXT    NOT NULL,
             AppliedPolicy      TEXT,
             Status             TEXT    NOT NULL
-                               CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked')),
+                               CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked', 'Stale')),
             MergedFields       TEXT,
             MarkCompletenessAs TEXT
                                CHECK (MarkCompletenessAs IS NULL OR MarkCompletenessAs IN ('Incomplete', 'NeedsReview', 'Complete')),

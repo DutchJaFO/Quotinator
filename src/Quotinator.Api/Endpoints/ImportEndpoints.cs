@@ -135,11 +135,11 @@ internal static class ImportEndpoints
         .WithDescription(
             "Returns a paginated list of staged import actions (#154), newest first — the review " +
             "surface for a staged batch, whether staged via `POST /import`, `POST /import/preview`, " +
-            "or startup seeding. Filter by `status` (`Pending`, `Decided`, `Applied`, `Discarded`), " +
-            "`batchId`, and/or `entityType` (`Quote`, `Source`, `Character`, `Person`). Each item " +
-            "includes `relatedActionIds` (the Source/Character/Person actions in the same batch a " +
-            "Quote action depends on) and `ambiguousFields` (the fields genuinely needing a decision, " +
-            "populated only while `status` is `Pending`). Maximum `pageSize` is 500.");
+            "or startup seeding. Filter by `status` (`Pending`, `Decided`, `Applied`, `Discarded`, " +
+            "`Blocked`, `Stale`), `batchId`, and/or `entityType` (`Quote`, `Source`, `Character`, " +
+            "`Person`). Each item includes `relatedActionIds` (the Source/Character/Person actions in " +
+            "the same batch a Quote action depends on) and `ambiguousFields` (the fields genuinely " +
+            "needing a decision, populated only while `status` is `Pending`). Maximum `pageSize` is 500.");
 
         publicGroup.MapGet("/actions/export", async (
             string? batchId,
@@ -170,8 +170,8 @@ internal static class ImportEndpoints
         .WithName("ExportImportActionBatch")
         .WithSummary("Export a staged batch's decidable fields as a flat file")
         .WithDescription(
-            "Returns every decidable field across `batchId`'s `Pending`, `Decided`, and `Blocked` " +
-            "Modify actions, one row per field — the flat format `POST /import/actions/bulk-decide` " +
+            "Returns every decidable field across `batchId`'s `Pending`, `Decided`, `Blocked`, and " +
+            "`Stale` Modify actions, one row per field — the flat format `POST /import/actions/bulk-decide` " +
             "reads back, for reviewing or revising many decisions at once outside the API (spreadsheet, " +
             "script, etc.) instead of one `POST /import/actions/{id}/decide` call per action. " +
             "`format` (`json`, the default, or `csv`) controls the response shape; both use the same " +
@@ -236,8 +236,8 @@ internal static class ImportEndpoints
                 "Reads the uploaded, edited `GET /import/actions/export` file back and applies each " +
                 "row's `Decision`/`CustomValue`, grouped by `ActionId` — one `POST /import/actions/{id}" +
                 "/decide` call per action, reusing the same validation that endpoint already applies " +
-                "(no new validation logic). Deciding a `Blocked` action works exactly like deciding a " +
-                "`Pending` one. A malformed row (bad `ActionId`, unrecognised `Decision`, malformed " +
+                "(no new validation logic). Deciding a `Blocked` or `Stale` action works exactly like " +
+                "deciding a `Pending` one. A malformed row (bad `ActionId`, unrecognised `Decision`, malformed " +
                 "CSV/JSON) or an action group that fails validation (unknown `ActionId`, `ActionId` not " +
                 "part of `batchId`, `EntityType` mismatch, `Field` not decidable for that `EntityType`) " +
                 "is reported in the response's `errors` list without aborting the rest of the file, " +
@@ -568,12 +568,12 @@ internal static class ImportEndpoints
     }
 
     // 202 tells the caller up front that the batch has unresolved actions (any entity type — Quote,
-    // Source, etc. — Pending or Blocked) it must adjust the file or decide via /import/actions before
-    // the batch can be applied — 200 means everything staged cleanly (and, for a non-preview call,
-    // was actually applied). PendingActionIds (#165) is the authoritative signal — Conflicts alone
-    // only ever covered Quote Modify actions and has no concept of Blocked or non-Quote entities, so
-    // checking it in isolation would silently report 200 for a batch that Source's Blocked status
-    // held from applying.
+    // Source, etc. — Pending, Blocked, or Stale) it must adjust the file or decide via /import/actions
+    // before the batch can be applied — 200 means everything staged cleanly (and, for a non-preview
+    // call, was actually applied). PendingActionIds (#165) is the authoritative signal — Conflicts
+    // alone only ever covered Quote Modify actions and has no concept of Blocked/Stale or non-Quote
+    // entities, so checking it in isolation would silently report 200 for a batch that Source's
+    // Blocked or Stale status held from applying.
     private static IResult ToStatusCodeResult(ImportResultResponse result)
     {
         return result.PendingActionIds.Count > 0
