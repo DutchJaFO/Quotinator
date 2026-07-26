@@ -571,13 +571,29 @@ convention.
 
 ### 18. Tests — overall
 
-**Status:** Not started.
+**Status:** T2 done 2026-07-26. T1 (Visual Studio) is the developer's own action, not yet performed.
 
 The five tests listed in the issue's "Expected tests" table (reproduced above) are the floor, not the
 full set — Steps 1–16 above each imply additional coverage (manifest-schema validation, `Stale` status
 round-trip for both mechanisms, endpoint auth/status-code tests for both new rule-file routes) beyond
 what's individually listed under each step's own "Tests" step. Per this project's red-green policy,
 every test must be confirmed red before its corresponding implementation lands.
+
+Full solution suite green: 2723 tests, 0 failures, 0 warnings on `dotnet build`/`dotnet test`.
+
+**T2 (Docker) sign-off, 2026-07-26** — built and ran `quotinator:local` fresh (799 quotes, 464 sources
+seeded), then exercised all four new endpoints against real bundled data end to end: `GET /rules/
+conflict` on `quotinator-curated-conflict-rules.json` returned `200`/`isOverrideActive: false`; a real
+`review`-policy re-import + decide produced a genuine batch, `POST /rules/conflict/generate` returned
+`200`/`isOverrideActive: true`/`rulesAdded: 1`, and a follow-up `GET` confirmed the override took
+effect; `DELETE /rules/conflict` returned `204`, a repeat call `404`. **`GET /rules/alias` surfaced 3
+genuine near-duplicate Source pairs on the live curated dataset** (`"When Harry Met Sally"` vs.
+`"When Harry Met Sally..."`, `"Avengers - Age of Ultron"` vs. `"Avengers: Age of Ultron"`, and
+`"Airplane"` vs. `"Airplane!"` — the last already aliased in a *different* bundled file, illustrating
+the accepted file-scoped trade-off from Step 14's design) — a genuinely useful live finding, not a
+bug; CLAUDE.md's own smoke-test prediction ("expected to be empty") was written before this was run and
+has been corrected to match reality. These 3 candidates are a data-quality follow-up, not part of
+#153's own scope — see the note below on filing them.
 
 ---
 

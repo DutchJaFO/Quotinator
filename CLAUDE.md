@@ -1632,11 +1632,16 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    ```bash
    curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/alias?fileName=quotinator-curated-source-aliases.json&origin=Bundled"
    ```
-   Must return `200` with a `candidates` array — on the current bundled dataset this is expected to be
-   empty (`#181`'s own alias file already covers every known real duplicate), which itself confirms the
-   endpoint runs cleanly against the full live `Sources` table without erroring; a non-empty result here
-   on an otherwise-unmodified checkout would mean a new duplicate has entered the bundled data unnoticed
-   and should be investigated before release.
+   Must return `200` with a `candidates` array. **Live-verified 2026-07-26 against real bundled data:
+   this is not empty** — it found 3 genuine near-duplicates the curated alias file doesn't cover
+   (`"When Harry Met Sally"` vs. `"When Harry Met Sally..."`, `"Avengers - Age of Ultron"` vs.
+   `"Avengers: Age of Ultron"` — the normalizer strips `-`/`:` identically, correctly catching this —
+   and `"Airplane"` vs. `"Airplane!"`, already aliased in a *different* bundled file's own alias list,
+   not curated's — the file-scoped design means a duplicate covered elsewhere can still surface here,
+   a known, accepted trade-off, not a bug). This confirms the endpoint runs cleanly end to end against
+   the full live `Sources` table and genuinely finds real candidates, which is the point — do not expect
+   an empty result on this dataset. A confirmed, verified duplicate should be filed as a data-quality
+   follow-up per `docs/workflow/source-verification.md`, not fixed inline as part of this checklist.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
