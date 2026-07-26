@@ -20,4 +20,15 @@ public interface IRuleFileOverridePathResolver
     /// this must always be a plain filename with no path segments.
     /// </exception>
     string Resolve(string fileName, SeedBatchOrigin origin);
+
+    /// <summary>
+    /// Resolves <paramref name="fileName"/> to its bundled/image path for <paramref name="origin"/> —
+    /// the read-only copy shipped in the Docker image (<see cref="SeedBatchOrigin.Bundled"/>) or the
+    /// user's own imports directory (<see cref="SeedBatchOrigin.UserImports"/>), never the override
+    /// directory <see cref="Resolve"/> returns. Used to read the current effective content as the base
+    /// for a new override generation, when no override is registered yet.
+    /// </summary>
+    /// <exception cref="ArgumentException">Same validation as <see cref="Resolve"/>.</exception>
+    /// <exception cref="InvalidOperationException">No bundled directory was configured for <paramref name="origin"/>.</exception>
+    string ResolveBundledPath(string fileName, SeedBatchOrigin origin);
 }

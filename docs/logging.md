@@ -260,6 +260,7 @@ Format: `[Subsystem - Phase] message text`
 | `[Api - GetSoundCueById]` | Entry to GET /api/v1/masterdata/soundcues/{id} |
 | `[Api - GetAllConversations]` | Entry to GET /api/v1/conversations |
 | `[Api - GetConversationById]` | Entry to GET /api/v1/conversations/{id} |
+| `[Api - Import]` | Import endpoint handlers (`POST /import`, `/import/preview`, `/import/rules/*`) |
 | `[Audit]` | Audit trail write operations (AuditWriter) |
 
 New subsystems must register a prefix in this table before their log lines land in a PR.

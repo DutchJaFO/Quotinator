@@ -334,7 +334,7 @@ public class DatabaseInitializerTests
         // first, matching how every other test in this file lets InitialiseAsync create the schema.
         await CreateInitializer([batch]).InitialiseAsync();
         await registry.RegisterAsync(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled,
-            QuotinatorDatabaseInitializer.ComputeContentHash(overrideContent), sourceBatchId: null);
+            EffectiveRuleFileResolver.ComputeContentHash(overrideContent), sourceBatchId: null);
 
         var db = CreateInitializer([batch], ruleFileOverridePathResolver: pathResolver, sourceFileOverrideRegistry: registry);
         await db.ReseedAsync();

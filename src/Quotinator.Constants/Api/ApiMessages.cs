@@ -53,4 +53,8 @@ public static class ApiMessages
     public const string UniverseNotFound                 = "ErrorUniverseNotFound";
     public const string StageDirectionNotFound           = "ErrorStageDirectionNotFound";
     public const string SoundCueNotFound                 = "ErrorSoundCueNotFound";
+    public const string RuleFileNameRequired             = "ErrorRuleFileNameRequired";
+    public const string RuleFileOriginInvalid            = "ErrorRuleFileOriginInvalid";
+    public const string RuleFileNotFound                 = "ErrorRuleFileNotFound";
+    public const string RuleFileOverrideNotFound         = "ErrorRuleFileOverrideNotFound";
 }

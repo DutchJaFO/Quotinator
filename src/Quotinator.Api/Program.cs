@@ -378,7 +378,8 @@ builder.Services.AddSingleton<ISourceCacheUpdater>(sp => new SourceCacheUpdater(
 // #153: a generated ruleFile/sourceAliasFile override is written under the same two persistent,
 // writable cache directories SourceCacheUpdater already uses above — never the bundled/image sources
 // directory, which is read-only in a real deployment.
-builder.Services.AddSingleton<IRuleFileOverridePathResolver>(_ => new RuleFileOverridePathResolver(internalDownloadDir, externalDownloadDir));
+builder.Services.AddSingleton<IRuleFileOverridePathResolver>(_ =>
+    new RuleFileOverridePathResolver(internalDownloadDir, externalDownloadDir, bundledSourcesDir, importsDir));
 
 builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
 {
@@ -584,6 +585,7 @@ app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDat
 app.MapQuoteEndpoints();
 app.MapAdminEndpoints();
 app.MapImportEndpoints();
+app.MapImportRuleEndpoints();
 app.MapConversationEndpoints();
 app.MapSourceEndpoints();
 app.MapCharacterEndpoints();

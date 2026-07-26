@@ -467,13 +467,14 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     /// requirement for seeding to proceed, matching <see cref="LoadSourceFileAsync"/>'s own
     /// fail-open convention for the source file itself. #153: prefers a registered, hash-verified
     /// override over the bundled/image copy, when one exists — see
-    /// <see cref="ResolveEffectiveRuleFilePathAsync"/>.
+    /// <see cref="EffectiveRuleFileResolver"/>.
     /// </summary>
     private async Task<ConflictRuleLookup> LoadConflictRulesAsync(string? ruleFilePath, SeedBatchOrigin origin)
     {
         if (ruleFilePath is null) return ConflictRuleLookup.Empty;
 
-        var effectivePath = await ResolveEffectiveRuleFilePathAsync(ruleFilePath, origin);
+        var effectivePath = await EffectiveRuleFileResolver.ResolveEffectivePathAsync(
+            ruleFilePath, origin, _ruleFileOverridePathResolver, _sourceFileOverrideRegistry, Logger);
 
         if (!File.Exists(effectivePath))
         {
@@ -501,13 +502,14 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     /// <c>sourceAliasFile</c> property. Missing/absent/invalid all resolve to
     /// <see cref="SourceAliasLookup.Empty"/> — same fail-open convention as <see cref="LoadConflictRulesAsync"/>.
     /// #153: prefers a registered, hash-verified override over the bundled/image copy, when one
-    /// exists — see <see cref="ResolveEffectiveRuleFilePathAsync"/>.
+    /// exists — see <see cref="EffectiveRuleFileResolver"/>.
     /// </summary>
     private async Task<SourceAliasLookup> LoadSourceAliasesAsync(string? sourceAliasFilePath, SeedBatchOrigin origin)
     {
         if (sourceAliasFilePath is null) return SourceAliasLookup.Empty;
 
-        var effectivePath = await ResolveEffectiveRuleFilePathAsync(sourceAliasFilePath, origin);
+        var effectivePath = await EffectiveRuleFileResolver.ResolveEffectivePathAsync(
+            sourceAliasFilePath, origin, _ruleFileOverridePathResolver, _sourceFileOverrideRegistry, Logger);
 
         if (!File.Exists(effectivePath))
         {
@@ -530,53 +532,4 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         }
     }
 
-    /// <summary>
-    /// #153: a generated <c>ruleFile</c>/<c>sourceAliasFile</c> override lives on the persistent volume
-    /// (never the bundled/image path, which is read-only in a real deployment) — see
-    /// <see cref="IRuleFileOverridePathResolver"/>. Only trusted when BOTH a registration exists in
-    /// <see cref="ISourceFileOverrideRegistry"/> AND the override file's current content hash still
-    /// matches what was registered — an override file present on disk without a matching registration
-    /// (deleted registration, hand-edited content, a stale copy from a previous version) is never
-    /// silently trusted; falls back to <paramref name="bundledPath"/> instead.
-    /// </summary>
-    private async Task<string> ResolveEffectiveRuleFilePathAsync(string bundledPath, SeedBatchOrigin origin)
-    {
-        var fileName = Path.GetFileName(bundledPath);
-
-        string overridePath;
-        try
-        {
-            overridePath = _ruleFileOverridePathResolver.Resolve(fileName, origin);
-        }
-        catch (ArgumentException)
-        {
-            // Should never happen for a manifest-derived filename (always a plain filename by
-            // construction) — fail open to the bundled path rather than block seeding over it.
-            return bundledPath;
-        }
-
-        if (!File.Exists(overridePath)) return bundledPath;
-
-        var registered = await _sourceFileOverrideRegistry.FindAsync(fileName, origin);
-        if (registered is null)
-        {
-            Logger.LogWarning("[Database - Seed] {File} has an override file on disk but no registered entry — ignoring it and using the bundled copy",
-                fileName);
-            return bundledPath;
-        }
-
-        var actualHash = ComputeContentHash(await File.ReadAllTextAsync(overridePath));
-        if (!string.Equals(actualHash, registered.ContentHash, StringComparison.OrdinalIgnoreCase))
-        {
-            Logger.LogWarning("[Database - Seed] {File}'s override content hash no longer matches its registration — ignoring it and using the bundled copy",
-                fileName);
-            return bundledPath;
-        }
-
-        return overridePath;
-    }
-
-    /// <summary>SHA-256 of <paramref name="content"/>, lowercase hex — the same hash shape <see cref="ISourceFileOverrideRegistry"/> stores.</summary>
-    internal static string ComputeContentHash(string content)
-        => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
 }

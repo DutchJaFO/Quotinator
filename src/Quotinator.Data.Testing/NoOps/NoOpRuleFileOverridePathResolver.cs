@@ -12,4 +12,8 @@ public sealed class NoOpRuleFileOverridePathResolver : IRuleFileOverridePathReso
     /// <inheritdoc/>
     public string Resolve(string fileName, SeedBatchOrigin origin)
         => Path.Combine(Path.GetTempPath(), "quotinator-noop-rule-override", origin.ToString(), fileName);
+
+    /// <inheritdoc/>
+    public string ResolveBundledPath(string fileName, SeedBatchOrigin origin)
+        => Path.Combine(Path.GetTempPath(), "quotinator-noop-rule-bundled", origin.ToString(), fileName);
 }

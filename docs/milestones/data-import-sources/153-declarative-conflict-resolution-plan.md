@@ -403,8 +403,8 @@ skipping the verification step this project requires for a factual title claim.
 
 ### 14. Rule-file endpoints
 
-**Status:** Partially done — design settled 2026-07-26, registry table implemented, path resolver and
-endpoints themselves not started yet.
+**Status:** `ConflictResolutionRule` half done, implemented 2026-07-26. `SourceAliasRule` half not
+started — blocked on Step 13 (candidate-detection generation), which has not started either.
 
 **Design finding that changed this step's shape**: the bundled sources directory (`data/sources/`) is
 not on the persistent volume — it's baked into the Docker image (`Program.cs`'s `bundledSourcesDir =
@@ -416,48 +416,75 @@ downloaded/refreshed copy under `{dataDir}/sources/download/` (bundled) or `{dat
 directories as the override target for `ruleFile`/`sourceAliasFile`, rather than writing to the
 bundled/image path.
 
-**Registry table, implemented 2026-07-26**: `System_SourceFileOverrides` (entity `SourceFileOverride`,
-migration `SourceFileOverrideMigrations.CreateSourceFileOverridesTable`, `ISourceFileOverrideRegistry`)
-records, per (`FileName`, `SeedBatchOrigin`), the override's content hash and originating batch id —
-an upsert, not a history log. This is what lets the seeding pipeline know for certain whether an
-override on disk is genuinely one this project's own generation mechanism produced, rather than
-inferring it from file existence alone. Named with today's `System_` convention; a broader
-`Import_`-prefix table-naming standardization pass (and a separate, general import-file
-content-provenance mechanism) is tracked in #227, not this issue's own scope.
+**Registry table**: `System_SourceFileOverrides` (entity `SourceFileOverride`, migration
+`SourceFileOverrideMigrations.CreateSourceFileOverridesTable`, `ISourceFileOverrideRegistry`) records,
+per (`FileName`, `SeedBatchOrigin`), the override's content hash and originating batch id — an upsert,
+not a history log. This is what lets the seeding pipeline know for certain whether an override on disk
+is genuinely one this project's own generation mechanism produced, rather than inferring it from file
+existence alone. Named with today's `System_` convention; a broader `Import_`-prefix table-naming
+standardization pass (and a separate, general import-file content-provenance mechanism) is tracked in
+#227, not this issue's own scope.
 
-**Still to build**:
-- A path-resolution service (`Quotinator.Data.Paths`) that takes a plain filename (no directory
-  segments — rejected outright, plus a resolved-path containment check as defence in depth) and a
-  `SeedBatchOrigin`, and returns the safe, absolute override path under the correct download directory.
-  DI-registered via the factory-overload pattern (`dataDir` is a runtime-computed value).
-- Read-side wiring: before `QuotinatorDatabaseInitializer.LoadConflictRules`/`LoadSourceAliases` load a
-  bundled file's `ruleFile`/`sourceAliasFile` from the image path, check the registry + override
-  location first (hash must match what's registered) and prefer it when present and valid.
-- The two endpoints:
-  - `ConflictResolutionRule`: `GET` returns the current effective rule file (override if registered and
-    valid, else the bundled/image copy) for a given filename+origin; `POST` generates from a `batchId`
-    (Steps 11–12), merges, writes to the override location, registers the new hash, and returns the
-    result. A `DELETE` to remove a registered override (revert to the bundled copy) is a natural,
-    low-cost addition once the registry and path resolver exist.
-  - `SourceAliasRule`: `GET` returns Step 13's candidate-duplicate suggestions — read-only, never
-    writes an alias entry itself.
-- Route placement: under `/api/v1/import`, alongside `/actions/export`, matching the existing
-  route-group convention. Every write (`POST`/`DELETE`) requires `X-Api-Key`, matching every other
-  mutating endpoint in this group; the candidate-suggestion `GET` needs no key, matching
-  `/actions/export`'s own precedent for a read-only, no-side-effect endpoint.
+**Path resolution**: `RuleFileOverridePathResolver`/`IRuleFileOverridePathResolver`
+(`Quotinator.Data.Paths`) resolves a plain filename (directory segments/`.`/`..` rejected outright, plus
+a resolved-path containment check as defence in depth) plus a `SeedBatchOrigin` to two distinct paths —
+`Resolve` (the writable override location under the download-cache directories) and `ResolveBundledPath`
+(the read-only bundled/image or user-imports path, used as the merge base when no override is
+registered yet). DI-registered via the factory-overload pattern (`dataDir`/`bundledSourcesDir`/
+`importsDir` are runtime-computed values).
+
+**Shared effective-content resolution**: `EffectiveRuleFileResolver` (`Quotinator.Data.Import`, static)
+is the single place that decides "override or bundled" — used by both
+`QuotinatorDatabaseInitializer.LoadConflictRulesAsync`/`LoadSourceAliasesAsync` (the seeding pipeline)
+and the new endpoints below, so both agree on what "currently effective" means. Extracted specifically
+to avoid a real correctness bug found before it shipped: an endpoint that generated an override without
+first reading the *current effective* content (bundled file included) would silently drop that bundled
+file's own hand-authored rules the first time an override was ever registered for it, since the read
+path replaces the whole file rather than merging at load time. `ReadEffectiveContentAsync` is the
+merge-base read the generate endpoint uses; `ResolveEffectivePathAsync` is what the seeding pipeline
+uses to decide which path to actually load. A `logPrefix` parameter (default `[Database - Seed]`) lets
+each caller supply its own structured-log prefix — `[Api - Import]` from the endpoints — rather than
+every log line claiming to be the seeding pipeline.
+
+**Endpoints, implemented 2026-07-26** — `ImportRuleEndpoints.cs`, all three under
+`/api/v1/import/rules/conflict`, tagged `ApiTags.Import`, matching the existing route-group convention:
+- `GET` (public, no key, matching `/actions/export`'s precedent) — returns the current effective
+  `ConflictResolutionRule`s for `fileName`/`origin` (override if registered and hash-verified, else
+  bundled), plus `isOverrideActive`. `404` if neither exists.
+- `POST /generate` (admin, `X-Api-Key`) — takes `fileName`/`origin`/`batchId`, builds rules from the
+  batch's decided export rows (Steps 10–12), merges into the current effective content (never
+  overwriting an already-covered entity/field), writes the result to the override location, registers
+  its hash, and returns the merged file plus `rulesAdded`.
+- `DELETE` (admin, `X-Api-Key`) — un-registers the override (the file itself is left on disk, harmless
+  since it's never trusted without a matching registration); `404` if nothing is registered.
+
+`SourceAliasRule`'s own `GET` (Step 13's candidate-duplicate suggestions, read-only) is not built yet —
+blocked on Step 13 itself.
 
 ### 15. Tests — rule generation (both mechanisms)
 
-**Status:** `ConflictResolutionRule` half done, implemented 2026-07-26 — `ConflictRuleGeneratorTests.cs`
-(11 tests): one decided field for one entity produces a single one-field rule; multiple decided fields
-for the same entity collapse into one rule with multiple `Fields` entries (proving Step 10's
-grouping-by-`EntityId` claim, not just asserting it); an entity with every field still undecided
-produces no rule at all; `Custom` resolution carries its `CustomValue`; `ExistingRecord`/
-`IncomingRecord` reflect every row regardless of decision; `genres` decodes from its delimited export
-encoding into a proper array; multiple entities in one batch each get their own rule; merging with no
-existing file returns the generated rules as-is; a new `EntityId` is appended; an already-covered
-field's hand-authored resolution is never overwritten even when regenerated with a different value; a
-genuinely new field for an already-covered entity is added alongside the existing one.
+**Status:** `ConflictResolutionRule` half done. `SourceAliasRule` half not started.
+
+`ConflictRuleGeneratorTests.cs` (11 tests): one decided field for one entity produces a single
+one-field rule; multiple decided fields for the same entity collapse into one rule with multiple
+`Fields` entries (proving Step 10's grouping-by-`EntityId` claim, not just asserting it); an entity with
+every field still undecided produces no rule at all; `Custom` resolution carries its `CustomValue`;
+`ExistingRecord`/`IncomingRecord` reflect every row regardless of decision; `genres` decodes from its
+delimited export encoding into a proper array; multiple entities in one batch each get their own rule;
+merging with no existing file returns the generated rules as-is; a new `EntityId` is appended; an
+already-covered field's hand-authored resolution is never overwritten even when regenerated with a
+different value; a genuinely new field for an already-covered entity is added alongside the existing
+one.
+
+`ImportRuleEndpointsTests.cs` (12 tests) covers the three new endpoints end to end: missing
+`fileName`/invalid `origin` → `422`; neither bundled nor override exists → `404`; a bundled-only file
+returns `isOverrideActive: false`; a registered override returns its own rules with `isOverrideActive:
+true`; `generate` without `X-Api-Key` → `401`, without `batchId` → `422`; a valid generate call writes
+the override file, registers it, and returns `rulesAdded`; **generating from a batch that only touches
+one entity does not drop an already-existing bundled rule for a different entity** — the exact
+correctness gap `EffectiveRuleFileResolver` exists to close, proven end to end rather than only at the
+unit level; `DELETE` without a key → `401`, with nothing registered → `404`, and removing a registration
+makes a subsequent `GET` fall back to the bundled copy.
 
 `SourceAliasRule` half **not started** — a near-duplicate Source pair surfaced as a candidate; an
 existing, already-aliased pair not re-suggested; the candidate endpoint never writes to the alias file
@@ -527,8 +554,8 @@ every test must be confirmed red before its corresponding implementation lands.
 | 4 | ✅ | `SourceAliasRule`'s own mechanism identified — no new construction needed for matching | Live (review) | Resolved in Step 4: `SourceAliasLookup.TryResolve` (shipped by #181) is the complete read path; this issue only adds generation and staleness on top |
 | 5 | ✅ | A `ConflictResolutionRule` is flagged `Stale` (not silently applied, not silently discarded) when the underlying source's shape has changed enough to invalidate it | Unit test | `ConflictRuleLookupTests` (7 staleness cases) + `ImportActionPlannerTests` integration coverage, implemented 2026-07-26 |
 | 6 | ✅ | A `SourceAliasRule` is flagged `Stale` when its recorded canonical value no longer matches the live Source | Unit test + Live (T2) | `ImportActionPlannerTests` (Step 9) + CLAUDE.md smoke test against real bundled data, implemented 2026-07-26 |
-| 7 | ❌ | Rule generation from a batch's decided actions produces candidate `ConflictResolutionRule` entries, worst case one per action, best case one shared entity rule | Unit test | Step 15's tests |
-| 8 | ❌ | Generation merges into an existing rule file without overwriting manual edits | Unit test | Step 15's tests |
+| 7 | ✅ | Rule generation from a batch's decided actions produces candidate `ConflictResolutionRule` entries, worst case one per action, best case one shared entity rule | Unit test | `ConflictRuleGeneratorTests.Generate_*` (Step 10-12), implemented 2026-07-26 |
+| 8 | ✅ | Generation merges into an existing rule file without overwriting manual edits | Unit test + Live (endpoint) | `ConflictRuleGeneratorTests.Merge_*` + `ImportRuleEndpointsTests.GenerateConflictRuleFile_ExistingBundledRules_AreMergedNotDropped`, implemented 2026-07-26 |
 | 9 | ❌ | `SourceAliasRule` candidate-duplicate detection surfaces likely duplicates without auto-writing an alias entry | Unit test | Step 15's tests |
 | 10 | ✅ | A matching, non-stale `ConflictResolutionRule` auto-resolves a staged action instead of leaving it `Pending`, even under `Review` policy | Unit test | Already shipped by #181 under a different name: `ImportActionPlannerTests.PlanAsync_ReviewPolicy_MatchingRuleCoversTheOnlyChangedField_StagesDecidedNotPending` |
 | 11 | ✅ | No matching rule stages `Pending` exactly as today (regression guard) | Unit test | Already shipped by #181 under a different name: `ImportActionPlannerTests.PlanAsync_ReviewPolicy_NonMatchingRuleLookup_StagesPendingAsToday` |
