@@ -362,23 +362,27 @@ apiece. No cross-entity pattern-matching mechanism needs to be designed or built
 
 ### 11. `ConflictResolutionRule` generation — implement the export-row → rule-entry mapping
 
-**Status:** Not started. Read `GET /import/actions/export`'s `ImportActionFieldRow` rows for a batch,
-group by `EntityId`, and for each group emit one `ConflictResolutionRule` with `ExistingRecord`/
-`IncomingRecord` populated from the group's own rows' `ExistingValue`/`IncomingValue` (reassembled into
-the full-record JSON shape `ConflictResolutionRule` expects — see Step 5, these are recorded as
-complete field sets, not just the resolved field) and one `ConflictResolutionFieldRule` per row
-(`Field`/`Decision`/`CustomValue` map directly to `Field`/`Resolution`/`CustomValue`). Only rows with a
-real `Decision` (not still-`Pending`, and not `Stale` per Step 6) are eligible.
+**Status:** Done, implemented 2026-07-26. `Quotinator.Core.Database.ConflictRuleGenerator.Generate`
+takes the same `IReadOnlyList<ImportActionFieldRow>` shape `GET /import/actions/export` produces,
+groups by `EntityId`, and for each group builds `ExistingRecord`/`IncomingRecord` from every row's
+`ExistingValue`/`IncomingValue` (the full decidable field set for that entity type, not a subset —
+`ImportActionFieldRowMapper.DecidableFieldsByEntityType` already covers every mergeable field per
+entity, e.g. Quote's own 8 fields exactly match `QuoteFieldMerge.ToFieldMap`'s set) and one
+`ConflictResolutionFieldRule` per row that has a real `Decision` (`Field`/`Decision`/`CustomValue` map
+directly to `Field`/`Resolution`/`CustomValue`). An entity with zero decided fields (every row's
+`Decision` is `null` — still `Pending`/`Stale`/`Blocked`) produces no rule at all. `genres` is decoded
+from its `;`-delimited plain-text export encoding back into a JSON array via the existing
+`ImportActionFieldRowMapper.DecodeGenres`, matching every hand-authored rule's own array shape.
 
 ### 12. `ConflictResolutionRule` generation — merge-not-overwrite into an existing rule file
 
-**Status:** Not started. Load the target rule file (if it exists), and for each newly-generated
-`ConflictResolutionRule`: if an entry with the same `EntityId` already exists, merge the new `Fields`
-into it (a newly-decided field not previously covered gets added; a field the file already covers is
-left as the human originally wrote it — a generation run must never silently overwrite a manual edit)
-rather than replacing the whole entry. If no entry exists for that `EntityId`, append it. Write the
-merged file back preserving whatever JSON formatting/ordering convention the hand-authored files
-already use.
+**Status:** Done, implemented 2026-07-26. `ConflictRuleGenerator.Merge(ConflictResolutionRuleFile?
+existing, IReadOnlyList<ConflictResolutionRule> generated)` is a pure function, deliberately separated
+from any file I/O (Step 14 owns reading/writing the actual file): a new `EntityId` not already in
+`existing` is appended whole; an `EntityId` already present has only its genuinely new fields (not
+already named in that entry's own `Fields`) added — an already-covered field's resolution, and the
+entry's own recorded `ExistingRecord`/`IncomingRecord` snapshot, are left exactly as the file already
+has them, never overwritten by a fresh generation run.
 
 ### 13. `SourceAliasRule` generation — candidate detection, not auto-generation
 
@@ -415,14 +419,20 @@ own auth requirement as precedent before deciding either way.
 
 ### 15. Tests — rule generation (both mechanisms)
 
-**Status:** Not started. `ConflictResolutionRule`: a batch with one decided field for one entity
-produces a single one-field rule; a batch with multiple decided fields for the same entity collapses
-into one rule with multiple `Fields` entries (proving Step 10's grouping-by-`EntityId` claim, not just
-asserting it); merging into an existing file preserves a field the file already manually covers
-unchanged; merging adds a new field/entity the file didn't previously cover; an undecided (`Pending`)
-or `Stale` action is excluded from generation. `SourceAliasRule`: a near-duplicate Source pair is
-surfaced as a candidate; an existing, already-aliased pair is not re-suggested; the candidate endpoint
-never writes to the alias file itself.
+**Status:** `ConflictResolutionRule` half done, implemented 2026-07-26 — `ConflictRuleGeneratorTests.cs`
+(11 tests): one decided field for one entity produces a single one-field rule; multiple decided fields
+for the same entity collapse into one rule with multiple `Fields` entries (proving Step 10's
+grouping-by-`EntityId` claim, not just asserting it); an entity with every field still undecided
+produces no rule at all; `Custom` resolution carries its `CustomValue`; `ExistingRecord`/
+`IncomingRecord` reflect every row regardless of decision; `genres` decodes from its delimited export
+encoding into a proper array; multiple entities in one batch each get their own rule; merging with no
+existing file returns the generated rules as-is; a new `EntityId` is appended; an already-covered
+field's hand-authored resolution is never overwritten even when regenerated with a different value; a
+genuinely new field for an already-covered entity is added alongside the existing one.
+
+`SourceAliasRule` half **not started** — a near-duplicate Source pair surfaced as a candidate; an
+existing, already-aliased pair not re-suggested; the candidate endpoint never writes to the alias file
+itself. Blocked on Step 13's own design (see Step 13's status).
 
 ### 16. Rule lookup and auto-apply during staging
 
