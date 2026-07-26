@@ -1,11 +1,14 @@
+using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Database;
+using Quotinator.Core.Entities;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
@@ -157,6 +160,48 @@ internal static class ImportRuleEndpoints
                 "matching registration) so it can still be inspected or re-registered later. Returns `404` if no override " +
                 "is currently registered for `fileName`/`origin`. " +
                 "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
+
+        publicGroup.MapGet("/alias", async (
+                string? fileName,
+                string? origin,
+                IListableRepository<Source> sourceRepository,
+                IRuleFileOverridePathResolver pathResolver,
+                ISourceFileOverrideRegistry registry,
+                IApiLocalizer localizer,
+                ILogger<Log> logger) =>
+            {
+                if (!TryValidate(fileName, origin, localizer, out var parsedOrigin, out var validationError))
+                    return validationError!;
+
+                var content = await EffectiveRuleFileResolver.ReadEffectiveContentAsync(
+                    fileName!, parsedOrigin, pathResolver, registry, logger, logPrefix: "[Api - Import]");
+                var existingAliases = content is null
+                    ? SourceAliasLookup.Empty
+                    : new SourceAliasLookup(ParseSourceAliasFile(content).Aliases);
+
+                var allSources = await sourceRepository.GetPageAsync(page: 1, pageSize: 0);
+                var tuples = allSources.Items.Select(s => (s.Id.ToCanonicalId(), s.Title, s.Type.Raw));
+
+                var candidates = SourceAliasCandidateGenerator.Generate(tuples, existingAliases);
+
+                return Results.Ok(new SourceAliasCandidateResponse
+                {
+                    FileName   = fileName!,
+                    Origin     = origin!,
+                    Candidates = candidates,
+                });
+            })
+            .Produces<SourceAliasCandidateResponse>(StatusCodes.Status200OK)
+            .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
+            .WithName("GetSourceAliasCandidates")
+            .WithSummary("Suggest likely duplicate Source titles not yet covered by an alias")
+            .WithDescription(
+                "Scans every Source in the database for near-duplicate `(Title, Type)` pairs (punctuation/whitespace " +
+                "differences — e.g. a trailing `!`, a curly vs. straight apostrophe — not plain casing, which #175's " +
+                "natural-key matching already prevents from ever coexisting) not already covered by `fileName`/`origin`'s " +
+                "own `SourceAliasRule` file. Detect-and-suggest only — never writes an alias entry; confirming a genuine " +
+                "duplicate requires research per `docs/workflow/source-verification.md` before hand-editing the alias " +
+                "file. No `X-Api-Key` required, matching `GET /import/actions`'s precedent for a read-only endpoint.");
     }
 
     private static readonly System.Text.Json.JsonSerializerOptions RuleFileWriteOptions = new() { WriteIndented = true };
@@ -164,6 +209,9 @@ internal static class ImportRuleEndpoints
 
     private static ConflictResolutionRuleFile ParseConflictRuleFile(string json)
         => System.Text.Json.JsonSerializer.Deserialize<ConflictResolutionRuleFile>(json, RuleFileReadOptions) ?? new ConflictResolutionRuleFile();
+
+    private static SourceAliasRuleFile ParseSourceAliasFile(string json)
+        => System.Text.Json.JsonSerializer.Deserialize<SourceAliasRuleFile>(json, RuleFileReadOptions) ?? new SourceAliasRuleFile();
 
     private static bool TryValidate(
         string? fileName, string? origin, IApiLocalizer localizer,

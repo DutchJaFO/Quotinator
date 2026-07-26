@@ -5,10 +5,12 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
+using Quotinator.Core.Entities;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
@@ -45,6 +47,7 @@ public class ImportRuleEndpointsTests
     private WebApplicationFactory<Program> CreateFactory(
         FakeImportActionService? actionService = null,
         FakeSourceFileOverrideRegistry? registry = null,
+        IEnumerable<Source>? sources = null,
         string? adminApiKey = TestKey)
     {
         var pathResolver = new RuleFileOverridePathResolver(_overrideDir, Path.Combine(_tempDir, "override-external"), _bundledDir, Path.Combine(_tempDir, "bundled-external"));
@@ -59,6 +62,7 @@ public class ImportRuleEndpointsTests
                 services.AddSingleton<IImportActionService>(actionService ?? new FakeImportActionService());
                 services.AddSingleton<ISourceFileOverrideRegistry>(registry ?? new FakeSourceFileOverrideRegistry());
                 services.AddSingleton<IRuleFileOverridePathResolver>(pathResolver);
+                services.AddSingleton<IListableRepository<Source>>(new FakeSourceRepository(sources));
             });
             builder.ConfigureAppConfiguration((_, config) =>
             {
@@ -82,6 +86,14 @@ public class ImportRuleEndpointsTests
 
     private const string SampleRuleFile =
         """{"rules":[{"entityId":"11111111-1111-1111-1111-111111111111","existingRecord":{"date":"1990"},"incomingRecord":{"date":"1991"},"fields":[{"field":"date","resolution":"Keep"}]}]}""";
+
+    private static Source NewSource(string title, QuoteType type = QuoteType.Movie) => new()
+    {
+        Id          = Guid.NewGuid(),
+        Title       = title,
+        Type        = new SafeValue<QuoteType?>(type.ToString(), type),
+        DateCreated = SafeDateValue.Now,
+    };
 
     // ── GET /conflict ──────────────────────────────────────────────────────
 
@@ -303,5 +315,101 @@ public class ImportRuleEndpointsTests
 
         Assert.IsFalse(doc.RootElement.GetProperty("isOverrideActive").GetBoolean(), "removing the registration must fall back to the bundled copy");
         Assert.AreEqual("11111111-1111-1111-1111-111111111111", doc.RootElement.GetProperty("rules")[0].GetProperty("entityId").GetString());
+    }
+
+    // ── GET /alias ─────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task GetSourceAliasCandidates_MissingFileName_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/rules/alias?origin=Bundled");
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task GetSourceAliasCandidates_NoApiKeyRequired_Returns200()
+    {
+        using var factory = CreateFactory(sources: [NewSource("Casablanca")]);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task GetSourceAliasCandidates_NearDuplicateTitles_SurfacedAsCandidate()
+    {
+        using var factory = CreateFactory(sources:
+        [
+            NewSource("Airplane!"),
+            NewSource("Airplane"),
+        ]);
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled");
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(1, doc.RootElement.GetProperty("candidates").GetArrayLength());
+    }
+
+    [TestMethod]
+    public async Task GetSourceAliasCandidates_NoDuplicates_ReturnsEmptyCandidates()
+    {
+        using var factory = CreateFactory(sources:
+        [
+            NewSource("Jurassic Park"),
+            NewSource("Casablanca"),
+        ]);
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled");
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.AreEqual(0, doc.RootElement.GetProperty("candidates").GetArrayLength());
+    }
+
+    [TestMethod]
+    public async Task GetSourceAliasCandidates_AlreadyCoveredByExistingAlias_NotReSuggested()
+    {
+        WriteBundledRuleFile("aliases.json",
+            """{"aliases":[{"title":"Airplane","type":"Movie","canonicalTitle":"Airplane!","canonicalType":"Movie"}]}""");
+
+        using var factory = CreateFactory(sources:
+        [
+            NewSource("Airplane!"),
+            NewSource("Airplane"),
+        ]);
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled");
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.AreEqual(0, doc.RootElement.GetProperty("candidates").GetArrayLength(), "an already-aliased pair must not be re-suggested");
+    }
+
+    [TestMethod]
+    public async Task GetSourceAliasCandidates_NeverWritesToAliasFile()
+    {
+        var bundledPath = Path.Combine(_bundledDir, "aliases.json");
+        WriteBundledRuleFile("aliases.json", """{"aliases":[]}""");
+        var beforeContent = await File.ReadAllTextAsync(bundledPath);
+
+        using var factory = CreateFactory(sources:
+        [
+            NewSource("Airplane!"),
+            NewSource("Airplane"),
+        ]);
+        using var client = factory.CreateClient();
+
+        await client.GetAsync("/api/v1/import/rules/alias?fileName=aliases.json&origin=Bundled");
+
+        Assert.AreEqual(beforeContent, await File.ReadAllTextAsync(bundledPath), "GET must never modify the alias file on disk");
+        Assert.IsFalse(File.Exists(Path.Combine(_overrideDir, "aliases.json")), "GET must never create an override file either");
     }
 }

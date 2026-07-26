@@ -386,25 +386,34 @@ has them, never overwritten by a fresh generation run.
 
 ### 13. `SourceAliasRule` generation — candidate detection, not auto-generation
 
-**Status:** Not started. Aliases cannot be generated the same mechanical way `ConflictResolutionRule`
-entries can: every alias #181 shipped came from manual title-verification research (a web search per
-title, per `docs/workflow/source-verification.md`) confirming what a film's real canonical title is —
-there is no decided-action shape (Keep/Replace/Custom) to read a canonical title back from, because
-nobody "decides" a canonical title through the normal conflict-review flow. Building an endpoint that
+**Status:** Done, implemented 2026-07-26.
+
+Aliases cannot be generated the same mechanical way `ConflictResolutionRule` entries can: every alias
+#181 shipped came from manual title-verification research (a web search per title, per
+`docs/workflow/source-verification.md`) confirming what a film's real canonical title is — there is no
+decided-action shape (Keep/Replace/Custom) to read a canonical title back from, because nobody
+"decides" a canonical title through the normal conflict-review flow. Building an endpoint that
 auto-writes alias entries without human verification would violate this project's own source-
 verification policy (a title/date claim must be checked against real sources before being recorded,
 per `docs/workflow/source-verification.md`'s procedure) — so generation for this mechanism means
-**detect and suggest, never auto-write**: scan existing `Sources` rows for near-duplicate `(Title,
-Type)` pairs not already covered by an alias (e.g. same normalized-punctuation/case title, or a close
-string-distance match) and surface them as candidates for a human to research and confirm by hand,
-using the existing hand-edit path — not a new auto-write mechanism. This still delivers the automation
-value item 5 asks for (finding likely duplicates without a human having to notice them first) without
-skipping the verification step this project requires for a factual title claim.
+**detect and suggest, never auto-write**.
+
+`SourceAliasCandidateGenerator.Generate` (`Quotinator.Data.Import`) groups existing `(Id, Title, Type)`
+Source rows by a punctuation-blind, case-blind normalization of `Title` (letters/digits/spaces only,
+whitespace collapsed) plus case-insensitive `Type`, then pairs up every two distinct-cased titles
+sharing a group. Two rows already identical except for case are never candidates — #175's natural-key
+Source matching is already case-insensitive, so two such rows could never both exist in the first
+place; this generator exists for the punctuation-level duplicates that catches (a trailing `!`, a curly
+vs. straight apostrophe, doubled whitespace — the exact defect classes #181's own cleanup found live),
+not a fuzzy string-distance metric, which would trade precision for recall this project doesn't need
+yet. A pair already covered by an existing `SourceAliasRule` (on either side) is skipped — not
+re-suggested. Output is `SourceAliasCandidate` (two ids, two titles, one type) — a pure suggestion
+record with no `canonicalTitle`/`canonicalType` fields at all, so there is nothing to persist even by
+mistake; confirming a real duplicate still requires the existing hand-edit path.
 
 ### 14. Rule-file endpoints
 
-**Status:** `ConflictResolutionRule` half done, implemented 2026-07-26. `SourceAliasRule` half not
-started — blocked on Step 13 (candidate-detection generation), which has not started either.
+**Status:** Done, implemented 2026-07-26.
 
 **Design finding that changed this step's shape**: the bundled sources directory (`data/sources/`) is
 not on the persistent volume — it's baked into the Docker image (`Program.cs`'s `bundledSourcesDir =
@@ -446,24 +455,27 @@ uses to decide which path to actually load. A `logPrefix` parameter (default `[D
 each caller supply its own structured-log prefix — `[Api - Import]` from the endpoints — rather than
 every log line claiming to be the seeding pipeline.
 
-**Endpoints, implemented 2026-07-26** — `ImportRuleEndpoints.cs`, all three under
-`/api/v1/import/rules/conflict`, tagged `ApiTags.Import`, matching the existing route-group convention:
-- `GET` (public, no key, matching `/actions/export`'s precedent) — returns the current effective
-  `ConflictResolutionRule`s for `fileName`/`origin` (override if registered and hash-verified, else
-  bundled), plus `isOverrideActive`. `404` if neither exists.
-- `POST /generate` (admin, `X-Api-Key`) — takes `fileName`/`origin`/`batchId`, builds rules from the
-  batch's decided export rows (Steps 10–12), merges into the current effective content (never
+**Endpoints, implemented 2026-07-26** — `ImportRuleEndpoints.cs`, under `/api/v1/import/rules/`, tagged
+`ApiTags.Import`, matching the existing route-group convention:
+- `GET /conflict` (public, no key, matching `/actions/export`'s precedent) — returns the current
+  effective `ConflictResolutionRule`s for `fileName`/`origin` (override if registered and hash-verified,
+  else bundled), plus `isOverrideActive`. `404` if neither exists.
+- `POST /conflict/generate` (admin, `X-Api-Key`) — takes `fileName`/`origin`/`batchId`, builds rules
+  from the batch's decided export rows (Steps 10–12), merges into the current effective content (never
   overwriting an already-covered entity/field), writes the result to the override location, registers
   its hash, and returns the merged file plus `rulesAdded`.
-- `DELETE` (admin, `X-Api-Key`) — un-registers the override (the file itself is left on disk, harmless
-  since it's never trusted without a matching registration); `404` if nothing is registered.
-
-`SourceAliasRule`'s own `GET` (Step 13's candidate-duplicate suggestions, read-only) is not built yet —
-blocked on Step 13 itself.
+- `DELETE /conflict` (admin, `X-Api-Key`) — un-registers the override (the file itself is left on disk,
+  harmless since it's never trusted without a matching registration); `404` if nothing is registered.
+- `GET /alias` (public, no key) — runs Step 13's `SourceAliasCandidateGenerator` against every live
+  Source row, filtered against `fileName`/`origin`'s own currently-effective `SourceAliasRule` file (via
+  the same `EffectiveRuleFileResolver`, so an override for the alias file is honoured too, even though
+  aliases have no `POST`/`DELETE` of their own — only the `ConflictResolutionRule` side needs a write
+  path; a confirmed alias is still a manual hand-edit of the source file per Step 13's own design). No
+  request body, no write of any kind — read-only by construction.
 
 ### 15. Tests — rule generation (both mechanisms)
 
-**Status:** `ConflictResolutionRule` half done. `SourceAliasRule` half not started.
+**Status:** Done, implemented 2026-07-26.
 
 `ConflictRuleGeneratorTests.cs` (11 tests): one decided field for one entity produces a single
 one-field rule; multiple decided fields for the same entity collapse into one rule with multiple
@@ -476,19 +488,27 @@ already-covered field's hand-authored resolution is never overwritten even when 
 different value; a genuinely new field for an already-covered entity is added alongside the existing
 one.
 
-`ImportRuleEndpointsTests.cs` (12 tests) covers the three new endpoints end to end: missing
-`fileName`/invalid `origin` → `422`; neither bundled nor override exists → `404`; a bundled-only file
-returns `isOverrideActive: false`; a registered override returns its own rules with `isOverrideActive:
-true`; `generate` without `X-Api-Key` → `401`, without `batchId` → `422`; a valid generate call writes
-the override file, registers it, and returns `rulesAdded`; **generating from a batch that only touches
-one entity does not drop an already-existing bundled rule for a different entity** — the exact
-correctness gap `EffectiveRuleFileResolver` exists to close, proven end to end rather than only at the
-unit level; `DELETE` without a key → `401`, with nothing registered → `404`, and removing a registration
-makes a subsequent `GET` fall back to the bundled copy.
+`SourceAliasCandidateGeneratorTests.cs` (10 tests): a punctuation-only difference (`"Airplane!"` vs.
+`"Airplane"`), a curly-vs-straight apostrophe, and doubled whitespace all surface as candidates; a
+case-only difference never surfaces (guarded even though #175 already prevents it from occurring in
+live data); same normalized title under a different `Type` is not grouped; no duplicates present
+returns empty; an already-aliased pair — checked from either side of the pair — is never re-suggested;
+a three-way duplicate group produces every pairwise combination; the candidate type carries no
+`canonicalTitle`/`canonicalType` field, so nothing could be written even by mistake.
 
-`SourceAliasRule` half **not started** — a near-duplicate Source pair surfaced as a candidate; an
-existing, already-aliased pair not re-suggested; the candidate endpoint never writes to the alias file
-itself. Blocked on Step 13's own design (see Step 13's status).
+`ImportRuleEndpointsTests.cs` (18 tests) covers all four endpoints end to end. `ConflictResolutionRule`
+side: missing `fileName`/invalid `origin` → `422`; neither bundled nor override exists → `404`; a
+bundled-only file returns `isOverrideActive: false`; a registered override returns its own rules with
+`isOverrideActive: true`; `generate` without `X-Api-Key` → `401`, without `batchId` → `422`; a valid
+generate call writes the override file, registers it, and returns `rulesAdded`; **generating from a
+batch that only touches one entity does not drop an already-existing bundled rule for a different
+entity** — the exact correctness gap `EffectiveRuleFileResolver` exists to close, proven end to end
+rather than only at the unit level; `DELETE` without a key → `401`, with nothing registered → `404`,
+and removing a registration makes a subsequent `GET` fall back to the bundled copy. `SourceAliasRule`
+side: missing `fileName` → `422`; no `X-Api-Key` required; a near-duplicate pair is surfaced; no
+duplicates returns an empty `candidates` array; a pair already covered by the alias file's own existing
+entry is not re-suggested; the endpoint never writes to either the bundled alias file or an override
+file — asserted by hashing file content before/after the call, not just checking the response shape.
 
 ### 16. Rule lookup and auto-apply during staging
 
@@ -556,7 +576,7 @@ every test must be confirmed red before its corresponding implementation lands.
 | 6 | ✅ | A `SourceAliasRule` is flagged `Stale` when its recorded canonical value no longer matches the live Source | Unit test + Live (T2) | `ImportActionPlannerTests` (Step 9) + CLAUDE.md smoke test against real bundled data, implemented 2026-07-26 |
 | 7 | ✅ | Rule generation from a batch's decided actions produces candidate `ConflictResolutionRule` entries, worst case one per action, best case one shared entity rule | Unit test | `ConflictRuleGeneratorTests.Generate_*` (Step 10-12), implemented 2026-07-26 |
 | 8 | ✅ | Generation merges into an existing rule file without overwriting manual edits | Unit test + Live (endpoint) | `ConflictRuleGeneratorTests.Merge_*` + `ImportRuleEndpointsTests.GenerateConflictRuleFile_ExistingBundledRules_AreMergedNotDropped`, implemented 2026-07-26 |
-| 9 | ❌ | `SourceAliasRule` candidate-duplicate detection surfaces likely duplicates without auto-writing an alias entry | Unit test | Step 15's tests |
+| 9 | ✅ | `SourceAliasRule` candidate-duplicate detection surfaces likely duplicates without auto-writing an alias entry | Unit test + Live (endpoint) | `SourceAliasCandidateGeneratorTests.*` + `ImportRuleEndpointsTests.GetSourceAliasCandidates_*`, implemented 2026-07-26 |
 | 10 | ✅ | A matching, non-stale `ConflictResolutionRule` auto-resolves a staged action instead of leaving it `Pending`, even under `Review` policy | Unit test | Already shipped by #181 under a different name: `ImportActionPlannerTests.PlanAsync_ReviewPolicy_MatchingRuleCoversTheOnlyChangedField_StagesDecidedNotPending` |
 | 11 | ✅ | No matching rule stages `Pending` exactly as today (regression guard) | Unit test | Already shipped by #181 under a different name: `ImportActionPlannerTests.PlanAsync_ReviewPolicy_NonMatchingRuleLookup_StagesPendingAsToday` |
 | 12 | ❌ | `README.md`/`addon/DOCS.md` updated for both new endpoints and the new `Stale` status | Live | Manual diff review against the endpoints and status value actually added |
