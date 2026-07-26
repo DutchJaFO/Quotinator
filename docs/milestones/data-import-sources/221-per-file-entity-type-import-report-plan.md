@@ -1,6 +1,6 @@
 # #221 — Per-file, per-entity-type import/seed report
 
-**Status:** Planning
+**Status:** In progress (step 1)
 
 **GitHub issue:** https://github.com/DutchJaFO/Quotinator/issues/221
 
@@ -66,7 +66,11 @@ body's own "Related gap" section.
 
 ### 1. `ImportActionReport` — the shared report DTO and builder
 
-**Status:** Not started.
+**Status:** Done, implemented 2026-07-26.
+
+`EntityTypeActionCounts`/`FileImportReport` (`Quotinator.Core.Models`) and
+`ImportActionReportBuilder.Build` (`Quotinator.Core.Database`, internal) implemented exactly as
+designed above — 13 unit tests in `ImportActionReportBuilderTests.cs`, all passing.
 
 New types in `Quotinator.Core.Models` (response-shape DTOs, matching `MasterDataReference`'s own
 precedent for where these live):
@@ -196,7 +200,7 @@ call sites correctly —
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `ImportActionReportBuilder` classifies every `(ActionType, Status)` combination into exactly one of 6 buckets | Unit test | `ImportActionReportBuilderTests.*` (Step 1) |
+| 1 | ✅ | `ImportActionReportBuilder` classifies every `(ActionType, Status)` combination into exactly one of 6 buckets | Unit test | `ImportActionReportBuilderTests.*` (13 tests), implemented 2026-07-26 |
 | 2 | ❌ | Seeding produces a per-file report replacing `LastSeedDuplicates`, for all entity types | Unit test | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_ProducesPerFileReport` (new) |
 | 3 | ❌ | `PreviewSeedAsync` produces the same rich report without writing any row to the database | Unit test | `DatabaseInitializerTests.PreviewSeedAsync_RealBundledFiles_ProducesReportWithNoDatabaseWrites` (new) |
 | 4 | ❌ | `POST /import`/`/import/preview` responses include a per-file report | Unit test | `ImportEndpointTests`/`SqliteQuoteImportServiceTests` (new cases) |
