@@ -5,6 +5,7 @@ using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
+using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
@@ -47,10 +48,14 @@ public class DatabaseInitializerTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches, bool useBaseline = true)
-        => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline);
+    private QuotinatorDatabaseInitializer CreateInitializer(
+        IReadOnlyList<SeedBatch> batches, bool useBaseline = true,
+        IRuleFileOverridePathResolver? ruleFileOverridePathResolver = null, ISourceFileOverrideRegistry? sourceFileOverrideRegistry = null)
+        => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline, ruleFileOverridePathResolver, sourceFileOverrideRegistry);
 
-    private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline)
+    private QuotinatorDatabaseInitializer CreateInitializer(
+        IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline,
+        IRuleFileOverridePathResolver? ruleFileOverridePathResolver = null, ISourceFileOverrideRegistry? sourceFileOverrideRegistry = null)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
@@ -72,6 +77,8 @@ public class DatabaseInitializerTests
             coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
+            ruleFileOverridePathResolver ?? NoOpRuleFileOverridePathResolver.Instance,
+            sourceFileOverrideRegistry ?? NoOpSourceFileOverrideRegistry.Instance,
             useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 
@@ -278,6 +285,115 @@ public class DatabaseInitializerTests
             "The rule fully covers the only ambiguous field — nothing should be left Pending");
         Assert.AreEqual("Original text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id;", new { id = quoteId }),
             "Keep must resolve to the existing (baseline) value");
+    }
+
+    /// <summary>
+    /// #153: end-to-end proof that a registered, hash-verified override on the persistent volume is
+    /// preferred over the bundled rule file the manifest actually references — the override says
+    /// Replace where the bundled copy says Keep, and the applied result reflects Replace.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_RegisteredOverrideWithMatchingHash_IsPreferredOverBundledRuleFile()
+    {
+        const string quoteId = "d3111111-1111-4111-8111-111111111111";
+        var baselinePath = Path.Combine(_tempDir, "override-baseline.json");
+        var conflictPath = Path.Combine(_tempDir, "override-conflict.json");
+        var bundledRulesPath = Path.Combine(_tempDir, "override-conflict-rules.json");
+
+        File.WriteAllText(baselinePath,
+            """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
+                .Replace("QUOTE_ID", quoteId));
+        File.WriteAllText(conflictPath,
+            """[{"id":"QUOTE_ID","quote":"Changed text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
+                .Replace("QUOTE_ID", quoteId));
+        // Bundled copy says Keep — if this were used, the applied text would stay "Original text.".
+        File.WriteAllText(bundledRulesPath,
+            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
+                .Replace("QUOTE_ID", quoteId));
+
+        var internalDownloadDir = Path.Combine(_tempDir, "sources", "download");
+        var pathResolver = new RuleFileOverridePathResolver(internalDownloadDir, Path.Combine(_tempDir, "imports", "download"));
+        var overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
+        Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
+        // Override says Replace — the applied text must come from here instead.
+        var overrideContent =
+            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Replace"}]}]}"""
+                .Replace("QUOTE_ID", quoteId);
+        File.WriteAllText(overridePath, overrideContent);
+
+        var registry = new SourceFileOverrideRegistry(new SqliteConnectionFactory(_dbPath));
+        var batch = new SeedBatch(
+            [
+                new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
+                new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: bundledRulesPath),
+            ],
+            ManifestPolicy.HardcodedDefault, "override-test");
+
+        // The registry table must exist before InitialiseAsync runs migrations — the very first
+        // write in this test — so seed a bare, migration-free database via a throwaway initializer
+        // first, matching how every other test in this file lets InitialiseAsync create the schema.
+        await CreateInitializer([batch]).InitialiseAsync();
+        await registry.RegisterAsync(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled,
+            QuotinatorDatabaseInitializer.ComputeContentHash(overrideContent), sourceBatchId: null);
+
+        var db = CreateInitializer([batch], ruleFileOverridePathResolver: pathResolver, sourceFileOverrideRegistry: registry);
+        await db.ReseedAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        Assert.AreEqual("Changed text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id;", new { id = quoteId }),
+            "The registered override (Replace) must win over the bundled rule file (Keep)");
+    }
+
+    /// <summary>
+    /// #153: an override file physically present on disk but never registered (or registered under a
+    /// stale hash) must never be silently trusted — falls back to the bundled rule file exactly as if
+    /// no override existed at all.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_OverrideFileWithoutMatchingRegistration_FallsBackToBundledRuleFile()
+    {
+        const string quoteId = "d4111111-1111-4111-8111-111111111111";
+        var baselinePath = Path.Combine(_tempDir, "unregistered-baseline.json");
+        var conflictPath = Path.Combine(_tempDir, "unregistered-conflict.json");
+        var bundledRulesPath = Path.Combine(_tempDir, "unregistered-conflict-rules.json");
+
+        File.WriteAllText(baselinePath,
+            """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
+                .Replace("QUOTE_ID", quoteId));
+        File.WriteAllText(conflictPath,
+            """[{"id":"QUOTE_ID","quote":"Changed text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
+                .Replace("QUOTE_ID", quoteId));
+        File.WriteAllText(bundledRulesPath,
+            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
+                .Replace("QUOTE_ID", quoteId));
+
+        var internalDownloadDir = Path.Combine(_tempDir, "sources2", "download");
+        var pathResolver = new RuleFileOverridePathResolver(internalDownloadDir, Path.Combine(_tempDir, "imports2", "download"));
+        var overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
+        Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
+        // An override file exists on disk, but is never registered below.
+        File.WriteAllText(overridePath,
+            """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Replace"}]}]}"""
+                .Replace("QUOTE_ID", quoteId));
+
+        var registry = new SourceFileOverrideRegistry(new SqliteConnectionFactory(_dbPath));
+        var batch = new SeedBatch(
+            [
+                new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
+                new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: bundledRulesPath),
+            ],
+            ManifestPolicy.HardcodedDefault, "unregistered-override-test");
+
+        var db = CreateInitializer([batch], ruleFileOverridePathResolver: pathResolver, sourceFileOverrideRegistry: registry);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        Assert.AreEqual("Original text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id;", new { id = quoteId }),
+            "An unregistered override file must never be trusted — the bundled rule file (Keep) must be used instead");
     }
 
     /// <summary>Regression guard: the same scenario with no rule file at all must behave exactly as before #181 — Pending, nothing overwritten.</summary>
@@ -754,6 +870,7 @@ public class DatabaseInitializerTests
             coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             QuotinatorMigrations.Baseline);
         return (db, dbPath);
     }

@@ -70,6 +70,7 @@ public class ImportBatchesTests
             coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 

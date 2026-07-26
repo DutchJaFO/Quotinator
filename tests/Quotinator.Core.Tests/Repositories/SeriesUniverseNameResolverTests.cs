@@ -50,7 +50,8 @@ public class SeriesUniverseNameResolverTests
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, NoOpSystemAuditWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
-            autoUpdateSources: false, QuotinatorMigrations.Baseline);
+            autoUpdateSources: false,
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
     }
 

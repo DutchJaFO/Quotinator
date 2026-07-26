@@ -10,6 +10,7 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
+using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Helpers;
@@ -30,6 +31,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     private readonly IImportActionService           _actionService;
     private readonly ISourceCacheUpdater            _sourceCacheUpdater;
     private readonly bool                           _autoUpdateSources;
+    private readonly IRuleFileOverridePathResolver  _ruleFileOverridePathResolver;
+    private readonly ISourceFileOverrideRegistry    _sourceFileOverrideRegistry;
 
     /// <summary>Initialises the instance with all dependencies required for Quotinator seeding.</summary>
     public QuotinatorDatabaseInitializer(
@@ -45,6 +48,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         ILogger<DatabaseInitializer>   logger,
         ISourceCacheUpdater            sourceCacheUpdater,
         bool                           autoUpdateSources,
+        IRuleFileOverridePathResolver  ruleFileOverridePathResolver,
+        ISourceFileOverrideRegistry    sourceFileOverrideRegistry,
         SchemaBaseline?                baseline = null)
         : base(factory, options, migrations, auditWriter, callerContext, logger, baseline)
     {
@@ -54,6 +59,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         _actionService      = actionService;
         _sourceCacheUpdater = sourceCacheUpdater;
         _autoUpdateSources  = autoUpdateSources;
+        _ruleFileOverridePathResolver = ruleFileOverridePathResolver;
+        _sourceFileOverrideRegistry   = sourceFileOverrideRegistry;
     }
 
     /// <inheritdoc/>
@@ -262,8 +269,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 var quotes          = parsed.Quotes;
                 var filePolicy      = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
                 var policy          = filePolicy.ForQuotes;
-                var conflictRules   = LoadConflictRules(seedFile.RuleFilePath);
-                var sourceAliases   = LoadSourceAliases(seedFile.SourceAliasFilePath);
+                var conflictRules   = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
+                var sourceAliases   = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
 
                 Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
                     quotes.Count, fileName, batch.Label);
@@ -458,29 +465,33 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     /// manifest entry's <c>ruleFile</c> property. Missing/absent/invalid all resolve to
     /// <see cref="ConflictRuleLookup.Empty"/> — a rule file is an optimisation, never a hard
     /// requirement for seeding to proceed, matching <see cref="LoadSourceFileAsync"/>'s own
-    /// fail-open convention for the source file itself.
+    /// fail-open convention for the source file itself. #153: prefers a registered, hash-verified
+    /// override over the bundled/image copy, when one exists — see
+    /// <see cref="ResolveEffectiveRuleFilePathAsync"/>.
     /// </summary>
-    private ConflictRuleLookup LoadConflictRules(string? ruleFilePath)
+    private async Task<ConflictRuleLookup> LoadConflictRulesAsync(string? ruleFilePath, SeedBatchOrigin origin)
     {
         if (ruleFilePath is null) return ConflictRuleLookup.Empty;
 
-        if (!File.Exists(ruleFilePath))
+        var effectivePath = await ResolveEffectiveRuleFilePathAsync(ruleFilePath, origin);
+
+        if (!File.Exists(effectivePath))
         {
             Logger.LogWarning("[Database - Seed] conflict-resolution rule file {File} referenced in manifest but not found — continuing without rules",
-                Path.GetFileName(ruleFilePath));
+                Path.GetFileName(effectivePath));
             return ConflictRuleLookup.Empty;
         }
 
         try
         {
-            var json     = File.ReadAllText(ruleFilePath);
+            var json     = await File.ReadAllTextAsync(effectivePath);
             var ruleFile = JsonSerializer.Deserialize<ConflictResolutionRuleFile>(json, ConflictRuleReadOptions);
             return new ConflictRuleLookup(ruleFile?.Rules ?? []);
         }
         catch (JsonException ex)
         {
             Logger.LogWarning(ex, "[Database - Seed] conflict-resolution rule file {File} is not valid JSON — continuing without rules",
-                Path.GetFileName(ruleFilePath));
+                Path.GetFileName(effectivePath));
             return ConflictRuleLookup.Empty;
         }
     }
@@ -488,30 +499,84 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     /// <summary>
     /// #181: loads a source's own per-source title-alias file, referenced by the manifest entry's
     /// <c>sourceAliasFile</c> property. Missing/absent/invalid all resolve to
-    /// <see cref="SourceAliasLookup.Empty"/> — same fail-open convention as <see cref="LoadConflictRules"/>.
+    /// <see cref="SourceAliasLookup.Empty"/> — same fail-open convention as <see cref="LoadConflictRulesAsync"/>.
+    /// #153: prefers a registered, hash-verified override over the bundled/image copy, when one
+    /// exists — see <see cref="ResolveEffectiveRuleFilePathAsync"/>.
     /// </summary>
-    private SourceAliasLookup LoadSourceAliases(string? sourceAliasFilePath)
+    private async Task<SourceAliasLookup> LoadSourceAliasesAsync(string? sourceAliasFilePath, SeedBatchOrigin origin)
     {
         if (sourceAliasFilePath is null) return SourceAliasLookup.Empty;
 
-        if (!File.Exists(sourceAliasFilePath))
+        var effectivePath = await ResolveEffectiveRuleFilePathAsync(sourceAliasFilePath, origin);
+
+        if (!File.Exists(effectivePath))
         {
             Logger.LogWarning("[Database - Seed] source-alias file {File} referenced in manifest but not found — continuing without aliases",
-                Path.GetFileName(sourceAliasFilePath));
+                Path.GetFileName(effectivePath));
             return SourceAliasLookup.Empty;
         }
 
         try
         {
-            var json      = File.ReadAllText(sourceAliasFilePath);
+            var json      = await File.ReadAllTextAsync(effectivePath);
             var aliasFile = JsonSerializer.Deserialize<SourceAliasRuleFile>(json, ConflictRuleReadOptions);
             return new SourceAliasLookup(aliasFile?.Aliases ?? []);
         }
         catch (JsonException ex)
         {
             Logger.LogWarning(ex, "[Database - Seed] source-alias file {File} is not valid JSON — continuing without aliases",
-                Path.GetFileName(sourceAliasFilePath));
+                Path.GetFileName(effectivePath));
             return SourceAliasLookup.Empty;
         }
     }
+
+    /// <summary>
+    /// #153: a generated <c>ruleFile</c>/<c>sourceAliasFile</c> override lives on the persistent volume
+    /// (never the bundled/image path, which is read-only in a real deployment) — see
+    /// <see cref="IRuleFileOverridePathResolver"/>. Only trusted when BOTH a registration exists in
+    /// <see cref="ISourceFileOverrideRegistry"/> AND the override file's current content hash still
+    /// matches what was registered — an override file present on disk without a matching registration
+    /// (deleted registration, hand-edited content, a stale copy from a previous version) is never
+    /// silently trusted; falls back to <paramref name="bundledPath"/> instead.
+    /// </summary>
+    private async Task<string> ResolveEffectiveRuleFilePathAsync(string bundledPath, SeedBatchOrigin origin)
+    {
+        var fileName = Path.GetFileName(bundledPath);
+
+        string overridePath;
+        try
+        {
+            overridePath = _ruleFileOverridePathResolver.Resolve(fileName, origin);
+        }
+        catch (ArgumentException)
+        {
+            // Should never happen for a manifest-derived filename (always a plain filename by
+            // construction) — fail open to the bundled path rather than block seeding over it.
+            return bundledPath;
+        }
+
+        if (!File.Exists(overridePath)) return bundledPath;
+
+        var registered = await _sourceFileOverrideRegistry.FindAsync(fileName, origin);
+        if (registered is null)
+        {
+            Logger.LogWarning("[Database - Seed] {File} has an override file on disk but no registered entry — ignoring it and using the bundled copy",
+                fileName);
+            return bundledPath;
+        }
+
+        var actualHash = ComputeContentHash(await File.ReadAllTextAsync(overridePath));
+        if (!string.Equals(actualHash, registered.ContentHash, StringComparison.OrdinalIgnoreCase))
+        {
+            Logger.LogWarning("[Database - Seed] {File}'s override content hash no longer matches its registration — ignoring it and using the bundled copy",
+                fileName);
+            return bundledPath;
+        }
+
+        return overridePath;
+    }
+
+    /// <summary>SHA-256 of <paramref name="content"/>, lowercase hex — the same hash shape <see cref="ISourceFileOverrideRegistry"/> stores.</summary>
+    internal static string ComputeContentHash(string content)
+        => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
 }

@@ -375,6 +375,11 @@ builder.Services.AddSingleton<ISourceCacheUpdater>(sp => new SourceCacheUpdater(
         quoteSourceConverters, validateCanonicalSchema),
     sp.GetRequiredService<ILogger<SourceCacheUpdater>>()));
 
+// #153: a generated ruleFile/sourceAliasFile override is written under the same two persistent,
+// writable cache directories SourceCacheUpdater already uses above — never the bundled/image sources
+// directory, which is read-only in a real deployment.
+builder.Services.AddSingleton<IRuleFileOverridePathResolver>(_ => new RuleFileOverridePathResolver(internalDownloadDir, externalDownloadDir));
+
 builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
@@ -394,6 +399,8 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<ILogger<DatabaseInitializer>>(),
         sp.GetRequiredService<ISourceCacheUpdater>(),
         autoUpdateSources,
+        sp.GetRequiredService<IRuleFileOverridePathResolver>(),
+        sp.GetRequiredService<ISourceFileOverrideRegistry>(),
         QuotinatorMigrations.Baseline);
 });
 builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Core.Services.SqliteQuoteService(connectionFactory));

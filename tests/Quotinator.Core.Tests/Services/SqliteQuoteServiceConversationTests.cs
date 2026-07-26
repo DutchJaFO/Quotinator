@@ -102,7 +102,8 @@ public class SqliteQuoteServiceConversationTests
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
             coordinator, actionService,
             NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
-            NoOpSourceCacheUpdater.Instance, autoUpdateSources: false);
+            NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance);
         await db.InitialiseAsync();
     }
 
