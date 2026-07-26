@@ -610,7 +610,14 @@ convention.
 
 ### 18. Tests — overall
 
-**Status:** T2 done 2026-07-26. T1 (Visual Studio) is the developer's own action, not yet performed.
+**Status:** Done — T2 (2026-07-26) and T1 (2026-07-26, developer's own action in Visual Studio) both
+confirmed.
+
+**T1 sign-off**: developer ran `POST /admin/database/reseed` against a real Visual Studio debug session
+(migrating an existing v11 database to v13 first). Result matched T2 exactly: `799 quotes  461 sources
+12 characters  3 people` — the 3 alias-merged Sources (464 → 461) and 5 corrected characters (7 → 12,
+the 4 new rules + Galadriel) both confirmed independently of the Docker environment. No errors, no
+pending actions.
 
 The five tests listed in the issue's "Expected tests" table (reproduced above) are the floor, not the
 full set — Steps 1–16 above each imply additional coverage (manifest-schema validation, `Stale` status

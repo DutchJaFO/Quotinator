@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-25 21:50 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-26 18:19 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -38,6 +38,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Known, recurring conflicts between bundled quote sources are now resolved automatically on import instead of requiring the same manual decision every time the data is reprocessed.
 - A number of duplicate entries caused by inconsistent movie titles across bundled data sources have been merged into one accurate entry each — including every Star Wars film, several Marvel films, The Godfather Part II, and Creed II, among others.
 - James Bond has been added as a supported film franchise, alongside The Matrix.
+- Rule files that correct recurring, known data conflicts can now be viewed, generated from a decision already made, and removed through new endpoints, instead of only being hand-edited.
+- A few more duplicate entries (Airplane!, When Harry Met Sally, and an Avengers film) have been merged into one accurate entry each, and several quotes that were missing which character said them now have that filled in.
+- A data-correction feature meant to fill in a missing detail (like which character said a quote) had never actually worked the first time a quote was seen — only on a later re-check — so any such correction made so far silently had no effect; this is now fixed.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -97,6 +100,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New `POST /api/v1/import/actions/bulk-decide` endpoint accepts an edited export file back and applies every decision it contains in one call, reporting any row that couldn't be applied without affecting the rest of the file (issue #163)
 - New per-source conflict-resolution rule file (`ruleFile` manifest property) lets a known, recurring field disagreement between two occurrences of the same record auto-resolve under the `review` policy instead of always staging for manual decision (issue #181)
 - New per-source title-alias file (`sourceAliasFile` manifest property) corrects a misspelled or inconsistent Source title/type to its canonical form before it's matched against existing data — applies to both a brand-new record and a re-imported one, preventing a duplicate Source from ever being created for the same real film/show under a different spelling (issue #181)
+- New `GET`/`POST /generate`/`DELETE /api/v1/import/rules/conflict` endpoints view, generate from a decided batch, and remove a persisted override of a per-source conflict-resolution rule file, without needing to hand-edit and redeploy it (issue #153)
+- New `GET /api/v1/import/rules/alias` endpoint scans existing Sources for likely duplicate titles not yet covered by a title-alias file and suggests them for review — never writes an alias entry itself (issue #153)
+- A staged action can now be flagged `Stale` when the conflict-resolution or title-alias rule that would have auto-resolved it no longer matches current data — held for review instead of silently reapplying an outdated correction (issue #153)
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
@@ -149,6 +155,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `PlanSourcesAsync` (the Source-correction planning path) had never been wired to the per-source conflict-resolution rule file mechanism, so a legitimate cross-file Source enrichment (e.g. a curated quote establishing a Source, a later file assigning it to a series) had no way to auto-resolve under the `review` policy and always required manual decision (issue #181)
 - Filtering quotes by `series=`/`universe=` name (rather than id), matching a Series/Universe/Person by name during import, the `lang` query parameter, and `GET`/`DELETE /api/v1/admin/audit`'s `table` filter all matched case-sensitively — a lowercase or differently-cased value (e.g. `?universe=james bond` against a stored `"James Bond"`) silently returned no results, or in the `DELETE` case silently deleted nothing while still reporting success; all four now match case-insensitively, consistent with every other identifier in the system (issue #216)
 - Case-insensitive matching for Source titles, Series/Universe/Person names, and a few internal status filters was implemented as separate hand-written SQL in each place, and one of them (import-action status/entity-type filtering) had drifted onto the opposite letter-case convention from everywhere else; consolidated onto one shared, tested mechanism with no change to actual matching behaviour, plus an automated check that catches a future comparison of this kind if it's ever added without the same case-insensitive handling (issue #211)
+- A conflict-resolution rule's `Custom` value (filling in a field that's missing or wrong on both sides, e.g. which character said a quote) only ever applied the second time the same quote was encountered, never the first — so it silently never took effect for a quote appearing exactly once anywhere in the bundled data, which is the common case; it now applies from the first encounter (issue #153)
+- Fixing the above exposed two further issues in the same mechanism: a field already correctly resolved could be incorrectly held for review as if the rule governing it had gone stale, and a record needing no correction at all (every field already agreeing) could be held for review forever instead of resolving immediately; both are now fixed (issue #153)
+- Airplane!, When Harry Met Sally, and an Avengers film each existed as duplicate entries under an inconsistently-spelled title in one bundled data source — merged into their single existing, correctly-spelled entry (issue #153)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`
