@@ -475,6 +475,103 @@ public class ImportActionPlannerTests
         Assert.AreEqual("Marvel's The Avengers", payload.Title, "With no alias lookup provided, the raw incoming title is used unchanged — regression guard matching pre-#181 behaviour");
     }
 
+    // ── #153: SourceAliasRule staleness ──────────────────────────────────────────
+
+    /// <summary>
+    /// Simulates a genuine rename: the Source that was originally created under exactly the alias's
+    /// own recorded canonical (title, type) — and therefore carries the id that pair deterministically
+    /// hashes to (<see cref="EntityIdentity.SourceId"/>, fixed at creation, never recomputed on a later
+    /// Modify) — has since had its Title changed away from that canonical value. The alias file was
+    /// never updated to match. Deliberately does NOT test "no Source with the canonical title exists
+    /// at all" as stale — found live via Docker T2 that an earlier version of this check conflated that
+    /// case (a completely legitimate first-time, alias-guided creation) with a genuine rename, producing
+    /// false positives against every real bundled alias whose canonical Source hadn't been created by
+    /// an earlier file yet. See <see cref="PlanAsync_SourceAliasNoCanonicalSourceYet_FirstTimeCreation_NotStale"/>
+    /// for that regression guard.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_SourceAliasStale_CanonicalSourceRenamedAway_AddPathStagesQuoteAsStale()
+    {
+        using var conn = await OpenConnectionAsync();
+        var renamedSourceId = EntityIdentity.SourceId("The Avengers", "movie");
+        await SeedExplicitSourceAsync(conn, renamedSourceId, title: "The Avengers (Renamed)", type: "Movie", date: null);
+
+        var quote   = BuildQuote("f1111111-1111-4111-8111-111111111111", source: "Marvel's The Avengers", character: null);
+        var aliases = new SourceAliasLookup([
+            new SourceAliasRule { Title = "Marvel's The Avengers", Type = "movie", CanonicalTitle = "The Avengers", CanonicalType = "movie" },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Stale, quoteAction.Status.Parsed, "The row the alias's canonical pair would hash to now has a different live Title — a genuine rename, must never be silently trusted");
+        Assert.IsNull(quoteAction.MergedFields, "A Stale action has nothing resolved yet, same as Pending/Blocked");
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_SourceAliasStale_ModifyPath_StagesQuoteAsStaleNotDecided()
+    {
+        using var conn = await OpenConnectionAsync();
+        var quoteId  = "f2111111-1111-4111-8111-111111111111";
+        var sourceId = Guid.NewGuid().ToString();
+        await SeedExistingQuoteWithSourceAsync(conn, quoteId, sourceId, "Zootopia", "Movie", "Original text.");
+        var renamedCanonicalId = EntityIdentity.SourceId("Zootopia (Canonical)", "movie");
+        await SeedExplicitSourceAsync(conn, renamedCanonicalId, title: "Zootopia (Canonical, Renamed)", type: "Movie", date: null);
+
+        var quote   = BuildQuote(quoteId, source: "Zootopia", quoteText: "A changed line.", type: Core.Models.QuoteType.Anime);
+        var aliases = new SourceAliasLookup([
+            new SourceAliasRule { Title = "Zootopia", Type = "anime", CanonicalTitle = "Zootopia (Canonical)", CanonicalType = "movie" },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Stale, quoteAction.Status.Parsed, "The alias's canonical Source has been renamed away since authoring — must not silently resolve this Modify");
+        Assert.IsNull(quoteAction.MergedFields, "A Stale action has nothing resolved yet, same as Pending/Blocked");
+    }
+
+    /// <summary>
+    /// Regression guard for the exact bug found live via Docker T2 (#153): an alias whose canonical
+    /// Source has never existed at all — the common, legitimate case of an alias guiding the
+    /// first-ever creation of a Source under its correct name (e.g. a brand-new database, or the first
+    /// bundled file to ever mention this title) — must resolve normally, not be treated as stale.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_SourceAliasNoCanonicalSourceYet_FirstTimeCreation_NotStale()
+    {
+        using var conn = await OpenConnectionAsync();
+        var quote   = BuildQuote("f4111111-1111-4111-8111-111111111111", source: "Marvel's The Avengers", character: null);
+        var aliases = new SourceAliasLookup([
+            new SourceAliasRule { Title = "Marvel's The Avengers", Type = "movie", CanonicalTitle = "The Avengers", CanonicalType = "movie" },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "No Source has ever existed under this canonical name yet — this is a legitimate first-time creation, not staleness");
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        Assert.AreEqual("The Avengers", payload.Title, "The new Source must be created under the alias's canonical title, not the raw incoming one");
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_SourceAliasFresh_CanonicalSourceExists_RegressionStillDecided()
+    {
+        using var conn = await OpenConnectionAsync();
+        var canonicalSourceId = Guid.NewGuid().ToString();
+        await SeedExplicitSourceAsync(conn, canonicalSourceId, title: "The Avengers", type: "Movie", date: null);
+
+        var quote   = BuildQuote("f3111111-1111-4111-8111-111111111111", source: "Marvel's The Avengers", character: null);
+        var aliases = new SourceAliasLookup([
+            new SourceAliasRule { Title = "Marvel's The Avengers", Type = "movie", CanonicalTitle = "The Avengers", CanonicalType = "movie" },
+        ]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "A fresh alias (canonical Source still exists) must resolve normally, not be treated as stale");
+    }
+
     private static async Task SeedExistingQuoteWithCharacterAsync(SqliteConnection conn, string id, string quoteText, string characterName)
     {
         var now          = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");

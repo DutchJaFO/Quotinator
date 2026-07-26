@@ -301,28 +301,49 @@ no dedicated new test beyond the enum round-trip above) returns exactly the stag
 
 ### 8. `SourceAliasRule` staleness
 
-**Status:** Not started. Design grounded directly in the code (Step 4's finding), not a schema
-addition. A different failure mode from `ConflictResolutionRule`'s, since an alias has no "existing vs
-incoming" shape to diff: the plausible failure is a Source later being renamed via Modify (#162) after
-an alias was authored pointing at its old title — nothing recomputes or invalidates the alias file when
-that happens. Detect this with the same query `ResolveSourceAsync` itself already uses to match a
-Source by natural key — `Sql.Sources.SelectIdByTitleAndType` (confirmed to exist at
-`src/Quotinator.Core/Queries/Sql.cs:387-388`, case-insensitive, `IsDeleted = 0`) — called with the
-alias's own `CanonicalTitle`/`CanonicalType` at the exact point `SourceAliasLookup.TryResolve` succeeds,
-*before* substituting the canonical pair into the quote and letting `ResolveSourceAsync` run. No row
-found means no Source currently matches what the alias claims is canonical (most likely: it was renamed
-since); treat the alias as stale rather than letting `ResolveSourceAsync` silently create a new,
-wrongly-titled duplicate Source under the stale name. Surfaced via the same `Stale` status Step 6
-introduces, applied to the Quote(s) this alias would otherwise have silently resolved for. No new
-schema field, no new query, no `EntityIdentity` re-derivation involved.
+**Status:** Done, implemented 2026-07-26 — **after two false-positive bugs found and corrected live
+against real bundled data**, neither catchable by unit tests alone. This step's original design (a
+plain `Sql.Sources.SelectIdByTitleAndType` existence check) was wrong: it treats "no Source with this
+exact title exists right now" as the staleness signal, but that condition is identical for two
+completely different cases — a genuine rename (stale, correctly held) and an alias simply doing its
+normal job of guiding the *first-ever* creation of a Source under its correct canonical name (not
+stale at all — the common case on a brand-new database, or the first bundled file to ever mention a
+title). A title-only existence check cannot tell these apart. Live Docker T2 against the real bundled
+alias files (`nikhilnamal17-source-aliases.json` etc.) surfaced this immediately: 7 genuinely fresh,
+correctly-behaving aliases were flagged `Stale` purely because their canonical Source hadn't been
+created by an earlier bundled file yet — a real regression this plan doc's own smoke-test checklist
+addition (CLAUDE.md) now guards against.
+
+**Corrected design**, implemented in `ImportActionPlanner.cs`'s alias-substitution block: the reliable
+staleness signal is the Source's own id, not its title. `EntityIdentity.SourceId(canonicalTitle,
+canonicalType)` is a deterministic hash fixed at creation and never recomputed on a later Modify (only
+the row's `Title`/`Type` columns change; `Id` does not) — so the id a Source would have gotten if
+created under exactly the alias's own recorded canonical pair is knowable up front, whether or not that
+row exists yet. Three outcomes: (1) no row with that id exists at all → this is a legitimate first-time
+creation, never stale; (2) a row with that id exists and its *current* `Title`/`Type` still equals the
+alias's own canonical pair → fresh, substitute as before; (3) a row with that id exists but its current
+`Title`/`Type` has drifted away from the canonical pair → a genuine rename happened since the alias was
+authored → stale, do not substitute, surface via the same `Stale` status Step 6 introduces. Also
+checks `sourceIndex` (this planning call's own in-memory same-batch Add/match cache, the same one
+`ResolveSourceAsync` itself consults first) before falling back to the DB — a canonical Source
+introduced earlier in the very same batch is only staged, not yet actually written, so the DB alone
+would find nothing and produce the identical false-positive class of bug. One documented, narrow scope
+gap: a Source created under an *explicit* file-carried id (#162) that doesn't match the hash — a later
+rename of that specific row won't be caught by the id lookup (though substitution still resolves
+correctly via `ResolveSourceAsync`'s own natural-key lookup regardless, so no incorrect behaviour
+results, only a narrower staleness-detection miss for that one case).
 
 ### 9. Tests — `SourceAliasRule` staleness
 
-**Status:** Not started. At minimum: an alias whose recorded `CanonicalTitle`/`CanonicalType` no longer
-matches any live Source (simulating a rename via Modify since the alias was authored) is detected as
-stale and does not silently create a duplicate Source; an alias whose recorded canonical pair still
-matches an existing Source applies exactly as #181's own existing alias tests already prove (regression,
-not new behaviour).
+**Status:** Done, implemented 2026-07-26. `ImportActionPlannerTests.cs`: an alias whose canonical pair
+hashes to a Source that currently exists under a *different* title (a genuine simulated rename) stages
+`Stale` on both the Add path and the Modify path, with no `MergedFields`; an alias whose canonical
+Source has never existed at all resolves normally (`Decided`, Source created under the canonical
+title) — the explicit regression guard for the false-positive bug found live; an alias whose canonical
+Source already exists exactly as recorded continues to apply normally, matching #181's own pre-existing
+alias tests (unaffected regression). Live-verified against the full real bundled dataset (CLAUDE.md
+smoke test): fresh seed and post-reseed `status=pending`/`status=stale` both return `totalCount: 0`
+across all four bundled alias files.
 
 ### 10. `ConflictResolutionRule` generation — the generalization heuristic is simpler than it first looked
 
@@ -466,7 +487,7 @@ every test must be confirmed red before its corresponding implementation lands.
 | 3 | ✅ | `ConflictResolutionRule` application reuses `FieldMergeResolver.ResolveWithDecisions` rather than a parallel mechanism | Live (review) | Already true via #181: `ImportActionPlanner.cs` calls `ResolveWithDecisions` directly from every `ConflictRuleLookup` call site |
 | 4 | ✅ | `SourceAliasRule`'s own mechanism identified — no new construction needed for matching | Live (review) | Resolved in Step 4: `SourceAliasLookup.TryResolve` (shipped by #181) is the complete read path; this issue only adds generation and staleness on top |
 | 5 | ✅ | A `ConflictResolutionRule` is flagged `Stale` (not silently applied, not silently discarded) when the underlying source's shape has changed enough to invalidate it | Unit test | `ConflictRuleLookupTests` (7 staleness cases) + `ImportActionPlannerTests` integration coverage, implemented 2026-07-26 |
-| 6 | ❌ | A `SourceAliasRule` is flagged `Stale` when its recorded canonical value no longer matches the live Source | Unit test | Step 9's tests |
+| 6 | ✅ | A `SourceAliasRule` is flagged `Stale` when its recorded canonical value no longer matches the live Source | Unit test + Live (T2) | `ImportActionPlannerTests` (Step 9) + CLAUDE.md smoke test against real bundled data, implemented 2026-07-26 |
 | 7 | ❌ | Rule generation from a batch's decided actions produces candidate `ConflictResolutionRule` entries, worst case one per action, best case one shared entity rule | Unit test | Step 15's tests |
 | 8 | ❌ | Generation merges into an existing rule file without overwriting manual edits | Unit test | Step 15's tests |
 | 9 | ❌ | `SourceAliasRule` candidate-duplicate detection surfaces likely duplicates without auto-writing an alias entry | Unit test | Step 15's tests |
@@ -506,8 +527,19 @@ throughout rather than accumulating narrative:
 - Steps 1-7 verified/implemented 2026-07-26: Steps 1-4 confirmed accurate on direct re-inspection of
   the code (no corrections needed); Steps 5-7 (`ConflictResolutionRule` staleness detection, the new
   `Stale` status, and its tests) implemented, full solution suite green (2657 tests), 0 build warnings.
-  Steps 8-18 (SourceAliasRule staleness, both mechanisms' generation, endpoints, documentation, T1/T2)
-  remain.
+  Live Docker T2 verification (not just unit tests) caught a genuine pre-existing data bug on its first
+  real run: a bundled rule's recorded snapshot used a straight apostrophe where the real quote uses a
+  curly one — fixed, and added to CLAUDE.md's living smoke-test checklist.
+- Steps 8-9 implemented 2026-07-26, after the *first* implementation attempt was proven wrong by live
+  Docker T2 against real bundled data, not by unit tests (every existing fixture pre-seeded the
+  canonical Source as a real row, masking the bug). The original design ("does a Source with this exact
+  title exist right now") cannot distinguish a genuine rename from an alias simply doing its normal job
+  of guiding a Source's first-ever creation — both look identical (nothing found). Corrected to an
+  id-based check (`EntityIdentity.SourceId`, fixed at creation, unaffected by a later rename) that
+  actually distinguishes the two cases; re-verified clean (`status=pending`/`status=stale` both zero)
+  against the full real bundled dataset on both a fresh seed and a reseed. This is the second time in
+  this same session live T2 verification caught something unit tests alone did not — both findings are
+  now permanent entries in CLAUDE.md's smoke-test checklist so neither regresses silently.
 
 **Considered and rejected (2026-07-14), while scoping #179's Series/Universe schema:** generalizing
 this issue's declarative rule-file mechanism to also cover curator-only enrichment injection (a rule

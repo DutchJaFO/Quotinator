@@ -1566,6 +1566,32 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    confirm via `git stash`/checkout of the pre-fix rule file only if you need to see the "before" state
    again, since the shipped rule file is already corrected.
 
+   **`SourceAliasRule` staleness** (#153) — an alias is stale only when the Source its own
+   `canonicalTitle`/`canonicalType` deterministically hashes to (`EntityIdentity.SourceId`, fixed at
+   creation, never recomputed on a later Modify) already exists but under a *different* current title —
+   a genuine rename since the alias was authored. **Two false-positive bugs were found and fixed live
+   via this exact check, neither catchable by unit tests alone** (every existing fixture pre-seeded the
+   canonical Source as a real DB row, which masked both): (1) the very first version checked only "does
+   a Source with this exact title exist right now," which cannot distinguish a genuine rename from the
+   alias's own normal, legitimate job of guiding the *first-ever* creation of a Source under its correct
+   name — flagged 7 real bundled aliases as stale purely because their canonical Source hadn't been
+   created by an earlier file yet; (2) a same-batch fix (checking `sourceIndex`, this batch's own
+   in-memory Add cache) still needed the *id-based* rewrite above to fully clear a `SELECT *`-by-title
+   query being unable to distinguish those same two cases when nothing had been indexed yet either.
+   Confirm both are fixed against real bundled data with a fresh container and a reseed:
+   ```bash
+   docker build -f docker/Dockerfile -t quotinator:local .
+   docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+   curl -s http://localhost:8080/api/v1/version
+   curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
+   curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
+   curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
+   ```
+   Wait for `/version` to report `quotes: 799` before checking (same partial-seed caveat as above).
+   Both the fresh-seed and post-reseed `status=pending`/`status=stale` checks must return `totalCount:
+   0` — every real bundled alias's canonical Source either already exists under its exact recorded
+   title, or is being legitimately created for the first time; none has actually been renamed away.
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle

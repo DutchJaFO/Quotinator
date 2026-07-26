@@ -112,21 +112,64 @@ internal static class ImportActionPlanner
             // field displays in its audit trail. See #181's plan doc, Step 10, for the Zootopia-class
             // bug this closes (a rule that only corrected the displayed field left the quote linked to
             // a spurious, alias-derived Source row).
+            var sourceAliasStale = false;
             if (sourceAliases is not null && sourceAliases.TryResolve(q.Source, q.Type.ToString(), out var canonical))
             {
-                q = new SourceQuote
+                // #153: staleness here means "this alias's canonical target was renamed/changed since
+                // the alias was authored" — NOT "no Source with this exact title exists yet." Those
+                // are different: an alias's own normal, legitimate job includes guiding the *first-ever*
+                // creation of a Source under its correct canonical name (e.g. a brand-new database, or
+                // this being the first bundled file to ever mention the title) — in that case nothing
+                // with the canonical title exists yet by design, and that must never be flagged stale.
+                // A naive "does a Source with this exact (title, type) exist right now" check cannot
+                // tell these two cases apart, since both look identical (nothing found) — found live
+                // via Docker T2 (#153): a first pass at this used exactly that check and produced 7
+                // false positives against real bundled data, every one of them a legitimate first-time
+                // alias-guided creation, not an actual rename.
+                //
+                // The reliable signal is the Source's own id, not its title: EntityIdentity.SourceId is
+                // a deterministic hash of (title, type) fixed at creation and never recomputed on a
+                // later Modify (only the row's Title/Type columns change; Id does not) — so the id a
+                // Source would have gotten if created under exactly this canonical (title, type) pair
+                // is knowable up front, before the row necessarily exists. If a row with that id exists
+                // but its *current* Title/Type has since drifted away from the alias's own recorded
+                // canonical pair, a rename genuinely happened and the alias is stale. If no row with
+                // that id exists at all, nothing has been renamed — this is simply the first time this
+                // canonical Source is being introduced, exactly what the alias exists to guide.
+                var canonicalId = EntityIdentity.SourceId(canonical.CanonicalTitle, canonical.CanonicalType);
+                var canonicalRow = sourceIndex.TryGetValue($"{canonical.CanonicalTitle}|{canonical.CanonicalType}", out var indexedId)
+                    ? (Title: canonical.CanonicalTitle, Type: canonical.CanonicalType, Found: true, IndexedId: (string?)indexedId)
+                    : await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                        Sql.Sources.SelectExistingById, new { id = canonicalId }, transaction) is { } row
+                        ? (Title: row.Title, Type: row.Type, Found: true, IndexedId: canonicalId)
+                        : (Title: canonical.CanonicalTitle, Type: canonical.CanonicalType, Found: false, IndexedId: (string?)null);
+
+                // Not found at all → first-time creation, not stale. Found (by id) → stale only if the
+                // live row's own Title/Type has drifted from what the alias itself claims is canonical.
+                var canonicalSourceExists = !canonicalRow.Found
+                    || (string.Equals(canonicalRow.Title, canonical.CanonicalTitle, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(canonicalRow.Type, canonical.CanonicalType, StringComparison.OrdinalIgnoreCase));
+
+                if (canonicalSourceExists)
                 {
-                    Id               = q.Id,
-                    QuoteText        = q.QuoteText,
-                    OriginalLanguage = q.OriginalLanguage,
-                    Source           = canonical.CanonicalTitle,
-                    Date             = q.Date,
-                    Character        = q.Character,
-                    Author           = q.Author,
-                    Type             = QuoteSeedWriter.ParseQuoteType(canonical.CanonicalType),
-                    Genres           = q.Genres,
-                    Translations     = q.Translations,
-                };
+                    q = new SourceQuote
+                    {
+                        Id               = q.Id,
+                        QuoteText        = q.QuoteText,
+                        OriginalLanguage = q.OriginalLanguage,
+                        Source           = canonical.CanonicalTitle,
+                        Date             = q.Date,
+                        Character        = q.Character,
+                        Author           = q.Author,
+                        Type             = QuoteSeedWriter.ParseQuoteType(canonical.CanonicalType),
+                        Genres           = q.Genres,
+                        Translations     = q.Translations,
+                    };
+                }
+                else
+                {
+                    sourceAliasStale = true;
+                }
             }
 
             var sourceId    = await ResolveSourceAsync(connection, q, sourceIndex, batchIdStr, actions, now, transaction);
@@ -139,8 +182,15 @@ internal static class ImportActionPlanner
 
             if (existing is null)
             {
-                seenQuotes[q.Id] = q;
-                seenQuoteStatus[q.Id] = CompletenessStatus.Incomplete;
+                // #153: a stale alias substitution left this quote's Source resolution unreliable —
+                // never registered as a confirmed same-batch reference (matching how a Pending Modify
+                // is never registered either), so a later quote in this same batch referencing this id
+                // re-checks against real DB state rather than this unconfirmed one.
+                if (!sourceAliasStale)
+                {
+                    seenQuotes[q.Id] = q;
+                    seenQuoteStatus[q.Id] = CompletenessStatus.Incomplete;
+                }
                 var payload = new QuoteActionPayload
                 {
                     Fields    = QuoteFieldMerge.ToDto(q),
@@ -148,6 +198,7 @@ internal static class ImportActionPlanner
                     CharacterId = characterId,
                     PersonId  = personId,
                 };
+                var addStatus = sourceAliasStale ? ImportActionStatus.Stale : ImportActionStatus.Decided;
 
                 actions.Add(new SystemImportAction
                 {
@@ -157,7 +208,7 @@ internal static class ImportActionPlanner
                     EntityId      = q.Id,
                     IncomingValue = JsonSerializer.Serialize(payload),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                    Status        = new SafeValue<ImportActionStatus?>(addStatus.ToString(), addStatus),
                     DetectedAt    = now,
                 });
                 continue;
@@ -263,9 +314,12 @@ internal static class ImportActionPlanner
             // Review is the only policy left Pending; every other policy is Decided at detection
             // time, with the final resolved values already computed so apply never needs policy logic.
             // A fully rule-resolved Review action is also Decided immediately — nothing is left for a
-            // human to decide.
+            // human to decide. #153: a stale alias substitution overrides all of that — this quote's
+            // Source resolution is unreliable regardless of how cleanly its fields would otherwise
+            // have resolved, so it is held for review the same way a stale rule already is above.
             var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
-            var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+            var status    = sourceAliasStale ? ImportActionStatus.Stale : isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+            var isUnresolved = isPending || sourceAliasStale;
 
             actions.Add(new SystemImportAction
             {
@@ -276,13 +330,13 @@ internal static class ImportActionPlanner
                 EntityId        = q.Id,
                 ExistingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
                 IncomingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                MergedFields    = isPending ? null : JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(resolved), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                MergedFields    = isUnresolved ? null : JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(resolved), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
                 AppliedPolicy   = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
                 Status          = new SafeValue<ImportActionStatus?>(status.ToString(), status),
                 DetectedAt      = now,
             });
 
-            if (!isPending)
+            if (!isUnresolved)
             {
                 seenQuotes[q.Id] = resolved;
                 seenQuoteStatus[q.Id] = existing.Value.CompletenessStatus;
