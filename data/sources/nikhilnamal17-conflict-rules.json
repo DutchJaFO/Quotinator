@@ -216,6 +216,102 @@
       "fields": [
         { "field": "quoteText", "resolution": "Keep" }
       ]
+    },
+    {
+      "entityId": "0208a400-f014-2846-924c-37a93ce476b5",
+      "existingRecord": {
+        "quoteText": "Joey, have you ever been in a turkish prison?",
+        "source": "Airplane!",
+        "date": "1980",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Joey, have you ever been in a turkish prison?",
+        "source": "Airplane!",
+        "date": "1980",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "character", "resolution": "Custom", "customValue": "Captain Oveur" }
+      ]
+    },
+    {
+      "entityId": "349b84e1-6282-f842-94c1-b485fcad9434",
+      "existingRecord": {
+        "quoteText": "Looks like I picked the wrong week to quit sniffing glue.",
+        "source": "Airplane!",
+        "date": "1980",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Looks like I picked the wrong week to quit sniffing glue.",
+        "source": "Airplane!",
+        "date": "1980",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "character", "resolution": "Custom", "customValue": "Steve McCroskey" }
+      ]
+    },
+    {
+      "entityId": "ee931571-d699-744a-a871-36a108124e31",
+      "existingRecord": {
+        "quoteText": "When you realize you want to spend the rest of your life with somebody, you want the rest of your life to start as soon as possible.",
+        "source": "When Harry Met Sally...",
+        "date": "1989",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "When you realize you want to spend the rest of your life with somebody, you want the rest of your life to start as soon as possible.",
+        "source": "When Harry Met Sally...",
+        "date": "1989",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "character", "resolution": "Custom", "customValue": "Harry Burns" }
+      ]
+    },
+    {
+      "entityId": "47e336d6-0835-8d4c-8006-7e5a682f49bb",
+      "existingRecord": {
+        "quoteText": "Like the oldman said, together",
+        "source": "Avengers: Age of Ultron",
+        "date": "2015",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Like the oldman said, together",
+        "source": "Avengers: Age of Ultron",
+        "date": "2015",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "character", "resolution": "Custom", "customValue": "Tony Stark" }
+      ]
     }
   ]
 }

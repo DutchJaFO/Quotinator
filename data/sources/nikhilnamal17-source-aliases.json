@@ -25,6 +25,9 @@
     { "title": "Star Wars, Empire Strikes Back", "type": "movie", "canonicalTitle": "Star Wars: Episode V - The Empire Strikes Back", "canonicalType": "movie" },
     { "title": "Star Wars: Return of Jedi", "type": "movie", "canonicalTitle": "Star Wars: Episode VI - Return of the Jedi", "canonicalType": "movie" },
     { "title": "Star Wars Episode 6 : Return Of The Jedi", "type": "movie", "canonicalTitle": "Star Wars: Episode VI - Return of the Jedi", "canonicalType": "movie" },
-    { "title": "Star Wars: The Force Awakens", "type": "movie", "canonicalTitle": "Star Wars: Episode VII - The Force Awakens", "canonicalType": "movie" }
+    { "title": "Star Wars: The Force Awakens", "type": "movie", "canonicalTitle": "Star Wars: Episode VII - The Force Awakens", "canonicalType": "movie" },
+    { "title": "Airplane", "type": "movie", "canonicalTitle": "Airplane!", "canonicalType": "movie" },
+    { "title": "When Harry Met Sally", "type": "movie", "canonicalTitle": "When Harry Met Sally...", "canonicalType": "movie" },
+    { "title": "Avengers - Age of Ultron", "type": "movie", "canonicalTitle": "Avengers: Age of Ultron", "canonicalType": "movie" }
   ]
 }

@@ -91,6 +91,58 @@ public class DatabaseInitializerTests
         ManifestPolicy.HardcodedDefault,
         "bundled sources");
 
+    /// <summary>#153: mirrors production's manifest-driven wiring — NikhilNamal17 seeded under its own
+    /// Review policy with its real ruleFile, matching what ManifestSeedPlanner actually builds (unlike
+    /// <see cref="AllFilesBatch"/>, which never wires a rule file at all).</summary>
+    private static SeedBatch NikhilNamal17WithRuleFileBatch() => new(
+        [
+            new SeedFile(
+                NikhilNamal17File,
+                "https://github.com/NikhilNamal17/popular-movie-quotes",
+                Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review),
+                RuleFilePath: Path.Combine(SourcesDir, "nikhilnamal17-conflict-rules.json"),
+                SourceAliasFilePath: Path.Combine(SourcesDir, "nikhilnamal17-source-aliases.json"))
+        ],
+        ManifestPolicy.HardcodedDefault,
+        "bundled sources");
+
+    /// <summary>#153: seeding NikhilNamal17 alone, under its real Review policy and real rule file, must
+    /// produce zero Pending/Stale/Blocked actions — the same "no file left staged awaiting review"
+    /// invariant CLAUDE.md's own live T2 checklist already asserts against the full bundled dataset.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions()
+    {
+        var db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var unresolved = (await conn.QueryAsync<(string Id, string EntityId, string Status, string? ExistingValue, string? IncomingValue)>(
+            "SELECT Id, EntityId, Status, ExistingValue, IncomingValue FROM System_ImportActions WHERE Status NOT IN ('Decided', 'Applied') AND IsDeleted = 0;")).ToList();
+
+        Assert.IsEmpty(unresolved,
+            $"Every action must auto-resolve under Review with the real rule file — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
+    }
+
+    /// <summary>#153: the Galadriel Custom rule (nikhilnamal17-conflict-rules.json) must correct the
+    /// character field on this quote's very first (Add) encounter, not only on a later Modify.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_GaladrielQuoteGetsCharacterOnAdd()
+    {
+        var db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var character = await conn.ExecuteScalarAsync<string?>(
+            "SELECT c.Name FROM Quotes q JOIN Characters c ON c.Id = q.CharacterId " +
+            "WHERE q.Id = 'c124e692-04fc-7b49-af53-b6bcc0692dbe' AND q.IsDeleted = 0;");
+
+        Assert.AreEqual("Galadriel", character);
+    }
+
     // ── Seeding ───────────────────────────────────────────────────────────────
 
     /// <summary>Seeding all three bundled source files produces the expected quote/source/character counts.</summary>

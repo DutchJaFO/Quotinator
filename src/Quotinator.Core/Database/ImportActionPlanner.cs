@@ -172,6 +172,36 @@ internal static class ImportActionPlanner
                 }
             }
 
+            // #153: a matching ConflictResolutionRule's Custom-value field applies to q itself, before
+            // Source/Character/Person resolution ever runs — not just on a later Modify. Without this,
+            // a rule correcting e.g. "character" would only ever take effect if this exact quote id is
+            // re-encountered (in-file or cross-file) after its first Add, since the Modify branch below
+            // is the only other place a rule is consulted; a quote appearing exactly once anywhere in
+            // the bundled corpus would never see its Custom correction at all. Running this before
+            // resolution also means Character/Person resolve against the corrected value, not the raw
+            // one — the same reasoning as the SourceAliasRule substitution just above. Keep/Replace
+            // resolutions are meaningless with no second side yet to compare against and are silently
+            // no-ops here, since ResolveWithDecisions is given the same value on both sides.
+            if (conflictRules is not null && !sourceAliasStale)
+            {
+                var rawFields = QuoteFieldMerge.ToFieldMap(q);
+                Dictionary<string, FieldMergeDecision>? customDecisions = null;
+                foreach (var field in rawFields.Keys)
+                {
+                    if (conflictRules.TryResolve(q.Id, field, rawFields[field], rawFields[field], out var decision, out var isStale)
+                        && !isStale && decision.Choice == FieldResolutionChoice.Custom)
+                    {
+                        (customDecisions ??= new Dictionary<string, FieldMergeDecision>(StringComparer.OrdinalIgnoreCase))[field] = decision;
+                    }
+                }
+
+                if (customDecisions is { Count: > 0 })
+                {
+                    var corrected = FieldMergeResolver.ResolveWithDecisions(rawFields, rawFields, customDecisions);
+                    q = QuoteFieldMerge.ApplyMergedFields(corrected.MergedFields, q);
+                }
+            }
+
             var sourceId    = await ResolveSourceAsync(connection, q, sourceIndex, batchIdStr, actions, now, transaction);
             var characterId = await ResolveCharacterAsync(connection, q, sourceId, characterIndex, batchIdStr, actions, now, transaction);
             var personId    = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
@@ -269,6 +299,16 @@ internal static class ImportActionPlanner
                 var hasStaleRule  = false;
                 foreach (var field in existingFields.Keys)
                 {
+                    // #153: a field already equal on both sides needs no decision at all (matching
+                    // FieldMergeResolver's own "equal values keep existing" auto-resolution) — most
+                    // often true here for a field the Add-branch's own early Custom-rule application
+                    // just above already corrected identically on every in-file occurrence. Consulting
+                    // the rule anyway would compare its recorded snapshot (describing the field's
+                    // pre-correction shape) against the now-already-corrected value and spuriously
+                    // flag it stale, blocking the whole action for a field that needed no resolution.
+                    if (FieldMergeResolver.ValuesEqual(existingFields[field], incomingFields.GetValueOrDefault(field)))
+                        continue;
+
                     if (!conflictRules.TryResolve(q.Id, field, existingFields[field], incomingFields.GetValueOrDefault(field), out var decision, out var isStale))
                         continue;
                     if (isStale) hasStaleRule = true;
@@ -295,16 +335,21 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                if (ruleDecisions.Count > 0)
+                // #153: always attempt the resolve, even with zero rule decisions — a record with every
+                // field already equal (nothing ambiguous at all, e.g. because the Add-branch's own
+                // early Custom-rule application already made both sides agree) must still resolve
+                // instead of falling through to Pending. Gating this on ruleDecisions.Count > 0 was a
+                // pre-existing bug masked by every existing rule also recording a redundant decision for
+                // an already-equal field — removing that redundancy (the ValuesEqual skip above) is
+                // what surfaced it. ResolveWithDecisions itself already handles zero decisions safely:
+                // equal fields auto-resolve, and only a genuinely ambiguous field with no decision throws.
+                try
                 {
-                    try
-                    {
-                        ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions);
-                    }
-                    catch (UnresolvedFieldConflictException)
-                    {
-                        // Not every ambiguous field has a matching rule — fall through to normal Pending staging.
-                    }
+                    ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions);
+                }
+                catch (UnresolvedFieldConflictException)
+                {
+                    // Not every ambiguous field has a matching rule — fall through to normal Pending staging.
                 }
             }
 

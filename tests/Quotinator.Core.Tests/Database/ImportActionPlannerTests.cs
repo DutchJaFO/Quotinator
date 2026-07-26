@@ -402,6 +402,93 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionStatus.Blocked, quoteAction.Status.Parsed, "A matching rule must never bypass CompletenessGuard — a Complete row still blocks a silent overwrite");
     }
 
+    // ── #153: a Custom-resolution rule also applies to a brand-new Add, not just a later Modify ──
+
+    private static ConflictResolutionRule BuildCharacterCustomRule(string quoteId, string customValue) => new()
+    {
+        EntityId = quoteId,
+        ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":null}"""),
+        IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":null}"""),
+        Fields = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = customValue }],
+    };
+
+    [TestMethod]
+    public async Task PlanAsync_BrandNewQuote_MatchingCustomRule_CorrectsFieldOnAdd()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d1111111-1111-4111-8111-111111111111";
+        var quote = BuildQuote(id, source: "Airplane!", character: null);
+        var rules = new ConflictRuleLookup([BuildCharacterCustomRule(id, "Steve McCroskey")]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionKind.Add, quoteAction.ActionType.Parsed, "This is still a genuine first-ever encounter, not a Modify");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        Assert.AreEqual("Steve McCroskey", payload.Fields.Character, "A matching Custom rule must correct the field on a brand-new Add, not only on a later Modify");
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_BrandNewQuote_MatchingCustomRule_CharacterEntityResolvesAgainstCorrectedValue()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d2111111-1111-4111-8111-111111111111";
+        var quote = BuildQuote(id, source: "Airplane!", character: null);
+        var rules = new ConflictRuleLookup([BuildCharacterCustomRule(id, "Steve McCroskey")]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        // Without the fix, Character resolution runs against the raw (null) value and no Character
+        // action is staged at all — the corrected text would show on the Quote but never link to a
+        // real Character entity.
+        var characterAction = actions.SingleOrDefault(a => a.EntityType == "Character");
+        Assert.IsNotNull(characterAction, "The corrected character value must also drive Character entity resolution, not just the Quote's own display field");
+        var sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(EntityIdentity.CharacterId(sourceAction.EntityId, "Steve McCroskey", "Movie"), characterAction!.EntityId);
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_BrandNewQuote_StaleCustomRule_DoesNotApply()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d3111111-1111-4111-8111-111111111111";
+        // The rule was authored assuming "character" comes in as null — this quote's raw incoming
+        // character is no longer null (the upstream data changed since the rule was written), so the
+        // rule's own recorded snapshot for this exact field no longer matches and it must not apply.
+        var staleRule = new ConflictResolutionRule
+        {
+            EntityId = id,
+            ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":null}"""),
+            IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":null}"""),
+            Fields = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Steve McCroskey" }],
+        };
+        var quote = BuildQuote(id, source: "Airplane!", character: "Some Newly-Added Value");
+        var rules = new ConflictRuleLookup([staleRule]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        Assert.AreEqual("Some Newly-Added Value", payload.Fields.Character, "A stale rule (recorded snapshot no longer matches this field's real value) must never silently apply, on Add or Modify");
+    }
+
+    [TestMethod]
+    public async Task PlanAsync_BrandNewQuote_KeepOrReplaceRuleField_IsNoOpOnAdd()
+    {
+        using var conn = await OpenConnectionAsync();
+        var id = "d4111111-1111-4111-8111-111111111111";
+        var quote = BuildQuote(id, source: "Casablanca", quoteText: "Here's looking at you, kid.");
+        // A Keep/Replace rule has no second side to choose between on a brand-new Add — must be a no-op.
+        var rules = new ConflictRuleLookup([BuildQuoteTextKeepRule(id)]);
+
+        var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        var quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionKind.Add, quoteAction.ActionType.Parsed);
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        Assert.AreEqual("Here's looking at you, kid.", payload.Fields.QuoteText, "Keep/Replace on a first-ever Add must be a no-op, not an error");
+    }
+
     // ── #181: source-title alias lookup ────────────────────────────────────────
 
     private static async Task SeedExistingQuoteWithSourceAsync(SqliteConnection conn, string quoteId, string sourceId, string sourceTitle, string sourceType, string quoteText)

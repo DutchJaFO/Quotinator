@@ -525,6 +525,45 @@ is unchanged and unaware an override even exists. The two new `DatabaseInitializ
 fallback sibling) already prove this end to end — an override actually changes which quote text gets
 applied through this exact wiring, not just which file gets read.
 
+**Three genuine pre-existing bugs found and fixed 2026-07-26**, while using the newly-shipped
+`GET /import/rules/alias` endpoint (Step 14) against real bundled data and then correcting what it
+found (3 near-duplicate Sources, plus missing `character` values on the affected quotes — verified via
+IMDb/Wikipedia per `docs/workflow/source-verification.md` before recording):
+
+1. **A `ConflictResolutionRule`'s `Custom`-value correction never applied on a quote's first-ever
+   `Add`** — only on a later `Modify`, since `ImportActionPlanner.PlanAsync`'s ADD branch never
+   consulted `conflictRules` at all. A quote appearing exactly once anywhere in the bundled corpus
+   (true for all 4 newly-added rules, and — retroactively discovered — for the pre-existing "Galadriel"
+   LOTR rule too, whose only reason it ever worked at all is an accidental in-file duplicate at two
+   different line numbers in `NikhilNamal17_popular-movie-quotes.json`) could never have its Custom
+   correction applied by any means. Fixed by applying a matching Custom correction to the quote itself
+   *before* Source/Character/Person resolution runs — the same point #181's own `SourceAliasRule`
+   substitution already uses, so Character resolution sees the corrected value too, not just the
+   Quote's own display field.
+2. **Exposed immediately by fix 1**: the Modify branch's own per-field rule consultation loop ran
+   unconditionally for every field, including one already resolved to equal values by fix 1's own early
+   correction — comparing the rule's recorded (pre-correction) snapshot against the now-already-correct
+   value and spuriously flagging it `Stale`, blocking the whole action. Fixed by skipping a field
+   already equal on both sides before ever consulting a rule for it — mirroring
+   `FieldMergeResolver`'s own "equal values need no decision" behaviour.
+3. **Exposed immediately by fix 2**: `FieldMergeResolver.ResolveWithDecisions` was only ever attempted
+   when `ruleDecisions.Count > 0` — meaning a record with *zero* rule decisions needed (every field
+   already equal, exactly the case fix 2 now produces) was never resolved at all and fell through to
+   `Pending` forever, even though nothing was actually ambiguous. Masked before fix 2 because every
+   existing rule always recorded at least one (redundant, no-op) decision for an already-equal field.
+   Fixed by always attempting the resolve — `ResolveWithDecisions` already handles zero decisions
+   correctly (equal fields auto-resolve; only a genuinely unresolved ambiguous field throws).
+
+New tests: `ImportActionPlannerTests.PlanAsync_BrandNewQuote_MatchingCustomRule_CorrectsFieldOnAdd`,
+`...CharacterEntityResolvesAgainstCorrectedValue`, `...StaleCustomRule_DoesNotApply`,
+`...KeepOrReplaceRuleField_IsNoOpOnAdd` (fix 1); `DatabaseInitializerTests
+.InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions` and
+`...GaladrielQuoteGetsCharacterOnAdd` (fixes 2–3, against the real bundled file + real rule file, which
+is what actually caught fixes 2–3 — the synthetic single-quote unit tests for fix 1 alone could not,
+since they never exercise a second in-file occurrence). Live T2-verified: a fresh container now seeds
+799 quotes / 461 sources / 12 characters (up from 7) with zero `Pending`/`Stale` actions remaining, and
+`GET /import/rules/alias` now returns an empty `candidates` list.
+
 Wires into `ImportActionPlanner.PlanAsync`'s Quote Modify branch — `ConflictRuleLookup.TryResolve` is
 consulted from four methods (five literal call sites — `PlanSourcesAsync` calls it twice, once per
 resolution branch: explicit-id match and natural-key match): the Quote loop itself, and
