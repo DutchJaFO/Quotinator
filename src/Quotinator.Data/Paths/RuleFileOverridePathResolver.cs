@@ -27,7 +27,13 @@ public sealed class RuleFileOverridePathResolver(
     {
         if (string.IsNullOrWhiteSpace(fileName))
             throw new ArgumentException("A filename is required.", nameof(fileName));
-        if (Path.GetFileName(fileName) != fileName || fileName is "." or "..")
+
+        // Explicit, platform-independent character check — Path.GetFileName only recognises '\' as a
+        // directory separator on Windows, so relying on it alone let a backslash-based traversal
+        // attempt (e.g. "..\secrets.json") slip through unrejected on Linux, the platform this project
+        // actually ships on (docker/Dockerfile). Checking both separator characters directly, rather
+        // than through Path's OS-dependent parsing, closes that gap regardless of which platform runs it.
+        if (fileName.Contains('/') || fileName.Contains('\\') || fileName is "." or "..")
             throw new ArgumentException($"'{fileNameForError}' must be a plain filename with no directory segments.", nameof(fileName));
 
         var baseDir  = Path.GetFullPath(baseDirRaw);
