@@ -83,7 +83,17 @@ internal sealed class StartupSummaryLogger
             Version:        {_version.Version}
             Data:           {_dataDir}
             Database:       {_dbPath}
-                            schema v{_db.SchemaVersion} (data v{_db.DataSchemaVersion}) - {_db.QuoteCount} quotes  {_db.SourceCount} sources  {_db.CharacterCount} characters  {_db.PeopleCount} people{migLine}
+                            schema v{_db.SchemaVersion} (data v{_db.DataSchemaVersion}){migLine}
+            Statistics:
+                            {_db.QuoteCount} quotes
+                            {_db.SourceCount} sources
+                            {_db.CharacterCount} characters
+                            {_db.PeopleCount} people
+                            {_db.SeriesCount} series
+                            {_db.UniverseCount} universes
+                            {_db.StageDirectionCount} stage directions
+                            {_db.SoundCueCount} sound cues
+                            {_db.ConversationCount} conversations
             Backups:        {_backupsDir}
             DataProtection: {_keysDir}
             ------------------------------
