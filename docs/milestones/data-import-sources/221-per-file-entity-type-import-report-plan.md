@@ -1,6 +1,6 @@
 # #221 — Per-file, per-entity-type import/seed report
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 7)
 
 **GitHub issue:** https://github.com/DutchJaFO/Quotinator/issues/221
 
@@ -203,21 +203,58 @@ existing `ImportResultResponse` object-initializer call sites in `ImportEndpoint
 
 ### 5. Missing entity-type counts (Series/Universe/StageDirection/SoundCue/Conversation)
 
-**Status:** Not started.
+**Status:** Done, implemented 2026-07-28.
 
-Add `SeriesCount`/`UniverseCount`/`StageDirectionCount`/`SoundCueCount`/`ConversationCount` to
-`IDatabaseInitializer`, implemented in `DatabaseInitializer` the same way the existing four counts
-are (a `CountAll`-style query per table, updated after `InitialiseAsync`/`ReseedAsync`/`ResetAsync`).
-Extend `LogDatabaseStatsAsync`'s `[Database - Stats]` log line to include all nine counts.
-`NoOpDatabaseInitializer` (test double) gets matching zero-valued properties.
+Added `SeriesCount`/`UniverseCount`/`StageDirectionCount`/`SoundCueCount`/`ConversationCount` to
+`IDatabaseInitializer`/`DatabaseInitializer` (`protected set` properties, same shape as the existing
+four), populated in `QuotinatorDatabaseInitializer.LogDatabaseStatsAsync` via three newly-added
+`Sql.Conversations/StageDirections/SoundCues.CountActive` constants (`Series.CountActive` and
+`Universe.CountActive` already existed from #180). The `[Database - Stats]` log line now reports all
+nine counts. `NoOpDatabaseInitializer`, `AdminEndpointsTests.SpyDatabaseInitializer`, and
+`StartupSummaryLoggerTests.StubDbInitializer` updated with matching zero-valued properties.
+`POST /admin/database/reseed`/`reset` responses gain `series`/`universes`/`stageDirections`/
+`soundCues`/`conversations` fields alongside the existing four.
+
+**Test** (`DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_PopulatesNewEntityTypeCounts`, new):
+seeds `AllFilesBatch()`, cross-checks each of the five new counts against a direct SQL `COUNT(*)`
+query rather than a hardcoded literal (the exact bundled totals are incidental to what this test
+proves). `SeriesCount`/`UniverseCount` are asserted as `0` — `AllFilesBatch()` (curated/vilaboim/
+NikhilNamal17) deliberately excludes the separate `quotinator-series-universe.json` bundled file, so
+this is the correct expected value, not an oversight.
+
+**Regression found during this step, resolved by deleting both tests (developer's call, not a
+workaround)**: `LogDatabaseStatsAsync` is called unconditionally after `OnInitialisedAsync`, and two
+pre-existing migration-replay tests
+(`InitialiseAsync_ExistingDatabaseAtVersion3_StillReplaysRemainingConsumerMigrationsIncrementally`,
+`Migration_SeriesUniverseSchema_PopulatesCharacterSources1to1FromExistingSourceId`) broke because they
+stop migration application at an intermediate checkpoint (before `Conversations`/`StageDirections`/
+`SoundCues`/`Series`/`Universe` tables exist) before calling into that hook. Investigated an
+`ApplyMigrationsForTestingAsync` test-only entry point (migrations only, skipping `OnInitialisedAsync`)
+as a fix, but the developer identified both tests as structurally flawed independent of this
+regression and rejected preserving them via a workaround: `InitialiseAsync_ExistingDatabaseAtVersion3_
+...` pins its behaviour to an arbitrary, hardcoded migration checkpoint ("version 3") that has no
+real-world meaning of its own; `Migration_SeriesUniverseSchema_PopulatesCharacterSources1to1FromExistin
+gSourceId` hand-writes raw SQL `INSERT` statements against `Sources`/`Characters` instead of going
+through the repository pattern this project otherwise uses everywhere, meaning it silently
+re-duplicates entity shape knowledge that will need hand-fixing every time either entity's schema
+changes. Both tests deleted outright; the `ApplyMigrationsForTestingAsync` addition was reverted since
+nothing calls it. `Migration_SeriesUniverseSchema_DropsCharactersSourceIdColumn` (a sibling test in the
+same file) is unaffected — it calls the ordinary, full `InitialiseAsync()`, never a partial-migration
+checkpoint.
+
+**Also required**: three new `Sql.Conversations/StageDirections/SoundCues.CountActive` constants
+added to the `AggregateQueries_MatchDocumentedInventory` guard test's documented inventory in
+`SqlQueryGuardTests.cs` (reviewed — plain `COUNT(*)`, no `GROUP BY`/`HAVING`, same as every other
+`CountActive` constant).
 
 ### 6. Update admin endpoint responses
 
-**Status:** Done for the report shape (2026-07-28); the five new entity-type counts (Step 5) still
-need adding to `reseed`/`reset`'s responses once that step lands.
+**Status:** Done, implemented 2026-07-28.
 
 - `POST /admin/database/reseed`, `POST /admin/database/reset` — ✅ `duplicates` (a bare int) replaced
-  with `reports` (one per file), done as part of Step 2 (2026-07-26).
+  with `reports` (one per file), done as part of Step 2 (2026-07-26); ✅ `series`/`universes`/
+  `stageDirections`/`soundCues`/`conversations` added alongside the existing four counts, done as part
+  of Step 5. `AdminEndpointsTests`'s two stats-shape tests updated to assert all nine fields.
 - `GET /admin/database/seed/preview` — ✅ `totalQuotes`/`uniqueQuotes`/`crossFileDuplicates` replaced
   with `reports` (one per file, the new shape); `[Description]` text updated to document the known
   cross-file-simulation limitation. `AdminEndpointsTests.PreviewSeed_Returns200WithPreviewShape`
@@ -265,6 +302,6 @@ call sites correctly —
 | 4 | ✅ | `POST /import`/`/import/preview` responses include a per-file report | Unit test | `QuoteImportServiceTests.ImportAsync_FreshDatabase_ReportShowsOneNewQuoteAction`/`ApplyStagedBatchAsync_PreviouslyStagedBatch_ReportShowsOneNewQuoteAction`, implemented 2026-07-28 |
 | 5 | ❌ | `POST /admin/database/reseed`/`reset` responses include per-file reports instead of a flat `duplicates` count | Unit test + Live | `AdminEndpointsTests` (new cases) + CLAUDE.md smoke test |
 | 6 | ✅ | `GET /admin/database/seed/preview` response includes per-file reports | Unit test + Live | `AdminEndpointsTests.PreviewSeed_Returns200WithPreviewShape` (updated 2026-07-28); Live T2 pending Step 8 |
-| 7 | ❌ | Startup stats log and `IDatabaseInitializer` expose counts for all 9 entity types (adding Series/Universe/StageDirection/SoundCue/Conversation) | Unit test + Live | `DatabaseInitializerTests` (new case) + live container log inspection |
+| 7 | ✅ | Startup stats log and `IDatabaseInitializer` expose counts for all 9 entity types (adding Series/Universe/StageDirection/SoundCue/Conversation) | Unit test + Live | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_PopulatesNewEntityTypeCounts`, implemented 2026-07-28; live container log inspection pending Step 8 |
 | 8 | ❌ | `SeedDuplicateRecord`/`LastSeedDuplicates`/`CrossFileDuplicates` are fully removed, no remaining references | Live (review) | `grep -rn "SeedDuplicateRecord\|LastSeedDuplicates\|CrossFileDuplicates" src/ tests/` returns nothing |
 | 9 | ❌ | Documentation (README/DOCS.md/CLAUDE.md smoke tests) reflects the new response shapes | Live (review) | Manual read-through of the three docs against the actual endpoint responses |
