@@ -22,21 +22,12 @@ public class DatabaseInitializer : IDatabaseInitializer
     // constructor — Quotinator.Data owns and maintains these scripts itself, and they always
     // apply before any consumer-supplied migration, tracked in their own System_SchemaVersion
     // table, independent of the consumer's own System_ConsumerSchemaVersion count.
+    // #155: version 2 consolidates every Data-owned migration shipped since v1.7.2's single frozen
+    // migration (version 1) — see DataConsolidatedMigrations.SinceV172 for the full reasoning.
     private static readonly IReadOnlyList<SchemaMigration> DataOwnedMigrations =
     [
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
-        new SchemaMigration { Version = 2, Sql = AuditMigrations.RenameAuditEntriesToSystemAuditEntries },
-        new SchemaMigration { Version = 3, Sql = ImportConflictMigrations.CreateImportConflictsTable },
-        new SchemaMigration { Version = 4, Sql = ChangeLogMigrations.CreateChangeLogTable },
-        new SchemaMigration { Version = 5, Sql = AuditMigrations.MigrateToRecordBase },
-        new SchemaMigration { Version = 6, Sql = ImportConflictMigrations.MigrateToRecordBase },
-        new SchemaMigration { Version = 7, Sql = ImportConflictMigrations.AddExistingBatchId },
-        new SchemaMigration { Version = 8, Sql = ImportActionMigrations.CreateImportActionsTable },
-        new SchemaMigration { Version = 9, Sql = ImportConflictMigrations.AddStatusCheckConstraint },
-        new SchemaMigration { Version = 10, Sql = ImportActionMigrations.AddBlockedStatusAndMarkCompletenessAs },
-        new SchemaMigration { Version = 11, Sql = ImportActionMigrations.AddOriginalDecision },
-        new SchemaMigration { Version = 12, Sql = ImportActionMigrations.AddStaleStatus },
-        new SchemaMigration { Version = 13, Sql = SourceFileOverrideMigrations.CreateSourceFileOverridesTable },
+        new SchemaMigration { Version = 2, Sql = DataConsolidatedMigrations.SinceV172 },
     ];
 
     // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and

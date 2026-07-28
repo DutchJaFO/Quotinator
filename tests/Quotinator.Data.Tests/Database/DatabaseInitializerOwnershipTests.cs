@@ -340,81 +340,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync();
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(13, dataRows,
+        Assert.AreEqual(2, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(13, db.DataSchemaVersion);
-    }
-
-    /// <summary>
-    /// Regression guard, found live: a database that already migrated through Data-version 9 (the
-    /// shape #154's <c>System_ImportActions</c> had before #165) must correctly pick up migration 10
-    /// (<c>Blocked</c>/<c>MarkCompletenessAs</c>) on its next startup — not silently skip it because
-    /// <c>System_SchemaVersion</c> already recorded a version number. #165 initially edited migration
-    /// 8's own SQL text in place instead of adding a new migration, which passed every existing test
-    /// (all of which start from a genuinely empty database) but broke on a developer's own real,
-    /// already-migrated-to-v9 database — the version-9 row meant migration 8's changed text never
-    /// re-ran, so the widened CHECK/new column silently never appeared. This test manually seeds a
-    /// database at exactly that pre-#165 v9 shape (not via the current code's migration list — that
-    /// would trivially "pass" against whatever the current migration list happens to say) and proves
-    /// the upgrade path actually works.
-    /// </summary>
-    [TestMethod]
-    public async Task InitialiseAsync_ExistingDatabaseAtDataVersion9_UpgradesSystemImportActionsWithBlockedAndMarkCompletenessAs()
-    {
-        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        using var temp = new TempDatabase(
-        [
-            "CREATE TABLE System_SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);",
-            $"INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (9, '{now}');",
-            // Pre-#165 shape (migration 8's original text) — no Blocked, no MarkCompletenessAs.
-            """
-            CREATE TABLE System_ImportActions (
-                Id              TEXT    NOT NULL PRIMARY KEY,
-                BatchId         TEXT    NOT NULL,
-                ActionType      TEXT    NOT NULL
-                                CHECK (ActionType IN ('Add', 'Modify')),
-                EntityType      TEXT    NOT NULL,
-                EntityId        TEXT    NOT NULL,
-                ExistingBatchId TEXT,
-                ExistingValue   TEXT,
-                IncomingValue   TEXT    NOT NULL,
-                AppliedPolicy   TEXT,
-                Status          TEXT    NOT NULL
-                                CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded')),
-                MergedFields    TEXT,
-                DetectedAt      TEXT    NOT NULL,
-                AppliedAt       TEXT,
-                DiscardedAt     TEXT,
-                DateCreated     TEXT    NOT NULL,
-                DateModified    TEXT,
-                DateDeleted     TEXT,
-                IsDeleted       INTEGER NOT NULL DEFAULT 0
-            );
-            """,
-            // Enough of the other Data-owned tables (System_AuditEntries, System_ImportConflicts,
-            // System_ChangeLog) to satisfy AnyTableExists's "not a genuinely empty database" check —
-            // exact shape doesn't matter here, only System_ImportActions is under test.
-            "CREATE TABLE System_AuditEntries (Id TEXT NOT NULL PRIMARY KEY);",
-        ]);
-        var db = CreateBareInitializer(temp.DbPath, []);
-
-        await db.InitialiseAsync();
-
-        Assert.AreEqual(13, db.DataSchemaVersion, "Migrations 10, 11, 12, and 13 must have applied on top of the existing v9 database");
-
-        using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
-        await conn.OpenAsync();
-
-        var id = Guid.NewGuid().ToString();
-        await conn.ExecuteAsync(
-            "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
-            "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Blocked', 'Complete', @now, @now);",
-            new { id, now });
-
-        var (status, markCompletenessAs) = await conn.QuerySingleAsync<(string Status, string MarkCompletenessAs)>(
-            "SELECT Status, MarkCompletenessAs FROM System_ImportActions WHERE Id = @id;", new { id });
-        Assert.AreEqual("Blocked", status);
-        Assert.AreEqual("Complete", markCompletenessAs);
+        Assert.AreEqual(2, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

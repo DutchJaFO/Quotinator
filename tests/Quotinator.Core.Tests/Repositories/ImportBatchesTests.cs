@@ -160,7 +160,7 @@ public class ImportBatchesTests
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(11, db.SchemaVersion, "SchemaVersion should be 11 after Migration011");
+        Assert.AreEqual(4, db.SchemaVersion, "SchemaVersion should be 4 after #155's consolidation of migrations 4-11 into one");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────
@@ -350,33 +350,46 @@ public class ImportBatchesTests
     }
 
     /// <summary>
-    /// Migration010 (#213) renames <c>ImportBatches.ImportedBy</c> to <c>ImportedById</c> via a single
-    /// atomic <c>ALTER TABLE ... RENAME COLUMN</c>, preserving any pre-existing value. Builds a database
-    /// at App migration v9 (before Migration010), inserts a row using the pre-rename column name
-    /// directly, then completes migration through v10 and confirms the value survived under the new
-    /// column name — mirroring <c>Migration_SeriesUniverseSchema_PopulatesCharacterSources1to1FromExistingSourceId</c>'s
-    /// partial-migration pattern in <c>DatabaseInitializerTests.cs</c>.
+    /// #155: consolidated migration 4 (#213's original standalone migration 10, folded in) renames
+    /// <c>ImportBatches.ImportedBy</c> to <c>ImportedById</c> via a single atomic
+    /// <c>ALTER TABLE ... RENAME COLUMN</c> partway through, preserving any pre-existing value.
+    /// <para/>
+    /// Per #155: a test never truncates the migration list passed to a <c>DatabaseInitializer</c> —
+    /// there is no code path where the real app "pretends" some migrations don't exist, so a test
+    /// shouldn't either. Instead, a genuine v1.7.2-shaped fixture is built by executing the three
+    /// Consumer migrations that actually shipped in that release (frozen forever, confirmed against
+    /// `main`) directly against a raw connection, then recording that same true fact — migrations
+    /// 1-3 really did just run — in <c>System_ConsumerSchemaVersion</c> (mirroring the existing
+    /// <see cref="CreateV2DatabaseAsync"/> precedent in this file). The migration list itself stays
+    /// the full, real, untruncated <see cref="QuotinatorMigrations.All"/> (still 4 entries) — this
+    /// only tells the initializer what has already genuinely happened, so the run below is the real
+    /// v1.7.2 → current upgrade path: only migration 4 replays, exactly as it would for a real user.
     /// </summary>
     [TestMethod]
     public async Task Migration_RenameImportedByToImportedById_ColumnRenamedAndDataPreserved()
     {
-        var partialMigrations = QuotinatorMigrations.All.Take(9).ToList();
-        var db1 = CreateInitializer([], partialMigrations, useBaseline: false);
-        await db1.InitialiseForTestingAsync(forceIncremental: true);
-
         var batchId = Guid.NewGuid().ToString();
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync();
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration002_ReseedGenres);
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration003_ImportBatches);
+
             var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
             await conn.ExecuteAsync(
                 "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, ImportedBy, RecordCount, DateCreated, IsDeleted) " +
                 "VALUES (@id, 'pre-rename.json', 'Import', @now, '22222222-2222-4222-8222-222222222222', 0, @now, 0);",
                 new { id = batchId, now });
+
+            await conn.ExecuteAsync("CREATE TABLE System_ConsumerSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL)");
+            await conn.ExecuteAsync(
+                "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (1, @now), (2, @now), (3, @now);",
+                new { now });
         }
 
-        var db2 = CreateInitializer([]);
-        await db2.InitialiseAsync();
+        var db = CreateInitializer([]);
+        await db.InitialiseAsync();
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         await verifyConn.OpenAsync();

@@ -920,11 +920,12 @@ public class DatabaseInitializerTests
         Assert.AreEqual((2, LegacyV2Marker), consumerRows[1]);
         Assert.AreEqual((3, LegacyV3Marker), consumerRows[2]);
 
-        // dataRows also includes migrations 2-13's own rows by this point (db2.InitialiseAsync()
-        // already replayed them, in the same call that ran the split) — only row 1 is under test
+        // dataRows also includes migration 2's own row by this point (db2.InitialiseAsync()
+        // already replayed it, in the same call that ran the split) — only row 1 is under test
         // here: it must carry legacy version 4's original marker, proving the split renumbered it
-        // to 1 rather than leaving it at its raw legacy value of 4 (which migrations 2-4 would then
-        // have read as "already applied" and skipped, the original bug).
+        // to 1 rather than leaving it at its raw legacy value of 4 (which, pre-#155, the
+        // then-separate migrations 2-4 would have read as "already applied" and skipped — the
+        // original bug).
         Assert.AreEqual(LegacyV4Marker, dataRows.Single(r => r.Version == 1).AppliedAt);
 
         // The actual bug symptom: these three tables must exist and be queryable — a bare rename
@@ -937,7 +938,7 @@ public class DatabaseInitializerTests
             Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
         }
 
-        Assert.AreEqual(13, db2.DataSchemaVersion, "Data migrations 2-13 should all have replayed from the correctly-seeded starting point of 1");
+        Assert.AreEqual(2, db2.DataSchemaVersion, "Data migration 2 (the #155 consolidation) should have replayed from the correctly-seeded starting point of 1");
     }
 
     /// <summary>Data migration 2 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
@@ -1025,7 +1026,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(11, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+        Assert.AreEqual(4, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
     }
 
     // ── #143 — migration ownership split + baseline schema ─────────────────────
@@ -1325,8 +1326,8 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(13, db.DataSchemaVersion);
-        Assert.AreEqual(11, db.SchemaVersion);
+        Assert.AreEqual(2, db.DataSchemaVersion);
+        Assert.AreEqual(4, db.SchemaVersion);
     }
 
     /// <summary>
@@ -1370,7 +1371,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(11, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+        Assert.AreEqual(4, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
     // ── #179 — Series/Universe schema, Character↔Source many-to-many ───────────
@@ -1436,10 +1437,27 @@ public class DatabaseInitializerTests
     // ── #174: Migration011_CharacterGlobalIdentity (ADR 013) ────────────────────
 
     /// <summary>
-    /// Seeds a pre-#174 database at App migration v10 (Migration009's CharacterSources join landed,
-    /// Migration011's merge has not) with two Sources and two same-named Characters, each linked to
-    /// exactly one Source (the shape ADR 011 Decision 5 guarantees at this point in migration
-    /// history), then completes migration through v11 and returns the survivor lookup for assertions.
+    /// #155: builds the pre-#174 precondition state directly rather than via a partial-migration
+    /// checkpoint — since consolidated migration 4 now fuses Series/CharacterSources schema creation
+    /// and the character-merge logic into one atomic, non-reentrant migration, there is no longer any
+    /// reachable migration-boundary between "schema exists" and "merge has run" to stop at (this was
+    /// already true of any *real* upgrade even before consolidation — nothing in migration 4 itself
+    /// ever populates Sources.SeriesId, only the app's own later import/seeding path does, so the
+    /// merge only ever found real candidates against a database that had *already* progressed through
+    /// real usage between two separate release cycles; per #155, no release ever shipped these
+    /// migrations separately, so that in-between state never existed in reality either).
+    /// <para/>
+    /// Per #155: never pass a truncated migration list to a <c>DatabaseInitializer</c>. Building the
+    /// v3-equivalent schema here therefore doesn't use <c>CreateInitializer</c>/<c>InitialiseAsync</c>
+    /// at all — it executes the three real, frozen Consumer migrations directly against a raw
+    /// connection (the same technique <c>ImportBatchesTests</c>' rename test uses), then, as this
+    /// class's own precondition doc above explains, no real migration replay can ever reach the exact
+    /// moment this test needs (Sources.SeriesId populated but the merge not yet run — a state that
+    /// cannot exist for any real upgrading user, since both now happen in the same atomic migration).
+    /// So the two migration 4 fragments are likewise executed directly, as the specific pieces of real
+    /// production SQL they are, to unit-test <c>CharacterGlobalIdentityMerge</c>'s own logic in
+    /// isolation against a hand-built but structurally realistic precondition — never through
+    /// <c>CreateInitializer</c>, truncated or otherwise.
     /// </summary>
     private async Task<(string source1Id, string source2Id, string character1Id, string character2Id)> SeedPreMergeCharactersAsync(
         string name = "Gandalf", string? name2 = null, string type1 = "Movie", string type2 = "Movie",
@@ -1448,9 +1466,6 @@ public class DatabaseInitializerTests
         string dateCreated1 = "2026-01-01 00:00:00", string dateCreated2 = "2026-01-02 00:00:00")
     {
         name2 ??= name;
-        var partialMigrations = QuotinatorMigrations.All.Take(10).ToList();
-        var db1 = CreateInitializer([], partialMigrations, useBaseline: false);
-        await db1.InitialiseForTestingAsync(forceIncremental: true);
 
         var source1Id    = Guid.NewGuid().ToString();
         var source2Id    = Guid.NewGuid().ToString();
@@ -1460,37 +1475,51 @@ public class DatabaseInitializerTests
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync();
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration002_ReseedGenres);
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration003_ImportBatches);
 
-            // Sources.SeriesId is a real FK to Series(Id) — a Series row must exist first.
+            await conn.ExecuteAsync(
+                "INSERT INTO Sources (Id, Title, Type, DateCreated, IsDeleted) VALUES (@id, @title, @type, @now, 0);",
+                new { id = source1Id, title = "Source One", type = type1, now = dateCreated1 });
+            await conn.ExecuteAsync(
+                "INSERT INTO Sources (Id, Title, Type, DateCreated, IsDeleted) VALUES (@id, @title, @type, @now, 0);",
+                new { id = source2Id, title = "Source Two", type = type2, now = dateCreated2 });
+
+            await conn.ExecuteAsync(
+                "INSERT INTO Characters (Id, SourceId, Name, DateCreated, IsDeleted) VALUES (@id, @sourceId, @name, @now, 0);",
+                new { id = character1Id, sourceId = source1Id, name, now = dateCreated1 });
+            await conn.ExecuteAsync(
+                "INSERT INTO Characters (Id, SourceId, Name, DateCreated, IsDeleted) VALUES (@id, @sourceId, @name, @now, 0);",
+                new { id = character2Id, sourceId = source2Id, name = name2, now = dateCreated2 });
+
+            // Migration009's own Characters rebuild carries CompletenessStatus across from the
+            // pre-existing row — but that column doesn't exist yet at true v3 (it's added by an
+            // earlier part of migration 4 than the rebuild, applied moments from now). Set it
+            // directly after the schema-creation portion runs, before the merge portion reads it.
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration004_ConsolidatedSinceV172Core);
+
+            await conn.ExecuteAsync(
+                "UPDATE Characters SET CompletenessStatus = @completeness WHERE Id = @id;",
+                new { id = character1Id, completeness = completeness1 });
+            await conn.ExecuteAsync(
+                "UPDATE Characters SET CompletenessStatus = @completeness WHERE Id = @id;",
+                new { id = character2Id, completeness = completeness2 });
+
+            // Sources.SeriesId is never populated by any migration itself — only the app's own later
+            // import/seeding path does this in reality. Simulate that here for whichever Sources this
+            // specific test wants linked into a (real or shared) Series.
             foreach (var seriesId in new[] { seriesId1, seriesId2 }.Where(s => s is not null).Distinct())
                 await conn.ExecuteAsync(
                     "INSERT OR IGNORE INTO Series (Id, Name, DateCreated, IsDeleted) VALUES (@id, @name, @now, 0);",
                     new { id = seriesId, name = $"Series {seriesId}", now = dateCreated1 });
+            if (seriesId1 is not null)
+                await conn.ExecuteAsync("UPDATE Sources SET SeriesId = @seriesId WHERE Id = @id;", new { id = source1Id, seriesId = seriesId1 });
+            if (seriesId2 is not null)
+                await conn.ExecuteAsync("UPDATE Sources SET SeriesId = @seriesId WHERE Id = @id;", new { id = source2Id, seriesId = seriesId2 });
 
-            await conn.ExecuteAsync(
-                "INSERT INTO Sources (Id, Title, Type, SeriesId, DateCreated, IsDeleted) VALUES (@id, @title, @type, @seriesId, @now, 0);",
-                new { id = source1Id, title = "Source One", type = type1, seriesId = seriesId1, now = dateCreated1 });
-            await conn.ExecuteAsync(
-                "INSERT INTO Sources (Id, Title, Type, SeriesId, DateCreated, IsDeleted) VALUES (@id, @title, @type, @seriesId, @now, 0);",
-                new { id = source2Id, title = "Source Two", type = type2, seriesId = seriesId2, now = dateCreated2 });
-
-            await conn.ExecuteAsync(
-                "INSERT INTO Characters (Id, Name, CompletenessStatus, DateCreated, IsDeleted) VALUES (@id, @name, @completeness, @now, 0);",
-                new { id = character1Id, name, completeness = completeness1, now = dateCreated1 });
-            await conn.ExecuteAsync(
-                "INSERT INTO Characters (Id, Name, CompletenessStatus, DateCreated, IsDeleted) VALUES (@id, @name, @completeness, @now, 0);",
-                new { id = character2Id, name = name2, completeness = completeness2, now = dateCreated2 });
-
-            await conn.ExecuteAsync(
-                "INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated, IsDeleted) VALUES (@id, @characterId, @sourceId, @now, 0);",
-                new { id = Guid.NewGuid().ToString(), characterId = character1Id, sourceId = source1Id, now = dateCreated1 });
-            await conn.ExecuteAsync(
-                "INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated, IsDeleted) VALUES (@id, @characterId, @sourceId, @now, 0);",
-                new { id = Guid.NewGuid().ToString(), characterId = character2Id, sourceId = source2Id, now = dateCreated2 });
+            await conn.ExecuteAsync(QuotinatorMigrations.CharacterGlobalIdentityMerge);
         }
-
-        var db2 = CreateInitializer([]);
-        await db2.InitialiseAsync();
 
         return (source1Id, source2Id, character1Id, character2Id);
     }
@@ -1579,13 +1608,18 @@ public class DatabaseInitializerTests
         Assert.AreEqual(2, survivorCount, "Same Name, same Type, but no known Series relationship — conservative default must leave both rows separate");
     }
 
+    /// <summary>
+    /// Per #155: no <c>CreateInitializer</c>/<c>InitialiseAsync</c> call anywhere in this test, same
+    /// reasoning as <see cref="SeedPreMergeCharactersAsync"/> above — the real, frozen Consumer
+    /// migrations build the base schema, migration 4's schema-creation fragment builds the
+    /// Series/CharacterSources shape, then <see cref="QuotinatorMigrations.CharacterGlobalIdentityMerge"/>
+    /// runs directly to unit-test its own quote-repointing behaviour against a hand-built precondition
+    /// that (as documented above) can never arise from a real migration replay.
+    /// </summary>
     [TestMethod]
     public async Task Migration_CharacterGlobalIdentity_RepointsQuoteCharacterIdToMergedRow()
     {
         var seriesId = Guid.NewGuid().ToString();
-        var partialMigrations = QuotinatorMigrations.All.Take(10).ToList();
-        var db1 = CreateInitializer([], partialMigrations, useBaseline: false);
-        await db1.InitialiseForTestingAsync(forceIncremental: true);
 
         var source1Id    = Guid.NewGuid().ToString();
         var source2Id    = Guid.NewGuid().ToString();
@@ -1596,6 +1630,11 @@ public class DatabaseInitializerTests
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync();
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration002_ReseedGenres);
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration003_ImportBatches);
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration004_ConsolidatedSinceV172Core);
+
             await conn.ExecuteAsync(
                 "INSERT INTO Series (Id, Name, DateCreated, IsDeleted) VALUES (@id, @name, '2026-01-01 00:00:00', 0);",
                 new { id = seriesId, name = $"Series {seriesId}" });
@@ -1620,10 +1659,9 @@ public class DatabaseInitializerTests
             await conn.ExecuteAsync(
                 "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, DateCreated, IsDeleted) VALUES (@id, 'A line.', 'en', @sourceId, @characterId, '2026-01-02 00:00:00', 0);",
                 new { id = quoteId, sourceId = source2Id, characterId = character2Id });
-        }
 
-        var db2 = CreateInitializer([]);
-        await db2.InitialiseAsync();
+            await conn.ExecuteAsync(QuotinatorMigrations.CharacterGlobalIdentityMerge);
+        }
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         await verifyConn.OpenAsync();
@@ -1772,5 +1810,4 @@ public class DatabaseInitializerTests
             Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Identical content — no change, no action staged at all");
         }
     }
-
 }

@@ -20,14 +20,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 1, Sql = Migration001_InitialSchema },
         new SchemaMigration { Version = 2, Sql = Migration002_ReseedGenres },
         new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
-        new SchemaMigration { Version = 4, Sql = Migration004_ImportBatchTypeUserSeed },
-        new SchemaMigration { Version = 5, Sql = Migration005_ImportBatchConflictPolicy },
-        new SchemaMigration { Version = 6, Sql = Migration006_RecordCompleteness },
-        new SchemaMigration { Version = 7, Sql = Migration007_ImportBatchStagingStatus },
-        new SchemaMigration { Version = 8, Sql = Migration008_Conversations },
-        new SchemaMigration { Version = 9, Sql = Migration009_SeriesUniverseSchema },
-        new SchemaMigration { Version = 10, Sql = Migration010_RenameImportBatchImportedById },
-        new SchemaMigration { Version = 11, Sql = Migration011_CharacterGlobalIdentity },
+        new SchemaMigration { Version = 4, Sql = Migration004_ConsolidatedSinceV172 },
     ];
 
     /// <summary>
@@ -38,7 +31,13 @@ public static class QuotinatorMigrations
     public static SchemaBaseline Baseline { get; } = new SchemaBaseline { Sql = BaselineSchema };
 
     // All tables use RecordBase columns (Id, DateCreated, DateModified, DateDeleted, IsDeleted).
-    private const string Migration001_InitialSchema = """
+    // internal (not private): frozen forever (already released in v1.7.2, confirmed against `main`
+    // — never editable per this project's migration policy), so tests may reference this constant
+    // directly to build a genuine v1.7.2-shaped fixture database without ever truncating the real
+    // migration list passed to a DatabaseInitializer (see #155's "we do not skip migrations for any
+    // reason" — a test must always run the real, complete migration path; it may only construct
+    // realistic pre-existing data for that real path to run against).
+    internal const string Migration001_InitialSchema = """
         CREATE TABLE IF NOT EXISTS Sources (
             Id           TEXT    PRIMARY KEY,
             Title        TEXT    NOT NULL,
@@ -141,13 +140,13 @@ public static class QuotinatorMigrations
     // Clears QuoteGenres so ReSeedGenresIfEmptyAsync can repopulate using the corrected
     // normalisation logic. Hyphenated genres ("sci-fi", "non-fiction") were silently dropped
     // during initial seeding because Enum.TryParse failed on the hyphen.
-    private const string Migration002_ReseedGenres = "DELETE FROM QuoteGenres;";
+    internal const string Migration002_ReseedGenres = "DELETE FROM QuoteGenres;";
 
     // Adds the ImportBatches provenance table and nullable ImportBatchId FK columns on all
     // entity tables. Pre-seed rows for the two bundled external datasets are inserted only
     // when upgrading (Quotes already contains data) — fresh installs receive provenance from
     // the seeder instead.
-    private const string Migration003_ImportBatches = """
+    internal const string Migration003_ImportBatches = """
         CREATE TABLE IF NOT EXISTS ImportBatches (
             Id           TEXT    PRIMARY KEY,
             Name         TEXT    NOT NULL,
@@ -182,12 +181,76 @@ public static class QuotinatorMigrations
         WHERE EXISTS (SELECT 1 FROM Quotes LIMIT 1);
         """;
 
-    // Widens the ImportBatches.Type CHECK constraint to add 'UserSeed' (files scanned from the
-    // user's imports folder, distinct from 'System'/'Seed' bundled content). SQLite cannot ALTER
-    // a CHECK constraint, so the table is recreated with the new constraint and existing rows are
-    // copied across. Wrapped in the caller's transaction, so a failure rolls back to the
-    // pre-migration table intact — safe to retry.
-    private const string Migration004_ImportBatchTypeUserSeed = """
+    // #155: consolidates every Consumer-owned migration added since v1.7.2 (the last actually
+    // published release — confirmed directly against the `main` branch, which still has only
+    // migrations 1-3 here) into a single migration. None of the 8 migrations this replaces
+    // (ImportBatchTypeUserSeed, ImportBatchConflictPolicy, RecordCompleteness,
+    // ImportBatchStagingStatus, Conversations, SeriesUniverseSchema,
+    // RenameImportBatchImportedById, CharacterGlobalIdentity) had ever reached a real installation,
+    // so squashing them is safe under this project's migration policy (which protects migrations
+    // that have shipped, not ones still in development) — see the #155 plan doc for the full
+    // reasoning and the developer's explicit direction to consolidate. Combining previously-separate
+    // transactions into one is strictly safer (fully atomic), never less so. Content below is the
+    // literal concatenation of the 8 migrations' SQL bodies, in their original order — no logic
+    // changed, only where the version boundaries used to fall. Per-step reasoning preserved from
+    // each original migration's own doc comment:
+    //
+    // ImportBatchTypeUserSeed: widens ImportBatches.Type's CHECK to add 'UserSeed' (imports-folder
+    // files, distinct from bundled 'System'/'Seed' content) via the rebuild-under-temporary-name
+    // pattern (SQLite cannot ALTER a CHECK constraint in place).
+    //
+    // ImportBatchConflictPolicy: adds ImportBatches.ConflictPolicy, recording which
+    // duplicate-resolution policy was active per batch; pre-existing rows backfill to 'skip' (the
+    // HardcodedDefault in effect before #64 flipped it to NewestWins).
+    //
+    // RecordCompleteness: adds CompletenessStatus (Incomplete/NeedsReview/Complete, #55/#165) and
+    // NoValueKnown (confirmed-empty field list) to Quotes/Sources/Characters/People, enum-backed so
+    // CompletenessStatus gets a CHECK per ADR 008; both default to the "never reviewed" state for
+    // pre-existing rows.
+    //
+    // ImportBatchStagingStatus: adds ImportBatches.Status ('Staged'/'Applied'/'Discarded', #154) and
+    // AppliedAt; every pre-#154 code path committed immediately, so pre-existing rows backfill to
+    // 'Applied'.
+    //
+    // Conversations: adds Conversations/ConversationLines/StageDirections/StageDirectionTranslations/
+    // SoundCues/SoundCueTranslations (#67), every table with full RecordBase columns (ADR 002).
+    // ConversationLines.LineType and the cross-field "exactly one FK matches LineType" rule are two
+    // independent CHECKs per ADR 008. Conversations/StageDirections/SoundCues get
+    // CompletenessStatus/NoValueKnown inline since they're created fresh here.
+    //
+    // SeriesUniverseSchema (#179/ADR 011): adds the Universe -> Series -> Source hierarchy, and
+    // makes Character<->Source many-to-many via CharacterSources (replacing Characters.SourceId's
+    // single required FK) with zero data merging — every existing Character (including soft-deleted
+    // ones) gets exactly one CharacterSources row carrying its then-current SourceId before the
+    // column is dropped. CharacterSources.Id is generated via randomblob()/hex() (SQLite has no
+    // native UUID function), which always produces uppercase hex — matching this project's canonical
+    // convention at the time this was written; ADR 012 later moved the convention to lowercase, but
+    // since nothing outside this migration ever looks a CharacterSources row up by its own Id (only
+    // by the CharacterId/SourceId pair via IdClauses), the mismatch is inert and permanent by design.
+    // Characters.SourceId and its UNIQUE(SourceId, Name) constraint are dropped via the same
+    // rebuild-under-temporary-name pattern ImportBatchTypeUserSeed above uses.
+    //
+    // RenameImportBatchImportedById (#213): renames ImportBatches.ImportedBy to ImportedById so the
+    // column carries the *Id suffix every id-casing guard relies on to find id/FK columns by name —
+    // a single atomic RENAME COLUMN, no CHECK/UNIQUE/REFERENCES on this column to rebuild around.
+    //
+    // CharacterGlobalIdentity (#174, ADR 013): consolidates pre-existing per-Source Character rows
+    // into fewer global rows using the merge-candidate test ADR 013 Decision 1 defines — same Name
+    // (case-insensitive), same denormalized SourceType (backfilled first, from each row's single
+    // linked Source — every Character still has exactly one CharacterSources link at this exact
+    // point in migration history, since SeriesUniverseSchema above performed zero merging), and a
+    // directly shared, non-null Sources.SeriesId between the two Characters' linked Sources. A
+    // Character with no Series-known linked Source is conservatively excluded from merging
+    // (Decision 1(c)). CharacterSources/Quotes.CharacterId are re-pointed to each group's survivor,
+    // CompletenessStatus resolves to the most-reviewed value across the group (Decision 4),
+    // merged-away rows are soft-deleted, never hard-deleted (Decision 3).
+    // Split from CharacterGlobalIdentityMerge (below) purely so tests can run this schema-creation
+    // portion standalone, populate Sources.SeriesId by hand (nothing in this migration itself ever
+    // seeds SeriesId values — that only ever happens via the app's own later import/seeding path),
+    // then run the merge portion separately against realistic data — see
+    // DatabaseInitializerTests' Migration_CharacterGlobalIdentity_* tests. Not meant to represent a
+    // real, independently-reachable migration checkpoint on its own.
+    internal const string Migration004_ConsolidatedSinceV172Core = """
         CREATE TABLE IF NOT EXISTS ImportBatches_New (
             Id           TEXT    PRIMARY KEY,
             Name         TEXT    NOT NULL,
@@ -209,26 +272,9 @@ public static class QuotinatorMigrations
         DROP TABLE ImportBatches;
 
         ALTER TABLE ImportBatches_New RENAME TO ImportBatches;
-        """;
 
-    // Adds ImportBatches.ConflictPolicy, recording the conflict-resolution policy that was active
-    // for each batch. Pre-existing rows backfill to 'skip' — the HardcodedDefault in effect before
-    // #64 flipped it to NewestWins — since that's what those rows were actually seeded under; new
-    // rows populate their real applied policy at insert time via CreateImportBatchAsync.
-    private const string Migration005_ImportBatchConflictPolicy = """
         ALTER TABLE ImportBatches ADD COLUMN ConflictPolicy TEXT NOT NULL DEFAULT 'skip';
-        """;
 
-    // Adds CompletenessStatus (3-state: Incomplete/NeedsReview/Complete — #165) and NoValueKnown
-    // (JSON array of field names confirmed to have no findable value) to all four entity tables,
-    // per #55/#165. Originally a plain IsComplete BIT (#55); revised to the 3-state enum before ever
-    // shipping (#165, verified against release tags — safe to edit in place, nothing to migrate
-    // forward from). Both columns default 'Incomplete'/'[]' for pre-existing rows on upgrade —
-    // correct, since no row predating this migration has ever been reviewed. #64's UPDATE paths
-    // (Sql.Quotes.UpdateOnNewestWins and the GetOrCreate* "found existing" paths) deliberately never
-    // reference these columns, so an existing row's values survive every reseed/reimport untouched.
-    // CompletenessStatus is enum-backed, so it gets a CHECK constraint per ADR 008.
-    private const string Migration006_RecordCompleteness = """
         ALTER TABLE Quotes     ADD COLUMN CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
             CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete'));
         ALTER TABLE Quotes     ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
@@ -241,42 +287,11 @@ public static class QuotinatorMigrations
         ALTER TABLE People     ADD COLUMN CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
             CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete'));
         ALTER TABLE People     ADD COLUMN NoValueKnown TEXT NOT NULL DEFAULT '[]';
-        """;
 
-    // Adds ImportBatches.Status ('Staged'/'Applied'/'Discarded') and AppliedAt (#154). Every
-    // pre-existing code path (live import, preview, seeding) always committed immediately, so
-    // pre-existing rows correctly backfill to 'Applied' — nothing before this feature ever staged.
-    // Only the new staging endpoint creates 'Staged' rows. Status is backed by a real C# enum
-    // (ImportBatchStatus), so it gets a CHECK constraint per ADR 008 (enum-backed columns require
-    // a matching CHECK). Confirmed against sqlite.org's ALTER TABLE docs, not just empirical testing
-    // — ADD COLUMN explicitly supports a CHECK constraint (existing rows are tested against it),
-    // and this column satisfies every documented restriction (no PRIMARY KEY/UNIQUE, NOT NULL has a
-    // real default, no REFERENCES clause, not a GENERATED STORED column).
-    private const string Migration007_ImportBatchStagingStatus = """
         ALTER TABLE ImportBatches ADD COLUMN Status TEXT NOT NULL DEFAULT 'Applied'
             CHECK (Status IN ('Staged', 'Applied', 'Discarded'));
         ALTER TABLE ImportBatches ADD COLUMN AppliedAt TEXT;
-        """;
 
-    // Adds Conversations, ConversationLines, StageDirections, StageDirectionTranslations,
-    // SoundCues, SoundCueTranslations (#67). ConversationLines.LineType is backed by a real C#
-    // enum (ConversationLineType), so it gets a CHECK per ADR 008 — kept as its own simple
-    // membership CHECK, separate from the second CHECK enforcing the "exactly one FK matches
-    // LineType" business rule, so the ADR's literal "CHECK enumerating the same member names"
-    // requirement is satisfied independently of the cross-field rule. Every table here carries
-    // RecordBase columns without exception (ADR 002), including ConversationLines (a line/junction
-    // table) and the two translation tables, which use a synthetic Id + UNIQUE(EntityId, Language)
-    // rather than a composite primary key — matching QuoteTranslations/SourceTranslations/
-    // CharacterTranslations, not a new shape.
-    //
-    // Conversations/StageDirections/SoundCues also gain CompletenessStatus/NoValueKnown inline here
-    // (#165) — unlike Quotes/Sources/Characters/People (which already existed by migration006 and
-    // needed a later ALTER), these three tables are created fresh in this very migration, so the
-    // columns are added directly rather than via a follow-up ALTER. ConversationLines and the two
-    // translation tables are child/junction rows, not their own reviewable content entities, so they
-    // don't get the columns — matching Source/Character/Person's own "entity, not its translation
-    // row" scope from #55.
-    private const string Migration008_Conversations = """
         CREATE TABLE IF NOT EXISTS Conversations (
             Id                 TEXT    PRIMARY KEY,
             Description        TEXT,
@@ -370,27 +385,7 @@ public static class QuotinatorMigrations
         CREATE INDEX IF NOT EXISTS IX_ConversationLines_SoundCueId               ON ConversationLines(SoundCueId);
         CREATE INDEX IF NOT EXISTS IX_StageDirectionTranslations_StageDirectionId ON StageDirectionTranslations(StageDirectionId);
         CREATE INDEX IF NOT EXISTS IX_SoundCueTranslations_SoundCueId            ON SoundCueTranslations(SoundCueId);
-        """;
 
-    // #179/ADR 011: Universe -> Series -> Source hierarchy, and Character<->Source becomes
-    // many-to-many via CharacterSources, replacing Characters.SourceId's single required FK.
-    // Zero data merging — every existing Characters row (including soft-deleted ones, to preserve
-    // full history/reversibility) gets exactly one CharacterSources row carrying its current
-    // SourceId, before the column is dropped. CharacterSources.Id is generated in SQL (SQLite has
-    // no native UUID function) via the standard randomblob()/hex() idiom — SQLite's hex() always
-    // returns uppercase hex digits, which matched this project's canonical convention at the time
-    // this migration was written (GuidHandler.cs then stored uppercase). ADR 012's later revisions
-    // moved the canonical convention to lowercase, but this migration is frozen per this project's
-    // migration policy (never edit a shipped migration) — it permanently produces an uppercase-
-    // cased CharacterSources.Id regardless. This is an accepted, permanent exception, not a bug:
-    // nothing outside this migration ever looks a CharacterSources row up by its own Id (only by
-    // the CharacterId/SourceId pair, both wrapped via IdClauses), so the mismatch is inert.
-    // Characters.SourceId and its UNIQUE(SourceId, Name) constraint are then
-    // dropped via the rebuild-under-temporary-name pattern (SQLite cannot ALTER a UNIQUE constraint
-    // or drop a column participating in one in place) — see Migration004_ImportBatchTypeUserSeed for
-    // the same pattern. No new uniqueness constraint is added to Characters here; that depends on
-    // the merge key #174's own ADR decides.
-    private const string Migration009_SeriesUniverseSchema = """
         CREATE TABLE IF NOT EXISTS Universe (
             Id                 TEXT    PRIMARY KEY,
             Name               TEXT    NOT NULL UNIQUE,
@@ -464,25 +459,27 @@ public static class QuotinatorMigrations
         CREATE INDEX IF NOT EXISTS IX_CharacterSources_SourceId    ON CharacterSources(SourceId);
         CREATE INDEX IF NOT EXISTS IX_Series_UniverseId            ON Series(UniverseId);
         CREATE INDEX IF NOT EXISTS IX_Sources_SeriesId              ON Sources(SeriesId);
-        """;
 
-    // Renames ImportBatches.ImportedBy to ImportedById (#213) — the column always held a UUID (or NULL)
-    // but its name didn't carry the *Id suffix every id-casing guard (SqlIdCaseGuard,
-    // SqlSelectPresentationGuard, ReflectedColumnMetadata) relies on to find id/FK columns by name. Single
-    // atomic RENAME COLUMN — no CHECK/UNIQUE/REFERENCES on this column, so the full create-copy-drop-rename
-    // table rebuild Migration004 needed for a CHECK-constraint change is unnecessary here. Column is
-    // unused in v1 (no auth/user management — CLAUDE.md's "What NOT to do"), so every pre-existing row's
-    // value is NULL and survives the rename unchanged.
-    private const string Migration010_RenameImportBatchImportedById = """
         ALTER TABLE ImportBatches RENAME COLUMN ImportedBy TO ImportedById;
         """;
 
-    // #174, ADR 013 — consolidates pre-existing per-Source Character rows into fewer global rows,
-    // using the merge-candidate test ADR 013 Decision 1 defines: same Name (case-insensitive —
-    // Decision 1(a)), same denormalized SourceType (the Source.Type anchor, ADR 011), and a directly
-    // shared, non-null Sources.SeriesId between the two Characters' linked Sources. At this exact
-    // point in migration history every pre-existing Character still has exactly one CharacterSources
-    // link (ADR 011 Decision 5's own migration performed zero merging), so "the Source this Character
+    private const string Migration004_ConsolidatedSinceV172 =
+        Migration004_ConsolidatedSinceV172Core + CharacterGlobalIdentityMerge;
+
+    // #174, ADR 013 — extracted as its own constant, appended to Migration004_ConsolidatedSinceV172
+    // above via string concatenation rather than left fully inline, so a unit test can execute this
+    // exact merge logic in isolation against a hand-built precondition state (Characters/
+    // CharacterSources/Sources.SeriesId already populated as if migration 4's own schema-creation
+    // portion had already run), without needing the full, non-reentrant consolidated migration to
+    // execute end to end — see DatabaseInitializerTests' Migration_CharacterGlobalIdentity_* tests.
+    // internal (not private): those tests execute this SQL directly against a hand-built connection.
+    //
+    // Consolidates pre-existing per-Source Character rows into fewer global rows, using the
+    // merge-candidate test ADR 013 Decision 1 defines: same Name (case-insensitive — Decision 1(a)),
+    // same denormalized SourceType (the Source.Type anchor, ADR 011), and a directly shared,
+    // non-null Sources.SeriesId between the two Characters' linked Sources. At this exact point in
+    // migration history every pre-existing Character still has exactly one CharacterSources link
+    // (the SeriesUniverseSchema portion above performed zero merging), so "the Source this Character
     // is linked to" is unambiguous for every row processed here.
     //
     // Backfills the new SourceType column first (from each row's single linked Source), then computes
@@ -494,13 +491,13 @@ public static class QuotinatorMigrations
     // becomes a merge candidate for anyone, keeping its own id unchanged.
     //
     // CharacterSources/Quotes.CharacterId are re-pointed to the survivor, then CompletenessStatus
-    // resolves to the most-reviewed value across the group (ADR 013 Decision 4); NoValueKnown is set
-    // to '[]' directly rather than computed via a JSON-array union (Decision 4's own remark: every
-    // pre-existing Character row already has NoValueKnown = '[]', since Character's only field is
-    // Name, so there is nothing to union yet). Merged-away rows are soft-deleted, never hard-deleted
-    // (ADR 013 Decision 3) — CharacterSources/Quotes rows have already been re-pointed away from them
-    // by this point, so no FK is left dangling.
-    private const string Migration011_CharacterGlobalIdentity = """
+    // resolves to the most-reviewed value across the group (Decision 4); NoValueKnown is set to '[]'
+    // directly rather than computed via a JSON-array union (every pre-existing Character row already
+    // has NoValueKnown = '[]', since Character's only field is Name, so there is nothing to union
+    // yet). Merged-away rows are soft-deleted, never hard-deleted (Decision 3) — CharacterSources/
+    // Quotes rows have already been re-pointed away from them by this point, so no FK is left
+    // dangling.
+    internal const string CharacterGlobalIdentityMerge = """
         ALTER TABLE Characters ADD COLUMN SourceType TEXT NOT NULL DEFAULT 'Unknown'
             CHECK (SourceType IN ('Unknown','Movie','Tv','Anime','Book','Person'));
 
