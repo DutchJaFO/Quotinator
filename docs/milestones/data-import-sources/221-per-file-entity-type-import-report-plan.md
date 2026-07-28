@@ -1,6 +1,6 @@
 # #221 — Per-file, per-entity-type import/seed report
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 
 **GitHub issue:** https://github.com/DutchJaFO/Quotinator/issues/221
 
@@ -149,14 +149,32 @@ count), plus asserts zero `Pending`/`Blocked` (NewestWins always resolves determ
 
 ### 3. Wire into `PreviewSeedAsync` — real planner, no writes
 
-**Status:** Not started.
+**Status:** Done, implemented 2026-07-28.
 
-Per Design Decision 4: rewrite `PreviewSeedAsync` to call `ImportActionPlanner.PlanAsync` per file
-against a real (but never-written-to) connection, building a `FileImportReport` per file the same
-way Step 2 does. `SeedPreviewResult` drops `CrossFileDuplicates`/`TotalQuotes`/`UniqueQuotes` in
-favour of `IReadOnlyList<FileImportReport> Reports` (file quote counts are still meaningful and stay
-on `SeedFilePreview` — only the duplicate-tracking field changes). `SeedDuplicateRecord` is deleted
-once this is the last reference to it.
+`PreviewSeedAsync` rewritten to open its own read-only connection (`CreateConnection()` +
+`OpenAsync()`) and, per file, call `LoadSourceFileAsync` for the full multi-entity parse and
+`ImportActionPlanner.PlanAsync` (passing `transaction: null` and a fresh `Guid.NewGuid()` batch id,
+since nothing is ever staged or committed) to build a `FileImportReport` via
+`ImportActionReportBuilder.Build` — exactly the same classifier the real seeding pipeline uses.
+`SeedPreviewResult` now carries `IReadOnlyList<FileImportReport> Reports` instead of
+`CrossFileDuplicates`/`TotalQuotes`/`UniqueQuotes` (file quote counts are unaffected — they still live
+on `SeedFilePreview`). `SeedDuplicateRecord.cs` deleted (no remaining references). The now-unused
+`TruncateLabel` helper (only ever used by the old duplicate-tracking code) removed alongside it.
+
+**Known limitation, documented on `SeedPreviewResult.Reports`'s own XML doc comment** (per Design
+Decision 4 and the developer's explicit choice to accept it rather than build a full transactional
+simulation): since nothing is actually written between files, a quote id appearing in two different
+files that are both new to the database reports as `new` in both files' reports, not `new` in one and
+`modified` in the other, unlike a real seed run (where the earlier file's row is actually committed
+before the next file is planned). Always accurate against a database that already has the relevant
+rows — confirmed by the new test below, which previews against an already-fully-seeded database and
+gets the correct `modified` counts throughout.
+
+**Test** (`DatabaseInitializerTests.PreviewSeedAsync_AfterFullSeed_ProducesReportWithoutWritingAnyRow`,
+new): seeds `AllFilesBatch()` fully, records `System_ImportActions`/`ImportBatches` row counts, calls
+`PreviewSeedAsync()`, and asserts both row counts are byte-for-byte unchanged and the returned report
+shows `modified = 844` (799 unique quotes + 45 cross-file duplicate occurrences — every quote line
+across every file matches an already-existing row) and `new = 0`.
 
 ### 4. Wire into `POST /import`/`POST /import/preview`
 
@@ -181,14 +199,15 @@ Extend `LogDatabaseStatsAsync`'s `[Database - Stats]` log line to include all ni
 
 ### 6. Update admin endpoint responses
 
-**Status:** In progress — `reseed`/`reset` done as part of Step 2 (2026-07-26); `seed/preview` still
-pending Step 3.
+**Status:** Done for the report shape (2026-07-28); the five new entity-type counts (Step 5) still
+need adding to `reseed`/`reset`'s responses once that step lands.
 
 - `POST /admin/database/reseed`, `POST /admin/database/reset` — ✅ `duplicates` (a bare int) replaced
-  with `reports` (one per file). The five new entity-type counts (Step 5) still need adding alongside
-  the existing four once that step lands.
-- `GET /admin/database/seed/preview` — not started; replace `crossFileDuplicates` with `reports` (one
-  per file, the new shape) once Step 3's rearchitecture lands.
+  with `reports` (one per file), done as part of Step 2 (2026-07-26).
+- `GET /admin/database/seed/preview` — ✅ `totalQuotes`/`uniqueQuotes`/`crossFileDuplicates` replaced
+  with `reports` (one per file, the new shape); `[Description]` text updated to document the known
+  cross-file-simulation limitation. `AdminEndpointsTests.PreviewSeed_Returns200WithPreviewShape`
+  updated to assert `files`/`reports` instead of the removed fields.
 
 ### 7. Documentation
 
@@ -228,10 +247,10 @@ call sites correctly —
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | `ImportActionReportBuilder` classifies every `(ActionType, Status)` combination into exactly one of 6 buckets | Unit test | `ImportActionReportBuilderTests.*` (13 tests), implemented 2026-07-26 |
 | 2 | ✅ | Seeding produces a per-file report replacing `LastSeedDuplicates`, for all entity types | Unit test | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates` (updated), implemented 2026-07-26 |
-| 3 | ❌ | `PreviewSeedAsync` produces the same rich report without writing any row to the database | Unit test | `DatabaseInitializerTests.PreviewSeedAsync_RealBundledFiles_ProducesReportWithNoDatabaseWrites` (new) |
+| 3 | ✅ | `PreviewSeedAsync` produces the same rich report without writing any row to the database | Unit test | `DatabaseInitializerTests.PreviewSeedAsync_AfterFullSeed_ProducesReportWithoutWritingAnyRow`, implemented 2026-07-28 |
 | 4 | ❌ | `POST /import`/`/import/preview` responses include a per-file report | Unit test | `ImportEndpointTests`/`SqliteQuoteImportServiceTests` (new cases) |
 | 5 | ❌ | `POST /admin/database/reseed`/`reset` responses include per-file reports instead of a flat `duplicates` count | Unit test + Live | `AdminEndpointsTests` (new cases) + CLAUDE.md smoke test |
-| 6 | ❌ | `GET /admin/database/seed/preview` response includes per-file reports | Unit test + Live | `AdminEndpointsTests` (new case) + CLAUDE.md smoke test |
+| 6 | ✅ | `GET /admin/database/seed/preview` response includes per-file reports | Unit test + Live | `AdminEndpointsTests.PreviewSeed_Returns200WithPreviewShape` (updated 2026-07-28); Live T2 pending Step 8 |
 | 7 | ❌ | Startup stats log and `IDatabaseInitializer` expose counts for all 9 entity types (adding Series/Universe/StageDirection/SoundCue/Conversation) | Unit test + Live | `DatabaseInitializerTests` (new case) + live container log inspection |
 | 8 | ❌ | `SeedDuplicateRecord`/`LastSeedDuplicates`/`CrossFileDuplicates` are fully removed, no remaining references | Live (review) | `grep -rn "SeedDuplicateRecord\|LastSeedDuplicates\|CrossFileDuplicates" src/ tests/` returns nothing |
 | 9 | ❌ | Documentation (README/DOCS.md/CLAUDE.md smoke tests) reflects the new response shapes | Live (review) | Manual read-through of the three docs against the actual endpoint responses |
