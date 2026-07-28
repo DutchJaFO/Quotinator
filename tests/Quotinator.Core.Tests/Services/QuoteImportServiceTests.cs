@@ -137,6 +137,37 @@ public class QuoteImportServiceTests
         Assert.AreEqual("newest-wins", result.ConflictPolicy, "Response-facing wire value must be kebab-case, matching every other DuplicateResolutionPolicy JSON value in this API");
     }
 
+    /// <summary>#221: ImportAsync's response includes a per-file, per-entity-type Report built from
+    /// the same actions the rest of the response already summarised — a brand-new quote against an
+    /// empty database is a single "new" Quote action, and the report's own FileName matches the
+    /// caller-supplied file name.</summary>
+    [TestMethod]
+    public async Task ImportAsync_FreshDatabase_ReportShowsOneNewQuoteAction()
+    {
+        var service = CreateService();
+
+        var result = await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: false);
+
+        Assert.AreEqual("test.json", result.Report.FileName);
+        Assert.AreEqual(1, result.Report.EntityTypes["Quote"].New);
+        Assert.AreEqual(0, result.Report.EntityTypes["Quote"].Modified);
+    }
+
+    /// <summary>#221: ApplyStagedBatchAsync (the batchId-mode alias for POST /import?batchId=) also
+    /// includes a Report, built from the already-staged actions it applies rather than a fresh
+    /// PlanAsync call — labelled with the batch's own stored file name, not a fresh upload's.</summary>
+    [TestMethod]
+    public async Task ApplyStagedBatchAsync_PreviouslyStagedBatch_ReportShowsOneNewQuoteAction()
+    {
+        var service = CreateService();
+        var staged  = await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "staged.json", null, preview: true);
+
+        var result = await service.ApplyStagedBatchAsync(staged.BatchId!.Value);
+
+        Assert.AreEqual("staged.json", result.Report.FileName);
+        Assert.AreEqual(1, result.Report.EntityTypes["Quote"].New);
+    }
+
     // ── Conflict policies against a pre-existing DB row (not a second file) ────
 
     [TestMethod]

@@ -185,6 +185,7 @@ public class ImportEndpointTests
                     }
                 ],
                 PendingActionIds = [Guid.NewGuid()],
+                Report = new FileImportReport { FileName = "test", EntityTypes = new Dictionary<string, EntityTypeActionCounts>() }
             }
         };
         using var factory = CreateFactory(TestKey, service);
@@ -216,6 +217,7 @@ public class ImportEndpointTests
                 Summary          = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 1, Updated = 0, Skipped = 0, Errors = 0 },
                 Conflicts        = [],
                 PendingActionIds = [Guid.NewGuid()],
+                Report           = new FileImportReport { FileName = "test", EntityTypes = new Dictionary<string, EntityTypeActionCounts>() }
             }
         };
         using var factory = CreateFactory(TestKey, service);
@@ -248,6 +250,7 @@ public class ImportEndpointTests
                         IncomingValue = new Dictionary<string, object?>(),
                     }
                 ],
+                Report = new FileImportReport { FileName = "test", EntityTypes = new Dictionary<string, EntityTypeActionCounts>() }
             }
         };
         using var factory = CreateFactory(TestKey, service);
@@ -348,6 +351,7 @@ public class ImportEndpointTests
                     }
                 ],
                 PendingActionIds = [Guid.NewGuid()],
+                Report = new FileImportReport { FileName = "test", EntityTypes = new Dictionary<string, EntityTypeActionCounts>() }
             }
         };
         using var factory = CreateFactory(TestKey, service);

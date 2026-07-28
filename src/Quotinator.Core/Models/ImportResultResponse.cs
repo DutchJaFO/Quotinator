@@ -1,3 +1,5 @@
+using Quotinator.Data.Import;
+
 namespace Quotinator.Core.Models;
 
 /// <summary>
@@ -34,6 +36,18 @@ public sealed class ImportResultResponse
 
     /// <summary>Rows that failed validation and were skipped without aborting the rest of the file.</summary>
     public IReadOnlyList<ImportRowError> Errors { get; init; } = [];
+
+    /// <summary>
+    /// Per-entity-type new/modified/blocked/discarded/pending/stale action counts for this import
+    /// (#221) — the same per-file report shape <see cref="Quotinator.Data.Database.IDatabaseInitializer.LastSeedReport"/>
+    /// and <c>GET /admin/database/seed/preview</c> use, built from the exact <c>SystemImportAction</c>
+    /// rows this call staged (or, for <see cref="Quotinator.Core.Services.IQuoteImportService.ApplyStagedBatchAsync"/>,
+    /// the already-staged rows it applied). Answers a different question than <see cref="Summary"/>
+    /// (Quote-only row counts including validation errors) — this covers every entity type the file
+    /// touched, classified by <c>ImportActionStatus</c>/<c>ImportActionKind</c> rather than by
+    /// import-specific outcome.
+    /// </summary>
+    public required FileImportReport Report { get; init; }
 }
 
 /// <summary>Row counts for an <see cref="ImportResultResponse"/>.</summary>

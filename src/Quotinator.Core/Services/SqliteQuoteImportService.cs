@@ -133,7 +133,8 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             },
             Conflicts        = BuildConflictEntries(actions),
             PendingActionIds = pendingActionIds,
-            Errors           = errors
+            Errors           = errors,
+            Report           = ImportActionReportBuilder.Build(fileName, actions)
         };
     }
 
@@ -185,7 +186,8 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             },
             Conflicts        = BuildConflictEntries(actions),
             PendingActionIds = pendingActionIds,
-            Errors           = []
+            Errors           = [],
+            Report           = ImportActionReportBuilder.Build(batch.Name, actions)
         };
     }
 

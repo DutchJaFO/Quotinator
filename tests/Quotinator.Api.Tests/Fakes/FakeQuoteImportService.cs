@@ -30,7 +30,8 @@ internal sealed class FakeQuoteImportService : IQuoteImportService
             BatchId        = preview ? null : Guid.NewGuid(),
             Preview        = preview,
             ConflictPolicy = "newest-wins",
-            Summary        = new ImportSummary { Total = 1, Imported = 1, Updated = 0, Skipped = 0, Errors = 0 }
+            Summary        = new ImportSummary { Total = 1, Imported = 1, Updated = 0, Skipped = 0, Errors = 0 },
+            Report         = new FileImportReport { FileName = fileName, EntityTypes = new Dictionary<string, EntityTypeActionCounts>() }
         });
     }
 
@@ -45,7 +46,8 @@ internal sealed class FakeQuoteImportService : IQuoteImportService
             BatchId        = batchId,
             Preview        = false,
             ConflictPolicy = "newest-wins",
-            Summary        = new ImportSummary { Total = 1, Imported = 1, Updated = 0, Skipped = 0, Errors = 0 }
+            Summary        = new ImportSummary { Total = 1, Imported = 1, Updated = 0, Skipped = 0, Errors = 0 },
+            Report         = new FileImportReport { FileName = "staged-batch", EntityTypes = new Dictionary<string, EntityTypeActionCounts>() }
         });
     }
 }
