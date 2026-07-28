@@ -50,7 +50,7 @@ public class StartupSummaryLoggerTests
         public int    CharacterCount   => 42;
         public int    PeopleCount      => 12;
         public string? MigrationApplied => migrationApplied;
-        public IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates => [];
+        public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task InitialiseAsync()                    => Task.CompletedTask;
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
         public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false) => Task.CompletedTask;

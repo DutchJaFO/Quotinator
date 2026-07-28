@@ -246,19 +246,10 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             return;
         }
 
-        LastSeedDuplicates = [];
+        LastSeedReport = [];
 
-        // Tracks which file a quote Id was last seen in, purely for SeedDuplicateRecord's
-        // human-readable FirstSeenInFile/ConflictFile labels — actual duplicate detection is the
-        // planner's own job (in-memory within one file, a real DB lookup across files, since each
-        // file's batch is staged then applied before the next file is planned).
-        // Case-insensitive (ADR 012) — these are keyed/looked-up by the file's own raw q.Id, which is
-        // never canonicalized at this outer level (only ImportActionPlanner's internal loop copy is),
-        // while action.EntityId used for lookups below is always canonical lowercase.
-        var lastFileByQuoteId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var duplicates        = new List<SeedDuplicateRecord>();
-        var uniqueQuoteIds    = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var stagedFiles       = new List<string>();
+        var reports     = new List<FileImportReport>();
+        var stagedFiles = new List<string>();
 
         foreach (var batch in effectiveBatches)
         {
@@ -288,21 +279,9 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                     tx.Commit();
                 }
 
-                foreach (var action in actions)
-                {
-                    if (action.EntityType != ImportActionEntityTypes.Quote || action.ActionType.Parsed != ImportActionKind.Modify)
-                        continue;
-
-                    lastFileByQuoteId.TryGetValue(action.EntityId, out var firstFile);
-                    var quoteText = quotes.First(q => string.Equals(q.Id, action.EntityId, StringComparison.OrdinalIgnoreCase)).QuoteText;
-                    duplicates.Add(new SeedDuplicateRecord(
-                        "quote", action.EntityId, TruncateLabel(quoteText), firstFile ?? fileName, fileName, policy));
-                }
-                foreach (var q in quotes)
-                {
-                    lastFileByQuoteId[q.Id] = fileName;
-                    uniqueQuoteIds.Add(q.Id);
-                }
+                var report = ImportActionReportBuilder.Build(fileName, actions);
+                reports.Add(report);
+                Logger.LogInformation("[Database - Seed] {File} report: {Report}", fileName, FormatReport(report));
 
                 var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Seed);
                 if (applyResult is null)
@@ -335,12 +314,9 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             }
         }
 
-        LastSeedDuplicates = duplicates;
+        LastSeedReport = reports;
 
-        var dupCount = duplicates.Count;
-        Logger.LogInformation(
-            "[Database - Seed] seeding complete — {Unique} unique quotes from {Total} total ({Dups} duplicate{S})",
-            uniqueQuoteIds.Count, uniqueQuoteIds.Count + dupCount, dupCount, dupCount == 1 ? "" : "s");
+        Logger.LogInformation("[Database - Seed] seeding complete — {Count} file(s) processed", reports.Count);
 
         if (stagedFiles.Count > 0)
             Logger.LogInformation(
@@ -457,6 +433,11 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
     private static string TruncateLabel(string text, int maxLen = 60)
         => text.Length <= maxLen ? text : text[..maxLen] + "…";
+
+    /// <summary>Single-line, grep-friendly rendering of a <see cref="FileImportReport"/> for the seed log (#221).</summary>
+    private static string FormatReport(FileImportReport report)
+        => string.Join(" ", report.EntityTypes.Select(kv =>
+            $"{kv.Key}[new={kv.Value.New} modified={kv.Value.Modified} blocked={kv.Value.Blocked} discarded={kv.Value.Discarded} pending={kv.Value.Pending} stale={kv.Value.Stale}]"));
 
     private static readonly JsonSerializerOptions ConflictRuleReadOptions = new() { PropertyNameCaseInsensitive = true };
 

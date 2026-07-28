@@ -183,7 +183,7 @@ public class DatabaseInitializer : IDatabaseInitializer
     public string? MigrationApplied { get; protected set; }
 
     /// <inheritdoc/>
-    public IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates { get; protected set; } = [];
+    public IReadOnlyList<FileImportReport> LastSeedReport { get; protected set; } = [];
 
     // Guards against concurrent seeding when multiple WebApplicationFactory instances start in
     // the same process (e.g. parallel MSTest runs). Each waiter re-checks COUNT(*) after

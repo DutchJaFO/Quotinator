@@ -108,7 +108,7 @@ internal static class AdminEndpoints
                 sources     = db.SourceCount,
                 characters  = db.CharacterCount,
                 people      = db.PeopleCount,
-                duplicates  = db.LastSeedDuplicates.Count
+                reports     = db.LastSeedReport
             });
         })
         .WithName("ReseedDatabase")
@@ -118,7 +118,8 @@ internal static class AdminEndpoints
             "The schema version history is preserved — no migrations are re-applied. " +
             "Auto-updated sources are refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
             "unless `Quotinator:AutoUpdateSources` is `false`, in which case `forceSourceRefresh` has no effect. " +
-            "Returns the row counts and duplicate count after the operation completes. " +
+            "Returns the row counts and a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) " +
+            "after the operation completes (issue #221). " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
@@ -131,7 +132,7 @@ internal static class AdminEndpoints
                 sources    = db.SourceCount,
                 characters = db.CharacterCount,
                 people     = db.PeopleCount,
-                duplicates = db.LastSeedDuplicates.Count
+                reports    = db.LastSeedReport
             });
         })
         .WithName("ResetDatabase")
@@ -144,7 +145,8 @@ internal static class AdminEndpoints
             "By default, schema migration history is also cleared and replayed; pass `preserveSchemaVersion=true` to keep the existing migration history instead. " +
             "Auto-updated sources are refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
             "unless `Quotinator:AutoUpdateSources` is `false`, in which case `forceSourceRefresh` has no effect. " +
-            "Returns the row counts and duplicate count after the operation completes. " +
+            "Returns the row counts and a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) " +
+            "after the operation completes (issue #221). " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 

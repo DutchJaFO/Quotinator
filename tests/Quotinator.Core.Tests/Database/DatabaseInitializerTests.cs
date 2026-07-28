@@ -158,17 +158,23 @@ public class DatabaseInitializerTests
         Assert.AreEqual(3,   db.PeopleCount,    "People (Winston Churchill, Neil Armstrong, Martin Luther King Jr. — curated)");
     }
 
-    /// <summary>Cross-file duplicates between vilaboim and NikhilNamal17 are recorded with NewestWins policy (AllFilesBatch() uses ManifestPolicy.HardcodedDefault directly, bypassing the bundled manifest.json's own "skip" override).</summary>
+    /// <summary>#221: cross-file duplicates between vilaboim and NikhilNamal17 show up as "modified" Quote
+    /// actions in the per-file report (AllFilesBatch() uses ManifestPolicy.HardcodedDefault, i.e.
+    /// NewestWins, bypassing the bundled manifest.json's own "skip" override) — none pending or blocked,
+    /// since NewestWins always resolves deterministically.</summary>
     [TestMethod]
     public async Task InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates()
     {
         var db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(45, db.LastSeedDuplicates.Count, "Cross-file duplicates");
-        Assert.IsTrue(
-            db.LastSeedDuplicates.All(d => d.AppliedPolicy == DuplicateResolutionPolicy.NewestWins),
-            "All duplicates should use NewestWins policy (HardcodedDefault)");
+        var modified = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0);
+        var pending  = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Pending ?? 0);
+        var blocked  = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Blocked ?? 0);
+
+        Assert.AreEqual(45, modified, "Cross-file duplicates, resolved as modified Quote actions");
+        Assert.AreEqual(0, pending, "NewestWins always resolves deterministically — nothing pending");
+        Assert.AreEqual(0, blocked, "NewestWins never blocks — no Complete rows exist yet to block against");
     }
 
     /// <summary>Seeding only the curated file correctly wires up the FK chain: Source → Character → Quote.</summary>
@@ -183,7 +189,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(7,  db.SourceCount,    "4 movie sources + 3 person speech occasions");
         Assert.AreEqual(7,  db.CharacterCount, "7 characters across the four movie sources");
         Assert.AreEqual(3,  db.PeopleCount,    "Winston Churchill, Neil Armstrong, Martin Luther King Jr.");
-        Assert.AreEqual(0,  db.LastSeedDuplicates.Count);
+        Assert.AreEqual(0,  db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0), "A single file has no cross-file duplicates");
     }
 
     /// <summary>

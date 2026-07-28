@@ -38,11 +38,12 @@ public interface IDatabaseInitializer
     string? MigrationApplied { get; }
 
     /// <summary>
-    /// Duplicate records encountered during the last seeding operation.
-    /// Populated after <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, or <see cref="ResetAsync"/> completes.
-    /// Empty on a fresh database with no cross-file conflicts.
+    /// One <see cref="FileImportReport"/> per source file processed during the last seeding
+    /// operation, in the order the files were processed (#221). Populated after
+    /// <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, or <see cref="ResetAsync"/> completes.
+    /// Empty on a fresh database with no configured source files.
     /// </summary>
-    IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates { get; }
+    IReadOnlyList<FileImportReport> LastSeedReport { get; }
 
     /// <summary>Ensures WAL mode is active, applies any pending schema migrations, and seeds the database from source files if empty.</summary>
     Task InitialiseAsync();

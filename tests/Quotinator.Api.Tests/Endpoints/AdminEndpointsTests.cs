@@ -202,7 +202,7 @@ public class AdminEndpointsTests
         public int    CharacterCount   => 0;
         public int    PeopleCount      => 0;
         public string? MigrationApplied => null;
-        public IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates => [];
+        public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
         public Task InitialiseAsync() => Task.CompletedTask;
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;

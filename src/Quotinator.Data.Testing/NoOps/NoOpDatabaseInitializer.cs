@@ -31,7 +31,7 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public string? MigrationApplied => null;
 
     /// <inheritdoc/>
-    public IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates => [];
+    public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
     /// <inheritdoc/>
     public Task InitialiseAsync() => Task.CompletedTask;
