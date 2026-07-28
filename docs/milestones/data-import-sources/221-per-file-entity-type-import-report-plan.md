@@ -1,6 +1,6 @@
 # #221 — Per-file, per-entity-type import/seed report
 
-**Status:** In progress (step 1)
+**Status:** In progress (step 3)
 
 **GitHub issue:** https://github.com/DutchJaFO/Quotinator/issues/221
 
@@ -115,13 +115,37 @@ dictionary (an empty `sources` entry for a file with no Source actions adds no i
 
 ### 2. Wire into the seeding pipeline — replace `LastSeedDuplicates`
 
-**Status:** Not started.
+**Status:** Done, implemented 2026-07-26.
 
-`QuotinatorDatabaseInitializer.SeedIfEmptyInternalAsync`'s per-file loop already has `actions` right
-after `PlanAsync` returns (before `StageAsync`/`ApplyBatchAsync`). Build one `FileImportReport` per
-file there, collect into `IReadOnlyList<FileImportReport> LastSeedReport` (replaces
-`LastSeedDuplicates` on `DatabaseInitializer`/`IDatabaseInitializer`). Remove the
-`lastFileByQuoteId`/`duplicates`/`SeedDuplicateRecord`-based tracking entirely from this method.
+`IDatabaseInitializer.LastSeedDuplicates`/`DatabaseInitializer.LastSeedDuplicates` replaced with
+`LastSeedReport` (`IReadOnlyList<FileImportReport>`). `QuotinatorDatabaseInitializer
+.SeedIfEmptyInternalAsync`'s per-file loop builds one `FileImportReport` right after `PlanAsync`
+returns (before `StageAsync`/`ApplyBatchAsync`), replacing the old `lastFileByQuoteId`/`duplicates`/
+`SeedDuplicateRecord`-based tracking entirely. The old aggregate "seeding complete — N unique quotes
+from M total (D duplicates)" log line is replaced by one per-file `[Database - Seed] {File} report:
+{...}` line (emitted right after that file's report is built) plus a short "seeding complete — N
+file(s) processed" summary line. `NoOpDatabaseInitializer` and the two test-double
+`IDatabaseInitializer` implementations (`AdminEndpointsTests.SpyDatabaseInitializer`,
+`StartupSummaryLoggerTests.StubDbInitializer`) updated to match.
+
+**ADR 004 correction made during this step**: `FileImportReport`/`EntityTypeActionCounts`/
+`ImportActionReportBuilder` were initially placed in `Quotinator.Core` (Step 1), but since
+`IDatabaseInitializer.LastSeedReport` lives in `Quotinator.Data` and only ever touches
+`SystemImportAction` (already a `Quotinator.Data` entity), that would have required `Quotinator.Data`
+to depend on `Quotinator.Core` — forbidden by ADR 004. Moved to `Quotinator.Data.Import` (and
+`ImportActionReportBuilder` made `public`, since `Quotinator.Core` now calls it across the assembly
+boundary) before Step 2's wiring — see the separate `refactor [#221]` commit.
+
+**`AdminEndpoints.cs`'s `POST /admin/database/reseed`/`reset` responses updated too** (part of Step 6,
+done here since Step 2 already needed the field renamed): `duplicates` (a bare int) replaced with
+`reports` (the new per-file shape). `GET /admin/database/seed/preview` is unaffected here — its own
+migration is Step 3.
+
+Existing tests updated: `InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates` now asserts the
+summed `Modified` count across all files' `Quote` entries equals 45 (matching the old duplicate
+count), plus asserts zero `Pending`/`Blocked` (NewestWins always resolves deterministically);
+`InitialiseAsync_CuratedFileOnly_SeedsFkChainCorrectly`'s duplicate-count assertion now checks
+`Modified` is `0` for a single-file seed.
 
 ### 3. Wire into `PreviewSeedAsync` — real planner, no writes
 
@@ -157,12 +181,14 @@ Extend `LogDatabaseStatsAsync`'s `[Database - Stats]` log line to include all ni
 
 ### 6. Update admin endpoint responses
 
-**Status:** Not started.
+**Status:** In progress — `reseed`/`reset` done as part of Step 2 (2026-07-26); `seed/preview` still
+pending Step 3.
 
-- `GET /admin/database/seed/preview` — replace `crossFileDuplicates` with `reports` (one per file,
-  the new shape).
-- `POST /admin/database/reseed`, `POST /admin/database/reset` — replace `duplicates` (a bare int)
-  with `reports` (one per file); add the five new counts alongside the existing four.
+- `POST /admin/database/reseed`, `POST /admin/database/reset` — ✅ `duplicates` (a bare int) replaced
+  with `reports` (one per file). The five new entity-type counts (Step 5) still need adding alongside
+  the existing four once that step lands.
+- `GET /admin/database/seed/preview` — not started; replace `crossFileDuplicates` with `reports` (one
+  per file, the new shape) once Step 3's rearchitecture lands.
 
 ### 7. Documentation
 
@@ -201,7 +227,7 @@ call sites correctly —
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | `ImportActionReportBuilder` classifies every `(ActionType, Status)` combination into exactly one of 6 buckets | Unit test | `ImportActionReportBuilderTests.*` (13 tests), implemented 2026-07-26 |
-| 2 | ❌ | Seeding produces a per-file report replacing `LastSeedDuplicates`, for all entity types | Unit test | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_ProducesPerFileReport` (new) |
+| 2 | ✅ | Seeding produces a per-file report replacing `LastSeedDuplicates`, for all entity types | Unit test | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates` (updated), implemented 2026-07-26 |
 | 3 | ❌ | `PreviewSeedAsync` produces the same rich report without writing any row to the database | Unit test | `DatabaseInitializerTests.PreviewSeedAsync_RealBundledFiles_ProducesReportWithNoDatabaseWrites` (new) |
 | 4 | ❌ | `POST /import`/`/import/preview` responses include a per-file report | Unit test | `ImportEndpointTests`/`SqliteQuoteImportServiceTests` (new cases) |
 | 5 | ❌ | `POST /admin/database/reseed`/`reset` responses include per-file reports instead of a flat `duplicates` count | Unit test + Live | `AdminEndpointsTests` (new cases) + CLAUDE.md smoke test |
