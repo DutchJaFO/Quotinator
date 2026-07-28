@@ -1,9 +1,8 @@
-using Quotinator.Core.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 
-namespace Quotinator.Core.Tests.Database;
+namespace Quotinator.Data.Tests.Import;
 
 /// <summary>Tests for <see cref="ImportActionReportBuilder"/> (#221).</summary>
 [TestClass]

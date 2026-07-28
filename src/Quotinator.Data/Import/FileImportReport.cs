@@ -1,10 +1,10 @@
-namespace Quotinator.Core.Models;
+namespace Quotinator.Data.Import;
 
 /// <summary>
-/// Per-entity-type breakdown of how many <c>SystemImportAction</c> rows for one imported/seeded file
-/// fell into each of the 6 possible outcomes (#221) — replaces the flat "duplicates" count that gave
-/// no indication of which file it came from or what actually happened. Every action from a single
-/// planning pass falls into exactly one bucket:
+/// Per-entity-type breakdown of how many <see cref="Entities.SystemImportAction"/> rows for one
+/// imported/seeded file fell into each of the 6 possible outcomes (#221) — replaces the flat
+/// "duplicates" count that gave no indication of which file it came from or what actually happened.
+/// Every action from a single planning pass falls into exactly one bucket:
 /// <list type="bullet">
 /// <item><description><see cref="New"/> — an Add action that resolved cleanly (<c>Decided</c> or <c>Applied</c>)</description></item>
 /// <item><description><see cref="Modified"/> — a Modify action that resolved cleanly (<c>Decided</c> or <c>Applied</c>)</description></item>
@@ -41,6 +41,6 @@ public sealed class FileImportReport
     /// <summary>File name without directory path.</summary>
     public required string FileName { get; init; }
 
-    /// <summary>Per-entity-type action counts, keyed by <see cref="Quotinator.Core.Helpers.ImportActionEntityTypes"/> value. Entity types with no actions for this file are omitted.</summary>
+    /// <summary>Per-entity-type action counts, keyed by the caller's own entity-type constant (e.g. Quotinator.Core.Helpers.ImportActionEntityTypes). Entity types with no actions for this file are omitted.</summary>
     public required IReadOnlyDictionary<string, EntityTypeActionCounts> EntityTypes { get; init; }
 }
