@@ -1,6 +1,6 @@
 # #221 — Per-file, per-entity-type import/seed report
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 5)
 
 **GitHub issue:** https://github.com/DutchJaFO/Quotinator/issues/221
 
@@ -178,14 +178,28 @@ across every file matches an already-existing row) and `new = 0`.
 
 ### 4. Wire into `POST /import`/`POST /import/preview`
 
-**Status:** Not started.
+**Status:** Done, implemented 2026-07-28.
 
-`SqliteQuoteImportService.ImportAsync` already has its own `actions` list from the same
-`ImportActionPlanner.PlanAsync` call. Build one `FileImportReport` (per Design Decision 3, the same
-per-file wrapper shape even though there's exactly one file) and add it to `ImportResultResponse` as
-a new `Report` property. `ImportSummary`'s existing `Total`/`Imported`/`Updated`/`Skipped`/`Errors`
-fields stay — they answer a different question (row-level outcome including validation errors,
-which `FileImportReport` has no concept of) and nothing here duplicates them.
+`ImportResultResponse` gains a `required FileImportReport Report` property (`Quotinator.Core.Models`,
+depends on `Quotinator.Data.Import` — no ADR 004 concern, since Core is already allowed to depend on
+Data). `SqliteQuoteImportService.ImportAsync` builds it from its own `actions` list (the same list
+`ImportActionPlanner.PlanAsync` already returns) via `ImportActionReportBuilder.Build(fileName,
+actions)`. `ApplyStagedBatchAsync` (the `batchId`-mode alias — applies an already-staged batch with no
+fresh `PlanAsync` call) builds it from the actions it re-reads via `_actionReader.GetAllForBatchAsync`,
+labelled with the batch's own stored `Name` (the original upload's file name) rather than a fresh
+value, since there's no new file in this call. `ImportSummary`'s existing
+`Total`/`Imported`/`Updated`/`Skipped`/`Errors` fields stay — they answer a different question
+(row-level outcome including validation errors, which `FileImportReport` has no concept of) and
+nothing here duplicates them. `ImportEndpoints.cs` needed no changes — both endpoints already return
+the whole `ImportResultResponse` object directly (`Results.Ok(result)`), so `Report` reaches the wire
+automatically.
+
+**Tests** (`QuoteImportServiceTests.cs`, new): `ImportAsync_FreshDatabase_ReportShowsOneNewQuoteAction`
+(a brand-new quote produces `Report.EntityTypes["Quote"].New == 1`) and
+`ApplyStagedBatchAsync_PreviouslyStagedBatch_ReportShowsOneNewQuoteAction` (same, applied via the
+`batchId` alias path, confirming the re-read-actions code path also builds a correct report). Four
+existing `ImportResultResponse` object-initializer call sites in `ImportEndpointTests.cs` and
+`FakeQuoteImportService.cs` updated to supply the now-required `Report` field.
 
 ### 5. Missing entity-type counts (Series/Universe/StageDirection/SoundCue/Conversation)
 
@@ -248,7 +262,7 @@ call sites correctly —
 | 1 | ✅ | `ImportActionReportBuilder` classifies every `(ActionType, Status)` combination into exactly one of 6 buckets | Unit test | `ImportActionReportBuilderTests.*` (13 tests), implemented 2026-07-26 |
 | 2 | ✅ | Seeding produces a per-file report replacing `LastSeedDuplicates`, for all entity types | Unit test | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates` (updated), implemented 2026-07-26 |
 | 3 | ✅ | `PreviewSeedAsync` produces the same rich report without writing any row to the database | Unit test | `DatabaseInitializerTests.PreviewSeedAsync_AfterFullSeed_ProducesReportWithoutWritingAnyRow`, implemented 2026-07-28 |
-| 4 | ❌ | `POST /import`/`/import/preview` responses include a per-file report | Unit test | `ImportEndpointTests`/`SqliteQuoteImportServiceTests` (new cases) |
+| 4 | ✅ | `POST /import`/`/import/preview` responses include a per-file report | Unit test | `QuoteImportServiceTests.ImportAsync_FreshDatabase_ReportShowsOneNewQuoteAction`/`ApplyStagedBatchAsync_PreviouslyStagedBatch_ReportShowsOneNewQuoteAction`, implemented 2026-07-28 |
 | 5 | ❌ | `POST /admin/database/reseed`/`reset` responses include per-file reports instead of a flat `duplicates` count | Unit test + Live | `AdminEndpointsTests` (new cases) + CLAUDE.md smoke test |
 | 6 | ✅ | `GET /admin/database/seed/preview` response includes per-file reports | Unit test + Live | `AdminEndpointsTests.PreviewSeed_Returns200WithPreviewShape` (updated 2026-07-28); Live T2 pending Step 8 |
 | 7 | ❌ | Startup stats log and `IDatabaseInitializer` expose counts for all 9 entity types (adding Series/Universe/StageDirection/SoundCue/Conversation) | Unit test + Live | `DatabaseInitializerTests` (new case) + live container log inspection |
