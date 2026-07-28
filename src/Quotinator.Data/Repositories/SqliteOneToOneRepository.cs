@@ -2,6 +2,7 @@ using System.Reflection;
 using Dapper;
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Repositories;
@@ -23,18 +24,19 @@ namespace Quotinator.Data.Repositories;
 /// <typeparam name="TDetail">The detail entity type.</typeparam>
 public abstract class SqliteOneToOneRepository<TParent, TDetail>(
     IDbConnectionFactory factory,
-    IAuditWriter auditWriter,
+    ISystemAuditWriter auditWriter,
     ICallerContext callerContext)
     : AggregateRepository<TParent, TDetail>(factory, auditWriter, callerContext),
       IOneToOneRepository<TParent, TDetail>
     where TParent : RecordBase
     where TDetail : RecordBase
 {
-    // Resolved once per TDetail — same pattern as SqliteRepositoryBase.TableName for TParent.
+    // Resolved once per TDetail — same pattern as SqliteRepositoryBase.TableName/Columns for TParent.
     private static readonly string DetailTableName =
         typeof(TDetail).GetCustomAttribute<TableAttribute>()?.Name
         ?? throw new InvalidOperationException(
             $"{typeof(TDetail).Name} must carry a [Table(\"..\")] attribute from Dapper.Contrib.Extensions.");
+    private static readonly IEntityColumnMetadata DetailColumns = ReflectedColumnMetadata.For(typeof(TDetail));
 
     /// <inheritdoc/>
     public abstract Task<TDetail?> GetDetailAsync(Guid parentId, IUnitOfWork? unitOfWork = null);
@@ -53,17 +55,17 @@ public abstract class SqliteOneToOneRepository<TParent, TDetail>(
     protected async Task<TDetail?> GetDetailByForeignKeyAsync(
         string fkColumn, Guid parentId, IUnitOfWork? unitOfWork = null)
     {
-        var param = new { parentId = parentId.ToString("D").ToUpperInvariant() };
+        var param = new { parentId = parentId.ToCanonicalId() };
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var rows = await uow.Connection.QueryAsync<TDetail>(
-                RepositorySql.SelectByForeignKey(DetailTableName, fkColumn), param, uow.Transaction);
+                RepositorySql.SelectByForeignKey(DetailTableName, fkColumn, DetailColumns), param, uow.Transaction);
             return rows.FirstOrDefault();
         }
         using var conn = Factory.CreateConnection();
         conn.Open();
         var result = await conn.QueryAsync<TDetail>(
-            RepositorySql.SelectByForeignKey(DetailTableName, fkColumn), param);
+            RepositorySql.SelectByForeignKey(DetailTableName, fkColumn, DetailColumns), param);
         return result.FirstOrDefault();
     }
 }

@@ -1,0 +1,22 @@
+{
+  "rules": [
+    {
+      "entityId": "3e72279b-187d-cc49-94e7-83e63335f56d",
+      "existingRecord": {
+        "title": "Star Wars: Episode V - The Empire Strikes Back",
+        "type": "Movie",
+        "date": "1980",
+        "seriesId": null
+      },
+      "incomingRecord": {
+        "title": "Star Wars: Episode V - The Empire Strikes Back",
+        "type": "Movie",
+        "date": "1980",
+        "seriesId": "2b66f560-983d-5c41-8b21-1a94909ab456"
+      },
+      "fields": [
+        { "field": "seriesId", "resolution": "Replace" }
+      ]
+    }
+  ]
+}

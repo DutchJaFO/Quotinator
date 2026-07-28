@@ -44,17 +44,25 @@ public class StartupSummaryLoggerTests
     private sealed class StubDbInitializer(string? migrationApplied) : IDatabaseInitializer
     {
         public int    SchemaVersion    => 3;
+        public int    DataSchemaVersion => 2;
         public int    QuoteCount       => 780;
         public int    SourceCount      => 3;
         public int    CharacterCount   => 42;
         public int    PeopleCount      => 12;
+        public int    SeriesCount      => 0;
+        public int    UniverseCount    => 0;
+        public int    StageDirectionCount => 0;
+        public int    SoundCueCount    => 0;
+        public int    ConversationCount => 0;
         public string? MigrationApplied => migrationApplied;
-        public IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates => [];
+        public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task InitialiseAsync()                    => Task.CompletedTask;
-        public Task ReseedAsync()                        => Task.CompletedTask;
-        public Task ResetAsync()                         => Task.CompletedTask;
+        public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
+        public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false) => Task.CompletedTask;
         public Task<SeedPreviewResult> PreviewSeedAsync() =>
-            Task.FromResult(new SeedPreviewResult([], [], 0, 0));
+            Task.FromResult(new SeedPreviewResult([], []));
+        public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false) =>
+            Task.FromResult(new SourceCacheResolution([], []));
     }
 
     private static string AllMessages(CapturingLogger<StartupSummaryLogger> logger)
@@ -153,10 +161,27 @@ public class StartupSummaryLoggerTests
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
         var all = AllMessages(logger);
         StringAssert.Contains(all, "schema v3");
+        StringAssert.Contains(all, "Statistics:");
         StringAssert.Contains(all, "780 quotes");
         StringAssert.Contains(all, "3 sources");
         StringAssert.Contains(all, "42 characters");
         StringAssert.Contains(all, "12 people");
+    }
+
+    /// <summary>#221: the five entity-type counts added alongside quotes/sources/characters/people
+    /// each get their own line under the "Statistics:" section, not crammed onto the schema line —
+    /// found live via T1 that a single-line format doesn't scale as more entity types are added.</summary>
+    [TestMethod]
+    public void LogReady_BannerContainsNewEntityTypeStats_OnePerLine()
+    {
+        var logger = new CapturingLogger<StartupSummaryLogger>();
+        Build(logger).LogReady(["http://0.0.0.0:8080"]);
+        var all = AllMessages(logger);
+        StringAssert.Contains(all, "0 series");
+        StringAssert.Contains(all, "0 universes");
+        StringAssert.Contains(all, "0 stage directions");
+        StringAssert.Contains(all, "0 sound cues");
+        StringAssert.Contains(all, "0 conversations");
     }
 
     [TestMethod]

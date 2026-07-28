@@ -1,6 +1,7 @@
 using Dapper;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Repositories;
@@ -9,7 +10,7 @@ namespace Quotinator.Data.Repositories;
 /// Extends <see cref="SqliteRepository{T}"/> with soft-delete management:
 /// retrieving deleted records, undoing a soft-delete, hard-deleting a single record,
 /// and purging all soft-deleted records from the table.
-/// All write methods write an <see cref="AuditEntry"/> in the same connection and transaction.
+/// All write methods write a <see cref="SystemAuditEntry"/> in the same connection and transaction.
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
 public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRepository<T>
@@ -19,7 +20,7 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
     /// <param name="factory">Opens connections to the SQLite database.</param>
     /// <param name="auditWriter">Writes an audit entry alongside every write operation.</param>
     /// <param name="callerContext">Provides the current caller's identity for audit entries.</param>
-    public SqliteRestorableRepository(IDbConnectionFactory factory, IAuditWriter auditWriter, ICallerContext callerContext)
+    public SqliteRestorableRepository(IDbConnectionFactory factory, ISystemAuditWriter auditWriter, ICallerContext callerContext)
         : base(factory, auditWriter, callerContext) { }
 
     /// <inheritdoc/>
@@ -28,19 +29,19 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var results = await uow.Connection.QueryAsync<T>(
-                RepositorySql.SelectDeleted(TableName), transaction: uow.Transaction);
+                RepositorySql.SelectDeleted(TableName, Columns), transaction: uow.Transaction);
             return results.ToList();
         }
         using var conn = Factory.CreateConnection();
         conn.Open();
-        var rows = await conn.QueryAsync<T>(RepositorySql.SelectDeleted(TableName));
+        var rows = await conn.QueryAsync<T>(RepositorySql.SelectDeleted(TableName, Columns));
         return rows.ToList();
     }
 
     /// <inheritdoc/>
     public async Task RestoreAsync(Guid id, IUnitOfWork? unitOfWork = null)
     {
-        var param = new { now = SafeDateValue.Now.Raw, id = id.ToString("D").ToUpperInvariant() };
+        var param = new { now = SafeDateValue.Now.Raw, id = id.ToCanonicalId() };
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             await uow.Connection.ExecuteAsync(
@@ -57,7 +58,7 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
     /// <inheritdoc/>
     public async Task HardDeleteAsync(Guid id, IUnitOfWork? unitOfWork = null)
     {
-        var param = new { id = id.ToString("D").ToUpperInvariant() };
+        var param = new { id = id.ToCanonicalId() };
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             await uow.Connection.ExecuteAsync(

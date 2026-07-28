@@ -13,6 +13,9 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public int SchemaVersion => 0;
 
     /// <inheritdoc/>
+    public int DataSchemaVersion => 0;
+
+    /// <inheritdoc/>
     public int QuoteCount => 0;
 
     /// <inheritdoc/>
@@ -25,21 +28,40 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public int PeopleCount => 0;
 
     /// <inheritdoc/>
+    public int SeriesCount => 0;
+
+    /// <inheritdoc/>
+    public int UniverseCount => 0;
+
+    /// <inheritdoc/>
+    public int StageDirectionCount => 0;
+
+    /// <inheritdoc/>
+    public int SoundCueCount => 0;
+
+    /// <inheritdoc/>
+    public int ConversationCount => 0;
+
+    /// <inheritdoc/>
     public string? MigrationApplied => null;
 
     /// <inheritdoc/>
-    public IReadOnlyList<SeedDuplicateRecord> LastSeedDuplicates => [];
+    public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
     /// <inheritdoc/>
     public Task InitialiseAsync() => Task.CompletedTask;
 
     /// <inheritdoc/>
-    public Task ReseedAsync() => Task.CompletedTask;
+    public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
 
     /// <inheritdoc/>
-    public Task ResetAsync() => Task.CompletedTask;
+    public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false) => Task.CompletedTask;
 
     /// <inheritdoc/>
     public Task<SeedPreviewResult> PreviewSeedAsync()
-        => Task.FromResult(new SeedPreviewResult([], [], 0, 0));
+        => Task.FromResult(new SeedPreviewResult([], []));
+
+    /// <inheritdoc/>
+    public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false)
+        => Task.FromResult(new SourceCacheResolution([], []));
 }

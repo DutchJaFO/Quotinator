@@ -12,6 +12,21 @@
       "description": "Canonical quote entries. Same schema as source-flat.schema.json.",
       "items": { "$ref": "#/$defs/quote" }
     },
+    "sources": {
+      "type": "array",
+      "description": "Optional explicit Source declarations (#162) — an author-assigned id decoupling matching from Title/Type/Date content, so all three become correctable. A quote's own 'source' field stays a title string either way; this section is purely additive context a file may also provide.",
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "people": {
+      "type": "array",
+      "description": "Optional explicit Person declarations (#173) — an author-assigned id decoupling matching from Name content, so Name/dateOfBirth/dateOfDeath all become correctable. A quote's own 'author' field stays a name string either way; this section is purely additive context a file may also provide.",
+      "items": { "$ref": "#/$defs/person" }
+    },
+    "characters": {
+      "type": "array",
+      "description": "Optional explicit Character declarations (#175) — an author-assigned id decoupling matching from Name content, so Name becomes correctable; when id is omitted, the entry is matched (or, if genuinely new, created) via ADR 013's Type-anchored, Series-scoped algorithm using name+sourceTitle+sourceType. A quote's own 'character'/'source' fields stay text strings either way; this section is purely additive context a file may also provide.",
+      "items": { "$ref": "#/$defs/character" }
+    },
     "stageDirections": {
       "type": "array",
       "description": "Reusable scene-setting and action descriptions that appear in conversations.",
@@ -26,6 +41,16 @@
       "type": "array",
       "description": "Ordered groupings of quotes, stage directions, and sound cues.",
       "items": { "$ref": "#/$defs/conversation" }
+    },
+    "series": {
+      "type": "array",
+      "description": "Optional explicit Series declarations (#180) — a direct continuity of Sources within a Universe. Matched by name only; no explicit id, since the id is generated from the name.",
+      "items": { "$ref": "#/$defs/series" }
+    },
+    "universe": {
+      "type": "array",
+      "description": "Optional explicit Universe declarations (#180) — a fictional world or franchise spanning one or more Series. Matched by name only; no explicit id, since the id is generated from the name.",
+      "items": { "$ref": "#/$defs/universe" }
     }
   },
   "$defs": {
@@ -70,6 +95,63 @@
         }
       }
     },
+    "source": {
+      "type": "object",
+      "required": ["title", "type"],
+      "additionalProperties": false,
+      "description": "Two shapes. CORRECTION (#162): include 'id' — the Source is matched by that explicit id, so title/type/date can all be corrected. ENRICHMENT (#180): omit 'id' — the Source is matched by natural key (title + type), which makes those two the lookup key rather than correctable values; only 'seriesName' is applied on this path. Omit any property you do not intend to set: a property present with a null value means 'reset this to null', not 'leave it alone'.",
+      "properties": {
+        "id":         { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive (#180). Optional — omit it to match by natural key (title + type) instead, which is the right shape for a curated overlay file that only enriches Sources this project already generated ids for." },
+        "title":      { "type": "string", "minLength": 1 },
+        "type":       { "type": "string", "enum": ["movie", "tv", "anime", "book", "person"] },
+        "date":       { "type": ["string", "null"], "description": "Publication or release date. Only meaningful alongside an explicit 'id' — a natural-key-matched entry never sets it. Omit entirely unless you intend to set it." },
+        "seriesName": { "type": ["string", "null"], "description": "Name of the Series (#180) this Source belongs to, if any. Resolved to a Series id at import time — never a raw id, matching how a quote's own 'source'/'author' fields are text, not ids. Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." }
+      }
+    },
+    "series": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "description": "Two shapes (#163). CORRECTION: include 'id' — the Series is matched by that explicit id, so 'name'/'universeName' can both be corrected. CREATION/ENRICHMENT: omit 'id' — the Series is matched, or if genuinely new created, by natural key (name).",
+      "properties": {
+        "id":           { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive (#163). Optional — omit it to match by natural key (name) instead." },
+        "name":         { "type": "string", "minLength": 1 },
+        "universeName": { "type": ["string", "null"], "description": "Name of the Universe (#180) this Series belongs to, if any. Resolved to a Universe id at import time, same as Source.seriesName." }
+      }
+    },
+    "universe": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "description": "Two shapes (#163). CORRECTION: include 'id' — the Universe is matched by that explicit id, so 'name' can be corrected. CREATION/ENRICHMENT: omit 'id' — the Universe is matched, or if genuinely new created, by natural key (name).",
+      "properties": {
+        "id":   { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive (#163). Optional — omit it to match by natural key (name) instead." },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "person": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id":          { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "name":        { "type": "string", "minLength": 1 },
+        "dateOfBirth": { "type": ["string", "null"], "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
+        "dateOfDeath": { "type": ["string", "null"], "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." }
+      }
+    },
+    "character": {
+      "type": "object",
+      "required": ["name", "sourceTitle", "sourceType"],
+      "additionalProperties": false,
+      "description": "Two shapes (#175). CORRECTION: include 'id' — the Character is matched by that explicit id, so 'name' can be corrected ('sourceType' is immutable once a Character exists — ADR 013 — so 'sourceTitle'/'sourceType' are present for schema consistency but never diffed/written on this path). CREATION/ENRICHMENT: omit 'id' — the Character is matched, or if genuinely new created, via ADR 013's Type-anchored, Series-scoped algorithm using 'name'+'sourceTitle'+'sourceType', the identical identity test a quote's own 'character'/'source' fields resolve through, just decoupled from any specific quote's own text.",
+      "properties": {
+        "id":          { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive. Optional — omit to match/create via sourceTitle+sourceType+name instead (ADR 013)." },
+        "name":        { "type": "string", "minLength": 1 },
+        "sourceTitle": { "type": "string", "minLength": 1, "description": "The Source this Character is anchored to for ADR 013 matching purposes — same title text a quote's own 'source' field uses. Ignored (never diffed) when 'id' is present." },
+        "sourceType":  { "type": "string", "enum": ["movie", "tv", "anime", "book", "person"], "description": "The Source.Type anchor (ADR 011) for ADR 013 matching. Ignored (never diffed) when 'id' is present — a Character's Type anchor is immutable once set." }
+      }
+    },
     "stageDirection": {
       "type": "object",
       "required": ["id", "text"],
@@ -77,7 +159,7 @@
       "properties": {
         "id":       { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
         "text":     { "type": "string", "minLength": 1, "description": "e.g. '[EXT. AIRPORT - DAY]'" },
-        "imageUrl": { "type": ["string", "null"], "format": "uri" },
+        "imageUrl": { "type": ["string", "null"], "format": "uri", "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
         "translations": {
           "type": "object",
           "additionalProperties": {
@@ -96,8 +178,8 @@
       "properties": {
         "id":           { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
         "text":         { "type": "string", "minLength": 1, "description": "e.g. '[rimshot]', '[awkward silence]'" },
-        "soundFileUrl": { "type": ["string", "null"], "format": "uri" },
-        "imageUrl":     { "type": ["string", "null"], "format": "uri" },
+        "soundFileUrl": { "type": ["string", "null"], "format": "uri", "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
+        "imageUrl":     { "type": ["string", "null"], "format": "uri", "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
         "translations": {
           "type": "object",
           "additionalProperties": {
@@ -115,7 +197,7 @@
       "additionalProperties": false,
       "properties": {
         "id":          { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
-        "description": { "type": ["string", "null"] },
+        "description": { "type": ["string", "null"], "description": "Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
         "lines": {
           "type": "array",
           "minItems": 2,

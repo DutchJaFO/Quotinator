@@ -1,4 +1,6 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using Quotinator.Core.Models;
 
 namespace Quotinator.Core.Helpers;
 
@@ -8,38 +10,42 @@ public static partial class InputValidation
     /// <summary>Maximum length allowed for free-text filter values (character, author, source).</summary>
     public const int MaxFilterLength = 200;
 
-    /// <summary>The set of accepted quote source type values for the <c>type=</c> query parameter.</summary>
+    /// <summary>The set of accepted quote source type values for the <c>type=</c> query parameter —
+    /// derived from <see cref="QuoteType"/> (excluding the <see cref="QuoteType.Unknown"/> fallback
+    /// sentinel) so the API vocabulary can never drift out of sync with the enum.</summary>
     public static readonly HashSet<string> ValidTypes =
-        ["movie", "tv", "anime", "book", "person"];
+        [.. Enum.GetValues<QuoteType>()
+            .Where(t => t != QuoteType.Unknown)
+            .Select(t => t.ToString().ToLowerInvariant())];
 
-    /// <summary>The set of accepted field names for the <c>field=</c> parameter on the search endpoint.</summary>
+    /// <summary>The set of accepted field names for the <c>field=</c> parameter on the search endpoint —
+    /// derived from <see cref="QuoteResponse"/>'s own searchable properties (<see cref="QuoteResponse.Quote"/>,
+    /// <see cref="QuoteResponse.Source"/>, <see cref="QuoteResponse.Character"/>, <see cref="QuoteResponse.Author"/>)
+    /// so a property rename breaks this at compile time instead of silently diverging.</summary>
     public static readonly HashSet<string> ValidSearchFields =
-        ["quote", "source", "character", "author"];
+        [
+            nameof(QuoteResponse.Quote).ToLowerInvariant(),
+            nameof(QuoteResponse.Source).ToLowerInvariant(),
+            nameof(QuoteResponse.Character).ToLowerInvariant(),
+            nameof(QuoteResponse.Author).ToLowerInvariant(),
+        ];
 
-    /// <summary>The set of accepted genre tag values for the <c>genre=</c> query parameter.</summary>
+    /// <summary>The set of accepted genre tag values for the <c>genre=</c> query parameter — derived
+    /// from <see cref="Genre"/> (excluding the <see cref="Genre.Unknown"/> fallback sentinel),
+    /// kebab-cased to match the wire format (e.g. <c>SciFi</c> -&gt; <c>sci-fi</c>).</summary>
     public static readonly HashSet<string> ValidGenres =
-        ["action", "adventure", "animation", "comedy", "drama", "fantasy", "fiction",
-         "horror", "mystery", "non-fiction", "romance", "sci-fi", "thriller"];
+        [.. Enum.GetValues<Genre>()
+            .Where(g => g != Genre.Unknown)
+            .Select(g => JsonNamingPolicy.KebabCaseLower.ConvertName(g.ToString()))];
 
-    /// <summary>Maps API genre tags (e.g. <c>"sci-fi"</c>) to the database enum name (e.g. <c>"SciFi"</c>).
-    /// Shared between <c>SqliteQuoteService</c> (query normalisation) and <c>DatabaseInitializer</c> (seeding).</summary>
+    /// <summary>Maps API genre tags (e.g. <c>"sci-fi"</c>) to the database enum name (e.g. <c>"SciFi"</c>) —
+    /// derived from <see cref="Genre"/>, not hand-duplicated. Shared between <c>SqliteQuoteService</c>
+    /// (query normalisation) and <c>DatabaseInitializer</c> (seeding).</summary>
     public static readonly IReadOnlyDictionary<string, string> GenreApiToDb =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["action"]      = "Action",
-            ["adventure"]   = "Adventure",
-            ["animation"]   = "Animation",
-            ["comedy"]      = "Comedy",
-            ["drama"]       = "Drama",
-            ["fantasy"]     = "Fantasy",
-            ["fiction"]     = "Fiction",
-            ["horror"]      = "Horror",
-            ["mystery"]     = "Mystery",
-            ["non-fiction"] = "NonFiction",
-            ["romance"]     = "Romance",
-            ["sci-fi"]      = "SciFi",
-            ["thriller"]    = "Thriller",
-        };
+        Enum.GetValues<Genre>()
+            .Where(g => g != Genre.Unknown)
+            .ToDictionary(g => JsonNamingPolicy.KebabCaseLower.ConvertName(g.ToString()), g => g.ToString(),
+                StringComparer.OrdinalIgnoreCase);
 
     // ISO 639-1: 2-letter code, optionally followed by a region subtag (e.g. en-GB).
     // Accepts up to 8 chars total to cover common BCP 47 subtags without being permissive.
@@ -56,6 +62,26 @@ public static partial class InputValidation
     /// <summary>Returns <c>true</c> if <paramref name="lang"/> is a valid BCP 47 language tag in the expected form (e.g. "en", "en-GB", "nl").</summary>
     public static bool IsValidLang(string lang) =>
         lang.Length <= 8 && LangPattern().IsMatch(lang);
+
+    /// <summary>
+    /// Validates and lowercases <paramref name="lang"/> in place — the single choke point every
+    /// <c>?lang=</c>-accepting endpoint must call (#216 fix). Returns <c>false</c> (leaving
+    /// <paramref name="lang"/> untouched) when the value fails <see cref="IsValidLang"/>; a
+    /// <c>null</c> value is always valid and passes through unchanged. Case-insensitive matching
+    /// against a stored <c>Language</c> column requires both sides normalized — the DB side is
+    /// wrapped in <c>LOWER()</c> at every comparison, and this method is the corresponding input-side
+    /// half, so a case-only difference between the query parameter and however a translation's
+    /// language key was originally authored in an import file never fails to match. Lowercasing here
+    /// (rather than only on the SQL side) also keeps `EffectiveLanguage`'s echoed value canonical,
+    /// matching this project's presentation convention elsewhere.
+    /// </summary>
+    public static bool TryNormalizeLang(ref string? lang)
+    {
+        if (lang is null) return true;
+        if (!IsValidLang(lang)) return false;
+        lang = lang.ToLowerInvariant();
+        return true;
+    }
 
     /// <summary>Returns <c>true</c> if <paramref name="value"/> matches known SQL injection patterns.</summary>
     public static bool IsSuspiciousInput(string value) =>

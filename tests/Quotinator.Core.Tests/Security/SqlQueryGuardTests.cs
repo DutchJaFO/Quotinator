@@ -1,13 +1,25 @@
 using System.Reflection;
-using Quotinator.Engine.Services;
 using Quotinator.Data.Diagnostics;
-using Quotinator.Data.Queries;
+using Quotinator.Core.Entities;
+using Quotinator.Core.Queries;
+using Quotinator.Core.Services;
 
 namespace Quotinator.Core.Tests.Security;
 
 [TestClass]
 public class SqlQueryGuardTests
 {
+    /// <summary>
+    /// Every non-id text column Core's own entities carry — discovered via reflection, not a
+    /// hand-maintained list (#211, mirroring #210's own rejection of a hand-maintained id-column
+    /// registry). Computed once and reused by every text-case-guard test in this class.
+    /// </summary>
+    private static readonly IReadOnlySet<string> CoreTextColumnNames = SqlTextCaseGuard.DiscoverTextColumnNames(
+        typeof(Character), typeof(CharacterTranslation), typeof(ConversationEntity), typeof(Person),
+        typeof(QuoteEntity), typeof(QuoteTranslationEntity), typeof(SeriesEntity), typeof(SoundCueEntity),
+        typeof(SoundCueTranslationEntity), typeof(Source), typeof(SourceTranslation),
+        typeof(StageDirectionEntity), typeof(StageDirectionTranslationEntity), typeof(UniverseEntity));
+
     /// <summary>
     /// Reflects over every string constant in <see cref="Sql"/> and its nested classes,
     /// and asserts that none match the CVE-2025-6965 vulnerable aggregate pattern
@@ -29,7 +41,7 @@ public class SqlQueryGuardTests
     /// methods passes the aggregate guard for all clause combinations.
     /// Covers the complete WHERE clause matrix from <c>SqliteQuoteService.BuildFilterWhere</c>
     /// and all field-filter variants from <c>Sql.SearchField</c>.
-    /// Repository factory methods are covered in <c>Quotinator.Data.Tests.RepositorySqlGuardTests</c>.
+    /// Repository factory methods are covered in <c>Quotinator.Data.Tests.Security.SqlQueryGuardTests</c>.
     /// </summary>
     [TestMethod]
     [DynamicData(nameof(AssembledQueryCases))]
@@ -39,6 +51,88 @@ public class SqlQueryGuardTests
             SqlAggregateGuard.IsVulnerablePattern(fullSql),
             $"Assembled query '{label}' contains a vulnerable aggregate pattern. " +
             "Review BuildFilterWhere or Sql.Quotes factory methods and consult docs/sql-safety.md.");
+    }
+
+    /// <summary>
+    /// Reflects over every string constant in <see cref="Sql"/> and its nested classes, and asserts
+    /// none compare an id-named column to a bound parameter case-sensitively. See ADR 012 and #210 —
+    /// a canonically-stored id must still be matched via <c>LOWER(...)</c> on both sides, since
+    /// SQLite's default TEXT comparison is case-sensitive.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(AllNamedSqlConstants))]
+    public void SqlConstant_PassesIdCaseGuard(string name, string sql)
+    {
+        var violations = SqlIdCaseGuard.FindViolations(sql);
+        Assert.IsEmpty(violations,
+            $"Sql.{name} contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
+            "Wrap both sides in LOWER(...) — see ADR 012.");
+    }
+
+    /// <summary>Same guard, applied to every dynamically-assembled query (see <see cref="AssembledQueryCases"/>).</summary>
+    [TestMethod]
+    [DynamicData(nameof(AssembledQueryCases))]
+    public void AssembledQuery_PassesIdCaseGuard(string label, string fullSql)
+    {
+        var violations = SqlIdCaseGuard.FindViolations(fullSql);
+        Assert.IsEmpty(violations,
+            $"Assembled query '{label}' contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
+            "Wrap both sides in LOWER(...) — see ADR 012.");
+    }
+
+    /// <summary>
+    /// Reflects over every string constant in <see cref="Sql"/> and its nested classes, and asserts
+    /// none returns any <c>*Id</c>-suffixed column unwrapped in its SELECT column list — PK or FK,
+    /// regardless of downstream C# type. See ADR 012's "read-time presentation normalization" revision.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(AllNamedSqlConstants))]
+    public void SqlConstant_PassesSelectPresentationGuard(string name, string sql)
+    {
+        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
+        Assert.IsEmpty(violations,
+            $"Sql.{name} selects {string.Join(", ", violations)} unwrapped — wrap in LOWER(...) AS " +
+            "ColumnName in the SELECT column list. See ADR 012's \"read-time presentation " +
+            "normalization\" revision.");
+    }
+
+    /// <summary>Same guard, applied to every dynamically-assembled query (see <see cref="AssembledQueryCases"/>).</summary>
+    [TestMethod]
+    [DynamicData(nameof(AssembledQueryCases))]
+    public void AssembledQuery_PassesSelectPresentationGuard(string label, string fullSql)
+    {
+        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(fullSql);
+        Assert.IsEmpty(violations,
+            $"Assembled query '{label}' selects {string.Join(", ", violations)} unwrapped — wrap in " +
+            "LOWER(...) AS ColumnName in the SELECT column list. See ADR 012's \"read-time " +
+            "presentation normalization\" revision.");
+    }
+
+    /// <summary>
+    /// Reflects over every string constant in <see cref="Sql"/> and its nested classes, and asserts
+    /// none compare a non-id text column (Name/Title natural key, Language code, etc.) to a bound
+    /// parameter case-sensitively. See #211 — the same class of gap #210 found for id columns,
+    /// extended to everything CLAUDE.md's "case-insensitive by default" rule covers beyond ids.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(AllNamedSqlConstants))]
+    public void SqlConstant_PassesTextCaseGuard(string name, string sql)
+    {
+        var violations = SqlTextCaseGuard.FindViolations(sql, CoreTextColumnNames);
+        Assert.IsEmpty(violations,
+            $"Sql.{name} contains a case-sensitive text comparison: {string.Join(", ", violations)}. " +
+            "Wrap both sides via TextClauses.Equals(...) — see #211.");
+    }
+
+    /// <summary>Same guard, applied to every dynamically-assembled query (see <see cref="AssembledQueryCases"/>).</summary>
+    [TestMethod]
+    [DynamicData(nameof(AssembledQueryCases))]
+    public void AssembledQuery_PassesTextCaseGuard(string label, string fullSql)
+    {
+        var violations = SqlTextCaseGuard.FindViolations(fullSql, CoreTextColumnNames);
+        Assert.IsEmpty(violations,
+            $"Assembled query '{label}' contains a case-sensitive text comparison: " +
+            $"{string.Join(", ", violations)}. Wrap both sides via TextClauses.Equals(...) — see #211.");
     }
 
     /// <summary>
@@ -54,7 +148,6 @@ public class SqlQueryGuardTests
         // None use GROUP BY or HAVING, so none trigger the vulnerability.
         var documented = new HashSet<string>
         {
-            "Schema.GetCurrentVersion",           // COALESCE(MAX(...))
             "Quotes.CountAll",                    // COUNT(*)
             "Quotes.CountActive",                 // COUNT(*)
             "Quotes.CountForRandomBase",          // COUNT(*) — private base for CountRandom factory
@@ -64,7 +157,20 @@ public class SqlQueryGuardTests
             "Characters.CountActive",             // COUNT(*)
             "People.CountActive",                 // COUNT(*)
             "Sources.CountActive",                // COUNT(*)
-            "Audit.CountPagedBase",               // COUNT(*) — private base for CountPaged factory
+            "Characters.CountActiveReferences",   // COUNT(*) — #59 reversal reference check
+            "People.CountActiveReferences",       // COUNT(*) — #59 reversal reference check
+            "Sources.CountActiveReferences",      // COUNT(*) x2 (subqueries) — #59 reversal reference check
+            "StageDirections.CountActiveReferences", // COUNT(*) — #68 reversal reference check
+            "SoundCues.CountActiveReferences",       // COUNT(*) — #68 reversal reference check
+            "ConversationLines.SelectMembershipForQuote", // COUNT(*) subquery, no GROUP BY — #69 conversation-membership lookup
+            "ConversationLines.SelectLineCountsForConversations", // COUNT(*) subquery, no GROUP BY — #189 list line-count batch lookup
+            "Series.CountActive",                 // COUNT(*) — #180
+            "Series.CountActiveReferences",        // COUNT(*) — #180 reversal reference check
+            "Universe.CountActive",               // COUNT(*) — #180
+            "Universe.CountActiveReferences",      // COUNT(*) — #180 reversal reference check
+            "Conversations.CountActive",           // COUNT(*) — #221 stats/report entity-type count
+            "StageDirections.CountActive",         // COUNT(*) — #221 stats/report entity-type count
+            "SoundCues.CountActive",               // COUNT(*) — #221 stats/report entity-type count
         };
 
         var actual = EnumerateSqlConstants()
@@ -80,29 +186,48 @@ public class SqlQueryGuardTests
             "and update the documented list in this test.");
     }
 
+    /// <summary>
+    /// #214: <see cref="EnumerateSqlConstants"/> must also discover zero-arg/all-optional <c>static</c>
+    /// factory methods (via <c>GetMethods</c>), not just fields and properties — otherwise a method like
+    /// <see cref="Quotinator.Core.Queries.Sql.Quotes.SelectById"/> is silently invisible to every guard
+    /// unless someone remembers to add it to <see cref="AssembledQueryCases"/> by hand.
+    /// </summary>
+    [TestMethod]
+    public void AllNamedSqlConstants_DiscoversZeroArgAndAllOptionalStaticFactoryMethods()
+    {
+        var names = EnumerateSqlConstants().Select(x => x.Name).ToHashSet();
+
+        Assert.Contains("Quotes.SelectById()", names);
+        Assert.Contains("Quotes.SelectRawById()", names);
+    }
+
     public static IEnumerable<object[]> AssembledQueryCases()
     {
         // Full matrix of filter combinations — exercises every branch in BuildFilterWhere.
-        var filterCases = new (string Label, string[]? Types, string[]? Genres, string? Lang, string? Character, string? Author, string? Source, int? YearFrom, int? YearTo)[]
+        var seriesGuid   = Guid.Parse("11111111-0000-0000-0000-000000000001");
+        var universeGuid = Guid.Parse("22222222-0000-0000-0000-000000000001");
+        var filterCases = new (string Label, string[]? Types, string[]? Genres, string? Lang, string? Character, string? Author, string? Source, Guid? SeriesId, Guid? UniverseId, int? YearFrom, int? YearTo)[]
         {
-            ("no filters",      null,               null,               null, null,       null,    null,    null, null),
-            ("type",            ["movie"],          null,               null, null,       null,    null,    null, null),
-            ("genre",           null,               ["drama"],          null, null,       null,    null,    null, null),
-            ("lang",            null,               null,               "nl", null,       null,    null,    null, null),
-            ("character",       null,               null,               null, "Hannibal", null,    null,    null, null),
-            ("author",          null,               null,               null, null,       "Twain", null,    null, null),
-            ("source",          null,               null,               null, null,       null,    "Matrix",null, null),
-            ("yearFrom",        null,               null,               null, null,       null,    null,    1990, null),
-            ("yearTo",          null,               null,               null, null,       null,    null,    null, 2000),
-            ("all filters",     ["tv"],             ["comedy"],         "de", "Sherlock", "Doyle", "BBC",   1900, 2020),
-            ("multi-type",      ["movie", "book"],  null,               null, null,       null,    null,    null, null),
-            ("multi-genre",     null,               ["sci-fi", "drama"],null, null,       null,    null,    null, null),
+            ("no filters",      null,               null,               null, null,       null,    null,    null,        null,          null, null),
+            ("type",            ["movie"],          null,               null, null,       null,    null,    null,        null,          null, null),
+            ("genre",           null,               ["drama"],          null, null,       null,    null,    null,        null,          null, null),
+            ("lang",            null,               null,               "nl", null,       null,    null,    null,        null,          null, null),
+            ("character",       null,               null,               null, "Hannibal", null,    null,    null,        null,          null, null),
+            ("author",          null,               null,               null, null,       "Twain", null,    null,        null,          null, null),
+            ("source",          null,               null,               null, null,       null,    "Matrix",null,        null,          null, null),
+            ("seriesId",        null,               null,               null, null,       null,    null,    seriesGuid,  null,          null, null),
+            ("universeId",      null,               null,               null, null,       null,    null,    null,        universeGuid,  null, null),
+            ("yearFrom",        null,               null,               null, null,       null,    null,    null,        null,          1990, null),
+            ("yearTo",          null,               null,               null, null,       null,    null,    null,        null,          null, 2000),
+            ("all filters",     ["tv"],             ["comedy"],         "de", "Sherlock", "Doyle", "BBC",   seriesGuid,  universeGuid,  1900, 2020),
+            ("multi-type",      ["movie", "book"],  null,               null, null,       null,    null,    null,        null,          null, null),
+            ("multi-genre",     null,               ["sci-fi", "drama"],null, null,       null,    null,    null,        null,          null, null),
         };
 
-        foreach (var (label, types, genres, lang, character, author, source, yearFrom, yearTo) in filterCases)
+        foreach (var (label, types, genres, lang, character, author, source, seriesId, universeId, yearFrom, yearTo) in filterCases)
         {
             var (whereClause, _) = SqliteQuoteService.BuildFilterWhere(
-                types, genres, lang, character, author, source, yearFrom, yearTo);
+                types, genres, lang, character, author, source, seriesId, universeId, yearFrom, yearTo);
 
             yield return [$"CountRandom({label})",    Sql.Quotes.CountRandom(whereClause)];
             yield return [$"CountGetAll({label})",    Sql.Quotes.CountGetAll(whereClause)];
@@ -110,14 +235,11 @@ public class SqlQueryGuardTests
             yield return [$"SelectPaged({label})",    Sql.Quotes.SelectPaged(whereClause)];
         }
 
-        // Sql.Queries factory methods — one case per method.
-        yield return ["Queries.WidgetWithOwner()", Sql.Queries.WidgetWithOwner()];
-
-        // SelectById has no dynamic clauses — one case covers it.
-        yield return ["SelectById()", Sql.Quotes.SelectById()];
+        // SelectById()/SelectRawById() are 0-arg — #214's widened EnumerateSqlConstants now discovers
+        // and guard-checks them automatically via AllNamedSqlConstants, so no manual case is needed here.
 
         // SelectSearch: one case per field-filter constant × a representative where clause.
-        var (baseWhere, _) = SqliteQuoteService.BuildFilterWhere(["movie"], ["drama"], null, null, null, null, null, null);
+        var (baseWhere, _) = SqliteQuoteService.BuildFilterWhere(["movie"], ["drama"], null, null, null, null, null, null, null, null);
         foreach (var (fieldName, fieldFilter) in new[]
         {
             (nameof(Sql.SearchField.Quote),     Sql.SearchField.Quote),
@@ -129,77 +251,88 @@ public class SqlQueryGuardTests
         {
             yield return [$"SelectSearch(field={fieldName})", Sql.Quotes.SelectSearch(baseWhere, fieldFilter)];
         }
-
     }
 
     /// <summary>
-    /// Asserts that <c>Sql.Joins.Inner</c> and <c>Sql.Joins.Left</c> bracket-quote all identifiers
-    /// in their output — table name, alias, and column references all wrapped in <c>[…]</c>.
+    /// Enumerates all fixed string queries in <see cref="Sql"/> and its nested classes — <c>const</c>
+    /// fields (<see cref="FieldInfo.IsLiteral"/>), <c>static readonly</c> fields
+    /// (<see cref="FieldInfo.IsInitOnly"/>), and arrow-bodied <c>static string</c> properties. A query
+    /// that calls <see cref="Quotinator.Data.Queries.IdClauses"/> cannot be a compile-time
+    /// <c>const</c> — it must be <c>static readonly</c> instead — so fields alone are not enough.
+    /// Properties matter too: <c>Sql.SystemImportActions.SelectById</c> (in
+    /// <c>Quotinator.Data.Queries.Sql</c>) was declared as a property, not a field, and a real
+    /// case-sensitivity bug in it went completely undetected by every guard test until this method
+    /// was widened to also call <see cref="Type.GetProperties(BindingFlags)"/> — found live during
+    /// #210's IdClauses refactor, not by design.
     /// </summary>
-    [TestMethod]
-    public void SqlJoins_Inner_OutputIsBracketQuoted()
-    {
-        var sql = Sql.Joins.Inner("Owners", "o", "w", "OwnerId", "Id");
-        StringAssert.Contains(sql, "[Owners]",  "Table name must be bracket-quoted");
-        StringAssert.Contains(sql, "[o]",       "Right alias must be bracket-quoted");
-        StringAssert.Contains(sql, "[w]",       "Left alias must be bracket-quoted");
-        StringAssert.Contains(sql, "[OwnerId]", "Left key must be bracket-quoted");
-        StringAssert.Contains(sql, "[Id]",      "Right key must be bracket-quoted");
-        StringAssert.Contains(sql, "INNER JOIN", "Fragment must be an INNER JOIN");
-    }
-
-    [TestMethod]
-    public void SqlJoins_Left_OutputIsBracketQuoted()
-    {
-        var sql = Sql.Joins.Left("Owners", "o", "w", "OwnerId", "Id");
-        StringAssert.Contains(sql, "[Owners]",  "Table name must be bracket-quoted");
-        StringAssert.Contains(sql, "[o]",       "Right alias must be bracket-quoted");
-        StringAssert.Contains(sql, "[w]",       "Left alias must be bracket-quoted");
-        StringAssert.Contains(sql, "[OwnerId]", "Left key must be bracket-quoted");
-        StringAssert.Contains(sql, "[Id]",      "Right key must be bracket-quoted");
-        StringAssert.Contains(sql, "LEFT JOIN", "Fragment must be a LEFT JOIN");
-    }
-
-    /// <summary>
-    /// Discovers all concrete <see cref="IJoinStrategy{TResult}"/> implementations in <c>Quotinator.Data</c>
-    /// via reflection, calls <see cref="IJoinStrategy{TResult}.BuildSql"/> on each, and asserts the result
-    /// passes the aggregate vulnerability guard. Adding a new strategy class automatically adds it to this test.
-    /// </summary>
-    [TestMethod]
-    [DynamicData(nameof(AllJoinStrategyBuildSqlCases))]
-    public void AllJoinStrategies_BuildSql_PassesAggregateGuard(string typeName, string sql)
-    {
-        Assert.IsFalse(
-            SqlAggregateGuard.IsVulnerablePattern(sql),
-            $"{typeName}.BuildSql() contains a vulnerable aggregate pattern. " +
-            "Review the strategy and consult docs/sql-safety.md before suppressing.");
-    }
-
-    public static IEnumerable<object[]> AllJoinStrategyBuildSqlCases()
-    {
-        var joinStrategyType = typeof(IJoinStrategy<>);
-        return typeof(IJoinStrategy<>).Assembly
-            .GetTypes()
-            .Where(t => !t.IsAbstract && !t.IsInterface)
-            .Where(t => t.GetInterfaces()
-                .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == joinStrategyType))
-            .Select(t =>
-            {
-                var instance = Activator.CreateInstance(t)!;
-                var sql      = (string)t.GetMethod("BuildSql")!.Invoke(instance, null)!;
-                return new object[] { t.Name, sql };
-            });
-    }
-
-    /// <summary>Enumerates all string constants in <see cref="Sql"/> and its nested classes.</summary>
     public static IEnumerable<object[]> AllNamedSqlConstants()
         => EnumerateSqlConstants().Select(x => new object[] { x.Name, x.Sql });
+
+    /// <summary>
+    /// #214: asserts the set of <c>static</c> SQL factory methods requiring at least one non-optional
+    /// parameter matches a documented inventory — a drift detector, not a bug fix. A single synthetic
+    /// invocation cannot safely stand in for these (see #214's plan doc for why: a flag-driven method's
+    /// most dangerous branch is often exactly the one an all-default invocation would skip), so manual
+    /// <see cref="AssembledQueryCases"/> coverage remains authoritative for them. This test only ensures
+    /// a newly-added parameterized method can't silently join that group without a developer noticing.
+    /// </summary>
+    [TestMethod]
+    public void ParameterizedSqlFactoryMethods_MatchDocumentedInventory()
+    {
+        var documented = new HashSet<string>
+        {
+            "Quotes.SelectRandom",
+            "Quotes.SelectPaged",
+            "Quotes.SelectSearch",
+            "Quotes.CountRandom",
+            "Quotes.CountGetAll",
+        };
+
+        var actual = EnumerateParameterizedSqlFactoryMethodNames().ToHashSet();
+
+        CollectionAssert.AreEquivalent(
+            documented.ToList(),
+            actual.ToList(),
+            "The set of static SQL factory methods requiring at least one parameter has changed. " +
+            "Add the new method to AssembledQueryCases with a case for every meaningfully distinct " +
+            "call shape, then update this documented list. See #214.");
+    }
+
+    private static IEnumerable<string> EnumerateParameterizedSqlFactoryMethodNames()
+        => typeof(Sql)
+            .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)
+            .SelectMany(t => t
+                .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+                .Where(m => !m.IsSpecialName
+                    && m.ReturnType == typeof(string)
+                    && m.GetParameters().Any(p => !p.IsOptional))
+                .Select(m => $"{t.Name}.{m.Name}"));
 
     private static IEnumerable<(string Name, string Sql)> EnumerateSqlConstants()
         => typeof(Sql)
             .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)
             .SelectMany(t => t
                 .GetFields(BindingFlags.NonPublic | BindingFlags.Static)
-                .Where(f => f.IsLiteral && f.FieldType == typeof(string))
-                .Select(f => ($"{t.Name}.{f.Name}", (string)f.GetValue(null)!)));
+                .Where(f => (f.IsLiteral || f.IsInitOnly) && f.FieldType == typeof(string))
+                .Select(f => ($"{t.Name}.{f.Name}", (string)f.GetValue(null)!))
+                .Concat(t
+                    .GetProperties(BindingFlags.NonPublic | BindingFlags.Static)
+                    .Where(p => p.PropertyType == typeof(string) && p.GetMethod is not null)
+                    .Select(p => ($"{t.Name}.{p.Name}", (string)p.GetValue(null)!)))
+                .Concat(t
+                    // #214: zero-arg/all-optional static factory methods — GetParameters().All(IsOptional)
+                    // is vacuously true for a genuine 0-arg method, so this one filter covers both shapes
+                    // the issue names. IsSpecialName excludes compiler-generated property accessors
+                    // (get_Foo), which would otherwise duplicate coverage already provided by GetProperties
+                    // above. Methods requiring at least one non-optional parameter are deliberately excluded
+                    // — see ParameterizedSqlFactoryMethods_MatchDocumentedInventory and #214's plan doc for
+                    // why a single synthetic invocation can't safely stand in for the manual DynamicData
+                    // matrix those methods need.
+                    .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+                    .Where(m => !m.IsSpecialName
+                        && m.ReturnType == typeof(string)
+                        && m.GetParameters().All(p => p.IsOptional))
+                    .Select(m => (
+                        $"{t.Name}.{m.Name}()",
+                        (string)m.Invoke(null, m.GetParameters().Select(p => p.DefaultValue).ToArray())!))));
 }

@@ -234,6 +234,7 @@ Format: `[Subsystem - Phase] message text`
 | `[Database - Seed]` | Quote import, genre seed, duplicate handling |
 | `[Database - Stats]` | Final quote / source / character / people counts |
 | `[Database - Backup]` | Backup operations |
+| `[Database - SourceRefresh]` | Auto-update source cache: download attempts, staleness/collision resolution |
 | `[Config]` | Config / env-var diagnostic lines |
 | `[SSL]` | TLS cert load, Kestrel HTTPS bind |
 | `[DataProtection]` | Key persistence setup |
@@ -247,6 +248,19 @@ Format: `[Subsystem - Phase] message text`
 | `[Api - GetById]` | Entry to GET /api/v1/quotes/{id} |
 | `[Api - GetAll]` | Entry to GET /api/v1/quotes/ |
 | `[Api - Admin]` | Admin endpoint handlers (reseed, reset, seed preview) |
+| `[Api - GetAllPeople]` | Entry to GET /api/v1/masterdata/people |
+| `[Api - GetPersonById]` | Entry to GET /api/v1/masterdata/people/{id} |
+| `[Api - GetAllSeries]` | Entry to GET /api/v1/masterdata/series |
+| `[Api - GetSeriesById]` | Entry to GET /api/v1/masterdata/series/{id} |
+| `[Api - GetAllUniverses]` | Entry to GET /api/v1/masterdata/universes |
+| `[Api - GetUniverseById]` | Entry to GET /api/v1/masterdata/universes/{id} |
+| `[Api - GetAllStageDirections]` | Entry to GET /api/v1/masterdata/stagedirections |
+| `[Api - GetStageDirectionById]` | Entry to GET /api/v1/masterdata/stagedirections/{id} |
+| `[Api - GetAllSoundCues]` | Entry to GET /api/v1/masterdata/soundcues |
+| `[Api - GetSoundCueById]` | Entry to GET /api/v1/masterdata/soundcues/{id} |
+| `[Api - GetAllConversations]` | Entry to GET /api/v1/conversations |
+| `[Api - GetConversationById]` | Entry to GET /api/v1/conversations/{id} |
+| `[Api - Import]` | Import endpoint handlers (`POST /import`, `/import/preview`, `/import/rules/*`) |
 | `[Audit]` | Audit trail write operations (AuditWriter) |
 
 New subsystems must register a prefix in this table before their log lines land in a PR.

@@ -1,5 +1,6 @@
 using Quotinator.Data.Connections;
 using Quotinator.Data.Example.Common;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Example.MasterDetail;
@@ -11,7 +12,7 @@ namespace Quotinator.Data.Example.MasterDetail;
 /// <remarks>
 /// <para>
 /// The child repository is created internally — consumers only inject the three standard
-/// dependencies (<c>IDbConnectionFactory</c>, <c>IAuditWriter</c>, <c>ICallerContext</c>).
+/// dependencies (<c>IDbConnectionFactory</c>, <c>ISystemAuditWriter</c>, <c>ICallerContext</c>).
 /// </para>
 /// <para>
 /// In production code, <c>GetChildren</c> typically reads a navigation property set by the caller
@@ -21,7 +22,7 @@ namespace Quotinator.Data.Example.MasterDetail;
 /// </remarks>
 public sealed class WidgetWithLinesRepository(
     IDbConnectionFactory factory,
-    IAuditWriter auditWriter,
+    ISystemAuditWriter auditWriter,
     ICallerContext callerContext)
     : AggregateRepository<Widget, WidgetLine>(factory, auditWriter, callerContext)
 {
@@ -31,7 +32,7 @@ public sealed class WidgetWithLinesRepository(
 
     protected override IReadOnlyList<WidgetLine> GetChildren(Widget parent) =>
     [
-        new WidgetLine { ParentId = parent.Id.ToString("D").ToUpperInvariant(), Value = $"{parent.Label} — Line 1" },
-        new WidgetLine { ParentId = parent.Id.ToString("D").ToUpperInvariant(), Value = $"{parent.Label} — Line 2" }
+        new WidgetLine { ParentId = parent.Id.ToCanonicalId(), Value = $"{parent.Label} — Line 1" },
+        new WidgetLine { ParentId = parent.Id.ToCanonicalId(), Value = $"{parent.Label} — Line 2" }
     ];
 }

@@ -24,20 +24,27 @@ dotnet test tests/Quotinator.Core.Tests --configuration Release
 # Run the API locally
 dotnet run --project src/Quotinator.Api
 
-# Re-seed data/sources/ from the configured sources (run from repo root)
-dotnet-script scripts/seed.csx
-dotnet-script scripts/seed.csx -- --dry-run    # preview what would be written without creating files
-dotnet-script scripts/seed.csx -- --no-fetch   # use scripts/cache/ instead of downloading
+# Regenerate a data/sources/ file locally (run the app, then force-refresh via the admin endpoint —
+# see scripts/SOURCES.md for the full converter-plugin workflow)
+dotnet run --project src/Quotinator.Api
+curl -X POST -H "X-Api-Key: <your admin key>" "http://localhost:5000/api/v1/admin/sources/refresh?force=true"
 
 # Build the Docker image locally (required before tagging a release)
 docker build -f docker/Dockerfile -t quotinator:local .
 
-# Install git hooks (run once per clone — prevents accidental GitHub issue auto-close via commit message)
+# Install git hooks (run once per clone — prevents accidental GitHub issue auto-close via commit
+# message, enforces the draft-then-review commit rule below, and auto-deletes the reviewed draft
+# after a successful commit)
 cp scripts/hooks/commit-msg .git/hooks/commit-msg
-chmod +x .git/hooks/commit-msg
+cp scripts/hooks/post-commit .git/hooks/post-commit
+chmod +x .git/hooks/commit-msg .git/hooks/post-commit
 ```
 
 The Scalar API reference is at `/scalar/v1` and the OpenAPI spec at `/openapi/v1.json` — available in all environments including production.
+
+**An AI assistant must never run `dotnet run`/`dotnet watch` directly for its own verification.** `dotnet run --project src/Quotinator.Api` above is listed for a human developer — running it as the assistant risks a port/process conflict with a developer's own Visual Studio instance (this has already caused a real IIS Express outage requiring a reboot). For the assistant's own live/smoke verification, use Docker (`docker build` + `docker run` — see `docs/release-verification.md`'s T2 tier). T1 (Visual Studio) is exclusively the developer's own action to perform and confirm — never something the assistant replicates locally.
+
+**Draft, review, then act — for every `git commit` and every GitHub issue create/edit, no exceptions.** Write the full intended text (commit message, or issue title + body) to a file, **and paste that same full text directly into the chat response** — not a summary, not a diff-only excerpt, and not a `Read` tool call whose output happens to render the file, which is not the same thing as the assistant's own words containing the text. Only run the actual command after explicit approval. See `docs/workflow/process.md`'s "Commit message format and content" for the exact mechanics (`.claude/temp/commit-draft.md`, `git commit -F`). The `commit-msg` hook installed above enforces the commit side of this mechanically; `gh issue create`/`edit` have no equivalent hook, so that side relies on this rule being followed, not on tooling.
 
 ---
 
@@ -62,6 +69,7 @@ Quotes come from **films, television, books, and famous people**. All quotes are
 - UI framework: **Blazor Server**
 - Deployment: **Docker** (linux/amd64 + linux/arm64)
 - The developer works professionally with C# and Blazor — keep patterns familiar and idiomatic
+- **This repository is C#-only** ([ADR 010](docs/architecture-decisions/010-repository-is-csharp-only.md)). Any script worth keeping is a `dotnet-script` `.csx` file under `scripts/` (see `scripts/changelog.csx`) or a proper C# project under `tools/` — never Python, Perl, Node.js, or a Unix text-processing one-liner (`sed`, `awk`, etc.), including ad hoc during a development session. Direct invocation of already-installed CLI tools (`git`, `dotnet`, `docker`, `gh`) via the shell is unaffected — the rule governs what gets *written*, not which shell runs an existing command.
 
 ---
 
@@ -84,6 +92,20 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 
 ---
 
+## Authoritative sources
+
+**Code is never authoritative on its own — only evidence of what was actually done, which may itself be wrong.** Before making a design or scope decision, check sources in this order:
+
+1. **Official documentation** for the language, framework, or library involved (e.g. SQLite's own docs for what `ALTER TABLE` can and can't do).
+2. **This project's own documentation** — `docs/architecture-decisions/` (ADRs — formal, numbered, permanent decisions) first, then `docs/decisions/` (informal/in-progress notes), then the relevant milestone plan doc, then this file.
+3. **If neither has an answer, ask the user.** Never silently pick an option and proceed as if it were settled.
+
+**Existing code that looks like a pattern is not the same as a validated decision.** Copying what an earlier entity/class/table already does is not a substitute for checking whether that earlier code actually complied with a governing ADR — it may itself be the mistake propagating. This is exactly how `SystemAuditEntry` (#73) shipped without `RecordBase` despite ADR 002 mandating it "without exception": the ADR existed a week before the implementation, nobody checked it, and the next two entities (`SystemImportConflict`, then `ChangeLogEntry`) each copied the previous one's shape instead of checking the ADR independently, compounding the same deviation three times before it was caught (see ADR 002 for the full incident).
+
+**Always check `docs/architecture-decisions/` before designing a new entity, table, or repository pattern** — not just the milestone's own plan docs. An ADR can govern a decision the current GitHub issue never mentions.
+
+---
+
 ## Architecture Decisions
 
 ### Flat-file JSON for v1, SQLite for v2
@@ -94,39 +116,54 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 **Schema migration policy:** Migrations are numbered, append-only sequences in `DatabaseInitializer.Migrations`. Rules that must be followed for every migration:
 
 - **Never reorder or edit an existing migration** — once applied to a real database, a migration is frozen. Changing it silently corrupts installations that already ran it.
-- **Every DDL statement must be idempotent.** Use `CREATE TABLE IF NOT EXISTS`, `DROP TABLE IF EXISTS`, and `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (supported by the bundled SQLite 3.37+). A non-idempotent migration that fails partway through leaves the database in a state where the version is not recorded but the schema change was partially applied — causing a never-ending startup crash loop on every subsequent restart.
+- **Every DDL statement must be idempotent where SQLite allows it.** Use `CREATE TABLE IF NOT EXISTS` and `DROP TABLE IF EXISTS`. **SQLite has no `IF EXISTS`/`IF NOT EXISTS` form for `ALTER TABLE ... RENAME TO` or `ALTER TABLE ... ADD COLUMN`** (verified against sqlite.org — neither statement's grammar supports it, at any version). A non-idempotent migration that fails partway through leaves the database in a state where the version is not recorded but the schema change was partially applied — causing a never-ending startup crash loop on every subsequent restart. See "No exception-based migration recovery" below for how this project handles statements that can't be made idempotent.
 - **One schema change per migration where possible.** Multi-statement migrations are harder to make fully idempotent and harder to reason about when partially applied.
 - All migration SQL stays inside `DatabaseInitializer` as `private const string Migration00N_...` — not in `Sql.cs`. Migration text is frozen at migration time and must not be discoverable or modifiable via the `Sql` class.
+
+**Migration ownership split (Data vs. consumer):** `Quotinator.Data` owns migrations for its own tables (currently `System_AuditEntries`; any future `System_`-prefixed table Quotinator.Data itself defines) via a fixed internal list (`DatabaseInitializer.DataOwnedMigrations`) — never passed through the constructor, and never controlled by the consuming project. These always apply first, before any consumer-supplied migration, and are tracked in their own `System_SchemaVersion` table. A consuming project's own domain migrations (e.g. `Quotinator.Core`'s `QuotinatorMigrations.All`) are tracked independently in `System_ConsumerSchemaVersion`, so "version N" always means the same specific migration for whichever side owns it, unaffected by the other side's migration count changing over time. `IDatabaseInitializer.SchemaVersion` reports the consumer's own version (what operators track release-over-release); `DataSchemaVersion` reports Quotinator.Data's own version separately.
+
+**Baseline schema for fresh databases:** A completely empty database (zero tables of any kind, detected via `Sql.Schema.AnyTableExists`) skips replaying migration history entirely and instead applies a one-step consolidated baseline: `DatabaseInitializer`'s own `DataBaselineSql` (Quotinator.Data's tables) followed by the consumer's `SchemaBaseline.Sql` (e.g. `QuotinatorMigrations.Baseline`, Quotinator.Core's domain tables). A database with *any* pre-existing table — even just an empty version table — always takes the full incremental path instead; the two paths never cross. **Whenever a new migration is added to either `DataOwnedMigrations` or a consumer's migration list, the corresponding baseline must be updated to match its final result in the same commit** — this is enforced by dedicated schema-drift tests (`DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema` in `Quotinator.Data.Tests`, `Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema`/`...AcceptSameCheckConstraintValues` in `Quotinator.Core.Tests`) that compare the baseline-created schema against the incrementally-replayed schema and fail on any drift, including in CHECK constraint behaviour (which `PRAGMA table_info` doesn't capture structurally).
+
+**No exception-based migration recovery.** A migration must never rely on catching its own failure to detect an already-applied state — a genuinely different failure with the same error message would be silently misclassified and swallowed, leaving no way to know whether the correct migrations actually applied. Two rules follow from this:
+
+- **Fix the root cause instead of adding a check.** `Reset` (`DropAndRebuildAsync`) never wipes or replays `Quotinator.Data`'s own migration history (`System_SchemaVersion`), regardless of `preserveSchemaVersion` — because Data's migrations only ever concern `System_`-prefixed tables, which a Reset never drops in the first place (see `Sql.Schema.GetUserTables`). Only the consumer's own domain tables and `System_ConsumerSchemaVersion` are actually dropped and replayed. This is what makes the previously-unavoidable rename collision on every Reset simply never happen, with no check of any kind. Structural metadata checks (`sqlite_master`, `pragma_table_info`) are reserved for the single existing whole-database-empty check (`Sql.Schema.AnyTableExists`) — do not add a new one anywhere else as a substitute for catching an exception.
+- **A database whose recorded schema version doesn't match its actual on-disk schema is a hard failure, not a self-heal.** If a migration throws for any reason, it is never inspected or interpreted — `ApplyMigrationsAsync` and `DropAndRebuildAsync` back up the database before any destructive step, and on any exception restore that backup and rethrow, leaving the database exactly as it was before the attempt. The operator must run an explicit Reset to resolve a genuine mismatch. `ApplyMigrationPhaseAsync` itself has no `try`/`catch` at all — a failing migration's own transaction rolls back automatically via `using`, and the exception propagates untouched.
 
 ### Project structure
 ```
 src/
   Quotinator.Constants/        # Route strings, tag names, error message keys — no dependencies
-  Quotinator.Core/             # Domain models, interfaces, and in-memory service implementations
+  Quotinator.Core/             # Domain models, interfaces, and the SQLite-backed service implementation — bridges domain contracts with Quotinator.Data's generic infrastructure
   Quotinator.Data/             # Generic, reusable SQLite/Dapper infrastructure — domain-agnostic
   Quotinator.Data.Testing/     # Test helper library — stubs, fakes, disposable SQLite DB (reference from test projects only)
-  Quotinator.Engine/           # SQLite-backed Quotinator domain implementation — bridges Core + Data
   Quotinator.Changelog/        # Changelog schema, models, and generator logic
+  Quotinator.Converters.Vilaboim/      # IQuoteSourceConverter plugin: vilaboim/movie-quotes raw format
+  Quotinator.Converters.NikhilNamal17/ # IQuoteSourceConverter plugin: NikhilNamal17/popular-movie-quotes raw format
   Quotinator.Api/              # ASP.NET Core — REST endpoints + Blazor Server UI (combined)
 tests/
   Quotinator.Api.Tests/             # Endpoint integration tests (WebApplicationFactory)
   Quotinator.Changelog.Tests/       # Changelog schema and generation tests
   Quotinator.Constants.Tests/       # Tests for route and constant definitions
-  Quotinator.Core.Tests/            # Unit tests for domain logic and in-memory service
+  Quotinator.Converters.Vilaboim.Tests/      # Tests for the Vilaboim converter plugin
+  Quotinator.Converters.NikhilNamal17.Tests/ # Tests for the NikhilNamal17 converter plugin
+  Quotinator.Core.Tests/            # Unit tests for domain logic, and integration tests for the SQLite-backed implementation (SqliteQuoteService, migrations)
   Quotinator.Data.Example/          # Concrete example implementations of Data patterns (not a test runner)
   Quotinator.Data.Testing.Tests/    # Tests for the Data.Testing helper library
   Quotinator.Data.Tests/            # Integration tests for Data infrastructure (real SQLite, no fakes)
-  Quotinator.Engine.Tests/          # Integration tests for Engine (SqliteQuoteService, migrations)
+  Quotinator.Tools.DbInspector.Tests/  # Unit tests for the DbInspector dev tool
+tools/
+  Quotinator.Tools.DbInspector/     # Dev-only CLI: run arbitrary SQL against a Quotinator SQLite file. Never shipped.
 data/sources/             # Bundled source files (one JSON per dataset) + manifest
 docs/                     # Workflow guides, testing policy, CVE docs, milestone plans
 scripts/
-  seed.csx                # Per-source seed script (dotnet-script)
   changelog.csx           # Changelog markdown generator
 docker/Dockerfile         # Multi-stage build, targets linux/amd64 + linux/arm64
 addon/                    # Home Assistant add-on manifest and assets
 ```
 
-Dependency direction: `Quotinator.Api` → `Quotinator.Engine` → `Quotinator.Core`; `Quotinator.Engine` → `Quotinator.Data`; `Quotinator.Api` → `Quotinator.Constants`. Core and Data have no dependencies on each other or on Engine. `Quotinator.Data.Testing` → `Quotinator.Data` only.
+Dependency direction: `Quotinator.Api` → `Quotinator.Core`; `Quotinator.Core` → `Quotinator.Data`; `Quotinator.Api` → `Quotinator.Constants`. `Quotinator.Data` has no dependency on Core (must stay domain-agnostic — see ADR 004). `Quotinator.Data.Testing` → `Quotinator.Data` only. (Until #206, `Quotinator.Engine` sat between Api and Core as a separate project; it was merged into `Quotinator.Core` because Core's own "stay Dapper/SQLite-free" invariant — the only reason Engine existed as a *third* project rather than Core depending on Data directly — turned out not to be worth its cost. See ADR 004's `#206` revision for the full reasoning.)
+
+`tools/` holds standalone developer utilities that are never referenced by any `src/` project and never built into the Docker image — they exist purely to support local development/debugging. See `tools/Quotinator.Tools.DbInspector/README.md` for the current example.
 
 ### File placement rule
 
@@ -154,6 +191,16 @@ Routes/        → Quotinator.Constants.Routes     (ApiRoutes, RouteExtensions)
 **The only permitted exception:** `new` may be used when the DI container itself cannot supply a required parameter at registration time (e.g. a computed path, a runtime config value, or a factory-constructed primitive). In that case, use the service-provider factory overload (`builder.Services.AddSingleton<T>(sp => new T(sp.GetRequiredService<IDep>(), computedValue))`) rather than a bare `new` call at the call site.
 
 Any use of bare `new` for a type that could reasonably be registered must have a comment explaining why DI was not used.
+
+### JSON parsing policy
+
+**Always deserialize JSON into POCOs via `JsonSerializer.Deserialize<T>` — never walk a parsed document by hand (`JsonNode`/`JsonDocument` indexers, `["field"]`, `GetValue<T>()`) to extract data.** Define a DTO class per JSON shape (e.g. `SourceQuote` for quote files, `ChangelogRoot` for the changelog, `ManifestDto`/`ManifestFileEntryDto`/`ManifestGithubDto`/`ManifestPolicyDto` for `manifest.json`), with `[JsonPropertyName("...")]` on each property mapping the wire name to a PascalCase C# name. If a schema exists (`schemas/*.json`), every field it defines must be representable as a DTO property — a schema field with no corresponding POCO property is a policy violation. The same applies to writing JSON: build a DTO and call `JsonSerializer.Serialize`, never hand-assemble a `JsonObject`/`JsonArray`.
+
+**Enum-valued string fields** (e.g. `"skip"`/`"overwrite"`, `"internal"`/`"external"`) should be typed directly as the C# enum on the DTO property with `[JsonConverter(typeof(JsonStringEnumConverter))]` — `System.Text.Json`'s built-in converter matches enum member names case-insensitively on read, so no manual string-switch mapping is needed for these.
+
+**The only permitted exception:** sniffing which of several top-level shapes a document uses, when the shapes are different enough that a single DTO can't represent both (e.g. `LoadQuotesFromFile` in `QuotinatorDatabaseInitializer.cs` uses one `JsonNode.Parse` call only to check whether the root is a bare array or a `{ "quotes": [...] }` wrapper) — the actual field extraction for whichever shape is chosen must still go through `JsonSerializer.Deserialize<T>` into a POCO, not further manual node walking.
+
+**Why:** manual node walking (`e!["field"]!.GetValue<string>()`) loses compile-time member names, gives worse error messages on type mismatches, and tends to accumulate ad hoc parsing logic (URL resolution, enum coercion, nullability handling) that a typed DTO expresses more clearly. It also invites silent divergence between the JSON schema and what the code actually reads, since nothing forces every schema field to have a corresponding read path. This was found and corrected in `ManifestSeedPlanner.cs`, which had grown into full manual `JsonNode` parsing while the rest of the codebase (`SourceQuote`, `ChangelogRoot`) already used POCOs — see the `Manifest*Dto` classes in `Quotinator.Data/Import/` for the corrected pattern.
 
 ### Serilog — programmatic configuration
 
@@ -319,22 +366,222 @@ The navbar `LanguageSelector` control (`Components/Controls/LanguageSelector.raz
 
 ### Endpoint test pattern
 
-Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.Mvc.Testing`) and replace `IQuoteService` with `FakeQuoteService` via `WithWebHostBuilder`. See `tests/Quotinator.Api.Tests/Endpoints/QuoteEndpointsTests.cs` for the canonical pattern. The `public partial class Program { }` line at the bottom of `Program.cs` is required to expose the entry point to the test project.
+Endpoint tests use `WebApplicationFactory<Program>` (from `Microsoft.AspNetCore.Mvc.Testing`) and replace `IQuoteService` with `FakeQuoteService` via `WithWebHostBuilder`. **Also register `IDatabaseInitializer` with `NoOpDatabaseInitializer`** in the same `WithWebHostBuilder` call — without it, the test hits a real database at startup even though `FakeQuoteService` makes the endpoint logic itself DB-free. A test that intends real database contact registers a real (or in-memory-backed) initializer explicitly instead; the default for endpoint tests is no DB contact at all. See `tests/Quotinator.Api.Tests/Endpoints/QuoteEndpointsTests.cs` for the canonical pattern. The `public partial class Program { }` line at the bottom of `Program.cs` is required to expose the entry point to the test project.
 
 ### Route registration order
 
 `/search` is registered before `/{id}` in `QuoteEndpoints.cs` so the literal segment takes priority over the catch-all parameter. Preserve this order.
 
-### Year parameter binding pattern
+### Masterdata routing convention
 
-`yearFrom`, `yearTo`, `year`, and `decade` are declared as `string?` in handler signatures rather than `int?`. This is deliberate: when declared as `int?`, ASP.NET Core's parameter binder throws `BadHttpRequestException` on invalid input (e.g. `yearFrom=1980x`) and the exception propagates unhandled through the entire middleware stack before being caught accidentally by `UseExceptionHandler`. Declaring them as `string?` lets `TryParseYear()` in `QuoteEndpoints.cs` catch the parse failure at the point of origin and return a 422 immediately.
+`/api/v1/masterdata/` is the route prefix for the five masterdata entities — Sources, Characters, People,
+Series, and Universes (`GET /api/v1/masterdata/sources`, `GET /api/v1/masterdata/sources/{id}`, and so on
+for each entity) — tagged `ApiTags.MasterData` in the OpenAPI/Scalar UI. This coexists with the flat
+top-level plural pattern `/quotes` and `/import/actions` already use, deliberately: masterdata entities are
+the shared reference data that quotes and conversations are built from, and grouping them under one prefix
+makes that relationship legible in the API surface, rather than scattering five unrelated-looking
+top-level routes.
 
-The downside is that the OpenAPI generator infers `type: string` from the C# type, which is wrong. An operation transformer in `Program.cs` patches the schema back to `type: integer` for the three affected endpoints (`api/v1/quotes`, `api/v1/quotes/random`, `api/v1/quotes/search`). The transformer is scoped explicitly to those paths — do not add any endpoint to that set unless it also uses `TryParseYear`.
+**`/api/v1/conversations` deliberately keeps its own route and `ApiTags.Conversations` tag — it does not
+move under `/masterdata/`.** Conversations is a *consumer* of masterdata (it embeds quotes, which
+reference Sources/Characters), not a masterdata entity itself. Stated explicitly here so the next reader
+doesn't reasonably assume the omission was an oversight.
 
-**Rules for adding new numeric query parameters:**
+### Masterdata reference shape
+
+Any FK-valued field on a masterdata response DTO (e.g. a Source's link to its Series, a Character's links
+to its Sources) is a minimal, read-only `MasterDataReference(string Id, string Name)` —
+`src/Quotinator.Core/Models/MasterDataReference.cs` — **never** a bare id and never the full related record.
+A single optional FK (`Source.SeriesId`) becomes a nullable `MasterDataReference?`; a many-to-many link
+(Character↔Source) becomes a `IReadOnlyList<MasterDataReference>`. `MasterDataReference` originally lived
+in `Quotinator.Api.Models` (introduced by #184); #206's merge of `Quotinator.Engine` into `Quotinator.Core`
+relocated it to `Quotinator.Core.Models` alongside every masterdata response DTO and `QuoteResponse` —
+one canonical location, not split across two projects.
+
+**Why not a bare id:** a bare id forces the client into a second round-trip per reference just to show a
+name. **Why not the full related record:** that would denormalise and bloat every response with data the
+caller can already fetch via that entity's own masterdata endpoint if it needs more than a display label —
+and `Quotinator.Core.Models.QuoteResponse` already establishes the precedent of embedding just enough to
+render, not a nested full object. `MasterDataReference` is the middle ground, sized for "enough to display
+without an extra call."
+
+**Deliberately minimal, not permanently minimal.** `MasterDataReference` carries only `Id`/`Name` today
+because nothing has needed more yet — richer detail (or the full related record) can be added to specific
+response fields later, per concrete need, without redesigning the shape from scratch. Its properties are
+read-only (`init`-only): these are display references embedded in another entity's response, not something
+a client edits through this endpoint. Any future CRUD work targets the core response record itself (e.g.
+`PUT /masterdata/sources/{id}`), never a nested reference field directly.
+
+**A resolver, not the generic repository — resolving a FK to a reference always requires a join** the
+generic `IListableRepository<T>`/`IRepository<T>` (single-table only, no join support) cannot express.
+Each masterdata issue that needs this writes its own small reader in `Quotinator.Core.Repositories`
+(e.g. `ISourceSeriesReferenceReader`, `ICharacterSourceLinkReader`) returning plain `(Guid Id, string
+Name)` tuples, not `MasterDataReference` directly — this keeps the reader a data-shape concern,
+independent of which response DTO an individual endpoint chooses to build from the tuple, rather than a
+project-boundary workaround (both types are reachable from the same project since #206's merge; the
+separation is a design choice, not a constraint). The consuming endpoint maps the resolver's result into
+`MasterDataReference` at the API layer. A batched form (`GetXForManyAsync`, one query per page rather
+than one per row) is required wherever the reference appears in a list response, matching #195's N+1
+avoidance rule for pagination generally.
+
+### Soft-deleted rows are invisible by default, everywhere
+
+`IRepository<T>.GetByIdAsync`/`IListableRepository<T>.GetPageAsync` already exclude `IsDeleted = 1` rows
+unconditionally — confirmed by reading `RepositorySql.SelectById`/`SelectPage`/`CountActive`
+(`src/Quotinator.Data/Repositories/RepositorySql.cs`), none of which have a parameter or overload for
+including deleted rows. No endpoint anywhere in this codebase exposes soft-deleted rows today, opt-in or
+otherwise — `IRestorableRepository<T>.GetDeletedAsync`/`RestoreAsync` exist and are DI-registered, but are
+never called from `Quotinator.Api`.
+
+**The rule this establishes:** a soft-deleted row is never visible through a read endpoint by default, and
+if a concrete need for admin-style "show me deleted rows too" visibility ever arises, it must be built as
+an explicit opt-in query parameter (e.g. `includeDeleted=true`, defaulting to `false`) — never a default,
+and never inferred from a caller's role or key. **Do not build this parameter speculatively** — add it to
+a specific endpoint only when a real consumer needs it; until then, the existing unconditional exclusion
+is the entire implementation, for free.
+
+**This applies one level deeper than the primary record, too.** Any new reference-resolving join
+(`MasterDataReference` above) must filter the *referenced* table to `IsDeleted = 0` in the `JOIN`/`ON`
+clause, not just the driving table — the same idiom `Sql.Quotes.SelectBase`'s multi-table join and
+`Sql.Characters.SelectIdBySourceAndName` already use (`JOIN Sources s ON s.Id = ... AND s.IsDeleted = 0`).
+A soft-deleted target simply produces no matching row, so the reference resolves to `null` (or is absent
+from a list) automatically — no separate "is this reference deleted" check is ever needed at the call site.
+
+### Numeric query parameter binding pattern
+
+`yearFrom`, `yearTo`, `year`, `decade`, `page`, `pageSize`, `n`, and `limit` are declared as `string?` in handler signatures rather than `int?`. This is deliberate: when declared as `int?`, ASP.NET Core's parameter binder throws `BadHttpRequestException` on invalid input (e.g. `yearFrom=1980x`) and the exception propagates unhandled through the entire middleware stack before being caught accidentally by `UseExceptionHandler`. Declaring them as `string?` lets `TryParseYear()` (or the equivalent inline `int.TryParse`) in `QuoteEndpoints.cs` catch the parse failure at the point of origin and return a 422 immediately.
+
+The downside is that the OpenAPI generator infers `type: string` from the C# type, which is wrong, and drops any `[DefaultValue]` attribute along with it. `NumericParameterSchemaTransformer` (`src/Quotinator.Api/OpenApi/NumericParameterSchemaTransformer.cs`) patches both back — the schema to `type: integer` and, for parameters registered with one, the published `default` — via a registry keyed by **path and parameter name together**. Registering only the path patches nothing: this is the exact gap #194 found, where `api/v1/quotes` was registered for the year params but `page`/`pageSize` were never added alongside them.
+
+**Rules for adding new numeric query parameter:**
 - Declare as `string?` and parse with `int.TryParse` (or a dedicated helper) — never `int?`
 - Return 422 on parse failure via `Results.Problem`
-- Add the endpoint path to the year-param schema transformer in `Program.cs`
+- If the parameter has a real default, add it to `Quotinator.Constants.Api.QueryParamDefaults` and use that constant in the `[DefaultValue(...)]` attribute and the handler's own fallback — one value, not three independently-drifting copies
+- Add **both** the endpoint path and the parameter name (with its default, or `null` if it has none) to `NumericParameterSchemaTransformer.NumericParamsByPath`
+
+### Standard pagination contract
+
+Every paginated GET list endpoint (`/quotes`, `/admin/audit`, `/import/actions`) shares one contract
+(#183/#195), implemented once and reused rather than reimplemented per endpoint:
+
+- `page`/`pageSize` are `string?`-bound (see "Numeric query parameter binding pattern" above) and
+  parsed via `PaginationParsing.TryParse` (`src/Quotinator.Api/Endpoints/Shared/PaginationParsing.cs`).
+- `pageSize = 0` means "every matching row as a single page" — bypasses the max, and the response's
+  `pageSize` reports the actual returned count, not the literal `0` requested (the "effective size"
+  contract, built into `PagedItems<T>` wherever it's constructed).
+- Maximum `pageSize` is `QueryParamDefaults.PageSizeMax` (500); default is `QueryParamDefaults.PageSize`
+  (20). Both live in `Quotinator.Constants.Api.QueryParamDefaults` — never a second hardcoded copy.
+- A page number past the last page is a distinct 422 (`PaginationParsing.ValidatePageBeyondLast`),
+  checked *after* the query runs against the real `TotalPages`, never silently clamped or emptied.
+- The response shape is `Quotinator.Data.Models.PagedItems<T>` (or, for `/quotes`, the pre-existing
+  `Quotinator.Core.Models.PagedResult<T>`, which has an identical field shape — see #195's plan doc
+  for why the two types coexist instead of unifying).
+- `NotFoundResult.OkOrNotFound` (`src/Quotinator.Api/Endpoints/Shared/NotFoundResult.cs`) is the shared
+  404 helper for the matching `GET /{id}` endpoint, when one exists.
+
+**Whenever a new paginated GET endpoint is added, it must ship with the full test matrix below.**
+Coverage of these eight cases was missing piecemeal across `/quotes`, `/admin/audit`, and
+`/import/actions` themselves and only closed after the fact — do not let a new endpoint repeat that
+gap.
+
+| # | Case | Expected |
+|---|---|---|
+| 1 | `page=0` | 422 |
+| 2 | `page` malformed (e.g. `page=abc`) | 422 |
+| 3 | `pageSize` malformed | 422 |
+| 4 | `pageSize` negative | 422 |
+| 5 | `pageSize` above 500 | 422, never silently clamped |
+| 6 | `pageSize = 0` | 200, `items` contains every row, `pageSize` in the response equals `totalCount` |
+| 7 | `pageSize` omitted | defaults to 20 — assert the actual response field, not just a 200 |
+| 8 | `page` beyond the last page (given a known `TotalPages`) | 422, distinct from case 1 |
+
+See `tests/Quotinator.Api.Tests/Endpoints/QuoteEndpointsTests.cs`, `AdminAuditEndpointTests.cs`, and
+`ImportActionEndpointsTests.cs` for the canonical implementations of all eight cases.
+
+**Case 6 needs a second test at the repository/service level, not just the endpoint level.** The
+endpoint-level test typically runs against a stub/fake reader that echoes its input back, which cannot
+catch a reader translating `pageSize = 0` into a literal SQL `LIMIT 0` instead of `LIMIT -1` — exactly
+the live bug #195's own T2 pass found in `SystemAuditReader`/`SystemImportActionReader` after their
+*type* was retrofitted to `PagedItems<T>` but their SQL wasn't. Add a real-SQLite test asserting
+`pageSize = 0` returns every row, not zero — see `SystemAuditReaderTests.cs`,
+`SqliteQuoteServiceTests.cs`, and the `GetPagedAsync` region of `SystemImportActionWriterReaderTests.cs`
+for the pattern.
+
+**Registering a new path in `NumericParameterSchemaTransformer` also needs a live-pipeline test, not
+only the transformer's own unit tests.** `NumericParameterSchemaTransformerTests.cs` exercises the
+transformer class directly against a synthetic `OpenApiOperation` — it would keep passing even if the
+transformer were never actually registered via `AddOpenApi` in `Program.cs`.
+`OpenApiSpecEndpointTests.cs` closes that gap: a `WebApplicationFactory`-based test that fetches the
+real `/openapi/v1.json` through the full pipeline and asserts the published type, replacing what would
+otherwise be a manual `curl | grep` check of the live spec.
+
+### GUID/enum/id/Name/Title comparisons are case-insensitive by default
+
+Any GUID, enum, other identifier, or **Name/Title-valued natural-key** comparison is **case-insensitive by default** — never case-sensitive, and never behind a config toggle. This applies wherever two independently-cased copies of the same value can meet, not only at the REST route/query-parameter boundary: a curator-authored JSON file's own explicit id (e.g. a `sources[]`/`people[]` entry referencing an already-existing, `EntityIdentity`-derived row) is under no obligation to match the stored casing, and neither is a `series=`/`universe=` filter value or an import file's own Series/Universe/Person `name` field. The pattern is `LOWER(column) = LOWER(@param)` in the `Sql.cs` query, built via `Quotinator.Data.Queries.IdClauses` for id columns (see `Sql.Conversations.SelectForRead`, `Sql.SystemImportActions.SelectAllForBatch`'s `BuildWhere`, `Sql.Sources`/`Sql.People`'s `SelectExistingById`/`UpdateFieldsById`/`UpdateCompletenessById`/`CountActiveReferences`) or via `Quotinator.Data.Queries.TextClauses.Equals` for every other non-id text column — Name/Title natural keys, Status/EntityType/TableName discriminators, Language codes (#211, sibling to `IdClauses` rather than folded into it, since `IdClauses` stays scoped to what its name and ADR 012 actually govern). Never hand-type `LOWER(x) = LOWER(@y)` inline for either class — a helper cannot forget the wrap or apply it to only one side; a hand-typed comparison can, and repeatedly has (found live: `Sources.Title`/`.Type`, `Series`/`Universe`/`People.Name` were all hand-written before #211 consolidated them, and `SystemImportActions.Status`/`.EntityType` had drifted onto `UPPER(...)` while every column fixed after ADR 012's later uppercase→lowercase flip used `LOWER(...)` — a hand-maintained comparison has no way to pick up a project-wide convention change automatically). This `LOWER()` wrapping is a pure comparison-mechanics concern, independent of and unrelated to which casing is canonical for storage/presentation — see ADR 012's "system-wide lowercase convention" revision. The canonical stored/presented form for every entity id is lowercase (`Guid.ToString("D")`'s own default), rendered via `Quotinator.Data.Helpers.GuidExtensions.ToCanonicalId()` — the single real choke point; never a bare `.ToString("D")`/`.ToUpperInvariant()` typed out inline, and never a raw `Guid`-typed value bound directly into an `IN`-list (Dapper's list-parameter expansion does not reliably invoke a registered type handler per element — pre-canonicalize to strings first). Name/Title columns have no equivalent canonical-casing concern (unlike ids, their stored casing is meaningful display text, e.g. "The Lord of the Rings") — only the comparison side needs wrapping, never the presentation side, so `TextClauses` provides only `Equals`, none of `IdClauses`' `Join`/`In`/`SelectColumn` counterparts.
+
+Found and fixed piecemeal across `status`/`entityType`/`batchId` (#154), a conversation `{id}` route (#69), Sources'/People's own id-first lookup used by an explicit `sources[]`/`people[]` entry (#180), and Series/Universe/People's own `SelectIdByName` natural-key lookups plus three further recurrences of the same class found in a systematic full-codebase audit — `?lang=` (reachable on nearly every read endpoint, and additionally normalized at the API boundary via `InputValidation.TryNormalizeLang`, the single choke point every `?lang=`-accepting endpoint calls before the value ever reaches a SQL comparison or an echoed `EffectiveLanguage`), `admin/audit`'s `?table=` (previously a silent no-op on `DELETE`, not just an empty `GET`), and `SystemChangeLog.EntityType` (#216) — before being recognised as a general rule that applies to every id- or natural-key-matching comparison in the codebase, not just route/query parameters. When adding any new GUID/enum/id/Name/Title-valued parameter or SQL comparison of this kind, apply case-insensitive matching from the start rather than waiting for it to be reported as a bug on that specific one — and when fixing an instance of this bug, grep the same file/module for sibling comparisons of the same kind and fix them together, since this class of bug has repeatedly turned out to affect more than the one reported case.
+
+**Explicit, deliberate exception: `LIKE`-based free-text search (`/quotes/search`'s `q`, and the `character`/`author`/`source` fuzzy filters).** SQLite's `LIKE` only case-folds ASCII by default — accented Latin, Cyrillic, CJK, etc. remain case-sensitive unless the ICU extension is loaded (verified against [sqlite.org/lang_expr.html](https://www.sqlite.org/lang_expr.html) during #216). This is narrower than the blanket rule above and was deliberately left unfixed by #216 — accepted as a known limitation since no bundled translation currently exercises non-ASCII partial-match search — with the actual fix (native ICU extension vs. a managed `SqliteConnection.CreateCollation`/`CreateFunction` alternative) tracked separately as [#222](https://github.com/DutchJaFO/Quotinator/issues/222) in the v1.8.0 maintenance milestone. Do not silently "fix" this by wrapping a `LIKE` clause in `LOWER()` on both sides — that only helps ASCII and masks the real Unicode gap #222 exists to resolve properly.
+
+**Comparison case-insensitivity is not the same guarantee as canonical presentation — a third mechanism, applied uniformly to every selected id column, is required.** A `SELECT` that isn't filtering or joining on a column runs neither write-side canonicalization nor `IdClauses`' comparison-side `LOWER()` wrapping. Every `*Id`-suffixed column in a SELECT list — primary key or foreign key — must go through `Quotinator.Data.Queries.IdClauses.SelectColumn(column, alias)`, which emits `LOWER(column) AS alias`. This applies unconditionally, not only to columns known to be `string`-typed on their C# side: a `Guid`-typed property happens to render lowercase for free today via `System.Text.Json`'s default formatting, but that's an accident of the serializer, not a guarantee — a column's downstream C# type can change without the query being touched (`Quotinator.Core.Models.MasterDataReference.Id` is `string`-typed for exactly this reason, despite backing what was originally a `Guid`-typed column). Wrap every selected id column the same way `IdClauses.Join` already wraps every JOIN condition unconditionally, regardless of whether it looks safe today.
+
+**The one exemption**: `SystemChangeLog.InitiatedById` is `Id`-suffixed but not always an id — it holds an import batch UUID, an HTTP route, or an enrichment provider name — so forcing it lowercase would corrupt legitimate mixed-case content in the non-id cases. It is excluded by name in `SqlSelectPresentationGuard.ExemptColumnNames`, the only entry. A reader with no HTTP endpoint yet is still in scope for this rule — a DI-registered reader with a real `SELECT` query needs correct presentation for any consumer, not only a live one.
+
+**Mechanical guard**: `Quotinator.Data.Diagnostics.SqlSelectPresentationGuard` mirrors `SqlIdCaseGuard`'s own strip-then-scan technique (not a maintained registry of "columns known to need it") — strip every already-`LOWER(...)`-wrapped column from a query's SELECT list, then flag any remaining `*Id`-suffixed reference. Wired into the same `SqlQueryGuardTests`/`RepositorySqlGuardTests` `DynamicData` enumeration `SqlIdCaseGuard` uses, so every SQL constant, factory method, and dynamically-assembled query is scanned on every test run — including `RepositorySql.cs`'s generic queries, which build an explicit column list via an `IEntityColumnMetadata` parameter rather than `SELECT *`, so they get the exact same wrap-every-id-column coverage as every hand-written query in `Sql.cs`. See ADR 012 for how `IEntityColumnMetadata`/`ReflectedColumnMetadata` work.
+
+**Mechanical guard for the non-id text-column class**: `Quotinator.Data.Diagnostics.SqlTextCaseGuard` (#211) plays the same role as `SqlIdCaseGuard` for the columns `TextClauses` covers, wired into the identical `DynamicData` enumeration. Unlike `SqlIdCaseGuard`'s `*Id` name-suffix pattern, these columns share no common name — `SqlTextCaseGuard.DiscoverTextColumnNames(params Type[] entityTypes)` reflects over the caller-supplied `[Table(...)]`-decorated entity types instead, collecting every public property whose *declared C# type* is exactly `string`/`string?` (a `SafeValue<TEnum?>`-typed property is a different .NET type and is skipped automatically — no enum-specific logic needed to tell them apart). Reflecting on storage type alone is not sufficient, though: `SystemImportActions.Status` is `SafeValue<ImportActionStatus?>` on its entity (correctly enum-backed for storage) but its query parameter (`GetPagedAsync(string? status, ...)`) is raw external text with no enum round-trip of its own before reaching SQL — the entity's storage type says nothing about whether its filter parameter was ever validated against that same enum. `SqlTextCaseGuard.AdditionalColumnNames` is the explicit, justified supplement for exactly this class of gap, mirroring `SqlSelectPresentationGuard.ExemptColumnNames`'s own precedent (additive instead of subtractive).
+
+**The same convention extends beyond SQL to in-memory field-value comparison during import.**
+`FieldMergeResolver.ValuesEqual` (`src/Quotinator.Data/Import/FieldMergeResolver.cs`) — the shared
+comparison every entity's conflict/merge detection goes through (Quote, Source, Person, Character,
+Series, Universe, StageDirection, SoundCue, Conversation) — compares string values (scalar or within a
+list) case-insensitively, applied uniformly to every field including free-text content, not just
+identity-like ones. Found while implementing #181: a plain `Equals(a, b)` meant an import file's own
+casing variance (e.g. `"star wars"` vs `"Star Wars"`) was treated as a genuine field conflict, even
+though `QuoteIdentity.StableId` already normalises casing away when generating the same quote's id —
+an inconsistency between two adjacent mechanisms governing the same imported value. Deliberately applies
+uniformly rather than only to source/character/author-style fields: a future import correcting only a
+quote's own casing (e.g. an all-caps entry) is expected to be rare enough that requiring an accompanying
+non-casing change (or an explicit `markCompletenessAs`) to register the correction is an acceptable
+trade-off against the alternative of a growing per-field exemption list.
+
+### Entity-scoped filter-parameter convention
+
+Any endpoint that filters by a related masterdata entity (e.g. "quotes from this Source", "characters in
+this Universe") exposes **two mutually-exclusive parameters**: an id-valued form (`{entity}Id`, e.g.
+`sourceId`) and a name-valued form (`{entity}`, e.g. `source`). Supplying both is invalid. This is #196's
+convention, implemented once as the shared `EntityFilterParsing.ResolveAsync`
+(`src/Quotinator.Api/Endpoints/Shared/EntityFilterParsing.cs`) rather than reinvented per endpoint.
+
+**The name-valued form is resolved to the entity's id first — it is not a direct SQL contains-match.**
+`ResolveAsync` takes a caller-supplied `resolveIdByName` delegate (the consuming endpoint's own repository
+lookup) and looks the name up *before* any list/filter query runs. If nothing matches, the caller already
+knows there will be zero related results and returns that informatively — `EntityFilterOutcome.NotFound`
+with a populated `Message` — rather than running a query that would also come back empty. This is
+deliberately not a 422: a name that doesn't exist is a legitimate "no results" case, matching the existing
+`FilteredResultStatus.NoResults` precedent (`QuoteEndpoints.cs:207-216`, 200 + empty items + an informative
+message), not bad input.
+
+**Validation**: supplying both parameters, or an id-valued one that isn't a well-formed GUID, both return
+422 with a `detail`, never the framework binder's bare 400 — consistent with #183's pagination contract.
+Once resolved to an id (whether supplied directly or found by name), matching is a case-insensitive exact
+match (`LOWER(column) = LOWER(@id)`), per the case-insensitive-by-default rule above.
+
+**Explicit exemption: `/quotes/search` and `/quotes/random`.** Their existing `character`/`author`/`source`
+filters stay fuzzy, direct contains-matches — this convention is for *new* entity-scoped filters
+(#184–#189, #192), not a retrofit of Search/RandomQuote's existing behaviour.
+
+`EntityFilterParsing`'s three messages use `IApiLocalizer.Format(key, args)` to substitute `{0}`/`{1}`
+placeholders into a localised template (the same pattern as `ApiMessages.ImportActionAmbiguousFieldsUnresolved`
+in `ImportEndpoints.cs`) — `IApiLocalizer`'s indexer (`this[string key]`) is a flat lookup with no
+interpolation support, so `Format` exists specifically to substitute the resolved template with the
+specific parameter/entity names rather than the message being generic. **Never use
+`string.Format(localizer[key], args)`** — the format-string argument's content depends on the request's
+own `Accept-Language` header (which of the 3 translation files gets consulted), which is exactly the
+shape CodeQL's `cs/uncontrolled-format-string` flags, and a translation-file placeholder-count typo would
+throw `FormatException` and turn into a live 500. `IApiLocalizer.Format` does the same substitution via a
+single-pass regex (`ApiLocalizerFormatting.Substitute`, `src/Quotinator.Core/Services/ApiLocalizer.cs`)
+that never throws — a placeholder with no matching argument is left as literal text instead.
 
 ### Vocabulary and abbreviations
 
@@ -419,9 +666,30 @@ Each source produces one file in `data/sources/`. Two MIT-licensed external sour
 | [vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes) | `vilaboim_movie-quotes.json` | MIT | `{ quote, movie }` |
 | [NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes) | `NikhilNamal17_popular-movie-quotes.json` | MIT | `{ quote, movie, type, year }` |
 
-Both are attributed in `SOURCES.md`. The seed script lives at `scripts/seed.csx` — run it to regenerate the source files from upstream; it writes `manifest.json` only when it does not already exist.
+Both are attributed in `SOURCES.md`. Each source's raw upstream format is converted to Quotinator's canonical schema by a first-party `IQuoteSourceConverter` plugin (`Quotinator.Converters.Vilaboim`, `Quotinator.Converters.NikhilNamal17`), invoked automatically by the live auto-update mechanism (`Quotinator__AutoUpdateSources`) and manually via `POST /api/v1/admin/sources/refresh` to regenerate a `data/sources/*.json` file locally. See `scripts/SOURCES.md` for the full workflow to add a new source.
 
 Manually curated and verified entries live in `data/sources/quotinator-curated.json`. All entries must be accurately attributed and verified before adding.
+
+### Verifying title/date corrections (`*-conflict-rules.json`, `*-source-aliases.json`)
+
+A `ConflictResolutionRule` or `SourceAliasRule` entry encodes a factual claim about a real film, show,
+or book — a canonical title, a release date, which real-world work two differently-spelled Source rows
+both refer to. **Verify each such claim before adding the rule or alias — see
+[`docs/workflow/source-verification.md`](docs/workflow/source-verification.md) for the required
+procedure and source priority order.** Do not rely on unstated model/training knowledge, even for
+well-known mainstream titles, and do not search sources in an arbitrary/inconsistent order — the linked
+procedure defines which sources to check first and when to widen the search.
+
+**Why this matters even for "obvious" facts**: correctness is this project's top priority (see Project
+Priorities above) — quotes must be real and accurately attributed, and that guarantee is only as good
+as the data feeding it. An uncited "I recognize this movie" claim is not reproducible or auditable the
+way this project's other correctness work is (red-green tests, cited CVEs).
+
+**Two known, deliberately unresolved exceptions**, left as future work rather than "fixed" here:
+- A film with more than one legitimate official title (e.g. Harry Potter's Philosopher's/Sorcerer's
+  Stone, UK vs US) has no way to record the alternate as anything but "corrected away" — see #218.
+- A bundled quote that cannot be verified against any real source at all (not a title/date
+  inconsistency, a genuine "does this quote exist" question) has no exclusion mechanism — see #219.
 
 ---
 
@@ -469,8 +737,10 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `data/sources/quotinator-curated.json` | Manually verified curated entries |
 | `schemas/source-flat.schema.json` | Machine-readable quote schema |
 | `schemas/changelog.schema.json` | Machine-readable changelog schema — read before writing changelog entries |
-| `scripts/seed.csx` | Per-source seed script — writes one file per source, manifest only when missing |
+| `scripts/SOURCES.md` | Workflow for adding a new quote source via a converter plugin |
 | `scripts/changelog.csx` | Changelog markdown generator — run after editing `changelog.en.json` |
+| `src/Quotinator.Data/Import/ISourceCacheUpdater.cs` | Live auto-update download/convert/validate pipeline for manifest-declared sources |
+| `src/Quotinator.Data/Import/IQuoteSourceConverter.cs` | Converter plugin contract — implement one per raw upstream source format |
 | `src/Quotinator.Api/Program.cs` | API entry point |
 | `src/Quotinator.Api/resources/changelog.en.json` | Changelog source of truth — edit this, never the generated `.md` files |
 | `src/Quotinator.Api/resources/changelog.nl.json` | Dutch changelog (lockstep with `en.json`) |
@@ -479,20 +749,25 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `src/Quotinator.Core/Models/Quote.cs` | Canonical Quote model |
 | `src/Quotinator.Core/Models/QuoteTranslation.cs` | Translation entry model |
 | `src/Quotinator.Core/Models/QuoteResponse.cs` | API response DTO |
-| `src/Quotinator.Core/Data/Sql.cs` | All SQL query strings — never write SQL inline outside this file |
+| `src/Quotinator.Data/Queries/Sql.cs` | All SQL query strings — never write SQL inline outside this file |
 | `src/Quotinator.Data/Database/DatabaseInitializer.cs` | SQLite schema + numbered migrations |
 | `addon/config.yaml` | HA add-on manifest — version, options, schema, port config |
 | `addon/CHANGELOG.md` | Generated HA add-on changelog — do not edit directly |
 | `docker/Dockerfile` | Container build |
 | `docs/docker.md` | Docker build notes, Blazor static web assets caveat, port configuration |
+| `docs/database-conventions.md` | Database do's and don'ts — RecordBase, enum/CHECK constraints, migrations, SQL safety, Data/Engine boundaries, DB testing conventions |
+| `docs/data-access.md` | Repository/join-query usage patterns (how to use the infrastructure `database-conventions.md` governs) |
 | `docs/testing-policy.md` | Testing standards — test project pairing, CVE folder rule, parallel execution |
 | `docs/workflow/process.md` | Milestone workflow — starting, executing, closing, living and maintenance milestones |
+| `docs/workflow/source-verification.md` | Procedure, source priority order, and escalation rules for verifying a title/date/attribution claim before a data correction |
 | `docs/workflow/checklist.md` | Issue filing, session-start, issue-closing, and milestone-close checklists |
 | `docs/workflow/cve.md` | CVE handling workflow; template is at `docs/workflow/cve-template.md` |
 | `docs/security/README.md` | Summary of all known CVEs and their current status across all projects |
 | `docs/milestones/` | Per-milestone overview and per-issue plan docs |
 | `.gitignore` | Must exclude `appsettings.local.json`, `.env`, and `data/*.db` |
+| `.claude/temp/` | Gitignored — the place for temporary/test-output files (one-off inspection output, scratch files generated purely to check something). Never write temporary output into a tracked folder such as `scripts/changelog-reference/`. |
 | `src/[project]/CVE/` | Per-project CVE tracking — `CVE-YYYY-NNNNN.md` per alert; closed CVEs in `CVE/archived/` |
+| `tools/Quotinator.Tools.DbInspector/` | Dev-only CLI — run arbitrary SQL against a Quotinator SQLite file; see its `README.md` |
 
 ---
 
@@ -530,7 +805,7 @@ Current folders and their contents:
 - `/addon/` — all Home Assistant add-on files (`config.yaml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `icon.png`, `logo.png`)
 - `/data/sources/` — `manifest.json`, `quotinator-curated.json`, `vilaboim_movie-quotes.json`, `NikhilNamal17_popular-movie-quotes.json`
 - `/docker/` — `Dockerfile`, `docker-compose.yml`
-- `/scripts/` — `seed.csx`, `sources.json`, `SOURCES.md`
+- `/scripts/` — `SOURCES.md` and changelog scripts
 - `/src/` — C# projects
 - `/tests/` — test projects
 
@@ -558,13 +833,19 @@ The actual host, port, and file path are configured in the consumer environment,
 
 Run these checks before pushing any commit or tag. Tests alone do not cover all failure modes — the Docker build in particular is only verified here and in the release workflow.
 
+**`main` must always be green.** A failing build or test is acceptable on a feature branch mid-development — it is never acceptable on `main`. This checklist exists specifically to guarantee that; do not skip steps because a deadline is close or the failure "looks unrelated."
+
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`. The same 0-warnings policy that applies to `dotnet build` applies here — any compiler warning surfaced during test build is a blocking failure.
 3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
 
    **Before writing any entries, read `schemas/changelog.schema.json`** — it is the authoritative definition of every field and which fields are required. Do not infer the format from prior entries or git history.
 
-   **During development — at issue close time** (not deferred to release): add entries to the `unreleased` section at the top of `changelog.en.json`. Include the issue number in `unreleased.issues`. This follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `[Unreleased]` convention and keeps the changelog in sync without waiting for a release. Decide at the time of writing whether the change deserves a `highlights` entry (user-facing impact) or only `added`/`changed`/`fixed`/`removed` (technical). See `docs/workflow/checklist.md` → "Before closing an issue" for the full closing step.
+   **At the `Waiting for release` phase — as soon as an issue's verification is complete, not deferred until it's actually tagged or closed:** add entries to the `unreleased` section at the top of `changelog.en.json`. Include the issue number in `unreleased.issues`. This follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) `[Unreleased]` convention: entries accumulate as work completes so that promoting them at release time is a rename, not a writing exercise. Decide at the time of writing whether the change deserves a `highlights` entry (user-facing impact) or only `added`/`changed`/`fixed`/`removed` (technical). The issue itself stays open and uncommented — `gh issue close` is a separate, later action gated on the release actually shipping (see `docs/workflow/issue-closure.md`'s two-gate rule) — adding the changelog entry does not imply the issue is closed. See `docs/workflow/checklist.md` → "Before closing an issue" → "Waiting for release" for the full step list.
+
+   **`changelog.nl.json` and `changelog.de.json` update in lockstep with `en.json`, in the same commit — every time, not only when filling an `issues[]` gap.** Every entry added to `en.json`'s `unreleased` section gets a matching translated entry in both other files before that commit is made; `TranslationCompletenessTests`-style drift between locales is a blocking failure, the same as a missing English entry.
+
+   **Before tagging a release, audit `unreleased.issues[]` against every issue actually touched during the session(s) since the last release** — not just the most recent one. It is easy to add entries as you go and still miss an issue from earlier in a long session; a missed issue number breaks the "release linking" traceability the changelog exists to provide.
 
    **Release issue-list rule:** every release entry whose work traces back to a specific issue must carry that issue's number in its `issues[]` array — including hotfix releases spawned by the same issue. Example: issue #100 spawned both v1.6.3 (primary Serilog change) and v1.6.4 (HA crash hotfix); both entries carry `"issues": [100]`. If a release is already tagged when the gap is noticed, add the number to the matching entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep) and regenerate.
 
@@ -596,20 +877,12 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    docker build -f docker/Dockerfile -t quotinator:local .
    ```
    If you do not have Docker available, note this explicitly and let the reviewer know CI is the first Docker gate.
-6. **Smoke-test the image** (optional but recommended for Dockerfile changes):
-   ```bash
-   docker run --rm -p 8080:8080 quotinator:local
-   curl -s http://localhost:8080/api/v1/health
-   curl -s http://localhost:8080/api/v1/version
-   curl -s http://localhost:8080/api/v1/quotes/random
-   curl -s "http://localhost:8080/api/v1/quotes/search?q=love"
-   curl -s "http://localhost:8080/api/v1/quotes/search?q=Casablanca&field=source"
-   curl -s "http://localhost:8080/api/v1/quotes/search?q=Churchill&field=author"
-   curl -s "http://localhost:8080/api/v1/quotes/search?q=Rick&field=character"
-   curl -s "http://localhost:8080/api/v1/quotes/search?q=love&type=person"
-   ```
-   Check that `/version` returns the expected version number — a missing `Directory.Build.props` in the build context silently produces `1.0.0` while `/health` still returns healthy.
-   The search queries cover: default full-text (`love` should return results), `field=source` (`Casablanca` should return results), and `field=author`, `field=character`, `type=person` — these three may return an empty `items` array with a `message` when the bundled dataset has no matching data; that is expected behaviour, not a bug.
+6. **Smoke-test the image** — required whenever a T2 verification pass is performed (see
+   `docs/release-verification.md`'s T2 gate), not just for Dockerfile changes. Run the full checklist
+   in [`docs/smoke-tests.md`](docs/smoke-tests.md) — the single authoritative T2 smoke-test suite,
+   kept in its own document since it has grown too large to stay inline here. **It is a living
+   checklist**: whenever a T2 pass surfaces a new bug or edge case, add its verification command
+   there in the same commit that fixes it — the list only grows, never shrinks.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 

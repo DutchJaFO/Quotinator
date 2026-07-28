@@ -1,5 +1,6 @@
 using Quotinator.Data.Connections;
 using Quotinator.Data.Example.Common;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Example.OneToOne;
@@ -16,7 +17,7 @@ namespace Quotinator.Data.Example.OneToOne;
 /// </remarks>
 public sealed class WidgetWithFkDetailRepository(
     IDbConnectionFactory factory,
-    IAuditWriter auditWriter,
+    ISystemAuditWriter auditWriter,
     ICallerContext callerContext)
     : SqliteOneToOneRepository<Widget, WidgetDetailFk>(factory, auditWriter, callerContext)
 {
@@ -28,7 +29,7 @@ public sealed class WidgetWithFkDetailRepository(
     [
         new WidgetDetailFk
         {
-            WidgetId = parent.Id.ToString("D").ToUpperInvariant(),
+            WidgetId = parent.Id.ToCanonicalId(),
             Notes    = $"fk-detail for {parent.Label}"
         }
     ];

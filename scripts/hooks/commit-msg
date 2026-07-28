@@ -1,6 +1,7 @@
 #!/bin/sh
 #
-# commit-msg hook: block commit messages that would auto-close a GitHub issue.
+# commit-msg hook: block commit messages that would auto-close a GitHub issue,
+# and require every non-merge commit message to match a reviewed draft file.
 #
 # GitHub closes issues when a commit merged to the default branch contains:
 #   close/closes/closed/fix/fixes/fixed/resolve/resolves/resolved #N
@@ -9,6 +10,12 @@
 # Issues in this project are closed explicitly via:
 #   gh issue close <N> --comment "<verification summary>"
 # Never via commit message.
+#
+# Every commit message must first be written to .claude/temp/commit-draft.md
+# and shown to the user for review before the actual commit runs — see
+# docs/workflow/process.md "Commit message format and content". This hook
+# enforces that the two match exactly; it cannot verify the review itself
+# happened, only that the draft-then-commit mechanics were followed.
 #
 # Install: cp scripts/hooks/commit-msg .git/hooks/commit-msg
 #          chmod +x .git/hooks/commit-msg
@@ -44,6 +51,35 @@ if echo "$FIRST_LINE" | grep -qE '\(#[0-9]+\)\s*$'; then
     echo "  Continuing anyway — press Ctrl-C within 5 seconds to abort."
     echo ""
     sleep 5
+fi
+
+# Require a reviewed draft before allowing a normal (non-merge) commit.
+# Skipped for merge commits — their message is auto-generated, nothing to draft.
+if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    DRAFT_FILE=".claude/temp/commit-draft.md"
+
+    if [ ! -f "$DRAFT_FILE" ]; then
+        echo ""
+        echo "ERROR: no reviewed commit draft found at $DRAFT_FILE."
+        echo ""
+        echo "  Write the commit message to $DRAFT_FILE, show it to the user"
+        echo "  for review, and only commit after explicit approval — see"
+        echo "  docs/workflow/process.md \"Commit message format and content\"."
+        echo ""
+        exit 1
+    fi
+
+    DRAFT_CONTENT=$(cat "$DRAFT_FILE")
+    if [ "$MSG" != "$DRAFT_CONTENT" ]; then
+        echo ""
+        echo "ERROR: commit message does not match the reviewed draft at $DRAFT_FILE."
+        echo ""
+        echo "  Commit with 'git commit -F $DRAFT_FILE' so the reviewed text"
+        echo "  and the actual commit message always match exactly, or update"
+        echo "  the draft and get it re-reviewed first."
+        echo ""
+        exit 1
+    fi
 fi
 
 exit 0

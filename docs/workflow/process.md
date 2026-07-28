@@ -4,6 +4,102 @@
 
 This document defines how we plan, execute, and close milestones. All workflow templates live in `docs/workflow/`. Per-milestone documents live in `docs/milestones/{milestone-slug}/`.
 
+## Where information lives
+
+Two rules prevent the same fact from being written in two places, drifting out of sync the moment one of them is updated and not the other:
+
+- **`overview.md` carries status only, never detail.** For any given issue, `overview.md` states its current status and links to its plan doc. It never explains *what* was done, *why*, *when a tier was verified*, or *what a session found* — that is the plan doc's job.
+- **A plan doc's numbered step sections and Verification table carry the detail, and their own status.** There is no separate "Step status" checklist — each step is its own subsection (`### N. Title`) with `**Status:**` as its first line, followed by the step's actual detail in that same place. Do not add prose sections (`Notes`, `Implementation notes`, session narratives) that restate what a step or verification row already documents — that is duplication, not a record of anything new. The one legitimate exception is a **Scope changes** section (see below): it records a *decision* — what moved, why, which issue now owns it — not a re-explanation of work already captured by a step or verification row.
+
+**`overview.md`'s header `**Status:**` line and every plan doc's own header `**Status:**` line are exactly one of these, nothing added:**
+
+| Status | Means |
+|--------|-------|
+| `Planning` | Scope/design still being worked out; no implementation started |
+| `In progress` (plan docs with numbered steps: `In progress (step N)`, naming the step currently being worked) | Implementation under way; not yet fully verified |
+| `Waiting for release` | Fully implemented and verified; not yet shipped in a tagged release |
+| `Released` | Shipped in a tagged release |
+
+No dates, no "See X for detail" pointers, no extra clauses of any kind. If something beyond the bare status word feels necessary, that need is itself the signal it belongs in a section of the doc, not the Status line — the reader is already looking at the document.
+
+**This "no duplication" rule applies to every header field, not just Status.** `**Tiers required:**`, `**GitHub issue:**`, `**Depends on:**`, and any other header line state the bare fact only — no parenthetical justifying *why* (e.g. which files or migrations trigger a tier). That reasoning already lives in the plan doc's own Steps section; repeating it in the header creates a second copy that can silently drift out of sync the moment a step changes and the header doesn't get updated to match. If a header field ever tempts a "— because..." or "(touches X, Y, Z)" clause, that is the same signal as with Status: the content belongs in a body section, not the header.
+
+This does not apply to an individual step section's own `**Status:**` line (e.g. `✅ Done`, `⬜ Not started`) — that is a separate, per-step concept already covered above, not the document-level header.
+
+**`In progress` requires actual outstanding code/doc work.** Before setting or leaving an issue at `In progress`, check whether every step section and every verification row in its plan doc is already ✅. If they are, the issue is `Waiting for release` even if its Tiers column still shows an unverified tier (e.g. `T3 ⬜`) — Tiers and Status are separate axes. This matters specifically for T3: T3 verification (live HA supervisor) can only happen after a beta tag exists, so a T3-only gap is never something more code work can close right now. Calling that `In progress` implies work that doesn't exist. Re-check this whenever you review or update a plan doc's header status, not just when you first set it.
+
+### Issue lifecycle
+
+Every issue moves through exactly these four phases, in order — the status word above **is** the
+phase name. Each phase has its own entry criteria and its own steps/checklist; do not treat "working
+an issue" as one undifferentiated block of work, and do not defer a phase's steps to a later phase
+just because they're documented near each other.
+
+| Phase (status) | Entry criteria | Steps documented in | Checklist in |
+|---|---|---|---|
+| `Planning` | Issue filed, milestone assigned | "Working on an issue" → Planning, below | `checklist.md` → "Planning an issue" |
+| `In progress` | Verification checklist exists in the plan doc | "Working on an issue" → Implementation, below | `checklist.md` → "Implementing an issue" |
+| `Waiting for release` | Every plan-doc verification row is ✅ | "Completing an issue" → Waiting for release, below | `checklist.md` → "Before closing an issue" → Waiting for release |
+| `Released` | Tag pushed, fix confirmed in the release artefact | "Completing an issue" → Released, below | `checklist.md` → "Before closing an issue" → Released |
+
+A phase's own steps run **as soon as that phase's entry criteria are met** — they do not wait for the
+next phase's gate. This is what "Completing an issue" below means by "two phases, not one flat list,"
+and it applies the same way to Planning/Implementation: don't bundle scope-checking work into the
+implementation phase's steps, and don't defer implementation-phase step-status updates until the whole
+issue looks done.
+
+**The same "don't duplicate what git already tracks" principle applies to ADR headers.** An ADR's
+`Updated:` field (see `docs/architecture-decisions/README.md`) holds one date, never an accumulated
+parenthetical log of every issue that touched the file — that log is exactly what `git log` on the
+file already is. This is why plan doc and ADR updates must land in their own commit, separate from
+the code change that motivated them: a code commit that also silently rewrites a doc's header buries
+the doc change inside an unrelated diff, and the git-history-as-source-of-truth argument above only
+holds if the history is actually legible per-file. Going forward: when a step of work produces both a
+code change and a plan-doc/ADR update, commit the code first, then the doc update as its own commit
+(same issue number, `docs [#N]: ...` per the existing commit-message convention) — never combine them
+just because they happened in the same session.
+
+**Commit message format and content.** Title is `type [#N]: short summary` — `type` is one of `feat`
+(new capability), `fix` (bug fix), `docs` (documentation-only change, no source files), `chore`
+(tooling/dependency/config, no behaviour change), `refactor` (code-organisation change with no
+behaviour change, e.g. moving a type between projects); `[#N]` is the GitHub issue number, or
+multiple bracketed numbers (`[#69][#157]`) when a commit's work genuinely spans more than one issue.
+Content differs by commit type:
+
+- **Code commits (`feat`/`fix`/`refactor`/`chore`) are terse.** The diff and the code's own comments
+  already explain *what* changed — a commit message that restates them (`"added X property to Y
+  class"`, `"changed the loop to use LINQ"`) is redundant. State the *why* in one or two sentences,
+  only when it isn't obvious from the diff itself (a bug's root cause, a design trade-off, which
+  issue's requirement this satisfies). If there's nothing non-obvious to say, the title alone is a
+  complete commit message — do not pad it with a body just to have one.
+- **Documentation-only commits (`docs`) are the exception — write fuller content.** Since ADR/plan-doc
+  headers no longer carry accumulated history (see above), the commit message for a `docs` commit *is*
+  that document's historical record — there is no header field or code diff to fall back on for
+  understanding what changed and why later. A `docs` commit message should describe what changed in
+  the document and why in enough detail to stand alone in `git log`, the way the ADR's own `##
+  Revision — issue #N` body section does for the document itself.
+
+**Draft, review, then commit — every time, no exceptions.** Before running `git commit`, write the
+full intended commit message to `.claude/temp/commit-draft.md` **and paste that same text directly
+into the chat response** — the developer must be able to read the full draft in the conversation
+itself, without opening a file or expanding a tool result. A `Read` tool call on the draft file does
+not satisfy this: its output renders as a tool result, not as the assistant's own message text, and
+has already been treated as "not really shown" once a developer had to say so explicitly (2026-07-14,
+issue #175's body edit — the assistant `Read` the draft instead of pasting it, which is exactly the
+gap this sentence exists to close). Only run the actual commit after explicit approval, via `git
+commit -F .claude/temp/commit-draft.md` so the reviewed text and the committed text are identical by
+construction. The `commit-msg` hook (`scripts/hooks/commit-msg`) enforces the mechanics of this — it
+blocks any non-merge commit whose message doesn't exactly match `.claude/temp/commit-draft.md` — but
+it cannot verify the review itself happened, only that the draft-then-commit sequence was followed. A
+`post-commit` hook (`scripts/hooks/post-commit`) automatically deletes `.claude/temp/commit-draft.md`
+right after a successful commit, so a leftover draft can't silently satisfy the `commit-msg` hook for
+a later, unrelated, unreviewed commit — this is automated, not something to remember by hand. The
+same draft-then-review rule applies to GitHub issue text (`gh issue create`/`gh issue edit`): write
+the draft to a file, paste its full text directly into the chat response (same rule as above — not
+merely readable via a tool call), get approval, then run the command against that file, then delete
+the draft file the same way. There is no equivalent client-side hook for `gh` issue commands — neither the
+review gate nor the cleanup — so that whole side is enforced by discipline, not tooling.
+
 ## Folder and file naming
 
 Milestone slugs and plan file names use only lowercase letters, numbers, and hyphens — no spaces or special characters. Derived from the milestone title: replace spaces with hyphens, strip punctuation, lowercase everything.
@@ -29,7 +125,10 @@ Examples:
 3. Map dependencies between issues.
 4. Decide on an order of operations.
 5. Create `docs/milestones/{slug}/overview.md` (see `checklist.md` for the template).
-6. Create a per-issue plan doc for every issue in the milestone.
+6. Create a per-issue plan doc for every issue in the milestone. A parent (tracking) issue gets one
+   too, but shaped like a miniature `overview.md` — a sub-issue list, dependency map, and order of
+   operations, with no Steps or Verification checklist of its own. See `issues.md` → "Splitting an
+   issue into sub-issues".
 7. Commit the milestone folder to `main`.
 
 ### Step 2 — Create the feature branch
@@ -68,6 +167,11 @@ At the start of every session working on a milestone:
 
 ## Working on an issue
 
+An issue's own two working phases — see "Issue lifecycle" above. Planning ends and Implementation
+begins once the plan doc's verification checklist exists and the issue's status moves to `In progress`.
+
+### Planning
+
 1. Read the full issue spec: `gh issue view <N>`
 2. Read the plan doc.
 3. **Cross-check the spec against the current authoritative sources — do this before writing any code.**
@@ -75,10 +179,11 @@ At the start of every session working on a milestone:
    Issues are written at a point in time. Prior issues in the same milestone may have introduced schemas, models, or design decisions that change what this issue should cover. Before accepting the spec as written:
 
    **Check sources in this order:**
-   1. **JSON schemas** (`schemas/`) — the machine-readable contract for any data file the issue touches. A feature not defined in the schema does not officially exist yet, regardless of what the code does.
-   2. **Script / generator behaviour** — if the issue touches a generator (e.g. `changelog.csx`), read the script. The generator defines what the schema promises to consumers; its parameters and helper functions reveal the full intended scope.
-   3. **C# models** — cross-reference the models against the schema. Gaps between them are bugs: a model property not in the schema is undocumented; a schema field not in the model is unimplemented.
-   4. **Documentation** — any project-level README or design doc that describes the format to consumers.
+   1. **`docs/architecture-decisions/`** — formal, numbered ADRs. An ADR can govern a design decision (e.g. entity/table shape) that the current issue never mentions. Copying an existing entity's shape is not a substitute for checking this — the existing entity may itself violate an ADR (see CLAUDE.md's "Authoritative sources" section for how this went wrong once already).
+   2. **JSON schemas** (`schemas/`) — the machine-readable contract for any data file the issue touches. A feature not defined in the schema does not officially exist yet, regardless of what the code does.
+   3. **Script / generator behaviour** — if the issue touches a generator (e.g. `changelog.csx`), read the script. The generator defines what the schema promises to consumers; its parameters and helper functions reveal the full intended scope.
+   4. **C# models** — cross-reference the models against the schema. Gaps between them are bugs: a model property not in the schema is undocumented; a schema field not in the model is unimplemented.
+   5. **Documentation** — any project-level README or design doc that describes the format to consumers.
 
    For each source, explicitly ask:
    - Does the issue reference every field or concept that now exists in the authoritative source?
@@ -120,14 +225,25 @@ At the start of every session working on a milestone:
    |---|--------|-------------|--------|--------------|
    | 1 | ❌ / ✅ | Description | Unit test / Live | Test class.Method or exact command + expected output |
 
-   `Status` is a standalone column between `#` and `Requirement` — never embed ✅ or ❌ inside the Verification column.
+   `Status` is a standalone column between `#` and `Requirement` — never embed ✅ or ❌ inside the Verification column. The `#` column is always plain sequential integers, in row order top to bottom — never lettered (`7a`, `7b`) and never numbered out of sequence with the row's actual position. A requirement discovered after the table already exists gets appended at the next integer (or the whole table renumbered if it belongs earlier), not a lettered insert. This applies equally to `overview.md`'s Order of operations table (see `checklist.md`).
+
+   **A plan doc's steps are numbered sections, never a checklist.** A one-line checklist item is never enough room to describe a step properly — trying to fit detail into it forces a choice between cramming (unreadable) or a separate prose section that repeats the same content (duplication, the exact thing `Where information lives` warns against). Instead, each step is its own subsection — `### N. <short imperative title>` — with `**Status:** <state>` as the very first line of the section body, followed by whatever detail that step actually needs. No separate "Step status" list anywhere in the doc; the section *is* the status and the detail together, in one place. Numbered sequentially in real execution order — same rule as the Verification table: plain integers, never lettered, never out of position. A step discovered mid-implementation is inserted at its actual place in the sequence (renumbering everything after it), not appended out of order at the end.
 
    **Bug fixes:** before writing any fix, first confirm the bug is reproducible. Write a
    failing unit test that demonstrates the bug, or document the exact steps and observed
    output that prove it exists. The fix is complete only when that test passes or those
    steps no longer reproduce the bug.
-6. Implement. Update plan doc step status as work progresses.
-7. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each documented verification step against the actual code.
+
+### Implementation
+
+1. Write every test named in the plan doc's verification checklist first and confirm each one is
+   genuinely red against current code, per the red-before-green rule above.
+2. Implement. Update each step section's `**Status:**` line as work progresses — this is the per-step
+   record; there is no separate "what's left" list to maintain elsewhere.
+3. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each
+   documented verification step against the actual code. Every row in the plan doc's verification
+   table should now be ✅ — if it is, the issue has reached the `Waiting for release` phase (see
+   "Completing an issue" below); if any row is still ❌, implementation continues.
 
 An issue is done only when every requirement in its GitHub spec is met and verified against actual code. Partial implementation means the issue stays open.
 
@@ -184,26 +300,74 @@ chmod +x .git/hooks/commit-msg
 
 ---
 
+## Process gap discovery
+
+Whenever something about the workflow itself doesn't go as expected — a step feels undefined, a
+rule seems to have been skipped, an artifact (a checkbox, a header field, a checklist item) turns
+out to be stale or unmaintained — investigate it before moving on, rather than fixing the immediate
+symptom and continuing. Two distinct outcomes are possible, and the fix is different for each:
+
+1. **The rule already existed and was ignored.** Grep the relevant doc (`CLAUDE.md`,
+   `docs/workflow/*.md`, `docs/*-conventions.md`, the relevant ADR) to confirm the rule's exact
+   wording and location. If it was there and simply not followed, the fix is behavioural, not
+   documentary — no doc change needed, but note the incident and, if it's likely to recur, consider
+   whether the existing wording is discoverable enough (e.g. buried in an unrelated section).
+2. **It's a genuine gap — the rule was never written down anywhere.** Add it to the document that
+   should have carried it (see `Where information lives` above for which document owns which kind of
+   fact). A genuine gap gets a doc fix in its own commit (see "Commit message format and content"
+   above) — never left as an unwritten habit a future session has no way to discover.
+
+**This check is a standing step when closing an issue or closing a milestone, not something done only
+when a gap happens to be noticed.** At both points, ask: did anything about *how this issue/milestone
+was worked* diverge from what's documented, or expose something the documentation never actually
+covered? If so, resolve which of the two outcomes above applies before considering the close
+complete. See `checklist.md`'s "Before closing an issue" and "Milestone close" sections for the
+concrete checklist items this produces.
+
+**How a discovered gap gets resolved is always the developer's decision — never the AI assistant's
+own call.** An AI assistant's job here is investigation and presentation: identify the gap, classify
+it (ignored-vs-genuine per the two outcomes above), and lay out what closing it would look like — not
+to pick the resolution and implement it unprompted. This applies even when a resolution seems obvious
+or "small" (e.g. adding one sentence to an existing section) — present it and wait for the developer
+to say yes, the same as any other doc/process change. Silence or a general "handle it" is not the same
+as an explicit decision on a specific proposed resolution.
+
+---
+
 ## Completing an issue
 
-An issue may only be closed when **all** of the following are true:
+An issue may only be **closed** when **all** of the following are true (see `issue-closure.md`'s
+two-gate rule for the full criteria):
 
 - Every requirement in the GitHub issue spec is implemented and tested, **or** any deferred requirements are documented via a comment on the issue (see Scope changes above)
 - All related/blocking issues it depends on are themselves closed
 - All changes are merged to `main`
-- The changes are included in a tagged release
+- The changes are included in a **tagged release, and the fix is confirmed working in the appropriate release artefact** — a pushed tag and green CI are preconditions, not the confirmation itself (`issue-closure.md`'s Gate 2)
 
-**Timing on feature branches:** while working on a feature branch, an issue can reach "spec complete, all tests green" status before the PR is merged. Do not run `gh issue close` at that point. The issue stays open until the PR is merged to `main`. Once merged, verify one final time that the main branch is green, then close.
+**Timing on feature branches:** while working on a feature branch, an issue can reach "spec complete, all tests green" status before the PR is merged. Do not run `gh issue close` at that point. The issue stays open until the PR is merged to `main`. Once merged, an issue is `Waiting for release` — it stays open until a tag ships and the artefact confirmation above happens, then close.
 
-Steps:
+**Two phases, not one flat list.** The first group of steps below happens as soon as verification is genuinely complete — it does not wait for a release, and skipping straight to "closing work" risks leaving these undone for a long time. The second group is gated on the release criteria above.
 
-1. Update the plan doc status to `Complete`.
-2. Update the status column in `overview.md`.
-3. Re-verify the order of operations table — a completed issue may unblock others or change the correct sequence. Update the table if needed before picking the next issue.
-4. **After the PR is merged to `main`:** close on GitHub:
+### Waiting for release
+
+Do these immediately once the plan doc's Verification table is all ✅ — regardless of release timing:
+
+1. Update the plan doc status to `Waiting for release` (the fixed status vocabulary is `Planning` / `In progress` / `Waiting for release` / `Released` — see "Where information lives" above; there is no `Complete` value).
+2. Update the status column in `overview.md` to match.
+3. Re-verify the order of operations table — a soon-to-ship issue may unblock others or change the correct sequence. Update the table if needed before picking the next issue.
+4. **Tick every checkbox in the GitHub issue's own "Definition of done" section** — each one should already correspond to a ✅ row in the plan doc's Verification table; ticking is a mechanical sync, not a new judgment call. There is no per-checkbox `gh` command for this: fetch the current body (`gh issue view <N> --json body -q .body`), replace each remaining `- [ ]` with `- [x]`, and write it back (`gh issue edit <N> --body-file -` or `--body "<full updated body>"`). A box that cannot honestly be ticked means the issue is not actually done — resolve that before proceeding, not by leaving the box unchecked and closing anyway. The one checkbox that stays unticked at this point is "Findings summarised in a closing comment" — that becomes true only once the `Released` phase's close step below actually happens.
+5. **Add the issue's changelog entry to the `unreleased` section** of `changelog.en.json` (+ `nl.json`/`de.json` lockstep) — this is the whole point of a Keep a Changelog `[Unreleased]` section: entries accumulate as work completes so promoting them at release time is a rename, not a writing exercise. Do not wait for the tag. See "Pre-Push Checklist" in `CLAUDE.md` for the exact format.
+
+### Released
+
+Do these once the tag is pushed and the artefact confirmation criteria above are met:
+
+1. Confirm the release actually included this issue's already-added `unreleased` entry — promote it as part of the release-tagging step (see `CLAUDE.md`'s Pre-Push Checklist), not written fresh here.
+2. Show the user the closing comment (the same verification table, reproduced in full) and get explicit approval, then close on GitHub:
    ```
    gh issue close <N> --comment "<short note on what was done>"
    ```
+3. Update the plan doc status to `Released` and update `overview.md` to match.
 
 ---
 
@@ -247,9 +411,14 @@ Issues not yet started or still in progress stay open after a partial merge. Onl
 A milestone is closed only when all issues are resolved or explicitly closed with documented justification.
 
 1. Confirm: `gh issue list --milestone "<Milestone Name>" --state open`
-2. Run the full pre-push checklist (`CLAUDE.md`): build, tests, Docker build.
-3. Push to `main`, tag the release.
-4. Close the milestone on GitHub:
+2. **If the milestone added any migrations:** verify the full incremental migration path against a
+   database matching the *last published release's* schema, not the accumulated local dev database
+   — see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md).
+   File this as its own tracked issue in the milestone (see #155 for a worked example) rather than
+   folding it into whichever feature issue happens to touch migrations last.
+3. Run the full pre-push checklist (`CLAUDE.md`): build, tests, Docker build.
+4. Push to `main`, tag the release.
+5. Close the milestone on GitHub:
    ```
    gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed
    ```

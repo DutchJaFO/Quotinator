@@ -21,6 +21,7 @@ and follow standard C# documentation conventions.
 | CI | Continuous Integration | |
 | CD | Continuous Delivery / Continuous Deployment | Used together as CI/CD in workflow docs. |
 | CRUD | Create, Read, Update, Delete | Standard shorthand for the four basic data operations. |
+| CSV | Comma-Separated Values | A flat, delimited text format for tabular data. Supported by the import endpoint (`POST /api/v1/import`) via the `Quotinator.Converters.Csv` plugin, in addition to Quotinator's canonical JSON schema. |
 | CVE | Common Vulnerabilities and Exposures | The identifier scheme used by the National Vulnerability Database for publicly known security issues. |
 | DI | Dependency Injection | Used throughout in the context of ASP.NET Core's built-in container. |
 | DTO | Data Transfer Object | An object used to carry data between layers without exposing the domain model directly. |
@@ -31,6 +32,7 @@ and follow standard C# documentation conventions.
 | MCP | Model Context Protocol | The protocol used to expose Quotinator as a tool to AI assistants. |
 | NVD | National Vulnerability Database | The US government repository of standards-based vulnerability management data. |
 | PK | Primary Key | The unique identifier column on a database table. In this project always a UUID. |
+| POCO | Plain Old CLR Object | A simple class with no framework base class or attributes required by its runtime behaviour — used here for JSON DTOs deserialized via `JsonSerializer`. |
 | PR | Pull Request | A GitHub pull request proposing changes from one branch into another. |
 | REST | Representational State Transfer | The architectural style used by the Quotinator HTTP API. |
 | SMO | SQL Server Management Objects | Microsoft's .NET library for SQL Server administration. Mentioned in `docs/sql-safety.md` when explaining why the T-SQL parser was rejected. |

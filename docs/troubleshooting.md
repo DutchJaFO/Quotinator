@@ -41,7 +41,7 @@ Quotinator automatically creates a backup of the database before applying schema
    docker stop quotinator
    ```
 
-2. **List backups on the host, oldest first.** The data directory on the host is whatever path you mounted to `/app/data`:
+2. **List backups on the host, oldest first.** The data directory on the host is whatever path you mounted to `/data` (see [`docs/docker.md`](docker.md#data-directory-and-volume-mounts) — never `/app/data`, which collides with the image's bundled sources):
    ```bash
    ls -lt /path/to/data/backups/ | tail -n +2 | tail -5
    ```
@@ -94,7 +94,8 @@ docker stop quotinator
 docker rm quotinator
 docker run -d \
   -p 8080:8080 \
-  -v /path/to/data:/app/data \
+  -v /path/to/data:/data \
+  -e Quotinator__DataDir=/data \
   ghcr.io/dutchjafo/quotinator:latest
 ```
 

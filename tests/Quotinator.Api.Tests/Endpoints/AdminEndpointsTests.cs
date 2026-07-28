@@ -7,6 +7,7 @@ using Quotinator.Api.Tests.Fakes;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
+using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Tests.Endpoints;
@@ -16,15 +17,16 @@ public class AdminEndpointsTests
 {
     private const string TestKey = "test-admin-key";
 
-    private static WebApplicationFactory<Program> CreateFactory(string? adminApiKey = null) =>
+    private static WebApplicationFactory<Program> CreateFactory(
+        string? adminApiKey = null, IDatabaseInitializer? dbInitializer = null) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
-                services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
-                services.AddSingleton<IAuditWriter>(new NoOpAuditWriter());
-                services.AddSingleton<IAuditReader>(new NoOpAuditReader());
+                services.AddSingleton(dbInitializer ?? NoOpDatabaseInitializer.Instance);
+                services.AddSingleton<ISystemAuditWriter>(new NoOpSystemAuditWriter());
+                services.AddSingleton<ISystemAuditReader>(new NoOpSystemAuditReader());
                 services.AddSingleton<ICallerContext>(new NoOpCallerContext());
             });
 
@@ -66,10 +68,8 @@ public class AdminEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.IsTrue(doc.RootElement.TryGetProperty("files",               out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("totalQuotes",         out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("uniqueQuotes",        out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("crossFileDuplicates", out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("files",   out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("reports", out _));
     }
 
     // ── POST /admin/database/reseed ───────────────────────────────────────────
@@ -112,10 +112,16 @@ public class AdminEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.IsTrue(doc.RootElement.TryGetProperty("quotes",     out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("sources",    out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("characters", out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("people",     out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("quotes",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("sources",         out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("characters",      out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("people",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("series",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("universes",       out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("stageDirections", out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("soundCues",       out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("conversations",   out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("reports",         out _), "#221: per-file report array replacing the old flat duplicates count");
     }
 
     // ── POST /admin/database/reset ────────────────────────────────────────────
@@ -158,9 +164,74 @@ public class AdminEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.IsTrue(doc.RootElement.TryGetProperty("quotes",     out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("sources",    out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("characters", out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("people",     out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("quotes",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("sources",         out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("characters",      out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("people",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("series",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("universes",       out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("stageDirections", out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("soundCues",       out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("conversations",   out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("reports",         out _), "#221: per-file report array replacing the old flat duplicates count");
+    }
+
+    /// <summary>POST /admin/database/reset with no query parameter defaults preserveSchemaVersion to false (#141).</summary>
+    [TestMethod]
+    public async Task ResetDatabase_NoQueryParam_DefaultsPreserveSchemaVersionFalse()
+    {
+        var spy = new SpyDatabaseInitializer();
+        using var factory = CreateFactory(TestKey, spy);
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(false, spy.LastPreserveSchemaVersion);
+    }
+
+    /// <summary>POST /admin/database/reset?preserveSchemaVersion=true threads the flag through to ResetAsync (#141).</summary>
+    [TestMethod]
+    public async Task ResetDatabase_PreserveSchemaVersionTrue_Returns200AndPassesFlagThrough()
+    {
+        var spy = new SpyDatabaseInitializer();
+        using var factory = CreateFactory(TestKey, spy);
+        var response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset?preserveSchemaVersion=true", null);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(true, spy.LastPreserveSchemaVersion);
+    }
+
+    private sealed class SpyDatabaseInitializer : IDatabaseInitializer
+    {
+        public bool? LastPreserveSchemaVersion { get; private set; }
+
+        public int    SchemaVersion    => 5;
+        public int    DataSchemaVersion => 2;
+        public int    QuoteCount       => 0;
+        public int    SourceCount      => 0;
+        public int    CharacterCount   => 0;
+        public int    PeopleCount      => 0;
+        public int    SeriesCount      => 0;
+        public int    UniverseCount    => 0;
+        public int    StageDirectionCount => 0;
+        public int    SoundCueCount    => 0;
+        public int    ConversationCount => 0;
+        public string? MigrationApplied => null;
+        public IReadOnlyList<FileImportReport> LastSeedReport => [];
+
+        public Task InitialiseAsync() => Task.CompletedTask;
+        public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
+
+        public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false)
+        {
+            LastPreserveSchemaVersion = preserveSchemaVersion;
+            return Task.CompletedTask;
+        }
+
+        public Task<SeedPreviewResult> PreviewSeedAsync()
+            => Task.FromResult(new SeedPreviewResult([], []));
+
+        public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false)
+            => Task.FromResult(new SourceCacheResolution([], []));
     }
 }

@@ -1,0 +1,571 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Quotinator.Data.Import;
+
+namespace Quotinator.Data.Tests.Import;
+
+[TestClass]
+public class ManifestSeedPlannerTests
+{
+    private string _tempDir = null!;
+
+    [TestInitialize]
+    public void TestInitialize()
+        => _tempDir = Directory.CreateTempSubdirectory("quotinator_manifestplanner_").FullName;
+
+    [TestCleanup]
+    public void TestCleanup()
+    {
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, recursive: true);
+    }
+
+    // ── Existing behavior (ported, regression-pinned) ───────────────────────────
+
+    [TestMethod]
+    public void PlanSeed_NoManifestAllowAutoCreateFalse_ReturnsAlphabeticalOrderNoFileWritten()
+    {
+        WriteFile("b.json", "[]");
+        WriteFile("a.json", "[]");
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        CollectionAssert.AreEqual(
+            new[] { "a.json", "b.json" },
+            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+        Assert.IsFalse(File.Exists(Path.Combine(_tempDir, "manifest.json")), "No manifest should be written when allowAutoCreate is false");
+    }
+
+    [TestMethod]
+    public void PlanSeed_ManifestListsFiles_ReturnsListedFilesInDeclaredOrder()
+    {
+        WriteFile("z.json", "[]");
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(
+                new JsonObject { ["file"] = "z.json", ["name"] = "z" },
+                new JsonObject { ["file"] = "a.json", ["name"] = "a" })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        CollectionAssert.AreEqual(
+            new[] { "z.json", "a.json" },
+            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+    }
+
+    [TestMethod]
+    public void PlanSeed_FileWithConverterOptions_PopulatesSeedFileConverterOptions()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(
+                new JsonObject
+                {
+                    ["file"]             = "a.json",
+                    ["name"]             = "a",
+                    ["converter"]        = "basic-json-array",
+                    ["converterOptions"] = new JsonObject
+                    {
+                        ["propertyMapping"] = new JsonObject { ["source"] = "movie" }
+                    }
+                })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        var file = files.Single();
+        Assert.AreEqual("basic-json-array", file.Converter);
+        Assert.IsNotNull(file.ConverterOptions);
+        Assert.AreEqual("movie", file.ConverterOptions!.Value.GetProperty("propertyMapping").GetProperty("source").GetString());
+    }
+
+    [TestMethod]
+    public void PlanSeed_UnlistedFilesPresent_AppendsThemAlphabeticallyAfterListed()
+    {
+        WriteFile("z.json", "[]");
+        WriteFile("a.json", "[]");
+        WriteFile("m.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject { ["file"] = "z.json", ["name"] = "z" })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        CollectionAssert.AreEqual(
+            new[] { "z.json", "a.json", "m.json" },
+            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+    }
+
+    [TestMethod]
+    public void PlanSeed_AutoCreatedManifestPolicy_DefersToConfigPolicy()
+    {
+        WriteFile("a.json", "[]");
+        var configPolicy = new ManifestPolicy(DuplicateResolutionPolicy.NewestWins);
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (_, policy) = planner.PlanSeed(_tempDir, configPolicy, allowAutoCreate: true);
+
+        Assert.AreEqual(configPolicy, policy, "Auto-created manifest omits duplicateResolution, so the resolved policy must equal the config-level policy");
+    }
+
+    [TestMethod]
+    public void PlanSeed_InvalidManifestJson_FallsBackToAlphabeticalOrder()
+    {
+        WriteFile("b.json", "[]");
+        WriteFile("a.json", "[]");
+        File.WriteAllText(Path.Combine(_tempDir, "manifest.json"), "{ this is not valid json");
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, policy) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        CollectionAssert.AreEqual(
+            new[] { "a.json", "b.json" },
+            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+        Assert.AreEqual(ManifestPolicy.HardcodedDefault, policy);
+    }
+
+    // Behavior change from the pre-POCO manual-parsing version: an unrecognised policy string used
+    // to be silently coerced to Skip per-field while the rest of the manifest was still trusted.
+    // Deserializing into a typed DTO makes this a hard failure for the whole manifest instead —
+    // more correct (the mistake surfaces via the warning log) and consistent with any other malformed
+    // manifest content.
+    [TestMethod]
+    public void PlanSeed_ManifestHasInvalidPolicyValue_FallsBackToAlphabeticalOrderAndLogsWarning()
+    {
+        WriteFile("b.json", "[]");
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["duplicateResolution"] = new JsonObject { ["default"] = "notarealpolicy" },
+            ["files"] = new JsonArray(new JsonObject { ["file"] = "b.json", ["name"] = "b" })
+        });
+        var logger  = new RecordingLogger<ManifestSeedPlanner>();
+        var planner = new ManifestSeedPlanner(logger);
+
+        var (files, policy) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        CollectionAssert.AreEqual(
+            new[] { "a.json", "b.json" },
+            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+        Assert.AreEqual(ManifestPolicy.HardcodedDefault, policy);
+        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning));
+    }
+
+    [TestMethod]
+    public void PlanSeed_EmptyDirectory_ReturnsEmptyListNoManifestWritten()
+    {
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: true);
+
+        Assert.AreEqual(0, files.Count);
+        Assert.IsFalse(File.Exists(Path.Combine(_tempDir, "manifest.json")), "An empty directory must never get an auto-created manifest (files would violate minItems: 1)");
+    }
+
+    // ── Auto-create ───────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void PlanSeed_NoManifestAllowAutoCreateTrue_WritesManifestListingDiscoveredFilesAlphabetically()
+    {
+        WriteFile("b.json", "[]");
+        WriteFile("a.json", "[]");
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: true);
+
+        var manifestPath = Path.Combine(_tempDir, "manifest.json");
+        Assert.IsTrue(File.Exists(manifestPath), "Manifest should be auto-created");
+
+        var root  = JsonNode.Parse(File.ReadAllText(manifestPath))!;
+        var files = root["files"]!.AsArray().Select(e => e!["file"]!.GetValue<string>()).ToList();
+
+        CollectionAssert.AreEqual(new[] { "a.json", "b.json" }, files);
+        Assert.IsNull(root["duplicateResolution"], "Auto-created manifest must not freeze a duplicateResolution policy");
+    }
+
+    [TestMethod]
+    public void PlanSeed_NoManifestAllowAutoCreateTrue_LogsWarning()
+    {
+        WriteFile("a.json", "[]");
+        var logger  = new RecordingLogger<ManifestSeedPlanner>();
+        var planner = new ManifestSeedPlanner(logger);
+
+        planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: true);
+
+        Assert.IsTrue(logger.Entries.Any(e =>
+            e.Level == LogLevel.Warning &&
+            e.Message.Contains("[Database - Init]") &&
+            e.Message.Contains("auto-created")),
+            "Expected a warning log line announcing the manifest auto-creation");
+    }
+
+    [TestMethod]
+    public void PlanSeed_NoManifestAllowAutoCreateFalse_DoesNotLogWarning()
+    {
+        WriteFile("a.json", "[]");
+        var logger  = new RecordingLogger<ManifestSeedPlanner>();
+        var planner = new ManifestSeedPlanner(logger);
+
+        planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.IsFalse(logger.Entries.Any(e => e.Level == LogLevel.Warning),
+            "The disabled/bundled-dir path must stay at Information level — no warning");
+    }
+
+    // ── URL resolution — three source kinds ─────────────────────────────────────
+
+    [TestMethod]
+    public void PlanSeed_ManifestEntryHasDownloadUrl_ParsedIntoSeedFile()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]        = "a.json",
+                ["name"]        = "a",
+                ["url"]         = "https://example.com/a",
+                ["downloadUrl"] = "https://example.com/raw/a.json"
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        var seedFile = files.Single();
+        Assert.AreEqual("https://example.com/a", seedFile.Url);
+        Assert.AreEqual("https://example.com/raw/a.json", seedFile.DownloadUrl);
+    }
+
+    [TestMethod]
+    public void PlanSeed_ManifestEntryHasRefreshIntervalHoursAndDownloadTarget_ParsedIntoSeedFile()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]                 = "a.json",
+                ["name"]                 = "a",
+                ["downloadUrl"]          = "https://example.com/raw/a.json",
+                ["refreshIntervalHours"] = 6,
+                ["downloadTarget"]       = "external"
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        var seedFile = files.Single();
+        Assert.AreEqual(6, seedFile.RefreshIntervalHours);
+        Assert.AreEqual(DownloadTarget.External, seedFile.DownloadTarget);
+    }
+
+    [TestMethod]
+    public void PlanSeed_ManifestEntryOmitsRefreshIntervalHoursAndDownloadTarget_BothNull()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]        = "a.json",
+                ["name"]        = "a",
+                ["downloadUrl"] = "https://example.com/raw/a.json"
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        var seedFile = files.Single();
+        Assert.IsNull(seedFile.RefreshIntervalHours);
+        Assert.IsNull(seedFile.DownloadTarget);
+    }
+
+    [TestMethod]
+    public void PlanSeed_ManifestEntryHasGithubObject_ComputesUrlAndDownloadUrlFromConvention()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]   = "a.json",
+                ["name"]   = "a",
+                ["github"] = new JsonObject
+                {
+                    ["owner"]  = "someowner",
+                    ["repo"]   = "somerepo",
+                    ["path"]   = "data/a.json",
+                    ["branch"] = "develop"
+                }
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        var seedFile = files.Single();
+        Assert.AreEqual("https://github.com/someowner/somerepo", seedFile.Url);
+        Assert.AreEqual("https://raw.githubusercontent.com/someowner/somerepo/develop/data/a.json", seedFile.DownloadUrl);
+    }
+
+    [TestMethod]
+    public void PlanSeed_ManifestEntryHasGithubObjectNoBranch_DefaultsToMain()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]   = "a.json",
+                ["name"]   = "a",
+                ["github"] = new JsonObject
+                {
+                    ["owner"] = "someowner",
+                    ["repo"]  = "somerepo",
+                    ["path"]  = "a.json"
+                }
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.AreEqual("https://raw.githubusercontent.com/someowner/somerepo/main/a.json", files.Single().DownloadUrl);
+    }
+
+    [TestMethod]
+    public void PlanSeed_ManifestEntryIsLocalOnly_ReturnsNullUrlAndDownloadUrl()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject { ["file"] = "a.json", ["name"] = "a" })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        var seedFile = files.Single();
+        Assert.IsNull(seedFile.Url);
+        Assert.IsNull(seedFile.DownloadUrl);
+    }
+
+    // ── Per-file duplicateResolution override (bonus, #45) ──────────────────────
+
+    [TestMethod]
+    public void PlanSeed_FileEntryHasDuplicateResolution_SeedFilePolicyIsSet()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "a.json",
+                ["name"] = "a",
+                ["duplicateResolution"] = new JsonObject { ["default"] = "merge-theirs" }
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.AreEqual(DuplicateResolutionPolicy.MergeTheirs, files.Single().Policy?.Default);
+    }
+
+    /// <summary>#180: the curated series/universe overlay file's own manifest entry must resolve to
+    /// Review, not the bundled top-level default (Skip) — a silently-applied Skip would mean a
+    /// genuine Source/Series/Universe field disagreement between two pieces of first-party data is
+    /// never surfaced to a human.</summary>
+    [TestMethod]
+    public void PlanSeed_SeriesUniverseOverlayEntry_ResolvesReviewNotBundledDefaultSkip()
+    {
+        WriteFile("quotinator-series-universe.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["duplicateResolution"] = new JsonObject { ["default"] = "skip" },
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "quotinator-series-universe.json",
+                ["name"] = "quotinator/series-universe",
+                ["duplicateResolution"] = new JsonObject { ["default"] = "review" }
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, topLevelPolicy) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.AreEqual(DuplicateResolutionPolicy.Skip, topLevelPolicy.Default, "Sanity check — the bundled top-level default really is Skip in this scenario");
+        Assert.AreEqual(DuplicateResolutionPolicy.Review, files.Single().Policy?.Default, "The file's own override must win over the bundled default");
+    }
+
+    [TestMethod]
+    public void PlanSeed_FileEntryOmitsDuplicateResolution_SeedFilePolicyIsNull()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject { ["file"] = "a.json", ["name"] = "a" })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.IsNull(files.Single().Policy, "No per-file override — falls through to the manifest/config tiers instead");
+    }
+
+    // ── #181: ruleFile ───────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void PlanSeed_FileEntryHasRuleFile_ResolvedToAbsolutePathSameConventionAsFile()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "a.json",
+                ["name"] = "a",
+                ["ruleFile"] = "a-conflict-rules.json",
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.AreEqual(Path.Combine(_tempDir, "a-conflict-rules.json"), files.Single().RuleFilePath);
+    }
+
+    [TestMethod]
+    public void PlanSeed_FileEntryOmitsRuleFile_RuleFilePathIsNull()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject { ["file"] = "a.json", ["name"] = "a" })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.IsNull(files.Single().RuleFilePath);
+    }
+
+    /// <summary>
+    /// Found live via T2 during #181: a rule file sits in the same directory as its owning source file
+    /// but is referenced only via ruleFile, never files[].file — the "unlisted files get appended
+    /// alphabetically" fallback must not sweep it up and try to import it as if it were a quote source.
+    /// </summary>
+    [TestMethod]
+    public void PlanSeed_RuleFileReferencedButNotListedAsFile_NotTreatedAsUnlisted()
+    {
+        WriteFile("a.json", "[]");
+        WriteFile("a-conflict-rules.json", """{"rules":[]}""");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "a.json",
+                ["name"] = "a",
+                ["ruleFile"] = "a-conflict-rules.json",
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        CollectionAssert.AreEqual(new[] { "a.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList(),
+            "The rule file must not be appended as an unlisted quote source");
+    }
+
+    // ── #181: sourceAliasFile ────────────────────────────────────────────────
+
+    [TestMethod]
+    public void PlanSeed_FileEntryHasSourceAliasFile_ResolvedToAbsolutePathSameConventionAsFile()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "a.json",
+                ["name"] = "a",
+                ["sourceAliasFile"] = "a-source-aliases.json",
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.AreEqual(Path.Combine(_tempDir, "a-source-aliases.json"), files.Single().SourceAliasFilePath);
+    }
+
+    [TestMethod]
+    public void PlanSeed_FileEntryOmitsSourceAliasFile_SourceAliasFilePathIsNull()
+    {
+        WriteFile("a.json", "[]");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject { ["file"] = "a.json", ["name"] = "a" })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        Assert.IsNull(files.Single().SourceAliasFilePath);
+    }
+
+    /// <summary>Same exclusion as PlanSeed_RuleFileReferencedButNotListedAsFile_NotTreatedAsUnlisted, for sourceAliasFile.</summary>
+    [TestMethod]
+    public void PlanSeed_SourceAliasFileReferencedButNotListedAsFile_NotTreatedAsUnlisted()
+    {
+        WriteFile("a.json", "[]");
+        WriteFile("a-source-aliases.json", """{"aliases":[]}""");
+        WriteManifest(new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"] = "a.json",
+                ["name"] = "a",
+                ["sourceAliasFile"] = "a-source-aliases.json",
+            })
+        });
+
+        var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
+        var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
+
+        CollectionAssert.AreEqual(new[] { "a.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList(),
+            "The source-alias file must not be appended as an unlisted quote source");
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void WriteFile(string name, string content)
+        => File.WriteAllText(Path.Combine(_tempDir, name), content);
+
+    private void WriteManifest(JsonObject manifest)
+        => File.WriteAllText(Path.Combine(_tempDir, "manifest.json"), manifest.ToJsonString());
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
+    }
+}

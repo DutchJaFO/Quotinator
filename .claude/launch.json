@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "quotinator-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/Quotinator.Api", "--launch-profile", "http"],
+      "port": 5043
+    }
+  ]
+}

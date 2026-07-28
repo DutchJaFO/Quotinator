@@ -23,16 +23,72 @@ public class SourceDataIntegrityTests
     private static readonly JsonSchema ExtendedSchema =
         JsonSchema.FromFile(Path.Combine(SchemasDir, "source-extended.schema.json"));
 
+    private static readonly JsonSchema ConflictResolutionRuleSchema =
+        JsonSchema.FromFile(Path.Combine(SchemasDir, "conflict-resolution-rules.schema.json"));
+
+    private static readonly JsonSchema SourceAliasRuleSchema =
+        JsonSchema.FromFile(Path.Combine(SchemasDir, "source-alias-rules.schema.json"));
+
     private static readonly EvaluationOptions StrictOptions = new()
     {
         OutputFormat = OutputFormat.List
     };
 
-    private static IEnumerable<string> SourceFiles =>
-        Directory.Exists(SourcesDir)
-            ? Directory.EnumerateFiles(SourcesDir, "*.json")
-                       .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
-            : [];
+    /// <summary>Every *.json file listed in a manifest entry's own `ruleFile` property (#181) — a different shape from a source file, validated separately.</summary>
+    private static HashSet<string> RuleFilesListedInManifest()
+    {
+        var root = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
+        return root["files"]!.AsArray()
+            .Select(e => e!["ruleFile"]?.GetValue<string>())
+            .Where(name => name is not null)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+    }
+
+    /// <summary>Every *.json file listed in a manifest entry's own `sourceAliasFile` property (#181) — a different shape from a source file, validated separately.</summary>
+    private static HashSet<string> SourceAliasFilesListedInManifest()
+    {
+        var root = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
+        return root["files"]!.AsArray()
+            .Select(e => e!["sourceAliasFile"]?.GetValue<string>())
+            .Where(name => name is not null)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+    }
+
+    private static IEnumerable<string> SourceFiles
+    {
+        get
+        {
+            if (!Directory.Exists(SourcesDir)) return [];
+            var ruleFiles = RuleFilesListedInManifest();
+            var aliasFiles = SourceAliasFilesListedInManifest();
+            return Directory.EnumerateFiles(SourcesDir, "*.json")
+                .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
+                .Where(f => !ruleFiles.Contains(Path.GetFileName(f)))
+                .Where(f => !aliasFiles.Contains(Path.GetFileName(f)));
+        }
+    }
+
+    private static IEnumerable<string> RuleFiles
+    {
+        get
+        {
+            if (!Directory.Exists(SourcesDir)) return [];
+            var ruleFiles = RuleFilesListedInManifest();
+            return Directory.EnumerateFiles(SourcesDir, "*.json")
+                .Where(f => ruleFiles.Contains(Path.GetFileName(f)));
+        }
+    }
+
+    private static IEnumerable<string> SourceAliasFiles
+    {
+        get
+        {
+            if (!Directory.Exists(SourcesDir)) return [];
+            var aliasFiles = SourceAliasFilesListedInManifest();
+            return Directory.EnumerateFiles(SourcesDir, "*.json")
+                .Where(f => aliasFiles.Contains(Path.GetFileName(f)));
+        }
+    }
 
     // ── JSON validity ─────────────────────────────────────────────────────────
 
@@ -84,6 +140,83 @@ public class SourceDataIntegrityTests
         }
     }
 
+    /// <summary>Each per-source conflict-resolution rule file (#181) conforms to schemas/conflict-resolution-rules.schema.json.</summary>
+    [TestMethod]
+    public void RuleFiles_ConformToSchema()
+    {
+        foreach (var file in RuleFiles)
+        {
+            var name    = Path.GetFileName(file);
+            var element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(file));
+            var result  = ConflictResolutionRuleSchema.Evaluate(element, StrictOptions);
+            Assert.IsTrue(result.IsValid, FormatErrors(name, result));
+        }
+    }
+
+    /// <summary>Each per-source title-alias file (#181) conforms to schemas/source-alias-rules.schema.json.</summary>
+    [TestMethod]
+    public void SourceAliasFiles_ConformToSchema()
+    {
+        foreach (var file in SourceAliasFiles)
+        {
+            var name    = Path.GetFileName(file);
+            var element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(file));
+            var result  = SourceAliasRuleSchema.Evaluate(element, StrictOptions);
+            Assert.IsTrue(result.IsValid, FormatErrors(name, result));
+        }
+    }
+
+    /// <summary>A manifest file entry that sets both `github` and `url` violates the schema — the two source kinds are mutually exclusive.</summary>
+    [TestMethod]
+    public void Manifest_EntryWithBothGithubAndUrl_FailsSchemaValidation()
+    {
+        var manifest = new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]   = "a.json",
+                ["name"]   = "a",
+                ["url"]    = "https://example.com/a",
+                ["github"] = new JsonObject
+                {
+                    ["owner"] = "owner",
+                    ["repo"]  = "repo",
+                    ["path"]  = "a.json"
+                }
+            })
+        };
+
+        var element = JsonSerializer.Deserialize<JsonElement>(manifest.ToJsonString());
+        var result  = ManifestSchema.Evaluate(element, StrictOptions);
+
+        Assert.IsFalse(result.IsValid, "A manifest entry with both github and url should fail schema validation");
+    }
+
+    /// <summary>A manifest file entry may declare `converterOptions` (an opaque, converter-specific object) alongside `converter`.</summary>
+    [TestMethod]
+    public void Manifest_EntryWithConverterOptions_PassesSchemaValidation()
+    {
+        var manifest = new JsonObject
+        {
+            ["files"] = new JsonArray(new JsonObject
+            {
+                ["file"]             = "a.json",
+                ["name"]             = "a",
+                ["url"]              = "https://example.com/a",
+                ["converter"]        = "basic-json-array",
+                ["converterOptions"] = new JsonObject
+                {
+                    ["propertyMapping"] = new JsonObject { ["source"] = "movie", ["date"] = "year" }
+                }
+            })
+        };
+
+        var element = JsonSerializer.Deserialize<JsonElement>(manifest.ToJsonString());
+        var result  = ManifestSchema.Evaluate(element, StrictOptions);
+
+        Assert.IsTrue(result.IsValid, FormatErrors("synthetic manifest with converterOptions", result));
+    }
+
     // ── Manifest structure ────────────────────────────────────────────────────
 
     /// <summary>Every file listed in manifest.json exists on disk.</summary>
@@ -101,7 +234,7 @@ public class SourceDataIntegrityTests
         }
     }
 
-    /// <summary>Every *.json source file in data/sources/ (excluding manifest) is listed in the manifest.</summary>
+    /// <summary>Every *.json source file in data/sources/ (excluding manifest) is listed in the manifest, either as a source file's own `file` entry or as some entry's `ruleFile`/`sourceAliasFile` (#181).</summary>
     [TestMethod]
     public void SourceFiles_AllListedInManifest()
     {
@@ -109,12 +242,14 @@ public class SourceDataIntegrityTests
         var listed = root["files"]!.AsArray()
                         .Select(e => e!["file"]!.GetValue<string>())
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        listed.UnionWith(RuleFilesListedInManifest());
+        listed.UnionWith(SourceAliasFilesListedInManifest());
 
         foreach (var file in Directory.EnumerateFiles(SourcesDir, "*.json"))
         {
             var name = Path.GetFileName(file);
             if (name.Equals("manifest.json", StringComparison.OrdinalIgnoreCase)) continue;
-            Assert.IsTrue(listed.Contains(name), $"'{name}' exists in data/sources/ but is not listed in manifest.json");
+            Assert.IsTrue(listed.Contains(name), $"'{name}' exists in data/sources/ but is not listed in manifest.json (as either 'file', 'ruleFile', or 'sourceAliasFile')");
         }
     }
 

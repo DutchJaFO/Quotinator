@@ -1,0 +1,57 @@
+using System.Text.Json.Serialization;
+
+namespace Quotinator.Data.Import;
+
+/// <summary>
+/// Wire model for a single entry in <c>manifest.json</c>'s <c>files</c> array. See <see cref="ManifestDto"/>.
+/// Inherits <see cref="SourceImportSettingsDto.Converter"/> and <see cref="SourceImportSettingsDto.DuplicateResolution"/>
+/// (the latter overriding the manifest's own top-level <c>duplicateResolution</c> for this file specifically) —
+/// both serialize as flat sibling properties on this type, not nested.
+/// </summary>
+internal sealed class ManifestFileEntryDto : SourceImportSettingsDto
+{
+    /// <summary>Filename relative to this manifest's directory.</summary>
+    [JsonPropertyName("file")]
+    public required string File { get; init; }
+
+    /// <summary>Human-readable source identifier. Not currently consumed by seeding logic, but part of the schema.</summary>
+    [JsonPropertyName("name")]
+    public string? Name { get; init; }
+
+    /// <summary>Upstream URL for provenance. Mutually exclusive with <see cref="Github"/> — use <see cref="Github"/> for GitHub-hosted sources instead.</summary>
+    [JsonPropertyName("url")]
+    public string? Url { get; init; }
+
+    /// <summary>Direct, fetchable URL used by the auto-update mechanism. Only meaningful alongside <see cref="Url"/> or <see cref="Github"/>.</summary>
+    [JsonPropertyName("downloadUrl")]
+    public string? DownloadUrl { get; init; }
+
+    /// <summary>Overrides <c>Quotinator__SourceUpdateIntervalHours</c> for this specific source.</summary>
+    [JsonPropertyName("refreshIntervalHours")]
+    public int? RefreshIntervalHours { get; init; }
+
+    /// <summary>Overrides which cache folder the auto-update mechanism writes a downloaded copy of this source to.</summary>
+    [JsonPropertyName("downloadTarget")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public DownloadTarget? DownloadTarget { get; init; }
+
+    /// <summary>GitHub coordinates this source is fetched from, if hosted there. <see cref="Url"/>/<see cref="DownloadUrl"/> are computed from these, not set directly.</summary>
+    [JsonPropertyName("github")]
+    public ManifestGithubDto? Github { get; init; }
+
+    /// <summary>
+    /// Filename (relative to this manifest's directory, same convention as <see cref="File"/>) of this
+    /// source's own per-source conflict-resolution rule file (#181) — a <see cref="ConflictResolutionRuleFile"/>.
+    /// Absent means no rules are loaded for this source (equivalent to an empty rule file).
+    /// </summary>
+    [JsonPropertyName("ruleFile")]
+    public string? RuleFile { get; init; }
+
+    /// <summary>
+    /// Filename (relative to this manifest's directory, same convention as <see cref="File"/>) of this
+    /// source's own per-source title-alias file (#181) — a <see cref="SourceAliasRuleFile"/>. Absent
+    /// means no aliases are loaded for this source (equivalent to an empty alias file).
+    /// </summary>
+    [JsonPropertyName("sourceAliasFile")]
+    public string? SourceAliasFile { get; init; }
+}

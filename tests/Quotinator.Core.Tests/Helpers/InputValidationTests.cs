@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 
@@ -38,6 +39,48 @@ public class InputValidationTests
 
     #endregion
 
+    #region TryNormalizeLang
+
+    /// <summary>#216 fix: a mixed/upper-case lang value must be validated and lowercased in one step.</summary>
+    [TestMethod]
+    [DataRow("EN", "en")]
+    [DataRow("nl", "nl")]
+    [DataRow("En-Gb", "en-gb")]
+    [DataRow("ZH-HANS", "zh-hans")]
+    public void TryNormalizeLang_ValidCode_ReturnsTrueAndLowercases(string input, string expected)
+    {
+        string? lang = input;
+        var ok = InputValidation.TryNormalizeLang(ref lang);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(expected, lang);
+    }
+
+    [TestMethod]
+    public void TryNormalizeLang_Null_ReturnsTrueAndLeavesNull()
+    {
+        string? lang = null;
+        var ok = InputValidation.TryNormalizeLang(ref lang);
+
+        Assert.IsTrue(ok);
+        Assert.IsNull(lang);
+    }
+
+    [TestMethod]
+    [DataRow("english")]
+    [DataRow("en_GB")]
+    [DataRow("123")]
+    public void TryNormalizeLang_InvalidCode_ReturnsFalseAndLeavesUnchanged(string input)
+    {
+        string? lang = input;
+        var ok = InputValidation.TryNormalizeLang(ref lang);
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual(input, lang, "Must not mutate the value on a failed validation");
+    }
+
+    #endregion
+
     #region ValidTypes
 
     [TestMethod]
@@ -56,6 +99,15 @@ public class InputValidationTests
     {
         Assert.IsFalse(InputValidation.ValidTypes.Contains("film"));
         Assert.IsFalse(InputValidation.ValidTypes.Contains("Movie")); // case-sensitive
+    }
+
+    [TestMethod]
+    public void ValidTypes_MatchesQuoteTypeEnumExactly()
+    {
+        var expected = Enum.GetValues<QuoteType>()
+            .Where(t => t != QuoteType.Unknown)
+            .Select(t => t.ToString().ToLowerInvariant());
+        CollectionAssert.AreEquivalent(expected.ToList(), InputValidation.ValidTypes.ToList());
     }
 
     #endregion
@@ -100,6 +152,15 @@ public class InputValidationTests
         Assert.IsFalse(InputValidation.ValidGenres.Contains("scifi"));    // missing hyphen
         Assert.IsFalse(InputValidation.ValidGenres.Contains("SciFi"));    // wrong casing
         Assert.IsFalse(InputValidation.ValidGenres.Contains("cartoon"));
+    }
+
+    [TestMethod]
+    public void ValidGenres_MatchesGenreEnumExactly()
+    {
+        var expected = Enum.GetValues<Genre>()
+            .Where(g => g != Genre.Unknown)
+            .Select(g => JsonNamingPolicy.KebabCaseLower.ConvertName(g.ToString()));
+        CollectionAssert.AreEquivalent(expected.ToList(), InputValidation.ValidGenres.ToList());
     }
 
     #endregion

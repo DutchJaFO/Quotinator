@@ -1,0 +1,220 @@
+{
+  "rules": [
+    {
+      "entityId": "1aa241c0-9a8f-e348-9d67-fdae91c0f33b",
+      "existingRecord": { "quoteText": "Frankly, my dear, I don't give a damn.", "source": "Gone With the Wind", "date": "1939", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Frankly, my dear, I don't give a damn.", "source": "Gone with the Wind", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "0f7f3ce6-b269-984d-bbd7-fdefd1596817",
+      "existingRecord": { "quoteText": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.", "source": "On The Waterfront", "date": "1954", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.", "source": "On the Waterfront", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "fc60dfad-226f-4b41-b6b3-5b55eb8836e1",
+      "existingRecord": { "quoteText": "Here's looking at you, kid.", "source": "Casablanca", "date": "1942", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Here's looking at you, kid.", "source": "Casablanca", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "64287d95-076b-814f-8119-c1c7689eb32e",
+      "existingRecord": { "quoteText": "Go ahead, make my day.", "source": "Sudden Impact", "date": "1983", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Go ahead, make my day.", "source": "Sudden Impact", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "293bdf5c-58c7-3f4c-8833-49ab4b0ce578",
+      "existingRecord": { "quoteText": "May the Force be with you.", "source": "Star Wars", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "May the Force be with you.", "source": "Star Wars", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "2f1fdc4c-726a-a24c-ae63-bc441a7a99ce",
+      "existingRecord": { "quoteText": "They call me Mister Tibbs!", "source": "In the Heat of the Night", "date": "1967", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "They call me Mister Tibbs!", "source": "In the Heat of the Night", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "255047c3-45c3-1b48-b69d-90fde26ac421",
+      "existingRecord": { "quoteText": "A census taker once tried to test me. I ate his liver with some fava beans and a nice Chianti.", "source": "The Silence of the Lambs", "date": "1991", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "A census taker once tried to test me. I ate his liver with some fava beans and a nice Chianti.", "source": "The Silence of the Lambs", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "c995935b-18ce-0745-9f71-cc0d5d6a0a27",
+      "existingRecord": { "quoteText": "There's no place like home.", "source": "The Wizard of Oz", "date": "1939", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "There's no place like home.", "source": "The Wizard of Oz", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "f673643f-ca91-dd41-a82d-67f75cd17b96",
+      "existingRecord": { "quoteText": "Show me the money!", "source": "Jerry Maguire", "date": "1996", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Show me the money!", "source": "Jerry Maguire", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "d1eb52a2-f3a9-c446-8036-5dc745359386",
+      "existingRecord": { "quoteText": "You can't handle the truth!", "source": "A Few Good Men", "date": "1992", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "You can't handle the truth!", "source": "A Few Good Men", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "b0645d78-8a82-7b45-8233-c1be84d2361a",
+      "existingRecord": { "quoteText": "After all, tomorrow is another day!", "source": "Gone With the Wind", "date": "1939", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "After all, tomorrow is another day!", "source": "Gone with the Wind", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "f9baf5ab-1591-834a-b621-cd41c3287fcb",
+      "existingRecord": { "quoteText": "Round up the usual suspects.", "source": "Casablanca", "date": "1942", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Round up the usual suspects.", "source": "Casablanca", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "5004fdad-72a6-fc46-9f88-43280926ce83",
+      "existingRecord": { "quoteText": "You're gonna need a bigger boat.", "source": "Jaws", "date": "1975", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "You're gonna need a bigger boat.", "source": "Jaws", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "99346a07-8912-e84d-9971-234ea8c0c1b1",
+      "existingRecord": { "quoteText": "I'll be back.", "source": "The Terminator", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "I'll be back.", "source": "The Terminator", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "b7ccf85a-1f3d-f24a-967b-f01b16e2a6f0",
+      "existingRecord": { "quoteText": "If you build it, he will come.", "source": "Field of Dreams", "date": "1989", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "If you build it, he will come.", "source": "Field of Dreams", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "81d801ff-65c1-dd40-bde5-815a3b683140",
+      "existingRecord": { "quoteText": "Mama always said life was like a box of chocolates. You never know what you're gonna get.", "source": "Forrest Gump", "date": "1994", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Mama always said life was like a box of chocolates. You never know what you're gonna get.", "source": "Forrest Gump", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "b2c46906-6a94-c14b-957a-4b67ace38167",
+      "existingRecord": { "quoteText": "We rob banks.", "source": "Bonnie and Clyde", "date": "1967", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "We rob banks.", "source": "Bonnie and Clyde", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "60ad00c7-b5c2-8349-a0ca-21048f02b3be",
+      "existingRecord": { "quoteText": "We'll always have Paris.", "source": "Casablanca", "date": "1942", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "We'll always have Paris.", "source": "Casablanca", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "33c1b100-5560-fd45-b509-0fe270ebad99",
+      "existingRecord": { "quoteText": "I see dead people.", "source": "The Sixth Sense", "date": "1999", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "I see dead people.", "source": "The Sixth Sense", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "bde0619e-a69c-bd46-b430-c53f700d6e46",
+      "existingRecord": { "quoteText": "It's alive! It's alive!", "source": "Frankenstein", "date": "1931", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "It's alive! It's alive!", "source": "Frankenstein", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "42639f23-503b-3844-8efb-eaf95c5ba271",
+      "existingRecord": { "quoteText": "Houston, we have a problem.", "source": "Apollo 13", "date": "1995", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Houston, we have a problem.", "source": "Apollo 13", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "3f6938e7-1675-4647-a910-4c0ba35043d9",
+      "existingRecord": { "quoteText": "There's no crying in baseball!", "source": "A League of their Own", "date": "1992", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "There's no crying in baseball!", "source": "A League of Their Own", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "053ebeb0-e2ef-b74c-a6aa-53965f8f0137",
+      "existingRecord": { "quoteText": "As God is my witness, I'll never be hungry again.", "source": "Gone With the Wind", "date": "1939", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "As God is my witness, I'll never be hungry again.", "source": "Gone with the Wind", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "44b5c35c-f19e-2444-978b-1da5007b755b",
+      "existingRecord": { "quoteText": "Mrs. Robinson, you're trying to seduce me. Aren't you?", "source": "The Graduate", "date": "1967", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Mrs. Robinson, you're trying to seduce me. Aren't you?", "source": "The Graduate", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "4989bd56-2a9a-7f48-8a76-b307fa50a44c",
+      "existingRecord": { "quoteText": "Elementary, my dear Watson.", "source": "The Adventures of Sherlock Holmes", "date": "1939", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Elementary, my dear Watson.", "source": "The Adventures of Sherlock Holmes", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "6e372d8f-b718-704d-a5e9-67976bba6918",
+      "existingRecord": { "quoteText": "Here's Johnny!", "source": "The Shining", "date": "1980", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Here's Johnny!", "source": "The Shining", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "62e4ea28-ef5d-554b-a78f-e73a707afe3a",
+      "existingRecord": { "quoteText": "Is it safe?", "source": "Marathon man", "date": "1976", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Is it safe?", "source": "Marathon Man", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "d29cabf3-5758-5449-a6fe-fd1f3d57a874",
+      "existingRecord": { "quoteText": "Hasta la vista, baby.", "source": "Terminator 2: Judgment Day", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Hasta la vista, baby.", "source": "Terminator 2: Judgment Day", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "d2d3f85d-3049-2c47-b4cf-5cad4c6d0561",
+      "existingRecord": { "quoteText": "Hello, gorgeous.", "source": "Funny Girl", "date": "1968", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Hello, gorgeous.", "source": "Funny Girl", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "1dee96b7-c8cd-3643-99d4-4615a5177ee2",
+      "existingRecord": { "quoteText": "Listen to them. Children of the night. What music they make.", "source": "Dracula", "date": "1931", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Listen to them. Children of the night. What music they make.", "source": "Dracula", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "6b108079-c9a0-1745-b3f4-56305be78a20",
+      "existingRecord": { "quoteText": "Oh, no, it wasn't the airplanes. It was Beauty killed the Beast.", "source": "King Kong", "date": "1933", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Oh, no, it wasn't the airplanes. It was Beauty killed the Beast.", "source": "King Kong", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "199b7450-2b5a-ef4c-ae96-6851585158f7",
+      "existingRecord": { "quoteText": "A martini. Shaken, not stirred.", "source": "Goldfinger", "date": "1964", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "A martini. Shaken, not stirred.", "source": "Goldfinger", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "088603c0-b35a-1b48-977d-ca08489a0cbb",
+      "existingRecord": { "quoteText": "Life is a banquet, and most poor suckers are starving to death!", "source": "Auntie Mame", "date": "1958", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Life is a banquet, and most poor suckers are starving to death!", "source": "Auntie Mame", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "0338231a-680a-9047-b934-238692ec684e",
+      "existingRecord": { "quoteText": "Carpe diem. Seize the day, boys. Make your lives extraordinary.", "source": "Dead Poets Society", "date": "1989", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Carpe diem. Seize the day, boys. Make your lives extraordinary.", "source": "Dead Poets Society", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "0c5bbbb6-d2d1-8147-b4eb-ca35070f8003",
+      "existingRecord": { "quoteText": "Snap out of it!", "source": "Moonstruck", "date": "1987", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Snap out of it!", "source": "Moonstruck", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    },
+    {
+      "entityId": "8c3c554d-f843-2144-b08b-42993c657f6f",
+      "existingRecord": { "quoteText": "Nobody puts Baby in a corner.", "source": "Dirty Dancing", "date": "1987", "character": null, "author": null, "type": "movie", "genres": [] },
+      "incomingRecord": { "quoteText": "Nobody puts Baby in a corner.", "source": "Dirty Dancing", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "fields": [ { "field": "date", "resolution": "Keep" } ]
+    }
+  ]
+}

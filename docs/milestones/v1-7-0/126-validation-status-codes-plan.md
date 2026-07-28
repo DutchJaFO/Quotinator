@@ -16,7 +16,7 @@ Quote endpoints return HTTP 200 for validation failures (unrecognised genre, unr
 ## Changes made
 
 - All validation errors in `GetRandom`, `GetAll`, and `GetSearch` handlers in `QuoteEndpoints.cs` now return the correct 4xx status code.
-- `YearParameterSchemaTransformer` extracted from an anonymous lambda to a named `IOpenApiOperationTransformer` class in `src/Quotinator.Api/OpenApi/` (makes the path/param sets unit-testable).
+- `YearParameterSchemaTransformer` extracted from an anonymous lambda to a named `IOpenApiOperationTransformer` class in `src/Quotinator.Api/OpenApi/` (makes the path/param sets unit-testable). Later generalised and renamed to `NumericParameterSchemaTransformer` by #194, once the same path/name-registry gap this class introduced was found to also affect `page`/`pageSize`/`n`/`limit`.
 - `YearParseError` helper updated to accept a `paramName` argument; all 12 call sites use `nameof()`.
 - `n`, `page`, `pageSize`, `limit` changed from `Status400BadRequest` to `Status422UnprocessableEntity` for consistency with year params (both are semantic/value errors, not structural failures).
 - `ApiMessages.YearParamNotInteger` added with `{0}` placeholder; error detail names the specific failing parameter.
@@ -47,7 +47,7 @@ Quote endpoints return HTTP 200 for validation failures (unrecognised genre, unr
 | 8 | ✅ | Unknown `lang` → 400 | Unit test | `QuoteEndpointsTests.GetRandom/GetAll/Search_InvalidLang_ReturnsBadRequest` |
 | 9 | ✅ | Valid filters with no matching data → 200 `NoResults` | Unit test | `QuoteEndpointsTests.GetRandom_ValidFilterNoMatches_ReturnsNoResultsEnvelope` |
 | 10 | ✅ | Two-digit decade shorthand → correct year range | Unit test | `QuoteEndpointsTests.GetRandom/GetAll_DecadeShorthand2Digit40/80/00` |
-| 11 | ✅ | `YearParameterSchemaTransformer` patches year params to integer type on correct paths only | Unit test | `YearParameterSchemaTransformerTests` (10 tests) |
+| 11 | ✅ | `YearParameterSchemaTransformer` patches year params to integer type on correct paths only | Unit test | `YearParameterSchemaTransformerTests` (10 tests) — class since renamed `NumericParameterSchemaTransformer`/`NumericParameterSchemaTransformerTests` and widened to cover `page`/`pageSize`/`n`/`limit` by #194; this row records what #126 itself verified |
 | 12 | ✅ | Error message names the specific failing parameter | Unit test | `QuoteEndpointsTests.GetRandom_NNotInteger_Returns422` asserts detail contains `"n"` |
 | 13 | ⬜ | T1 — manual: `GET /api/v1/quotes/random?type=Tv` → 422, message names `type` | T1 live | Run in VS; check status code and body in Scalar or browser |
 | 14 | ⬜ | T1 — manual: `GET /api/v1/quotes/random?decade=80` → 200, results from 1980–1989 | T1 live | Run in VS; verify `quote.year` values in response are in 1980–1989 range |

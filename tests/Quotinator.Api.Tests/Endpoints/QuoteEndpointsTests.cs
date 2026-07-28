@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
 using Quotinator.Data.Testing.NoOps;
+using Quotinator.Core.Repositories;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 
@@ -20,6 +21,10 @@ public class QuoteEndpointsTests
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
+                services.AddSingleton<ISeriesNameResolver>(new FakeSeriesNameResolver(
+                    new Dictionary<string, Guid> { [FakeQuoteService.MiddleEarthSeries.Name] = Guid.Parse(FakeQuoteService.MiddleEarthSeries.Id) }));
+                services.AddSingleton<IUniverseNameResolver>(new FakeUniverseNameResolver(
+                    new Dictionary<string, Guid> { [FakeQuoteService.MiddleEarthUniverse.Name] = Guid.Parse(FakeQuoteService.MiddleEarthUniverse.Id) }));
             }));
 
     // ── /random — envelope shape ──────────────────────────────────────────
@@ -527,13 +532,22 @@ public class QuoteEndpointsTests
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
-    /// <summary>pageSize=0 is semantically out of range — returns 422.</summary>
+    /// <summary>pageSize=0 means "every item as one page" under #195's contract — succeeds, doesn't 422.</summary>
     [TestMethod]
-    public async Task GetAll_PageSizeZero_Returns422()
+    public async Task GetAll_PageSizeZero_Succeeds()
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=0");
-        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>150 exceeds the old 100 max but not the new 500 max — succeeds under #195's contract.</summary>
+    [TestMethod]
+    public async Task Quotes_PageSize150_NowSucceeds()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=150");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
 
     /// <summary>A non-integer pageSize is the same kind of error as yearFrom=5f — returns 422.</summary>
@@ -543,6 +557,43 @@ public class QuoteEndpointsTests
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=x");
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>pageSize above 500 is rejected outright, never silently clamped.</summary>
+    [TestMethod]
+    public async Task Quotes_PageSizeAbove500_Returns422NotSilentClamp()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=501");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
+    }
+
+    /// <summary>A negative pageSize is out of range — returns 422.</summary>
+    [TestMethod]
+    public async Task Quotes_PageSizeNegative_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=-1");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>An omitted pageSize defaults to the shared standard of 20.</summary>
+    [TestMethod]
+    public async Task Quotes_PageSizeOmitted_DefaultsTo20()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes");
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32());
+    }
+
+    /// <summary>Requesting a page past the last page is rejected, not silently clamped or emptied.</summary>
+    [TestMethod]
+    public async Task Quotes_PageBeyondLast_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=1&page=99");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page beyond the last page must be rejected");
     }
 
     /// <summary>limit=0 on search is semantically out of range — returns 422.</summary>
@@ -899,5 +950,84 @@ public class QuoteEndpointsTests
         var body = await response.Content.ReadAsStringAsync();
         StringAssert.Contains(body, "decade");
         Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
+    }
+
+    // ── #192: Series/Universe filters ───────────────────────────────────────
+
+    /// <summary>?seriesId=&lt;the fixture's Series id&gt; returns only quotes in that Series.</summary>
+    [TestMethod]
+    public async Task GetAll_SeriesFilter_ReturnsOnlyThatSeriesQuotes()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes?seriesId={FakeQuoteService.MiddleEarthSeries.Id}");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
+        Assert.AreEqual(1, items.Count);
+        Assert.AreEqual(FakeQuoteService.Tolkien.Id, items[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>?universeId=&lt;the fixture's Universe id&gt; returns quotes across every Series in it.</summary>
+    [TestMethod]
+    public async Task GetAll_UniverseFilter_ReturnsQuotesAcrossEverySeriesInThatUniverse()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes?universeId={FakeQuoteService.MiddleEarthUniverse.Id}");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
+        Assert.AreEqual(1, items.Count);
+        Assert.AreEqual(FakeQuoteService.Tolkien.Id, items[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>/random supports the Universe filter the same way /quotes does.</summary>
+    [TestMethod]
+    public async Task GetRandom_UniverseFilter_ReturnsOnlyThatUniverseQuotes()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/random?n=10&universeId={FakeQuoteService.MiddleEarthUniverse.Id}");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
+        Assert.AreEqual(1, items.Count);
+        Assert.AreEqual(FakeQuoteService.Tolkien.Id, items[0].GetProperty("id").GetString());
+    }
+
+    /// <summary>Supplying both seriesId and series (the id- and name-valued forms of the same filter)
+    /// returns 422 — #196's mutual-exclusivity rule, proven on a real endpoint.</summary>
+    [TestMethod]
+    public async Task GetAll_BothSeriesIdAndSeriesSupplied_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync(
+            $"/api/v1/quotes?seriesId={FakeQuoteService.MiddleEarthSeries.Id}&series={FakeQuoteService.MiddleEarthSeries.Name}");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>A malformed seriesId (not a GUID) returns 422, not a bare framework 400.</summary>
+    [TestMethod]
+    public async Task GetAll_MalformedSeriesId_Returns422()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?seriesId=not-a-guid");
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    /// <summary>A series name that doesn't resolve to anything is a legitimate zero-results case
+    /// (200 + empty items), not an error — #196's NotFound-is-not-an-error distinction, proven
+    /// end to end through the resolver.</summary>
+    [TestMethod]
+    public async Task GetAll_SeriesNameDoesNotResolve_ReturnsNoResultsNotError()
+    {
+        using var factory = CreateFactory();
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?series=DoesNotExist");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("totalCount").GetInt32());
     }
 }

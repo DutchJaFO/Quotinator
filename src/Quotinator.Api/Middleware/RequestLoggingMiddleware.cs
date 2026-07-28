@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Quotinator.Data.Helpers;
 
 namespace Quotinator.Api.Middleware;
 
@@ -34,8 +35,8 @@ public class RequestLoggingMiddleware : IMiddleware
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
         var id     = Guid.NewGuid().ToString("N")[..8];
-        var method = SanitiseForLog(context.Request.Method);
-        var url    = SanitiseForLog(context.Request.Path + context.Request.QueryString.Value);
+        var method = LogSanitizer.ForLog(context.Request.Method);
+        var url    = LogSanitizer.ForLog(context.Request.Path + context.Request.QueryString.Value);
         var (tag, isDebug) = Categorise(context.Request.Path.Value ?? string.Empty);
 
         Log(isDebug, "{Tag:l} {Id:l} {Method:l} {Url:l}",
@@ -75,9 +76,6 @@ public class RequestLoggingMiddleware : IMiddleware
 
         return ("[Web - Request]", true);
     }
-
-    private static string SanitiseForLog(string value)
-        => value.Replace('\r', ' ').Replace('\n', ' ');
 
     private static bool IsStaticAsset(string path)
     {

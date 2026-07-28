@@ -1,4 +1,7 @@
 using Dapper;
+using Quotinator.Data.Entities;
+using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Helpers;
 
@@ -16,15 +19,46 @@ public abstract class DatabaseConfiguration
     /// </summary>
     public void Configure()
     {
+        // Dapper's own built-in typeMap resolves a bare Guid parameter's DbType before it ever
+        // consults a registered ITypeHandler, so GuidHandler.SetValue is silently skipped for
+        // outbound parameters unless the built-in mapping is removed first — see GuidHandler's
+        // remarks and GuidExtensions.ToCanonicalId, which is this project's real casing choke point.
+        SqlMapper.RemoveTypeMap(typeof(Guid));
         SqlMapper.AddTypeHandler(new GuidHandler());
         SqlMapper.AddTypeHandler(new SafeDateHandler());
+        RegisterJsonHandler<IReadOnlyList<string>>();
+        RegisterEnumHandler<ChangeAction>();
+        RegisterEnumHandler<InitiatorType>();
+        // DuplicateResolutionPolicy lives in Quotinator.Data.Import (not a consumer's domain), same as
+        // ChangeAction/InitiatorType above — belongs here, not in a subclass's RegisterDomainHandlers().
+        // Previously only registered via QuotinatorDapperConfiguration, which meant Quotinator.Data.Tests
+        // (which only calls the base Configure()) could never write a SystemImportAction row at all.
+        RegisterEnumHandler<DuplicateResolutionPolicy>();
+        // ImportActionStatus/ImportActionKind are closed sets this project's own coordinator logic
+        // assigns and transitions between (see ADR 008) — same category as DuplicateResolutionPolicy
+        // above, registered here rather than in a consumer's RegisterDomainHandlers().
+        RegisterEnumHandler<ImportActionStatus>();
+        RegisterEnumHandler<ImportActionKind>();
+        // ImportBatchType/ImportBatchStatus never interact with a consumer-defined entity — pure
+        // import/seed bookkeeping, the same category as DuplicateResolutionPolicy above (see ADR 004's
+        // consumer-entity-interaction test, issue #158). Moved here from a consumer's
+        // RegisterDomainHandlers() for the same reason DuplicateResolutionPolicy was: Quotinator.Data.Tests
+        // (which only calls this base Configure()) needs to read/write an ImportBatch row directly.
+        RegisterEnumHandler<ImportBatchType>();
+        RegisterEnumHandler<ImportBatchStatus>();
+        // CompletenessStatus (#165) is assigned/transitioned entirely by this project's own
+        // CompletenessGuard — same category as ImportActionStatus above, not a consumer's domain enum.
+        RegisterEnumHandler<CompletenessStatus>();
+        // SeedBatchOrigin (#153) backs System_SourceFileOverrides.Origin — pure import/seed
+        // bookkeeping, the same category as ImportBatchType/ImportBatchStatus above.
+        RegisterEnumHandler<SeedBatchOrigin>();
         RegisterDomainHandlers();
     }
 
     /// <summary>
     /// Override to register domain-specific type handlers. Called by <see cref="Configure"/> after
-    /// the generic handlers are registered. Use <see cref="RegisterEnumHandler{TEnum}"/> rather than
-    /// calling <see cref="SqlMapper"/> directly.
+    /// the generic handlers are registered. Use <see cref="RegisterEnumHandler{TEnum}"/> or
+    /// <see cref="RegisterJsonHandler{T}"/> rather than calling <see cref="SqlMapper"/> directly.
     /// </summary>
     protected virtual void RegisterDomainHandlers() { }
 
@@ -34,4 +68,15 @@ public abstract class DatabaseConfiguration
     /// </summary>
     protected void RegisterEnumHandler<TEnum>() where TEnum : struct, Enum
         => SqlMapper.AddTypeHandler(new SafeEnumHandler<TEnum>());
+
+    /// <summary>
+    /// Registers a <see cref="JsonHandler{T}"/> for <typeparamref name="T"/> with Dapper, so any
+    /// column typed as <typeparamref name="T"/> round-trips through JSON text automatically. Call
+    /// once per concrete <typeparamref name="T"/> needed — e.g. from <see cref="RegisterDomainHandlers"/>
+    /// when a consuming project needs to read a JSON column (such as a future typed read of
+    /// <c>System_ImportConflicts.MergedFields</c> as <c>IReadOnlyDictionary&lt;string, string&gt;</c>)
+    /// as something other than the raw string it's stored as today.
+    /// </summary>
+    protected static void RegisterJsonHandler<T>()
+        => SqlMapper.AddTypeHandler(new JsonHandler<T>());
 }

@@ -1,8 +1,9 @@
 # #57 — Seed script: dedup inconsistent
 
-**Status:** Partially resolved — awaiting #58  
-**GitHub issue:** #57  
+**Status:** Waiting for release
+**GitHub issue:** #57
 **Closed by:** #61
+**Tiers required:** None — Problem 4's fix lives entirely in `QuotinatorDatabaseInitializer` (engine layer); it never touches `.razor`/Blazor/pre-Blazor middleware (T1), the Dockerfile/publish output/`Program.cs` startup/SSL config (T2), or any T3 surface. Fully covered by unit tests; no live verification gate applies.
 
 ---
 
@@ -10,15 +11,37 @@
 
 The seed script accumulated duplicates because the old `data/quotes.json` was regenerated from multiple sources without consistent deduplication. Two different datasets could emit the same quote text with different IDs.
 
+## Spec requirements (Problems 1–4)
+
+1. Each source produces its own output file — no combined/concatenated `quotes.json` that could silently merge or drop records
+2. Cross-source duplicate quotes (same ID appearing in more than one source file) are detected and resolved according to the conflict-resolution policy, not silently overwritten or duplicated
+3. Duplicate handling is deterministic and consistent regardless of source file processing order
+4. The seeder creates one `ImportBatch` row per source dataset and links every record from that source to it via `ImportBatchId`, with `ImportBatches.RecordCount` matching the actual number of linked rows
+
+---
+
+## Step status
+
+1. [x] One file per source (no combined output) — #61
+2. [x] Cross-source duplicate detection and resolution via conflict-resolution policy — #61
+3. [x] Deterministic, order-independent duplicate handling — #61
+4. [x] One `ImportBatch` row per source, all records linked via `ImportBatchId`, `RecordCount` accurate — #58 + this session
+
+---
+
 ## Resolution
 
 Problems 1–3 are eliminated by #61: each source writes its own file; cross-source deduplication and conflict resolution happen in `DatabaseInitializer` at seeding time, driven by the conflict-resolution policy (#64).
 
-Problem 4 (ImportBatch entries) cannot be implemented until #58 lands. Once #58 is done, the seed script must create one `ImportBatch` row per source dataset and link all records from that source to it via `ImportBatchId`.
+Problem 4 (ImportBatch entries) required #58 to land first. With #58's `Type`/`Url` fix in place, the seeder creates one `ImportBatch` row per source dataset and links every record from that source to it via `ImportBatchId`; `ImportBatches.RecordCount` is verified to match the actual linked row count per batch.
+
+**Note (2026-06-30):** this fix is committed on `feature/data-import-sources`, fully verified by unit tests (no live tier required — see Tiers line above). It has not shipped in any release yet — "pending release", not "done".
 
 ## Verification
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1–3 | ✅ | Dedup/conflict/overwrite concerns eliminated | Unit test | `RepositoryStructureTests.SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` — one file per source, no combined output |
-| 4 | ❌ | Seed script creates one ImportBatch per source | Unit test | Requires #58 — test to be written when #58 lands |
+| 1 | ✅ | One file per source, no combined output | Unit test | `RepositoryStructureTests.SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` |
+| 2 | ✅ | Cross-source duplicates resolved per conflict-resolution policy | Unit test | `RepositoryStructureTests.SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` |
+| 3 | ✅ | Deterministic, order-independent duplicate handling | Unit test | `RepositoryStructureTests.SeedScript_WithNoFetch_ProducesFilesMatchingBaseline` |
+| 4 | ✅ | One ImportBatch per source, records linked via ImportBatchId, RecordCount accurate | Unit test | `ImportBatchesTests.Seeding_TwoSourceFiles_QuotesLinkToOwningBatchAndRecordCountMatches` |

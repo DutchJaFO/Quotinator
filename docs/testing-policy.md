@@ -69,11 +69,33 @@ Every bug fix must be accompanied by tests that close the gap the bug exposed. T
 **Mandatory steps (in this order):**
 
 1. **Reproduce the bug with a failing test before writing any fix.** A test that was green before the bug existed and is now red proves the bug is real and gives you a clear pass/fail gate. If a unit test is not possible (e.g. the bug only manifests in a deployed HA add-on), document the exact steps and observed output that reproduce it.
+
+   **Negative/absence assertions need a canary, not just a red-before-fix run — and this applies equally to live/T2 smoke-test verification, not only unit tests.** A check of the form "X is not present" (a unit test asserting a message no longer contains a specific string, or a live smoke-test step confirming a response no longer shows old wording) can go red-then-green against the real bug while still being weak — it never proves the thing that's supposed to be present instead (e.g. an interpolated parameter) actually is, and for a live check specifically, it never proves the *same repro steps* would actually have caught the original bug rather than happening to already avoid it.
+
+   For a unit test: after the real fix is green, deliberately mutate the fixed code to reintroduce a *plausible* variant of the bug (e.g. drop a string interpolation entirely and hardcode a value instead), confirm the test fails with a clear assertion message, then revert the mutation (`git checkout` the file — never leave it in) and reconfirm green.
+
+   For a live/T2 smoke-test step: run the *exact same* repro steps against a build from the commit immediately before the fix (e.g. `git worktree add <path> <pre-fix-sha>`, `docker build` from that worktree with a distinct tag), confirm the old/broken behaviour actually appears, then tear down the canary worktree/image/container and re-confirm the real fix's build still shows correct behaviour. This is on top of the red-before-fix run in step 1, not a replacement for it — it validates the *test or smoke-test method's* sensitivity, not the fix's correctness.
 2. **Write the fix.** The test must turn green.
 3. **Check for related coverage gaps.** A bug often reveals an untested code path, not just one missing assertion. Ask: what other inputs or states could trigger the same class of failure? Add tests for those too.
 4. **All tests from steps 1–3 must be committed in the same PR as the fix.** A fix without a regression test is incomplete.
 
 The test project for the data layer (`Quotinator.Core.Tests`, `Quotinator.Data.Tests`) uses Dapper directly for test setup — the same reason the production data layer does. Add Dapper as an explicit `PackageReference` in any test project that manipulates SQLite state directly.
+
+## Endpoint test conventions
+
+Two gaps found live during #163's T2 pass turned out not to be one-off mistakes but missing conventions — each had already been solved once elsewhere in the codebase, but nothing forced the next endpoint to inherit the fix.
+
+### File-upload endpoints need a genuinely bodyless-request test
+
+Any endpoint accepting `IFormFile`/`[FromForm]` input must have a test that sends a request with **no body and no `Content-Type` at all** — not just an empty multipart form. Minimal API's automatic form binding requires a form content-type to even attempt binding; a request with none fails at the framework's own routing/binding layer, not as a normal thrown exception, bypassing `BadRequestExceptionHandler` and producing a bare, uninformative `400` instead of the endpoint's own validation message. An empty-form test built with `MultipartFormDataContent` (e.g. a `BuildForm(includeFile: false)`-style helper) does **not** exercise this path — it still sends a real, if empty, multipart body, so it never reaches the genuinely bodyless case.
+
+Test it with `client.PostAsync(url, content: null)` — see `ImportEndpointTests.Import_NoBodyAndNoBatchId_Returns422` for the established pattern. This gap shipped on `POST /import` first (fixed by binding `HttpRequest` manually and checking `HasFormContentType` before reading the form), then shipped again on a newer file-upload endpoint (`POST /import/actions/bulk-decide`, #163) — the fix pattern already existed in the codebase, but no test existed yet on the new endpoint to require it. When adding any new file-upload endpoint, copy the bodyless-request test alongside it from the start, not after a bug report.
+
+### JSON round-trip tests must exercise the app's actual serialization configuration, not bare `JsonSerializer`
+
+A test asserting that data round-trips through JSON across an HTTP boundary (e.g. "endpoint A's response parses back into a valid request for endpoint B") must go through the real pipeline — a `WebApplicationFactory` client call — or explicitly pass the `JsonSerializerOptions` the app actually registers (`Program.cs`'s `ConfigureHttpJsonOptions`, currently camelCase). A test that calls `JsonSerializer.Serialize`/`Deserialize` directly with no options on both the write and read side will silently agree with itself on `System.Text.Json`'s case-sensitive, PascalCase-only library default — proving nothing about whether the real app can round-trip its own output, since the real app's HTTP responses are camelCase.
+
+This class of bug is invisible to any in-process test that bypasses the framework's real JSON configuration — only a live HTTP round trip (T2, or a `WebApplicationFactory`-backed test using the app's real `HttpClient`) can catch it. If a unit-test-level round trip is used for speed instead, it must explicitly pass the app's real `JsonSerializerOptions`, never the library default. #163's export→bulk-decide round trip is the concrete case this rule comes from: the unit-test-level round trip used bare `JsonSerializer` calls and stayed green throughout development, while the identical round trip failed immediately over a real HTTP request until the mismatch was fixed.
 
 ## What to skip
 

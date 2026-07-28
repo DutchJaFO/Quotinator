@@ -7,8 +7,12 @@ namespace Quotinator.Api.Middleware;
 /// <summary>Maps <see cref="BadHttpRequestException"/> from parameter binding failures to a 422 response.</summary>
 /// <remarks>
 /// Safety net for any <see cref="BadHttpRequestException"/> that escapes the normal validation path.
-/// The primary year-param case is handled at the point of origin by <c>TryParseYear</c> so this
-/// handler fires only for unexpected binding failures on other parameter types.
+/// The primary year-param case is handled at the point of origin by <c>TryParseYear</c>, and
+/// <c>batchId</c> on the import-actions endpoints is handled the same way (declared <c>string?</c> and
+/// validated explicitly — see <c>ImportEndpoints.cs</c>), so this handler fires only for unexpected
+/// binding failures on other parameter types. Its message names only the numeric parameters because
+/// those are its only known remaining callers — if a future non-numeric parameter starts reaching it,
+/// fix it at the point of origin the same way rather than relying on this generic fallback.
 /// Registered before AddProblemDetails() so it runs first in the IExceptionHandler chain.
 /// </remarks>
 internal sealed class BadRequestExceptionHandler(IApiLocalizer localizer) : IExceptionHandler

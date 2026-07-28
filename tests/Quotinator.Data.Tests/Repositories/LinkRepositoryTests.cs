@@ -16,7 +16,7 @@ public class LinkRepositoryTests
     private string _tempDir         = null!;
     private string _dbPath          = null!;
     private IDbConnectionFactory _factory = null!;
-    private AuditWriter  _auditWriter    = null!;
+    private SystemAuditWriter _auditWriter = null!;
     private CallerContext _callerContext = null!;
     private WidgetTagLinkRepository _repo = null!;
 
@@ -55,19 +55,23 @@ public class LinkRepositoryTests
                 IsDeleted    INTEGER NOT NULL DEFAULT 0,
                 UNIQUE (WidgetId, TagId)
             );
-            CREATE TABLE AuditEntries (
-                Id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                TableName   TEXT    NOT NULL,
-                RecordId    TEXT,
-                Operation   TEXT    NOT NULL,
-                Agent       TEXT,
-                PerformedAt TEXT    NOT NULL
+            CREATE TABLE System_AuditEntries (
+                Id           TEXT    NOT NULL PRIMARY KEY,
+                TableName    TEXT    NOT NULL,
+                RecordId     TEXT,
+                Operation    TEXT    NOT NULL,
+                Agent        TEXT,
+                PerformedAt  TEXT    NOT NULL,
+                DateCreated  TEXT    NOT NULL,
+                DateModified TEXT,
+                DateDeleted  TEXT,
+                IsDeleted    INTEGER NOT NULL DEFAULT 0
             );
             """);
 
         _factory       = new SqliteConnectionFactory(_dbPath);
         _callerContext = new CallerContext();
-        _auditWriter   = new AuditWriter(_factory, _callerContext);
+        _auditWriter   = new SystemAuditWriter(_factory, _callerContext);
         _repo          = new WidgetTagLinkRepository(_factory, _auditWriter, _callerContext);
     }
 
@@ -110,7 +114,7 @@ public class LinkRepositoryTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         return conn.ExecuteScalar<int>(
-            "SELECT COUNT(*) FROM AuditEntries WHERE TableName = @t;", new { t = tableName });
+            "SELECT COUNT(*) FROM System_AuditEntries WHERE TableName = @t;", new { t = tableName });
     }
 
     // ── LinkAsync ─────────────────────────────────────────────────────────────

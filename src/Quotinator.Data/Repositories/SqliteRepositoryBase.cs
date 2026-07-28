@@ -8,7 +8,7 @@ namespace Quotinator.Data.Repositories;
 /// Infrastructure base for all SQLite repositories in Quotinator.Data.
 /// Provides the connection factory and the table name resolved from the <c>[Table]</c> attribute.
 /// Does not write audit entries — derive from <see cref="SqliteRepository{T}"/> for auditing,
-/// or from this class directly when audit recursion must be avoided (e.g. <see cref="AuditWriter"/>).
+/// or from this class directly when audit recursion must be avoided (e.g. <see cref="SystemAuditWriter"/>).
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
 public abstract class SqliteRepositoryBase<T> where T : class
@@ -23,6 +23,16 @@ public abstract class SqliteRepositoryBase<T> where T : class
         typeof(T).GetCustomAttribute<TableAttribute>()?.Name
         ?? throw new InvalidOperationException(
             $"{typeof(T).Name} must carry a [Table(\"..\")] attribute from Dapper.Contrib.Extensions.");
+
+    // Resolved once per T via ReflectedColumnMetadata's own cache. Property names double as column
+    // names for every entity today — no [Column] remapping exists anywhere in the codebase.
+    /// <summary>
+    /// Column metadata for <typeparamref name="T"/> — every persisted column (used to validate a
+    /// caller-supplied sort column before it reaches SQL, and to build <see cref="RepositorySql"/>'s
+    /// explicit SELECT column list instead of <c>SELECT *</c>) and, among those, every id column that
+    /// must be read through <c>LOWER(...)</c> — see ADR 012.
+    /// </summary>
+    protected static readonly IEntityColumnMetadata Columns = ReflectedColumnMetadata.For(typeof(T));
 
     /// <summary>Initialises the base with the connection factory.</summary>
     protected SqliteRepositoryBase(IDbConnectionFactory factory)

@@ -1,0 +1,17 @@
+#!/bin/sh
+#
+# post-commit hook: delete the reviewed commit draft after a successful commit.
+#
+# See docs/workflow/process.md "Commit message format and content" — a leftover
+# draft risks silently satisfying the commit-msg hook for a later, unrelated,
+# unreviewed commit. This hook automates that cleanup instead of relying on it
+# being done by hand every time. Safe to run unconditionally: post-commit only
+# fires after a commit actually succeeds (commit-msg rejections never reach
+# here), and removing a file that doesn't exist is a no-op.
+#
+# Install: cp scripts/hooks/post-commit .git/hooks/post-commit
+#          chmod +x .git/hooks/post-commit
+
+rm -f .claude/temp/commit-draft.md
+
+exit 0

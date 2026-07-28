@@ -2,6 +2,7 @@ using System.Reflection;
 using Dapper;
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Repositories;
@@ -22,6 +23,7 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
     private static readonly string LeftTableName    = GetTableName<TLeft>();
     private static readonly string RightTableName   = GetTableName<TRight>();
     private static readonly string JunctionTableName = GetTableName<TJunction>();
+    private static readonly IEntityColumnMetadata JunctionColumns = ReflectedColumnMetadata.For(typeof(TJunction));
 
     private readonly IDbConnectionFactory _factory;
     private readonly SqliteRepository<TLeft>              _leftRepo;
@@ -29,7 +31,7 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
     private readonly SqliteRestorableRepository<TJunction> _junctionRepo;
 
     /// <summary>Initialises with the three standard infrastructure dependencies.</summary>
-    protected SqliteLinkRepository(IDbConnectionFactory factory, IAuditWriter auditWriter, ICallerContext callerContext)
+    protected SqliteLinkRepository(IDbConnectionFactory factory, ISystemAuditWriter auditWriter, ICallerContext callerContext)
     {
         _factory      = factory;
         _leftRepo     = new SqliteRepository<TLeft>(factory, auditWriter, callerContext);
@@ -112,10 +114,10 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
     {
         var param = new
         {
-            leftId  = leftId.ToString("D").ToUpperInvariant(),
-            rightId = rightId.ToString("D").ToUpperInvariant()
+            leftId  = leftId.ToCanonicalId(),
+            rightId = rightId.ToCanonicalId()
         };
-        var sql = RepositorySql.SelectJunctionRow(JunctionTableName, LeftFkColumn, RightFkColumn);
+        var sql = RepositorySql.SelectJunctionRow(JunctionTableName, LeftFkColumn, RightFkColumn, JunctionColumns);
 
         if (unitOfWork is SqliteUnitOfWork uow)
         {
@@ -131,8 +133,8 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
     private async Task<IReadOnlyList<TJunction>> QueryActiveByFkAsync(
         string tableName, string fkColumn, Guid id, IUnitOfWork? unitOfWork)
     {
-        var param = new { parentId = id.ToString("D").ToUpperInvariant() };
-        var sql   = RepositorySql.SelectByForeignKey(tableName, fkColumn);
+        var param = new { parentId = id.ToCanonicalId() };
+        var sql   = RepositorySql.SelectByForeignKey(tableName, fkColumn, JunctionColumns);
 
         if (unitOfWork is SqliteUnitOfWork uow)
         {
@@ -150,7 +152,7 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
         where TEntity : RecordBase
     {
         var param = new { ids };
-        var sql   = RepositorySql.SelectByIds(tableName);
+        var sql   = RepositorySql.SelectByIds(tableName, ReflectedColumnMetadata.For(typeof(TEntity)));
 
         if (unitOfWork is SqliteUnitOfWork uow)
         {

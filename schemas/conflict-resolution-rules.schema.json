@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/DutchJaFO/Quotinator/main/schemas/conflict-resolution-rules.schema.json",
+  "title": "Quotinator Per-Source Conflict-Resolution Rule File",
+  "description": "A minimal, hand-authored set of rules (#181) that auto-resolve a field for a specific entity (Quote, Series, Universe, or any other type whose planner wires in ConflictRuleLookup) instead of leaving it staged Pending under the review duplicate-resolution policy. One rule file per bundled source, referenced from that source's own manifest.json entry via ruleFile. #153 (Phase 2) will later add a generated, declarative form of this same file shape.",
+  "type": "object",
+  "required": ["rules"],
+  "additionalProperties": false,
+  "properties": {
+    "rules": {
+      "type": "array",
+      "description": "Every entity this file declares a rule for. Empty for a source with no known recurring conflicts. Grouped by entity (one entry per entity), not flattened to one entry per field — a single entity can have more than one field in conflict at once. A single rules array can mix ids from more than one entity type (e.g. a Quote id alongside a Series id).",
+      "items": {
+        "type": "object",
+        "required": ["entityId", "existingRecord", "incomingRecord", "fields"],
+        "additionalProperties": false,
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The entity's own id (matched case-insensitively, per this project's id-comparison convention)."
+          },
+          "existingRecord": {
+            "type": "object",
+            "description": "The existing (already-seeded) side's complete field set, recorded at the time this rule was authored — lets a human reviewing this file see the whole record, not only the field(s) actually being resolved. Purely documentation, never read by the matching logic."
+          },
+          "incomingRecord": {
+            "type": "object",
+            "description": "The incoming (this source file's own) side's complete field set, recorded at the time this rule was authored. See existingRecord."
+          },
+          "fields": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Every field of this entity that this rule file resolves. Not limited to fields that actually disagree between the two sides — a Custom rule can also correct a field that's simply wrong or missing on both.",
+            "items": {
+              "type": "object",
+              "required": ["field", "resolution"],
+              "additionalProperties": false,
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The field name this rule governs (e.g. 'date', 'type', 'source', 'quoteText', 'character', 'author', 'originalLanguage', 'genres') — a key present in both existingRecord and incomingRecord."
+                },
+                "resolution": {
+                  "type": "string",
+                  "enum": ["Keep", "Replace", "Custom"],
+                  "description": "Keep — resolve to the existing (already-seeded) side's value. Replace — resolve to the incoming (this file's own) value. Custom — resolve to customValue, a value neither side actually has (e.g. correcting a field that's missing from both, not just disagreed upon)."
+                },
+                "customValue": {
+                  "type": "string",
+                  "description": "The value to use when resolution is Custom. Required when resolution is Custom; must be omitted otherwise."
+                }
+              },
+              "if": { "properties": { "resolution": { "const": "Custom" } } },
+              "then": { "required": ["field", "resolution", "customValue"] },
+              "else": { "not": { "required": ["customValue"] } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

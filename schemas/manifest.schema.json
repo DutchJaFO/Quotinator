@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/DutchJaFO/Quotinator/main/schemas/manifest.schema.json",
   "title": "Quotinator Source Manifest",
-  "description": "Ordered list of source files to import from a data/sources/ directory. Files are imported in the order listed; files not listed are appended alphabetically after listed entries.",
+  "description": "Ordered list of source files to import from a data/sources/ directory. Files are imported in the order listed; files not listed are appended alphabetically after listed entries. Each file entry is one of three kinds: local (file/name only, no provenance or download link), GitHub (a github object, from which url and downloadUrl are computed), or external URI (a plain url, optionally with a separate downloadUrl).",
   "type": "object",
   "required": ["files"],
   "additionalProperties": false,
@@ -12,8 +12,104 @@
       "description": "JSON Schema reference — used by editors for validation and IntelliSense."
     },
     "duplicateResolution": {
+      "$ref": "#/$defs/policySet",
+      "description": "How the seeder handles duplicate records when the same primary key appears in more than one file. Omit to inherit the policy from application configuration (Quotinator:DefaultConflictPolicy, with per-entity-type overrides under Quotinator:DuplicateResolution:*). When present, this section overrides all configuration-level settings for this directory, unless a listed file entry sets its own duplicateResolution — that wins over this manifest-level section for that file specifically."
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["file", "name"],
+        "additionalProperties": false,
+        "not": { "required": ["github", "url"] },
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filename relative to this manifest's directory (e.g. 'vilaboim_movie-quotes.json')."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable source identifier shown in the import log and management UI (e.g. 'vilaboim/movie-quotes')."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Upstream URL for this source file, for human-readable provenance (e.g. the GitHub repository homepage). When present, the seeder records the import batch as type 'seed' and stores the URL for provenance. Mutually exclusive with github — use github for GitHub-hosted sources instead."
+          },
+          "downloadUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Direct, fetchable URL to the raw source file — used by the auto-update mechanism (Quotinator__AutoUpdateSources) to refresh this file. Only meaningful alongside url (external source) or github (where it is computed, not set directly)."
+          },
+          "refreshIntervalHours": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Overrides the global Quotinator__SourceUpdateIntervalHours default for this specific source — how long a downloaded copy is considered fresh before the auto-update mechanism checks again. Only meaningful alongside downloadUrl/github."
+          },
+          "downloadTarget": {
+            "type": "string",
+            "enum": ["internal", "external"],
+            "description": "Overrides which cache folder the auto-update mechanism writes a downloaded copy of this source to — internal ({dataDir}/sources/download/) or external ({dataDir}/imports/download/). When omitted, defaults to internal for entries in the bundled sources manifest and external for entries in a user imports manifest. Only meaningful alongside downloadUrl/github."
+          },
+          "converter": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Name of a compiled converter plugin (an IQuoteSourceConverter implementation's Name) that transforms this source's raw upstream format into Quotinator's canonical quote schema before it is cached. Only meaningful alongside downloadUrl/github. The referenced converter must be one of the plugins compiled into the running image — an unrecognised name causes the download to fail closed (falls back like a network failure, never crashes startup)."
+          },
+          "converterOptions": {
+            "type": "object",
+            "description": "Configuration passed through verbatim to the named converter's ConvertAsync. Shape is entirely converter-specific (see each converter's own documentation) — this schema only requires it to be a JSON object. Only meaningful alongside converter."
+          },
+          "duplicateResolution": {
+            "$ref": "#/$defs/policySet",
+            "description": "Duplicate-resolution policy overriding this manifest's own top-level duplicateResolution for this file specifically. Omit to inherit the manifest-level policy (which itself falls back to application configuration when absent). This is the highest-priority tier — file, then manifest, then configuration."
+          },
+          "github": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["owner", "repo", "path"],
+            "properties": {
+              "owner":  { "type": "string", "minLength": 1 },
+              "repo":   { "type": "string", "minLength": 1 },
+              "path":   {
+                "type": "string",
+                "minLength": 1,
+                "description": "File path within the repo, relative to its root."
+              },
+              "branch": {
+                "type": "string",
+                "minLength": 1,
+                "default": "main",
+                "description": "Branch or tag to fetch from. Defaults to main if omitted — set explicitly for repos still on master or any other branch."
+              }
+            },
+            "description": "GitHub coordinates this source is fetched from. url and downloadUrl are computed from these using the standard github.com and raw.githubusercontent.com conventions — do not also set url/downloadUrl on the same entry; use a plain url for non-GitHub external sources instead."
+          },
+          "ruleFile": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filename (relative to this manifest's directory, same convention as file) of this source's own per-source conflict-resolution rule file (#181) — a set of quoteId+field rules that auto-resolve a genuinely ambiguous field instead of leaving it staged Pending under the review policy. Omit for a source with no known recurring conflicts, equivalent to an empty rule file."
+          },
+          "sourceAliasFile": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filename (relative to this manifest's directory, same convention as file) of this source's own per-source title-alias file (#181) — a set of raw-(title,type) substitutions consulted before Source resolution runs, so a misspelled/inconsistent title or type resolves to the already-canonical Source instead of creating a duplicate. Omit for a source with no known title/type inconsistencies, equivalent to an empty alias file."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "policy": {
+      "type": "string",
+      "enum": ["skip", "newest-wins", "merge-ours", "merge-theirs", "review"],
+      "description": "skip — keep the first occurrence and ignore later files with the same ID. newest-wins — replace the existing record with the version from the later file. merge-ours — auto-fill blank fields from either side; keep the existing value on a true conflict. merge-theirs — auto-fill blank fields from either side; take the incoming value on a true conflict. review — do not auto-resolve; stages the conflicting record Pending for manual decision via the import/actions decide endpoint, unless a per-source conflict-resolution rule file (see ruleFile above) already covers every ambiguous field, in which case it resolves immediately the same way a human decision would."
+    },
+    "policySet": {
       "type": "object",
-      "description": "How the seeder handles duplicate records when the same primary key appears in more than one file. Omit to inherit the policy from application configuration (Quotinator:DuplicateResolution). When present, this section overrides all configuration-level settings for this directory.",
       "additionalProperties": false,
       "properties": {
         "default": {
@@ -26,34 +122,6 @@
         "people":       { "$ref": "#/$defs/policy" },
         "translations": { "$ref": "#/$defs/policy" }
       }
-    },
-    "files": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["file", "name"],
-        "additionalProperties": false,
-        "properties": {
-          "file": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Filename relative to this manifest's directory (e.g. 'vilaboim_movie-quotes.json')."
-          },
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Human-readable source identifier shown in the import log and management UI (e.g. 'vilaboim/movie-quotes')."
-          }
-        }
-      }
-    }
-  },
-  "$defs": {
-    "policy": {
-      "type": "string",
-      "enum": ["skip", "overwrite"],
-      "description": "skip — keep the first occurrence and ignore later files with the same ID. overwrite — replace the existing record with the version from the later file."
     }
   }
 }

@@ -15,17 +15,21 @@ using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
-using Quotinator.Engine.Database;
-using Quotinator.Engine.Helpers;
-using Quotinator.Engine.Repositories;
-using Quotinator.Engine.Services;
+using Quotinator.Core.Database;
+using Quotinator.Core.Entities;
+using Quotinator.Core.Helpers;
+using Quotinator.Core.Repositories;
+using Quotinator.Core.Services;
 using Quotinator.Api.Middleware;
 using Quotinator.Api.OpenApi;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Changelog.Services;
-using Quotinator.Core.Services;
+using Quotinator.Converters.BasicJsonArray;
+using Quotinator.Converters.Csv;
+using Quotinator.Converters.RegexArray;
+using Quotinator.Core.Import;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
 
@@ -60,9 +64,12 @@ builder.Services.AddOpenApi(options =>
     {
         document.Tags = new HashSet<OpenApiTag>
         {
-            new() { Name = ApiTags.System,  Description = "Endpoints for monitoring and verifying the health of the API." },
-            new() { Name = ApiTags.Quotes,  Description = "Endpoints for fetching and searching quotes." },
-            new() { Name = ApiTags.Admin,   Description = "Administrative endpoints for database maintenance. Require `X-Api-Key` authentication. Protected by a concurrency-1 limiter — only one operation runs at a time; any concurrent request receives `429 Too Many Requests` immediately." },
+            new() { Name = ApiTags.System,        Description = "Endpoints for monitoring and verifying the health of the API." },
+            new() { Name = ApiTags.Quotes,        Description = "Endpoints for fetching and searching quotes." },
+            new() { Name = ApiTags.Admin,         Description = "Administrative endpoints for database maintenance. Require `X-Api-Key` authentication. Protected by a concurrency-1 limiter — only one operation runs at a time; any concurrent request receives `429 Too Many Requests` immediately." },
+            new() { Name = ApiTags.Import,        Description = "Endpoints for importing quote data and reviewing/resolving merge conflicts. Write operations require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter." },
+            new() { Name = ApiTags.Conversations, Description = "Endpoints for fetching multi-line conversations (a stage direction and/or sound cue alongside one or more quotes)." },
+            new() { Name = ApiTags.MasterData,    Description = "Endpoints for fetching the shared reference data — Sources, Characters, People, Series, and Universes — that quotes and conversations are built from." },
         };
 
         document.Info = new()
@@ -93,19 +100,10 @@ builder.Services.AddOpenApi(options =>
         return Task.CompletedTask;
     });
 
-    options.AddOperationTransformer((operation, context, cancellationToken) =>
-    {
-        if (operation.Tags?.Any(t => t.Name == ApiTags.Admin) == true)
-        {
-            operation.Security = new List<OpenApiSecurityRequirement>
-            {
-                new() { [new OpenApiSecuritySchemeReference("ApiKey")] = new List<string>() }
-            };
-        }
-        return Task.CompletedTask;
-    });
-
-    options.AddOperationTransformer<YearParameterSchemaTransformer>();
+    options.AddOperationTransformer<AdminApiKeySecurityTransformer>();
+    options.AddOperationTransformer<NumericParameterSchemaTransformer>();
+    options.AddOperationTransformer<EnumParameterSchemaTransformer>();
+    options.AddSchemaTransformer<ImportModelSchemaTransformer>();
 });
 
 builder.Services.AddRateLimiter(options =>
@@ -164,27 +162,27 @@ var dataDir = builder.Configuration["Quotinator:DataDir"]
 Directory.CreateDirectory(dataDir);
 
 // Duplicate-resolution policy from config — lowest-priority tier; a manifest's own
-// duplicateResolution section overrides this when present.
-static DuplicateResolutionPolicy ParseResolutionPolicy(string? value) =>
-    value?.ToLowerInvariant() == "overwrite"
-        ? DuplicateResolutionPolicy.Overwrite
-        : DuplicateResolutionPolicy.Skip;
-
-static DuplicateResolutionPolicy? ParseNullableResolutionPolicy(string? value) =>
-    value?.ToLowerInvariant() switch
-    {
-        "overwrite" => DuplicateResolutionPolicy.Overwrite,
-        "skip"      => DuplicateResolutionPolicy.Skip,
-        _           => null
-    };
-
+// duplicateResolution section overrides this when present. Quotinator:DefaultConflictPolicy is a
+// flat key (env Quotinator__DefaultConflictPolicy) — the 5 nested per-type keys below keep their
+// existing paths, minus the now-redundant "Default" sibling that used to live under
+// Quotinator:DuplicateResolution. Parsing itself lives in ConflictPolicyParser (Quotinator.Data)
+// so it's unit-testable outside these top-level statements.
 var configPolicy = new ManifestPolicy(
-    Default:      ParseResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Default"]),
-    Quotes:       ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Quotes"]),
-    Sources:      ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Sources"]),
-    Characters:   ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Characters"]),
-    People:       ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:People"]),
-    Translations: ParseNullableResolutionPolicy(builder.Configuration["Quotinator:DuplicateResolution:Translations"]));
+    Default:      ConflictPolicyParser.Parse(builder.Configuration["Quotinator:DefaultConflictPolicy"]),
+    Quotes:       ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Quotes"]),
+    Sources:      ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Sources"]),
+    Characters:   ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Characters"]),
+    People:       ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:People"]),
+    Translations: ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Translations"]));
+
+var createMissingManifest  = builder.Configuration.GetValue("Quotinator:CreateMissingManifest", true);
+var includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeDefaultSources", true);
+
+// Auto-update: whether the app checks manifest downloadUrl/github entries for a fresher copy at
+// all (master switch — false means pure offline mode, no network calls ever), and how long a
+// downloaded copy is considered fresh before the next check re-verifies it.
+var autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoUpdateSources", true);
+var sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
 
 // Bundled sources are always read from the Docker image (AppContext.BaseDirectory/data/sources/).
 // No file copy to the persistent volume is needed — only the database and DataProtection keys
@@ -192,99 +190,16 @@ var configPolicy = new ManifestPolicy(
 var bundledSourcesDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SourcesFolder);
 
 // User imports: optional directory in the data volume. Create it so users can drop files in.
-var importsDir = Path.Combine(dataDir, DataPaths.ImportsFolder);
+// Quotinator:ImportsPath overrides the default location when set.
+var importsDir = builder.Configuration["Quotinator:ImportsPath"] is { Length: > 0 } customImportsPath
+    ? customImportsPath
+    : Path.Combine(dataDir, DataPaths.ImportsFolder);
 
-static IReadOnlyList<SeedBatch> BuildSeedBatches(
-    string bundledDir, string importsDir, ManifestPolicy configPolicy, ILogger<Program> log)
-{
-    var batches = new List<SeedBatch>();
-
-    if (Directory.Exists(bundledDir))
-    {
-        var (files, policy) = OrderedByManifest(bundledDir, configPolicy, log);
-        if (files.Count > 0)
-            batches.Add(new SeedBatch(files, policy, "bundled sources"));
-    }
-    else
-    {
-        log.LogWarning("[Database - Init] bundled sources directory not found at {Dir} — database will be empty on first run", bundledDir);
-    }
-
-    if (Directory.Exists(importsDir))
-    {
-        var (files, policy) = OrderedByManifest(importsDir, configPolicy, log);
-        if (files.Count > 0)
-            batches.Add(new SeedBatch(files, policy, "user imports"));
-    }
-
-    return batches;
-}
-
-static (IReadOnlyList<string> Files, ManifestPolicy Policy) OrderedByManifest(
-    string dir, ManifestPolicy configPolicy, ILogger<Program> log)
-{
-    var allJson = Directory.GetFiles(dir, "*.json")
-                           .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
-                           .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-                           .ToList();
-
-    var manifestPath = Path.Combine(dir, "manifest.json");
-    if (!File.Exists(manifestPath))
-    {
-        log.LogInformation("[Database - Init] no manifest in {Dir} — importing {Count} JSON file(s) in alphabetical order", dir, allJson.Count);
-        return (allJson, configPolicy);
-    }
-
-    try
-    {
-        var root              = JsonNode.Parse(File.ReadAllText(manifestPath));
-        var manifestPolicyNode = root?["duplicateResolution"];
-        var fromManifest      = manifestPolicyNode is null ? null : ParseManifestPolicyNode(manifestPolicyNode);
-        var resolvedPolicy    = ManifestPolicy.Resolve(fromManifest, configPolicy);
-
-        var listed = (root?["files"]?.AsArray() ?? [])
-            .Select(e => Path.Combine(dir, e!["file"]!.GetValue<string>()))
-            .Where(File.Exists)
-            .ToList();
-
-        var listedSet = new HashSet<string>(listed, StringComparer.OrdinalIgnoreCase);
-        var unlisted  = allJson.Where(f => !listedSet.Contains(f)).ToList();
-        if (unlisted.Count > 0)
-            log.LogInformation("[Database - Init] {Count} file(s) not listed in manifest will be appended: {Files}",
-                unlisted.Count, string.Join(", ", unlisted.Select(Path.GetFileName)));
-
-        return ([.. listed, .. unlisted], resolvedPolicy);
-    }
-    catch (Exception ex)
-    {
-        log.LogWarning(ex, "[Database - Init] failed to read manifest at {Path} — falling back to alphabetical order", manifestPath);
-        return (allJson, configPolicy);
-    }
-}
-
-static ManifestPolicy ParseManifestPolicyNode(JsonNode node)
-{
-    static DuplicateResolutionPolicy ParsePol(JsonNode? n) =>
-        n?.GetValue<string>().ToLowerInvariant() == "overwrite"
-            ? DuplicateResolutionPolicy.Overwrite
-            : DuplicateResolutionPolicy.Skip;
-
-    static DuplicateResolutionPolicy? ParseNullPol(JsonNode? n) =>
-        n?.GetValue<string>().ToLowerInvariant() switch
-        {
-            "overwrite" => DuplicateResolutionPolicy.Overwrite,
-            "skip"      => DuplicateResolutionPolicy.Skip,
-            _           => null
-        };
-
-    return new ManifestPolicy(
-        Default:      ParsePol(node["default"]),
-        Quotes:       ParseNullPol(node["quotes"]),
-        Sources:      ParseNullPol(node["sources"]),
-        Characters:   ParseNullPol(node["characters"]),
-        People:       ParseNullPol(node["people"]),
-        Translations: ParseNullPol(node["translations"]));
-}
+// Auto-update download caches — always under the persistent data volume, never the read-only
+// bundled image path, so both are writable in every deployment shape including the HA add-on.
+// "Internal" is the default cache for bundled-manifest entries; "external" for user-imports entries.
+var internalDownloadDir = Path.Combine(dataDir, DataPaths.SourcesFolder, DataPaths.DownloadedSourcesFolder);
+var externalDownloadDir = Path.Combine(dataDir, DataPaths.ImportsFolder, DataPaths.DownloadedSourcesFolder);
 
 // Persist DataProtection keys to a subdirectory of the data volume so antiforgery tokens
 // and Blazor circuit descriptors survive container restarts and add-on updates.
@@ -328,6 +243,13 @@ if (isContainer)
     });
 }
 
+// Omit null properties from all JSON responses — verified against System.Text.Json docs:
+// JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull skips any
+// property whose value is null at serialization time, application-wide (not merely a formatting
+// choice for one endpoint).
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull);
+
 builder.Services.AddExceptionHandler<BadRequestExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
@@ -345,23 +267,152 @@ var connectionFactory = new SqliteConnectionFactory(dbPath);
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
-builder.Services.AddSingleton<ICallerContext, CallerContext>();
-builder.Services.AddSingleton<IAuditWriter, AuditWriter>();
-builder.Services.AddSingleton<IAuditReader, AuditReader>();
+// InitiatorContext implements both interfaces over the same AsyncLocal-backed instance, so
+// SqliteRepository<T>'s existing ICallerContext.Agent reads are unaffected by IInitiatorContext's
+// introduction — same singleton, same per-async-context isolation, just a richer surface for callers
+// that need InitiatedByType/InitiatedById too.
+builder.Services.AddSingleton<InitiatorContext>();
+builder.Services.AddSingleton<ICallerContext>(sp => sp.GetRequiredService<InitiatorContext>());
+builder.Services.AddSingleton<IInitiatorContext>(sp => sp.GetRequiredService<InitiatorContext>());
+builder.Services.AddSingleton<ISystemAuditWriter, SystemAuditWriter>();
+builder.Services.AddSingleton<ISystemAuditReader, SystemAuditReader>();
+builder.Services.AddSingleton<ISystemChangeLogWriter, SystemChangeLogWriter>();
+builder.Services.AddSingleton<ISystemChangeLogReader, SystemChangeLogReader>();
+builder.Services.AddSingleton<ISystemImportActionWriter, SystemImportActionWriter>();
+builder.Services.AddSingleton<ISystemImportActionReader, SystemImportActionReader>();
+builder.Services.AddSingleton<ISourceFileOverrideRegistry, SourceFileOverrideRegistry>();
+builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
+builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
 
-// Resolve seed batches before building the host — uses the early logger factory so errors
-// surface before the DI container starts up. Batches are captured into the lambda closure.
-var earlyLoggerFactory = LoggerFactory.Create(b => b.AddConsole());
-var earlyLogger        = earlyLoggerFactory.CreateLogger<Program>();
-var seedBatches        = BuildSeedBatches(bundledSourcesDir, importsDir, configPolicy, earlyLogger);
-builder.Services.AddSingleton<Quotinator.Engine.Repositories.IImportBatchRepository, SqliteImportBatchRepository>();
-builder.Services.AddSingleton<IDatabaseInitializer>(sp => new QuotinatorDatabaseInitializer(
-    connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
-    sp.GetRequiredService<Quotinator.Engine.Repositories.IImportBatchRepository>(),
-    sp.GetRequiredService<IAuditWriter>(),
-    sp.GetRequiredService<ICallerContext>(),
-    sp.GetRequiredService<ILogger<DatabaseInitializer>>()));
-builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Engine.Services.SqliteQuoteService(connectionFactory));
+// #59: restorable-repository access for Quote/Source/Character/Person, needed only by batch-undo
+// (reversal) — nothing else in the app soft-deletes these tables today. Fully generic, already
+// tested against a synthetic fixture in Quotinator.Data.Tests; no new repository code required.
+builder.Services.AddSingleton<IRestorableRepository<QuoteEntity>, SqliteRestorableRepository<QuoteEntity>>();
+builder.Services.AddSingleton<IRestorableRepository<Source>, SqliteRestorableRepository<Source>>();
+builder.Services.AddSingleton<IRestorableRepository<Character>, SqliteRestorableRepository<Character>>();
+builder.Services.AddSingleton<IRestorableRepository<Person>, SqliteRestorableRepository<Person>>();
+
+// #68: same rationale as above, for Conversation/StageDirection/SoundCue — needed by
+// SqliteImportActionService's stale-Add-target hard-delete and batch-reversal soft-delete/restore.
+// ConversationLines/StageDirectionTranslations/SoundCueTranslations are detail rows (like
+// QuoteGenres/QuoteTranslations) and never get their own repository.
+builder.Services.AddSingleton<IRestorableRepository<ConversationEntity>, SqliteRestorableRepository<ConversationEntity>>();
+builder.Services.AddSingleton<IRestorableRepository<StageDirectionEntity>, SqliteRestorableRepository<StageDirectionEntity>>();
+builder.Services.AddSingleton<IRestorableRepository<SoundCueEntity>, SqliteRestorableRepository<SoundCueEntity>>();
+
+// #193: listable-repository capability, needed by #184-#189's masterdata list endpoints.
+// SeriesEntity/UniverseEntity get their first repository of any kind here; the other four resolve to
+// their existing IRestorableRepository<T> singleton above — a second interface binding onto the same
+// object (SqliteRestorableRepository<T> already implements IListableRepository<T> transitively, since
+// it extends SqliteRepository<T>), not a second instance.
+builder.Services.AddSingleton<IListableRepository<SeriesEntity>, SqliteRepository<SeriesEntity>>();
+builder.Services.AddSingleton<IListableRepository<UniverseEntity>, SqliteRepository<UniverseEntity>>();
+builder.Services.AddSingleton<IListableRepository<Source>>(sp => (IListableRepository<Source>)sp.GetRequiredService<IRestorableRepository<Source>>());
+builder.Services.AddSingleton<IListableRepository<Character>>(sp => (IListableRepository<Character>)sp.GetRequiredService<IRestorableRepository<Character>>());
+builder.Services.AddSingleton<IListableRepository<Person>>(sp => (IListableRepository<Person>)sp.GetRequiredService<IRestorableRepository<Person>>());
+builder.Services.AddSingleton<IListableRepository<ConversationEntity>>(sp => (IListableRepository<ConversationEntity>)sp.GetRequiredService<IRestorableRepository<ConversationEntity>>());
+
+// #204: StageDirectionEntity was left out of #193's original six-entity scope. Same "second interface
+// binding onto the existing IRestorableRepository<T> singleton, not a second instance" reasoning as the
+// four bindings immediately above.
+builder.Services.AddSingleton<IListableRepository<StageDirectionEntity>>(sp => (IListableRepository<StageDirectionEntity>)sp.GetRequiredService<IRestorableRepository<StageDirectionEntity>>());
+
+// #205: SoundCueEntity was left out of #193's original six-entity scope, the same gap #204 closed for
+// StageDirectionEntity. Same "second interface binding onto the existing IRestorableRepository<T>
+// singleton, not a second instance" reasoning.
+builder.Services.AddSingleton<IListableRepository<SoundCueEntity>>(sp => (IListableRepository<SoundCueEntity>)sp.GetRequiredService<IRestorableRepository<SoundCueEntity>>());
+
+// #184: resolves a Source's SeriesId to its Series' (Id, Name) — the generic IListableRepository<T>/
+// IRepository<T> above cannot express this join (single-table SELECT * only).
+builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenceReader>();
+
+// #185: resolves a Character's linked Sources (via CharacterSources, #179) to their (Id, Title) —
+// same "generic repository cannot express a join" reasoning as ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<ICharacterSourceLinkReader, CharacterSourceLinkReader>();
+
+// #187: resolves a Series' UniverseId to its Universe's (Id, Name) — same "generic repository cannot
+// express a join" reasoning as ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<ISeriesUniverseReferenceReader, SeriesUniverseReferenceReader>();
+
+// #189: resolves each Conversation's active line count via ConversationLines — same "generic repository
+// cannot express a join/aggregate" reasoning as ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<IConversationLineCountReader, ConversationLineCountReader>();
+
+// #192: resolves a Series/Universe name to its id — the resolveIdByName delegate #196's
+// EntityFilterParsing.ResolveAsync needs for the quote read path's Series/Universe filters.
+builder.Services.AddSingleton<ISeriesNameResolver, SeriesNameResolver>();
+builder.Services.AddSingleton<IUniverseNameResolver, UniverseNameResolver>();
+
+// Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
+// eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
+// real Serilog pipeline at the same point in startup as the rest of seeding — not through a
+// separate bootstrap console logger that runs before the "Quotinator starting" banner.
+builder.Services.AddSingleton<IManifestSeedPlanner, ManifestSeedPlanner>();
+builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepository>();
+
+// 5 s timeout: a slow/unreachable upstream must never block startup, reseed, or reset for longer
+// than a brief, bounded check — the updater always falls back to the existing cached/local file.
+builder.Services.AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
+
+// Converters are stateless, hardcoded per source — no DI registration needed for the individual
+// plugin instances themselves (CLAUDE.md's DI policy: bare `new` is permitted for a computed value
+// assembled before a factory closure, same shape already used for SourceCacheOptions itself).
+var quoteSourceConverters = new IQuoteSourceConverter[]
+{
+    new RegexArrayConverter(),
+    new BasicJsonArrayConverter(),
+    new CsvQuoteConverter(),
+}.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+
+// Real canonical-schema validation needs Quotinator.Core's SourceQuote, but Quotinator.Data (home of
+// SourceCacheUpdater) must not depend on Quotinator.Core — so the validator is built here, at the
+// composition root, and injected as a plain delegate.
+Func<string, bool> validateCanonicalSchema = json => SourceQuoteFileReader.TryParse(json, out _);
+
+builder.Services.AddSingleton<ISourceCacheUpdater>(sp => new SourceCacheUpdater(
+    sp.GetRequiredService<IHttpClientFactory>(),
+    new SourceCacheOptions(internalDownloadDir, externalDownloadDir, sourceUpdateIntervalHours,
+        quoteSourceConverters, validateCanonicalSchema),
+    sp.GetRequiredService<ILogger<SourceCacheUpdater>>()));
+
+// #153: a generated ruleFile/sourceAliasFile override is written under the same two persistent,
+// writable cache directories SourceCacheUpdater already uses above — never the bundled/image sources
+// directory, which is read-only in a real deployment.
+builder.Services.AddSingleton<IRuleFileOverridePathResolver>(_ =>
+    new RuleFileOverridePathResolver(internalDownloadDir, externalDownloadDir, bundledSourcesDir, importsDir));
+
+builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<Program>>();
+    LegacyConfigWarnings.WarnIfDataPathStillSet(builder.Configuration["Quotinator:DataPath"], logger);
+
+    var seedBatches = SeedBatchesBuilder.Build(
+        bundledSourcesDir, importsDir, configPolicy, includeDefaultSources, createMissingManifest,
+        sp.GetRequiredService<IManifestSeedPlanner>(), logger);
+
+    return new QuotinatorDatabaseInitializer(
+        connectionFactory, dbOptions, QuotinatorMigrations.All, seedBatches,
+        sp.GetRequiredService<IImportBatchRepository>(),
+        sp.GetRequiredService<IImportActionCoordinator>(),
+        sp.GetRequiredService<IImportActionService>(),
+        sp.GetRequiredService<ISystemAuditWriter>(),
+        sp.GetRequiredService<ICallerContext>(),
+        sp.GetRequiredService<ILogger<DatabaseInitializer>>(),
+        sp.GetRequiredService<ISourceCacheUpdater>(),
+        autoUpdateSources,
+        sp.GetRequiredService<IRuleFileOverridePathResolver>(),
+        sp.GetRequiredService<ISourceFileOverrideRegistry>(),
+        QuotinatorMigrations.Baseline);
+});
+builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Core.Services.SqliteQuoteService(connectionFactory));
+builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp => new Quotinator.Core.Services.SqliteQuoteImportService(
+    connectionFactory,
+    sp.GetRequiredService<IImportBatchRepository>(),
+    sp.GetRequiredService<IImportActionCoordinator>(),
+    sp.GetRequiredService<IImportActionService>(),
+    sp.GetRequiredService<ISystemImportActionReader>(),
+    quoteSourceConverters,
+    configPolicy));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
@@ -470,6 +521,19 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// Optional request logging — logs every endpoint call as two lines (start + end) with a
+// per-request correlation ID. Off by default. Enable with log_requests: true in the add-on
+// config (or Quotinator__LogRequests=true). All endpoints are logged; header values are never
+// captured (X-Api-Key, Authorization, Cookie must not appear in logs).
+//
+// Registered before UseExceptionHandler() so it wraps it, not the reverse — the completion log
+// line reads context.Response.StatusCode in a finally block, and an exception thrown deeper in
+// the pipeline unwinds through that finally before the response status has actually been set by
+// whichever middleware handles it. Logging registered after UseExceptionHandler would therefore
+// always report the pre-exception default (200), never the real status the client received.
+if (logRequests)
+    app.UseMiddleware<RequestLoggingMiddleware>();
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseRequestLocalization();
@@ -483,13 +547,6 @@ app.Use(async (context, next) =>
     callerContext.Agent = context.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;
     await next();
 });
-
-// Optional request logging — logs every endpoint call as two lines (start + end) with a
-// per-request correlation ID. Off by default. Enable with log_requests: true in the add-on
-// config (or Quotinator__LogRequests=true). All endpoints are logged; header values are never
-// captured (X-Api-Key, Authorization, Cookie must not appear in logs).
-if (logRequests)
-    app.UseMiddleware<RequestLoggingMiddleware>();
 
 app.MapOpenApi();
 app.MapScalarApiReference();
@@ -527,6 +584,16 @@ app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDat
 
 app.MapQuoteEndpoints();
 app.MapAdminEndpoints();
+app.MapImportEndpoints();
+app.MapImportRuleEndpoints();
+app.MapConversationEndpoints();
+app.MapSourceEndpoints();
+app.MapCharacterEndpoints();
+app.MapPersonEndpoints();
+app.MapSeriesEndpoints();
+app.MapUniverseEndpoints();
+app.MapStageDirectionEndpoints();
+app.MapSoundCueEndpoints();
 
 // Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
 // Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.

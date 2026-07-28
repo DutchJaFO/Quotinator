@@ -12,16 +12,17 @@
     <PackageReference Include="Dapper" Version="2.1.79" />
     <PackageReference Include="Dapper.Contrib" Version="2.0.78" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+      <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
+      <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
   </ItemGroup>
 
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>Quotinator.Engine</_Parameter1>
+      <_Parameter1>Quotinator.Core</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>Quotinator.Engine.Tests</_Parameter1>
+      <_Parameter1>Quotinator.Api</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Quotinator.Core.Tests</_Parameter1>

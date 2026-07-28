@@ -1,7 +1,11 @@
+using System.ComponentModel;
 using Quotinator.Api.Endpoints.Filters;
+using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Core.Services;
 using Quotinator.Data.Database;
+using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Endpoints;
@@ -20,77 +24,90 @@ internal static class AdminEndpoints
         var adminGroup = app.MapGroup("/api/v1/admin")
                             .WithTags(ApiTags.Admin)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
-                            .AddEndpointFilter<AdminApiKeyFilter>();
+                            .AddEndpointFilter<AdminApiKeyFilter>()
+                            .WithMetadata(AdminApiKeyRequiredMarker.Instance);
 
         // ── Public ────────────────────────────────────────────────────────────
 
-        publicGroup.MapGet("/database/seed/preview", async (IDatabaseInitializer db) =>
+        publicGroup.MapGet("/database/seed/preview", async (IDatabaseInitializer db, IApiLocalizer localizer) =>
         {
             var preview = await db.PreviewSeedAsync();
             return Results.Ok(new
             {
-                files              = preview.Files.Select(f => new { f.FileName, f.QuoteCount }),
-                totalQuotes        = preview.TotalQuotes,
-                uniqueQuotes       = preview.UniqueQuotes,
-                crossFileDuplicates = preview.CrossFileDuplicates.Select(d => new
+                files = preview.Files.Select(f => new
                 {
-                    d.EntityType,
-                    d.Id,
-                    d.Label,
-                    d.FirstSeenInFile,
-                    d.ConflictFile,
-                    appliedPolicy = d.AppliedPolicy.ToString().ToLowerInvariant()
-                })
+                    f.FileName,
+                    f.QuoteCount,
+                    refreshOutcome     = f.RefreshOutcome?.ToString().ToLowerInvariant(),
+                    lastRefreshedAtUtc = f.LastRefreshedAtUtc,
+                    issue              = f.Issue?.ToString().ToLowerInvariant(),
+                    message            = f.Issue switch
+                    {
+                        SeedFileIssue.Missing     => localizer[ApiMessages.SeedFileMissing],
+                        SeedFileIssue.InvalidJson => localizer[ApiMessages.SeedFileInvalidJson],
+                        _                         => null
+                    }
+                }),
+                reports = preview.Reports
             });
         })
         .WithName("PreviewSeed")
         .WithSummary("Preview seed import")
         .WithDescription(
-            "Scans all configured source files without touching the database. " +
-            "Returns the quote count per file, total and unique quote counts, and any cross-file duplicate IDs with the policy that would be applied. " +
+            "Scans all configured source files without writing anything to the database. " +
+            "Returns the quote count per file, plus a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale " +
+            "counts) computed by running the real import action planner read-only against the current database state (issue #221). " +
+            "For a file with a `downloadUrl`, also returns `refreshOutcome` (`updated`, `uptodate`, `failed`, or `skippedcollision`) and " +
+            "`lastRefreshedAtUtc` (the cached copy's own last-write time, not \"now\") — both omitted for a file with no `downloadUrl`. " +
+            "`issue` (`missing` or `invalidjson`) and a localised `message` (following `Accept-Language`, like all other API error text) are present " +
+            "when the file could not be parsed at all — the only way to tell a `quoteCount` of `0` caused by a genuine parse error apart from a file " +
+            "that is simply, validly empty. Applies to every file, not only those with a `downloadUrl`. A `quoteCount` of `0` alongside a " +
+            "`failed`/`skippedcollision` `refreshOutcome` means the cache is currently degraded and fell back to the original file. " +
+            "Known limitation: since this preview never writes between files, a quote id appearing in two different files that are both " +
+            "new to the database reports as `new` in both files' reports rather than `new` in one and `modified` in the other, unlike a " +
+            "real seed run — always accurate against a database that already has the relevant rows. " +
             "Use this before calling `reseed` to understand what will be imported.");
 
         publicGroup.MapGet("/audit", async (
             string? table,
             string? recordId,
-            int page     = 1,
-            int pageSize = 50,
-            IAuditReader auditReader = null!) =>
+            IApiLocalizer localizer,
+            [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
+            [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
+            ISystemAuditReader auditReader = null!) =>
         {
-            if (page < 1)       page     = 1;
-            if (pageSize < 1)   pageSize = 1;
-            if (pageSize > 200) pageSize = 200;
+            if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
+                return pageError!;
 
-            var result = await auditReader.GetPagedAsync(table, recordId, page, pageSize);
+            var result = await auditReader.GetPagedAsync(table, recordId, pageValue, pageSizeValue);
 
-            return Results.Ok(new
-            {
-                totalMatching = result.TotalCount,
-                totalPages    = result.TotalPages,
-                page          = result.Page,
-                pageSize      = result.PageSize,
-                items         = result.Items
-            });
+            return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
+                ?? Results.Ok(result);
         })
         .WithName("GetAuditLog")
         .WithSummary("Get audit log")
         .WithDescription(
             "Returns a paginated list of audit entries, newest first. " +
             "Filter by `table` (e.g. `Quotes`, `Database`) and/or `recordId` (Guid). " +
-            "Maximum `pageSize` is 200.");
+            "Maximum `pageSize` is 500.");
 
         // ── Admin-only ────────────────────────────────────────────────────────
 
-        adminGroup.MapPost("/database/reseed", async (IDatabaseInitializer db) =>
+        adminGroup.MapPost("/database/reseed", async (IDatabaseInitializer db, bool forceSourceRefresh = false) =>
         {
-            await db.ReseedAsync();
+            await db.ReseedAsync(forceSourceRefresh);
             return Results.Ok(new
             {
-                quotes      = db.QuoteCount,
-                sources     = db.SourceCount,
-                characters  = db.CharacterCount,
-                people      = db.PeopleCount,
-                duplicates  = db.LastSeedDuplicates.Count
+                quotes          = db.QuoteCount,
+                sources         = db.SourceCount,
+                characters      = db.CharacterCount,
+                people          = db.PeopleCount,
+                series          = db.SeriesCount,
+                universes       = db.UniverseCount,
+                stageDirections = db.StageDirectionCount,
+                soundCues       = db.SoundCueCount,
+                conversations   = db.ConversationCount,
+                reports         = db.LastSeedReport
             });
         })
         .WithName("ReseedDatabase")
@@ -98,33 +115,72 @@ internal static class AdminEndpoints
         .WithDescription(
             "Clears all data tables and reimports every quote from the configured source files. " +
             "The schema version history is preserved — no migrations are re-applied. " +
-            "Returns the row counts and duplicate count after the operation completes. " +
+            "Auto-updated sources are refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
+            "unless `Quotinator:AutoUpdateSources` is `false`, in which case `forceSourceRefresh` has no effect. " +
+            "Returns the row counts and a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) " +
+            "after the operation completes (issue #221). " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db) =>
+        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
         {
-            await db.ResetAsync();
+            await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh);
             return Results.Ok(new
             {
-                quotes     = db.QuoteCount,
-                sources    = db.SourceCount,
-                characters = db.CharacterCount,
-                people     = db.PeopleCount,
-                duplicates = db.LastSeedDuplicates.Count
+                quotes          = db.QuoteCount,
+                sources         = db.SourceCount,
+                characters      = db.CharacterCount,
+                people          = db.PeopleCount,
+                series          = db.SeriesCount,
+                universes       = db.UniverseCount,
+                stageDirections = db.StageDirectionCount,
+                soundCues       = db.SoundCueCount,
+                conversations   = db.ConversationCount,
+                reports         = db.LastSeedReport
             });
         })
         .WithName("ResetDatabase")
         .WithSummary("Reset the database")
         .WithDescription(
-            "Clears all data and schema version history, reapplies all migrations from scratch, " +
+            "Clears all data, reapplies all migrations from scratch, " +
             "then reimports every quote from the configured source files. " +
             "Equivalent to deleting the database file and restarting. " +
-            "Returns the row counts and duplicate count after the operation completes. " +
+            "The audit log (`System_AuditEntries`) always survives a reset — clear it separately via `DELETE /api/v1/admin/audit` if needed. " +
+            "By default, schema migration history is also cleared and replayed; pass `preserveSchemaVersion=true` to keep the existing migration history instead. " +
+            "Auto-updated sources are refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
+            "unless `Quotinator:AutoUpdateSources` is `false`, in which case `forceSourceRefresh` has no effect. " +
+            "Returns the row counts and a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) " +
+            "after the operation completes (issue #221). " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapDelete("/audit", async (string? table, IAuditWriter auditWriter) =>
+        adminGroup.MapPost("/sources/refresh", async (IDatabaseInitializer db, bool force = false) =>
+        {
+            var resolution = await db.RefreshSourcesAsync(force);
+            return Results.Ok(new
+            {
+                results = resolution.Results.Select(r => new
+                {
+                    r.Name,
+                    r.Url,
+                    outcome = r.Outcome.ToString().ToLowerInvariant(),
+                    r.Detail,
+                    lastRefreshedAtUtc = r.LastRefreshedAtUtc
+                })
+            });
+        })
+        .WithName("RefreshSources")
+        .WithSummary("Refresh downloaded source caches")
+        .WithDescription(
+            "Refreshes the internal and external download caches for every manifest entry that declares a `downloadUrl`/`github`, " +
+            "without touching the database — the reimport itself only happens on the next reseed/reset/startup. " +
+            "Stale or missing entries are downloaded; fresh entries are left as-is unless `force=true`. " +
+            "Has no effect when `Quotinator:AutoUpdateSources` is `false`. " +
+            "Each result includes `lastRefreshedAtUtc` — the effective cache file's own last-write time, so an `uptodate` outcome " +
+            "still shows exactly how old the cached copy is rather than only that it was within the TTL window. `null` when no trusted cache file exists (e.g. a collision). " +
+            "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
+
+        adminGroup.MapDelete("/audit", async (string? table, ISystemAuditWriter auditWriter) =>
         {
             await auditWriter.ClearAsync(table);
             return Results.NoContent();

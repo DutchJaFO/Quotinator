@@ -13,15 +13,26 @@ public class QuoteServiceTests
         Directory.Exists(SourcesDir)
             ? Directory.EnumerateFiles(SourcesDir, "*.json")
                        .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
+                       // #181: a per-source conflict-resolution rule file (e.g. nikhilnamal17-conflict-rules.json)
+                       // or title-alias file (e.g. nikhilnamal17-source-aliases.json) is a different shape
+                       // entirely (not quotes) — never a quote source.
+                       .Where(f => !Path.GetFileName(f).EndsWith("-conflict-rules.json", StringComparison.OrdinalIgnoreCase))
+                       .Where(f => !Path.GetFileName(f).EndsWith("-source-aliases.json", StringComparison.OrdinalIgnoreCase))
             : [];
 
-    /// <summary>Each committed source file exists, is valid JSON, and contains at least one quote.</summary>
+    /// <summary>
+    /// Each committed source file exists, is valid JSON, and contains at least one quote — except
+    /// quotinator-series-universe.json (#180), whose entire purpose is Source/Series/Universe
+    /// enrichment with a deliberately empty quotes[] section.
+    /// </summary>
     [TestMethod]
     public void Load_EachSourceFile_ReturnsQuotes()
     {
         Assert.IsTrue(Directory.Exists(SourcesDir), $"data/sources/ not found at: {SourcesDir}");
 
-        var files = SourceFiles.ToList();
+        var files = SourceFiles
+            .Where(f => !Path.GetFileName(f).Equals("quotinator-series-universe.json", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         Assert.IsTrue(files.Count > 0, "data/sources/ contains no JSON source files");
 
         foreach (var file in files)

@@ -27,6 +27,7 @@
   </Folder>
   <Folder Name="/.claude/">
     <File Path=".claude/settings.json" />
+    <File Path=".claude/launch.json" />
   </Folder>
   <Folder Name="/.claude/hooks/">
     <File Path=".claude/hooks/session-start.sh" />
@@ -49,8 +50,17 @@
   <Folder Name="/data/sources/">
     <File Path="data/sources/manifest.json" />
     <File Path="data/sources/quotinator-curated.json" />
+    <File Path="data/sources/quotinator-curated-conflict-rules.json" />
+    <File Path="data/sources/quotinator-curated-source-aliases.json" />
+    <File Path="data/sources/quotinator-series-universe.json" />
+    <File Path="data/sources/quotinator-series-universe-conflict-rules.json" />
+    <File Path="data/sources/quotinator-series-universe-source-aliases.json" />
     <File Path="data/sources/vilaboim_movie-quotes.json" />
+    <File Path="data/sources/vilaboim-conflict-rules.json" />
+    <File Path="data/sources/vilaboim-source-aliases.json" />
     <File Path="data/sources/NikhilNamal17_popular-movie-quotes.json" />
+    <File Path="data/sources/nikhilnamal17-conflict-rules.json" />
+    <File Path="data/sources/nikhilnamal17-source-aliases.json" />
   </Folder>
   <Folder Name="/docker/">
     <File Path="docker/Dockerfile" />
@@ -62,6 +72,7 @@
     <File Path="docs/ci-cd.md" />
     <File Path="docs/data-access.md" />
     <File Path="docs/data-import.md" />
+    <File Path="docs/database-conventions.md" />
     <File Path="docs/docker.md" />
     <File Path="docs/home-assistant.md" />
     <File Path="docs/localisation.md" />
@@ -70,6 +81,7 @@
     <File Path="docs/sql-safety.md" />
     <File Path="docs/logging.md" />
     <File Path="docs/release-verification.md" />
+    <File Path="docs/smoke-tests.md" />
     <File Path="docs/testing-policy.md" />
     <File Path="docs/troubleshooting.md" />
     <File Path="docs/vocabulary.md" />
@@ -85,13 +97,19 @@
     <File Path="docs/architecture-decisions/004-quotinator-data-project-boundaries.md" />
     <File Path="docs/architecture-decisions/005-quotinator-changelog-project-scope.md" />
     <File Path="docs/architecture-decisions/006-sequential-test-execution-by-default.md" />
+    <File Path="docs/architecture-decisions/007-cs1591-on-test-projects.md" />
+    <File Path="docs/architecture-decisions/008-enum-backed-columns-require-check-constraints.md" />
+    <File Path="docs/architecture-decisions/009-verify-migrations-against-last-released-schema.md" />
+    <File Path="docs/architecture-decisions/010-repository-is-csharp-only.md" />
+    <File Path="docs/architecture-decisions/011-series-universe-hierarchy-and-character-source-identity.md" />
+    <File Path="docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md" />
+    <File Path="docs/architecture-decisions/013-character-merge-algorithm.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
     <File Path="docs/milestones/open-issue-audit.md" />
   </Folder>
   <Folder Name="/docs/milestones/data-import-sources/">
-    <File Path="docs/milestones/data-import-sources/README.md" />
     <File Path="docs/milestones/data-import-sources/overview.md" />
     <File Path="docs/milestones/data-import-sources/45-import-endpoint-plan.md" />
     <File Path="docs/milestones/data-import-sources/55-record-completeness-plan.md" />
@@ -110,6 +128,61 @@
     <File Path="docs/milestones/data-import-sources/71-generic-repository-plan.md" />
     <File Path="docs/milestones/data-import-sources/72-cve-sql-audit-plan.md" />
     <File Path="docs/milestones/data-import-sources/78-repository-transaction-plan.md" />
+    <File Path="docs/milestones/data-import-sources/140-auto-update-sources-plan.md" />
+    <File Path="docs/milestones/data-import-sources/141-system-table-preservation-plan.md" />
+    <File Path="docs/milestones/data-import-sources/143-migration-ownership-baseline-plan.md" />
+    <File Path="docs/milestones/data-import-sources/144-converter-plugin-review-plan.md" />
+    <File Path="docs/milestones/data-import-sources/149-manual-conflict-review-plan.md" />
+    <File Path="docs/milestones/data-import-sources/152-endpoint-grouping-plan.md" />
+    <File Path="docs/milestones/data-import-sources/154-import-staging-plan.md" />
+    <File Path="docs/milestones/data-import-sources/157-sql-domain-engine-split-plan.md" />
+    <File Path="docs/milestones/data-import-sources/158-importbatch-to-data-plan.md" />
+    <File Path="docs/milestones/data-import-sources/162-source-explicit-id-plan.md" />
+    <File Path="docs/milestones/data-import-sources/165-completeness-review-model-plan.md" />
+    <File Path="docs/milestones/data-import-sources/168-quote-completeness-guard-plan.md" />
+    <File Path="docs/milestones/data-import-sources/170-not-decidable-wording-plan.md" />
+    <File Path="docs/milestones/data-import-sources/171-stagedirection-modify-plan.md" />
+    <File Path="docs/milestones/data-import-sources/172-soundcue-modify-plan.md" />
+    <File Path="docs/milestones/data-import-sources/173-person-modify-plan.md" />
+    <File Path="docs/milestones/data-import-sources/179-series-universe-schema-plan.md" />
+    <File Path="docs/milestones/data-import-sources/180-series-universe-population-plan.md" />
+    <File Path="docs/milestones/data-import-sources/183-list-endpoint-infrastructure-plan.md" />
+    <File Path="docs/milestones/data-import-sources/193-listable-repository-plan.md" />
+    <File Path="docs/milestones/data-import-sources/194-numeric-param-schema-plan.md" />
+    <File Path="docs/milestones/data-import-sources/195-pagination-contract-plan.md" />
+    <File Path="docs/milestones/data-import-sources/196-masterdata-conventions-plan.md" />
+    <File Path="docs/milestones/data-import-sources/184-sources-list-plan.md" />
+    <File Path="docs/milestones/data-import-sources/185-characters-list-plan.md" />
+    <File Path="docs/milestones/data-import-sources/186-people-list-plan.md" />
+    <File Path="docs/milestones/data-import-sources/187-series-list-plan.md" />
+    <File Path="docs/milestones/data-import-sources/188-universes-list-plan.md" />
+    <File Path="docs/milestones/data-import-sources/189-conversations-list-plan.md" />
+    <File Path="docs/milestones/data-import-sources/204-stagedirections-list-plan.md" />
+    <File Path="docs/milestones/data-import-sources/205-soundcues-list-plan.md" />
+    <File Path="docs/milestones/data-import-sources/192-quote-series-universe-plan.md" />
+    <File Path="docs/milestones/data-import-sources/206-core-engine-merge-plan.md" />
+    <File Path="docs/milestones/data-import-sources/190-optional-fields-plan.md" />
+    <File Path="docs/milestones/data-import-sources/207-canonicalize-entity-ids-plan.md" />
+    <File Path="docs/milestones/data-import-sources/209-canonicalize-entity-ids-part-a-plan.md" />
+    <File Path="docs/milestones/data-import-sources/210-canonicalize-quote-id-plan.md" />
+    <File Path="docs/milestones/data-import-sources/212-importbatches-select-star-plan.md" />
+    <File Path="docs/milestones/data-import-sources/213-importedby-id-convention-plan.md" />
+    <File Path="docs/milestones/data-import-sources/214-guard-reflection-methods-plan.md" />
+    <File Path="docs/milestones/data-import-sources/215-joinstrategy-guard-coverage-plan.md" />
+    <File Path="docs/milestones/data-import-sources/216-name-title-case-sensitivity-plan.md" />
+    <File Path="docs/milestones/data-import-sources/211-non-id-string-comparison-research-plan.md" />
+    <File Path="docs/milestones/data-import-sources/191-source-date-population-plan.md" />
+    <File Path="docs/milestones/data-import-sources/174-character-global-identity-plan.md" />
+    <File Path="docs/milestones/data-import-sources/175-character-modify-plan.md" />
+    <File Path="docs/milestones/data-import-sources/176-conversation-description-modify-plan.md" />
+    <File Path="docs/milestones/data-import-sources/169-universe-setting-research-plan.md" />
+    <File Path="docs/milestones/data-import-sources/163-bulk-decide-file-plan.md" />
+    <File Path="docs/milestones/data-import-sources/217-conflict-resolution-coverage-plan.md" />
+    <File Path="docs/milestones/data-import-sources/177-import-batch-status-applied-plan.md" />
+    <File Path="docs/milestones/data-import-sources/181-minimal-conflict-resolution-rule-file-plan.md" />
+    <File Path="docs/milestones/data-import-sources/153-declarative-conflict-resolution-plan.md" />
+    <File Path="docs/milestones/data-import-sources/221-per-file-entity-type-import-report-plan.md" />
+    <File Path="docs/milestones/data-import-sources/155-migration-review-plan.md" />
   </Folder>
   <Folder Name="/docs/milestones/v1-7-0/">
     <File Path="docs/milestones/v1-7-0/overview.md" />
@@ -158,6 +231,7 @@
     <File Path="docs/workflow/issue-closure.md" />
     <File Path="docs/workflow/issues.md" />
     <File Path="docs/workflow/process.md" />
+    <File Path="docs/workflow/source-verification.md" />
     <File Path="docs/workflow/release.md" />
     <File Path="docs/workflow/cve.md" />
     <File Path="docs/workflow/cve-template.md" />
@@ -166,18 +240,17 @@
     <File Path="schemas/manifest.schema.json" />
     <File Path="schemas/source-flat.schema.json" />
     <File Path="schemas/source-extended.schema.json" />
-    <File Path="schemas/seed-sources.schema.json" />
     <File Path="schemas/upstream-quoted-string.schema.json" />
     <File Path="schemas/upstream-object-array.schema.json" />
     <File Path="schemas/changelog.schema.json" />
+    <File Path="schemas/conflict-resolution-rules.schema.json" />
+    <File Path="schemas/source-alias-rules.schema.json" />
   </Folder>
   <Folder Name="/scripts/">
     <File Path="scripts/README.md" />
-    <File Path="scripts/seed.csx" />
     <File Path="scripts/changelog.csx" />
     <File Path="scripts/changelog-import.csx" />
     <File Path="scripts/changelog-upgrade.csx" />
-    <File Path="scripts/sources.json" />
     <File Path="scripts/SOURCES.md" />
   </Folder>
   <Folder Name="/scripts/changelog-reference/">
@@ -195,33 +268,42 @@
     <File Path="scripts/hooks/README.md" />
     <File Path="scripts/hooks/commit-msg" />
   </Folder>
-  <Folder Name="/scripts/cache/">
-    <File Path="scripts/cache/README.md" />
-  </Folder>
   <Folder Name="/Solution/">
     <File Path="tests/Quotinator.Api.Tests/Solution/RepositoryStructureTests.cs" />
+  </Folder>
+  <Folder Name="/Solution/Fixtures/">
+    <File Path="tests/Quotinator.Api.Tests/Solution/Fixtures/vilaboim_raw.json" />
+    <File Path="tests/Quotinator.Api.Tests/Solution/Fixtures/nikhilnamal17_raw.json" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Quotinator.Api/Quotinator.Api.csproj" />
     <Project Path="src/Quotinator.Changelog/Quotinator.Changelog.csproj" />
     <Project Path="src/Quotinator.Constants/Quotinator.Constants.csproj" />
+    <Project Path="src/Quotinator.Converters.BasicJsonArray/Quotinator.Converters.BasicJsonArray.csproj" />
+    <Project Path="src/Quotinator.Converters.Csv/Quotinator.Converters.Csv.csproj" />
+    <Project Path="src/Quotinator.Converters.RegexArray/Quotinator.Converters.RegexArray.csproj" />
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
     <Project Path="src/Quotinator.Data/Quotinator.Data.csproj" />
-    <Project Path="src/Quotinator.Engine/Quotinator.Engine.csproj" />
     <Project Path="src/Quotinator.Data.Testing/Quotinator.Data.Testing.csproj" />
     <File Path="src/Quotinator.Api/resources/changelog.en.json" />
     <File Path="src/Quotinator.Api/resources/changelog.nl.json" />
     <File Path="src/Quotinator.Api/resources/changelog.de.json" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Quotinator.Tools.DbInspector/Quotinator.Tools.DbInspector.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Quotinator.Api.Tests/Quotinator.Api.Tests.csproj" />
     <Project Path="tests/Quotinator.Changelog.Tests/Quotinator.Changelog.Tests.csproj" />
     <Project Path="tests/Quotinator.Constants.Tests/Quotinator.Constants.Tests.csproj" />
+    <Project Path="tests/Quotinator.Converters.BasicJsonArray.Tests/Quotinator.Converters.BasicJsonArray.Tests.csproj" />
+    <Project Path="tests/Quotinator.Converters.Csv.Tests/Quotinator.Converters.Csv.Tests.csproj" />
+    <Project Path="tests/Quotinator.Converters.RegexArray.Tests/Quotinator.Converters.RegexArray.Tests.csproj" />
     <Project Path="tests/Quotinator.Core.Tests/Quotinator.Core.Tests.csproj" />
     <Project Path="tests/Quotinator.Data.Example/Quotinator.Data.Example.csproj" />
     <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
     <Project Path="tests/Quotinator.Data.Testing.Tests/Quotinator.Data.Testing.Tests.csproj" />
-    <Project Path="tests/Quotinator.Engine.Tests/Quotinator.Engine.Tests.csproj" />
+    <Project Path="tests/Quotinator.Tools.DbInspector.Tests/Quotinator.Tools.DbInspector.Tests.csproj" />
   </Folder>
   <Folder Name="/CVE/" />
   <Folder Name="/CVE/Quotinator.Api/">
@@ -245,11 +327,29 @@
   <Folder Name="/CVE/Quotinator.Constants.Tests/">
     <File Path="tests/Quotinator.Constants.Tests/CVE/.gitkeep" />
   </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.BasicJsonArray/">
+    <File Path="src/Quotinator.Converters.BasicJsonArray/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.BasicJsonArray.Tests/">
+    <File Path="tests/Quotinator.Converters.BasicJsonArray.Tests/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.Csv/">
+    <File Path="src/Quotinator.Converters.Csv/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.Csv.Tests/">
+    <File Path="tests/Quotinator.Converters.Csv.Tests/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.RegexArray/">
+    <File Path="src/Quotinator.Converters.RegexArray/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Converters.RegexArray.Tests/">
+    <File Path="tests/Quotinator.Converters.RegexArray.Tests/CVE/.gitkeep" />
+  </Folder>
   <Folder Name="/CVE/Quotinator.Core/">
     <File Path="src/Quotinator.Core/CVE/CVE-2025-6965.md" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Core.Tests/">
-    <File Path="tests/Quotinator.Core.Tests/CVE/.gitkeep" />
+    <File Path="tests/Quotinator.Core.Tests/CVE/CVE-2025-6965.md" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Data/">
     <File Path="src/Quotinator.Data/CVE/CVE-2025-6965.md" />
@@ -266,10 +366,10 @@
   <Folder Name="/CVE/Quotinator.Data.Testing.Tests/">
     <File Path="tests/Quotinator.Data.Testing.Tests/CVE/.gitkeep" />
   </Folder>
-  <Folder Name="/CVE/Quotinator.Engine/">
-    <File Path="src/Quotinator.Engine/CVE/.gitkeep" />
+  <Folder Name="/CVE/Quotinator.Tools.DbInspector/">
+    <File Path="tools/Quotinator.Tools.DbInspector/CVE/.gitkeep" />
   </Folder>
-  <Folder Name="/CVE/Quotinator.Engine.Tests/">
-    <File Path="tests/Quotinator.Engine.Tests/CVE/.gitkeep" />
+  <Folder Name="/CVE/Quotinator.Tools.DbInspector.Tests/">
+    <File Path="tests/Quotinator.Tools.DbInspector.Tests/CVE/.gitkeep" />
   </Folder>
 </Solution>

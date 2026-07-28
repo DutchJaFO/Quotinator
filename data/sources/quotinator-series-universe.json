@@ -1,0 +1,490 @@
+{
+  "quotes": [],
+  "sources": [
+    {
+      "title": "Back to the Future",
+      "type": "movie",
+      "date": "1985",
+      "seriesName": "Back to the Future"
+    },
+    {
+      "title": "Back to the Future Part II",
+      "type": "movie",
+      "seriesName": "Back to the Future"
+    },
+    {
+      "title": "Batman",
+      "type": "movie",
+      "seriesName": "Batman (1989)"
+    },
+    {
+      "title": "Batman & Robin",
+      "type": "movie",
+      "seriesName": "Batman (1989)"
+    },
+    {
+      "title": "Batman v Superman: Dawn of Justice",
+      "type": "movie",
+      "seriesName": "Batman v Superman: Dawn of Justice"
+    },
+    {
+      "title": "Black Panther",
+      "type": "movie",
+      "seriesName": "Black Panther"
+    },
+    {
+      "title": "Captain America: Civil War",
+      "type": "movie",
+      "seriesName": "Captain America"
+    },
+    {
+      "title": "Captain America: The Winter Soldier",
+      "type": "movie",
+      "seriesName": "Captain America"
+    },
+    {
+      "title": "Captain Marvel",
+      "type": "movie",
+      "seriesName": "Captain Marvel"
+    },
+    {
+      "title": "Deadpool",
+      "type": "movie",
+      "seriesName": "Deadpool"
+    },
+    {
+      "title": "Deadpool 2",
+      "type": "movie",
+      "seriesName": "Deadpool"
+    },
+    {
+      "title": "Furious 7",
+      "type": "movie",
+      "seriesName": "Fast & Furious"
+    },
+    {
+      "title": "The Fast and The Furious",
+      "type": "movie",
+      "seriesName": "Fast & Furious"
+    },
+    {
+      "title": "The Fate of the Furious",
+      "type": "movie",
+      "date": "2017",
+      "seriesName": "Fast & Furious"
+    },
+    {
+      "title": "The Fast and The Furious: Tokyo Drift",
+      "type": "movie",
+      "seriesName": "Fast & Furious"
+    },
+    {
+      "title": "Frozen",
+      "type": "movie",
+      "seriesName": "Frozen"
+    },
+    {
+      "title": "Frozen II",
+      "type": "movie",
+      "seriesName": "Frozen"
+    },
+    {
+      "title": "Guardians of the Galaxy",
+      "type": "movie",
+      "seriesName": "Guardians of the Galaxy"
+    },
+    {
+      "title": "Harry Potter and the Chamber of Secrets",
+      "type": "movie",
+      "seriesName": "Harry Potter"
+    },
+    {
+      "title": "Harry Potter and the Deathly Hallows",
+      "type": "movie",
+      "seriesName": "Harry Potter"
+    },
+    {
+      "title": "Harry Potter and the Goblet of Fire",
+      "type": "movie",
+      "seriesName": "Harry Potter"
+    },
+    {
+      "title": "Harry Potter and the Half-Blood Prince",
+      "type": "movie",
+      "seriesName": "Harry Potter"
+    },
+    {
+      "title": "Harry potter and the Order of the Phoenix",
+      "type": "movie",
+      "seriesName": "Harry Potter"
+    },
+    {
+      "title": "Harry Potter and the Philosopher's Stone",
+      "type": "movie",
+      "seriesName": "Harry Potter"
+    },
+    {
+      "title": "Harry Potter and the Prisoner of Azkaban",
+      "type": "movie",
+      "seriesName": "Harry Potter"
+    },
+    {
+      "title": "Iron Man",
+      "type": "movie",
+      "seriesName": "Iron Man"
+    },
+    {
+      "title": "John Wick",
+      "type": "movie",
+      "seriesName": "John Wick"
+    },
+    {
+      "title": "John Wick: Chapter 2",
+      "type": "movie",
+      "seriesName": "John Wick"
+    },
+    {
+      "title": "John Wick: Chapter 3 – Parabellum",
+      "type": "movie",
+      "seriesName": "John Wick"
+    },
+    {
+      "title": "Jurassic Park",
+      "type": "movie",
+      "seriesName": "Jurassic Park"
+    },
+    {
+      "title": "Naruto",
+      "type": "anime",
+      "seriesName": "Naruto"
+    },
+    {
+      "title": "Naruto Shippuden",
+      "type": "anime",
+      "seriesName": "Naruto"
+    },
+    {
+      "title": "Naruto Shippuden",
+      "type": "movie",
+      "seriesName": "Naruto"
+    },
+    {
+      "title": "Creed II",
+      "type": "movie",
+      "seriesName": "Rocky"
+    },
+    {
+      "title": "Rocky",
+      "type": "movie",
+      "seriesName": "Rocky"
+    },
+    {
+      "title": "Rocky Balboa",
+      "type": "movie",
+      "seriesName": "Rocky"
+    },
+    {
+      "title": "Spider-Man: Homecoming",
+      "type": "movie",
+      "seriesName": "Spider-Man: Homecoming"
+    },
+    {
+      "title": "Star Wars: Episode IV - A New Hope",
+      "type": "movie",
+      "seriesName": "Original Trilogy"
+    },
+    {
+      "title": "Star Wars: Episode I – The Phantom Menace",
+      "type": "movie",
+      "seriesName": "Prequel Trilogy"
+    },
+    {
+      "title": "Star Wars: Episode III – Revenge of the Sith",
+      "type": "movie",
+      "seriesName": "Prequel Trilogy"
+    },
+    {
+      "title": "Star Wars: Episode V - The Empire Strikes Back",
+      "type": "movie",
+      "seriesName": "Original Trilogy"
+    },
+    {
+      "title": "Star Wars: Episode VI - Return of the Jedi",
+      "type": "movie",
+      "seriesName": "Original Trilogy"
+    },
+    {
+      "title": "Star Wars: Episode VII - The Force Awakens",
+      "type": "movie",
+      "seriesName": "Sequel Trilogy"
+    },
+    {
+      "title": "Terminator 2: Judgment Day",
+      "type": "movie",
+      "seriesName": "Terminator"
+    },
+    {
+      "title": "The Terminator",
+      "type": "movie",
+      "seriesName": "Terminator"
+    },
+    {
+      "title": "Avengers: Age of Ultron",
+      "type": "movie",
+      "seriesName": "The Avengers"
+    },
+    {
+      "title": "Avengers: Endgame",
+      "type": "movie",
+      "seriesName": "The Avengers"
+    },
+    {
+      "title": "Avengers: Infinity War",
+      "type": "movie",
+      "seriesName": "The Avengers"
+    },
+    {
+      "title": "The Avengers",
+      "type": "movie",
+      "seriesName": "The Avengers"
+    },
+    {
+      "title": "Batman: The Dark Knight Returns",
+      "type": "movie",
+      "seriesName": "The Dark Knight Returns"
+    },
+    {
+      "title": "Batman begins",
+      "type": "movie",
+      "seriesName": "The Dark Knight Trilogy"
+    },
+    {
+      "title": "Dark Knight Rises",
+      "type": "movie",
+      "seriesName": "The Dark Knight Trilogy"
+    },
+    {
+      "title": "The Dark Knight",
+      "type": "movie",
+      "seriesName": "The Dark Knight Trilogy"
+    },
+    {
+      "title": "The Godfather",
+      "type": "movie",
+      "seriesName": "The Godfather"
+    },
+    {
+      "title": "The Godfather III",
+      "type": "movie",
+      "seriesName": "The Godfather"
+    },
+    {
+      "title": "The Godfather Part II",
+      "type": "movie",
+      "seriesName": "The Godfather"
+    },
+    {
+      "title": "The Hobbit",
+      "type": "movie",
+      "seriesName": "The Hobbit"
+    },
+    {
+      "title": "The Hobbit: The Battle of Five Armies",
+      "type": "movie",
+      "seriesName": "The Hobbit"
+    },
+    {
+      "title": "The Hobbit: The Desolation of Smaug",
+      "type": "movie",
+      "seriesName": "The Hobbit"
+    },
+    {
+      "title": "The Lord of the Rings: Return of the King",
+      "type": "movie",
+      "seriesName": "The Lord of the Rings"
+    },
+    {
+      "title": "The Lord of the Rings: The Fellowship of the Ring",
+      "type": "movie",
+      "seriesName": "The Lord of the Rings"
+    },
+    {
+      "title": "The Lord of the Rings: The Two Towers",
+      "type": "movie",
+      "seriesName": "The Lord of the Rings"
+    },
+    {
+      "title": "The Matrix",
+      "type": "movie",
+      "date": "1999",
+      "seriesName": "The Matrix Trilogy"
+    },
+    {
+      "title": "X-men",
+      "type": "movie",
+      "seriesName": "X-Men"
+    },
+    {
+      "title": "X-Men: Days of Future Past",
+      "type": "movie",
+      "date": "2014",
+      "seriesName": "X-Men"
+    },
+    {
+      "title": "Dr. No",
+      "type": "movie",
+      "date": "1962",
+      "seriesName": "Sean Connery Era"
+    },
+    {
+      "title": "Goldfinger",
+      "type": "movie",
+      "date": "1964",
+      "seriesName": "Sean Connery Era"
+    },
+    {
+      "title": "The Wolf of Wall Street",
+      "type": "movie",
+      "date": "2013"
+    },
+    {
+      "title": "The Silence of the Lambs",
+      "type": "movie",
+      "date": "1991"
+    }
+  ],
+  "series": [
+    {
+      "name": "Back to the Future"
+    },
+    {
+      "name": "Batman (1989)",
+      "universeName": "Batman"
+    },
+    {
+      "name": "Batman v Superman: Dawn of Justice",
+      "universeName": "Batman"
+    },
+    {
+      "name": "Black Panther",
+      "universeName": "Marvel Cinematic Universe"
+    },
+    {
+      "name": "Captain America",
+      "universeName": "Marvel Cinematic Universe"
+    },
+    {
+      "name": "Captain Marvel",
+      "universeName": "Marvel Cinematic Universe"
+    },
+    {
+      "name": "Deadpool"
+    },
+    {
+      "name": "Fast & Furious"
+    },
+    {
+      "name": "Frozen"
+    },
+    {
+      "name": "Guardians of the Galaxy",
+      "universeName": "Marvel Cinematic Universe"
+    },
+    {
+      "name": "Harry Potter",
+      "universeName": "Wizarding World"
+    },
+    {
+      "name": "Iron Man",
+      "universeName": "Marvel Cinematic Universe"
+    },
+    {
+      "name": "John Wick"
+    },
+    {
+      "name": "Jurassic Park"
+    },
+    {
+      "name": "Naruto"
+    },
+    {
+      "name": "Rocky"
+    },
+    {
+      "name": "Spider-Man: Homecoming",
+      "universeName": "Marvel Cinematic Universe"
+    },
+    {
+      "name": "Original Trilogy",
+      "universeName": "Star Wars"
+    },
+    {
+      "name": "Prequel Trilogy",
+      "universeName": "Star Wars"
+    },
+    {
+      "name": "Sequel Trilogy",
+      "universeName": "Star Wars"
+    },
+    {
+      "name": "Terminator"
+    },
+    {
+      "name": "The Avengers",
+      "universeName": "Marvel Cinematic Universe"
+    },
+    {
+      "name": "The Dark Knight Returns",
+      "universeName": "Batman"
+    },
+    {
+      "name": "The Dark Knight Trilogy",
+      "universeName": "Batman"
+    },
+    {
+      "name": "The Godfather"
+    },
+    {
+      "name": "The Hobbit",
+      "universeName": "Middle Earth"
+    },
+    {
+      "name": "The Lord of the Rings",
+      "universeName": "Middle Earth"
+    },
+    {
+      "name": "The Matrix Trilogy",
+      "universeName": "The Matrix"
+    },
+    {
+      "name": "X-Men"
+    },
+    {
+      "name": "Sean Connery Era",
+      "universeName": "James Bond"
+    }
+  ],
+  "universe": [
+    {
+      "name": "Batman"
+    },
+    {
+      "name": "James Bond"
+    },
+    {
+      "name": "Marvel Cinematic Universe"
+    },
+    {
+      "name": "Middle Earth"
+    },
+    {
+      "name": "Star Wars"
+    },
+    {
+      "name": "The Matrix"
+    },
+    {
+      "name": "Wizarding World"
+    }
+  ]
+}
