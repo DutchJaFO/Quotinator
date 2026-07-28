@@ -414,31 +414,35 @@ public class DatabaseInitializer : IDatabaseInitializer
     private static void EnableWal(SqliteConnection connection)
         => connection.Execute("PRAGMA journal_mode=WAL;");
 
-    // One-time bootstrap step, run before either version table's own CREATE TABLE IF NOT EXISTS and
-    // before either current migration version is known — SchemaVersion predates the numbered
-    // migration list entirely, so its rename can't be a numbered migration. A fresh database has no
-    // table literally named SchemaVersion, so this is a no-op — a new database is never created
-    // under the old name and then renamed. Only concerns Data's own table; System_ConsumerSchemaVersion
-    // is a brand-new table with no legacy name to migrate from.
-    private static async Task RenameLegacySchemaVersionTableIfPresentAsync(SqliteConnection connection)
+    // One-time bootstrap step, run after both version tables exist (their rows are the insert
+    // target) but before either current migration version is read — SchemaVersion predates the
+    // numbered migration list entirely, so splitting it can't itself be a numbered migration. A
+    // fresh database has no table literally named SchemaVersion, so this is a no-op — a new
+    // database is never created under the old name. See #155 for why this splits explicitly by
+    // hardcoded version number rather than renaming the table (a bare rename silently skipped
+    // Data migrations 2-4 on a real v1.7.2 upgrade, since it copied the legacy counter's raw value
+    // straight into System_SchemaVersion).
+    private static async Task SplitLegacySchemaVersionIfPresentAsync(SqliteConnection connection)
     {
         var legacyExists = await connection.ExecuteScalarAsync<int>(Sql.Schema.LegacySchemaVersionExists);
         if (legacyExists == 0) return;
 
-        await connection.ExecuteAsync(Sql.Schema.RenameLegacySchemaVersionTable);
+        await connection.ExecuteAsync(Sql.Schema.SplitLegacySchemaVersionIntoConsumer);
+        await connection.ExecuteAsync(Sql.Schema.SplitLegacySchemaVersionIntoData);
+        await connection.ExecuteAsync(Sql.Schema.DropLegacySchemaVersionTable);
     }
 
     private async Task ApplyMigrationsAsync(SqliteConnection connection, bool forceIncremental = false, bool skipOwnBackup = false)
     {
-        await RenameLegacySchemaVersionTableIfPresentAsync(connection);
-
         // Must run before either CreateXVersionTable call below — those would otherwise make every
         // fresh database register as "not empty" on the very next line, permanently disabling the
-        // baseline path.
+        // baseline path. A legacy (pre-split) database already has many other tables, so it never
+        // reads as empty here regardless of whether the legacy SchemaVersion table has been split yet.
         var isEmptyDatabase = await connection.ExecuteScalarAsync<int>(Sql.Schema.AnyTableExists) == 0;
 
         await connection.ExecuteAsync(Sql.Schema.CreateDataVersionTable);
         await connection.ExecuteAsync(Sql.Schema.CreateConsumerVersionTable);
+        await SplitLegacySchemaVersionIfPresentAsync(connection);
 
         if (isEmptyDatabase && !forceIncremental && _consumerBaseline is not null)
         {

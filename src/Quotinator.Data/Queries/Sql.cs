@@ -30,13 +30,29 @@ internal static class Sql
         // Bootstrap-only, one-time legacy detection — not part of the numbered migration list.
         // Runs before the current version is even known, since SchemaVersion itself is what the
         // numbered migration system depends on to know what to apply. Idempotent by construction:
-        // once the rename below has happened, sqlite_master no longer contains a table literally
-        // named SchemaVersion, so this check is a no-op on every subsequent startup. Only concerns
-        // Data's own table — System_ConsumerSchemaVersion is a brand-new table with no legacy name.
+        // once the split below has happened, sqlite_master no longer contains a table literally
+        // named SchemaVersion, so this check is a no-op on every subsequent startup.
         internal const string LegacySchemaVersionExists =
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SchemaVersion';";
-        internal const string RenameLegacySchemaVersionTable =
-            "ALTER TABLE SchemaVersion RENAME TO System_SchemaVersion;";
+
+        // #155: the legacy, pre-#143 SchemaVersion table held one row per version, versions 1-4
+        // (InitialSchema, ReseedGenres, ImportBatches, CreateAuditEntriesTable — v1.7.2's real,
+        // shipped migration list). Versions 1-3 are genuinely Consumer-owned under the current split;
+        // version 4 is Data-owned migration 1 (renumbered, since Data's own list starts fresh at 1).
+        // A bare table rename (this project's original #143 approach) copied the raw stored version
+        // number straight into System_SchemaVersion, which every later Data migration then read as
+        // "already applied" purely by numeric coincidence with Data's own 1-4 — silently skipping
+        // migrations 2-4 on any real v1.7.2 upgrade. Splitting explicitly, by hardcoded version
+        // number, avoids this: no other historical shape of the legacy table has ever existed, since
+        // nothing has shipped between v1.7.2 and the #143 split that introduced these two tables.
+        internal const string SplitLegacySchemaVersionIntoConsumer =
+            "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) " +
+            "SELECT Version, AppliedAt FROM SchemaVersion WHERE Version IN (1, 2, 3);";
+        internal const string SplitLegacySchemaVersionIntoData =
+            "INSERT INTO System_SchemaVersion (Version, AppliedAt) " +
+            "SELECT 1, AppliedAt FROM SchemaVersion WHERE Version = 4;";
+        internal const string DropLegacySchemaVersionTable =
+            "DROP TABLE SchemaVersion;";
 
         // Detects a completely empty database — zero tables of any kind, including the version
         // tables themselves. Used to decide whether a fresh database can take the one-step baseline

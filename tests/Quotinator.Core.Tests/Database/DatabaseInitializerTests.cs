@@ -626,6 +626,14 @@ public class DatabaseInitializerTests
 
     private const string MarkerValue = "manual-test-marker";
 
+    // #155: distinct markers for each of the 4 rows a genuine v1.7.2 legacy SchemaVersion table
+    // holds (InitialSchema, ReseedGenres, ImportBatches, CreateAuditEntriesTable), so a test can
+    // confirm exactly which row ends up in which of the two new counters after the split.
+    private const string LegacyV1Marker = "legacy-v1-initial-schema";
+    private const string LegacyV2Marker = "legacy-v2-reseed-genres";
+    private const string LegacyV3Marker = "legacy-v3-import-batches";
+    private const string LegacyV4Marker = "legacy-v4-create-audit-entries-table";
+
     /// <summary>A full Reset must not destroy the audit trail — System_AuditEntries is excluded from the table wipe.</summary>
     [TestMethod]
     public async Task ResetAsync_AfterInitialise_PreservesExistingAuditEntries()
@@ -817,19 +825,28 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// Builds a fully up-to-date database, then downgrades it back to the pre-#141 table names
-    /// (SchemaVersion, AuditEntries with the original IX_AuditEntries_* index names) and rolls
-    /// Data's own version counter back to v1 (create-only, rename not yet applied) — simulating a
-    /// real database that predates the #141 amendment, without hand-rolling the full legacy schema.
+    /// Builds a fully up-to-date database, then downgrades it back to a genuine v1.7.2 legacy shape:
+    /// a single unified <c>SchemaVersion</c> table holding exactly the 4 rows that release actually
+    /// shipped (InitialSchema, ReseedGenres, ImportBatches, CreateAuditEntriesTable — confirmed
+    /// directly against the `main` branch's own code, not assumed), plus the legacy <c>AuditEntries</c>
+    /// table shape. Both new counter tables are cleared first so the split has a genuinely empty
+    /// target to populate, matching what a real v1.7.2 database's tables looked like before the
+    /// #143 split existed at all. See #155 — this replaces an earlier version of this helper that
+    /// used a single, arbitrary <c>Version = 1</c> row, which incidentally never exercised the real
+    /// bug (the legacy rename silently skipping Data migrations 2-4 by numeric coincidence with the
+    /// real, 4-row legacy value).
     /// </summary>
     private async Task DowngradeToLegacyNamesAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
         await conn.ExecuteAsync("DELETE FROM System_SchemaVersion;");
-        await conn.ExecuteAsync(
-            "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
+        await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion;");
         await conn.ExecuteAsync("ALTER TABLE System_SchemaVersion RENAME TO SchemaVersion;");
+        await conn.ExecuteAsync(
+            "INSERT INTO SchemaVersion (Version, AppliedAt) VALUES " +
+            "(1, @m1), (2, @m2), (3, @m3), (4, @m4);",
+            new { m1 = LegacyV1Marker, m2 = LegacyV2Marker, m3 = LegacyV3Marker, m4 = LegacyV4Marker });
 
         // Rebuild AuditEntries under its true migration-1 legacy shape (auto-increment long Id, no
         // RecordBase columns) rather than a bare rename — a bare rename would carry over migration
@@ -854,30 +871,73 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// A database with a pre-existing legacy SchemaVersion table (simulating an upgrade from
-    /// before the #141 amendment) gets it renamed to System_SchemaVersion, with the existing
-    /// version-history row preserved rather than wiped.
+    /// #155 regression guard: a genuine v1.7.2 legacy <c>SchemaVersion</c> table (4 rows — Init/
+    /// ReseedGenres/ImportBatches/CreateAuditEntriesTable) must split correctly — versions 1-3 into
+    /// <c>System_ConsumerSchemaVersion</c> (each timestamp preserved), version 4 renumbered to 1 in
+    /// <c>System_SchemaVersion</c> (also preserved) — <em>not</em> a bare rename that copies the raw
+    /// value 4 straight into Data's counter. The original bug this guards against: with a bare
+    /// rename, <c>dataCurrent</c> reads 4 immediately, and since Data's own migrations 2-4 today
+    /// (<c>RenameAuditEntriesToSystemAuditEntries</c>, <c>CreateImportConflictsTable</c>,
+    /// <c>CreateChangeLogTable</c>) numerically coincide with that value, all three were silently
+    /// skipped as "already applied" even though none had ever actually run — leaving
+    /// <c>AuditEntries</c> never renamed and <c>System_ImportConflicts</c>/<c>System_ChangeLog</c>
+    /// never created, while <c>DataSchemaVersion</c> still reported "fully up to date" once the
+    /// later migrations ran. This test's own table-existence assertions are the direct proof the fix
+    /// closes that gap, not just that the version counters end up numerically correct.
     /// </summary>
     [TestMethod]
-    public async Task InitialiseAsync_LegacySchemaVersionTable_IsRenamedWithRowsPreserved()
+    public async Task InitialiseAsync_LegacyV172SchemaVersionTable_SplitsCorrectlyAndReplaysRemainingMigrations()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
         await DowngradeToLegacyNamesAsync();
 
-        var db2 = CreateInitializer([]);
+        // This database's domain tables are already fully migrated (from the InitialiseAsync() call
+        // above), so exercising a genuine replay of Consumer's own migrations 4-11 against them
+        // would hit real column/table conflicts — that end-to-end scenario against a truly
+        // legacy-shaped v1.7.2 database is step 5's job (a real git-worktree snapshot), not this
+        // unit test's. Passing an empty Consumer migration list here means Consumer has nothing to
+        // replay against, so nothing can conflict; Data's own fixed migration list still applies
+        // unconditionally regardless of what's passed here, so this still fully exercises the bug
+        // this test guards against.
+        var db2 = CreateInitializer([], migrations: [], useBaseline: false);
         await db2.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
+
         var legacyCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SchemaVersion';");
-        var preservedRow = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM System_SchemaVersion WHERE Version = 1 AND AppliedAt = @marker;", new { marker = MarkerValue });
+        var consumerRows = (await conn.QueryAsync<(int Version, string AppliedAt)>(
+            "SELECT Version, AppliedAt FROM System_ConsumerSchemaVersion ORDER BY Version;")).ToList();
+        var dataRows = (await conn.QueryAsync<(int Version, string AppliedAt)>(
+            "SELECT Version, AppliedAt FROM System_SchemaVersion ORDER BY Version;")).ToList();
 
-        Assert.AreEqual(0, legacyCount, "The legacy SchemaVersion table must no longer exist after the rename");
-        Assert.AreEqual(1, preservedRow, "The pre-existing version-history row must survive the rename, not be wiped");
-        Assert.AreEqual(13, db2.DataSchemaVersion, "Data migrations 2-13 (the rename, System_ImportConflicts, System_ChangeLog, both RecordBase retrofits, ExistingBatchId, System_ImportActions, the Status CHECK constraint, Blocked/MarkCompletenessAs, OriginalDecision, the Stale status, and System_SourceFileOverrides) should all have replayed after the legacy rename");
+        Assert.AreEqual(0, legacyCount, "The legacy SchemaVersion table must no longer exist after the split");
+
+        Assert.HasCount(3, consumerRows, "Legacy versions 1-3 must land in System_ConsumerSchemaVersion, unrenumbered");
+        Assert.AreEqual((1, LegacyV1Marker), consumerRows[0]);
+        Assert.AreEqual((2, LegacyV2Marker), consumerRows[1]);
+        Assert.AreEqual((3, LegacyV3Marker), consumerRows[2]);
+
+        // dataRows also includes migrations 2-13's own rows by this point (db2.InitialiseAsync()
+        // already replayed them, in the same call that ran the split) — only row 1 is under test
+        // here: it must carry legacy version 4's original marker, proving the split renumbered it
+        // to 1 rather than leaving it at its raw legacy value of 4 (which migrations 2-4 would then
+        // have read as "already applied" and skipped, the original bug).
+        Assert.AreEqual(LegacyV4Marker, dataRows.Single(r => r.Version == 1).AppliedAt);
+
+        // The actual bug symptom: these three tables must exist and be queryable — a bare rename
+        // left them permanently missing on a real v1.7.2 upgrade despite DataSchemaVersion claiming
+        // "up to date".
+        foreach (var table in new[] { "System_AuditEntries", "System_ImportConflicts", "System_ChangeLog" })
+        {
+            var tableExists = await conn.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @table;", new { table });
+            Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
+        }
+
+        Assert.AreEqual(13, db2.DataSchemaVersion, "Data migrations 2-13 should all have replayed from the correctly-seeded starting point of 1");
     }
 
     /// <summary>Data migration 2 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
@@ -897,7 +957,11 @@ public class DatabaseInitializerTests
                 new { marker = MarkerValue });
         }
 
-        var db2 = CreateInitializer([]);
+        // Empty Consumer migration list — see InitialiseAsync_LegacyV172SchemaVersionTable_... above
+        // for why: this database's domain tables are already fully migrated, so a genuine replay of
+        // Consumer's own migrations would hit real column/table conflicts unrelated to what this
+        // test is actually about (Data migration 2's AuditEntries rename).
+        var db2 = CreateInitializer([], migrations: [], useBaseline: false);
         await db2.InitialiseAsync();
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
