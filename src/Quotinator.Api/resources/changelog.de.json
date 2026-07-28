@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -42,7 +42,8 @@
       "James Bond wurde als unterstützte Filmreihe hinzugefügt, ebenso wie The Matrix.",
       "Regeldateien, die wiederkehrende, bekannte Datenkonflikte lösen, können jetzt über neue Endpunkte angezeigt, aus einer bereits getroffenen Entscheidung generiert und entfernt werden, statt nur manuell bearbeitet zu werden.",
       "Ein paar weitere doppelte Einträge (Airplane!, When Harry Met Sally und ein Avengers-Film) wurden jeweils zu einem korrekten Eintrag zusammengeführt, und bei mehreren Zitaten, bei denen unbekannt war, welche Figur sie gesagt hat, wurde dies nun ergänzt.",
-      "Eine Korrekturfunktion, die ein fehlendes Detail ergänzen sollte (z. B. welche Figur ein Zitat gesagt hat), funktionierte beim ersten Auftreten eines Zitats nie — nur bei einer späteren erneuten Prüfung —, sodass eine solche Korrektur bisher stillschweigend wirkungslos blieb; dies ist nun behoben."
+      "Eine Korrekturfunktion, die ein fehlendes Detail ergänzen sollte (z. B. welche Figur ein Zitat gesagt hat), funktionierte beim ersten Auftreten eines Zitats nie — nur bei einer späteren erneuten Prüfung —, sodass eine solche Korrektur bisher stillschweigend wirkungslos blieb; dies ist nun behoben.",
+      "Beim Importieren, bei der Vorschau eines Imports und beim erneuten Einlesen der Datenbank wird jetzt genau gemeldet, was pro Datei und pro Datentyp passiert ist (neu, korrigiert, zur Überprüfung vorgemerkt usw.), anstatt einer einzigen ungenauen Anzahl von Duplikaten."
     ],
     "added": [
       "Im Benutzer-Importordner wird nun automatisch eine `manifest.json` erstellt, wenn keine vorhanden ist, mit den gefundenen Dateien in alphabetischer Reihenfolge; gesteuert über den Konfigurationsschlüssel `Quotinator__CreateMissingManifest` (Standard `true`)",
@@ -104,7 +105,9 @@
       "Neue quellenspezifische Titel-Alias-Datei (`sourceAliasFile`-Manifesteigenschaft) korrigiert einen falsch geschriebenen oder uneinheitlichen Quellentitel/-typ zu seiner kanonischen Form, bevor er mit vorhandenen Daten abgeglichen wird — gilt sowohl für einen brandneuen als auch für einen erneut importierten Datensatz und verhindert, dass jemals eine doppelte Quelle für denselben echten Film/dieselbe echte Serie unter einer anderen Schreibweise entsteht (Issue #181)",
       "Neue Endpunkte `GET`/`POST /generate`/`DELETE /api/v1/import/rules/conflict` zeigen eine persistierte Override einer quellenspezifischen Konfliktlösungs-Regeldatei an, generieren sie aus einem entschiedenen Batch und entfernen sie, ohne dass eine manuelle Bearbeitung und erneute Bereitstellung nötig ist (Issue #153)",
       "Neuer Endpunkt `GET /api/v1/import/rules/alias` durchsucht vorhandene Quellen nach wahrscheinlichen doppelten Titeln, die noch nicht durch eine Titel-Alias-Datei abgedeckt sind, und schlägt sie zur Überprüfung vor — schreibt selbst nie einen Alias-Eintrag (Issue #153)",
-      "Eine gestagte Aktion kann jetzt als `Stale` markiert werden, wenn die Konfliktlösungs- oder Titel-Alias-Regel, die sie automatisch aufgelöst hätte, nicht mehr mit den aktuellen Daten übereinstimmt — sie wird dann zur Überprüfung zurückgehalten, statt eine veraltete Korrektur stillschweigend erneut anzuwenden (Issue #153)"
+      "Eine gestagte Aktion kann jetzt als `Stale` markiert werden, wenn die Konfliktlösungs- oder Titel-Alias-Regel, die sie automatisch aufgelöst hätte, nicht mehr mit den aktuellen Daten übereinstimmt — sie wird dann zur Überprüfung zurückgehalten, statt eine veraltete Korrektur stillschweigend erneut anzuwenden (Issue #153)",
+      "`POST /api/v1/import`, `.../import/preview`, `POST /api/v1/admin/database/reseed`/`reset` und `GET /api/v1/admin/database/seed/preview` liefern jetzt alle einen Bericht pro Datei und Entitätstyp (Anzahl neu/geändert/blockiert/verworfen/ausstehend/veraltet) anstelle einer einzigen pauschalen `duplicates`-Zahl — ersetzt `LastSeedDuplicates`/`SeedDuplicateRecord` vollständig (Issue #221)",
+      "`IDatabaseInitializer` stellt jetzt zusätzlich zu den vier bestehenden Zählern auch `SeriesCount`/`UniverseCount`/`StageDirectionCount`/`SoundCueCount`/`ConversationCount` bereit, sichtbar in der Start-Logzeile `[Database - Stats]` sowie in den Antworten von `reseed`/`reset` (Issue #221)"
     ],
     "changed": [
       "Eine brandneue Datenbank erstellt ihr Schema jetzt in einem Schritt, anstatt jeden historischen Upgrade-Schritt nacheinander zu durchlaufen; bestehende Datenbanken sind davon nicht betroffen und werden wie bisher schrittweise aktualisiert",
@@ -118,7 +121,8 @@
       "Die gebündelten Quellen `NikhilNamal17/popular-movie-quotes` und `vilaboim/movie-quotes` verwenden jetzt die neuen generischen Konverter `basic-json-array`/`regex-array`, konfiguriert über `converterOptions` in `data/sources/manifest.json` statt über eigenen Code pro Quelle — die Ausgabe ist unverändert, dieselben Zitat-Ids und Inhalte",
       "Die Paginierung jedes Listen-Endpunkts folgt jetzt einem einheitlichen Vertrag: eine `pageSize` über 500 wird abgelehnt (422) statt stillschweigend begrenzt, `pageSize=0` gibt alle passenden Zeilen als eine Seite zurück, und das Anfordern einer Seite hinter der letzten ist ein eigenständiger 422",
       "Die Standard-Seitengröße für `GET /api/v1/admin/audit` und `GET /api/v1/import/actions` wurde von 50 auf 20 geändert, passend zu jedem anderen Listen-Endpunkt",
-      "Die Identität eines Charakters ist nicht mehr auf eine einzelne Quelle beschränkt: Zwei Charaktere mit demselben Namen werden jetzt als derselbe Charakter behandelt, wenn ihre Quellen sowohl denselben Medientyp als auch eine bekannte Reihe teilen; bestehende Duplikate pro Quelle werden beim Upgrade automatisch zusammengeführt, wo immer eine Reihenbeziehung bekannt ist (issue #174)"
+      "Die Identität eines Charakters ist nicht mehr auf eine einzelne Quelle beschränkt: Zwei Charaktere mit demselben Namen werden jetzt als derselbe Charakter behandelt, wenn ihre Quellen sowohl denselben Medientyp als auch eine bekannte Reihe teilen; bestehende Duplikate pro Quelle werden beim Upgrade automatisch zusammengeführt, wo immer eine Reihenbeziehung bekannt ist (issue #174)",
+      "Die Datenbankstatistiken im Start-Banner werden jetzt einzeln pro Zeile unter einem neuen Abschnitt `Statistics:` aufgelistet statt in einer einzigen Zeile zusammengedrängt, damit weitere Entitätstypen auch künftig lesbar bleiben (Issue #221)"
     ],
     "fixed": [
       "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für jede gebündelte Datei, ob extern über eine Manifest-URL bezogen oder intern kuratiert) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch falsch erfasst",

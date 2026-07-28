@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.",
@@ -35,7 +35,8 @@
       "James Bond has been added as a supported film franchise, alongside The Matrix.",
       "Rule files that correct recurring, known data conflicts can now be viewed, generated from a decision already made, and removed through new endpoints, instead of only being hand-edited.",
       "A few more duplicate entries (Airplane!, When Harry Met Sally, and an Avengers film) have been merged into one accurate entry each, and several quotes that were missing which character said them now have that filled in.",
-      "A data-correction feature meant to fill in a missing detail (like which character said a quote) had never actually worked the first time a quote was seen — only on a later re-check — so any such correction made so far silently had no effect; this is now fixed."
+      "A data-correction feature meant to fill in a missing detail (like which character said a quote) had never actually worked the first time a quote was seen — only on a later re-check — so any such correction made so far silently had no effect; this is now fixed.",
+      "Importing, previewing an import, and reseeding now report exactly what happened per file and per type of data (new, corrected, held for review, etc.) instead of one vague duplicates number."
     ],
     "added": [
       "A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)",
@@ -97,7 +98,9 @@
       "New per-source title-alias file (`sourceAliasFile` manifest property) corrects a misspelled or inconsistent Source title/type to its canonical form before it's matched against existing data — applies to both a brand-new record and a re-imported one, preventing a duplicate Source from ever being created for the same real film/show under a different spelling (issue #181)",
       "New `GET`/`POST /generate`/`DELETE /api/v1/import/rules/conflict` endpoints view, generate from a decided batch, and remove a persisted override of a per-source conflict-resolution rule file, without needing to hand-edit and redeploy it (issue #153)",
       "New `GET /api/v1/import/rules/alias` endpoint scans existing Sources for likely duplicate titles not yet covered by a title-alias file and suggests them for review — never writes an alias entry itself (issue #153)",
-      "A staged action can now be flagged `Stale` when the conflict-resolution or title-alias rule that would have auto-resolved it no longer matches current data — held for review instead of silently reapplying an outdated correction (issue #153)"
+      "A staged action can now be flagged `Stale` when the conflict-resolution or title-alias rule that would have auto-resolved it no longer matches current data — held for review instead of silently reapplying an outdated correction (issue #153)",
+      "`POST /api/v1/import`, `.../import/preview`, `POST /api/v1/admin/database/reseed`/`reset`, and `GET /api/v1/admin/database/seed/preview` now all return a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) instead of a single flat `duplicates` count — replaces `LastSeedDuplicates`/`SeedDuplicateRecord` entirely (issue #221)",
+      "`IDatabaseInitializer` now also exposes `SeriesCount`/`UniverseCount`/`StageDirectionCount`/`SoundCueCount`/`ConversationCount` alongside the existing four counts, surfaced in the startup `[Database - Stats]` log line and the `reseed`/`reset` endpoint responses (issue #221)"
     ],
     "changed": [
       "A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before",
@@ -111,7 +114,8 @@
       "The bundled `NikhilNamal17/popular-movie-quotes` and `vilaboim/movie-quotes` sources now use the new generic `basic-json-array`/`regex-array` converters, configured via `converterOptions` in `data/sources/manifest.json` instead of dedicated per-source code — output is unchanged, same quote ids and content",
       "Every list endpoint's pagination now follows one consistent contract: `pageSize` above 500 is rejected (422) instead of silently capped, `pageSize=0` returns every matching row as a single page, and requesting a page past the last one is a distinct 422",
       "The default page size for `GET /api/v1/admin/audit` and `GET /api/v1/import/actions` changed from 50 to 20, matching every other list endpoint",
-      "Character identity is no longer scoped to a single source: two characters with the same name are now treated as the same character when their sources share both media type and a known series; existing per-source duplicates are consolidated automatically on upgrade wherever a series relationship is known (issue #174)"
+      "Character identity is no longer scoped to a single source: two characters with the same name are now treated as the same character when their sources share both media type and a known series; existing per-source duplicates are consolidated automatically on upgrade wherever a series relationship is known (issue #174)",
+      "The startup banner's database statistics are now listed one per line under a new `Statistics:` section instead of crammed onto a single line, so additional entity types stay readable as more are added (issue #221)"
     ],
     "fixed": [
       "ImportBatch rows created during seeding now record the correct `Type` (`Seed` for any bundled file, whether externally sourced with a manifest URL or internally authored) and persist the source URL; previously every seeded batch was recorded incorrectly",

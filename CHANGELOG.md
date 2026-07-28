@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-26 18:19 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-28 17:46 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -41,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Rule files that correct recurring, known data conflicts can now be viewed, generated from a decision already made, and removed through new endpoints, instead of only being hand-edited.
 - A few more duplicate entries (Airplane!, When Harry Met Sally, and an Avengers film) have been merged into one accurate entry each, and several quotes that were missing which character said them now have that filled in.
 - A data-correction feature meant to fill in a missing detail (like which character said a quote) had never actually worked the first time a quote was seen — only on a later re-check — so any such correction made so far silently had no effect; this is now fixed.
+- Importing, previewing an import, and reseeding now report exactly what happened per file and per type of data (new, corrected, held for review, etc.) instead of one vague duplicates number.
 
 ### Added
 - A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)
@@ -103,6 +104,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New `GET`/`POST /generate`/`DELETE /api/v1/import/rules/conflict` endpoints view, generate from a decided batch, and remove a persisted override of a per-source conflict-resolution rule file, without needing to hand-edit and redeploy it (issue #153)
 - New `GET /api/v1/import/rules/alias` endpoint scans existing Sources for likely duplicate titles not yet covered by a title-alias file and suggests them for review — never writes an alias entry itself (issue #153)
 - A staged action can now be flagged `Stale` when the conflict-resolution or title-alias rule that would have auto-resolved it no longer matches current data — held for review instead of silently reapplying an outdated correction (issue #153)
+- `POST /api/v1/import`, `.../import/preview`, `POST /api/v1/admin/database/reseed`/`reset`, and `GET /api/v1/admin/database/seed/preview` now all return a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) instead of a single flat `duplicates` count — replaces `LastSeedDuplicates`/`SeedDuplicateRecord` entirely (issue #221)
+- `IDatabaseInitializer` now also exposes `SeriesCount`/`UniverseCount`/`StageDirectionCount`/`SoundCueCount`/`ConversationCount` alongside the existing four counts, surfaced in the startup `[Database - Stats]` log line and the `reseed`/`reset` endpoint responses (issue #221)
 
 ### Changed
 - A brand-new database now creates its schema in one step instead of replaying every historical upgrade step in sequence; existing databases are unaffected and continue upgrading incrementally as before
@@ -117,6 +120,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Every list endpoint's pagination now follows one consistent contract: `pageSize` above 500 is rejected (422) instead of silently capped, `pageSize=0` returns every matching row as a single page, and requesting a page past the last one is a distinct 422
 - The default page size for `GET /api/v1/admin/audit` and `GET /api/v1/import/actions` changed from 50 to 20, matching every other list endpoint
 - Character identity is no longer scoped to a single source: two characters with the same name are now treated as the same character when their sources share both media type and a known series; existing per-source duplicates are consolidated automatically on upgrade wherever a series relationship is known (issue #174)
+- The startup banner's database statistics are now listed one per line under a new `Statistics:` section instead of crammed onto a single line, so additional entity types stay readable as more are added (issue #221)
 
 ### Fixed
 - ImportBatch rows created during seeding now record the correct `Type` (`Seed` for any bundled file, whether externally sourced with a manifest URL or internally authored) and persist the source URL; previously every seeded batch was recorded incorrectly
