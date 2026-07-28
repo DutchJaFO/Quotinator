@@ -121,6 +121,7 @@ public class AdminEndpointsTests
         Assert.IsTrue(doc.RootElement.TryGetProperty("stageDirections", out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("soundCues",       out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("conversations",   out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("reports",         out _), "#221: per-file report array replacing the old flat duplicates count");
     }
 
     // ── POST /admin/database/reset ────────────────────────────────────────────
@@ -172,6 +173,7 @@ public class AdminEndpointsTests
         Assert.IsTrue(doc.RootElement.TryGetProperty("stageDirections", out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("soundCues",       out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("conversations",   out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("reports",         out _), "#221: per-file report array replacing the old flat duplicates count");
     }
 
     /// <summary>POST /admin/database/reset with no query parameter defaults preserveSchemaVersion to false (#141).</summary>
