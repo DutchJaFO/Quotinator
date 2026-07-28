@@ -45,14 +45,14 @@ internal static class EntityFilterParsing
     {
         if (idValue is not null && nameValue is not null)
             return new EntityFilterResult(EntityFilterOutcome.Error, null, null, Results.Problem(
-                detail: string.Format(localizer[ApiMessages.MutuallyExclusiveEntityFilter], names.IdParam, names.NameParam),
+                detail: localizer.Format(ApiMessages.MutuallyExclusiveEntityFilter, names.IdParam, names.NameParam),
                 statusCode: StatusCodes.Status422UnprocessableEntity));
 
         if (idValue is not null)
         {
             if (!Guid.TryParse(idValue, out var parsed))
                 return new EntityFilterResult(EntityFilterOutcome.Error, null, null, Results.Problem(
-                    detail: string.Format(localizer[ApiMessages.InvalidEntityFilterId], names.IdParam),
+                    detail: localizer.Format(ApiMessages.InvalidEntityFilterId, names.IdParam),
                     statusCode: StatusCodes.Status422UnprocessableEntity));
 
             return new EntityFilterResult(EntityFilterOutcome.Resolved, parsed, null, null);
@@ -63,7 +63,7 @@ internal static class EntityFilterParsing
             var resolvedId = await resolveIdByName(nameValue);
             return resolvedId is null
                 ? new EntityFilterResult(EntityFilterOutcome.NotFound, null,
-                    string.Format(localizer[ApiMessages.EntityFilterNoMatch], names.EntityType, nameValue), null)
+                    localizer.Format(ApiMessages.EntityFilterNoMatch, names.EntityType, nameValue), null)
                 : new EntityFilterResult(EntityFilterOutcome.Resolved, resolvedId, null, null);
         }
 

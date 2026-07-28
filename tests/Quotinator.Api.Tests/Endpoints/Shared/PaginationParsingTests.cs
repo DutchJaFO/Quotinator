@@ -11,6 +11,7 @@ public class PaginationParsingTests
     private sealed class FakeLocalizer : IApiLocalizer
     {
         public string this[string key] => key;
+        public string Format(string key, params object[] args) => ApiLocalizerFormatting.Substitute(this[key], args);
     }
 
     private static readonly FakeLocalizer Localizer = new();

@@ -571,11 +571,17 @@ match (`LOWER(column) = LOWER(@id)`), per the case-insensitive-by-default rule a
 filters stay fuzzy, direct contains-matches — this convention is for *new* entity-scoped filters
 (#184–#189, #192), not a retrofit of Search/RandomQuote's existing behaviour.
 
-`EntityFilterParsing`'s three messages use `string.Format` on a localised template with `{0}`/`{1}`
-placeholders (the same pattern as `ApiMessages.ImportActionAmbiguousFieldsUnresolved`,
-`ImportEndpoints.cs:174`) — `IApiLocalizer` itself has no interpolation support (`this[string key]` is a
-flat lookup), so the caller formats the resolved template with the specific parameter/entity names rather
-than the message being generic.
+`EntityFilterParsing`'s three messages use `IApiLocalizer.Format(key, args)` to substitute `{0}`/`{1}`
+placeholders into a localised template (the same pattern as `ApiMessages.ImportActionAmbiguousFieldsUnresolved`
+in `ImportEndpoints.cs`) — `IApiLocalizer`'s indexer (`this[string key]`) is a flat lookup with no
+interpolation support, so `Format` exists specifically to substitute the resolved template with the
+specific parameter/entity names rather than the message being generic. **Never use
+`string.Format(localizer[key], args)`** — the format-string argument's content depends on the request's
+own `Accept-Language` header (which of the 3 translation files gets consulted), which is exactly the
+shape CodeQL's `cs/uncontrolled-format-string` flags, and a translation-file placeholder-count typo would
+throw `FormatException` and turn into a live 500. `IApiLocalizer.Format` does the same substitution via a
+single-pass regex (`ApiLocalizerFormatting.Substitute`, `src/Quotinator.Core/Services/ApiLocalizer.cs`)
+that never throws — a placeholder with no matching argument is left as literal text instead.
 
 ### Vocabulary and abbreviations
 

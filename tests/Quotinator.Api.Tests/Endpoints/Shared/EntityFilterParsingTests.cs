@@ -17,6 +17,8 @@ public class EntityFilterParsingTests
             ApiMessages.EntityFilterNoMatch            => "No {0} matches '{1}'.",
             _ => key,
         };
+
+        public string Format(string key, params object[] args) => ApiLocalizerFormatting.Substitute(this[key], args);
     }
 
     private static readonly FakeLocalizer Localizer = new();

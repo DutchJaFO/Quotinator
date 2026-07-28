@@ -272,13 +272,13 @@ internal static class ImportEndpoints
             catch (ImportActionNotDecidableException ex)
             {
                 return Results.Problem(
-                    detail: string.Format(localizer[ApiMessages.ImportActionNotDecidable], ex.EntityType),
+                    detail: localizer.Format(ApiMessages.ImportActionNotDecidable, ex.EntityType),
                     statusCode: StatusCodes.Status422UnprocessableEntity);
             }
             catch (UnresolvedFieldConflictException ex)
             {
                 return Results.Problem(
-                    detail: string.Format(localizer[ApiMessages.ImportActionAmbiguousFieldsUnresolved], string.Join(", ", ex.FieldNames)),
+                    detail: localizer.Format(ApiMessages.ImportActionAmbiguousFieldsUnresolved, string.Join(", ", ex.FieldNames)),
                     statusCode: StatusCodes.Status422UnprocessableEntity);
             }
         })
@@ -521,13 +521,13 @@ internal static class ImportEndpoints
         catch (UnknownConverterException ex)
         {
             return Results.Problem(
-                detail: string.Format(localizer[ApiMessages.ImportUnknownConverter], ex.ConverterName),
+                detail: localizer.Format(ApiMessages.ImportUnknownConverter, ex.ConverterName),
                 statusCode: StatusCodes.Status422UnprocessableEntity);
         }
         catch (QuoteImportValidationException ex)
         {
             return Results.Problem(
-                detail: string.Format(localizer[ApiMessages.ImportFileInvalid], ex.Message),
+                detail: localizer.Format(ApiMessages.ImportFileInvalid, ex.Message),
                 statusCode: StatusCodes.Status422UnprocessableEntity);
         }
     }

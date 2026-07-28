@@ -152,7 +152,7 @@ internal static class QuoteEndpoints
 
     private static IResult YearParseError(IApiLocalizer localizer, string paramName) =>
         Results.Problem(
-            detail: string.Format(localizer[ApiMessages.YearParamNotInteger], paramName),
+            detail: localizer.Format(ApiMessages.YearParamNotInteger, paramName),
             statusCode: StatusCodes.Status422UnprocessableEntity);
 
     // Resolves both Series and Universe entity-scoped filters (#196's convention, #192's first

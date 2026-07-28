@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 
@@ -51,7 +52,7 @@ public static class EffectiveRuleFileResolver
         if (registered is null)
         {
             logger.LogWarning("{Prefix} {File} has an override file on disk but no registered entry — ignoring it and using the bundled copy",
-                logPrefix, fileName);
+                logPrefix, LogSanitizer.ForLog(fileName));
             return bundledPath;
         }
 
@@ -59,7 +60,7 @@ public static class EffectiveRuleFileResolver
         if (!string.Equals(actualHash, registered.ContentHash, StringComparison.OrdinalIgnoreCase))
         {
             logger.LogWarning("{Prefix} {File}'s override content hash no longer matches its registration — ignoring it and using the bundled copy",
-                logPrefix, fileName);
+                logPrefix, LogSanitizer.ForLog(fileName));
             return bundledPath;
         }
 

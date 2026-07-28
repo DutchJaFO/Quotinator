@@ -109,7 +109,7 @@ internal static class ImportRuleEndpoints
                 await registry.RegisterAsync(fileName!, parsedOrigin, EffectiveRuleFileResolver.ComputeContentHash(json), batchId);
 
                 logger.LogInformation("[Api - Import] generated conflict-resolution override for {File} ({Origin}) from batch {BatchId} — {Added} rule(s) added",
-                    fileName, origin, batchId, rulesAdded);
+                    LogSanitizer.ForLog(fileName!), LogSanitizer.ForLog(origin!), LogSanitizer.ForLog(batchId!), rulesAdded);
 
                 return Results.Ok(new ConflictRuleFileResponse
                 {
