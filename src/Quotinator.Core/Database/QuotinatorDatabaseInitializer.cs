@@ -153,6 +153,15 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// #221: builds a real <see cref="FileImportReport"/> per file via
+    /// <see cref="ImportActionPlanner.PlanAsync"/> — the same classifier the real seeding pipeline
+    /// uses — but never calls <see cref="IImportActionCoordinator.StageAsync"/> or
+    /// <see cref="IImportActionService.ApplyBatchAsync"/>, so nothing is ever written. This is safe
+    /// because <c>PlanAsync</c> itself only ever reads (every database call in it is a <c>SELECT</c>).
+    /// See <see cref="SeedPreviewResult.Reports"/> for the one known limitation this implies (no
+    /// cross-file simulation within a single preview call).
+    /// </remarks>
     public override async Task<SeedPreviewResult> PreviewSeedAsync()
     {
         // Preview reflects whatever is already cached on disk — it never triggers a network call,
@@ -162,43 +171,34 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         var resultsByName    = resolution.Results.ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
 
         var filePreviews = new List<SeedFilePreview>();
-        var duplicates   = new List<SeedDuplicateRecord>();
-        var seenIds      = new Dictionary<string, string>(StringComparer.Ordinal);
-        var totalQuotes  = 0;
+        var reports      = new List<FileImportReport>();
+
+        using var connection = CreateConnection();
+        await connection.OpenAsync();
 
         foreach (var batch in effectiveBatches)
         {
             foreach (var seedFile in batch.Files)
             {
-                var fileName = Path.GetFileName(seedFile.FilePath);
-                var (quotes, issue) = LoadQuotesFromFile(seedFile.FilePath);
+                var fileName    = Path.GetFileName(seedFile.FilePath);
+                var (parsed, issue) = LoadSourceFileAsync(seedFile.FilePath);
+                var quotes      = parsed.Quotes;
                 var refreshResult = resultsByName.GetValueOrDefault(fileName);
-                var filePolicy = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
+                var filePolicy  = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
                 filePreviews.Add(new SeedFilePreview(fileName, quotes.Count, refreshResult?.Outcome, refreshResult?.LastRefreshedAtUtc, issue));
-                totalQuotes += quotes.Count;
 
-                foreach (var q in quotes)
-                {
-                    if (seenIds.TryGetValue(q.Id, out var firstFile))
-                    {
-                        duplicates.Add(new SeedDuplicateRecord(
-                            "quote", q.Id, TruncateLabel(q.QuoteText),
-                            Path.GetFileName(firstFile), fileName,
-                            filePolicy.ForQuotes));
-                    }
-                    else
-                    {
-                        seenIds[q.Id] = seedFile.FilePath;
-                    }
-                }
+                var conflictRules = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
+                var sourceAliases = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
+
+                var actions = await ImportActionPlanner.PlanAsync(connection, quotes, Guid.NewGuid(), filePolicy.ForQuotes, transaction: null,
+                    parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
+                    parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases);
+
+                reports.Add(ImportActionReportBuilder.Build(fileName, actions));
             }
         }
 
-        return new SeedPreviewResult(
-            filePreviews,
-            duplicates,
-            totalQuotes,
-            seenIds.Count);
+        return new SeedPreviewResult(filePreviews, reports);
     }
 
     /// <inheritdoc/>
@@ -430,9 +430,6 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         Logger.LogWarning("[Database - Seed] {File} is empty or not valid JSON — skipping", Path.GetFileName(filePath));
         return (new ParsedSourceFile { Quotes = [] }, SeedFileIssue.InvalidJson);
     }
-
-    private static string TruncateLabel(string text, int maxLen = 60)
-        => text.Length <= maxLen ? text : text[..maxLen] + "…";
 
     /// <summary>Single-line, grep-friendly rendering of a <see cref="FileImportReport"/> for the seed log (#221).</summary>
     private static string FormatReport(FileImportReport report)

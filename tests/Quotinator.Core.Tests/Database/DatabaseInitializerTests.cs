@@ -177,6 +177,41 @@ public class DatabaseInitializerTests
         Assert.AreEqual(0, blocked, "NewestWins never blocks — no Complete rows exist yet to block against");
     }
 
+    /// <summary>#221: PreviewSeedAsync must produce the same rich per-file, per-entity-type report as a
+    /// real seed run, computed via a read-only <see cref="ImportActionPlanner.PlanAsync"/> call — but
+    /// write nothing to the database. Run against an already-fully-seeded database (so the planner has
+    /// real rows to resolve against, not just "everything new"), asserting both that the report has the
+    /// expected shape and, critically, that System_ImportActions/ImportBatches row counts are completely
+    /// unchanged before and after the call.</summary>
+    [TestMethod]
+    public async Task PreviewSeedAsync_AfterFullSeed_ProducesReportWithoutWritingAnyRow()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        var actionsBefore = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions;");
+        var batchesBefore = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ImportBatches;");
+
+        var preview = await db.PreviewSeedAsync();
+
+        var actionsAfter = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions;");
+        var batchesAfter = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ImportBatches;");
+
+        Assert.AreEqual(actionsBefore, actionsAfter, "PreviewSeedAsync must never write to System_ImportActions");
+        Assert.AreEqual(batchesBefore, batchesAfter, "PreviewSeedAsync must never create an ImportBatches row");
+
+        Assert.AreEqual(preview.Files.Count, preview.Reports.Count, "One report per previewed file");
+        Assert.IsTrue(preview.Reports.All(r => r.EntityTypes.ContainsKey("Quote")), "Every bundled file has at least one Quote action");
+
+        var modified = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0);
+        var newCount = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.New ?? 0);
+        Assert.AreEqual(844, modified, "799 unique quotes + 45 cross-file duplicate occurrences (AllFilesBatch's own vilaboim/NikhilNamal17 overlap) — every quote line across every file matches an already-existing row, since the database was already fully seeded");
+        Assert.AreEqual(0, newCount, "Nothing is genuinely new — the database was already fully seeded from the same files");
+    }
+
     /// <summary>Seeding only the curated file correctly wires up the FK chain: Source → Character → Quote.</summary>
     [TestMethod]
     public async Task InitialiseAsync_CuratedFileOnly_SeedsFkChainCorrectly()

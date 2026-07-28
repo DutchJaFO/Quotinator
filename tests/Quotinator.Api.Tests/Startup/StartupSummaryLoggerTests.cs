@@ -55,7 +55,7 @@ public class StartupSummaryLoggerTests
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
         public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false) => Task.CompletedTask;
         public Task<SeedPreviewResult> PreviewSeedAsync() =>
-            Task.FromResult(new SeedPreviewResult([], [], 0, 0));
+            Task.FromResult(new SeedPreviewResult([], []));
         public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false) =>
             Task.FromResult(new SourceCacheResolution([], []));
     }

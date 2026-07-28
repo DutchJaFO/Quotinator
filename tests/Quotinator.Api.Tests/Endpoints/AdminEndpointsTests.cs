@@ -68,10 +68,8 @@ public class AdminEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.IsTrue(doc.RootElement.TryGetProperty("files",               out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("totalQuotes",         out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("uniqueQuotes",        out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("crossFileDuplicates", out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("files",   out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("reports", out _));
     }
 
     // ── POST /admin/database/reseed ───────────────────────────────────────────
@@ -214,7 +212,7 @@ public class AdminEndpointsTests
         }
 
         public Task<SeedPreviewResult> PreviewSeedAsync()
-            => Task.FromResult(new SeedPreviewResult([], [], 0, 0));
+            => Task.FromResult(new SeedPreviewResult([], []));
 
         public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false)
             => Task.FromResult(new SourceCacheResolution([], []));

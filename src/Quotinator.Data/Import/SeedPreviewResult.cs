@@ -1,15 +1,21 @@
 namespace Quotinator.Data.Import;
 
-/// <summary>Summary of a dry-run file scan performed without touching the database.</summary>
+/// <summary>
+/// Summary of a dry-run file scan performed without writing anything to the database (#221).
+/// </summary>
 /// <param name="Files">One entry per source file in import order, including its quote count.</param>
-/// <param name="CrossFileDuplicates">Quotes with the same stable ID that appear in more than one file.</param>
-/// <param name="TotalQuotes">Total quote rows across all files (including duplicates).</param>
-/// <param name="UniqueQuotes">Unique quote IDs — what the database would contain after a full import with <c>skip</c> policy.</param>
+/// <param name="Reports">
+/// One <see cref="FileImportReport"/> per file, computed by running the real action planner against
+/// the current database state (read-only — no action is ever staged or applied). Known limitation:
+/// since nothing is actually written between files, a later file cannot see an earlier file's
+/// hypothetical effect within this same preview call — a quote id appearing in two different files
+/// that are both new to the database reports as <c>new</c> in both, not <c>new</c> + <c>modified</c>,
+/// unlike a real seed run (where the earlier file's row is actually committed before the next file is
+/// planned). Always accurate against a database that already has the relevant rows.
+/// </param>
 public record SeedPreviewResult(
-    IReadOnlyList<SeedFilePreview>     Files,
-    IReadOnlyList<SeedDuplicateRecord> CrossFileDuplicates,
-    int                                TotalQuotes,
-    int                                UniqueQuotes);
+    IReadOnlyList<SeedFilePreview>   Files,
+    IReadOnlyList<FileImportReport>  Reports);
 
 /// <summary>Per-file summary within a <see cref="SeedPreviewResult"/>.</summary>
 /// <param name="FileName">File name without directory path.</param>

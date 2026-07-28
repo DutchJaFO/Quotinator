@@ -285,7 +285,7 @@ public class DatabaseInitializer : IDatabaseInitializer
 
     /// <inheritdoc/>
     public virtual Task<SeedPreviewResult> PreviewSeedAsync()
-        => Task.FromResult(new SeedPreviewResult([], [], 0, 0));
+        => Task.FromResult(new SeedPreviewResult([], []));
 
     /// <inheritdoc/>
     public virtual Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false)

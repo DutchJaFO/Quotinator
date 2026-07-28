@@ -48,30 +48,24 @@ internal static class AdminEndpoints
                         _                         => null
                     }
                 }),
-                totalQuotes        = preview.TotalQuotes,
-                uniqueQuotes       = preview.UniqueQuotes,
-                crossFileDuplicates = preview.CrossFileDuplicates.Select(d => new
-                {
-                    d.EntityType,
-                    d.Id,
-                    d.Label,
-                    d.FirstSeenInFile,
-                    d.ConflictFile,
-                    appliedPolicy = d.AppliedPolicy.ToString().ToLowerInvariant()
-                })
+                reports = preview.Reports
             });
         })
         .WithName("PreviewSeed")
         .WithSummary("Preview seed import")
         .WithDescription(
-            "Scans all configured source files without touching the database. " +
-            "Returns the quote count per file, total and unique quote counts, and any cross-file duplicate IDs with the policy that would be applied. " +
+            "Scans all configured source files without writing anything to the database. " +
+            "Returns the quote count per file, plus a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale " +
+            "counts) computed by running the real import action planner read-only against the current database state (issue #221). " +
             "For a file with a `downloadUrl`, also returns `refreshOutcome` (`updated`, `uptodate`, `failed`, or `skippedcollision`) and " +
             "`lastRefreshedAtUtc` (the cached copy's own last-write time, not \"now\") — both omitted for a file with no `downloadUrl`. " +
             "`issue` (`missing` or `invalidjson`) and a localised `message` (following `Accept-Language`, like all other API error text) are present " +
             "when the file could not be parsed at all — the only way to tell a `quoteCount` of `0` caused by a genuine parse error apart from a file " +
             "that is simply, validly empty. Applies to every file, not only those with a `downloadUrl`. A `quoteCount` of `0` alongside a " +
             "`failed`/`skippedcollision` `refreshOutcome` means the cache is currently degraded and fell back to the original file. " +
+            "Known limitation: since this preview never writes between files, a quote id appearing in two different files that are both " +
+            "new to the database reports as `new` in both files' reports rather than `new` in one and `modified` in the other, unlike a " +
+            "real seed run — always accurate against a database that already has the relevant rows. " +
             "Use this before calling `reseed` to understand what will be imported.");
 
         publicGroup.MapGet("/audit", async (

@@ -44,7 +44,7 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
 
     /// <inheritdoc/>
     public Task<SeedPreviewResult> PreviewSeedAsync()
-        => Task.FromResult(new SeedPreviewResult([], [], 0, 0));
+        => Task.FromResult(new SeedPreviewResult([], []));
 
     /// <inheritdoc/>
     public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false)
