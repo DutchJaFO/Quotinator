@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 155, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Beveiliging: een kwetsbaarheid in een OpenAPI-documentatiebibliotheek (CVE-2026-49451) is geïdentificeerd en verholpen; het kwetsbare codepad was in Quotinator nooit bereikbaar, en er zijn geen gebruikersgegevens getroffen.",
@@ -163,7 +163,9 @@
       "Hoofdletterongevoelige matching voor brontitels, Reeks-/Universum-/Persoonsnamen en enkele interne statusfilters was geïmplementeerd als afzonderlijke, handmatig geschreven SQL op elke plek, en één daarvan (het filteren op status/entiteitstype van importacties) was afgedreven naar de tegenovergestelde schrijfwijzeconventie dan overal elders; samengevoegd tot één gedeeld, geteste mechanisme zonder wijziging in het daadwerkelijke matchgedrag, plus een geautomatiseerde controle die een toekomstige vergelijking van dit type opvangt als deze ooit wordt toegevoegd zonder dezelfde hoofdletterongevoelige afhandeling (issue #211)",
       "De `Custom`-waarde van een regel voor conflictoplossing (het invullen van een veld dat aan beide kanten ontbreekt of onjuist is, bijv. welk personage een citaat zei) werd alleen toegepast bij de tweede keer dat hetzelfde citaat werd tegengekomen, nooit de eerste keer — waardoor deze stilzwijgend geen effect had voor een citaat dat maar één keer voorkomt in de gebundelde gegevens, wat het gebruikelijke geval is; wordt nu vanaf de eerste keer toegepast (issue #153)",
       "Het oplossen van het bovenstaande onthulde twee verdere problemen in hetzelfde mechanisme: een veld dat al correct was opgelost kon onterecht worden vastgehouden voor beoordeling alsof de bijbehorende regel verouderd was, en een record dat helemaal geen correctie nodig had (alle velden al gelijk) kon voor altijd worden vastgehouden voor beoordeling in plaats van direct te worden opgelost; beide zijn nu verholpen (issue #153)",
-      "Airplane!, When Harry Met Sally en een Avengers-film bestonden elk als dubbel item onder een inconsistent gespelde titel in één gebundelde gegevensbron — samengevoegd tot hun enige bestaande, correct gespelde item (issue #153)"
+      "Airplane!, When Harry Met Sally en een Avengers-film bestonden elk als dubbel item onder een inconsistent gespelde titel in één gebundelde gegevensbron — samengevoegd tot hun enige bestaande, correct gespelde item (issue #153)",
+      "Een database die rechtstreeks vanaf v1.7.2 werd bijgewerkt, kon sommige interne tabelmigraties stilzwijgend overslaan door een boekhoudfout in de manier waarop het oude gecombineerde migratieversienummer werd opgesplitst in de nieuwere interne tellers — hersteld voordat dit ooit een release bereikte (issue #155)",
+      "Elke interne migratiestap die sinds v1.7.2 is toegevoegd maar nog geen release heeft bereikt, is samengevoegd tot twee atomaire stappen in plaats van veel kleine — en end-to-end geverifieerd tegen een echte v1.7.2-database; een puur interne vereenvoudiging zonder wijziging in schema of gedrag (issue #155)"
     ],
     "removed": [
       "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"

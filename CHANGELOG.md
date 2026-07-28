@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-28 17:46 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-28 22:49 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -162,6 +162,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A conflict-resolution rule's `Custom` value (filling in a field that's missing or wrong on both sides, e.g. which character said a quote) only ever applied the second time the same quote was encountered, never the first — so it silently never took effect for a quote appearing exactly once anywhere in the bundled data, which is the common case; it now applies from the first encounter (issue #153)
 - Fixing the above exposed two further issues in the same mechanism: a field already correctly resolved could be incorrectly held for review as if the rule governing it had gone stale, and a record needing no correction at all (every field already agreeing) could be held for review forever instead of resolving immediately; both are now fixed (issue #153)
 - Airplane!, When Harry Met Sally, and an Avengers film each existed as duplicate entries under an inconsistently-spelled title in one bundled data source — merged into their single existing, correctly-spelled entry (issue #153)
+- A database upgrading directly from v1.7.2 could have had some internal-table migrations silently skipped, due to a bookkeeping bug in how the old combined migration-version number was split into the newer internal counters — corrected before ever reaching a release (issue #155)
+- Every internal migration step added since v1.7.2 that has not yet reached a release has been consolidated into two atomic steps instead of many small ones, and verified end-to-end against a real v1.7.2 database — a purely internal simplification with no schema or behaviour change (issue #155)
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`

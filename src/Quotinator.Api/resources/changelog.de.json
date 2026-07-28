@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
+    "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 155, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
     "cves": ["CVE-2026-49451"],
     "highlights": [
       "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -163,6 +163,8 @@
       "Der `Custom`-Wert einer Konfliktlösungsregel (zum Ausfüllen eines Felds, das auf beiden Seiten fehlt oder falsch ist, z. B. welche Figur ein Zitat gesagt hat) wurde nur beim zweiten Auftreten desselben Zitats angewendet, nie beim ersten — sodass er bei einem Zitat, das nur genau einmal in den gebündelten Daten vorkommt (der Regelfall), stillschweigend wirkungslos blieb; wird jetzt bereits beim ersten Auftreten angewendet (Issue #153)",
       "Die Behebung des Obigen deckte zwei weitere Probleme im selben Mechanismus auf: Ein bereits korrekt aufgelöstes Feld konnte fälschlicherweise zur Überprüfung zurückgehalten werden, als wäre die zugehörige Regel veraltet, und ein Datensatz, der überhaupt keine Korrektur benötigte (alle Felder bereits übereinstimmend), konnte für immer zur Überprüfung zurückgehalten werden, statt sofort aufgelöst zu werden; beides ist nun behoben (Issue #153)",
       "Airplane!, When Harry Met Sally und ein Avengers-Film existierten jeweils als doppelter Eintrag unter einem uneinheitlich geschriebenen Titel in einer gebündelten Datenquelle — zu ihrem einzigen bestehenden, korrekt geschriebenen Eintrag zusammengeführt (Issue #153)",
+      "Eine Datenbank, die direkt von v1.7.2 aktualisiert wurde, konnte aufgrund eines Buchhaltungsfehlers beim Aufteilen der alten kombinierten Migrationsversionsnummer in die neueren internen Zähler stillschweigend einige interne Tabellenmigrationen überspringen — behoben, bevor dies je ein Release erreichte (Issue #155)",
+      "Jeder interne Migrationsschritt, der seit v1.7.2 hinzugefügt wurde und noch kein Release erreicht hat, wurde zu zwei atomaren Schritten statt vieler kleiner zusammengefasst und end-to-end gegen eine echte v1.7.2-Datenbank verifiziert — eine rein interne Vereinfachung ohne Änderung an Schema oder Verhalten (Issue #155)",
       "Die groß-/kleinschreibungsunabhängige Zuordnung für Quellentitel, Reihen-/Universums-/Personennamen und einige interne Statusfilter war an jeder Stelle als separates, handgeschriebenes SQL umgesetzt, und einer davon (die Status-/Entitätstyp-Filterung von Importaktionen) war auf die entgegengesetzte Schreibweisen-Konvention abgedriftet als überall sonst; zu einem einzigen, gemeinsam genutzten und getesteten Mechanismus zusammengeführt, ohne Änderung am tatsächlichen Abgleichsverhalten, plus eine automatisierte Prüfung, die einen künftigen Vergleich dieser Art abfängt, falls er jemals ohne dieselbe groß-/kleinschreibungsunabhängige Behandlung hinzugefügt wird (Issue #211)"
     ],
     "removed": [
