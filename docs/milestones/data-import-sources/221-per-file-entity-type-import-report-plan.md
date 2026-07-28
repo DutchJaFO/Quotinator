@@ -1,6 +1,6 @@
 # #221 — Per-file, per-entity-type import/seed report
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 8)
 
 **GitHub issue:** https://github.com/DutchJaFO/Quotinator/issues/221
 
@@ -262,16 +262,29 @@ added to the `AggregateQueries_MatchDocumentedInventory` guard test's documented
 
 ### 7. Documentation
 
-**Status:** Not started.
+**Status:** Done, implemented 2026-07-28.
 
-- `README.md`, `addon/DOCS.md` — update the three admin endpoint rows' descriptions.
-- `[Description]` attributes on the affected endpoints in `AdminEndpoints.cs` and `ImportEndpoints.cs`.
-- `CLAUDE.md`'s living T2 smoke-test checklist — update every existing reseed/reset/import smoke-test
-  command's expected-output description to match the new response shape; the checklist already
-  exercises all of these endpoints extensively, so this is corrections to existing entries, not new
-  ones.
-- `docs/logging.md` — no new prefix needed; `[Database - Stats]` already exists and this only widens
+- `README.md`, `addon/DOCS.md` — ✅ the five affected endpoint rows (`/import`, `/import/preview`,
+  `/admin/database/seed/preview`, `/admin/database/reseed`, `/admin/database/reset`) updated to
+  mention `report`/`reports` and the nine entity-type row counts.
+- `[Description]`/`WithDescription` text on the affected endpoints in `AdminEndpoints.cs` (done as
+  part of Steps 3/6) and `ImportEndpoints.cs`'s shared `ImportDescription` constant (this step) — all
+  now document the new `report`/`reports` field and, for the admin endpoints, the nine entity-type
+  counts.
+- `CLAUDE.md`'s living T2 smoke-test checklist — rather than editing the existing reseed/reset/import
+  entries in place (none of them asserted the old `duplicates`/`crossFileDuplicates` shape by name, so
+  there was nothing stale to correct), added a new dedicated "Per-file, per-entity-type import/seed
+  report (#221)" subsection covering all four surfaces (`seed/preview`, `reseed`, `reset`,
+  `import`/`import/preview`) plus the widened `[Database - Stats]` log line.
+- `docs/logging.md` — no changes needed; `[Database - Stats]` already existed and this only widens
   its own line.
+
+**T2 — live-verified 2026-07-28** against a fresh `quotinator:local` Docker build: `[Database - Stats]`
+log line shows all nine counts; `GET /admin/database/seed/preview` returns `reports` (no
+`totalQuotes`/`uniqueQuotes`/`crossFileDuplicates`); `POST /admin/database/reseed` and `.../reset` both
+return all nine row counts plus `reports`; `POST /import` and `.../import/preview` both return a
+singular `report` alongside `summary`/`conflicts`/`errors`. All four shapes matched exactly what's
+documented in `CLAUDE.md`'s new smoke-test subsection.
 
 ### 8. Tests — overall
 
@@ -303,5 +316,5 @@ call sites correctly —
 | 5 | ❌ | `POST /admin/database/reseed`/`reset` responses include per-file reports instead of a flat `duplicates` count | Unit test + Live | `AdminEndpointsTests` (new cases) + CLAUDE.md smoke test |
 | 6 | ✅ | `GET /admin/database/seed/preview` response includes per-file reports | Unit test + Live | `AdminEndpointsTests.PreviewSeed_Returns200WithPreviewShape` (updated 2026-07-28); Live T2 pending Step 8 |
 | 7 | ✅ | Startup stats log and `IDatabaseInitializer` expose counts for all 9 entity types (adding Series/Universe/StageDirection/SoundCue/Conversation) | Unit test + Live | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_PopulatesNewEntityTypeCounts`, implemented 2026-07-28; live container log inspection pending Step 8 |
-| 8 | ❌ | `SeedDuplicateRecord`/`LastSeedDuplicates`/`CrossFileDuplicates` are fully removed, no remaining references | Live (review) | `grep -rn "SeedDuplicateRecord\|LastSeedDuplicates\|CrossFileDuplicates" src/ tests/` returns nothing |
-| 9 | ❌ | Documentation (README/DOCS.md/CLAUDE.md smoke tests) reflects the new response shapes | Live (review) | Manual read-through of the three docs against the actual endpoint responses |
+| 8 | ✅ | `SeedDuplicateRecord`/`LastSeedDuplicates`/`CrossFileDuplicates` are fully removed, no remaining references | Live (review) | `grep -rn "SeedDuplicateRecord\|LastSeedDuplicates\|CrossFileDuplicates" src/ tests/` (excluding bin/obj) returns only a test *method name* describing the still-existing cross-file-duplicate-detection behaviour, not a reference to any removed type — confirmed 2026-07-28 |
+| 9 | ✅ | Documentation (README/DOCS.md/CLAUDE.md smoke tests) reflects the new response shapes | Live (review) | `README.md`/`addon/DOCS.md` rows and `CLAUDE.md`'s new #221 smoke-test subsection updated and live-verified against real endpoint responses, 2026-07-28 |
