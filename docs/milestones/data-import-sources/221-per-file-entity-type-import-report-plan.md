@@ -288,20 +288,31 @@ documented in `CLAUDE.md`'s new smoke-test subsection.
 
 ### 8. Tests — overall
 
-**Status:** Not started.
+**Status:** Full test suite and T2 done, 2026-07-28; T1 pending developer action.
 
-Beyond Step 1's builder unit tests: integration tests proving the report reaches each of the four
-call sites correctly —
-- `DatabaseInitializerTests` — a multi-file seed (`AllFilesBatch()`) produces a `LastSeedReport` with
-  the expected per-file/per-entity-type shape; the five new count properties are correct after
-  seeding.
-- `QuotinatorDatabaseInitializer` preview test — `PreviewSeedAsync` against real bundled files
-  produces the expected report **and never writes any row** (assert `System_ImportActions`/
-  `ImportBatches` row counts are unchanged before/after the call).
-- `SqliteImportActionServiceTests`/endpoint tests — `POST /import` and `/import/preview` responses
-  include the new `Report` field with correct counts for a known fixture file.
-- `AdminEndpointsTests` — `reseed`/`reset`/`seed/preview` responses include `reports` in the new
-  shape.
+All four integration-test bullets originally planned here were actually satisfied incrementally as
+each step landed, rather than as a separate batch at the end:
+- `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates`/
+  `PopulatesNewEntityTypeCounts` (Steps 2/5) — `LastSeedReport`'s shape and the five new count
+  properties, both against a real multi-file seed.
+- `DatabaseInitializerTests.PreviewSeedAsync_AfterFullSeed_ProducesReportWithoutWritingAnyRow` (Step 3)
+  — `PreviewSeedAsync` produces the expected report and never writes a row.
+- `QuoteImportServiceTests.ImportAsync_FreshDatabase_ReportShowsOneNewQuoteAction`/
+  `ApplyStagedBatchAsync_PreviouslyStagedBatch_ReportShowsOneNewQuoteAction` (Step 4) — `POST /import`
+  and the `batchId`-mode alias both include a correct `Report`.
+- `AdminEndpointsTests` (Steps 3/5/6) — `reseed`/`reset`/`seed/preview` responses include `reports`
+  (or the nine row counts) in the new shape.
+
+**Full regression suite**: `dotnet build --configuration Release` — 0 warnings/0 errors. `dotnet test
+--configuration Release` — all tests pass across every project (1341 in `Quotinator.Core.Tests`, up
+from the pre-#221 baseline; no failures anywhere), confirmed 2026-07-28 after every step's changes.
+
+**T2 — live-verified 2026-07-28** (see Step 7's own T2 note for the full detail): fresh
+`quotinator:local` Docker build, all four report surfaces and the widened `[Database - Stats]` log
+line checked against a running container and matched exactly.
+
+**T1 — pending.** Per this project's convention, T1 (Visual Studio) is exclusively the developer's own
+action to perform and confirm.
 
 ---
 
