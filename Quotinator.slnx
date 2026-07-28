@@ -81,6 +81,7 @@
     <File Path="docs/sql-safety.md" />
     <File Path="docs/logging.md" />
     <File Path="docs/release-verification.md" />
+    <File Path="docs/smoke-tests.md" />
     <File Path="docs/testing-policy.md" />
     <File Path="docs/troubleshooting.md" />
     <File Path="docs/vocabulary.md" />

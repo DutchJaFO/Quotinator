@@ -45,18 +45,18 @@ specific migration/reset path is exercised) on top of the baseline, not instead 
 was tried once (#196, "T2 not required — no route/schema/startup change") and was wrong on two counts: it
 missed that the change touched `Program.cs`, hitting a trigger below anyway, and it's simply not how this
 project verifies releases regardless of trigger-matching. The trigger list still matters for what to
-additionally exercise beyond the baseline smoke tests in CLAUDE.md's Pre-Push Checklist → step 6: any
+additionally exercise beyond the baseline smoke tests in `docs/smoke-tests.md`: any
 change that touches the Dockerfile, publish output, `Program.cs` startup, port or SSL configuration,
 `Directory.Build.props`; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`,
 migration SQL, or schema/table-wipe logic (reseed, reset, backup) needs a targeted check on top of the
 baseline, not instead of it.
 
-**Gate:** `docker build` succeeds; every command in CLAUDE.md's Pre-Push Checklist → step 6
-("Smoke-test the image") returns expected output. That checklist is the single authoritative,
-living smoke test suite — it is not duplicated here, so the two never drift apart. It already
-covers health/version/random/search plus the full import/staged-action review workflow (list,
-decide, undo, apply, discard, the `batchId`-mode alias, and case-insensitive query filters); update
-it — not this file — whenever a new scenario needs covering.
+**Gate:** `docker build` succeeds; every command in [`docs/smoke-tests.md`](smoke-tests.md)
+returns expected output. That document (referenced from CLAUDE.md's Pre-Push Checklist → step 6) is
+the single authoritative, living smoke test suite — it is not duplicated here, so the two never drift
+apart. It already covers health/version/random/search plus the full import/staged-action review
+workflow (list, decide, undo, apply, discard, the `batchId`-mode alias, and case-insensitive query
+filters); update it — not this file — whenever a new scenario needs covering.
 
 When the change touches schema/reset logic, also exercise the affected admin endpoint(s) directly (e.g. `POST /api/v1/admin/database/reset`) against the running container and confirm the expected before/after state.
 

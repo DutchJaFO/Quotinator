@@ -1,6 +1,6 @@
 # #221 — Per-file, per-entity-type import/seed report
 
-**Status:** In progress (step 8)
+**Status:** Waiting for release
 
 **GitHub issue:** https://github.com/DutchJaFO/Quotinator/issues/221
 
@@ -311,8 +311,19 @@ from the pre-#221 baseline; no failures anywhere), confirmed 2026-07-28 after ev
 `quotinator:local` Docker build, all four report surfaces and the widened `[Database - Stats]` log
 line checked against a running container and matched exactly.
 
-**T1 — pending.** Per this project's convention, T1 (Visual Studio) is exclusively the developer's own
-action to perform and confirm.
+**T1 — partial success, one fix landed as a result (2026-07-28).** The developer ran the app in Visual
+Studio and confirmed it starts without error, but flagged that `StartupSummaryLogger`'s closing banner
+still crammed all four original counts onto a single line (`schema v11 (data v13) - 799 quotes  461
+sources  12 characters  3 people`) — out of scope for this issue's original plan, but a real usability
+problem the developer's own T1 pass surfaced: cramming even more counts onto one line "is not going to
+work when we add even more items in the future." Fixed by splitting the schema/migration line from the
+counts entirely: the banner now has its own `Statistics:` section with one line per entity type (all
+nine — quotes, sources, characters, people, series, universes, stage directions, sound cues,
+conversations), matching the label/indent style the rest of the banner already uses. Live-verified via
+a fresh `quotinator:local` container showing the new format exactly as designed. Two
+`StartupSummaryLoggerTests` updated/added: `LogReady_BannerContainsDbStats` now also asserts the
+`Statistics:` header; new `LogReady_BannerContainsNewEntityTypeStats_OnePerLine` asserts all five new
+counts appear. T1 itself (app starts, pages render) is confirmed done.
 
 ---
 
@@ -324,8 +335,8 @@ action to perform and confirm.
 | 2 | ✅ | Seeding produces a per-file report replacing `LastSeedDuplicates`, for all entity types | Unit test | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates` (updated), implemented 2026-07-26 |
 | 3 | ✅ | `PreviewSeedAsync` produces the same rich report without writing any row to the database | Unit test | `DatabaseInitializerTests.PreviewSeedAsync_AfterFullSeed_ProducesReportWithoutWritingAnyRow`, implemented 2026-07-28 |
 | 4 | ✅ | `POST /import`/`/import/preview` responses include a per-file report | Unit test | `QuoteImportServiceTests.ImportAsync_FreshDatabase_ReportShowsOneNewQuoteAction`/`ApplyStagedBatchAsync_PreviouslyStagedBatch_ReportShowsOneNewQuoteAction`, implemented 2026-07-28 |
-| 5 | ❌ | `POST /admin/database/reseed`/`reset` responses include per-file reports instead of a flat `duplicates` count | Unit test + Live | `AdminEndpointsTests` (new cases) + CLAUDE.md smoke test |
-| 6 | ✅ | `GET /admin/database/seed/preview` response includes per-file reports | Unit test + Live | `AdminEndpointsTests.PreviewSeed_Returns200WithPreviewShape` (updated 2026-07-28); Live T2 pending Step 8 |
-| 7 | ✅ | Startup stats log and `IDatabaseInitializer` expose counts for all 9 entity types (adding Series/Universe/StageDirection/SoundCue/Conversation) | Unit test + Live | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_PopulatesNewEntityTypeCounts`, implemented 2026-07-28; live container log inspection pending Step 8 |
+| 5 | ✅ | `POST /admin/database/reseed`/`reset` responses include per-file reports instead of a flat `duplicates` count | Unit test + Live | `AdminEndpointsTests.ReseedDatabase_CorrectKey_Returns200WithStatsShape`/`ResetDatabase_CorrectKey_Returns200WithStatsShape` (implemented 2026-07-26, extended 2026-07-28 for the five new counts) + `docs/smoke-tests.md`, live-verified 2026-07-28 |
+| 6 | ✅ | `GET /admin/database/seed/preview` response includes per-file reports | Unit test + Live | `AdminEndpointsTests.PreviewSeed_Returns200WithPreviewShape` (updated 2026-07-28); live `curl` against a fresh `quotinator:local` container returned `reports` with the expected per-file/per-entity-type shape (no `totalQuotes`/`uniqueQuotes`/`crossFileDuplicates`), verified 2026-07-28 |
+| 7 | ✅ | Startup stats log and `IDatabaseInitializer` expose counts for all 9 entity types (adding Series/Universe/StageDirection/SoundCue/Conversation) | Unit test + Live | `DatabaseInitializerTests.InitialiseAsync_AllSourceFiles_PopulatesNewEntityTypeCounts`, implemented 2026-07-28; `docker logs <container> \| grep "\[Database - Stats\]"` against a fresh container showed all nine counts, verified 2026-07-28 |
 | 8 | ✅ | `SeedDuplicateRecord`/`LastSeedDuplicates`/`CrossFileDuplicates` are fully removed, no remaining references | Live (review) | `grep -rn "SeedDuplicateRecord\|LastSeedDuplicates\|CrossFileDuplicates" src/ tests/` (excluding bin/obj) returns only a test *method name* describing the still-existing cross-file-duplicate-detection behaviour, not a reference to any removed type — confirmed 2026-07-28 |
 | 9 | ✅ | Documentation (README/DOCS.md/CLAUDE.md smoke tests) reflects the new response shapes | Live (review) | `README.md`/`addon/DOCS.md` rows and `CLAUDE.md`'s new #221 smoke-test subsection updated and live-verified against real endpoint responses, 2026-07-28 |

@@ -165,9 +165,10 @@ Build and run the image the same way the release workflow does:
 docker build -f docker/Dockerfile -t quotinator:local .
 docker run --rm -d -p 8080:8080 --name quotinator-test quotinator:local
 ```
-Then run every command in CLAUDE.md's Pre-Push Checklist → step 6 ("Smoke-test the image") against
-it. That checklist is the single authoritative, living smoke test suite — it is not duplicated here
-so the two never drift apart; update it, not this file, whenever a new scenario needs covering.
+Then run every command in [`docs/smoke-tests.md`](smoke-tests.md) (referenced from CLAUDE.md's
+Pre-Push Checklist → step 6) against it. That document is the single authoritative, living smoke
+test suite — it is not duplicated here so the two never drift apart; update it, not this file,
+whenever a new scenario needs covering.
 ```bash
 docker stop quotinator-test
 ```
