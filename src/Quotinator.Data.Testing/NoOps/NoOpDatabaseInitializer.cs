@@ -28,6 +28,21 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public int PeopleCount => 0;
 
     /// <inheritdoc/>
+    public int SeriesCount => 0;
+
+    /// <inheritdoc/>
+    public int UniverseCount => 0;
+
+    /// <inheritdoc/>
+    public int StageDirectionCount => 0;
+
+    /// <inheritdoc/>
+    public int SoundCueCount => 0;
+
+    /// <inheritdoc/>
+    public int ConversationCount => 0;
+
+    /// <inheritdoc/>
     public string? MigrationApplied => null;
 
     /// <inheritdoc/>

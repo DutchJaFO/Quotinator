@@ -180,6 +180,21 @@ public class DatabaseInitializer : IDatabaseInitializer
     public int PeopleCount { get; protected set; }
 
     /// <inheritdoc/>
+    public int SeriesCount { get; protected set; }
+
+    /// <inheritdoc/>
+    public int UniverseCount { get; protected set; }
+
+    /// <inheritdoc/>
+    public int StageDirectionCount { get; protected set; }
+
+    /// <inheritdoc/>
+    public int SoundCueCount { get; protected set; }
+
+    /// <inheritdoc/>
+    public int ConversationCount { get; protected set; }
+
+    /// <inheritdoc/>
     public string? MigrationApplied { get; protected set; }
 
     /// <inheritdoc/>

@@ -168,6 +168,9 @@ public class SqlQueryGuardTests
             "Series.CountActiveReferences",        // COUNT(*) — #180 reversal reference check
             "Universe.CountActive",               // COUNT(*) — #180
             "Universe.CountActiveReferences",      // COUNT(*) — #180 reversal reference check
+            "Conversations.CountActive",           // COUNT(*) — #221 stats/report entity-type count
+            "StageDirections.CountActive",         // COUNT(*) — #221 stats/report entity-type count
+            "SoundCues.CountActive",               // COUNT(*) — #221 stats/report entity-type count
         };
 
         var actual = EnumerateSqlConstants()

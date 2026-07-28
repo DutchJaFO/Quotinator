@@ -98,11 +98,16 @@ internal static class AdminEndpoints
             await db.ReseedAsync(forceSourceRefresh);
             return Results.Ok(new
             {
-                quotes      = db.QuoteCount,
-                sources     = db.SourceCount,
-                characters  = db.CharacterCount,
-                people      = db.PeopleCount,
-                reports     = db.LastSeedReport
+                quotes          = db.QuoteCount,
+                sources         = db.SourceCount,
+                characters      = db.CharacterCount,
+                people          = db.PeopleCount,
+                series          = db.SeriesCount,
+                universes       = db.UniverseCount,
+                stageDirections = db.StageDirectionCount,
+                soundCues       = db.SoundCueCount,
+                conversations   = db.ConversationCount,
+                reports         = db.LastSeedReport
             });
         })
         .WithName("ReseedDatabase")
@@ -122,11 +127,16 @@ internal static class AdminEndpoints
             await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh);
             return Results.Ok(new
             {
-                quotes     = db.QuoteCount,
-                sources    = db.SourceCount,
-                characters = db.CharacterCount,
-                people     = db.PeopleCount,
-                reports    = db.LastSeedReport
+                quotes          = db.QuoteCount,
+                sources         = db.SourceCount,
+                characters      = db.CharacterCount,
+                people          = db.PeopleCount,
+                series          = db.SeriesCount,
+                universes       = db.UniverseCount,
+                stageDirections = db.StageDirectionCount,
+                soundCues       = db.SoundCueCount,
+                conversations   = db.ConversationCount,
+                reports         = db.LastSeedReport
             });
         })
         .WithName("ResetDatabase")

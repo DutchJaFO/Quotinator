@@ -586,6 +586,7 @@ internal static class Sql
     /// </summary>
     internal static class Conversations
     {
+        internal const string CountActive = "SELECT COUNT(*) FROM Conversations WHERE IsDeleted = 0;";
         internal const string DeleteAll = "DELETE FROM Conversations;";
 
         /// <summary>Case-insensitive (#210) — see <see cref="SelectForRead"/>'s remark; every id-comparison query in this codebase is case-insensitive by default now (ADR 012), not just the ones with a known-differently-cased caller.</summary>
@@ -707,6 +708,7 @@ internal static class Sql
     /// <summary>StageDirections table (#67/#68). Explicit-id existence check, like <see cref="Conversations"/> — see its remark.</summary>
     internal static class StageDirections
     {
+        internal const string CountActive = "SELECT COUNT(*) FROM StageDirections WHERE IsDeleted = 0;";
         internal const string DeleteAll = "DELETE FROM StageDirections;";
 
         /// <summary>Case-insensitive (#210) — see <see cref="Conversations.SelectIdById"/>'s remark.</summary>
@@ -790,6 +792,7 @@ internal static class Sql
     /// <summary>SoundCues table (#67/#68). Explicit-id existence check, like <see cref="Conversations"/> — see its remark.</summary>
     internal static class SoundCues
     {
+        internal const string CountActive = "SELECT COUNT(*) FROM SoundCues WHERE IsDeleted = 0;";
         internal const string DeleteAll = "DELETE FROM SoundCues;";
 
         /// <summary>Case-insensitive (#210) — see <see cref="Conversations.SelectIdById"/>'s remark.</summary>

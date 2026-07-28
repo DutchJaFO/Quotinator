@@ -31,6 +31,21 @@ public interface IDatabaseInitializer
     /// <summary>Total non-deleted people rows. Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
     int PeopleCount { get; }
 
+    /// <summary>Total non-deleted series rows (#221). Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
+    int SeriesCount { get; }
+
+    /// <summary>Total non-deleted universe rows (#221). Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
+    int UniverseCount { get; }
+
+    /// <summary>Total non-deleted stage direction rows (#221). Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
+    int StageDirectionCount { get; }
+
+    /// <summary>Total non-deleted sound cue rows (#221). Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
+    int SoundCueCount { get; }
+
+    /// <summary>Total non-deleted conversation rows (#221). Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
+    int ConversationCount { get; }
+
     /// <summary>
     /// Description of any migration applied at startup (e.g. <c>"v2 → v3"</c>), or <c>null</c> if
     /// the schema was already up to date. Available after <see cref="InitialiseAsync"/> completes.

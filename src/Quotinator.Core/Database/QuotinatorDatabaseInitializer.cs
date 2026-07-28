@@ -369,14 +369,21 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
     private async Task LogDatabaseStatsAsync(SqliteConnection connection)
     {
-        QuoteCount     = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountActive);
-        SourceCount    = await connection.ExecuteScalarAsync<int>(Sql.Sources.CountActive);
-        CharacterCount = await connection.ExecuteScalarAsync<int>(Sql.Characters.CountActive);
-        PeopleCount    = await connection.ExecuteScalarAsync<int>(Sql.People.CountActive);
+        QuoteCount          = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountActive);
+        SourceCount         = await connection.ExecuteScalarAsync<int>(Sql.Sources.CountActive);
+        CharacterCount      = await connection.ExecuteScalarAsync<int>(Sql.Characters.CountActive);
+        PeopleCount         = await connection.ExecuteScalarAsync<int>(Sql.People.CountActive);
+        SeriesCount         = await connection.ExecuteScalarAsync<int>(Sql.Series.CountActive);
+        UniverseCount       = await connection.ExecuteScalarAsync<int>(Sql.Universe.CountActive);
+        StageDirectionCount = await connection.ExecuteScalarAsync<int>(Sql.StageDirections.CountActive);
+        SoundCueCount       = await connection.ExecuteScalarAsync<int>(Sql.SoundCues.CountActive);
+        ConversationCount   = await connection.ExecuteScalarAsync<int>(Sql.Conversations.CountActive);
 
         Logger.LogInformation(
-            "[Database - Stats] {Quotes} quotes  {Sources} sources  {Characters} characters  {People} people",
-            QuoteCount, SourceCount, CharacterCount, PeopleCount);
+            "[Database - Stats] {Quotes} quotes  {Sources} sources  {Characters} characters  {People} people  " +
+            "{Series} series  {Universes} universes  {StageDirections} stage directions  {SoundCues} sound cues  {Conversations} conversations",
+            QuoteCount, SourceCount, CharacterCount, PeopleCount,
+            SeriesCount, UniverseCount, StageDirectionCount, SoundCueCount, ConversationCount);
     }
 
     private async Task<ImportBatch> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile, ManifestPolicy filePolicy)

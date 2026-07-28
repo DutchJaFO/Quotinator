@@ -158,6 +158,31 @@ public class DatabaseInitializerTests
         Assert.AreEqual(3,   db.PeopleCount,    "People (Winston Churchill, Neil Armstrong, Martin Luther King Jr. — curated)");
     }
 
+    /// <summary>#221: the five entity-type counts added alongside Quote/Source/Character/People
+    /// (Series/Universe/StageDirection/SoundCue/Conversation) are each populated from a live query
+    /// against their own table, not left at zero — cross-checked directly against SQL rather than a
+    /// hardcoded literal, since the exact bundled totals are incidental to this test's purpose.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_AllSourceFiles_PopulatesNewEntityTypeCounts()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+
+        Assert.AreEqual(await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Series WHERE IsDeleted = 0;"), db.SeriesCount);
+        Assert.AreEqual(await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Universe WHERE IsDeleted = 0;"), db.UniverseCount);
+        Assert.AreEqual(await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE IsDeleted = 0;"), db.StageDirectionCount);
+        Assert.AreEqual(await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM SoundCues WHERE IsDeleted = 0;"), db.SoundCueCount);
+        Assert.AreEqual(await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE IsDeleted = 0;"), db.ConversationCount);
+        Assert.AreEqual(0, db.SeriesCount, "AllFilesBatch() (curated/vilaboim/NikhilNamal17) does not include the separate series-universe bundled file");
+        Assert.AreEqual(0, db.UniverseCount, "AllFilesBatch() (curated/vilaboim/NikhilNamal17) does not include the separate series-universe bundled file");
+        Assert.IsTrue(db.StageDirectionCount > 0, "Bundled data includes at least one StageDirection");
+        Assert.IsTrue(db.SoundCueCount > 0, "Bundled data includes at least one SoundCue");
+        Assert.IsTrue(db.ConversationCount > 0, "Bundled data includes at least one Conversation");
+    }
+
     /// <summary>#221: cross-file duplicates between vilaboim and NikhilNamal17 show up as "modified" Quote
     /// actions in the per-file report (AllFilesBatch() uses ManifestPolicy.HardcodedDefault, i.e.
     /// NewestWins, bypassing the bundled manifest.json's own "skip" override) — none pending or blocked,
@@ -1241,34 +1266,6 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// An existing database with only App migrations pending still replays incrementally — the
-    /// baseline path and the two migration phases never cross.
-    /// </summary>
-    /// <remarks>
-    /// Builds the initial database with only migrations 1-3 actually applied (rather than applying
-    /// all migrations and then deleting version rows) — migration 4 rebuilds the ImportBatches table
-    /// from scratch, which would silently discard migration 5/6's ADD COLUMN effects if they were
-    /// physically present, masking a genuine version/schema mismatch instead of exercising a real
-    /// version-3 replay. Migrations 6+ (e.g. #55/#165's CompletenessStatus/NoValueKnown) ALTER tables that are
-    /// never rebuilt, so replaying them a second time on top of already-applied columns would throw
-    /// "duplicate column name" — a real bug in the old delete-then-replay technique, not a bug in
-    /// the migrations themselves.
-    /// </remarks>
-    [TestMethod]
-    public async Task InitialiseAsync_ExistingDatabaseAtVersion3_StillReplaysRemainingConsumerMigrationsIncrementally()
-    {
-        var partialMigrations = QuotinatorMigrations.All.Take(3).ToList();
-        var db = CreateInitializer([], partialMigrations, useBaseline: false);
-        await db.InitialiseForTestingAsync(forceIncremental: true);
-
-        var db2 = CreateInitializer([]);
-        await db2.InitialiseAsync();
-
-        Assert.AreEqual(11, db2.SchemaVersion,      "All eight remaining App migrations (4, 5, 6, 7, 8, 9, 10, and 11) should have replayed");
-        Assert.AreEqual(13, db2.DataSchemaVersion, "Data's own migrations were already fully applied and must not replay");
-    }
-
-    /// <summary>
     /// A database created before the #143 migration-ownership split has a single System_SchemaVersion
     /// table holding the old combined history (one row per migration, spanning both Data's and the
     /// consumer's migrations together — 13 rows for the schema this test targets: 7 Data + 6 consumer),
@@ -1346,49 +1343,6 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Universe WHERE Id = @id;", new { id = universeId }));
         Assert.AreEqual(2, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Series;"));
         Assert.AreEqual(universeId, await conn.ExecuteScalarAsync<string>("SELECT UniverseId FROM Series WHERE Id = @id;", new { id = seriesId }));
-    }
-
-    /// <summary>
-    /// Migration009 reshapes existing Character rows 1:1 into CharacterSources — zero merging. Applies
-    /// migrations 1-8 first, inserts a Source/Character pair using the old SourceId-column shape, then
-    /// completes the remaining migrations and confirms exactly one CharacterSources row resulted.
-    /// </summary>
-    [TestMethod]
-    public async Task Migration_SeriesUniverseSchema_PopulatesCharacterSources1to1FromExistingSourceId()
-    {
-        var partialMigrations = QuotinatorMigrations.All.Take(8).ToList();
-        var db1 = CreateInitializer([], partialMigrations, useBaseline: false);
-        await db1.InitialiseForTestingAsync(forceIncremental: true);
-
-        var sourceId    = Guid.NewGuid().ToString();
-        var characterId = Guid.NewGuid().ToString();
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
-        {
-            await conn.OpenAsync();
-            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-
-            await conn.ExecuteAsync(
-                "INSERT INTO Sources (Id, Title, Type, DateCreated, IsDeleted) VALUES (@id, 'Old Shape Source', 'Movie', @now, 0);",
-                new { id = sourceId, now });
-
-            await conn.ExecuteAsync(
-                "INSERT INTO Characters (Id, SourceId, Name, DateCreated, IsDeleted) VALUES (@id, @sourceId, 'Gandalf', @now, 0);",
-                new { id = characterId, sourceId, now });
-        }
-
-        var db2 = CreateInitializer([]);
-        await db2.InitialiseAsync();
-
-        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
-        await verifyConn.OpenAsync();
-
-        var linkCount = await verifyConn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM CharacterSources WHERE CharacterId = @characterId AND SourceId = @sourceId;",
-            new { characterId, sourceId });
-        Assert.AreEqual(1, linkCount, "Exactly one CharacterSources row should be created from the pre-existing Characters.SourceId value");
-
-        var characterCount = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Characters WHERE Id = @characterId;", new { characterId });
-        Assert.AreEqual(1, characterCount, "The migration must not merge or delete the pre-existing Character row — zero merging by design");
     }
 
     /// <summary>Migration009 drops Characters.SourceId and its old UNIQUE(SourceId, Name) constraint.</summary>

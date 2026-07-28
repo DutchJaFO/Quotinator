@@ -112,10 +112,15 @@ public class AdminEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.IsTrue(doc.RootElement.TryGetProperty("quotes",     out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("sources",    out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("characters", out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("people",     out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("quotes",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("sources",         out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("characters",      out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("people",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("series",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("universes",       out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("stageDirections", out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("soundCues",       out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("conversations",   out _));
     }
 
     // ── POST /admin/database/reset ────────────────────────────────────────────
@@ -158,10 +163,15 @@ public class AdminEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.IsTrue(doc.RootElement.TryGetProperty("quotes",     out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("sources",    out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("characters", out _));
-        Assert.IsTrue(doc.RootElement.TryGetProperty("people",     out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("quotes",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("sources",         out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("characters",      out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("people",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("series",          out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("universes",       out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("stageDirections", out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("soundCues",       out _));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("conversations",   out _));
     }
 
     /// <summary>POST /admin/database/reset with no query parameter defaults preserveSchemaVersion to false (#141).</summary>
@@ -199,6 +209,11 @@ public class AdminEndpointsTests
         public int    SourceCount      => 0;
         public int    CharacterCount   => 0;
         public int    PeopleCount      => 0;
+        public int    SeriesCount      => 0;
+        public int    UniverseCount    => 0;
+        public int    StageDirectionCount => 0;
+        public int    SoundCueCount    => 0;
+        public int    ConversationCount => 0;
         public string? MigrationApplied => null;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
