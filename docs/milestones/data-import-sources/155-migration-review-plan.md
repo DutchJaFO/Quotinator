@@ -1,6 +1,6 @@
 # #155 — Migration review: verify full incremental path from last-shipped v1.7.2 schema
 
-**Status:** In progress (step 8)
+**Status:** Waiting for release
 **GitHub issue:** #155
 **Tiers required:** T1, T2
 **Depends on:** none (sequenced last in this milestone, per its own issue text and `overview.md`'s dependency map)
@@ -359,7 +359,7 @@ on its own. This does not change ADR 009's stated process, so no Revision sectio
 | 6 | ✅ | No migration surviving the consolidation (Consumer 1-3, Data 1) was edited after `main` shipped it | Live (review) | Direct text diff of each constant's body, v1.7.2 tag vs. HEAD — all 4 byte-identical |
 | 7 | ✅ | A decision on a permanent v1.7.2 fixture is made and documented | Live (review) | Decision: stays manual per-milestone, no change to ADR 009 — see step 7 above |
 | 8 | ✅ | No regression | Unit test | `dotnet test --configuration Release --verbosity normal` — 1341+809+530+... tests, full suite green, 0 warnings, 0 errors |
-| 9 | ⏳ | T1 — app starts cleanly against a database that went through the real v1.7.2 → current upgrade path | Live (T1) | Handoff snapshot generated at `.claude/temp/v172-snapshot-for-T1.db` (gitignored) — developer confirms clean startup in Visual Studio pointed at this file |
+| 9 | ✅ | T1 — app starts cleanly against a database that went through the real v1.7.2 → current upgrade path | Live (T1) | Developer confirmed via Visual Studio, 2026-07-29 — log shows `applying 1 pending Data migration(s) (version 1 → 2)`, `applying 1 pending App migration(s) (version 3 → 4)`, `schema updated (data v2, app v4)`, 788 quotes/478 sources/2 characters preserved |
 | 10 | ✅ | T2 — Docker smoke test against a container whose database was seeded via the v1.7.2 upgrade path | Live (T2) | `docker build`; regenerated v1.7.2 snapshot mounted as the container's own `/data/quotinatordata.db` — startup log shows `applying 1 pending "Data" migration(s) (version 1 → 2)` / `applying 1 pending "App" migration(s) (version 3 → 4)`, final `schema v4 (data v2)`, 788 quotes/478 sources/2 characters preserved; `/health`, `/version`, `/quotes/random`, `/admin/audit` all confirmed working post-upgrade |
 
 ---
