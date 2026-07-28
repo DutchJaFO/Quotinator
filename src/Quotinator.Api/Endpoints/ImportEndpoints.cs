@@ -42,6 +42,8 @@ internal static class ImportEndpoints
             "`enrich` (currently always `501 Not Implemented` when `true`; reserved for #19). " +
             "Malformed `settings`, an unrecognised `converter` name, or file content that converts to zero valid quotes all return `422`. " +
             "A row missing a quote/source or with an invalid `id` is skipped and reported in `errors` — one bad row never aborts the rest of the file. " +
+            "`report` gives a per-entity-type new/modified/blocked/discarded/pending/stale action breakdown for this file (issue #221), " +
+            "distinct from `summary` (Quote-only row counts including validation errors). " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.";
 
         adminGroup.MapPost("/preview", (

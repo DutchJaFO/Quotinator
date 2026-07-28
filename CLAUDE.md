@@ -1643,6 +1643,40 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    an empty result on this dataset. A confirmed, verified duplicate should be filed as a data-quality
    follow-up per `docs/workflow/source-verification.md`, not fixed inline as part of this checklist.
 
+   **Per-file, per-entity-type import/seed report** (#221) — replaces the old flat `duplicates` count
+   everywhere a seed/import operation reports back. Confirm all four surfaces on a fresh container:
+   ```bash
+   curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/database/seed/preview"
+   ```
+   Must return `200` with a top-level `reports` array (not `totalQuotes`/`uniqueQuotes`/
+   `crossFileDuplicates`, all removed) — one entry per configured source file, each with a `fileName`
+   and an `entityTypes` object keyed by entity type (`Quote`, `Source`, etc.), each with
+   `new`/`modified`/`blocked`/`discarded`/`pending`/`stale` counts.
+   ```bash
+   curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
+   ```
+   Must return `200` with `quotes`/`sources`/`characters`/`people`/`series`/`universes`/
+   `stageDirections`/`soundCues`/`conversations` (all nine entity-type row counts) plus `reports`
+   (same per-file shape as the preview above). Repeat against `POST /admin/database/reset` — same
+   shape.
+   ```bash
+   curl -s -X POST -H "X-Api-Key: <your admin key>" \
+     -F "file=@data/sources/quotinator-curated.json" \
+     -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
+     -w "\n%{http_code}\n" \
+     "http://localhost:8080/api/v1/import"
+   ```
+   Must return `200` with a top-level `report` (singular — one file, not an array) alongside the
+   existing `summary`/`conflicts`/`errors` fields, shaped the same as one entry from `reports` above
+   (`fileName` plus `entityTypes`). Re-run the same call via `POST /api/v1/import/preview` — same
+   `report` shape, since the report reflects the actual staged actions regardless of whether the batch
+   was applied.
+   ```bash
+   docker logs <container> 2>&1 | grep "\[Database - Stats\]"
+   ```
+   The startup log line must show all nine counts — quotes, sources, characters, people, series,
+   universes, stage directions, sound cues, conversations — not just the original four.
+
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 
 ## Tagging a release — separate push cycle
