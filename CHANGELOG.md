@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-29 04:25 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-29 15:46 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [1.8.0] - 2026-07-29
+## [1.8.0-beta] - 2026-07-29
 
 ### Highlights
 - Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.
@@ -840,7 +840,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
-[1.8.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.2...v1.8.0
+[1.8.0-beta]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.2...v1.8.0-beta
 [1.7.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.5...v1.7.0
