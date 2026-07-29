@@ -1,6 +1,6 @@
 # #177 — ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #177
 **Tiers required:** T1, T2
 **Depends on:** none technically; sequenced first under #217 because the resolve→apply→reverse→retry

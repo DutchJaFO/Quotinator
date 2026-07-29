@@ -1,6 +1,6 @@
 # #181 — Minimal per-source conflict-resolution rule file + curated field-override preload
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #181
 **Tiers required:** T1, T2
 **Depends on:** #177 (dependency order established by #217, the parent tracking issue: #177 → #181 →

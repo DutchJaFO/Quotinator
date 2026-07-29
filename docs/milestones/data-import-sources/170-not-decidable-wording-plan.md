@@ -1,6 +1,6 @@
 # #170 — ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions"
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #170
 **Tiers required:** T1, T2
 

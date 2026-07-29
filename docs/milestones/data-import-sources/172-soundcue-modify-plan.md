@@ -1,6 +1,6 @@
 # #172 — SoundCue: Modify/decidability
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #172
 **Tiers required:** T1, T2
 **Depends on:** #162, #165, #168 (shipped patterns this builds on); benefits from #171 landing first (shared sub-problem)

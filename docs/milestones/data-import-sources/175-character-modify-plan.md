@@ -1,6 +1,6 @@
 # #175 — Character: explicit id, Modify/decidability
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #175
 **Tiers required:** T1, T2
 **Depends on:** #174

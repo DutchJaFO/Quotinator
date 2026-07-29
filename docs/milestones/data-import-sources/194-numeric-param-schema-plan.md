@@ -1,6 +1,6 @@
 # #194 — Numeric query params published to the OpenAPI spec as string
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #194
 **Tiers required:** T1, T2
 **Depends on:** none

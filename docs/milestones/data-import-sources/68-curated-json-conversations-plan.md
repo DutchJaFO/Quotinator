@@ -1,6 +1,6 @@
 # #68 — Curated JSON: conversations format
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #68
 **Tiers required:** T1, T2
 **Depends on:** #67, #61, #58, #154

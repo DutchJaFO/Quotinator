@@ -1,6 +1,6 @@
 # #67 — Conversations schema
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #67
 **Tiers required:** T1, T2
 **Depends on:** #58

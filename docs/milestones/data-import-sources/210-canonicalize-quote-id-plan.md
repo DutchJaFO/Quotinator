@@ -1,6 +1,6 @@
 # #210 — Canonicalize Quotes.Id at capture, case-insensitive lookup
 
-**Status:** Waiting for release — eighth round of scope expansion (see "Closing the RepositorySql SELECT-list boundary" below) shipped, full suite green, T1+T2 both confirmed
+**Status:** Released — eighth round of scope expansion (see "Closing the RepositorySql SELECT-list boundary" below) shipped, full suite green, T1+T2 both confirmed
 **GitHub issue:** #210
 **Tiers required:** T1, T2
 **Depends on:** none (parent tracking issue #207; shares `EntityIdCanonicalizer` with sibling sub-issue #209, which landed first)

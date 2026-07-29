@@ -1,6 +1,6 @@
 # #176 — Conversation: Description-field Modify/decidability
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #176
 **Tiers required:** T1, T2
 **Depends on:** #162, #165, #168 (shipped patterns this builds on); not technically blocked by #170-#175 but sequenced last among the entity-Modify issues

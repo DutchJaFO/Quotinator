@@ -1,6 +1,6 @@
 # #152 — Review endpoint grouping: split Admin / Quote / Import
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #152
 **Tiers required:** T1, T2
 **Depends on:** #149 (introduced the `Import` tag and `/api/v1/import` route group this issue completes)

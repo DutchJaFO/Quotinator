@@ -1,6 +1,6 @@
 # #206 — Merge Quotinator.Engine into Quotinator.Core
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #206
 **Tiers required:** T1, T2
 **Depends on:** nothing

@@ -1,6 +1,6 @@
 # #163 — Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153)
 
-**Status:** Done
+**Status:** Released
 **GitHub issue:** #163
 **Tiers required:** T1, T2
 **Depends on:** #162, #149, #154

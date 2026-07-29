@@ -1,6 +1,6 @@
 # #215 — Extend `IJoinStrategy<T>` auto-discovery to the id-case and SELECT-presentation guards
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #215
 **Tiers required:** T1, T2
 **Depends on:** none

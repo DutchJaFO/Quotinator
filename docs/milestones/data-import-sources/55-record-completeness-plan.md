@@ -1,6 +1,6 @@
 # #55 — Record completeness flag
 
-**Status:** Waiting for release
+**Status:** Released
 
 **Tiers required:** T1, T2
 

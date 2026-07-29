@@ -1,6 +1,6 @@
 # #221 — Per-file, per-entity-type import/seed report
 
-**Status:** Waiting for release
+**Status:** Released
 
 **GitHub issue:** https://github.com/DutchJaFO/Quotinator/issues/221
 

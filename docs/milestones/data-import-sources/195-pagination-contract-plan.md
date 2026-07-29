@@ -1,6 +1,6 @@
 # #195 — Standard pagination contract: PagedItems&lt;T&gt;, shared parsing and not-found helpers
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #195
 **Tiers required:** T1, T2
 **Depends on:** #194 (numeric params published as string) — done

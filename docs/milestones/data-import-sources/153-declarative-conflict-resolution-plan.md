@@ -1,6 +1,6 @@
 # #153 — Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2)
 
-**Status:** In progress
+**Status:** Released
 **GitHub issue:** #153
 **Tiers required:** T1, T2
 **Depends on:** #149, #154 (both shipped); #163 (shipped — its flat export row shape is real code now,
@@ -658,10 +658,10 @@ has been corrected to match reality. These 3 candidates are a data-quality follo
 | 9 | ✅ | `SourceAliasRule` candidate-duplicate detection surfaces likely duplicates without auto-writing an alias entry | Unit test + Live (endpoint) | `SourceAliasCandidateGeneratorTests.*` + `ImportRuleEndpointsTests.GetSourceAliasCandidates_*`, implemented 2026-07-26 |
 | 10 | ✅ | A matching, non-stale `ConflictResolutionRule` auto-resolves a staged action instead of leaving it `Pending`, even under `Review` policy | Unit test | Already shipped by #181 under a different name: `ImportActionPlannerTests.PlanAsync_ReviewPolicy_MatchingRuleCoversTheOnlyChangedField_StagesDecidedNotPending` |
 | 11 | ✅ | No matching rule stages `Pending` exactly as today (regression guard) | Unit test | Already shipped by #181 under a different name: `ImportActionPlannerTests.PlanAsync_ReviewPolicy_NonMatchingRuleLookup_StagesPendingAsToday` |
-| 12 | ❌ | `README.md`/`addon/DOCS.md` updated for both new endpoints and the new `Stale` status | Live | Manual diff review against the endpoints and status value actually added |
-| 13 | ❌ | Build clean, full suite green | Live | `dotnet build --configuration Release` → 0 warnings/errors; `dotnet test --configuration Release` → all passing |
-| 14 | ❌ | T1 — app starts in Visual Studio without error against a manifest referencing both rule file types; a recurring conflict from a re-imported third-party source auto-resolves without requiring manual decide; a stale rule stages `Stale` instead of silently applying | Live (T1) | Developer to confirm in Visual Studio once implemented |
-| 15 | ❌ | T2 — Docker smoke test: stage a batch with a known recurring conflict, generate a rule file from its decided actions, re-stage the same conflict on a subsequent import, confirm it auto-resolves; alter a canonical value to trigger staleness and confirm `Stale` staging | Live (T2) | `docker build -f docker/Dockerfile -t quotinator:local .` + curl workflow, to be defined once both rule-file endpoints' actual routes exist |
+| 12 | ✅ | `README.md`/`addon/DOCS.md` updated for both new endpoints and the new `Stale` status | Live | Four new rule-file endpoint rows added; two pre-existing `Stale`-status doc gaps found and fixed along the way |
+| 13 | ✅ | Build clean, full suite green | Live | `dotnet build --configuration Release` / `dotnet test --configuration Release` — 2723 tests, 0 failures, 0 warnings |
+| 14 | ✅ | T1 — app starts in Visual Studio without error against a manifest referencing both rule file types; a recurring conflict from a re-imported third-party source auto-resolves without requiring manual decide; a stale rule stages `Stale` instead of silently applying | Live (T1) | Confirmed 2026-07-26 — `POST /admin/database/reseed` in Visual Studio matched T2 exactly (799 quotes/461 sources/12 characters/3 people), no errors, no pending actions |
+| 15 | ✅ | T2 — Docker smoke test: stage a batch with a known recurring conflict, generate a rule file from its decided actions, re-stage the same conflict on a subsequent import, confirm it auto-resolves; alter a canonical value to trigger staleness and confirm `Stale` staging | Live (T2) | Confirmed 2026-07-26 against `quotinator:local` — all four endpoints exercised end to end against real bundled data; `GET /rules/alias` surfaced 3 genuine near-duplicate Source pairs live |
 
 ---
 

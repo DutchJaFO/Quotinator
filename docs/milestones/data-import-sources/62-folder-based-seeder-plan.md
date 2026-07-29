@@ -1,6 +1,6 @@
 # #62 — Folder-based seeder
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #62
 **Tiers required:** T1, T2 — this issue touches `Program.cs` startup config reading, same reasoning as #63.
 **Depends on:** #63 (manifest) — done; #58 (ImportBatch rows) — done

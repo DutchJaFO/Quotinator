@@ -1,6 +1,6 @@
 # #196 — Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter-parameter shape
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #196
 **Tiers required:** T1, T2
 **Depends on:** none

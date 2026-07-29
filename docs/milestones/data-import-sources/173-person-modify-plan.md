@@ -1,6 +1,6 @@
 # #173 — Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #173
 **Tiers required:** T1, T2
 **Depends on:** #162, #165, #168 (shipped patterns this builds on)

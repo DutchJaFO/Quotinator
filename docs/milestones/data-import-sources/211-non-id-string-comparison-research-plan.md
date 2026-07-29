@@ -1,6 +1,6 @@
 # #211 — Research: evaluate non-id string comparisons in SQL queries for the same class of gap as #210
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #211
 **Tiers required:** T1, T2 (revised 2026-07-25 — the investigation itself needs none, but Steps 5–8's
 `TextClauses`/`SqlTextCaseGuard` implementation is real code, unlike #169's pure-research precedent)

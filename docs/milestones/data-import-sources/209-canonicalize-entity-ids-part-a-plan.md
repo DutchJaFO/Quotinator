@@ -1,6 +1,6 @@
 # #209 — Canonicalize explicit ids at capture: Source, Person, StageDirection, SoundCue, Conversation
 
-**Status:** Planning
+**Status:** Released
 **GitHub issue:** #209
 **Tiers required:** T1, T2
 **Depends on:** none (ADR 012 already committed; built against current `Quotinator.Core`/`Quotinator.Data`; parent tracking issue #207)

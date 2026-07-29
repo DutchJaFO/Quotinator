@@ -1,6 +1,6 @@
 # #157 — Sql.cs mixes domain-specific SQL into domain-agnostic Quotinator.Data
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #157
 **Tiers required:** T2
 **Depends on:** #69

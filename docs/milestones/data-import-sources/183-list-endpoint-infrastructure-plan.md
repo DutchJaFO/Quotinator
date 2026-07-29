@@ -1,6 +1,6 @@
 # #183 — List-endpoint shared infrastructure for the masterdata and Conversations list endpoints
 
-**Status:** Planning
+**Status:** Released
 **GitHub issue:** #183
 **Depends on:** none
 
@@ -20,10 +20,10 @@ rather than carrying Steps and a verification checklist.
 
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
-| [#193](https://github.com/DutchJaFO/Quotinator/issues/193) | Generic listable repository capability + DI registrations for the six list entities | Planning | T1 ⬜ T2 ⬜ | [193-listable-repository-plan.md](193-listable-repository-plan.md) |
-| [#194](https://github.com/DutchJaFO/Quotinator/issues/194) | Numeric query params published to the OpenAPI spec as string — transformer only covers year params | Planning | T1 ⬜ T2 ⬜ | [194-numeric-param-schema-plan.md](194-numeric-param-schema-plan.md) |
-| [#195](https://github.com/DutchJaFO/Quotinator/issues/195) | Standard pagination contract: PageResponse&lt;T&gt;, shared parsing and not-found helpers | Planning | T1 ⬜ T2 ⬜ | [195-pagination-contract-plan.md](195-pagination-contract-plan.md) |
-| [#196](https://github.com/DutchJaFO/Quotinator/issues/196) | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter-parameter shape | Planning | T1 ⬜ T2 ⬜ | [196-masterdata-conventions-plan.md](196-masterdata-conventions-plan.md) |
+| [#193](https://github.com/DutchJaFO/Quotinator/issues/193) | Generic listable repository capability + DI registrations for the six list entities | Released | T1 ✅ T2 ✅ | [193-listable-repository-plan.md](193-listable-repository-plan.md) |
+| [#194](https://github.com/DutchJaFO/Quotinator/issues/194) | Numeric query params published to the OpenAPI spec as string — transformer only covers year params | Released | T1 ✅ T2 ✅ | [194-numeric-param-schema-plan.md](194-numeric-param-schema-plan.md) |
+| [#195](https://github.com/DutchJaFO/Quotinator/issues/195) | Standard pagination contract: PageResponse&lt;T&gt;, shared parsing and not-found helpers | Released | T1 ✅ T2 ✅ | [195-pagination-contract-plan.md](195-pagination-contract-plan.md) |
+| [#196](https://github.com/DutchJaFO/Quotinator/issues/196) | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter-parameter shape | Released | T1 ✅ T2 ✅ | [196-masterdata-conventions-plan.md](196-masterdata-conventions-plan.md) |
 
 ---
 
@@ -45,10 +45,10 @@ parallel with #194.
 
 | # | Issue | Title | Status |
 |---|-------|-------|--------|
-| 1 | #194 | Numeric query params published to the OpenAPI spec as string | Planning |
-| 2 | #193 | Generic listable repository capability + DI registrations | Planning |
-| 3 | #196 | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter shape | Planning |
-| 4 | #195 | Standard pagination contract: PageResponse&lt;T&gt;, shared helpers | Planning |
+| 1 | #194 | Numeric query params published to the OpenAPI spec as string | Released |
+| 2 | #193 | Generic listable repository capability + DI registrations | Released |
+| 3 | #196 | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter shape | Released |
+| 4 | #195 | Standard pagination contract: PageResponse&lt;T&gt;, shared helpers | Released |
 
 #194 is sequenced first because it is #195's hard blocker and is self-contained. #193 and #196 sit
 between them only because they are independent and can absorb any wait; neither blocks the other.

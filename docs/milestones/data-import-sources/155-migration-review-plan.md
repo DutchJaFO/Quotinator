@@ -1,6 +1,6 @@
 # #155 — Migration review: verify full incremental path from last-shipped v1.7.2 schema
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #155
 **Tiers required:** T1, T2
 **Depends on:** none (sequenced last in this milestone, per its own issue text and `overview.md`'s dependency map)

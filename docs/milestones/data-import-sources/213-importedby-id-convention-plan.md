@@ -1,6 +1,6 @@
 # #213 — Rename ImportBatch.ImportedBy to ImportedById for guard/convention compliance
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #213
 **Tiers required:** T1, T2
 **Depends on:** #212

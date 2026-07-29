@@ -1,6 +1,6 @@
 # #193 — Generic listable repository capability + DI registrations
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #193
 **Tiers required:** T1, T2
 **Depends on:** none

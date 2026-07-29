@@ -1,6 +1,6 @@
 # #69 — API: conversation membership, GET /conversations/{id}, random dedup
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #69
 **Tiers required:** T1, T2
 **Depends on:** #67, #68

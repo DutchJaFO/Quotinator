@@ -1,6 +1,6 @@
 # #162 — Source: explicit file-carried id, decoupling matching from Title/Type/Date content
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #162
 **Tiers required:** T1, T2
 **Depends on:** #165, #149, #154, #67/#68 (identity-model precedent)

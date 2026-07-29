@@ -1,6 +1,6 @@
 # #140 — Auto-update bundled source files from manifest URL on startup
 
-**Status:** Waiting for release
+**Status:** Released
 **Tiers required:** T1, T2, T3 (touches `DatabaseInitializer`/`QuotinatorDatabaseInitializer` → T1+T2; touches `addon/config.yaml` and `addon/translations/{en,nl,de}.yaml` → T3)
 **GitHub issue:** #140
 **Depends on:** #58 fix (manifest `url` field) — done; #62 (`AutoUpdateSources` follows the same config pattern) — done; #63 (`downloadUrl`/`github` manifest groundwork) — done
