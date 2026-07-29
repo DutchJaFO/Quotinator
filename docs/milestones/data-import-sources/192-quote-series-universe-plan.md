@@ -1,6 +1,6 @@
 # #192 — Expose series/universe on the quote read path — QuoteResponse fields and filters
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #192
 **Tiers required:** T1, T2
 **Depends on:** #180, #196, #206

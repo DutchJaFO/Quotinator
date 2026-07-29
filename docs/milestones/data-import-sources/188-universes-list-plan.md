@@ -1,6 +1,6 @@
 # #188 — Masterdata: GET /api/v1/masterdata/universes list + get-by-id
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #188
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196, #179

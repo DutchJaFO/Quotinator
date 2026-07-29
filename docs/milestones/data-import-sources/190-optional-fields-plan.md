@@ -1,6 +1,6 @@
 # #190 — Import files cannot express "leave this property alone"
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #190
 **Tiers required:** T1, T2
 **Depends on:** none (built against current `Quotinator.Core` — #206's Engine merge is already in)

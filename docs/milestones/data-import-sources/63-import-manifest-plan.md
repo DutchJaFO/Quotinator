@@ -1,6 +1,6 @@
 # #63 — Import manifest
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #63
 **Tiers required:** T1, T2
 

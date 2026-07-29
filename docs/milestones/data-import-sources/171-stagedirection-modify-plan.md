@@ -1,6 +1,6 @@
 # #171 — StageDirection: Modify/decidability
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #171
 **Tiers required:** T1, T2
 **Depends on:** #162, #165, #168 (all shipped — this issue builds on their pattern, not literally blocked by them being merged to main yet)

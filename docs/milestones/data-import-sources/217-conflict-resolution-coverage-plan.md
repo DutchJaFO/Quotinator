@@ -1,6 +1,6 @@
 # #217 — Establish conflict-resolution coverage for every bundled source file
 
-**Status:** Planning
+**Status:** Released
 **GitHub issue:** #217
 **Depends on:** none
 
@@ -43,9 +43,9 @@ corrections, not just conflict decisions proper.
 
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
-| [#177](https://github.com/DutchJaFO/Quotinator/issues/177) | ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal | Planning | T1 ⬜ T2 ⬜ | [177-import-batch-status-applied-plan.md](177-import-batch-status-applied-plan.md) |
-| [#181](https://github.com/DutchJaFO/Quotinator/issues/181) | Minimal per-source conflict-resolution rule file + curated field-override preload (scope widened to all 4 bundled files) | Planning | T1 ⬜ T2 ⬜ | [181-minimal-conflict-resolution-rule-file-plan.md](181-minimal-conflict-resolution-rule-file-plan.md) |
-| [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Planning | T1 ⬜ T2 ⬜ | [153-declarative-conflict-resolution-plan.md](153-declarative-conflict-resolution-plan.md) |
+| [#177](https://github.com/DutchJaFO/Quotinator/issues/177) | ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal | Released | T1 ✅ T2 ✅ | [177-import-batch-status-applied-plan.md](177-import-batch-status-applied-plan.md) |
+| [#181](https://github.com/DutchJaFO/Quotinator/issues/181) | Minimal per-source conflict-resolution rule file + curated field-override preload (scope widened to all 4 bundled files) | Released | T1 ✅ T2 ✅ | [181-minimal-conflict-resolution-rule-file-plan.md](181-minimal-conflict-resolution-rule-file-plan.md) |
+| [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Released | T1 ✅ T2 ✅ | [153-declarative-conflict-resolution-plan.md](153-declarative-conflict-resolution-plan.md) |
 
 ---
 
@@ -69,9 +69,9 @@ this parent issue's own scope.
 
 | # | Issue | Title | Status |
 |---|-------|-------|--------|
-| 1 | #177 | ImportBatches.Status never set to Applied, breaking reversal | Planning |
-| 2 | #181 | Minimal per-source conflict-resolution rule file (all 4 bundled files) | Planning |
-| 3 | #153 | Declarative conflict-resolution file, Phase 2 | Planning |
+| 1 | #177 | ImportBatches.Status never set to Applied, breaking reversal | Released |
+| 2 | #181 | Minimal per-source conflict-resolution rule file (all 4 bundled files) | Released |
+| 3 | #153 | Declarative conflict-resolution file, Phase 2 | Released |
 
 #177 first because the reversal it fixes is a hard prerequisite for #181's own iterative testing
 methodology. #181 before #153 because #153 builds on #181's shipped rule-file format rather than

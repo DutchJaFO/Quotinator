@@ -2,7 +2,7 @@
 
 **GitHub milestone:** [#10](https://github.com/DutchJaFO/Quotinator/milestone/10)
 **Branch:** `feature/data-import-sources`
-**Status:** In progress
+**Status:** Released
 
 ---
 
@@ -38,73 +38,73 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#78](https://github.com/DutchJaFO/Quotinator/issues/78) | Repository: transaction and shared connection support | Released | — (pre-dates tier system) | [78-repository-transaction-plan.md](78-repository-transaction-plan.md) |
 | [#79](https://github.com/DutchJaFO/Quotinator/issues/79) | Fix Highlights sections in CHANGELOG.md for 1.3.0 and 1.4.0 | Released | None required | No plan doc |
 | [#58](https://github.com/DutchJaFO/Quotinator/issues/58) | ImportBatches schema | Released | T1 ✅ T2 ✅ | [58-import-batches-schema-plan.md](58-import-batches-schema-plan.md) |
-| [#57](https://github.com/DutchJaFO/Quotinator/issues/57) | Seed script: dedup inconsistent | Waiting for release | None required | [57-seed-script-dedup-plan.md](57-seed-script-dedup-plan.md) |
-| [#63](https://github.com/DutchJaFO/Quotinator/issues/63) | Import manifest | Waiting for release | T1 ✅ T2 ✅ | [63-import-manifest-plan.md](63-import-manifest-plan.md) |
-| [#62](https://github.com/DutchJaFO/Quotinator/issues/62) | Folder-based seeder | Waiting for release | T1 ✅ T2 ✅ | [62-folder-based-seeder-plan.md](62-folder-based-seeder-plan.md) |
-| [#141](https://github.com/DutchJaFO/Quotinator/issues/141) | Reseed/reset must preserve System-classified data | Waiting for release | T1 ✅ T2 ✅ | [141-system-table-preservation-plan.md](141-system-table-preservation-plan.md) |
-| [#143](https://github.com/DutchJaFO/Quotinator/issues/143) | Fresh-database baseline schema + Data/Engine migration ownership split | Waiting for release | T1 ✅ T2 ✅ | [143-migration-ownership-baseline-plan.md](143-migration-ownership-baseline-plan.md) |
-| [#140](https://github.com/DutchJaFO/Quotinator/issues/140) | Auto-update bundled sources from manifest URL | Waiting for release | T1 ✅ T2 ✅ T3 ⬜ | [140-auto-update-sources-plan.md](140-auto-update-sources-plan.md) |
-| [#144](https://github.com/DutchJaFO/Quotinator/issues/144) | Converter plugins: generic naming, internal-only slots, configuration options | Waiting for release | T1 ✅ T2 ✅ | [144-converter-plugin-review-plan.md](144-converter-plugin-review-plan.md) |
-| [#64](https://github.com/DutchJaFO/Quotinator/issues/64) | Conflict resolution policy | Waiting for release | T1 ✅ T2 ✅ | [64-conflict-resolution-plan.md](64-conflict-resolution-plan.md) |
-| [#45](https://github.com/DutchJaFO/Quotinator/issues/45) | Import endpoint | Waiting for release | T1 ✅ T2 ✅ | [45-import-endpoint-plan.md](45-import-endpoint-plan.md) |
-| [#65](https://github.com/DutchJaFO/Quotinator/issues/65) | Import endpoint: preview/dry-run | Waiting for release | T1 ✅ T2 ✅ | [65-preview-dry-run-plan.md](65-preview-dry-run-plan.md) |
-| [#55](https://github.com/DutchJaFO/Quotinator/issues/55) | Record completeness flag | Waiting for release | T1 ✅ T2 ✅ | [55-record-completeness-plan.md](55-record-completeness-plan.md) |
-| [#56](https://github.com/DutchJaFO/Quotinator/issues/56) | Audit log (System_ChangeLog) | Waiting for release | T1 ✅ T2 ✅ | [56-audit-log-plan.md](56-audit-log-plan.md) |
-| [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: undo an applied import batch | Waiting for release | T1 ✅ T2 ✅ | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
-| [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Waiting for release | T1 ✅ T2 ✅ | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
-| [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Waiting for release | T1 ✅ T2 ✅ | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
-| [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | Waiting for release | T1 ✅ T2 ✅ | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
-| [#157](https://github.com/DutchJaFO/Quotinator/issues/157) | Sql.cs mixes domain-specific SQL into domain-agnostic Quotinator.Data | Waiting for release | T2 ✅ | [157-sql-domain-engine-split-plan.md](157-sql-domain-engine-split-plan.md) |
-| [#158](https://github.com/DutchJaFO/Quotinator/issues/158) | ImportBatch entity/repository/enums live in Quotinator.Engine instead of Quotinator.Data | Waiting for release | T2 ✅ | [158-importbatch-to-data-plan.md](158-importbatch-to-data-plan.md) |
-| [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow | Waiting for release | T1 ✅ T2 ✅ | [149-manual-conflict-review-plan.md](149-manual-conflict-review-plan.md) |
-| [#152](https://github.com/DutchJaFO/Quotinator/issues/152) | Review endpoint grouping: split Admin / Quote / Import | Waiting for release | T1 ✅ T2 ✅ | [152-endpoint-grouping-plan.md](152-endpoint-grouping-plan.md) |
-| [#165](https://github.com/DutchJaFO/Quotinator/issues/165) | Generalize record completeness to a 3-state model and hard-block modifying completed rows | Waiting for release | T1 ✅ T2 ✅ | [165-completeness-review-model-plan.md](165-completeness-review-model-plan.md) |
-| [#162](https://github.com/DutchJaFO/Quotinator/issues/162) | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Waiting for release | T1 ✅ T2 ✅ | [162-source-explicit-id-plan.md](162-source-explicit-id-plan.md) |
-| [#168](https://github.com/DutchJaFO/Quotinator/issues/168) | Quote's own Modify path never checks CompletenessGuard — a Complete quote can be silently overwritten by import | Waiting for release | T1 ✅ T2 ✅ | [168-quote-completeness-guard-plan.md](168-quote-completeness-guard-plan.md) |
-| [#170](https://github.com/DutchJaFO/Quotinator/issues/170) | ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions" | Waiting for release | T1 ✅ T2 ✅ | [170-not-decidable-wording-plan.md](170-not-decidable-wording-plan.md) |
-| [#171](https://github.com/DutchJaFO/Quotinator/issues/171) | StageDirection: Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [171-stagedirection-modify-plan.md](171-stagedirection-modify-plan.md) |
-| [#172](https://github.com/DutchJaFO/Quotinator/issues/172) | SoundCue: Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [172-soundcue-modify-plan.md](172-soundcue-modify-plan.md) |
-| [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | Waiting for release | T1 ✅ T2 ✅ | [173-person-modify-plan.md](173-person-modify-plan.md) |
+| [#57](https://github.com/DutchJaFO/Quotinator/issues/57) | Seed script: dedup inconsistent | Released | None required | [57-seed-script-dedup-plan.md](57-seed-script-dedup-plan.md) |
+| [#63](https://github.com/DutchJaFO/Quotinator/issues/63) | Import manifest | Released | T1 ✅ T2 ✅ | [63-import-manifest-plan.md](63-import-manifest-plan.md) |
+| [#62](https://github.com/DutchJaFO/Quotinator/issues/62) | Folder-based seeder | Released | T1 ✅ T2 ✅ | [62-folder-based-seeder-plan.md](62-folder-based-seeder-plan.md) |
+| [#141](https://github.com/DutchJaFO/Quotinator/issues/141) | Reseed/reset must preserve System-classified data | Released | T1 ✅ T2 ✅ | [141-system-table-preservation-plan.md](141-system-table-preservation-plan.md) |
+| [#143](https://github.com/DutchJaFO/Quotinator/issues/143) | Fresh-database baseline schema + Data/Engine migration ownership split | Released | T1 ✅ T2 ✅ | [143-migration-ownership-baseline-plan.md](143-migration-ownership-baseline-plan.md) |
+| [#140](https://github.com/DutchJaFO/Quotinator/issues/140) | Auto-update bundled sources from manifest URL | Released | T1 ✅ T2 ✅ T3 ✅ | [140-auto-update-sources-plan.md](140-auto-update-sources-plan.md) |
+| [#144](https://github.com/DutchJaFO/Quotinator/issues/144) | Converter plugins: generic naming, internal-only slots, configuration options | Released | T1 ✅ T2 ✅ | [144-converter-plugin-review-plan.md](144-converter-plugin-review-plan.md) |
+| [#64](https://github.com/DutchJaFO/Quotinator/issues/64) | Conflict resolution policy | Released | T1 ✅ T2 ✅ | [64-conflict-resolution-plan.md](64-conflict-resolution-plan.md) |
+| [#45](https://github.com/DutchJaFO/Quotinator/issues/45) | Import endpoint | Released | T1 ✅ T2 ✅ | [45-import-endpoint-plan.md](45-import-endpoint-plan.md) |
+| [#65](https://github.com/DutchJaFO/Quotinator/issues/65) | Import endpoint: preview/dry-run | Released | T1 ✅ T2 ✅ | [65-preview-dry-run-plan.md](65-preview-dry-run-plan.md) |
+| [#55](https://github.com/DutchJaFO/Quotinator/issues/55) | Record completeness flag | Released | T1 ✅ T2 ✅ | [55-record-completeness-plan.md](55-record-completeness-plan.md) |
+| [#56](https://github.com/DutchJaFO/Quotinator/issues/56) | Audit log (System_ChangeLog) | Released | T1 ✅ T2 ✅ | [56-audit-log-plan.md](56-audit-log-plan.md) |
+| [#59](https://github.com/DutchJaFO/Quotinator/issues/59) | Admin: undo an applied import batch | Released | T1 ✅ T2 ✅ | [59-admin-soft-reset-plan.md](59-admin-soft-reset-plan.md) |
+| [#67](https://github.com/DutchJaFO/Quotinator/issues/67) | Conversations schema | Released | T1 ✅ T2 ✅ | [67-conversations-schema-plan.md](67-conversations-schema-plan.md) |
+| [#68](https://github.com/DutchJaFO/Quotinator/issues/68) | Curated JSON conversations | Released | T1 ✅ T2 ✅ | [68-curated-json-conversations-plan.md](68-curated-json-conversations-plan.md) |
+| [#69](https://github.com/DutchJaFO/Quotinator/issues/69) | API conversations | Released | T1 ✅ T2 ✅ | [69-api-conversations-plan.md](69-api-conversations-plan.md) |
+| [#157](https://github.com/DutchJaFO/Quotinator/issues/157) | Sql.cs mixes domain-specific SQL into domain-agnostic Quotinator.Data | Released | T2 ✅ | [157-sql-domain-engine-split-plan.md](157-sql-domain-engine-split-plan.md) |
+| [#158](https://github.com/DutchJaFO/Quotinator/issues/158) | ImportBatch entity/repository/enums live in Quotinator.Engine instead of Quotinator.Data | Released | T2 ✅ | [158-importbatch-to-data-plan.md](158-importbatch-to-data-plan.md) |
+| [#149](https://github.com/DutchJaFO/Quotinator/issues/149) | Import endpoint: manual conflict-review workflow | Released | T1 ✅ T2 ✅ | [149-manual-conflict-review-plan.md](149-manual-conflict-review-plan.md) |
+| [#152](https://github.com/DutchJaFO/Quotinator/issues/152) | Review endpoint grouping: split Admin / Quote / Import | Released | T1 ✅ T2 ✅ | [152-endpoint-grouping-plan.md](152-endpoint-grouping-plan.md) |
+| [#165](https://github.com/DutchJaFO/Quotinator/issues/165) | Generalize record completeness to a 3-state model and hard-block modifying completed rows | Released | T1 ✅ T2 ✅ | [165-completeness-review-model-plan.md](165-completeness-review-model-plan.md) |
+| [#162](https://github.com/DutchJaFO/Quotinator/issues/162) | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Released | T1 ✅ T2 ✅ | [162-source-explicit-id-plan.md](162-source-explicit-id-plan.md) |
+| [#168](https://github.com/DutchJaFO/Quotinator/issues/168) | Quote's own Modify path never checks CompletenessGuard — a Complete quote can be silently overwritten by import | Released | T1 ✅ T2 ✅ | [168-quote-completeness-guard-plan.md](168-quote-completeness-guard-plan.md) |
+| [#170](https://github.com/DutchJaFO/Quotinator/issues/170) | ImportActionNotDecidableException's message and doc comment are stale — still says "only Quote actions" | Released | T1 ✅ T2 ✅ | [170-not-decidable-wording-plan.md](170-not-decidable-wording-plan.md) |
+| [#171](https://github.com/DutchJaFO/Quotinator/issues/171) | StageDirection: Modify/decidability | Released | T1 ✅ T2 ✅ | [171-stagedirection-modify-plan.md](171-stagedirection-modify-plan.md) |
+| [#172](https://github.com/DutchJaFO/Quotinator/issues/172) | SoundCue: Modify/decidability | Released | T1 ✅ T2 ✅ | [172-soundcue-modify-plan.md](172-soundcue-modify-plan.md) |
+| [#173](https://github.com/DutchJaFO/Quotinator/issues/173) | Person: explicit id, Modify/decidability, wire up dateOfBirth/dateOfDeath | Released | T1 ✅ T2 ✅ | [173-person-modify-plan.md](173-person-modify-plan.md) |
 | [#169](https://github.com/DutchJaFO/Quotinator/issues/169) | Research: "universe/setting" concept linking Source and Character | Released | None (research) | [169-universe-setting-research-plan.md](169-universe-setting-research-plan.md) |
-| [#179](https://github.com/DutchJaFO/Quotinator/issues/179) | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | Waiting for release | T1 ✅ T2 ✅ | [179-series-universe-schema-plan.md](179-series-universe-schema-plan.md) |
-| [#183](https://github.com/DutchJaFO/Quotinator/issues/183) | List-endpoint shared infrastructure (parent of #193, #194, #195, #196) | Planning | — (parent) | [183-list-endpoint-infrastructure-plan.md](183-list-endpoint-infrastructure-plan.md) |
-| [#194](https://github.com/DutchJaFO/Quotinator/issues/194) | Numeric query params published to the OpenAPI spec as string — transformer only covers year params | Waiting for release | T1 ✅ T2 ✅ | [194-numeric-param-schema-plan.md](194-numeric-param-schema-plan.md) |
-| [#193](https://github.com/DutchJaFO/Quotinator/issues/193) | Generic listable repository capability + DI registrations for the six list entities | Waiting for release | T1 ✅ T2 ✅ | [193-listable-repository-plan.md](193-listable-repository-plan.md) |
-| [#195](https://github.com/DutchJaFO/Quotinator/issues/195) | Standard pagination contract: PagedItems&lt;T&gt;, shared parsing and not-found helpers | Waiting for release | T1 ✅ T2 ✅ | [195-pagination-contract-plan.md](195-pagination-contract-plan.md) |
-| [#196](https://github.com/DutchJaFO/Quotinator/issues/196) | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter-parameter shape | Waiting for release | T1 ✅ T2 ✅ | [196-masterdata-conventions-plan.md](196-masterdata-conventions-plan.md) |
-| [#184](https://github.com/DutchJaFO/Quotinator/issues/184) | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [184-sources-list-plan.md](184-sources-list-plan.md) |
-| [#185](https://github.com/DutchJaFO/Quotinator/issues/185) | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [185-characters-list-plan.md](185-characters-list-plan.md) |
-| [#186](https://github.com/DutchJaFO/Quotinator/issues/186) | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [186-people-list-plan.md](186-people-list-plan.md) |
-| [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [187-series-list-plan.md](187-series-list-plan.md) |
-| [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [188-universes-list-plan.md](188-universes-list-plan.md) |
-| [#189](https://github.com/DutchJaFO/Quotinator/issues/189) | Conversations: GET /api/v1/conversations list endpoint | Waiting for release | T1 ✅ T2 ✅ | [189-conversations-list-plan.md](189-conversations-list-plan.md) |
-| [#204](https://github.com/DutchJaFO/Quotinator/issues/204) | Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [204-stagedirections-list-plan.md](204-stagedirections-list-plan.md) |
-| [#205](https://github.com/DutchJaFO/Quotinator/issues/205) | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | Waiting for release | T1 ✅ T2 ✅ | [205-soundcues-list-plan.md](205-soundcues-list-plan.md) |
-| [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release | T1 ✅ T2 ✅ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
-| [#190](https://github.com/DutchJaFO/Quotinator/issues/190) | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Waiting for release | T1 ✅ T2 ✅ | [190-optional-fields-plan.md](190-optional-fields-plan.md) |
-| [#191](https://github.com/DutchJaFO/Quotinator/issues/191) | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Waiting for release | T1 ✅ T2 ✅ | [191-source-date-population-plan.md](191-source-date-population-plan.md) |
-| [#206](https://github.com/DutchJaFO/Quotinator/issues/206) | Merge Quotinator.Engine into Quotinator.Core — collapse the three-project domain split to two | Waiting for release | T1 ✅ T2 ✅ | [206-core-engine-merge-plan.md](206-core-engine-merge-plan.md) |
-| [#192](https://github.com/DutchJaFO/Quotinator/issues/192) | Expose series/universe on the quote read path — QuoteResponse fields and filters | Waiting for release | T1 ✅ T2 ✅ | [192-quote-series-universe-plan.md](192-quote-series-universe-plan.md) |
-| [#209](https://github.com/DutchJaFO/Quotinator/issues/209) | Canonicalize explicit ids at capture — Source, Person, StageDirection, SoundCue, Conversation (sub-issue of #207) | Waiting for release | T1 ✅ T2 ✅ | [209-canonicalize-entity-ids-part-a-plan.md](209-canonicalize-entity-ids-part-a-plan.md) |
-| [#210](https://github.com/DutchJaFO/Quotinator/issues/210) | Canonicalize Quotes.Id at capture, case-insensitive lookup — scope expanded mid-issue to a systemic `SqlIdCaseGuard` + `IdClauses` construction helper, then to unify Quote onto the same convention every other entity uses, then to flip the whole system-wide convention itself from uppercase to lowercase, then to add read-time presentation normalization, then generalized to a uniform SELECT-list wrap for every id column and ADR 012 squashed into current-state form, then closed the last gap by giving `RepositorySql`'s generic `SELECT *` queries an explicit, wrapped column list via a new `IEntityColumnMetadata` interface (sub-issue of #207) | Waiting for release | T1 ✅ T2 ✅ | [210-canonicalize-quote-id-plan.md](210-canonicalize-quote-id-plan.md) |
-| [#207](https://github.com/DutchJaFO/Quotinator/issues/207) | Canonicalize file-authored explicit ids at capture (parent — closes once #209, #210, #212, #213, #214, and #215 all close) | In progress | — (parent) | [207-canonicalize-entity-ids-plan.md](207-canonicalize-entity-ids-plan.md) |
-| [#211](https://github.com/DutchJaFO/Quotinator/issues/211) | Research: evaluate non-id string comparisons in SQL queries for the same class of gap as #210 | Waiting for release | T1 ✅ T2 ✅ | [211-non-id-string-comparison-research-plan.md](211-non-id-string-comparison-research-plan.md) |
-| [#216](https://github.com/DutchJaFO/Quotinator/issues/216) | Series/Universe name-filter case sensitivity (confirmed bug) + audit all Name/Title natural-key comparisons | Waiting for release | T1 ✅ T2 ✅ | [216-name-title-case-sensitivity-plan.md](216-name-title-case-sensitivity-plan.md) |
-| [#212](https://github.com/DutchJaFO/Quotinator/issues/212) | `Sql.ImportBatches.SelectAll`/`SelectByType` still use `SELECT *`, invisible to `SqlSelectPresentationGuard` (sub-issue of #207) | Waiting for release | T1 ✅ T2 ✅ | [212-importbatches-select-star-plan.md](212-importbatches-select-star-plan.md) |
-| [#213](https://github.com/DutchJaFO/Quotinator/issues/213) | `ImportBatch.ImportedBy` doesn't follow the `*Id` naming convention every id-casing guard relies on — depends on #212 (sub-issue of #207) | Waiting for release | T1 ✅ T2 ✅ | [213-importedby-id-convention-plan.md](213-importedby-id-convention-plan.md) |
-| [#214](https://github.com/DutchJaFO/Quotinator/issues/214) | Guard test reflection doesn't cover static factory methods (`GetMethods`) — relies on manual enumeration (sub-issue of #207) | Waiting for release | T1 ✅ T2 ✅ | [214-guard-reflection-methods-plan.md](214-guard-reflection-methods-plan.md) |
-| [#215](https://github.com/DutchJaFO/Quotinator/issues/215) | `IJoinStrategy<T>` auto-discovery only checks the CVE aggregate guard, not id-case/presentation guards (sub-issue of #207) | Waiting for release | T1 ✅ T2 ✅ | [215-joinstrategy-guard-coverage-plan.md](215-joinstrategy-guard-coverage-plan.md) |
-| [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Waiting for release | T1 ✅ T2 ✅ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
-| [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [175-character-modify-plan.md](175-character-modify-plan.md) |
-| [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Waiting for release | T1 ✅ T2 ✅ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
-| [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Waiting for release | T1 ✅ T2 ✅ | [163-bulk-decide-file-plan.md](163-bulk-decide-file-plan.md) |
-| [#217](https://github.com/DutchJaFO/Quotinator/issues/217) | Establish conflict-resolution coverage for every bundled source file (parent of #177, #181, #153) | In progress | — (parent) | [217-conflict-resolution-coverage-plan.md](217-conflict-resolution-coverage-plan.md) |
-| [#177](https://github.com/DutchJaFO/Quotinator/issues/177) | ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal | Waiting for release | T1 ✅ T2 ✅ | [177-import-batch-status-applied-plan.md](177-import-batch-status-applied-plan.md) |
-| [#181](https://github.com/DutchJaFO/Quotinator/issues/181) | Minimal per-source conflict-resolution rule file + curated field-override preload (all 4 bundled files) | Waiting for release | T1 ✅ T2 ✅ | [181-minimal-conflict-resolution-rule-file-plan.md](181-minimal-conflict-resolution-rule-file-plan.md) |
-| [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Waiting for release | T1 ✅ T2 ✅ | [153-declarative-conflict-resolution-plan.md](153-declarative-conflict-resolution-plan.md) |
-| [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Waiting for release | T1 ✅ T2 ✅ | [154-import-staging-plan.md](154-import-staging-plan.md) |
-| [#155](https://github.com/DutchJaFO/Quotinator/issues/155) | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Waiting for release | T1 ✅ T2 ✅ | [155-migration-review-plan.md](155-migration-review-plan.md) |
-| [#221](https://github.com/DutchJaFO/Quotinator/issues/221) | Per-file, per-entity-type import/seed report (replace the misleading flat "duplicates" count) | Waiting for release | T1 ✅ T2 ✅ | [221-per-file-entity-type-import-report-plan.md](221-per-file-entity-type-import-report-plan.md) |
+| [#179](https://github.com/DutchJaFO/Quotinator/issues/179) | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | Released | T1 ✅ T2 ✅ | [179-series-universe-schema-plan.md](179-series-universe-schema-plan.md) |
+| [#183](https://github.com/DutchJaFO/Quotinator/issues/183) | List-endpoint shared infrastructure (parent of #193, #194, #195, #196) | Released | — (parent) | [183-list-endpoint-infrastructure-plan.md](183-list-endpoint-infrastructure-plan.md) |
+| [#194](https://github.com/DutchJaFO/Quotinator/issues/194) | Numeric query params published to the OpenAPI spec as string — transformer only covers year params | Released | T1 ✅ T2 ✅ | [194-numeric-param-schema-plan.md](194-numeric-param-schema-plan.md) |
+| [#193](https://github.com/DutchJaFO/Quotinator/issues/193) | Generic listable repository capability + DI registrations for the six list entities | Released | T1 ✅ T2 ✅ | [193-listable-repository-plan.md](193-listable-repository-plan.md) |
+| [#195](https://github.com/DutchJaFO/Quotinator/issues/195) | Standard pagination contract: PagedItems&lt;T&gt;, shared parsing and not-found helpers | Released | T1 ✅ T2 ✅ | [195-pagination-contract-plan.md](195-pagination-contract-plan.md) |
+| [#196](https://github.com/DutchJaFO/Quotinator/issues/196) | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter-parameter shape | Released | T1 ✅ T2 ✅ | [196-masterdata-conventions-plan.md](196-masterdata-conventions-plan.md) |
+| [#184](https://github.com/DutchJaFO/Quotinator/issues/184) | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Released | T1 ✅ T2 ✅ | [184-sources-list-plan.md](184-sources-list-plan.md) |
+| [#185](https://github.com/DutchJaFO/Quotinator/issues/185) | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Released | T1 ✅ T2 ✅ | [185-characters-list-plan.md](185-characters-list-plan.md) |
+| [#186](https://github.com/DutchJaFO/Quotinator/issues/186) | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Released | T1 ✅ T2 ✅ | [186-people-list-plan.md](186-people-list-plan.md) |
+| [#187](https://github.com/DutchJaFO/Quotinator/issues/187) | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Released | T1 ✅ T2 ✅ | [187-series-list-plan.md](187-series-list-plan.md) |
+| [#188](https://github.com/DutchJaFO/Quotinator/issues/188) | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Released | T1 ✅ T2 ✅ | [188-universes-list-plan.md](188-universes-list-plan.md) |
+| [#189](https://github.com/DutchJaFO/Quotinator/issues/189) | Conversations: GET /api/v1/conversations list endpoint | Released | T1 ✅ T2 ✅ | [189-conversations-list-plan.md](189-conversations-list-plan.md) |
+| [#204](https://github.com/DutchJaFO/Quotinator/issues/204) | Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id | Released | T1 ✅ T2 ✅ | [204-stagedirections-list-plan.md](204-stagedirections-list-plan.md) |
+| [#205](https://github.com/DutchJaFO/Quotinator/issues/205) | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | Released | T1 ✅ T2 ✅ | [205-soundcues-list-plan.md](205-soundcues-list-plan.md) |
+| [#180](https://github.com/DutchJaFO/Quotinator/issues/180) | Populate Series/Universe data via curated overlay file (review-only, staged) | Released | T1 ✅ T2 ✅ | [180-series-universe-population-plan.md](180-series-universe-population-plan.md) |
+| [#190](https://github.com/DutchJaFO/Quotinator/issues/190) | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Released | T1 ✅ T2 ✅ | [190-optional-fields-plan.md](190-optional-fields-plan.md) |
+| [#191](https://github.com/DutchJaFO/Quotinator/issues/191) | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Released | T1 ✅ T2 ✅ | [191-source-date-population-plan.md](191-source-date-population-plan.md) |
+| [#206](https://github.com/DutchJaFO/Quotinator/issues/206) | Merge Quotinator.Engine into Quotinator.Core — collapse the three-project domain split to two | Released | T1 ✅ T2 ✅ | [206-core-engine-merge-plan.md](206-core-engine-merge-plan.md) |
+| [#192](https://github.com/DutchJaFO/Quotinator/issues/192) | Expose series/universe on the quote read path — QuoteResponse fields and filters | Released | T1 ✅ T2 ✅ | [192-quote-series-universe-plan.md](192-quote-series-universe-plan.md) |
+| [#209](https://github.com/DutchJaFO/Quotinator/issues/209) | Canonicalize explicit ids at capture — Source, Person, StageDirection, SoundCue, Conversation (sub-issue of #207) | Released | T1 ✅ T2 ✅ | [209-canonicalize-entity-ids-part-a-plan.md](209-canonicalize-entity-ids-part-a-plan.md) |
+| [#210](https://github.com/DutchJaFO/Quotinator/issues/210) | Canonicalize Quotes.Id at capture, case-insensitive lookup — scope expanded mid-issue to a systemic `SqlIdCaseGuard` + `IdClauses` construction helper, then to unify Quote onto the same convention every other entity uses, then to flip the whole system-wide convention itself from uppercase to lowercase, then to add read-time presentation normalization, then generalized to a uniform SELECT-list wrap for every id column and ADR 012 squashed into current-state form, then closed the last gap by giving `RepositorySql`'s generic `SELECT *` queries an explicit, wrapped column list via a new `IEntityColumnMetadata` interface (sub-issue of #207) | Released | T1 ✅ T2 ✅ | [210-canonicalize-quote-id-plan.md](210-canonicalize-quote-id-plan.md) |
+| [#207](https://github.com/DutchJaFO/Quotinator/issues/207) | Canonicalize file-authored explicit ids at capture (parent — closes once #209, #210, #212, #213, #214, and #215 all close) | Released | — (parent) | [207-canonicalize-entity-ids-plan.md](207-canonicalize-entity-ids-plan.md) |
+| [#211](https://github.com/DutchJaFO/Quotinator/issues/211) | Research: evaluate non-id string comparisons in SQL queries for the same class of gap as #210 | Released | T1 ✅ T2 ✅ | [211-non-id-string-comparison-research-plan.md](211-non-id-string-comparison-research-plan.md) |
+| [#216](https://github.com/DutchJaFO/Quotinator/issues/216) | Series/Universe name-filter case sensitivity (confirmed bug) + audit all Name/Title natural-key comparisons | Released | T1 ✅ T2 ✅ | [216-name-title-case-sensitivity-plan.md](216-name-title-case-sensitivity-plan.md) |
+| [#212](https://github.com/DutchJaFO/Quotinator/issues/212) | `Sql.ImportBatches.SelectAll`/`SelectByType` still use `SELECT *`, invisible to `SqlSelectPresentationGuard` (sub-issue of #207) | Released | T1 ✅ T2 ✅ | [212-importbatches-select-star-plan.md](212-importbatches-select-star-plan.md) |
+| [#213](https://github.com/DutchJaFO/Quotinator/issues/213) | `ImportBatch.ImportedBy` doesn't follow the `*Id` naming convention every id-casing guard relies on — depends on #212 (sub-issue of #207) | Released | T1 ✅ T2 ✅ | [213-importedby-id-convention-plan.md](213-importedby-id-convention-plan.md) |
+| [#214](https://github.com/DutchJaFO/Quotinator/issues/214) | Guard test reflection doesn't cover static factory methods (`GetMethods`) — relies on manual enumeration (sub-issue of #207) | Released | T1 ✅ T2 ✅ | [214-guard-reflection-methods-plan.md](214-guard-reflection-methods-plan.md) |
+| [#215](https://github.com/DutchJaFO/Quotinator/issues/215) | `IJoinStrategy<T>` auto-discovery only checks the CVE aggregate guard, not id-case/presentation guards (sub-issue of #207) | Released | T1 ✅ T2 ✅ | [215-joinstrategy-guard-coverage-plan.md](215-joinstrategy-guard-coverage-plan.md) |
+| [#174](https://github.com/DutchJaFO/Quotinator/issues/174) | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Released | T1 ✅ T2 ✅ | [174-character-global-identity-plan.md](174-character-global-identity-plan.md) |
+| [#175](https://github.com/DutchJaFO/Quotinator/issues/175) | Character: explicit id, Modify/decidability | Released | T1 ✅ T2 ✅ | [175-character-modify-plan.md](175-character-modify-plan.md) |
+| [#176](https://github.com/DutchJaFO/Quotinator/issues/176) | Conversation: Description-field Modify/decidability | Released | T1 ✅ T2 ✅ | [176-conversation-description-modify-plan.md](176-conversation-description-modify-plan.md) |
+| [#163](https://github.com/DutchJaFO/Quotinator/issues/163) | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Released | T1 ✅ T2 ✅ | [163-bulk-decide-file-plan.md](163-bulk-decide-file-plan.md) |
+| [#217](https://github.com/DutchJaFO/Quotinator/issues/217) | Establish conflict-resolution coverage for every bundled source file (parent of #177, #181, #153) | Released | — (parent) | [217-conflict-resolution-coverage-plan.md](217-conflict-resolution-coverage-plan.md) |
+| [#177](https://github.com/DutchJaFO/Quotinator/issues/177) | ImportBatches.Status never set to Applied via the staged decide→apply flow, breaking reversal | Released | T1 ✅ T2 ✅ | [177-import-batch-status-applied-plan.md](177-import-batch-status-applied-plan.md) |
+| [#181](https://github.com/DutchJaFO/Quotinator/issues/181) | Minimal per-source conflict-resolution rule file + curated field-override preload (all 4 bundled files) | Released | T1 ✅ T2 ✅ | [181-minimal-conflict-resolution-rule-file-plan.md](181-minimal-conflict-resolution-rule-file-plan.md) |
+| [#153](https://github.com/DutchJaFO/Quotinator/issues/153) | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Released | T1 ✅ T2 ✅ | [153-declarative-conflict-resolution-plan.md](153-declarative-conflict-resolution-plan.md) |
+| [#154](https://github.com/DutchJaFO/Quotinator/issues/154) | Unify import, preview, and seeding on one staging engine | Released | T1 ✅ T2 ✅ | [154-import-staging-plan.md](154-import-staging-plan.md) |
+| [#155](https://github.com/DutchJaFO/Quotinator/issues/155) | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Released | T1 ✅ T2 ✅ | [155-migration-review-plan.md](155-migration-review-plan.md) |
+| [#221](https://github.com/DutchJaFO/Quotinator/issues/221) | Per-file, per-entity-type import/seed report (replace the misleading flat "duplicates" count) | Released | T1 ✅ T2 ✅ | [221-per-file-entity-type-import-report-plan.md](221-per-file-entity-type-import-report-plan.md) |
 
 ---
 
@@ -194,73 +194,73 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 2  | #71 | Generic repository pattern | Released |
 | 3  | #78 | Repository: transaction and shared connection support | Released |
 | 4  | #58 | ImportBatches schema | Released |
-| 5  | #57 | Seed script: dedup inconsistent | Waiting for release |
-| 6  | #63 | Import manifest | Waiting for release |
-| 7  | #62 | Folder-based seeder | Waiting for release |
-| 8  | #141 | Reseed/reset must preserve System-classified data | Waiting for release |
-| 9  | #140 | Auto-update bundled sources from manifest URL | Waiting for release |
-| 10 | #143 | Fresh-database baseline schema + Data/Engine migration ownership split | Waiting for release |
-| 11 | #64 | Conflict resolution policy | Waiting for release |
-| 12 | #45 | Import endpoint | Waiting for release |
-| 13 | #65 | Import endpoint: preview/dry-run | Waiting for release |
-| 14 | #55 | Record completeness flag | Waiting for release |
-| 15 | #56 | Audit log (System_ChangeLog) | Waiting for release |
-| 16 | #152 | Review endpoint grouping: split Admin / Quote / Import | Waiting for release |
-| 17 | #149 | Import endpoint: manual conflict-review workflow | Waiting for release |
-| 18 | #154 | Unify import, preview, and seeding on one staging engine | Waiting for release |
-| 19 | #59 | Admin: undo an applied import batch | Waiting for release |
-| 20 | #67 | Conversations schema | Waiting for release |
-| 21 | #68 | Curated JSON conversations | Waiting for release |
-| 22 | #69 | API conversations | Waiting for release |
-| 23 | #157 | Sql.cs mixes domain-specific SQL into domain-agnostic Quotinator.Data | Waiting for release |
-| 24 | #158 | ImportBatch entity/repository/enums live in Quotinator.Engine instead of Quotinator.Data | Waiting for release |
-| 25 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Waiting for release |
-| 26 | #165 | Generalize record completeness to a 3-state model and hard-block modifying completed rows | Waiting for release |
-| 27 | #162 | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Waiting for release |
-| 28 | #168 | Quote's own Modify path never checks CompletenessGuard | Waiting for release |
-| 29 | #170 | ImportActionNotDecidableException stale wording fix | Waiting for release |
-| 30 | #171 | StageDirection: Modify/decidability | Waiting for release |
-| 31 | #172 | SoundCue: Modify/decidability | Waiting for release |
-| 32 | #173 | Person: explicit id, Modify/decidability | Waiting for release |
+| 5  | #57 | Seed script: dedup inconsistent | Released |
+| 6  | #63 | Import manifest | Released |
+| 7  | #62 | Folder-based seeder | Released |
+| 8  | #141 | Reseed/reset must preserve System-classified data | Released |
+| 9  | #140 | Auto-update bundled sources from manifest URL | Released |
+| 10 | #143 | Fresh-database baseline schema + Data/Engine migration ownership split | Released |
+| 11 | #64 | Conflict resolution policy | Released |
+| 12 | #45 | Import endpoint | Released |
+| 13 | #65 | Import endpoint: preview/dry-run | Released |
+| 14 | #55 | Record completeness flag | Released |
+| 15 | #56 | Audit log (System_ChangeLog) | Released |
+| 16 | #152 | Review endpoint grouping: split Admin / Quote / Import | Released |
+| 17 | #149 | Import endpoint: manual conflict-review workflow | Released |
+| 18 | #154 | Unify import, preview, and seeding on one staging engine | Released |
+| 19 | #59 | Admin: undo an applied import batch | Released |
+| 20 | #67 | Conversations schema | Released |
+| 21 | #68 | Curated JSON conversations | Released |
+| 22 | #69 | API conversations | Released |
+| 23 | #157 | Sql.cs mixes domain-specific SQL into domain-agnostic Quotinator.Data | Released |
+| 24 | #158 | ImportBatch entity/repository/enums live in Quotinator.Engine instead of Quotinator.Data | Released |
+| 25 | #144 | Converter plugins: generic naming, internal-only slots, configuration options | Released |
+| 26 | #165 | Generalize record completeness to a 3-state model and hard-block modifying completed rows | Released |
+| 27 | #162 | Source: explicit file-carried id, decoupling matching from Title/Type/Date content | Released |
+| 28 | #168 | Quote's own Modify path never checks CompletenessGuard | Released |
+| 29 | #170 | ImportActionNotDecidableException stale wording fix | Released |
+| 30 | #171 | StageDirection: Modify/decidability | Released |
+| 31 | #172 | SoundCue: Modify/decidability | Released |
+| 32 | #173 | Person: explicit id, Modify/decidability | Released |
 | 33 | #169 | Research: "universe/setting" concept linking Source and Character | Released |
-| 34 | #179 | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | Waiting for release |
-| 35 | #194 | Numeric query params published to the OpenAPI spec as string (sub-issue of #183) | Waiting for release |
-| 36 | #193 | Generic listable repository capability + DI registrations (sub-issue of #183) | Waiting for release |
-| 37 | #195 | Standard pagination contract: PagedItems&lt;T&gt;, shared helpers (sub-issue of #183) | Waiting for release |
-| 38 | #196 | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter shape (sub-issue of #183) | Waiting for release |
-| 39 | #183 | List-endpoint shared infrastructure (parent — closes once #193–#196 all close) | Planning |
-| 40 | #184 | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Waiting for release |
-| 41 | #185 | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Waiting for release |
-| 42 | #186 | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Waiting for release |
-| 43 | #187 | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Waiting for release |
-| 44 | #188 | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Waiting for release |
-| 45 | #189 | Conversations: GET /api/v1/conversations list endpoint | Waiting for release |
-| 46 | #204 | Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id | Waiting for release |
-| 47 | #205 | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | Waiting for release |
-| 48 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Waiting for release |
-| 49 | #206 | Merge Quotinator.Engine into Quotinator.Core — collapse the three-project domain split to two | Waiting for release |
-| 50 | #192 | Expose series/universe on the quote read path — QuoteResponse fields and filters | Waiting for release |
-| 51 | #190 | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Waiting for release |
-| 52 | #209 | Canonicalize explicit ids at capture — Source, Person, StageDirection, SoundCue, Conversation (sub-issue of #207) | Waiting for release |
-| 53 | #210 | Canonicalize file-authored explicit ids at capture — Quotes.Id case-insensitive lookup (sub-issue of #207) | Waiting for release |
-| 54 | #207 | Canonicalize file-authored explicit ids at capture (parent — closes once #209, #210, #212, #213, #214, and #215 all close) | In progress |
-| 55 | #212 | `Sql.ImportBatches.SelectAll`/`SelectByType` still use `SELECT *`, invisible to `SqlSelectPresentationGuard` (sub-issue of #207) | Waiting for release |
-| 56 | #213 | `ImportBatch.ImportedBy` doesn't follow the `*Id` naming convention every id-casing guard relies on — depends on #212 (sub-issue of #207) | Waiting for release |
-| 57 | #214 | Guard test reflection doesn't cover static factory methods (`GetMethods`) — relies on manual enumeration (sub-issue of #207) | Waiting for release |
-| 58 | #215 | `IJoinStrategy<T>` auto-discovery only checks the CVE aggregate guard, not id-case/presentation guards (sub-issue of #207) | Waiting for release |
-| 59 | #191 | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Waiting for release |
-| 60 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Waiting for release |
-| 61 | #175 | Character: explicit id, Modify/decidability | Waiting for release |
-| 62 | #176 | Conversation: Description-field Modify/decidability | Waiting for release |
-| 63 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Waiting for release |
-| 64 | #211 | Research: evaluate non-id string comparisons in SQL queries for the same class of gap as #210 | Waiting for release |
-| 65 | #216 | Series/Universe name-filter case sensitivity (confirmed bug) + audit all Name/Title natural-key comparisons | Waiting for release |
-| 66 | #217 | Establish conflict-resolution coverage for every bundled source file (parent of #177, #181, #153) | In progress |
-| 67 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Waiting for release |
-| 68 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload (all 4 bundled files) | Waiting for release |
-| 69 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Waiting for release |
-| 70 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Waiting for release |
-| 71 | #221 | Per-file, per-entity-type import/seed report (replace the misleading flat "duplicates" count) | Waiting for release |
+| 34 | #179 | Series/Universe schema: link related Sources, and Character↔Source many-to-many identity | Released |
+| 35 | #194 | Numeric query params published to the OpenAPI spec as string (sub-issue of #183) | Released |
+| 36 | #193 | Generic listable repository capability + DI registrations (sub-issue of #183) | Released |
+| 37 | #195 | Standard pagination contract: PagedItems&lt;T&gt;, shared helpers (sub-issue of #183) | Released |
+| 38 | #196 | Masterdata conventions: ApiTags.MasterData, /masterdata/ routing, filter shape (sub-issue of #183) | Released |
+| 39 | #183 | List-endpoint shared infrastructure (parent — closes once #193–#196 all close) | Released |
+| 40 | #184 | Masterdata: GET /api/v1/masterdata/sources list + get-by-id | Released |
+| 41 | #185 | Masterdata: GET /api/v1/masterdata/characters list + get-by-id | Released |
+| 42 | #186 | Masterdata: GET /api/v1/masterdata/people list + get-by-id | Released |
+| 43 | #187 | Masterdata: GET /api/v1/masterdata/series list + get-by-id | Released |
+| 44 | #188 | Masterdata: GET /api/v1/masterdata/universes list + get-by-id | Released |
+| 45 | #189 | Conversations: GET /api/v1/conversations list endpoint | Released |
+| 46 | #204 | Masterdata: GET /api/v1/masterdata/stagedirections list + get-by-id | Released |
+| 47 | #205 | Masterdata: GET /api/v1/masterdata/soundcues list + get-by-id | Released |
+| 48 | #180 | Populate Series/Universe data via curated overlay file (review-only, staged) | Released |
+| 49 | #206 | Merge Quotinator.Engine into Quotinator.Core — collapse the three-project domain split to two | Released |
+| 50 | #192 | Expose series/universe on the quote read path — QuoteResponse fields and filters | Released |
+| 51 | #190 | Import files cannot express "leave this property alone" — absent and explicit-null are indistinguishable | Released |
+| 52 | #209 | Canonicalize explicit ids at capture — Source, Person, StageDirection, SoundCue, Conversation (sub-issue of #207) | Released |
+| 53 | #210 | Canonicalize file-authored explicit ids at capture — Quotes.Id case-insensitive lookup (sub-issue of #207) | Released |
+| 54 | #207 | Canonicalize file-authored explicit ids at capture (parent — closes once #209, #210, #212, #213, #214, and #215 all close) | Released |
+| 55 | #212 | `Sql.ImportBatches.SelectAll`/`SelectByType` still use `SELECT *`, invisible to `SqlSelectPresentationGuard` (sub-issue of #207) | Released |
+| 56 | #213 | `ImportBatch.ImportedBy` doesn't follow the `*Id` naming convention every id-casing guard relies on — depends on #212 (sub-issue of #207) | Released |
+| 57 | #214 | Guard test reflection doesn't cover static factory methods (`GetMethods`) — relies on manual enumeration (sub-issue of #207) | Released |
+| 58 | #215 | `IJoinStrategy<T>` auto-discovery only checks the CVE aggregate guard, not id-case/presentation guards (sub-issue of #207) | Released |
+| 59 | #191 | Sources.Date is never populated — ResolveSourceAsync drops the quote's own date | Released |
+| 60 | #174 | Character: migrate to global identity via new Series/Universe schema (ADR + migration) | Released |
+| 61 | #175 | Character: explicit id, Modify/decidability | Released |
+| 62 | #176 | Conversation: Description-field Modify/decidability | Released |
+| 63 | #163 | Bulk-decide a staged import batch via file export/import, CSV and JSON (Phase 1 of #153) | Released |
+| 64 | #211 | Research: evaluate non-id string comparisons in SQL queries for the same class of gap as #210 | Released |
+| 65 | #216 | Series/Universe name-filter case sensitivity (confirmed bug) + audit all Name/Title natural-key comparisons | Released |
+| 66 | #217 | Establish conflict-resolution coverage for every bundled source file (parent of #177, #181, #153) | Released |
+| 67 | #177 | ImportBatches.Status never set to Applied via staged apply, breaking reversal | Released |
+| 68 | #181 | Minimal per-source conflict-resolution rule file + curated field-override preload (all 4 bundled files) | Released |
+| 69 | #153 | Declarative conflict-resolution file for recurring third-party source conflicts (Phase 2) | Released |
+| 70 | #155 | Migration review: verify full incremental path from last-shipped v1.7.2 schema | Released |
+| 71 | #221 | Per-file, per-entity-type import/seed report (replace the misleading flat "duplicates" count) | Released |
 
 ---
 

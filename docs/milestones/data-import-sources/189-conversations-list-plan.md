@@ -1,6 +1,6 @@
 # #189 — Conversations: GET /api/v1/conversations list endpoint
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #189
 **Tiers required:** T1, T2
 **Depends on:** #193, #195

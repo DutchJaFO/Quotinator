@@ -1,6 +1,6 @@
 # #144 — Converter plugins: generic naming, internal-only slots, configuration options
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #144
 **Depends on:** #140
 

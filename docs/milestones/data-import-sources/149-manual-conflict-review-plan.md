@@ -1,6 +1,6 @@
 # #149 — Manual conflict-review workflow
 
-**Status:** Waiting for release
+**Status:** Released
 
 **Tiers required:** T1, T2
 

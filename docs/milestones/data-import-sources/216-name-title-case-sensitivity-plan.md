@@ -1,6 +1,6 @@
 # #216 — Series/Universe name-filter case sensitivity (confirmed bug) + audit all Name/Title natural-key comparisons
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #216
 **Tiers required:** T1, T2
 **Depends on:** Nothing — independent of #211 (see Background for the deliberate scope split); no

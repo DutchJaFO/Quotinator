@@ -1,6 +1,6 @@
 # #168 — Quote's own Modify path never checks CompletenessGuard
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #168
 **Tiers required:** T1, T2
 **Depends on:** #165

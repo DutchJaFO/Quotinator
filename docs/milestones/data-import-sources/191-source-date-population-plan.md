@@ -1,6 +1,6 @@
 # #191 — Populate Sources.Date from the resolving quote
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #191
 **Tiers required:** T1, T2
 **Depends on:** none (isolated fix inside `ImportActionPlanner.ResolveSourceAsync`)

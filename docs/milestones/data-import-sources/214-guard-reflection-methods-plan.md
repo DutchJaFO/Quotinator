@@ -1,6 +1,6 @@
 # #214 — Guard test reflection doesn't cover static factory methods (`GetMethods`)
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #214
 **Tiers required:** T1, T2
 **Depends on:** None

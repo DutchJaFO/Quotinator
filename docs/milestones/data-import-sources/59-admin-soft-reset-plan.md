@@ -1,6 +1,6 @@
 # #59 — Admin: undo an applied import batch
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #59
 **Tiers required:** T1, T2
 **Depends on:** #58, #56, #154

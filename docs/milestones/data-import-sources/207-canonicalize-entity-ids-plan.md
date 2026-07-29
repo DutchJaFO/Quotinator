@@ -1,6 +1,6 @@
 # #207 — Canonicalize file-authored explicit ids at capture (parent)
 
-**Status:** Planning
+**Status:** Released
 **GitHub issue:** #207
 **Depends on:** none
 
@@ -25,8 +25,12 @@ touch — see each sub-issue's own plan doc for the full investigation and Steps
 
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
-| [#209](https://github.com/DutchJaFO/Quotinator/issues/209) | Canonicalize explicit ids at capture — Source, Person, StageDirection, SoundCue, Conversation | Planning | T1 ⬜ T2 ⬜ | [209-canonicalize-entity-ids-part-a-plan.md](209-canonicalize-entity-ids-part-a-plan.md) |
-| [#210](https://github.com/DutchJaFO/Quotinator/issues/210) | Canonicalize Quotes.Id at capture, case-insensitive lookup | Planning | T1 ⬜ T2 ⬜ | [210-canonicalize-quote-id-plan.md](210-canonicalize-quote-id-plan.md) |
+| [#209](https://github.com/DutchJaFO/Quotinator/issues/209) | Canonicalize explicit ids at capture — Source, Person, StageDirection, SoundCue, Conversation | Released | T1 ✅ T2 ✅ | [209-canonicalize-entity-ids-part-a-plan.md](209-canonicalize-entity-ids-part-a-plan.md) |
+| [#210](https://github.com/DutchJaFO/Quotinator/issues/210) | Canonicalize Quotes.Id at capture, case-insensitive lookup | Released | T1 ✅ T2 ✅ | [210-canonicalize-quote-id-plan.md](210-canonicalize-quote-id-plan.md) |
+| [#212](https://github.com/DutchJaFO/Quotinator/issues/212) | `Sql.ImportBatches.SelectAll`/`SelectByType` still use `SELECT *`, invisible to `SqlSelectPresentationGuard` | Released | T2 ✅ | [212-importbatches-select-star-plan.md](212-importbatches-select-star-plan.md) |
+| [#213](https://github.com/DutchJaFO/Quotinator/issues/213) | `ImportBatch.ImportedBy` doesn't follow the `*Id` naming convention every id-casing guard relies on | Released | T1 ✅ T2 ✅ | [213-importedby-id-convention-plan.md](213-importedby-id-convention-plan.md) |
+| [#214](https://github.com/DutchJaFO/Quotinator/issues/214) | Guard test reflection doesn't cover static factory methods (`GetMethods`) | Released | T2 ✅ | [214-guard-reflection-methods-plan.md](214-guard-reflection-methods-plan.md) |
+| [#215](https://github.com/DutchJaFO/Quotinator/issues/215) | `IJoinStrategy<T>` auto-discovery only checks the CVE aggregate guard, not id-case/presentation guards | Released | T2 ✅ | [215-joinstrategy-guard-coverage-plan.md](215-joinstrategy-guard-coverage-plan.md) |
 
 ---
 
@@ -43,5 +47,9 @@ issue in this milestone.
 
 | # | Issue | Title | Status |
 |---|-------|-------|--------|
-| 1 | #209 | Canonicalize explicit ids at capture — Source, Person, StageDirection, SoundCue, Conversation | Planning |
-| 2 | #210 | Canonicalize Quotes.Id at capture, case-insensitive lookup | Planning |
+| 1 | #209 | Canonicalize explicit ids at capture — Source, Person, StageDirection, SoundCue, Conversation | Released |
+| 2 | #210 | Canonicalize Quotes.Id at capture, case-insensitive lookup | Released |
+| 3 | #212 | `Sql.ImportBatches.SelectAll`/`SelectByType` still use `SELECT *` | Released |
+| 4 | #213 | `ImportBatch.ImportedBy` doesn't follow the `*Id` naming convention | Released |
+| 5 | #214 | Guard test reflection doesn't cover static factory methods | Released |
+| 6 | #215 | `IJoinStrategy<T>` auto-discovery only checks the CVE aggregate guard | Released |

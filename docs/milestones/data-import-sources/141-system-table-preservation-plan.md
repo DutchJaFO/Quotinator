@@ -1,6 +1,6 @@
 # #141 — System table preservation on Reset (System_AuditEntries, System_SchemaVersion)
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #141
 **Tiers required:** T1, T2 — unchanged reasoning from the original pass (this still changes `DatabaseInitializer`/`Sql.Schema.GetUserTables`, the actual table-wipe logic behind `Reset`). T3 still does not apply.
 **Depends on:** #62 (`ImportBatchType` accuracy fix) — done, unblocked this issue

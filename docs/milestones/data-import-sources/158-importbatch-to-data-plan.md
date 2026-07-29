@@ -1,6 +1,6 @@
 # #158 — ImportBatch entity/repository/enums live in Quotinator.Engine instead of Quotinator.Data
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #158
 **Tiers required:** T2
 **Depends on:** #157

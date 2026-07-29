@@ -1,6 +1,6 @@
 # #179 — Series/Universe schema: link related Sources, and Character↔Source many-to-many identity
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #179
 **Tiers required:** T1, T2
 **Depends on:** none

@@ -1,6 +1,6 @@
 # #165 — Generalize record completeness to a 3-state model and hard-block modifying completed rows
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #165
 **Tiers required:** T1, T2
 **Depends on:** #55 (unshipped — edited in place), #154

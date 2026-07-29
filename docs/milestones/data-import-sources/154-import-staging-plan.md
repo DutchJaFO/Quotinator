@@ -1,6 +1,6 @@
 # #154 — Unify import, preview, and seeding on one staging engine
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #154
 **Tiers required:** T1, T2
 **Depends on:** #149, #56

@@ -1,6 +1,6 @@
 # #180 — Populate Series/Universe data via curated overlay file (review-only, staged)
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #180
 **Tiers required:** T1, T2
 **Depends on:** #179 (Series/Universe schema)

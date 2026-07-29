@@ -1,6 +1,6 @@
 # #185 — Masterdata: GET /api/v1/masterdata/characters list + get-by-id
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #185
 **Tiers required:** T1, T2
 **Depends on:** #193, #195, #196, #179
