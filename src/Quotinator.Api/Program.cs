@@ -570,11 +570,16 @@ app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDat
         environment = env.EnvironmentName,
         database    = new
         {
-            schemaVersion = db.SchemaVersion,
-            quotes        = db.QuoteCount,
-            sources       = db.SourceCount,
-            characters    = db.CharacterCount,
-            people        = db.PeopleCount
+            schemaVersion   = db.SchemaVersion,
+            quotes          = db.QuoteCount,
+            sources         = db.SourceCount,
+            characters      = db.CharacterCount,
+            people          = db.PeopleCount,
+            series          = db.SeriesCount,
+            universes       = db.UniverseCount,
+            stageDirections = db.StageDirectionCount,
+            soundCues       = db.SoundCueCount,
+            conversations   = db.ConversationCount
         }
     }))
    .WithName("Version")

@@ -4,7 +4,7 @@
   "machineTranslated": false,
   "releases": [
     {
-      "version": "1.8.0-beta",
+      "version": "1.8.0",
       "date": "2026-07-29",
       "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 155, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
       "cves": ["CVE-2026-49451"],
@@ -164,7 +164,8 @@
         "Every internal migration step added since v1.7.2 that has not yet reached a release has been consolidated into two atomic steps instead of many small ones, and verified end-to-end against a real v1.7.2 database — a purely internal simplification with no schema or behaviour change (issue #155)",
         "A route/query-derived filename, origin, and batch id were logged in two internal rule-file code paths without stripping embedded newlines, letting a caller forge fake log lines in the plain-text log output (CWE-117) — the same defensive fix already applied to request logging in v1.7.1 was extended to both call sites and centralised into one shared helper",
         "Several endpoints built an error-message detail via `string.Format` on a localised template — since which of the three translation files is consulted depends on the request's own `Accept-Language` header, a future translation-file placeholder-count typo could have thrown an unhandled exception; localised message substitution now uses a dedicated method that never throws instead (CWE-134)",
-        "A directory-traversal guard for internal rule-file paths relied on .NET's own filename parsing, which only recognises a backslash as a path separator on Windows — on Linux, the platform this project actually ships on, a backslash-containing filename could bypass the guard (not actually exploitable as a real traversal there, since backslash isn't a path separator on Linux either); the guard now rejects both separator characters explicitly, regardless of platform"
+        "A directory-traversal guard for internal rule-file paths relied on .NET's own filename parsing, which only recognises a backslash as a path separator on Windows — on Linux, the platform this project actually ships on, a backslash-containing filename could bypass the guard (not actually exploitable as a real traversal there, since backslash isn't a path separator on Linux either); the guard now rejects both separator characters explicitly, regardless of platform",
+        "`GET /api/v1/version`'s database stats only reported the original four entity counts (quotes, sources, characters, people) — the five newer counts added alongside them (series, universes, stage directions, sound cues, conversations), already surfaced in the startup log and the reseed/reset endpoint responses, are now included here too"
       ],
       "removed": [
         "The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`"

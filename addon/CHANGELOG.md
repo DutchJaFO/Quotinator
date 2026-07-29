@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-29 15:46 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-29 16:46 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -6,7 +6,7 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
-## [1.8.0-beta] - 2026-07-29
+## [1.8.0] - 2026-07-29
 
 - Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.
 - Setting up Quotinator for the first time is now faster — a brand-new database is created directly, instead of stepping through years of internal upgrade history.

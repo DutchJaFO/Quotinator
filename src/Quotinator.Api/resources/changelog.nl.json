@@ -11,7 +11,7 @@
   },
   "releases": [
     {
-      "version": "1.8.0-beta",
+      "version": "1.8.0",
       "date": "2026-07-29",
       "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 155, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
       "cves": ["CVE-2026-49451"],
@@ -171,7 +171,8 @@
         "Elke interne migratiestap die sinds v1.7.2 is toegevoegd maar nog geen release heeft bereikt, is samengevoegd tot twee atomaire stappen in plaats van veel kleine — en end-to-end geverifieerd tegen een echte v1.7.2-database; een puur interne vereenvoudiging zonder wijziging in schema of gedrag (issue #155)",
         "Een op route/query gebaseerde bestandsnaam, origin en batch-id werden in twee interne rule-file-codepaden gelogd zonder ingesloten nieuwe regels te verwijderen, waardoor een aanroeper valse logregels kon vervalsen in de platte-tekst-logoutput (CWE-117) — dezelfde defensieve fix die al in v1.7.1 op request-logging werd toegepast, is nu uitgebreid naar beide aanroeppunten en gecentraliseerd in één gedeelde helper",
         "Verschillende endpoints bouwden een foutmelding-detail op via `string.Format` op een gelokaliseerde sjabloon — omdat welk van de drie vertaalbestanden wordt geraadpleegd afhangt van de `Accept-Language`-header van het verzoek, had een toekomstige typefout in het aantal placeholders in een vertaalbestand een onverwerkte uitzondering kunnen veroorzaken; substitutie van gelokaliseerde berichten gebruikt nu in plaats daarvan een speciale methode die nooit een uitzondering veroorzaakt (CWE-134)",
-        "Een beveiliging tegen directory-traversal voor interne rule-file-paden vertrouwde op de eigen bestandsnaam-parsing van .NET, die een backslash alleen als padscheidingsteken herkent op Windows — op Linux, het platform waarop dit project daadwerkelijk wordt uitgerold, kon een bestandsnaam met een backslash deze beveiliging omzeilen (niet daadwerkelijk uit te buiten als echte traversal op Linux, aangezien een backslash daar ook geen padscheidingsteken is); de beveiliging wijst nu beide scheidingstekens expliciet af, ongeacht het platform"
+        "Een beveiliging tegen directory-traversal voor interne rule-file-paden vertrouwde op de eigen bestandsnaam-parsing van .NET, die een backslash alleen als padscheidingsteken herkent op Windows — op Linux, het platform waarop dit project daadwerkelijk wordt uitgerold, kon een bestandsnaam met een backslash deze beveiliging omzeilen (niet daadwerkelijk uit te buiten als echte traversal op Linux, aangezien een backslash daar ook geen padscheidingsteken is); de beveiliging wijst nu beide scheidingstekens expliciet af, ongeacht het platform",
+        "De databasestatistieken van `GET /api/v1/version` toonden alleen de oorspronkelijke vier entiteitstellingen (quotes, bronnen, personages, personen) — de vijf nieuwere tellingen die ernaast zijn toegevoegd (series, universums, regieaanwijzingen, geluidsfragmenten, gesprekken), al zichtbaar in het opstartlog en de reseed/reset-endpointreacties, zijn nu ook hier opgenomen"
       ],
       "removed": [
         "De convertornamen `nikhilnamal17` en `vilaboim` bestaan niet meer — een aangepaste manifestvermelding die een van beide bij naam gebruikt, moet worden bijgewerkt naar `basic-json-array`/`regex-array` met de bijbehorende `converterOptions`"
