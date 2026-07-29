@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-28 22:49 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-29 04:25 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [Unreleased]
+## [1.8.0] - 2026-07-29
 
 ### Highlights
 - Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.
@@ -164,6 +164,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Airplane!, When Harry Met Sally, and an Avengers film each existed as duplicate entries under an inconsistently-spelled title in one bundled data source — merged into their single existing, correctly-spelled entry (issue #153)
 - A database upgrading directly from v1.7.2 could have had some internal-table migrations silently skipped, due to a bookkeeping bug in how the old combined migration-version number was split into the newer internal counters — corrected before ever reaching a release (issue #155)
 - Every internal migration step added since v1.7.2 that has not yet reached a release has been consolidated into two atomic steps instead of many small ones, and verified end-to-end against a real v1.7.2 database — a purely internal simplification with no schema or behaviour change (issue #155)
+- A route/query-derived filename, origin, and batch id were logged in two internal rule-file code paths without stripping embedded newlines, letting a caller forge fake log lines in the plain-text log output (CWE-117) — the same defensive fix already applied to request logging in v1.7.1 was extended to both call sites and centralised into one shared helper
+- Several endpoints built an error-message detail via `string.Format` on a localised template — since which of the three translation files is consulted depends on the request's own `Accept-Language` header, a future translation-file placeholder-count typo could have thrown an unhandled exception; localised message substitution now uses a dedicated method that never throws instead (CWE-134)
+- A directory-traversal guard for internal rule-file paths relied on .NET's own filename parsing, which only recognises a backslash as a path separator on Windows — on Linux, the platform this project actually ships on, a backslash-containing filename could bypass the guard (not actually exploitable as a real traversal there, since backslash isn't a path separator on Linux either); the guard now rejects both separator characters explicitly, regardless of platform
 
 ### Removed
 - The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`
@@ -837,7 +840,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Multi-arch Docker image (`linux/amd64` + `linux/aarch64`)
 - Home Assistant ingress on port 8099; direct access on port 8080
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.2...HEAD
+[1.8.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.6.5...v1.7.0
