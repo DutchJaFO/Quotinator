@@ -1,10 +1,16 @@
-##### *GENERATED FILE [2026-07-30 19:32 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-30 21:00 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
+
+## [1.8.2-beta] - 2026-07-30
+
+- Security: a SQLite library vulnerability (CVE-2025-6965) has now been fixed directly by upgrading the affected native library; no user data was affected.
+
+---
 
 ## [1.8.1-beta] - 2026-07-30
 
@@ -46,12 +52,6 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - A few more duplicate entries (Airplane!, When Harry Met Sally, and an Avengers film) have been merged into one accurate entry each, and several quotes that were missing which character said them now have that filled in.
 - A data-correction feature meant to fill in a missing detail (like which character said a quote) had never actually worked the first time a quote was seen — only on a later re-check — so any such correction made so far silently had no effect; this is now fixed.
 - Importing, previewing an import, and reseeding now report exactly what happened per file and per type of data (new, corrected, held for review, etc.) instead of one vague duplicates number.
-
----
-
-## [1.7.2] - 2026-06-29
-
-- Internal improvements — no user-facing changes.
 
 ---
 

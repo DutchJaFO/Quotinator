@@ -11,6 +11,8 @@
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.79" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <!-- CVE-2025-6965: native-binary-only override; Microsoft.Data.Sqlite still floors SQLitePCLRaw.core at 2.1.11, but this package carries no managed deps so it upgrades independently. See CVE/CVE-2025-6965.md. -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
   </ItemGroup>
 
   <ItemGroup>
