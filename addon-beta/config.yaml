@@ -1,0 +1,90 @@
+name: Quotinator (BETA)
+version: "1.8.1-beta"
+slug: quotinator_beta
+description: Beta channel of Quotinator — a self-hosted quote REST API serving real, verified quotes from films, books, TV, and famous people. Same software as the stable add-on, tracking pre-release versions.
+url: https://github.com/DutchJaFO/Quotinator
+arch:
+  - amd64
+  - aarch64
+
+# Pre-built image from GitHub Container Registry — same image repository as the stable add-on.
+# The supervisor appends the version tag automatically; this add-on's own version field is what
+# selects a pre-release tag instead of a final one.
+image: ghcr.io/dutchjafo/quotinator
+
+# Always visible in the add-on store, not gated behind HA's experimental/Advanced Mode — matches
+# Music Assistant's own stable/beta precedent (see plan doc #166 Background).
+stage: stable
+
+startup: application
+boot: auto
+
+# SSL — optional HTTPS on the direct-access port (8080).
+# Set ssl: true and supply the cert/key filenames (relative to /ssl/).
+# HA's Let's Encrypt add-on writes fullchain.pem + privkey.pem to /ssl/ automatically.
+# Leave ssl: false when using HA ingress or a reverse proxy for TLS termination.
+options:
+  log_level: info
+  log_requests: false
+  ssl: false
+  certfile: fullchain.pem
+  keyfile: privkey.pem
+  auto_update_sources: true
+  source_update_interval_hours: 24
+schema:
+  log_level: list(trace|debug|info|notice|warning|error|fatal)
+  log_requests: bool
+  ssl: bool
+  certfile: str
+  keyfile: str
+  admin_api_key: str?
+  backup_path: str?
+  auto_update_sources: bool
+  source_update_interval_hours: int(1,)
+
+# Map add-on options and HA paths to environment variables consumed by ASP.NET Core.
+# Quotinator__DataPath points to the supervisor-mounted persistent volume (/data), not the
+# image-bundled /app/data directory. Kestrel port binding (8099 + 8080) is handled
+# entirely in code, so ASPNETCORE_HTTP_PORTS is intentionally absent here.
+env_vars:
+  - name: Quotinator__LogLevel
+    value: "{{ log_level }}"
+  - name: Quotinator__LogRequests
+    value: "{{ log_requests }}"
+  - name: Quotinator__Ssl
+    value: "{{ ssl }}"
+  - name: Quotinator__SslCertFile
+    value: "/ssl/{{ certfile }}"
+  - name: Quotinator__SslKeyFile
+    value: "/ssl/{{ keyfile }}"
+  - name: Quotinator__DataDir
+    value: "/data"
+  - name: Quotinator__AdminApiKey
+    value: "{{ admin_api_key }}"
+  - name: Quotinator__BackupPath
+    value: "{{ backup_path }}"
+  - name: Quotinator__AutoUpdateSources
+    value: "{{ auto_update_sources }}"
+  - name: Quotinator__SourceUpdateIntervalHours
+    value: "{{ source_update_interval_hours }}"
+
+# Direct access port — disabled by default; enable for MagicMirror, curl, or other
+# tools that need to reach the API outside of HA ingress.
+ports:
+  8080/tcp: null
+ports_description:
+  8080/tcp: Direct web access — HTTP (ssl:false) or HTTPS (ssl:true)
+
+# Ingress — embeds the UI into the Home Assistant sidebar.
+# Uses a dedicated internal port (8099) separate from the direct access port (8080).
+ingress: true
+ingress_port: 8099
+
+# AppArmor — custom profile in apparmor.txt restricts filesystem and network access.
+# Explicit true is required: the supervisor checks this key; relying on the default risks
+# the profile being silently ignored if the default is not applied before the check.
+apparmor: true
+
+# Data directory — quotes.json is stored here and persists across updates.
+map:
+  - data:rw

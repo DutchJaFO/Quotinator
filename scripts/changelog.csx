@@ -20,6 +20,9 @@
 //                                  (default: "No user-facing changes.")
 //   --line-endings       <style>   lf | crlf (default: lf)
 //                                  Line ending style for the output file.
+//   --max-releases       <N>      Only emit the N most recent releases; older ones are omitted with
+//                                  a note pointing to the GitHub Releases page. Omit for full history
+//                                  (default).
 //   --debug                        Include input path and regenerate command in the generated header.
 //                                  Omit for a minimal timestamp-only header (default for release/live use).
 
@@ -36,7 +39,19 @@ var fallbackArg     = Args.SkipWhile(a => a != "--fallback").Skip(1).FirstOrDefa
 var doFallback      = fallbackArg?.ToLowerInvariant() != "false";
 var fallbackMessage = Args.SkipWhile(a => a != "--fallback-message").Skip(1).FirstOrDefault() ?? "No user-facing changes.";
 var lineEndingsArg  = Args.SkipWhile(a => a != "--line-endings").Skip(1).FirstOrDefault() ?? "lf";
+var maxReleasesArg  = Args.SkipWhile(a => a != "--max-releases").Skip(1).FirstOrDefault();
 var debugHeader     = Args.Contains("--debug");
+
+int? maxReleases = null;
+if (!string.IsNullOrEmpty(maxReleasesArg))
+{
+    if (!int.TryParse(maxReleasesArg, out var parsedMaxReleases) || parsedMaxReleases < 1)
+    {
+        Console.Error.WriteLine($"Invalid --max-releases value '{maxReleasesArg}'. Must be a positive integer.");
+        Environment.Exit(1);
+    }
+    maxReleases = parsedMaxReleases;
+}
 
 if (string.IsNullOrEmpty(formatArg) || string.IsNullOrEmpty(inputArg))
 {
@@ -90,6 +105,7 @@ if (!doFallback)
     if (fallbackMessage != "No user-facing changes.") cmdBuilder.Append($" --fallback-message \"{fallbackMessage}\"");
 }
 if (lineEndingsArg != "lf")             cmdBuilder.Append($" --line-endings {lineEndingsArg}");
+if (maxReleases.HasValue)               cmdBuilder.Append($" --max-releases {maxReleases.Value}");
 var regenerateCmd = cmdBuilder.ToString();
 
 // ── Generate ──────────────────────────────────────────────────────────────────
@@ -98,9 +114,9 @@ var sb     = new StringBuilder();
 var format = formatArg.ToLowerInvariant();
 
 if (format == "keepachangelog")
-    GenerateKeepAChangelog(sb, releases, unreleased, doFallback, fallbackMessage, sectionHeaders, inputArg!, regenerateCmd, debugHeader);
+    GenerateKeepAChangelog(sb, releases, unreleased, doFallback, fallbackMessage, sectionHeaders, inputArg!, regenerateCmd, debugHeader, maxReleases);
 else if (format == "ha-addon")
-    GenerateHaAddon(sb, releases, audienceArg, doFallback, fallbackMessage, inputArg!, regenerateCmd, debugHeader);
+    GenerateHaAddon(sb, releases, audienceArg, doFallback, fallbackMessage, inputArg!, regenerateCmd, debugHeader, maxReleases);
 else
 {
     Console.Error.WriteLine($"Unknown format: {formatArg}. Use keepachangelog or ha-addon.");
@@ -124,8 +140,10 @@ else
 
 // ── Format implementations ────────────────────────────────────────────────────
 
-static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, JsonElement? unreleased, bool fallback, string fallbackMessage, Dictionary<string, string>? sectionHeaders, string inputPath, string regenerateCmd, bool debug)
+static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases, JsonElement? unreleased, bool fallback, string fallbackMessage, Dictionary<string, string>? sectionHeaders, string inputPath, string regenerateCmd, bool debug, int? maxReleases)
 {
+    var showCount  = maxReleases.HasValue ? Math.Min(maxReleases.Value, releases.Count) : releases.Count;
+    var truncated  = showCount < releases.Count;
     // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
     sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd, debug));
     sb.AppendLine();
@@ -167,7 +185,7 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
         }
     }
 
-    for (int i = 0; i < releases.Count; i++)
+    for (int i = 0; i < showCount; i++)
     {
         var r       = releases[i];
         var version = r.GetProperty("version").GetString()!;
@@ -190,39 +208,50 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
         AppendSection(sb, r, "fixed",   sectionHeaders);
         AppendSection(sb, r, "removed", sectionHeaders);
 
-        if (i < releases.Count - 1)
+        if (i < showCount - 1)
         {
             sb.AppendLine();
             sb.AppendLine("---");
         }
     }
 
+    if (truncated)
+    {
+        sb.AppendLine();
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine("Older releases are available in the full history on [GitHub Releases](https://github.com/DutchJaFO/Quotinator/releases).");
+    }
+
     // Footer comparison links
     sb.AppendLine();
-    if (unreleased.HasValue && releases.Count > 0)
+    if (unreleased.HasValue && showCount > 0)
     {
         var latest = releases[0].GetProperty("version").GetString()!;
         sb.AppendLine($"[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v{latest}...HEAD");
     }
-    for (int i = 0; i < releases.Count; i++)
+    for (int i = 0; i < showCount; i++)
     {
         var version = releases[i].GetProperty("version").GetString()!;
         string url;
-        if (i == releases.Count - 1)
-        {
-            url = $"https://github.com/DutchJaFO/Quotinator/releases/tag/v{version}";
-        }
-        else
+        if (i + 1 < releases.Count)
         {
             var prev = releases[i + 1].GetProperty("version").GetString()!;
             url = $"https://github.com/DutchJaFO/Quotinator/compare/v{prev}...v{version}";
+        }
+        else
+        {
+            url = $"https://github.com/DutchJaFO/Quotinator/releases/tag/v{version}";
         }
         sb.AppendLine($"[{version}]: {url}");
     }
 }
 
-static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string audience, bool fallback, string fallbackMessage, string inputPath, string regenerateCmd, bool debug)
+static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string audience, bool fallback, string fallbackMessage, string inputPath, string regenerateCmd, bool debug, int? maxReleases)
 {
+    var showCount = maxReleases.HasValue ? Math.Min(maxReleases.Value, releases.Count) : releases.Count;
+    var truncated = showCount < releases.Count;
+
     // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
     sb.AppendLine(BuildGeneratedHeader(inputPath, regenerateCmd, debug));
     sb.AppendLine();
@@ -232,7 +261,7 @@ static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string
     sb.AppendLine();
     sb.AppendLine("The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).");
 
-    for (int i = 0; i < releases.Count; i++)
+    for (int i = 0; i < showCount; i++)
     {
         var r       = releases[i];
         var version = r.GetProperty("version").GetString()!;
@@ -249,11 +278,19 @@ static void GenerateHaAddon(StringBuilder sb, List<JsonElement> releases, string
                 sb.AppendLine($"- {h}");
         }
 
-        if (i < releases.Count - 1)
+        if (i < showCount - 1)
         {
             sb.AppendLine();
             sb.AppendLine("---");
         }
+    }
+
+    if (truncated)
+    {
+        sb.AppendLine();
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine("Older releases are available in the full history on GitHub: https://github.com/DutchJaFO/Quotinator/releases");
     }
 }
 

@@ -107,11 +107,12 @@ Check that the correct release entry in `src/Quotinator.Api/resources/changelog.
 "issues": [82]
 ```
 
-After editing, regenerate both markdown changelogs:
+After editing, regenerate all three markdown changelogs:
 
 ```bash
-dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md
-dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md
+dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
 ```
 
 Run `dotnet test --filter ChangelogSchema` to confirm structure is valid after the edit.

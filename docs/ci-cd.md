@@ -79,13 +79,15 @@ See `docs/release-verification.md` for the full tier model (T1/T2/T3) and the mi
 
 ### Version files to update before any tag
 
-All three must match the tag (without the `v` prefix):
+All three must match the tag (without the `v` prefix). Quotinator publishes two HA add-ons from the
+same image (`addon/` stable, `addon-beta/` beta — see `docs/home-assistant.md`'s "Stable and beta
+channels") — **only one of their `config.yaml`s is bumped per tag**, never both:
 
 | File | Field |
 |---|---|
 | `Directory.Build.props` | `<Version>` — the only file to edit; `AssemblyVersion` and `FileVersion` derive from it automatically |
-| `addon/config.yaml` | `version` — HA Supervisor appends this as the Docker image tag when pulling from GHCR |
-| `src/Quotinator.Api/resources/changelog.en.json` | new release entry at top of `releases` array (+ `nl.json`, `de.json` lockstep); regenerate `CHANGELOG.md` and `addon/CHANGELOG.md` |
+| `addon-beta/config.yaml` (beta tag only) **or** `addon/config.yaml` (final tag only) | `version` — HA Supervisor appends this as the Docker image tag when pulling from GHCR |
+| `src/Quotinator.Api/resources/changelog.en.json` | new release entry at top of `releases` array (+ `nl.json`, `de.json` lockstep); regenerate `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md` (all three, every tag) |
 
 ---
 

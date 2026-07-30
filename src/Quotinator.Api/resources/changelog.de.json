@@ -11,6 +11,23 @@
   },
   "releases": [
     {
+      "version": "1.8.1-beta",
+      "date": "2026-07-30",
+      "issues": [166],
+      "highlights": [
+        "In Home Assistant ist nun ein separates Beta-Add-on verfügbar, mit dem du kommende Änderungen ausprobieren kannst, ohne deine stabile Installation zu beeinträchtigen — installiere beide nebeneinander.",
+        "Changelogs in der App und im Home-Assistant-Add-on zeigen jetzt nur noch die neuesten Versionen, mit einem Link zur vollständigen Historie auf GitHub."
+      ],
+      "added": [
+        "Neue Home-Assistant-Add-on-Definition `addon-beta/` (Slug `quotinator_beta`) veröffentlicht den Beta-Kanal als separates, immer sichtbares, unabhängig installierbares Add-on aus demselben Repository und Docker-Image wie das stabile Add-on (Issue #166)",
+        "`scripts/changelog.csx` hat eine neue Option `--max-releases <N>` erhalten, die die generierte Changelog-Ausgabe auf die N neuesten Versionen begrenzt, mit einem abschließenden Hinweis, der auf die vollständige Historie bei GitHub Releases verweist (Issue #166)"
+      ],
+      "changed": [
+        "`CHANGELOG.md`, `addon/CHANGELOG.md` und das neue `addon-beta/CHANGELOG.md` werden jetzt mit `--max-releases 3` generiert und zeigen nur noch die 3 neuesten Versionen statt der vollständigen Historie (Issue #166)",
+        "Ein Beta-Tag erhöht jetzt nur noch die Version von `addon-beta/config.yaml`, ein finaler Tag nur die von `addon/config.yaml` — zuvor wechselte eine gemeinsame Datei zwischen beiden Zuständen (Issue #166)"
+      ]
+    },
+    {
       "version": "1.8.0",
       "date": "2026-07-29",
       "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 155, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
