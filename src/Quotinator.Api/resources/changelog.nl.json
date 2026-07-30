@@ -11,6 +11,18 @@
   },
   "releases": [
     {
+      "version": "1.8.2-beta",
+      "date": "2026-07-30",
+      "issues": [72],
+      "cves": ["CVE-2025-6965"],
+      "highlights": [
+        "Beveiliging: een kwetsbaarheid in de SQLite-bibliotheek (CVE-2025-6965) is nu definitief verholpen door de betreffende native bibliotheek te upgraden; er zijn geen gebruikersgegevens getroffen."
+      ],
+      "fixed": [
+        "De native SQLite-bibliotheek (`SQLitePCLRaw.lib.e_sqlite3`) is via een directe package-override bijgewerkt naar `3.50.3` in elk betrokken project, waarmee CVE-2025-6965 (geheugencorruptie bij aggregatiequery's in SQLite-versies vóór 3.50.2) definitief is opgelost in plaats van alleen te steunen op de bestaande query-vorm-mitigatie (issue #72)"
+      ]
+    },
+    {
       "version": "1.8.1-beta",
       "date": "2026-07-30",
       "issues": [166],

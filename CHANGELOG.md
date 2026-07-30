@@ -1,10 +1,20 @@
-##### *GENERATED FILE [2026-07-30 19:32 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-30 21:00 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.8.2-beta] - 2026-07-30
+
+### Highlights
+- Security: a SQLite library vulnerability (CVE-2025-6965) has now been fixed directly by upgrading the affected native library; no user data was affected.
+
+### Fixed
+- Upgraded the native SQLite library (`SQLitePCLRaw.lib.e_sqlite3`) to `3.50.3` in every affected project via a direct package override, resolving CVE-2025-6965 (aggregate query memory corruption in SQLite versions before 3.50.2) directly instead of relying only on the existing query-shape mitigation (issue #72)
 
 ---
 
@@ -190,18 +200,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [1.7.2] - 2026-06-29
-
-### Highlights
-- Internal improvements — no user-facing changes.
-
-### Changed
-- Version string corrected — v1.7.1 final Docker image reported 1.7.1-beta due to a missed version bump before tagging; v1.7.2 carries the correct version string
-
----
-
 Older releases are available in the full history on [GitHub Releases](https://github.com/DutchJaFO/Quotinator/releases).
 
+[1.8.2-beta]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.1-beta...v1.8.2-beta
 [1.8.1-beta]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.0...v1.8.1-beta
 [1.8.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.2...v1.8.0
-[1.7.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.1...v1.7.2

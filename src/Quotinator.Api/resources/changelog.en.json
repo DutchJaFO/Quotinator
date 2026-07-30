@@ -4,6 +4,18 @@
   "machineTranslated": false,
   "releases": [
     {
+      "version": "1.8.2-beta",
+      "date": "2026-07-30",
+      "issues": [72],
+      "cves": ["CVE-2025-6965"],
+      "highlights": [
+        "Security: a SQLite library vulnerability (CVE-2025-6965) has now been fixed directly by upgrading the affected native library; no user data was affected."
+      ],
+      "fixed": [
+        "Upgraded the native SQLite library (`SQLitePCLRaw.lib.e_sqlite3`) to `3.50.3` in every affected project via a direct package override, resolving CVE-2025-6965 (aggregate query memory corruption in SQLite versions before 3.50.2) directly instead of relying only on the existing query-shape mitigation (issue #72)"
+      ]
+    },
+    {
       "version": "1.8.1-beta",
       "date": "2026-07-30",
       "issues": [166],

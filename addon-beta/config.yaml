@@ -1,5 +1,5 @@
 name: Quotinator (BETA)
-version: "1.8.1-beta"
+version: "1.8.2-beta"
 slug: quotinator_beta
 description: Beta channel of Quotinator — a self-hosted quote REST API serving real, verified quotes from films, books, TV, and famous people. Same software as the stable add-on, tracking pre-release versions.
 url: https://github.com/DutchJaFO/Quotinator

@@ -11,6 +11,18 @@
   },
   "releases": [
     {
+      "version": "1.8.2-beta",
+      "date": "2026-07-30",
+      "issues": [72],
+      "cves": ["CVE-2025-6965"],
+      "highlights": [
+        "Sicherheit: Eine Sicherheitslücke in der SQLite-Bibliothek (CVE-2025-6965) wurde jetzt endgültig behoben, indem die betroffene native Bibliothek aktualisiert wurde; es waren keine Benutzerdaten betroffen."
+      ],
+      "fixed": [
+        "Die native SQLite-Bibliothek (`SQLitePCLRaw.lib.e_sqlite3`) wurde per direktem Package-Override in jedem betroffenen Projekt auf `3.50.3` aktualisiert, wodurch CVE-2025-6965 (Speicherbeschädigung bei Aggregatabfragen in SQLite-Versionen vor 3.50.2) endgültig behoben wurde, statt sich nur auf die bestehende Mitigation der Abfrageform zu verlassen (Issue #72)"
+      ]
+    },
+    {
       "version": "1.8.1-beta",
       "date": "2026-07-30",
       "issues": [166],
