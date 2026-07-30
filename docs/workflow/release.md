@@ -44,7 +44,7 @@ Both must report `0 Warning(s)  0 Error(s)`.
 
 ### Step 2 — Update the `unreleased` section of `changelog.en.json`
 
-`src/Quotinator.Api/resources/changelog.en.json` is the source of truth. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly.**
+`src/Quotinator.Api/resources/changelog.en.json` is the source of truth. **Never edit `CHANGELOG.md`, `addon/CHANGELOG.md`, or `addon-beta/CHANGELOG.md` directly.**
 
 **Before writing any entries, read `schemas/changelog.schema.json`** — it is the authoritative definition of every field, its type, and which fields are required. Do not infer the format from prior entries in the file or from git history; the schema may have changed since those were written.
 
@@ -58,8 +58,9 @@ Rules for `highlights`:
 Regenerate the markdown changelogs after every edit to `changelog.en.json`:
 
 ```bash
-dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md
-dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md
+dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
 ```
 
 Verify structure: `dotnet test --filter ChangelogSchema`
@@ -112,6 +113,14 @@ Three places must match the new version (without `v` prefix):
 | `addon/config.yaml` | `version` |
 | `changelog.en.json` | version entry added above |
 
+> **Note:** `checklist.md`'s "Beta tag"/"Final tag" sections (the canonical version of this gate,
+> cross-referenced from CLAUDE.md) have the HA add-on version string itself carry a `-beta` suffix
+> during the beta phase (`addon-beta/config.yaml` only) and only reach the plain final version at
+> final tag (`addon/config.yaml` only) — two separate bump-and-commit cycles. This file's own Step 6
+> instead sets the plain final version once, before Step 9 pushes a `-beta`-suffixed *git tag* against
+> that same commit. Found while updating this file for the addon-beta split (#166) — flagging as a
+> pre-existing inconsistency between the two docs, out of scope for #166 itself to resolve.
+
 `AssemblyVersion` and `FileVersion` are derived automatically — do not set them manually.
 
 Increment following semver:
@@ -122,8 +131,9 @@ Increment following semver:
 Regenerate the changelogs one final time after promoting the release entry:
 
 ```bash
-dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md
-dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md
+dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
 ```
 
 ### Step 7 — Run the pre-push checklist and T1/T2 verification

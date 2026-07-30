@@ -113,7 +113,7 @@ Once the plan doc's Verification table is all ✅:
 - [ ] No requirement is still unconfirmed — if anything is unverified, the issue stays open and none of the remaining `Waiting for release` items apply yet
 - [ ] **Definition of done checkboxes ticked** — every box in the GitHub issue's own "Definition of done" section reflects the (already-verified) plan doc Verification table, except "Findings summarised in a closing comment" which stays unticked until the `Released` phase's close step actually happens; see `process.md` → "Completing an issue" for the `gh issue edit` mechanics. A box that can't honestly be ticked means the issue isn't done yet.
 - [ ] **Process gap check** — did anything about how this issue was worked diverge from documented process, or expose something the docs never covered? If so, resolve per `process.md` → "Process gap discovery" (fix the doc if it's a genuine gap; otherwise no doc change, just note it) before considering this issue's closing complete.
-- [ ] **Changelog `unreleased` entry added** — add the issue number to `unreleased.issues` in `changelog.en.json`; add at least one entry to `added`, `changed`, or `fixed`; add a `highlights` entry if the change is user-facing; update `nl.json` and `de.json` lockstep; regenerate `CHANGELOG.md` and `addon/CHANGELOG.md` via `scripts/changelog.csx`. Do this now, not at release time — the whole point of the `[Unreleased]` section is that entries accumulate as work completes, so promoting them later is a rename, not a writing exercise.
+- [ ] **Changelog `unreleased` entry added** — add the issue number to `unreleased.issues` in `changelog.en.json`; add at least one entry to `added`, `changed`, or `fixed`; add a `highlights` entry if the change is user-facing; update `nl.json` and `de.json` lockstep; regenerate `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md` via `scripts/changelog.csx` (each with `--max-releases 3`). Do this now, not at release time — the whole point of the `[Unreleased]` section is that entries accumulate as work completes, so promoting them later is a rename, not a writing exercise.
 - [ ] Update the plan doc status to `Waiting for release` (or note "no plan doc — by decision" if none exists)
 - [ ] Update the status column in `overview.md` to `Waiting for release`
 - [ ] Re-verify the order of operations table — update if this issue's completion changes the correct sequence
@@ -155,7 +155,7 @@ Releases follow a two-stage model. See `docs/release-verification.md` for tier d
       see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md)
 - [ ] Build clean: `dotnet build --configuration Release` — 0 warnings, 0 errors
 - [ ] Tests pass: `dotnet test --configuration Release` — all tests pass, 0 warnings
-- [ ] Changelogs updated (`CHANGELOG.md` and `addon/CHANGELOG.md`)
+- [ ] Changelogs updated (`CHANGELOG.md`, `addon/CHANGELOG.md`, `addon-beta/CHANGELOG.md`)
 - [ ] Final PR merged to `main` (without `--delete-branch` — developer deletes the branch manually if desired)
 
 ### Beta tag (T1 + T2 gate)
@@ -164,9 +164,9 @@ A beta tag is mandatory for every release. The release workflow enforces this �
 
 - [ ] T1 verified: app starts in VS without error; affected Razor pages render correctly
 - [ ] T2 verified: `docker build -f docker/Dockerfile -t quotinator:local .` succeeds; smoke-test commands return expected output
-- [ ] `addon/config.yaml version` set to beta version (e.g. `1.7.0-beta`)
+- [ ] `addon-beta/config.yaml version` set to beta version (e.g. `1.7.0-beta`) — the stable `addon/config.yaml` is not touched by a beta tag
 - [ ] `Directory.Build.props <Version>` set to beta version
-- [ ] Changelog beta entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep); `CHANGELOG.md` and `addon/CHANGELOG.md` regenerated
+- [ ] Changelog beta entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep); `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md` all regenerated with `--max-releases 3`
 - [ ] Push beta tag: `git tag vX.Y.Z-beta && git push origin vX.Y.Z-beta`
 - [ ] Confirm GitHub Actions release workflow completes; pre-release created on GitHub with correct Docker image
 
@@ -175,9 +175,9 @@ A beta tag is mandatory for every release. The release workflow enforces this �
 Push the final tag after T3 is verified in the live HA add-on.
 
 - [ ] T3 verified: beta add-on installed in HA; all T3-classified requirements confirmed in the live supervisor
-- [ ] `addon/config.yaml version` bumped to final version (e.g. `1.7.0`)
+- [ ] `addon/config.yaml version` bumped to final version (e.g. `1.7.0`) — the beta `addon-beta/config.yaml` is not touched by a final tag
 - [ ] `Directory.Build.props <Version>` bumped to final version (remove prerelease suffix; also remove the pinned `AssemblyVersion`/`FileVersion` lines — they are only needed when `<Version>` carries a suffix)
-- [ ] Changelog final entry promoted from beta; `CHANGELOG.md` and `addon/CHANGELOG.md` regenerated
+- [ ] Changelog final entry promoted from beta; `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md` all regenerated with `--max-releases 3`
 - [ ] **Version bump PR merged to `main` before tagging** — confirm the above three changes are on `main`, not just a local commit. Tags are immutable once pushed; pushing a tag against un-merged version files burns a patch version.
 - [ ] Push final tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
 - [ ] Confirm GitHub Actions release workflow completes; full release created on GitHub; `latest` Docker tag updated

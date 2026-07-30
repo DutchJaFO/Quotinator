@@ -44,6 +44,18 @@
     <File Path="addon/translations/nl.yaml" />
     <File Path="addon/translations/de.yaml" />
   </Folder>
+  <Folder Name="/addon-beta/">
+    <File Path="addon-beta/config.yaml" />
+    <File Path="addon-beta/apparmor.txt" />
+    <File Path="addon-beta/README.md" />
+    <File Path="addon-beta/DOCS.md" />
+    <File Path="addon-beta/CHANGELOG.md" />
+    <File Path="addon-beta/icon.png" />
+    <File Path="addon-beta/logo.png" />
+    <File Path="addon-beta/translations/en.yaml" />
+    <File Path="addon-beta/translations/nl.yaml" />
+    <File Path="addon-beta/translations/de.yaml" />
+  </Folder>
   <Folder Name="/data/" />
   <Folder Name="/data/sources/">
     <File Path="data/sources/manifest.json" />
@@ -218,6 +230,10 @@
     <File Path="docs/milestones/developer-documentation/93-testing-policy-plan.md" />
     <File Path="docs/milestones/developer-documentation/94-living-milestone-plan.md" />
     <File Path="docs/milestones/developer-documentation/104-changelog-checklist-plan.md" />
+  </Folder>
+  <Folder Name="/docs/milestones/maintenance-milestone-v1.8.0/">
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/overview.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/166-ha-addon-stable-beta-split-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

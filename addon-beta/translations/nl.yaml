@@ -1,0 +1,49 @@
+configuration:
+  log_level:
+    name: Logniveau
+    description: >-
+      Bepaalt de uitgebreidheid van de logs. Gebruik debug bij het melden van problemen.
+      Geldige waarden: trace, debug, info, notice, warning, error, fatal.
+  log_requests:
+    name: Verzoeken loggen
+    description: >-
+      Logt elk inkomend verzoek naar de quote API-eindpunten.
+      Standaard uitgeschakeld — schakel in om te bevestigen dat verzoeken aankomen zonder het debug-logniveau te activeren.
+  ssl:
+    name: SSL / HTTPS
+    description: >-
+      Schakelt HTTPS in op de directe toegangspoort (8080). Vereist een certificaat- en sleutelbestand.
+      Niet nodig bij gebruik van HA ingress of een reverse proxy voor TLS-beëindiging.
+  certfile:
+    name: Certificaatbestand
+    description: >-
+      Bestandsnaam van het certificaat, relatief aan /ssl/.
+      De Let's Encrypt add-on schrijft fullchain.pem automatisch.
+  keyfile:
+    name: Sleutelbestand
+    description: >-
+      Bestandsnaam van de privésleutel, relatief aan /ssl/.
+      De Let's Encrypt add-on schrijft privkey.pem automatisch.
+  admin_api_key:
+    name: Admin API-sleutel
+    description: >-
+      Geheime sleutel vereist om de destructieve admin-eindpunten (reseed, reset) aan te roepen.
+      Clients moeten X-Api-Key: <sleutel> meesturen.
+      Laat leeg om de admin-eindpunten volledig uit te schakelen.
+  backup_path:
+    name: Back-upmap
+    description: >-
+      Map waar back-ups van de database vóór migraties worden opgeslagen.
+      Laat leeg voor de standaardwaarde: een backups/-submap in de gegevensmap.
+  auto_update_sources:
+    name: Bronnen automatisch bijwerken
+    description: >-
+      Controleert manifestvermeldingen met een download-URL op een nieuwere versie vóór het seeden.
+      Schakel uit voor volledig offline/geïsoleerde installaties — er worden dan nooit netwerkverzoeken gedaan.
+  source_update_interval_hours:
+    name: Bijwerkinterval bronnen (uren)
+    description: >-
+      Hoe lang een gedownload bronbestand als actueel wordt beschouwd voordat het opnieuw wordt gecontroleerd.
+      Individuele bronnen kunnen dit overschrijven in hun eigen manifestvermelding.
+network:
+  8080/tcp: Directe webtoegang — HTTP (SSL uitgeschakeld) of HTTPS (SSL ingeschakeld)

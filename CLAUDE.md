@@ -158,7 +158,8 @@ docs/                     # Workflow guides, testing policy, CVE docs, milestone
 scripts/
   changelog.csx           # Changelog markdown generator
 docker/Dockerfile         # Multi-stage build, targets linux/amd64 + linux/arm64
-addon/                    # Home Assistant add-on manifest and assets
+addon/                    # Home Assistant add-on manifest and assets — stable channel
+addon-beta/               # Home Assistant add-on manifest and assets — beta channel, same image
 ```
 
 Dependency direction: `Quotinator.Api` → `Quotinator.Core`; `Quotinator.Core` → `Quotinator.Data`; `Quotinator.Api` → `Quotinator.Constants`. `Quotinator.Data` has no dependency on Core (must stay domain-agnostic — see ADR 004). `Quotinator.Data.Testing` → `Quotinator.Data` only. (Until #206, `Quotinator.Engine` sat between Api and Core as a separate project; it was merged into `Quotinator.Core` because Core's own "stay Dapper/SQLite-free" invariant — the only reason Engine existed as a *third* project rather than Core depending on Data directly — turned out not to be worth its cost. See ADR 004's `#206` revision for the full reasoning.)
@@ -305,6 +306,22 @@ SSL cert paths come from `Quotinator:SslCertFile` and `Quotinator:SslKeyFile`, s
 - **Internal / HA ingress links** (anything routed through the HA supervisor, including the OpenAPI UI and spec links): must use plain `<a href="…">` without `target="_blank"`.
 - **External links** (GitHub, external docs, etc.): must use `target="_blank" rel="noopener noreferrer"`. Without it, the external site loads inside the HA ingress frame and browsers block it via X-Frame-Options, showing an error instead of the page.
 
+### Home Assistant add-on: stable and beta channels
+
+Quotinator publishes **two** self-contained HA add-on definitions from the same repository and the
+same Docker image (`ghcr.io/dutchjafo/quotinator`), so a user can install stable and beta side by
+side: `addon/` (`slug: quotinator`, always the current final release) and `addon-beta/`
+(`slug: quotinator_beta`, name suffixed `(BETA)`, tracks the latest pushed prerelease tag). Both set
+`stage: stable` in `config.yaml` — the beta add-on is a normal, always-visible sibling in the add-on
+store, not hidden behind HA's experimental/Advanced Mode. Each folder is fully self-contained
+(`config.yaml`, `DOCS.md`, `README.md`, `CHANGELOG.md`, `translations/`, `icon.png`, `logo.png`,
+`apparmor.txt`) — there is no shared/symlinked file between them (see #166's plan doc for why).
+
+A beta tag only bumps `addon-beta/config.yaml`'s version; a final tag only bumps `addon/config.yaml`'s
+— see `docs/workflow/checklist.md`'s "Beta tag" / "Final tag" sections. Any change to `addon/config.yaml`
+(options, schema) or its `DOCS.md`/`README.md` content needs the matching `addon-beta/` edit in the
+same commit — see "When adding or renaming an HA add-on config option" below.
+
 ### MCP (v3)
 Expose at `/mcp` using the official MCP .NET SDK when available. Do not implement in v1.
 
@@ -332,8 +349,12 @@ src/Quotinator.Api/i18ntext/UI.nl.json
 2. Add/update the entry in `addon/translations/en.yaml` (English — baseline)
 3. Add/update the entry in `addon/translations/nl.yaml` (Dutch)
 4. Add/update the entry in `addon/translations/de.yaml` (German)
+5. Mirror steps 1–4 into `addon-beta/config.yaml` and `addon-beta/translations/{en,nl,de}.yaml` — same
+   options, same schema, same translation text (the option itself doesn't differ between channels)
 
 The translation files cover config option names/descriptions and port descriptions only. The `description` field in `config.yaml`, `addon/DOCS.md`, and `addon/README.md` have no HA translation mechanism and remain English-only. See `docs/home-assistant.md` for the full translation scope table.
+
+**The same mirroring applies to `addon/DOCS.md`/`README.md` content edits generally, not just config options.** `addon-beta/`'s copies are real, independent files (no shared/symlinked file — see the "Home Assistant add-on" section above), so a content edit to one needs the matching edit to the other in the same commit, or the two silently drift apart.
 
 **How each consumer uses these files:**
 
@@ -610,11 +631,12 @@ These rules apply to all Blazor components and pages:
 
 ### Keeping API documentation in sync
 
-When adding, removing, or changing any endpoint, parameter, or behaviour, update **all three** of these in the same commit:
+When adding, removing, or changing any endpoint, parameter, or behaviour, update **all four** of these in the same commit:
 
 1. `README.md` — the REST API Endpoints table and any parameter descriptions
 2. `addon/DOCS.md` — the API Endpoints table (HA add-on users read this)
-3. `src/Quotinator.Api/Endpoints/QuoteEndpoints.cs` — the `[Description]` attributes on the endpoint and its parameters (these feed the OpenAPI/Scalar UI)
+3. `addon-beta/DOCS.md` — same table, same content as `addon/DOCS.md` (same underlying software)
+4. `src/Quotinator.Api/Endpoints/QuoteEndpoints.cs` — the `[Description]` attributes on the endpoint and its parameters (these feed the OpenAPI/Scalar UI)
 
 The Scalar API reference is at `/scalar/v1` and the raw spec at `/openapi/v1.json` — both are available in all environments including production. Do not gate them behind `IsDevelopment()`.
 
@@ -751,8 +773,10 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `src/Quotinator.Core/Models/QuoteResponse.cs` | API response DTO |
 | `src/Quotinator.Data/Queries/Sql.cs` | All SQL query strings — never write SQL inline outside this file |
 | `src/Quotinator.Data/Database/DatabaseInitializer.cs` | SQLite schema + numbered migrations |
-| `addon/config.yaml` | HA add-on manifest — version, options, schema, port config |
-| `addon/CHANGELOG.md` | Generated HA add-on changelog — do not edit directly |
+| `addon/config.yaml` | Stable HA add-on manifest — version, options, schema, port config |
+| `addon/CHANGELOG.md` | Generated stable HA add-on changelog — do not edit directly |
+| `addon-beta/config.yaml` | Beta HA add-on manifest — same options/schema as `addon/`, own slug/version |
+| `addon-beta/CHANGELOG.md` | Generated beta HA add-on changelog — do not edit directly |
 | `docker/Dockerfile` | Container build |
 | `docs/docker.md` | Docker build notes, Blazor static web assets caveat, port configuration |
 | `docs/database-conventions.md` | Database do's and don'ts — RecordBase, enum/CHECK constraints, migrations, SQL safety, Data/Engine boundaries, DB testing conventions |
@@ -802,7 +826,8 @@ Source: verified against [microsoft/vs-solutionpersistence](https://github.com/m
 
 Current folders and their contents:
 - `/Solution Items/` — `CLAUDE.md`, `README.md`, `SOURCES.md`, `CHANGELOG.md`
-- `/addon/` — all Home Assistant add-on files (`config.yaml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `icon.png`, `logo.png`)
+- `/addon/` — all Home Assistant add-on files (`config.yaml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `icon.png`, `logo.png`) — stable channel
+- `/addon-beta/` — same file set as `/addon/`, for the beta channel (same image, different slug/version)
 - `/data/sources/` — `manifest.json`, `quotinator-curated.json`, `vilaboim_movie-quotes.json`, `NikhilNamal17_popular-movie-quotes.json`
 - `/docker/` — `Dockerfile`, `docker-compose.yml`
 - `/scripts/` — `SOURCES.md` and changelog scripts
@@ -837,7 +862,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`. The same 0-warnings policy that applies to `dotnet build` applies here — any compiler warning surfaced during test build is a blocking failure.
-3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md` or `addon/CHANGELOG.md` directly — they are generated files.**
+3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md`, `addon/CHANGELOG.md`, or `addon-beta/CHANGELOG.md` directly — they are generated files.**
 
    **Before writing any entries, read `schemas/changelog.schema.json`** — it is the authoritative definition of every field and which fields are required. Do not infer the format from prior entries or git history.
 
@@ -860,16 +885,24 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    - **Security fixes** should always appear in highlights — include the CVE ID so users can verify, but keep the surrounding language non-technical
    - `ChangelogSchemaTests` validates structure (no null entries, CVE format) — run `dotnet test --filter ChangelogSchema` to verify before committing
 
-   After editing `changelog.en.json`, regenerate the markdown files (run from repo root):
+   After editing `changelog.en.json`, regenerate the markdown files (run from repo root). All three
+   are permanently capped to the 3 most recent releases (`--max-releases 3`) — older history stays on
+   [GitHub Releases](https://github.com/DutchJaFO/Quotinator/releases), linked from a closing note in
+   each generated file:
    ```bash
-   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md
-   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md
+   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md --max-releases 3
+   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
+   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
    ```
    Commit the regenerated files alongside the JSON change.
 4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
    - `Directory.Build.props` → `<Version>` (shared across all projects — **this is the only file to update**)
    - `addon/config.yaml` → `version`
-   - `changelog.en.json` → new version entry at the top; regenerate `CHANGELOG.md` and `addon/CHANGELOG.md`
+   - `changelog.en.json` → new version entry at the top; regenerate `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md`
+
+   `addon-beta/config.yaml`'s own `version` is **not** part of this final-tag trio — it only moves at
+   a beta tag (see `docs/workflow/checklist.md`'s "Beta tag" section) and is expected to sit behind
+   the stable version between releases, tracking whatever prerelease was most recently pushed.
 
    `AssemblyVersion` and `FileVersion` are derived automatically as `$(Version).0` (e.g. `1.4.1` → `1.4.1.0`). Do not set them manually.
 5. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
@@ -896,7 +929,7 @@ Workflow:
 3. Wait for any remaining Dependabot PRs to finish CI
 4. Review and merge passing Dependabot PRs
 5. `git pull` to bring dependency bumps onto your local branch
-6. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate both markdown files with `scripts/changelog.csx`
+6. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate all three markdown files with `scripts/changelog.csx` (`--max-releases 3`)
 7. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, `changelog.en.json` version entry) and commit
 8. Run the full pre-push checklist above (including Docker build)
 9. Push the version bump commit, then push the tag:

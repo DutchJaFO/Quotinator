@@ -75,7 +75,7 @@ When the change touches schema/reset logic, also exercise the affected admin end
 - Add-on config panel — options and translations visible and correct in the HA UI
 - Log output format — `[Subsystem - Phase]` prefixes visible in the supervisor log
 
-**When required:** any change that touches ingress middleware, `X-Ingress-Path` handling, `PathBase`, `UseForwardedHeaders`, DataProtection, SSL/Kestrel config, `addon/config.yaml`, addon translation files, or log output format.
+**When required:** any change that touches ingress middleware, `X-Ingress-Path` handling, `PathBase`, `UseForwardedHeaders`, DataProtection, SSL/Kestrel config, `addon/config.yaml` or `addon-beta/config.yaml`, addon translation files, or log output format.
 
 **Gate:** install the beta add-on in HA; confirm all T3-classified requirements for the release are working in the live add-on. Document confirmation in the closing comment.
 
@@ -105,10 +105,10 @@ is `**Tiers required:** T1, T2`.
 
 ## Two-stage release model
 
-| Stage | Git tag | `addon/config.yaml version` | Docker tags | GitHub Release |
+| Stage | Git tag | Version bumped | Docker tags | GitHub Release |
 |---|---|---|---|---|
-| Beta | `v1.7.0-beta` | `1.7.0-beta` | `1.7.0-beta` (no `latest`) | Pre-release |
-| Final | `v1.7.0` | `1.7.0` | `1.7.0`, `1.7`, `1`, `latest` | Full release |
+| Beta | `v1.7.0-beta` | `addon-beta/config.yaml version` → `1.7.0-beta` | `1.7.0-beta` (no `latest`) | Pre-release |
+| Final | `v1.7.0` | `addon/config.yaml version` → `1.7.0` | `1.7.0`, `1.7`, `1`, `latest` | Full release |
 
 **T1 + T2 must be verified before pushing a beta tag.**  
 **T3 must be verified before pushing a final tag.**  

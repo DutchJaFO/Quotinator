@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Common problems and recovery procedures for Quotinator running outside of the Home Assistant add-on (plain Docker or docker-compose). For HA add-on users, see `addon/DOCS.md`.
+Common problems and recovery procedures for Quotinator running outside of the Home Assistant add-on (plain Docker or docker-compose). For HA add-on users, see `addon/DOCS.md` (stable) or `addon-beta/DOCS.md` (beta) — identical content, same underlying software.
 
 ---
 
