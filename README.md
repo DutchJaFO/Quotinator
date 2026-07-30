@@ -45,7 +45,8 @@ Quotinator/
 │   ├── Quotinator.Data.Example/      # Concrete example implementations of Data patterns (not a test runner)
 │   ├── Quotinator.Data.Testing.Tests/ # Tests for the Data.Testing helper library
 │   └── Quotinator.Data.Tests/        # Integration tests for Data infrastructure (real SQLite, no fakes)
-├── addon/                       # Home Assistant add-on manifest, config, and translations
+├── addon/                       # Home Assistant add-on manifest, config, and translations — stable channel
+├── addon-beta/                  # Same as addon/, for the beta channel (same image, different slug/version)
 ├── data/
 │   └── sources/                 # Bundled source files (one JSON per dataset) + manifest
 ├── docker/
@@ -200,7 +201,7 @@ Quotinator can be installed directly as a Home Assistant add-on. Click the butto
 
 [![Open your Home Assistant instance and show the app store with this repository pre-filled.](https://my.home-assistant.io/badges/supervisor_store.svg)](https://my.home-assistant.io/redirect/supervisor_store/?repository_url=https%3A%2F%2Fgithub.com%2FDutchJaFO%2FQuotinator)
 
-Then find **Quotinator** in the store and click **Install**. See [`addon/DOCS.md`](addon/DOCS.md) for configuration options once installed.
+Then find **Quotinator** (stable) or **Quotinator (BETA)** in the store and click **Install** — both are independently installable, published from the same repository and image. See [`addon/DOCS.md`](addon/DOCS.md) for configuration options once installed (identical for both channels).
 
 ## Docker
 
