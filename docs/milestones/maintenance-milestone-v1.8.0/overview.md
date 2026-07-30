@@ -13,7 +13,7 @@ its own `feature/<slug>` branch and PR rather than sharing a single milestone br
 
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
-| [#166](https://github.com/DutchJaFO/Quotinator/issues/166) | HA add-on: split into separate stable and beta sub-add-ons | Waiting for release | T1 ✅ T2 ✅ T3 ⬜ | [166-ha-addon-stable-beta-split-plan.md](166-ha-addon-stable-beta-split-plan.md) |
+| [#166](https://github.com/DutchJaFO/Quotinator/issues/166) | HA add-on: split into separate stable and beta sub-add-ons | Waiting for release | T1 ✅ T2 ✅ T3 ✅ | [166-ha-addon-stable-beta-split-plan.md](166-ha-addon-stable-beta-split-plan.md) |
 | [#197](https://github.com/DutchJaFO/Quotinator/issues/197) | MSTest analyzer diagnostics (e.g. MSTEST0068) are invisible to the 0-warnings build policy — no .editorconfig exists | Planning | Not yet determined | No plan doc yet |
 | [#159](https://github.com/DutchJaFO/Quotinator/issues/159) | Document repository-is-C#-only tooling policy as an ADR | Planning | Not yet determined | No plan doc yet |
 | [#146](https://github.com/DutchJaFO/Quotinator/issues/146) | Audit memory-only project conventions and move genuine ones into CLAUDE.md/docs | Planning | Not yet determined | No plan doc yet |
@@ -26,12 +26,13 @@ its own `feature/<slug>` branch and PR rather than sharing a single milestone br
 | [#227](https://github.com/DutchJaFO/Quotinator/issues/227) | Import-table naming standardization + general import-file content provenance (FileResource / FileResourceLine) | Planning | Not yet determined | No plan doc yet |
 | [#178](https://github.com/DutchJaFO/Quotinator/issues/178) | Changelog: add an optional one-line quote to each release entry | Planning | Not yet determined | No plan doc yet |
 | [#232](https://github.com/DutchJaFO/Quotinator/issues/232) | Reduce OS-level vulnerabilities in Docker base image (Docker Scout scan) | Planning | Not yet determined | No plan doc yet |
+| [#236](https://github.com/DutchJaFO/Quotinator/issues/236) | Release workflow: HA can see a config.yaml version bump before the matching Docker image is pushed | Planning | Not yet determined | No plan doc yet |
 
 ---
 
 ## Dependency map
 
-None of the 13 issues block each other. The order below is based on risk, effort, and
+None of the 14 issues block each other. The order below is based on risk, effort, and
 conflict-avoidance (e.g. doing a broad mechanical test-file change before other issues add more
 tests to the same files) rather than any hard dependency.
 
@@ -54,6 +55,9 @@ tests to the same files) rather than any hard dependency.
 11. **#227** — Import-table naming standardization + FileResource/FileResourceLine provenance (largest schema/structural change)
 12. **#178** — Changelog: optional one-line quote per release entry
 13. **#232** — Docker Scout OS vulnerability research (no confirmed code change yet)
+14. **#236** — Release workflow config/image timing race (discovered live during #166's T3
+    verification, 2026-07-30; appended here rather than reordered in since it has no dependency on
+    the others)
 
 ---
 

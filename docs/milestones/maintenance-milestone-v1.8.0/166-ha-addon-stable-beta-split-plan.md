@@ -244,13 +244,25 @@ consumed by the HA supervisor directly from the git repository, not baked into t
 
 ### 9. T3 — Live HA supervisor: both add-ons install side by side
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-Deployment-verified per CLAUDE.md's "Deployment-only issues" rule (HA add-on store behaviour).
-After a beta tag exists (bumping `addon-beta/config.yaml` per Step 4): confirm the HA Add-on Store,
-for a supervisor with Quotinator's repository added, lists **both** "Quotinator" and "Quotinator
-(BETA)" as independently installable add-ons; confirm the beta add-on installs, starts, and reaches
-the beta-tagged image; confirm the stable add-on is unaffected and still on its last final version.
+Deployment-verified per CLAUDE.md's "Deployment-only issues" rule (HA add-on store behaviour), after
+the `v1.8.1-beta` tag was pushed and its release workflow completed (2026-07-30). Confirmed: the HA
+Add-on Store lists **both** "Quotinator" (stable, already installed, unaffected) and "Quotinator
+(BETA)" as independently installable add-ons from the same repository — the core structural goal of
+this issue.
+
+**Found along the way, not a defect in this issue's own work:** the first install attempt for the
+beta add-on failed ("Installeren van de app is mislukt — An unknown error occurred with app
+e20c0077_quotinator_beta") because the HA supervisor's repository refresh picked up
+`addon-beta/config.yaml`'s merged `1.8.1-beta` version before the corresponding
+`ghcr.io/dutchjafo/quotinator:1.8.1-beta` image had finished building and pushing (~15 minutes for
+the full release workflow run). Retrying the install after the workflow completed succeeded — the
+Blazor UI's About page confirmed `v1.8.1-beta` running correctly. This is a pre-existing race in the
+release process (config visible on `main` before the tag's image build finishes), not something
+#166 introduced — filed separately as
+[#236](https://github.com/DutchJaFO/Quotinator/issues/236) since it affects every future beta/final
+tag equally, not just this one.
 
 ---
 
@@ -268,7 +280,7 @@ the beta-tagged image; confirm the stable add-on is unaffected and still on its 
 | 8 | ✅ | No regression | Unit test | `dotnet build --configuration Release` — 0 warnings, 0 errors; `dotnet test --configuration Release --verbosity normal` — 531 tests passed, 0 warnings, 0 errors |
 | 9 | ✅ | T1 — app starts in Visual Studio without error | Live (T1) | Developer's own VS run — clean startup log, correct version/stats, source refresh succeeded, no errors |
 | 10 | ✅ | T2 — Docker build + smoke tests pass | Live (T2) | `docker build` succeeded; container started cleanly (v1.8.0, 799 quotes seeded); `/api/v1/health`, `/api/v1/version`, `/api/v1/quotes/random`, `/scalar/v1` all returned expected output |
-| 11 | ❌ | T3 — both add-ons visible and independently installable in a live HA supervisor from one repository | Live (T3) | Manual HA add-on store check after a beta tag is pushed |
+| 11 | ✅ | T3 — both add-ons visible and independently installable in a live HA supervisor from one repository | Live (T3) | Both "Quotinator" and "Quotinator (BETA)" listed and independently installable; beta reached `v1.8.1-beta` after a retry once the release workflow's image build completed (see Step 9 for the timing gap found, tracked separately as #236) |
 
 ---
 
