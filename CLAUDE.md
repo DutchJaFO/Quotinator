@@ -273,12 +273,22 @@ Sensitive or environment-specific config (API keys, ports, data paths) goes in e
 
 ### Rate limiting
 
-All quote endpoints (`/api/v1/quotes/**`) use a sliding-window rate limiter configured in `Program.cs`:
+**Every endpoint group is rate-limited — no exceptions, including admin endpoints.** There is no
+unlimited/internal-traffic carve-out anywhere in the codebase; every `MapGroup`/`Map*` call chains
+`.RequireRateLimiting(...)` with one of the two named policies below (`Quotinator.Constants.RateLimiting.RateLimitPolicies`).
+
+**`api`** — quote endpoints (`/api/v1/quotes/**`), a sliding-window limiter configured in `Program.cs`:
 - **Limit:** 100 requests per minute per IP
 - **Window:** 60 seconds, divided into 6 segments of 10 seconds each (`SegmentsPerWindow = 6`)
 - **Queue:** none (`QueueLimit = 0`) — requests over the limit are rejected immediately with `429 Too Many Requests`
 
-These values are intentionally generous for homelab use. Change them in `Program.cs` if a consumer (e.g. a bulk import script) legitimately needs a higher limit.
+**`admin`** — every `/api/v1/admin/**` endpoint, a **concurrency-1 limiter**, not a sliding window:
+`PermitLimit = 1`, `QueueLimit = 0` — only one admin request may be in flight at a time; any concurrent
+call is rejected immediately with `429`. This is deliberately stricter than the quote policy since admin
+endpoints include destructive operations (reseed, reset) where a second concurrent call is a correctness
+hazard, not just a load concern.
+
+These values are intentionally generous for homelab use. Change them in `Program.cs` if a consumer (e.g. a bulk import script) legitimately needs a higher limit. When adding a new endpoint group, always attach one of the two existing named policies — never skip rate limiting for a new group because it's "internal" or "low-traffic."
 
 ### SSL / HTTPS
 
@@ -698,6 +708,30 @@ Both are attributed in `SOURCES.md`. Each source's raw upstream format is conver
 
 Manually curated and verified entries live in `data/sources/quotinator-curated.json`. All entries must be accurately attributed and verified before adding.
 
+### Import/enrichment file minimalism
+
+An import or curated-overlay file states only the fields it actually intends to set — nothing else.
+Two rules follow from this:
+
+1. **A property present with an explicit `null` means "reset this field"**, not "leave it alone."
+   Never add a field to a file just to carry its current value forward, and never write `null` unless
+   the intent genuinely is to clear that field. If a shape needs to express "don't touch this field"
+   and cannot — an optional `string?` property has no way to distinguish an absent key from an explicit
+   `null` once deserialized — that is a gap in the DTO/model, not something to work around by omitting
+   or guessing values in the file (see #190, the current known exception; check it before adding a new
+   optional field to any entry DTO).
+2. **Never hand-author an id the project derives deterministically.** If an entity's id is computed
+   from a stable natural key (e.g. `EntityIdentity.SourceId(title, type)`), a curated/enrichment file
+   should omit `id` entirely and let the importer resolve it by natural key — not compute and paste in
+   the same value by hand. An explicit `id` is only appropriate on a *correction* entry, where the id
+   already exists and identifies which row to update.
+
+**Why:** a file forced to state something it doesn't mean is a signal the import model is wrong, not
+that the file needs different values — found live during #180, where a draft curated overlay carried a
+hand-computed `id` on every entry (friction the project could generate for itself) and an explicit
+`"date": null` that actively meant "reset this source's date" on every row, which is what caused
+spurious Pending actions the file's author never intended.
+
 ### Verifying title/date corrections (`*-conflict-rules.json`, `*-source-aliases.json`)
 
 A `ConflictResolutionRule` or `SourceAliasRule` entry encodes a factual claim about a real film, show,
@@ -928,6 +962,15 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 ## Tagging a release — separate push cycle
 
 **Always tag in a separate commit/push cycle from feature work.** The reason: Dependabot may open PRs shortly after a push (NuGet and GitHub Actions updates run weekly). Merging those before tagging means the release includes up-to-date dependencies rather than shipping a version that is immediately out of date.
+
+**Merging multiple PRs in sequence:** `main` is protected by a GitHub Repository Ruleset (not classic
+branch protection — `gh api repos/{owner}/{repo}/branches/main/protection` returns 404 for this repo;
+the ruleset lives at `/repos/{owner}/{repo}/rulesets`), which requires the "Build & Test" status check
+to be current **on that PR's own branch**. Merging one PR advances `main`, which can put an already-green
+sibling PR into `mergeStateStatus: BEHIND` — `gh pr merge` then fails with "Repository rule violations
+found" even though that PR's checks passed minutes ago. Before merging each PR in a batch (step 1 and
+step 4 below), check `gh pr view <N> --json mergeStateStatus`; if `BEHIND`, run `gh pr update-branch <N>`
+and wait for checks to re-run green (`gh pr checks <N> --watch`) before retrying the merge.
 
 Workflow:
 1. **At the start of a session** — check for open Dependabot PRs (`gh pr list --state open`) and merge any that are green before starting feature work. This avoids Dependabot reacting to your push mid-session.

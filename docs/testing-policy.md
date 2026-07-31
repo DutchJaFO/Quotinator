@@ -52,6 +52,23 @@ tests/
 
 Both `src/Quotinator.ProjectName/CVE/` and `tests/Quotinator.ProjectName.Tests/CVE/` are created when the project is created — not when a CVE is filed. The folder must exist before it is needed. A `.gitkeep` file holds the folder until the first CVE document is added.
 
+### Database seeder/migration code needs real SQLite integration tests
+
+Any new method added to `DatabaseInitializer`/`QuotinatorDatabaseInitializer` that writes to SQLite
+needs a corresponding test that runs against a real, temp-file SQLite database — not only a unit test
+that exercises the method in isolation with mocked dependencies. `NoOpDatabaseInitializer` (used in
+endpoint tests, see `CLAUDE.md`'s "Endpoint test pattern") deliberately skips all real DB logic, which
+means a bug in the seeder itself — an FK constraint failure, a Guid-casing mismatch, a migration that
+throws — is invisible to the rest of the test suite and only surfaces at actual runtime.
+
+**Why:** a Guid case mismatch (`guid.ToString()` producing lowercase while a write path stored
+uppercase) caused a live `SQLite Error 19: FOREIGN KEY constraint failed` on first startup, while every
+one of the (then) 155 tests passed — the bug was only ever caught by actually running the app.
+
+**How to apply:** use a temp directory and a real SQLite file created in `[TestInitialize]`, call
+`SqliteConnection.ClearAllPools()` in `[TestCleanup]` before deleting it (pooled connections otherwise
+hold the file open), and see `DatabaseInitializerTests.cs` for the established pattern.
+
 ## What to test
 
 - All service methods (e.g. `QuoteService`)
@@ -104,6 +121,23 @@ Every bug fix must be accompanied by tests that close the gap the bug exposed. T
 4. **All tests from steps 1–3 must be committed in the same PR as the fix.** A fix without a regression test is incomplete.
 
 The test project for the data layer (`Quotinator.Core.Tests`, `Quotinator.Data.Tests`) uses Dapper directly for test setup — the same reason the production data layer does. Add Dapper as an explicit `PackageReference` in any test project that manipulates SQLite state directly.
+
+## Test fixture conventions
+
+### A GUID/id case-insensitivity fixture must contain a hex letter
+
+Any test proving a value round-trips correctly regardless of stored casing (`UPPER(...)` in SQL,
+`.ToUpper()`/`.ToUpperInvariant()` in C#, a hand-typed "mixed-case" fixture) must use a GUID/id literal
+containing at least one alphabetic hex character (`a`–`f`, either case). An all-digit literal — e.g.
+`"11111111-1111-4111-8111-111111111111"` — is unchanged by `UPPER()`/`ToUpper()`, so the test silently
+proves nothing about case-insensitivity even though it looks like a real one and passes.
+
+**Why:** found live in #213 — a new repository test used exactly that all-digit literal as the
+"uppercase" fixture for an id column. Fixed by switching to a literal like
+`"aabbccdd-1234-4abc-8def-1234567890ab"` (contains `a`–`f`). Applies to every `*Id`-suffixed column
+under [ADR 012](architecture-decisions/012-canonicalize-entity-ids-at-capture.md)'s case-insensitivity
+convention. Prefer a literal that *starts* with a hex letter so the mismatch is impossible to miss on
+a glance.
 
 ## Endpoint test conventions
 
