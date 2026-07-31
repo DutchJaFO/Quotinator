@@ -175,6 +175,21 @@ Three other kinds of work get their own branch, for different reasons than a mil
   the code being released. See `CLAUDE.md`'s "Tagging a release" section for the full sequence — the
   version-bump commit and the changelog-regeneration commit both belong on this one branch, not two
   separate ones.
+
+### When to open the PR for a milestone branch
+
+**Push commits to the milestone branch's remote as work completes — that alone needs no PR.** Open the
+PR only when one of these is true:
+
+- **Enough work has landed to justify a release** — the branch has reached a natural release
+  checkpoint, not necessarily "every issue in the milestone is done."
+- **Every issue in the milestone is complete.**
+
+**Large milestones may need more than one intermediate release before all their issues are done** —
+specifically so a single release's changelog entry doesn't grow unmanageably large trying to describe
+every issue in a big milestone at once. When that happens, open and merge a PR for the completed
+subset, tag that release (via its own release-prep branch, per the item above), then continue pushing
+further commits to the same milestone branch for the remaining issues and repeat.
 - **Dependabot** — the one case genuinely outside this project's control. Dependabot always opens its
   own branch and PR per dependency; there is no way to batch these, and no attempt should be made to.
 
