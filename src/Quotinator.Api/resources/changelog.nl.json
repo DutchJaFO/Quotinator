@@ -11,8 +11,8 @@
   },
   "releases": [
     {
-      "version": "1.8.2-beta",
-      "date": "2026-07-30",
+      "version": "1.8.2",
+      "date": "2026-07-31",
       "issues": [72],
       "cves": ["CVE-2025-6965"],
       "highlights": [

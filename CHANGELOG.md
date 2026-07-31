@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-30 21:00 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-31 05:11 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [1.8.2-beta] - 2026-07-30
+## [1.8.2] - 2026-07-31
 
 ### Highlights
 - Security: a SQLite library vulnerability (CVE-2025-6965) has now been fixed directly by upgrading the affected native library; no user data was affected.
@@ -202,6 +202,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 Older releases are available in the full history on [GitHub Releases](https://github.com/DutchJaFO/Quotinator/releases).
 
-[1.8.2-beta]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.1-beta...v1.8.2-beta
+[1.8.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.1-beta...v1.8.2
 [1.8.1-beta]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.0...v1.8.1-beta
 [1.8.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.2...v1.8.0
