@@ -53,7 +53,7 @@
     {
       "version": "1.8.0",
       "date": "2026-07-29",
-      "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 155, 157, 158, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
+      "issues": [45, 55, 56, 57, 58, 59, 62, 63, 64, 65, 67, 68, 69, 140, 141, 143, 144, 149, 152, 153, 154, 155, 157, 158, 159, 163, 165, 162, 168, 170, 171, 172, 173, 174, 175, 176, 177, 179, 180, 181, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 204, 205, 206, 209, 210, 211, 212, 213, 214, 215, 216, 221],
       "cves": ["CVE-2026-49451"],
       "highlights": [
         "Sicherheit: eine Schwachstelle in einer OpenAPI-Dokumentationsbibliothek (CVE-2026-49451) wurde identifiziert und behoben; der verwundbare Codepfad war in Quotinator nie erreichbar, und es waren keine Benutzerdaten betroffen.",
@@ -165,7 +165,8 @@
         "Die Paginierung jedes Listen-Endpunkts folgt jetzt einem einheitlichen Vertrag: eine `pageSize` über 500 wird abgelehnt (422) statt stillschweigend begrenzt, `pageSize=0` gibt alle passenden Zeilen als eine Seite zurück, und das Anfordern einer Seite hinter der letzten ist ein eigenständiger 422",
         "Die Standard-Seitengröße für `GET /api/v1/admin/audit` und `GET /api/v1/import/actions` wurde von 50 auf 20 geändert, passend zu jedem anderen Listen-Endpunkt",
         "Die Identität eines Charakters ist nicht mehr auf eine einzelne Quelle beschränkt: Zwei Charaktere mit demselben Namen werden jetzt als derselbe Charakter behandelt, wenn ihre Quellen sowohl denselben Medientyp als auch eine bekannte Reihe teilen; bestehende Duplikate pro Quelle werden beim Upgrade automatisch zusammengeführt, wo immer eine Reihenbeziehung bekannt ist (issue #174)",
-        "Die Datenbankstatistiken im Start-Banner werden jetzt einzeln pro Zeile unter einem neuen Abschnitt `Statistics:` aufgelistet statt in einer einzigen Zeile zusammengedrängt, damit weitere Entitätstypen auch künftig lesbar bleiben (Issue #221)"
+        "Die Datenbankstatistiken im Start-Banner werden jetzt einzeln pro Zeile unter einem neuen Abschnitt `Statistics:` aufgelistet statt in einer einzigen Zeile zusammengedrängt, damit weitere Entitätstypen auch künftig lesbar bleiben (Issue #221)",
+        "Die bestehende Konvention des Projekts, ausschließlich C# für Tooling zu verwenden, wurde nun als schriftliche Architekturentscheidung festgehalten — eine rein interne Dokumentationsergänzung ohne Verhaltensänderung (issue #159)"
       ],
       "fixed": [
         "ImportBatch-Zeilen, die beim Seeding erstellt werden, erfassen jetzt den korrekten `Type` (`Seed` für jede gebündelte Datei, ob extern über eine Manifest-URL bezogen oder intern kuratiert) und speichern die Quell-URL; zuvor wurde jeder geseedete Batch falsch erfasst",

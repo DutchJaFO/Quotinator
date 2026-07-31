@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-31 13:17 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-31 19:06 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -159,6 +159,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The default page size for `GET /api/v1/admin/audit` and `GET /api/v1/import/actions` changed from 50 to 20, matching every other list endpoint
 - Character identity is no longer scoped to a single source: two characters with the same name are now treated as the same character when their sources share both media type and a known series; existing per-source duplicates are consolidated automatically on upgrade wherever a series relationship is known (issue #174)
 - The startup banner's database statistics are now listed one per line under a new `Statistics:` section instead of crammed onto a single line, so additional entity types stay readable as more are added (issue #221)
+- Formalised the project's existing C#-only tooling convention as a written architecture decision record — a purely internal documentation addition with no behaviour change (issue #159)
 
 ### Fixed
 - ImportBatch rows created during seeding now record the correct `Type` (`Seed` for any bundled file, whether externally sourced with a manifest URL or internally authored) and persist the source URL; previously every seeded batch was recorded incorrectly
