@@ -15,9 +15,9 @@ public class ImportActionNotDecidableExceptionTests
 
         Assert.IsFalse(exception.Message.Contains("Quote", StringComparison.OrdinalIgnoreCase),
             "The message must describe the rule generically, not name a specific entity type as the one exception");
-        StringAssert.Contains(exception.Message, entityType,
+        Assert.Contains(entityType, exception.Message,
             "The message must actually report the entity type that was passed in, not a hardcoded one — proves the parameter is genuinely used, not just absent from a static string");
-        StringAssert.Contains(exception.Message, actionId.ToString(),
+        Assert.Contains(actionId.ToString(), exception.Message,
             "The message must report the actual action id that was passed in");
         Assert.AreEqual(actionId, exception.ActionId);
         Assert.AreEqual(entityType, exception.EntityType);

@@ -73,7 +73,7 @@ public class SqliteRepositoryTransactionTests
             .Distinct()
             .ToList();
 
-        Assert.AreEqual(0, violations.Count,
+        Assert.IsEmpty(violations,
             $"IUnitOfWork exposes infrastructure types: {string.Join(", ", violations)}");
     }
 

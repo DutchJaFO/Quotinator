@@ -56,11 +56,11 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.GetAsync("/api/v1/admin/audit");
+        var response = await client.GetAsync("/api/v1/admin/audit", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
 
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
         var doc  = JsonDocument.Parse(body);
         var root = doc.RootElement;
 
@@ -78,8 +78,8 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.GetAsync("/api/v1/admin/audit");
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var response = await client.GetAsync("/api/v1/admin/audit", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(0, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
@@ -102,8 +102,8 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.GetAsync("/api/v1/admin/audit");
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var response = await client.GetAsync("/api/v1/admin/audit", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
@@ -118,7 +118,7 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=999");
+        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=999", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
@@ -136,12 +136,12 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=abc");
-        var body     = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=abc", TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.IsFalse(body.Contains("Numeric parameters (yearFrom"), "must not fall through to the generic BadHttpRequestException safety-net message");
-        StringAssert.Contains(body, "pageSize");
+        Assert.DoesNotContain("Numeric parameters (yearFrom", body, "must not fall through to the generic BadHttpRequestException safety-net message");
+        Assert.Contains("pageSize", body);
     }
 
     [TestMethod]
@@ -151,7 +151,7 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.GetAsync("/api/v1/admin/audit?page=0");
+        var response = await client.GetAsync("/api/v1/admin/audit?page=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page=0 must be rejected, not silently reinterpreted as page 1");
     }
@@ -166,7 +166,7 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        await client.GetAsync("/api/v1/admin/audit");
+        await client.GetAsync("/api/v1/admin/audit", TestContext.CancellationToken);
 
         Assert.AreEqual(20, capturedPageSize, "the standard shared default is 20, not audit's old default of 50");
     }
@@ -178,7 +178,7 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.GetAsync("/api/v1/admin/audit?page=abc");
+        var response = await client.GetAsync("/api/v1/admin/audit?page=abc", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -190,7 +190,7 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=-1");
+        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=-1", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -211,7 +211,7 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=0");
+        var response = await client.GetAsync("/api/v1/admin/audit?pageSize=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "pageSize=0 means every row as one page — must succeed, not 422");
     }
@@ -232,7 +232,7 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.GetAsync("/api/v1/admin/audit?page=5");
+        var response = await client.GetAsync("/api/v1/admin/audit?page=5", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page beyond the last page must be rejected");
     }
@@ -245,7 +245,7 @@ public class AdminAuditEndpointTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
         // No X-Api-Key header — GET audit is public.
-        var response = await client.GetAsync("/api/v1/admin/audit");
+        var response = await client.GetAsync("/api/v1/admin/audit", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -256,7 +256,7 @@ public class AdminAuditEndpointTests
     {
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
-        var response      = await client.DeleteAsync("/api/v1/admin/audit");
+        var response      = await client.DeleteAsync("/api/v1/admin/audit", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -266,7 +266,7 @@ public class AdminAuditEndpointTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
-        var response = await client.DeleteAsync("/api/v1/admin/audit");
+        var response = await client.DeleteAsync("/api/v1/admin/audit", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
     }
 
@@ -280,7 +280,7 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        await client.DeleteAsync("/api/v1/admin/audit?table=Quotes");
+        await client.DeleteAsync("/api/v1/admin/audit?table=Quotes", TestContext.CancellationToken);
 
         Assert.AreEqual("Quotes", capturedTable, "table query parameter must be forwarded to ClearAsync");
     }
@@ -295,7 +295,7 @@ public class AdminAuditEndpointTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        await client.DeleteAsync("/api/v1/admin/audit");
+        await client.DeleteAsync("/api/v1/admin/audit", TestContext.CancellationToken);
 
         Assert.IsNull(capturedTable, "null must be forwarded to ClearAsync when no table param is supplied");
     }
@@ -331,4 +331,6 @@ public class AdminAuditEndpointTests
             return Task.CompletedTask;
         }
     }
+
+    public TestContext TestContext { get; set; }
 }

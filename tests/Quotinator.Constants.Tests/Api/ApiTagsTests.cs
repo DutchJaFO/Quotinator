@@ -21,9 +21,9 @@ public class ApiTagsTests
 
     [TestMethod]
     public void ApiTags_ReflectionFindsDeclaredConstants()
-        => Assert.IsTrue(AllTagValues().Count > 0, "reflection found zero ApiTags constants — check the BindingFlags");
+        => Assert.IsNotEmpty(AllTagValues(), "reflection found zero ApiTags constants — check the BindingFlags");
 
     [TestMethod]
     public void ApiTags_AllValues_AreDistinct()
-        => CollectionAssert.AllItemsAreUnique(AllTagValues());
+        => Assert.AreAllDistinct(AllTagValues());
 }

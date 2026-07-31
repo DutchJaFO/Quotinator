@@ -89,7 +89,7 @@ public class SourceCacheWiringTests
         await db.ReseedAsync();
         await db.ReseedAsync();
 
-        Assert.AreEqual(2, spy.Calls.Count, "Each reseed call must independently re-resolve the effective batch list");
+        Assert.HasCount(2, spy.Calls, "Each reseed call must independently re-resolve the effective batch list");
     }
 
     // Row 14: Reset triggers the same refresh-check logic as Reseed, including forceSourceRefresh threading.
@@ -103,7 +103,7 @@ public class SourceCacheWiringTests
 
         await db.ResetAsync(preserveSchemaVersion: false, forceSourceRefresh: true);
 
-        Assert.AreEqual(1, spy.Calls.Count);
+        Assert.HasCount(1, spy.Calls);
         Assert.IsTrue(spy.Calls[0].AllowNetwork);
         Assert.IsTrue(spy.Calls[0].ForceRefresh, "Reset must thread forceSourceRefresh through to the updater, same as Reseed");
     }
@@ -118,7 +118,7 @@ public class SourceCacheWiringTests
 
         await db.ReseedAsync(forceSourceRefresh: true);
 
-        Assert.AreEqual(1, spy.Calls.Count);
+        Assert.HasCount(1, spy.Calls);
         Assert.IsTrue(spy.Calls[0].ForceRefresh);
     }
 
@@ -134,7 +134,7 @@ public class SourceCacheWiringTests
 
         await db.PreviewSeedAsync();
 
-        Assert.AreEqual(1, spy.Calls.Count);
+        Assert.HasCount(1, spy.Calls);
         Assert.IsFalse(spy.Calls[0].AllowNetwork, "Preview must never trigger a network call regardless of AutoUpdateSources");
         Assert.IsFalse(spy.Calls[0].ForceRefresh);
     }
@@ -224,7 +224,7 @@ public class SourceCacheWiringTests
 
         var resolution = await db.RefreshSourcesAsync(force: true);
 
-        Assert.AreEqual(1, spy.Calls.Count);
+        Assert.HasCount(1, spy.Calls);
         Assert.IsTrue(spy.Calls[0].AllowNetwork);
         Assert.IsTrue(spy.Calls[0].ForceRefresh);
         Assert.AreEqual(quoteCountBefore, db.QuoteCount, "RefreshSourcesAsync must never reimport or otherwise touch quote data");

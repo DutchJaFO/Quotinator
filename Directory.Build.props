@@ -7,4 +7,14 @@
     <Copyright>Copyright © 2026 DutchJaFO</Copyright>
   </PropertyGroup>
 
+  <!-- #197: adopts MSTest.Analyzers' official "Recommended" severity preset (see
+       mstest-recommended.globalconfig in the MSTest.Analyzers package) instead of hand-maintaining
+       individual dotnet_diagnostic.MSTEST00NN.severity overrides in an .editorconfig — this stays in
+       sync automatically as MSTest ships new analyzer rules, rather than silently missing them the
+       way the previous unconfigured state (effectively "Default" mode) missed MSTEST0068/0046/0037
+       being stuck at 'suggestion' severity, invisible to `dotnet build` regardless of verbosity. -->
+  <PropertyGroup>
+    <MSTestAnalysisMode>Recommended</MSTestAnalysisMode>
+  </PropertyGroup>
+
 </Project>

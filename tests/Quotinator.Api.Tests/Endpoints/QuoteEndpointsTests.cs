@@ -34,14 +34,14 @@ public class QuoteEndpointsTests
     public async Task GetRandom_NoN_ReturnsEnvelopeWithSingleItem()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(JsonValueKind.Array, doc.RootElement.GetProperty("items").ValueKind);
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
-        Assert.IsTrue(doc.RootElement.GetProperty("totalMatching").GetInt32() > 0);
+        Assert.IsGreaterThan(0, doc.RootElement.GetProperty("totalMatching").GetInt32());
     }
 
     /// <summary>GET /random?n=2 returns an envelope with 2 items.</summary>
@@ -49,10 +49,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_WithN_ReturnsEnvelopeWithNItems()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=2");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=2", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(2, doc.RootElement.GetProperty("items").GetArrayLength());
     }
@@ -62,7 +62,7 @@ public class QuoteEndpointsTests
     public async Task GetRandom_NZero_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -71,7 +71,7 @@ public class QuoteEndpointsTests
     public async Task GetRandom_NTooLarge_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=101");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=101", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -80,9 +80,9 @@ public class QuoteEndpointsTests
     public async Task GetRandom_NNotInteger_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=g");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=g", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(doc.RootElement.TryGetProperty("detail", out _));
     }
 
@@ -93,10 +93,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_TypeFilter_ReturnsOnlyMatchingType()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&type=movie");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&type=movie", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
             Assert.AreEqual("movie", item.GetProperty("type").GetString());
@@ -107,10 +107,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_MultipleTypes_AppliesOrLogic()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&type=movie&type=book");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&type=movie&type=book", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
         {
@@ -124,10 +124,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_MultipleGenres_AppliesOrLogic()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&genre=fantasy&genre=sci-fi");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&genre=fantasy&genre=sci-fi", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         Assert.IsGreaterThan(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
@@ -137,9 +137,9 @@ public class QuoteEndpointsTests
     public async Task GetRandom_TotalMatchingReflectsPool()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=1&type=movie");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=1&type=movie", TestContext.CancellationToken);
 
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         // FakeQuoteService has 2 movie quotes; requesting n=1 should show totalMatching=2
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
@@ -152,12 +152,14 @@ public class QuoteEndpointsTests
     public async Task GetRandom_CharacterFilter_ReturnsMatchingQuotes()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&character=Rick");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&character=Rick", TestContext.CancellationToken);
 
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
-        StringAssert.Contains(doc.RootElement.GetProperty("items")[0].GetProperty("character").GetString(), "Rick");
+        var character = doc.RootElement.GetProperty("items")[0].GetProperty("character").GetString();
+        Assert.IsNotNull(character);
+        Assert.Contains("Rick", character);
     }
 
     /// <summary>author=Churchill filters to quotes by that author.</summary>
@@ -165,9 +167,9 @@ public class QuoteEndpointsTests
     public async Task GetRandom_AuthorFilter_ReturnsMatchingQuotes()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&author=Churchill");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&author=Churchill", TestContext.CancellationToken);
 
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
     }
@@ -177,9 +179,9 @@ public class QuoteEndpointsTests
     public async Task GetRandom_SourceFilter_ReturnsMatchingQuotes()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&source=Casablanca");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&source=Casablanca", TestContext.CancellationToken);
 
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
     }
@@ -191,10 +193,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_UnknownType_Returns422WithInvalidTypeEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?type=cartoon");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?type=cartoon", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("InvalidType", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.IsFalse(string.IsNullOrEmpty(doc.RootElement.GetProperty("message").GetString()));
@@ -205,10 +207,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_UnknownGenre_Returns422WithInvalidGenreEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?genre=notarealgenre");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?genre=notarealgenre", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("InvalidGenre", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
@@ -219,10 +221,10 @@ public class QuoteEndpointsTests
     {
         using var factory = CreateFactory();
         var longValue = new string('a', 201);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/random?character={longValue}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/random?character={longValue}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("InputTooLong", doc.RootElement.GetProperty("status").GetString());
     }
 
@@ -231,10 +233,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_SuspiciousCharacterInput_Returns400WithInvalidInputEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?character=%27%20OR%201%3D1%20--");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?character=%27%20OR%201%3D1%20--", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
     }
 
@@ -244,10 +246,10 @@ public class QuoteEndpointsTests
     {
         using var factory = CreateFactory();
         // FakeQuoteService has no anime quotes
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?type=anime");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?type=anime", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("NoResults", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.IsFalse(string.IsNullOrEmpty(doc.RootElement.GetProperty("message").GetString()));
@@ -261,10 +263,10 @@ public class QuoteEndpointsTests
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient()
-            .GetAsync($"/api/v1/quotes/{FakeQuoteService.CasablancaEn.Id}");
+            .GetAsync($"/api/v1/quotes/{FakeQuoteService.CasablancaEn.Id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(FakeQuoteService.CasablancaEn.Id, doc.RootElement.GetProperty("id").GetString());
     }
 
@@ -273,7 +275,7 @@ public class QuoteEndpointsTests
     public async Task GetById_UnknownId_ReturnsNotFound()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/does-not-exist");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/does-not-exist", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -283,10 +285,10 @@ public class QuoteEndpointsTests
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient()
-            .GetAsync($"/api/v1/quotes/{FakeQuoteService.CasablancaEn.Id}?lang=nl");
+            .GetAsync($"/api/v1/quotes/{FakeQuoteService.CasablancaEn.Id}?lang=nl", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("nl", doc.RootElement.GetProperty("language").GetString());
         Assert.IsTrue(doc.RootElement.GetProperty("isTranslated").GetBoolean());
     }
@@ -298,10 +300,10 @@ public class QuoteEndpointsTests
     public async Task Search_MatchingQuery_ReturnsOkEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=looking");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=looking", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
         Assert.AreEqual(JsonValueKind.Array, doc.GetProperty("items").ValueKind);
         Assert.IsGreaterThan(0, doc.GetProperty("items").GetArrayLength());
@@ -313,10 +315,10 @@ public class QuoteEndpointsTests
     public async Task Search_NoResults_ReturnsNoResultsEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=xyzzy_no_match_ever");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=xyzzy_no_match_ever", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual("NoResults", doc.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.GetProperty("items").GetArrayLength());
         Assert.IsFalse(string.IsNullOrEmpty(doc.GetProperty("message").GetString()));
@@ -327,10 +329,10 @@ public class QuoteEndpointsTests
     public async Task Search_UnknownType_Returns422WithInvalidTypeEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&type=cartoon");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&type=cartoon", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual("InvalidType", doc.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.GetProperty("items").GetArrayLength());
         Assert.IsFalse(string.IsNullOrEmpty(doc.GetProperty("message").GetString()));
@@ -341,10 +343,10 @@ public class QuoteEndpointsTests
     public async Task Search_UnknownGenre_Returns422WithInvalidGenreEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&genre=notarealgenre");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&genre=notarealgenre", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual("InvalidGenre", doc.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.GetProperty("items").GetArrayLength());
     }
@@ -354,7 +356,7 @@ public class QuoteEndpointsTests
     public async Task Search_EmptyQuery_ReturnsBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -363,7 +365,7 @@ public class QuoteEndpointsTests
     public async Task Search_MissingQuery_ReturnsBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -372,8 +374,8 @@ public class QuoteEndpointsTests
     public async Task Search_MissingQuery_ReturnsProblemDetails()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search");
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search", TestContext.CancellationToken);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(doc.RootElement.TryGetProperty("detail", out var detail));
         Assert.IsFalse(string.IsNullOrWhiteSpace(detail.GetString()));
     }
@@ -385,10 +387,12 @@ public class QuoteEndpointsTests
         using var factory = CreateFactory();
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("nl");
-        var response = await client.GetAsync("/api/v1/quotes/search");
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var response = await client.GetAsync("/api/v1/quotes/search", TestContext.CancellationToken);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(doc.RootElement.TryGetProperty("detail", out var detail));
-        StringAssert.Contains(detail.GetString(), "verplicht");
+        var detailText = detail.GetString();
+        Assert.IsNotNull(detailText);
+        Assert.Contains("verplicht", detailText);
     }
 
     // ── search field filter ───────────────────────────────────────────────
@@ -398,13 +402,15 @@ public class QuoteEndpointsTests
     public async Task Search_FieldQuote_MatchesQuoteText()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=back&field=quote");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=back&field=quote", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
         var items = doc.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
-        StringAssert.Contains(items[0].GetProperty("quote").GetString(), "back");
+        var quoteText = items[0].GetProperty("quote").GetString();
+        Assert.IsNotNull(quoteText);
+        Assert.Contains("back", quoteText);
     }
 
     /// <summary>field=source matches on source only, not quote text.</summary>
@@ -412,9 +418,9 @@ public class QuoteEndpointsTests
     public async Task Search_FieldSource_MatchesSourceOnly()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Casablanca&field=source");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Casablanca&field=source", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
         var items = doc.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
@@ -426,9 +432,9 @@ public class QuoteEndpointsTests
     public async Task Search_FieldCharacter_MatchesCharacter()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Rick&field=character");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Rick&field=character", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
         var items = doc.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
@@ -440,9 +446,9 @@ public class QuoteEndpointsTests
     public async Task Search_FieldAuthor_MatchesAuthor()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Churchill&field=author");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=Churchill&field=author", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
         var items = doc.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
@@ -454,7 +460,7 @@ public class QuoteEndpointsTests
     public async Task Search_InvalidField_ReturnsBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=test&field=invalid");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=test&field=invalid", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -465,10 +471,10 @@ public class QuoteEndpointsTests
     public async Task Search_MultipleTypes_AppliesOrLogic()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&type=movie&type=person");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&type=movie&type=person", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
         foreach (var item in doc.GetProperty("items").EnumerateArray())
         {
@@ -484,7 +490,7 @@ public class QuoteEndpointsTests
     public async Task GetRandom_InvalidLang_ReturnsBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?lang=not-a-real-lang-code-xyz");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?lang=not-a-real-lang-code-xyz", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -494,7 +500,7 @@ public class QuoteEndpointsTests
     {
         using var factory = CreateFactory();
         var longQuery = new string('a', 201);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/search?q={longQuery}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/search?q={longQuery}", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -505,10 +511,10 @@ public class QuoteEndpointsTests
     public async Task GetAll_Default_ReturnsPaginatedResult()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(doc.RootElement.TryGetProperty("items", out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("totalCount", out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("totalPages", out _));
@@ -519,7 +525,7 @@ public class QuoteEndpointsTests
     public async Task GetAll_PageZero_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?page=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?page=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -528,7 +534,7 @@ public class QuoteEndpointsTests
     public async Task GetAll_PageNotInteger_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?page=x");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?page=x", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -537,7 +543,7 @@ public class QuoteEndpointsTests
     public async Task GetAll_PageSizeZero_Succeeds()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -546,7 +552,7 @@ public class QuoteEndpointsTests
     public async Task Quotes_PageSize150_NowSucceeds()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=150");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=150", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -555,7 +561,7 @@ public class QuoteEndpointsTests
     public async Task GetAll_PageSizeNotInteger_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=x");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=x", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -564,7 +570,7 @@ public class QuoteEndpointsTests
     public async Task Quotes_PageSizeAbove500_Returns422NotSilentClamp()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=501");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=501", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
 
@@ -573,7 +579,7 @@ public class QuoteEndpointsTests
     public async Task Quotes_PageSizeNegative_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=-1");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=-1", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -582,8 +588,8 @@ public class QuoteEndpointsTests
     public async Task Quotes_PageSizeOmitted_DefaultsTo20()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes");
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32());
     }
 
@@ -592,7 +598,7 @@ public class QuoteEndpointsTests
     public async Task Quotes_PageBeyondLast_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=1&page=99");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?pageSize=1&page=99", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page beyond the last page must be rejected");
     }
 
@@ -601,7 +607,7 @@ public class QuoteEndpointsTests
     public async Task Search_LimitZero_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&limit=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&limit=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -610,7 +616,7 @@ public class QuoteEndpointsTests
     public async Task Search_LimitNotInteger_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&limit=x");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&limit=x", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -619,10 +625,10 @@ public class QuoteEndpointsTests
     public async Task GetAll_TypeFilter_ReturnsFilteredResults()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=person");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=person", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
             Assert.AreEqual("person", item.GetProperty("type").GetString());
     }
@@ -632,10 +638,10 @@ public class QuoteEndpointsTests
     public async Task GetAll_MultipleTypes_AppliesOrLogic()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=movie&type=book");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=movie&type=book", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
         {
             var t = item.GetProperty("type").GetString();
@@ -648,10 +654,10 @@ public class QuoteEndpointsTests
     public async Task GetAll_UnknownType_Returns422WithInvalidTypeEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=cartoon");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?type=cartoon", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("InvalidType", doc.RootElement.GetProperty("status").GetString());
     }
 
@@ -660,10 +666,10 @@ public class QuoteEndpointsTests
     public async Task GetAll_UnknownGenre_Returns422WithInvalidGenreEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?genre=notarealgenre");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?genre=notarealgenre", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("InvalidGenre", doc.RootElement.GetProperty("status").GetString());
     }
 
@@ -674,10 +680,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_YearFrom_ExcludesOlderQuotes()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&yearFrom=1980");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&yearFrom=1980", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         // Only Terminator (1984) should match
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
@@ -689,10 +695,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_YearTo_ExcludesNewerQuotes()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&yearTo=1942");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&yearTo=1942", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
     }
@@ -702,9 +708,9 @@ public class QuoteEndpointsTests
     public async Task GetRandom_YearShorthand_MatchesExactYear()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&year=1942");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&year=1942", TestContext.CancellationToken);
 
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual(FakeQuoteService.CasablancaEn.Id, doc.RootElement.GetProperty("items")[0].GetProperty("id").GetString());
@@ -715,9 +721,9 @@ public class QuoteEndpointsTests
     public async Task GetRandom_DecadeShorthand_MatchesQuotesInRange()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&decade=1940");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&decade=1940", TestContext.CancellationToken);
 
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
     }
@@ -727,9 +733,9 @@ public class QuoteEndpointsTests
     public async Task GetRandom_DecadeShorthand2Digit40_EquivalentTo1940s()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&decade=40");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?n=10&decade=40", TestContext.CancellationToken);
 
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("Ok", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(2, doc.RootElement.GetProperty("totalMatching").GetInt32());
     }
@@ -739,10 +745,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_DecadeNotDivisibleByTen_Returns422WithInvalidInputEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?decade=1941");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?decade=1941", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
@@ -752,10 +758,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_YearFromGreaterThanYearTo_Returns422WithInvalidInputEnvelope()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?yearFrom=1984&yearTo=1942");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?yearFrom=1984&yearTo=1942", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual("InvalidInput", doc.RootElement.GetProperty("status").GetString());
     }
 
@@ -764,7 +770,7 @@ public class QuoteEndpointsTests
     public async Task Search_YearFromGreaterThanYearTo_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&yearFrom=1984&yearTo=1942");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&yearFrom=1984&yearTo=1942", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -773,7 +779,7 @@ public class QuoteEndpointsTests
     public async Task GetAll_YearFromGreaterThanYearTo_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?yearFrom=1984&yearTo=1942");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?yearFrom=1984&yearTo=1942", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -782,7 +788,7 @@ public class QuoteEndpointsTests
     public async Task Search_InvalidLang_ReturnsBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&lang=not-a-real-lang-code-xyz");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&lang=not-a-real-lang-code-xyz", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -791,7 +797,7 @@ public class QuoteEndpointsTests
     public async Task GetAll_InvalidLang_ReturnsBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?lang=not-a-real-lang-code-xyz");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?lang=not-a-real-lang-code-xyz", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -802,10 +808,10 @@ public class QuoteEndpointsTests
     public async Task GetAll_YearFrom_FiltersOlderQuotes()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?yearFrom=1980");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?yearFrom=1980", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var items = doc.RootElement.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
         Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
@@ -816,7 +822,7 @@ public class QuoteEndpointsTests
     public async Task GetAll_DecadeNotDivisibleByTen_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1941");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1941", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -825,10 +831,10 @@ public class QuoteEndpointsTests
     public async Task GetAll_DecadeShorthand2Digit80_EquivalentTo1980s()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=80");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=80", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var items = doc.RootElement.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
         Assert.AreEqual(FakeQuoteService.Terminator.Id, items[0].GetProperty("id").GetString());
@@ -839,11 +845,11 @@ public class QuoteEndpointsTests
     public async Task GetAll_DecadeShorthand2Digit40_EquivalentTo1940s()
     {
         using var factory = CreateFactory();
-        var twoDigit  = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=40");
-        var fourDigit = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1940");
+        var twoDigit  = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=40", TestContext.CancellationToken);
+        var fourDigit = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1940", TestContext.CancellationToken);
 
-        var two  = JsonDocument.Parse(await twoDigit.Content.ReadAsStringAsync()).RootElement;
-        var four = JsonDocument.Parse(await fourDigit.Content.ReadAsStringAsync()).RootElement;
+        var two  = JsonDocument.Parse(await twoDigit.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
+        var four = JsonDocument.Parse(await fourDigit.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual(four.GetProperty("items").GetArrayLength(),
                         two.GetProperty("items").GetArrayLength(),
                         "decade=40 must return the same count as decade=1940");
@@ -854,10 +860,10 @@ public class QuoteEndpointsTests
     public async Task GetAll_DecadeShorthand2Digit00_ValidNoResults()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=00");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=00", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
     }
 
@@ -868,10 +874,10 @@ public class QuoteEndpointsTests
     public async Task Search_YearShorthand_FiltersResults()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=back&year=1984");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=back&year=1984", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual("Ok", doc.GetProperty("status").GetString());
         var items = doc.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
@@ -883,7 +889,7 @@ public class QuoteEndpointsTests
     public async Task Search_DecadeNotDivisibleByTen_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&decade=1941");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=the&decade=1941", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -895,7 +901,7 @@ public class QuoteEndpointsTests
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient()
-            .GetAsync("/api/v1/quotes/search?q=x&yearFrom=1980&yearTo=1981x");
+            .GetAsync("/api/v1/quotes/search?q=x&yearFrom=1980&yearTo=1981x", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -905,7 +911,7 @@ public class QuoteEndpointsTests
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient()
-            .GetAsync("/api/v1/quotes/random?yearFrom=abc");
+            .GetAsync("/api/v1/quotes/random?yearFrom=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -915,7 +921,7 @@ public class QuoteEndpointsTests
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient()
-            .GetAsync("/api/v1/quotes?decade=1980x");
+            .GetAsync("/api/v1/quotes?decade=1980x", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -924,10 +930,10 @@ public class QuoteEndpointsTests
     public async Task GetRandom_NonIntegerYearFrom_DetailNamesParameter()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?yearFrom=abc");
-        var body = await response.Content.ReadAsStringAsync();
-        StringAssert.Contains(body, "yearFrom");
-        Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/random?yearFrom=abc", TestContext.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        Assert.Contains("yearFrom", body);
+        Assert.DoesNotContain("pageSize", body, "Detail must not list unrelated parameters");
     }
 
     /// <summary>Error detail names yearTo specifically — not a generic list of all params.</summary>
@@ -935,10 +941,10 @@ public class QuoteEndpointsTests
     public async Task Search_NonIntegerYearTo_DetailNamesParameter()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&yearTo=1981x");
-        var body = await response.Content.ReadAsStringAsync();
-        StringAssert.Contains(body, "yearTo");
-        Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes/search?q=x&yearTo=1981x", TestContext.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        Assert.Contains("yearTo", body);
+        Assert.DoesNotContain("pageSize", body, "Detail must not list unrelated parameters");
     }
 
     /// <summary>Error detail names decade specifically — not a generic list of all params.</summary>
@@ -946,10 +952,10 @@ public class QuoteEndpointsTests
     public async Task GetAll_NonIntegerDecade_DetailNamesParameter()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1980x");
-        var body = await response.Content.ReadAsStringAsync();
-        StringAssert.Contains(body, "decade");
-        Assert.IsFalse(body.Contains("pageSize"), "Detail must not list unrelated parameters");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?decade=1980x", TestContext.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        Assert.Contains("decade", body);
+        Assert.DoesNotContain("pageSize", body, "Detail must not list unrelated parameters");
     }
 
     // ── #192: Series/Universe filters ───────────────────────────────────────
@@ -959,12 +965,12 @@ public class QuoteEndpointsTests
     public async Task GetAll_SeriesFilter_ReturnsOnlyThatSeriesQuotes()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes?seriesId={FakeQuoteService.MiddleEarthSeries.Id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes?seriesId={FakeQuoteService.MiddleEarthSeries.Id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
-        Assert.AreEqual(1, items.Count);
+        Assert.HasCount(1, items);
         Assert.AreEqual(FakeQuoteService.Tolkien.Id, items[0].GetProperty("id").GetString());
     }
 
@@ -973,12 +979,12 @@ public class QuoteEndpointsTests
     public async Task GetAll_UniverseFilter_ReturnsQuotesAcrossEverySeriesInThatUniverse()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes?universeId={FakeQuoteService.MiddleEarthUniverse.Id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes?universeId={FakeQuoteService.MiddleEarthUniverse.Id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
-        Assert.AreEqual(1, items.Count);
+        Assert.HasCount(1, items);
         Assert.AreEqual(FakeQuoteService.Tolkien.Id, items[0].GetProperty("id").GetString());
     }
 
@@ -987,12 +993,12 @@ public class QuoteEndpointsTests
     public async Task GetRandom_UniverseFilter_ReturnsOnlyThatUniverseQuotes()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/random?n=10&universeId={FakeQuoteService.MiddleEarthUniverse.Id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/quotes/random?n=10&universeId={FakeQuoteService.MiddleEarthUniverse.Id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
-        Assert.AreEqual(1, items.Count);
+        Assert.HasCount(1, items);
         Assert.AreEqual(FakeQuoteService.Tolkien.Id, items[0].GetProperty("id").GetString());
     }
 
@@ -1003,7 +1009,7 @@ public class QuoteEndpointsTests
     {
         using var factory = CreateFactory();
         var response = await factory.CreateClient().GetAsync(
-            $"/api/v1/quotes?seriesId={FakeQuoteService.MiddleEarthSeries.Id}&series={FakeQuoteService.MiddleEarthSeries.Name}");
+            $"/api/v1/quotes?seriesId={FakeQuoteService.MiddleEarthSeries.Id}&series={FakeQuoteService.MiddleEarthSeries.Name}", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -1012,7 +1018,7 @@ public class QuoteEndpointsTests
     public async Task GetAll_MalformedSeriesId_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?seriesId=not-a-guid");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?seriesId=not-a-guid", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -1023,11 +1029,13 @@ public class QuoteEndpointsTests
     public async Task GetAll_SeriesNameDoesNotResolve_ReturnsNoResultsNotError()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?series=DoesNotExist");
+        var response = await factory.CreateClient().GetAsync("/api/v1/quotes?series=DoesNotExist", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(0, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual(0, doc.RootElement.GetProperty("totalCount").GetInt32());
     }
+
+    public TestContext TestContext { get; set; }
 }

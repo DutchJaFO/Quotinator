@@ -50,7 +50,7 @@ public class ConnectionStringsTests
         var ex = Assert.ThrowsExactly<SqliteException>(() =>
             connection.Execute("UPDATE Widgets SET Name = 'tampered' WHERE Id = 1"));
 
-        StringAssert.Contains(ex.Message, "readonly");
+        Assert.Contains("readonly", ex.Message);
     }
 
     [TestMethod]

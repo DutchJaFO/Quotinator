@@ -20,7 +20,7 @@ public sealed class GeneratedFileHeaderTests
     {
         var result = GeneratedFileHeader.Build(DateTime.UtcNow, "changelog.json", "some-cmd");
         var firstLine = result.Split('\n')[0];
-        Assert.IsTrue(firstLine.StartsWith(NoticePrefix),
+        Assert.StartsWith(NoticePrefix, firstLine,
             $"First line must start with '{NoticePrefix}'");
     }
 
@@ -29,7 +29,7 @@ public sealed class GeneratedFileHeaderTests
     {
         var result = GeneratedFileHeader.Build(DateTime.UtcNow, "changelog.json", "some-cmd");
         var firstLine = result.Split('\n')[0];
-        Assert.IsTrue(firstLine.Contains(TimestampSuffix),
+        Assert.Contains(TimestampSuffix, firstLine,
             $"First line must contain '{TimestampSuffix}'");
     }
 
@@ -38,7 +38,7 @@ public sealed class GeneratedFileHeaderTests
     {
         var result = GeneratedFileHeader.Build(DateTime.UtcNow, "changelog.json", "some-cmd");
         var firstLine = result.Split('\n')[0];
-        Assert.IsTrue(firstLine.Contains(Instruction),
+        Assert.Contains(Instruction, firstLine,
             $"First line must contain '{Instruction}'");
     }
 
@@ -47,7 +47,7 @@ public sealed class GeneratedFileHeaderTests
     {
         var timestamp = new DateTime(2026, 6, 21, 12, 8, 0, DateTimeKind.Utc);
         var result    = GeneratedFileHeader.Build(timestamp, "changelog.json", "some-cmd");
-        Assert.IsTrue(result.Contains("2026-06-21 12:08"),
+        Assert.Contains("2026-06-21 12:08", result,
             "Header must contain the timestamp value passed to Build");
     }
 
@@ -56,9 +56,9 @@ public sealed class GeneratedFileHeaderTests
     {
         const string inputPath = "src/Quotinator.Api/changelog.json";
         var result = GeneratedFileHeader.Build(DateTime.UtcNow, inputPath, "some-cmd");
-        Assert.IsTrue(result.Contains(EditLabel),
+        Assert.Contains(EditLabel, result,
             $"Header must contain '{EditLabel}'");
-        Assert.IsTrue(result.Contains(inputPath),
+        Assert.Contains(inputPath, result,
             "Header must contain the input path passed to Build");
     }
 
@@ -66,7 +66,7 @@ public sealed class GeneratedFileHeaderTests
     public void Build_ContainsRegenerateLabel()
     {
         var result = GeneratedFileHeader.Build(DateTime.UtcNow, "changelog.json", "some-cmd");
-        Assert.IsTrue(result.Contains(RegenerateLabel),
+        Assert.Contains(RegenerateLabel, result,
             $"Header must contain '{RegenerateLabel}'");
     }
 
@@ -75,7 +75,7 @@ public sealed class GeneratedFileHeaderTests
     {
         const string cmd = "dotnet-script changelog.csx -- --format keepachangelog --input changelog.json";
         var result = GeneratedFileHeader.Build(DateTime.UtcNow, "changelog.json", cmd);
-        Assert.IsTrue(result.Contains(cmd),
+        Assert.Contains(cmd, result,
             "Header must contain the regenerate command passed to Build");
     }
 
@@ -83,7 +83,7 @@ public sealed class GeneratedFileHeaderTests
     public void Build_Minimal_StartsWithNoticePrefix()
     {
         var result = GeneratedFileHeader.Build(DateTime.UtcNow);
-        Assert.IsTrue(result.StartsWith(NoticePrefix),
+        Assert.StartsWith(NoticePrefix, result,
             $"Minimal header must start with '{NoticePrefix}'");
     }
 
@@ -91,7 +91,7 @@ public sealed class GeneratedFileHeaderTests
     public void Build_Minimal_ContainsUtcTimestampSuffix()
     {
         var result = GeneratedFileHeader.Build(DateTime.UtcNow);
-        Assert.IsTrue(result.Contains(TimestampSuffix),
+        Assert.Contains(TimestampSuffix, result,
             $"Minimal header must contain '{TimestampSuffix}'");
     }
 
@@ -100,7 +100,7 @@ public sealed class GeneratedFileHeaderTests
     {
         var timestamp = new DateTime(2026, 6, 22, 9, 0, 0, DateTimeKind.Utc);
         var result    = GeneratedFileHeader.Build(timestamp);
-        Assert.IsTrue(result.Contains("2026-06-22 09:00"),
+        Assert.Contains("2026-06-22 09:00", result,
             "Minimal header must contain the timestamp value passed to Build");
     }
 
@@ -116,7 +116,7 @@ public sealed class GeneratedFileHeaderTests
     public void Build_Minimal_DoesNotContainEditLabel()
     {
         var result = GeneratedFileHeader.Build(DateTime.UtcNow);
-        Assert.IsFalse(result.Contains(EditLabel),
+        Assert.DoesNotContain(EditLabel, result,
             $"Minimal header must not contain '{EditLabel}'");
     }
 
@@ -124,7 +124,7 @@ public sealed class GeneratedFileHeaderTests
     public void Build_Minimal_DoesNotContainRegenerateLabel()
     {
         var result = GeneratedFileHeader.Build(DateTime.UtcNow);
-        Assert.IsFalse(result.Contains(RegenerateLabel),
+        Assert.DoesNotContain(RegenerateLabel, result,
             $"Minimal header must not contain '{RegenerateLabel}'");
     }
 }

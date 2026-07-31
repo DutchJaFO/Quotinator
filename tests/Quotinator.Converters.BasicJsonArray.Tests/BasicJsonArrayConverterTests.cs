@@ -37,7 +37,7 @@ public class BasicJsonArrayConverterTests
         var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","type":"book"}]""");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath);
+        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
@@ -60,7 +60,7 @@ public class BasicJsonArrayConverterTests
             PropertyMapping = new NamedFieldMapping { Source = "movie" }
         });
 
-        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options);
+        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("A Source", quote.Source);
@@ -76,7 +76,7 @@ public class BasicJsonArrayConverterTests
             Defaults = new QuoteFieldDefaults { OriginalLanguage = "nl" }
         });
 
-        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options);
+        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("nl", quote.OriginalLanguage);
@@ -93,7 +93,7 @@ public class BasicJsonArrayConverterTests
         var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","genres":["drama","sci-fi"]}]""");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath);
+        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         CollectionAssert.AreEqual(new[] { "drama", "sci-fi" }, quote.Genres.ToList());
@@ -105,7 +105,7 @@ public class BasicJsonArrayConverterTests
         var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","genres":"drama"}]""");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath);
+        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         CollectionAssert.AreEqual(new[] { "drama" }, quote.Genres.ToList());
@@ -117,10 +117,10 @@ public class BasicJsonArrayConverterTests
         var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source"}]""");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath);
+        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
-        Assert.AreEqual(0, quote.Genres.Count);
+        Assert.IsEmpty(quote.Genres);
     }
 
     #endregion
@@ -137,11 +137,12 @@ public class BasicJsonArrayConverterTests
             """);
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath);
+        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var text = await File.ReadAllTextAsync(outputPath);
+        var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
         SourceQuoteFileReader.TryParse(text, out var quotes);
-        Assert.AreEqual(1, quotes!.Count);
+        Assert.IsNotNull(quotes);
+        Assert.HasCount(1, quotes);
         Assert.AreEqual("A real quote.", quotes[0].QuoteText);
     }
 
@@ -152,7 +153,7 @@ public class BasicJsonArrayConverterTests
         var outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
-            () => new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath));
+            () => new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -162,7 +163,7 @@ public class BasicJsonArrayConverterTests
         var outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
-            () => new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath));
+            () => new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
     }
 
     #endregion
@@ -186,9 +187,9 @@ public class BasicJsonArrayConverterTests
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
 
-        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options);
+        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
-        var text = await File.ReadAllTextAsync(outputPath);
+        var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
         Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
         Assert.AreEqual(expectedId, quotes!.Single().Id);
     }
@@ -203,7 +204,7 @@ public class BasicJsonArrayConverterTests
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
 
-        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options);
+        await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("1994", quote.Date);
@@ -234,4 +235,6 @@ public class BasicJsonArrayConverterTests
 
     private static JsonElement ToOptions(BasicJsonArrayConverterOptions options)
         => JsonSerializer.SerializeToElement(options);
+
+    public TestContext TestContext { get; set; }
 }

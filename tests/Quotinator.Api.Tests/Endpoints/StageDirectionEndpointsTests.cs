@@ -46,10 +46,10 @@ public class StageDirectionEndpointsTests
             ReturnPage = new PagedItems<StageDirectionEntity>([NewStageDirection(), NewStageDirection(text: "[INT. HANGAR - NIGHT]")], 1, 20, 2)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var root = doc.RootElement;
 
         Assert.IsTrue(root.TryGetProperty("items", out var items));
@@ -66,7 +66,7 @@ public class StageDirectionEndpointsTests
     public async Task GetAllStageDirections_PageZero_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?page=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?page=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -74,7 +74,7 @@ public class StageDirectionEndpointsTests
     public async Task GetAllStageDirections_PageMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?page=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?page=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -82,7 +82,7 @@ public class StageDirectionEndpointsTests
     public async Task GetAllStageDirections_PageSizeMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?pageSize=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?pageSize=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -90,7 +90,7 @@ public class StageDirectionEndpointsTests
     public async Task GetAllStageDirections_PageSizeNegative_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?pageSize=-1");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?pageSize=-1", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -98,7 +98,7 @@ public class StageDirectionEndpointsTests
     public async Task GetAllStageDirections_PageSizeAbove500_Returns422NotSilentClamp()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?pageSize=999");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?pageSize=999", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
 
@@ -111,10 +111,10 @@ public class StageDirectionEndpointsTests
                 [NewStageDirection(), NewStageDirection(text: "[INT. HANGAR - NIGHT]"), NewStageDirection(text: "[EXT. RUNWAY - DUSK]")], 1, 3, 3)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?pageSize=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(3, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual(3, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(3, doc.RootElement.GetProperty("pageSize").GetInt32(), "pageSize=0 reports the effective count, not the literal 0 requested");
@@ -124,10 +124,10 @@ public class StageDirectionEndpointsTests
     public async Task GetAllStageDirections_PageSizeOmitted_DefaultsTo20()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32());
     }
 
@@ -139,7 +139,7 @@ public class StageDirectionEndpointsTests
             ReturnPage = new PagedItems<StageDirectionEntity>([NewStageDirection()], 1, 20, 1)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?page=5");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections?page=5", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -154,10 +154,10 @@ public class StageDirectionEndpointsTests
             ReturnById = NewStageDirection(id: id, text: "[EXT. AIRPORT - DAY]", completeness: CompletenessStatus.Complete)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/stagedirections/{id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/stagedirections/{id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
 
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("[EXT. AIRPORT - DAY]", root.GetProperty("text").GetString());
@@ -172,7 +172,7 @@ public class StageDirectionEndpointsTests
     public async Task GetStageDirectionById_UnknownId_Returns404()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/stagedirections/{Guid.NewGuid()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/stagedirections/{Guid.NewGuid()}", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -180,7 +180,7 @@ public class StageDirectionEndpointsTests
     public async Task GetStageDirectionById_MalformedId_Returns404NotBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections/not-a-guid");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/stagedirections/not-a-guid", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -190,10 +190,10 @@ public class StageDirectionEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeStageDirectionRepository { ReturnById = NewStageDirection(id: id) };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/stagedirections/{id.ToString("D").ToUpperInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/stagedirections/{id.ToString("D").ToUpperInvariant()}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
@@ -203,14 +203,16 @@ public class StageDirectionEndpointsTests
     public async Task StageDirectionEndpoints_OnLiveSpec_TaggedMasterData()
     {
         using var factory = CreateFactory();
-        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
 
         var paths = doc!.RootElement.GetProperty("paths");
 
         var listTags = paths.GetProperty("/api/v1/masterdata/stagedirections").GetProperty("get").GetProperty("tags");
         var byIdTags = paths.GetProperty("/api/v1/masterdata/stagedirections/{id}").GetProperty("get").GetProperty("tags");
 
-        Assert.IsTrue(listTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
-        Assert.IsTrue(byIdTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
+        Assert.Contains(t => t.GetString() == "MasterData", listTags.EnumerateArray());
+        Assert.Contains(t => t.GetString() == "MasterData", byIdTags.EnumerateArray());
     }
+
+    public TestContext TestContext { get; set; }
 }

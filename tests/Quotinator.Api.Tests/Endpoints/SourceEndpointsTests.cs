@@ -53,10 +53,10 @@ public class SourceEndpointsTests
     {
         var repo = new FakeSourceRepository([NewSource(), NewSource(title: "The Terminator")]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var root = doc.RootElement;
 
         Assert.IsTrue(root.TryGetProperty("items", out var items));
@@ -73,7 +73,7 @@ public class SourceEndpointsTests
     public async Task GetAllSources_PageZero_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?page=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?page=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -81,7 +81,7 @@ public class SourceEndpointsTests
     public async Task GetAllSources_PageMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?page=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?page=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -89,7 +89,7 @@ public class SourceEndpointsTests
     public async Task GetAllSources_PageSizeMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -97,7 +97,7 @@ public class SourceEndpointsTests
     public async Task GetAllSources_PageSizeNegative_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=-1");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=-1", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -105,7 +105,7 @@ public class SourceEndpointsTests
     public async Task GetAllSources_PageSizeAbove500_Returns422NotSilentClamp()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=999");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=999", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
 
@@ -114,10 +114,10 @@ public class SourceEndpointsTests
     {
         var repo = new FakeSourceRepository([NewSource(), NewSource(title: "The Terminator"), NewSource(title: "Airplane!")]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(3, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual(3, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(3, doc.RootElement.GetProperty("pageSize").GetInt32(), "pageSize=0 reports the effective count, not the literal 0 requested");
@@ -127,10 +127,10 @@ public class SourceEndpointsTests
     public async Task GetAllSources_PageSizeOmitted_DefaultsTo20()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32());
     }
 
@@ -139,7 +139,7 @@ public class SourceEndpointsTests
     {
         var repo = new FakeSourceRepository([NewSource()]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?page=5");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?page=5", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -151,10 +151,10 @@ public class SourceEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeSourceRepository([NewSource(id: id, title: "Casablanca", type: QuoteType.Movie, completeness: CompletenessStatus.Complete)]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
 
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("Casablanca", root.GetProperty("title").GetString());
@@ -171,7 +171,7 @@ public class SourceEndpointsTests
     public async Task GetSourceById_UnknownId_Returns404()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{Guid.NewGuid()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{Guid.NewGuid()}", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -181,10 +181,10 @@ public class SourceEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeSourceRepository([NewSource(id: id)]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{id.ToString("D").ToUpperInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{id.ToString("D").ToUpperInvariant()}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
@@ -192,7 +192,7 @@ public class SourceEndpointsTests
     public async Task GetSourceById_MalformedId_Returns404NotBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources/not-a-guid");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources/not-a-guid", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -202,9 +202,9 @@ public class SourceEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeSourceRepository([NewSource(id: id, date: "")]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{id}", TestContext.CancellationToken);
 
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         AssertPropertyIsNullOrAbsent(root, "date");
     }
 
@@ -221,9 +221,9 @@ public class SourceEndpointsTests
             [sourceId] = (seriesId, "Star Wars"),
         });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{sourceId}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{sourceId}", TestContext.CancellationToken);
 
-        var root   = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root   = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         var series = root.GetProperty("series");
         Assert.AreEqual(JsonValueKind.Object, series.ValueKind);
         Assert.AreEqual(seriesId.ToString("D"), series.GetProperty("id").GetString());
@@ -236,9 +236,9 @@ public class SourceEndpointsTests
         var sourceId = Guid.NewGuid();
         var repo = new FakeSourceRepository([NewSource(id: sourceId)]);
         using var factory = CreateFactory(repo, new FakeSourceSeriesReferenceReader());
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{sourceId}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{sourceId}", TestContext.CancellationToken);
 
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         AssertPropertyIsNullOrAbsent(root, "series");
     }
 
@@ -252,9 +252,9 @@ public class SourceEndpointsTests
         var repo   = new FakeSourceRepository([NewSource(id: sourceId, seriesId: seriesId)]);
         var reader = new FakeSourceSeriesReferenceReader(new Dictionary<Guid, (Guid, string)>());
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{sourceId}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{sourceId}", TestContext.CancellationToken);
 
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         AssertPropertyIsNullOrAbsent(root, "series", "a Source pointing at a soft-deleted Series must resolve to null, not a dangling reference");
     }
 
@@ -279,9 +279,9 @@ public class SourceEndpointsTests
             [sourceWithSeriesB] = (seriesB, "The Lord of the Rings"),
         });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=0", TestContext.CancellationToken);
 
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("items");
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement.GetProperty("items");
         Assert.AreEqual(3, items.GetArrayLength());
 
         foreach (var item in items.EnumerateArray())
@@ -311,15 +311,15 @@ public class SourceEndpointsTests
     public async Task SourceEndpoints_OnLiveSpec_TaggedMasterData()
     {
         using var factory = CreateFactory();
-        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
 
         var paths = doc!.RootElement.GetProperty("paths");
 
         var listTags = paths.GetProperty("/api/v1/masterdata/sources").GetProperty("get").GetProperty("tags");
         var byIdTags = paths.GetProperty("/api/v1/masterdata/sources/{id}").GetProperty("get").GetProperty("tags");
 
-        Assert.IsTrue(listTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
-        Assert.IsTrue(byIdTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
+        Assert.Contains(t => t.GetString() == "MasterData", listTags.EnumerateArray());
+        Assert.Contains(t => t.GetString() == "MasterData", byIdTags.EnumerateArray());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -335,4 +335,6 @@ public class SourceEndpointsTests
         var isNullOrAbsent = !element.TryGetProperty(propertyName, out var value) || value.ValueKind == JsonValueKind.Null;
         Assert.IsTrue(isNullOrAbsent, message ?? $"'{propertyName}' must be null or omitted, never a non-null value");
     }
+
+    public TestContext TestContext { get; set; }
 }

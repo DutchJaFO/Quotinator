@@ -55,8 +55,8 @@ public class ConflictRuleGeneratorTests
 
         var rules = ConflictRuleGenerator.Generate(rows);
 
-        Assert.AreEqual(1, rules.Count, "Both decided fields for the same entity must collapse into a single rule, per #153's Step 10 finding");
-        Assert.AreEqual(2, rules[0].Fields.Count);
+        Assert.HasCount(1, rules, "Both decided fields for the same entity must collapse into a single rule, per #153's Step 10 finding");
+        Assert.HasCount(2, rules[0].Fields);
     }
 
     [TestMethod]
@@ -70,7 +70,7 @@ public class ConflictRuleGeneratorTests
 
         var rules = ConflictRuleGenerator.Generate(rows);
 
-        Assert.AreEqual(0, rules.Count, "An entity with every field still undecided (Pending/Stale/Blocked) has nothing to generate a rule from yet");
+        Assert.IsEmpty(rules, "An entity with every field still undecided (Pending/Stale/Blocked) has nothing to generate a rule from yet");
     }
 
     [TestMethod]
@@ -110,7 +110,7 @@ public class ConflictRuleGeneratorTests
         var rule = ConflictRuleGenerator.Generate(rows).Single();
 
         var genres = rule.ExistingRecord.GetProperty("genres").EnumerateArray().Select(e => e.GetString()).ToArray();
-        CollectionAssert.AreEqual(new[] { "drama", "sci-fi" }, genres);
+        Assert.AreSequenceEqual(new[] { "drama", "sci-fi" }, genres);
     }
 
     [TestMethod]
@@ -124,7 +124,7 @@ public class ConflictRuleGeneratorTests
 
         var rules = ConflictRuleGenerator.Generate(rows);
 
-        Assert.AreEqual(2, rules.Count);
+        Assert.HasCount(2, rules);
     }
 
     // ── Merge ─────────────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ public class ConflictRuleGeneratorTests
 
         var merged = ConflictRuleGenerator.Merge(null, generated);
 
-        Assert.AreEqual(1, merged.Rules.Count);
+        Assert.HasCount(1, merged.Rules);
     }
 
     [TestMethod]
@@ -150,7 +150,7 @@ public class ConflictRuleGeneratorTests
 
         var merged = ConflictRuleGenerator.Merge(existingFile, generated);
 
-        Assert.AreEqual(2, merged.Rules.Count);
+        Assert.HasCount(2, merged.Rules);
     }
 
     [TestMethod]
@@ -183,9 +183,9 @@ public class ConflictRuleGeneratorTests
         var merged = ConflictRuleGenerator.Merge(existingFile, generated);
 
         var rule = merged.Rules.Single(r => r.EntityId == EntityId);
-        Assert.AreEqual(2, rule.Fields.Count, "A genuinely new field for an already-covered entity must be added alongside the existing one");
-        Assert.IsTrue(rule.Fields.Any(f => f.Field == "date"));
-        Assert.IsTrue(rule.Fields.Any(f => f.Field == "character"));
+        Assert.HasCount(2, rule.Fields, "A genuinely new field for an already-covered entity must be added alongside the existing one");
+        Assert.Contains(f => f.Field == "date", rule.Fields);
+        Assert.Contains(f => f.Field == "character", rule.Fields);
     }
 
     private static readonly JsonElement EmptyRecord = JsonSerializer.Deserialize<JsonElement>("{}");

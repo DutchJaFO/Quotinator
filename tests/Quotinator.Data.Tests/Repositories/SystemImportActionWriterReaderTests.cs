@@ -99,7 +99,7 @@ public class SystemImportActionWriterReaderTests
 
         var result = await _reader.GetPagedAsync(null, null, null, 1, 0);
 
-        Assert.AreEqual(3, result.Items.Count, "pageSize = 0 must reach SQLite as LIMIT -1, not a literal LIMIT 0");
+        Assert.HasCount(3, result.Items, "pageSize = 0 must reach SQLite as LIMIT -1, not a literal LIMIT 0");
         Assert.AreEqual(3, result.TotalCount);
         Assert.AreEqual(3, result.PageSize, "PageSize must report the effective count actually returned, not the literal 0 requested");
     }
@@ -167,8 +167,8 @@ public class SystemImportActionWriterReaderTests
         }
 
         var batch = await _reader.GetAllForBatchAsync("BATCH-1");
-        Assert.AreEqual(2, batch.Count);
-        CollectionAssert.AreEquivalent(new[] { a1.Id, a2.Id }, batch.Select(a => a.Id).ToList());
+        Assert.HasCount(2, batch);
+        Assert.AreSequenceEqual(new[] { a1.Id, a2.Id }, batch.Select(a => a.Id).ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -189,8 +189,8 @@ public class SystemImportActionWriterReaderTests
 
         var batchA = await _reader.GetAllForBatchAsync("BATCH-A");
 
-        Assert.AreEqual(2, batchA.Count);
-        CollectionAssert.AreEquivalent(new[] { a1.Id, a2.Id }, batchA.Select(a => a.Id).ToList());
+        Assert.HasCount(2, batchA);
+        Assert.AreSequenceEqual(new[] { a1.Id, a2.Id }, batchA.Select(a => a.Id).ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]

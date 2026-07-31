@@ -119,7 +119,7 @@ public class ImportActionResolutionCoordinatorTests
         await _coordinator.StageAsync([a1, a2]);
 
         var batch = await _reader.GetAllForBatchAsync("BATCH-1");
-        Assert.AreEqual(2, batch.Count);
+        Assert.HasCount(2, batch);
     }
 
     [TestMethod]
@@ -128,7 +128,7 @@ public class ImportActionResolutionCoordinatorTests
         await _coordinator.StageAsync([]);
 
         var batch = await _reader.GetAllForBatchAsync("BATCH-1");
-        Assert.AreEqual(0, batch.Count);
+        Assert.IsEmpty(batch);
     }
 
     // ── DecideAsync / UndoDecisionAsync ──────────────────────────────────────
@@ -205,10 +205,10 @@ public class ImportActionResolutionCoordinatorTests
         {
             callbackInvocations++;
             return Task.CompletedTask;
-        });
+        }, TestContext.CancellationToken);
 
         Assert.IsNotNull(result);
-        CollectionAssert.AreEqual(new[] { pending.Id }, result!.ToList());
+        Assert.AreSequenceEqual(new[] { pending.Id }, result!.ToList());
         Assert.AreEqual(0, callbackInvocations, "Nothing should be applied while any action in the batch is still pending.");
 
         var stillDecided = await _reader.GetByIdAsync(decided.Id);
@@ -231,10 +231,10 @@ public class ImportActionResolutionCoordinatorTests
             Assert.IsNotNull(transaction);
             appliedIds.Add(action.Id);
             return Task.CompletedTask;
-        });
+        }, TestContext.CancellationToken);
 
         Assert.IsNull(result, "A fully-decided batch must apply successfully (null return).");
-        CollectionAssert.AreEquivalent(new[] { first.Id, second.Id }, appliedIds);
+        Assert.AreSequenceEqual(new[] { first.Id, second.Id }, appliedIds, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
 
         var firstAfter  = await _reader.GetByIdAsync(first.Id);
         var secondAfter = await _reader.GetByIdAsync(second.Id);
@@ -250,7 +250,7 @@ public class ImportActionResolutionCoordinatorTests
         await _writer.WriteAsync(entry);
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-            _coordinator.TryApplyBatchAsync("BATCH-1", (_, _, _) => throw new InvalidOperationException("boom")));
+            _coordinator.TryApplyBatchAsync("BATCH-1", (_, _, _) => throw new InvalidOperationException("boom"), TestContext.CancellationToken));
 
         var found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed, "A failed apply must not leave the action marked Applied.");
@@ -269,10 +269,10 @@ public class ImportActionResolutionCoordinatorTests
         {
             callbackInvocations++;
             return Task.CompletedTask;
-        });
+        }, TestContext.CancellationToken);
 
         Assert.IsNotNull(result);
-        CollectionAssert.AreEqual(new[] { blocked.Id }, result!.ToList());
+        Assert.AreSequenceEqual(new[] { blocked.Id }, result!.ToList());
         Assert.AreEqual(0, callbackInvocations, "A Blocked action must hold the whole batch, including otherwise-ready actions.");
 
         var stillDecided = await _reader.GetByIdAsync(decided.Id);
@@ -293,10 +293,10 @@ public class ImportActionResolutionCoordinatorTests
         {
             appliedIds.Add(action.Id);
             return Task.CompletedTask;
-        });
+        }, TestContext.CancellationToken);
 
         Assert.IsNull(result, "Once the Blocked action is decided, the rest of the batch must apply normally.");
-        CollectionAssert.AreEquivalent(new[] { decided.Id, blocked.Id }, appliedIds);
+        Assert.AreSequenceEqual(new[] { decided.Id, blocked.Id }, appliedIds, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -331,7 +331,7 @@ public class ImportActionResolutionCoordinatorTests
         {
             callbackInvoked = true;
             return Task.CompletedTask;
-        });
+        }, TestContext.CancellationToken);
 
         Assert.IsNull(result);
         Assert.IsFalse(callbackInvoked);
@@ -342,7 +342,7 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task DiscardBatchAsync_NoActionsForBatch_ThrowsImportBatchStateException()
         => await Assert.ThrowsExactlyAsync<ImportBatchStateException>(
-            () => _coordinator.DiscardBatchAsync("NO-SUCH-BATCH"));
+            () => _coordinator.DiscardBatchAsync("NO-SUCH-BATCH", TestContext.CancellationToken));
 
     [TestMethod]
     public async Task DiscardBatchAsync_StagedBatch_MarksEveryActionDiscardedWithoutTouchingDomainTables()
@@ -352,7 +352,7 @@ public class ImportActionResolutionCoordinatorTests
         await _writer.WriteAsync(a1);
         await _writer.WriteAsync(a2);
 
-        await _coordinator.DiscardBatchAsync("BATCH-1");
+        await _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken);
 
         var a1After = await _reader.GetByIdAsync(a1.Id);
         var a2After = await _reader.GetByIdAsync(a2.Id);
@@ -371,7 +371,7 @@ public class ImportActionResolutionCoordinatorTests
             await _writer.MarkAppliedAsync(entry.Id, conn);
         }
 
-        await Assert.ThrowsExactlyAsync<ImportBatchStateException>(() => _coordinator.DiscardBatchAsync("BATCH-1"));
+        await Assert.ThrowsExactlyAsync<ImportBatchStateException>(() => _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -379,9 +379,9 @@ public class ImportActionResolutionCoordinatorTests
     {
         var entry = BuildDecidedAdd("BATCH-1");
         await _writer.WriteAsync(entry);
-        await _coordinator.DiscardBatchAsync("BATCH-1");
+        await _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken);
 
-        await Assert.ThrowsExactlyAsync<ImportBatchStateException>(() => _coordinator.DiscardBatchAsync("BATCH-1"));
+        await Assert.ThrowsExactlyAsync<ImportBatchStateException>(() => _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken));
     }
 
     // ── TryReverseBatchAsync ──────────────────────────────────────────────────
@@ -412,11 +412,11 @@ public class ImportActionResolutionCoordinatorTests
             Assert.IsNotNull(connection);
             Assert.IsNotNull(transaction);
             return Task.CompletedTask;
-        });
+        }, TestContext.CancellationToken);
 
         Assert.IsNull(result, "A fully-Applied batch must reverse successfully (null return).");
         Assert.AreEqual(1, invocationCount, "The callback must receive the whole batch in one call, not once per action.");
-        CollectionAssert.AreEquivalent(new[] { a1.Id, a2.Id }, seenBatch!.Select(a => a.Id).ToList());
+        Assert.AreSequenceEqual(new[] { a1.Id, a2.Id }, seenBatch!.Select(a => a.Id).ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -434,10 +434,10 @@ public class ImportActionResolutionCoordinatorTests
         {
             callbackInvoked = true;
             return Task.CompletedTask;
-        });
+        }, TestContext.CancellationToken);
 
         Assert.IsNotNull(result);
-        CollectionAssert.AreEqual(new[] { decided.Id }, result!.ToList());
+        Assert.AreSequenceEqual(new[] { decided.Id }, result!.ToList());
         Assert.IsFalse(callbackInvoked, "Nothing should be reversed while any action in the batch isn't Applied.");
     }
 
@@ -449,7 +449,7 @@ public class ImportActionResolutionCoordinatorTests
         {
             callbackInvoked = true;
             return Task.CompletedTask;
-        });
+        }, TestContext.CancellationToken);
 
         Assert.IsNull(result);
         Assert.IsFalse(callbackInvoked);
@@ -463,9 +463,11 @@ public class ImportActionResolutionCoordinatorTests
         await MarkAppliedAsync(entry.Id);
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-            _coordinator.TryReverseBatchAsync("BATCH-1", (_, _, _) => throw new InvalidOperationException("boom")));
+            _coordinator.TryReverseBatchAsync("BATCH-1", (_, _, _) => throw new InvalidOperationException("boom"), TestContext.CancellationToken));
 
         var found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Applied, found!.Status.Parsed, "A failed reversal must leave the action exactly as it was.");
     }
+
+    public TestContext TestContext { get; set; }
 }

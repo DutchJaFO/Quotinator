@@ -78,9 +78,8 @@ public class ImportModelSchemaTransformerTests
         var schema = await Transform(typeof(ImportResultResponse), properties);
 
         var property = (OpenApiSchema)schema.Properties!["conflictPolicy"];
-        CollectionAssert.AreEqual(
-            new[] { "skip", "newest-wins", "merge-ours", "merge-theirs", "review" },
-            property.Enum!.Select(v => v!.GetValue<string>()).ToList());
+        Assert.AreSequenceEqual(
+            new[] { "skip", "newest-wins", "merge-ours", "merge-theirs", "review" }, property.Enum!.Select(v => v!.GetValue<string>()).ToList());
     }
 
     [TestMethod]
@@ -91,9 +90,8 @@ public class ImportModelSchemaTransformerTests
         var schema = await Transform(typeof(ImportConflictEntry), properties);
 
         var property = (OpenApiSchema)schema.Properties!["appliedPolicy"];
-        CollectionAssert.AreEqual(
-            new[] { "skip", "newest-wins", "merge-ours", "merge-theirs", "review" },
-            property.Enum!.Select(v => v!.GetValue<string>()).ToList());
+        Assert.AreSequenceEqual(
+            new[] { "skip", "newest-wins", "merge-ours", "merge-theirs", "review" }, property.Enum!.Select(v => v!.GetValue<string>()).ToList());
     }
 
     [TestMethod]
@@ -104,9 +102,8 @@ public class ImportModelSchemaTransformerTests
         var schema = await Transform(typeof(ImportConflictEntry), properties);
 
         var property = (OpenApiSchema)schema.Properties!["status"];
-        CollectionAssert.AreEqual(
-            new[] { "resolved", "pending" },
-            property.Enum!.Select(v => v!.GetValue<string>()).ToList());
+        Assert.AreSequenceEqual(
+            new[] { "resolved", "pending" }, property.Enum!.Select(v => v!.GetValue<string>()).ToList());
     }
 
     [TestMethod]

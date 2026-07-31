@@ -26,8 +26,8 @@ public sealed class ChangelogEntryTests
     public void FormatInline_HtmlSpecialChars_AreEncoded()
     {
         var result = ChangelogEntry.FormatInline("<script>alert('xss')</script>").Value;
-        StringAssert.Contains(result, "&lt;script&gt;");
-        StringAssert.DoesNotMatch(result, new System.Text.RegularExpressions.Regex("<script>"));
+        Assert.Contains("&lt;script&gt;", result);
+        Assert.DoesNotMatchRegex(new System.Text.RegularExpressions.Regex("<script>"), result);
     }
 
     [TestMethod]
@@ -73,11 +73,11 @@ public sealed class ChangelogEntryTests
             Highlights = ["Quote support added."]
         };
 
-        Assert.IsTrue(release.Highlights.Count > 0);
-        Assert.AreEqual(0, release.Added.Count);
-        Assert.AreEqual(0, release.Changed.Count);
-        Assert.AreEqual(0, release.Fixed.Count);
-        Assert.AreEqual(0, release.Removed.Count);
+        Assert.IsNotEmpty(release.Highlights);
+        Assert.IsEmpty(release.Added);
+        Assert.IsEmpty(release.Changed);
+        Assert.IsEmpty(release.Fixed);
+        Assert.IsEmpty(release.Removed);
     }
 
     [TestMethod]
@@ -92,9 +92,9 @@ public sealed class ChangelogEntryTests
             Fixed   = ["Rate limit header fixed."]
         };
 
-        Assert.AreEqual(0, release.Highlights.Count);
-        Assert.IsTrue(release.Added.Count > 0);
-        Assert.IsTrue(release.Fixed.Count > 0);
+        Assert.IsEmpty(release.Highlights);
+        Assert.IsNotEmpty(release.Added);
+        Assert.IsNotEmpty(release.Fixed);
     }
 
     [TestMethod]
@@ -103,11 +103,11 @@ public sealed class ChangelogEntryTests
         // Path 3: nothing to render; no error expected
         var release = new ChangelogRelease { Version = "1.0.0", Date = "2026-01-01" };
 
-        Assert.AreEqual(0, release.Highlights.Count);
-        Assert.AreEqual(0, release.Added.Count);
-        Assert.AreEqual(0, release.Changed.Count);
-        Assert.AreEqual(0, release.Fixed.Count);
-        Assert.AreEqual(0, release.Removed.Count);
+        Assert.IsEmpty(release.Highlights);
+        Assert.IsEmpty(release.Added);
+        Assert.IsEmpty(release.Changed);
+        Assert.IsEmpty(release.Fixed);
+        Assert.IsEmpty(release.Removed);
     }
 
     [TestMethod]
@@ -122,8 +122,8 @@ public sealed class ChangelogEntryTests
             Cves       = ["CVE-2025-6965"]
         };
 
-        Assert.IsTrue(release.Issues.Count > 0);
-        Assert.IsTrue(release.Cves.Count > 0);
+        Assert.IsNotEmpty(release.Issues);
+        Assert.IsNotEmpty(release.Cves);
         Assert.AreEqual(80,              release.Issues[0]);
         Assert.AreEqual("CVE-2025-6965", release.Cves[0]);
     }
@@ -139,7 +139,7 @@ public sealed class ChangelogEntryTests
             Issues     = [80]
         };
 
-        Assert.IsTrue(unreleased.Highlights.Count > 0);
+        Assert.IsNotEmpty(unreleased.Highlights);
         Assert.AreEqual(80, unreleased.Issues[0]);
     }
 }

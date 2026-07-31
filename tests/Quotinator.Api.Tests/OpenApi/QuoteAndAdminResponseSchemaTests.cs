@@ -40,7 +40,7 @@ public class QuoteAndAdminResponseSchemaTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var doc  = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var doc  = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
         var root = doc!.RootElement;
 
         var response200 = root.GetProperty("paths").GetProperty(path).GetProperty(method)
@@ -69,7 +69,7 @@ public class QuoteAndAdminResponseSchemaTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var doc  = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var doc  = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
         var root = doc!.RootElement;
 
         var response200 = root.GetProperty("paths").GetProperty("/api/v1/admin/database/reseed").GetProperty("post")
@@ -90,4 +90,6 @@ public class QuoteAndAdminResponseSchemaTests
             current = current.GetProperty(segment);
         return current;
     }
+
+    public TestContext TestContext { get; set; }
 }

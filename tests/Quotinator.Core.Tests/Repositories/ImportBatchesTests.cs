@@ -115,7 +115,7 @@ public class ImportBatchesTests
         var expected = new[] { "Id", "Name", "Type", "Url", "ImportedAt", "ImportedById", "RecordCount",
                                 "DateCreated", "DateModified", "DateDeleted", "IsDeleted", "ConflictPolicy" };
         foreach (var col in expected)
-            Assert.IsTrue(columns.Contains(col), $"Column '{col}' missing from ImportBatches");
+            Assert.Contains(col, columns, $"Column '{col}' missing from ImportBatches");
     }
 
     /// <summary>The batch's actual applied conflict-resolution policy (for quotes) is persisted, not just backfilled for pre-existing rows.</summary>
@@ -180,8 +180,8 @@ public class ImportBatchesTests
         var rows = (await conn.QueryAsync<(string Name, string Type, string? Url)>(
             "SELECT Name, Type, Url FROM ImportBatches WHERE IsDeleted = 0")).ToList();
 
-        Assert.AreEqual(2, rows.Count, "One ImportBatch row per source file");
-        Assert.AreEqual(rows.Count, rows.DistinctBy(r => r.Name).Count(), "All batch names are distinct");
+        Assert.HasCount(2, rows, "One ImportBatch row per source file");
+        Assert.HasCount(rows.Count, rows.DistinctBy(r => r.Name), "All batch names are distinct");
 
         var curatedRow = rows.Single(r => r.Name == Path.GetFileName(CuratedFile));
         Assert.AreEqual("Seed", curatedRow.Type, "A bundled file without a URL is still Seed content, just internally-authored");
@@ -219,8 +219,8 @@ public class ImportBatchesTests
         var curatedQuoteCount  = quoteBatchIds.Count(id => id == curatedBatch.Id);
         var vilaboimQuoteCount = quoteBatchIds.Count(id => id == vilaboimBatch.Id);
 
-        Assert.IsTrue(curatedQuoteCount  > 0, "Curated batch should own at least one quote");
-        Assert.IsTrue(vilaboimQuoteCount > 0, "Vilaboim batch should own at least one quote");
+        Assert.IsGreaterThan(0, curatedQuoteCount, "Curated batch should own at least one quote");
+        Assert.IsGreaterThan(0, vilaboimQuoteCount, "Vilaboim batch should own at least one quote");
         Assert.AreEqual(curatedBatch.RecordCount,  curatedQuoteCount,  "ImportBatches.RecordCount must match the actual number of Quotes rows linked to the curated batch");
         Assert.AreEqual(vilaboimBatch.RecordCount, vilaboimQuoteCount, "ImportBatches.RecordCount must match the actual number of Quotes rows linked to the vilaboim batch");
     }
@@ -243,7 +243,7 @@ public class ImportBatchesTests
         conn.Open();
 
         var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes");
-        Assert.IsTrue(quoteCount > 0, "Quotes from the valid curated file should still be seeded");
+        Assert.IsGreaterThan(0, quoteCount, "Quotes from the valid curated file should still be seeded");
 
         var emptyBatch = await conn.QuerySingleAsync<(string Id, int RecordCount)>(
             "SELECT Id, RecordCount FROM ImportBatches WHERE Name = @name", new { name = "empty.json" });
@@ -327,9 +327,9 @@ public class ImportBatchesTests
         var seedBatches = (await conn.QueryAsync<string>(
             "SELECT Name FROM ImportBatches WHERE Type = 'Seed' AND IsDeleted = 0")).ToList();
 
-        Assert.AreEqual(2, seedBatches.Count, "Two pre-seed batch rows expected after migration");
-        Assert.IsTrue(seedBatches.Any(n => n.Contains("vilaboim")), "vilaboim batch row missing");
-        Assert.IsTrue(seedBatches.Any(n => n.Contains("NikhilNamal17")), "NikhilNamal17 batch row missing");
+        Assert.HasCount(2, seedBatches, "Two pre-seed batch rows expected after migration");
+        Assert.Contains(n => n.Contains("vilaboim"), seedBatches, "vilaboim batch row missing");
+        Assert.Contains(n => n.Contains("NikhilNamal17"), seedBatches, "NikhilNamal17 batch row missing");
     }
 
     /// <summary>Records that existed before Migration003 retain <c>NULL</c> <c>ImportBatchId</c> after the migration runs.</summary>
@@ -371,7 +371,7 @@ public class ImportBatchesTests
         var batchId = Guid.NewGuid().ToString();
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await conn.OpenAsync();
+            await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration002_ReseedGenres);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration003_ImportBatches);
@@ -392,12 +392,12 @@ public class ImportBatchesTests
         await db.InitialiseAsync();
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
-        await verifyConn.OpenAsync();
+        await verifyConn.OpenAsync(TestContext.CancellationToken);
 
         var columns = (await verifyConn.QueryAsync<string>(
             "SELECT name FROM pragma_table_info('ImportBatches')")).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        Assert.IsTrue(columns.Contains("ImportedById"), "ImportedById column must exist after Migration010");
-        Assert.IsFalse(columns.Contains("ImportedBy"), "ImportedBy must no longer exist after the rename");
+        Assert.Contains("ImportedById", columns, "ImportedById column must exist after Migration010");
+        Assert.DoesNotContain("ImportedBy", columns, "ImportedBy must no longer exist after the rename");
 
         var preservedValue = await verifyConn.ExecuteScalarAsync<string>(
             "SELECT ImportedById FROM ImportBatches WHERE Id = @id;", new { id = batchId });
@@ -419,7 +419,7 @@ public class ImportBatchesTests
         var batchId = Guid.NewGuid().ToString();
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await conn.OpenAsync();
+            await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration002_ReseedGenres);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration003_ImportBatches);
@@ -445,7 +445,7 @@ public class ImportBatchesTests
         await db.InitialiseAsync();
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
-        await verifyConn.OpenAsync();
+        await verifyConn.OpenAsync(TestContext.CancellationToken);
 
         var normalisedValue = await verifyConn.ExecuteScalarAsync<string>(
             "SELECT ConflictPolicy FROM ImportBatches WHERE Id = @id;", new { id = batchId });
@@ -458,4 +458,6 @@ public class ImportBatchesTests
             new { id = Guid.NewGuid().ToString(), now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") }),
             "The new CHECK constraint must reject the old lowercase form going forward");
     }
+
+    public TestContext TestContext { get; set; }
 }

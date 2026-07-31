@@ -144,7 +144,7 @@ public class SystemAuditWriterTests
         {
             _caller.Agent = "task-B";
             agentInTask   = _caller.Agent;
-        }).Wait();
+        }, TestContext.CancellationToken).Wait(TestContext.CancellationToken);
 
         // The original context must still see "task-A".
         Assert.AreEqual("task-A", _caller.Agent);
@@ -167,7 +167,7 @@ public class SystemAuditWriterTests
         conn.Open();
         // Exactly one entry should remain — the purge record itself.
         var remaining = conn.Query<SystemAuditEntry>("SELECT * FROM System_AuditEntries;").ToList();
-        Assert.AreEqual(1, remaining.Count, "Only the purge sentinel entry should remain");
+        Assert.HasCount(1, remaining, "Only the purge sentinel entry should remain");
         Assert.AreEqual("System_AuditEntries", remaining[0].TableName);
         Assert.AreEqual(AuditOperation.Purge, remaining[0].Operation);
         Assert.AreEqual("Cleaner/1.0",     remaining[0].Agent);
@@ -188,7 +188,7 @@ public class SystemAuditWriterTests
         // The Sources entry must be untouched; the Widgets entry deleted; purge sentinel added.
         // Looked up by TableName rather than insertion order — Id is now a random Guid (RecordBase),
         // not an auto-increment integer, so it no longer reflects write order.
-        Assert.AreEqual(2, remaining.Count);
+        Assert.HasCount(2, remaining);
         var sourcesEntry = remaining.Single(r => r.TableName == "Sources");
         var widgetsEntry = remaining.Single(r => r.TableName == "Widgets");
         Assert.AreEqual(AuditOperation.Insert, sourcesEntry.Operation, "Sources entry must be untouched");
@@ -211,7 +211,7 @@ public class SystemAuditWriterTests
         conn.Open();
         var remaining = conn.Query<SystemAuditEntry>("SELECT * FROM System_AuditEntries;").ToList();
 
-        Assert.AreEqual(1, remaining.Count, "Only the purge sentinel entry should remain — the lowercase filter must still match the PascalCase-stored 'Widgets' row");
+        Assert.HasCount(1, remaining, "Only the purge sentinel entry should remain — the lowercase filter must still match the PascalCase-stored 'Widgets' row");
         Assert.AreEqual(AuditOperation.Purge, remaining[0].Operation);
     }
 
@@ -246,4 +246,6 @@ public class SystemAuditWriterTests
         Assert.AreEqual(AuditOperation.Insert, entry.Operation);
         Assert.AreEqual(w.Id.ToString("D"), entry.RecordId);
     }
+
+    public TestContext TestContext { get; set; }
 }

@@ -91,14 +91,14 @@ public class InputValidationTests
     [DataRow("person")]
     public void ValidTypes_ContainsExpectedValues(string type)
     {
-        Assert.IsTrue(InputValidation.ValidTypes.Contains(type));
+        Assert.Contains(type, InputValidation.ValidTypes);
     }
 
     [TestMethod]
     public void ValidTypes_DoesNotContainUnknownValues()
     {
-        Assert.IsFalse(InputValidation.ValidTypes.Contains("film"));
-        Assert.IsFalse(InputValidation.ValidTypes.Contains("Movie")); // case-sensitive
+        Assert.DoesNotContain("film", InputValidation.ValidTypes);
+        Assert.DoesNotContain("Movie", InputValidation.ValidTypes); // case-sensitive
     }
 
     [TestMethod]
@@ -107,7 +107,7 @@ public class InputValidationTests
         var expected = Enum.GetValues<QuoteType>()
             .Where(t => t != QuoteType.Unknown)
             .Select(t => t.ToString().ToLowerInvariant());
-        CollectionAssert.AreEquivalent(expected.ToList(), InputValidation.ValidTypes.ToList());
+        Assert.AreSequenceEqual(expected.ToList(), InputValidation.ValidTypes.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     #endregion
@@ -121,14 +121,14 @@ public class InputValidationTests
     [DataRow("author")]
     public void ValidSearchFields_ContainsExpectedValues(string field)
     {
-        Assert.IsTrue(InputValidation.ValidSearchFields.Contains(field));
+        Assert.Contains(field, InputValidation.ValidSearchFields);
     }
 
     [TestMethod]
     public void ValidSearchFields_DoesNotContainUnknownValues()
     {
-        Assert.IsFalse(InputValidation.ValidSearchFields.Contains("genre"));
-        Assert.IsFalse(InputValidation.ValidSearchFields.Contains("Quote")); // case-sensitive
+        Assert.DoesNotContain("genre", InputValidation.ValidSearchFields);
+        Assert.DoesNotContain("Quote", InputValidation.ValidSearchFields); // case-sensitive
     }
 
     #endregion
@@ -143,15 +143,15 @@ public class InputValidationTests
     [DataRow("thriller")]
     public void ValidGenres_ContainsExpectedValues(string genre)
     {
-        Assert.IsTrue(InputValidation.ValidGenres.Contains(genre));
+        Assert.Contains(genre, InputValidation.ValidGenres);
     }
 
     [TestMethod]
     public void ValidGenres_DoesNotContainUnknownValues()
     {
-        Assert.IsFalse(InputValidation.ValidGenres.Contains("scifi"));    // missing hyphen
-        Assert.IsFalse(InputValidation.ValidGenres.Contains("SciFi"));    // wrong casing
-        Assert.IsFalse(InputValidation.ValidGenres.Contains("cartoon"));
+        Assert.DoesNotContain("scifi", InputValidation.ValidGenres);    // missing hyphen
+        Assert.DoesNotContain("SciFi", InputValidation.ValidGenres);    // wrong casing
+        Assert.DoesNotContain("cartoon", InputValidation.ValidGenres);
     }
 
     [TestMethod]
@@ -160,7 +160,7 @@ public class InputValidationTests
         var expected = Enum.GetValues<Genre>()
             .Where(g => g != Genre.Unknown)
             .Select(g => JsonNamingPolicy.KebabCaseLower.ConvertName(g.ToString()));
-        CollectionAssert.AreEquivalent(expected.ToList(), InputValidation.ValidGenres.ToList());
+        Assert.AreSequenceEqual(expected.ToList(), InputValidation.ValidGenres.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     #endregion

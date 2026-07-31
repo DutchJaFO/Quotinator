@@ -45,10 +45,10 @@ public class ConversationEndpointsTests
     public async Task GetById_KnownId_ReturnsOkWithLinesInOrder()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/conversations/{FakeQuoteService.SampleConversation.Id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/conversations/{FakeQuoteService.SampleConversation.Id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(FakeQuoteService.SampleConversation.Id, doc.RootElement.GetProperty("id").GetString());
         var lines = doc.RootElement.GetProperty("lines");
         Assert.AreEqual(2, lines.GetArrayLength());
@@ -62,9 +62,9 @@ public class ConversationEndpointsTests
     public async Task GetById_QuoteLine_HasNoRecursiveConversationsField()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/conversations/{FakeQuoteService.SampleConversation.Id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/conversations/{FakeQuoteService.SampleConversation.Id}", TestContext.CancellationToken);
 
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var quoteLine = doc.RootElement.GetProperty("lines")[1];
         Assert.IsFalse(quoteLine.GetProperty("quote").TryGetProperty("conversations", out _),
             "An embedded quote line must never carry its own conversations membership array");
@@ -74,7 +74,7 @@ public class ConversationEndpointsTests
     public async Task GetById_UppercaseCasedId_StillResolves()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/conversations/{FakeQuoteService.SampleConversation.Id.ToUpperInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/conversations/{FakeQuoteService.SampleConversation.Id.ToUpperInvariant()}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
@@ -83,10 +83,10 @@ public class ConversationEndpointsTests
     public async Task GetById_UnknownId_Returns404WithLocalisedDetail()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations/00000000-0000-0000-0000-000000000000");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations/00000000-0000-0000-0000-000000000000", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(doc.RootElement.TryGetProperty("detail", out var detail));
         Assert.IsFalse(string.IsNullOrWhiteSpace(detail.GetString()));
     }
@@ -97,17 +97,19 @@ public class ConversationEndpointsTests
         using var factory = CreateFactory();
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("nl");
-        var response = await client.GetAsync("/api/v1/conversations/00000000-0000-0000-0000-000000000000");
+        var response = await client.GetAsync("/api/v1/conversations/00000000-0000-0000-0000-000000000000", TestContext.CancellationToken);
 
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        StringAssert.Contains(doc.RootElement.GetProperty("detail").GetString(), "conversatie");
+        var doc    = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        var detail = doc.RootElement.GetProperty("detail").GetString();
+        Assert.IsNotNull(detail);
+        Assert.Contains("conversatie", detail);
     }
 
     [TestMethod]
     public async Task GetById_InvalidLang_Returns400()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/conversations/{FakeQuoteService.SampleConversation.Id}?lang=not-a-lang-code-at-all");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/conversations/{FakeQuoteService.SampleConversation.Id}?lang=not-a-lang-code-at-all", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -119,10 +121,10 @@ public class ConversationEndpointsTests
     {
         var repo = new FakeConversationRepository([NewConversation(), NewConversation(description: "Another scene")]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var root = doc.RootElement;
 
         Assert.IsTrue(root.TryGetProperty("items", out var items));
@@ -143,9 +145,9 @@ public class ConversationEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeConversationRepository([NewConversation(id: id)]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations", TestContext.CancellationToken);
 
-        var doc   = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc   = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var items = doc.RootElement.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
 
@@ -164,9 +166,9 @@ public class ConversationEndpointsTests
         var repo   = new FakeConversationRepository([NewConversation(id: id)]);
         var reader = new FakeConversationLineCountReader(new Dictionary<Guid, int> { [id] = 3 });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations", TestContext.CancellationToken);
 
-        var doc   = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc   = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var items = doc.RootElement.GetProperty("items");
         Assert.AreEqual(3, items[0].GetProperty("lineCount").GetInt32());
     }
@@ -177,9 +179,9 @@ public class ConversationEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeConversationRepository([NewConversation(id: id)]);
         using var factory = CreateFactory(repo, new FakeConversationLineCountReader());
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations", TestContext.CancellationToken);
 
-        var doc   = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc   = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var items = doc.RootElement.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
         Assert.AreEqual(0, items[0].GetProperty("lineCount").GetInt32());
@@ -198,9 +200,9 @@ public class ConversationEndpointsTests
         ]);
         var reader = new FakeConversationLineCountReader(new Dictionary<Guid, int> { [withLinesId] = 5 });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?pageSize=0", TestContext.CancellationToken);
 
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("items");
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement.GetProperty("items");
         Assert.AreEqual(2, items.GetArrayLength());
 
         foreach (var item in items.EnumerateArray())
@@ -227,7 +229,7 @@ public class ConversationEndpointsTests
     public async Task GetAllConversations_PageZero_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?page=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?page=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -235,7 +237,7 @@ public class ConversationEndpointsTests
     public async Task GetAllConversations_PageMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?page=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?page=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -243,7 +245,7 @@ public class ConversationEndpointsTests
     public async Task GetAllConversations_PageSizeMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?pageSize=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?pageSize=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -251,7 +253,7 @@ public class ConversationEndpointsTests
     public async Task GetAllConversations_PageSizeNegative_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?pageSize=-1");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?pageSize=-1", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -259,7 +261,7 @@ public class ConversationEndpointsTests
     public async Task GetAllConversations_PageSizeAbove500_Returns422NotSilentClamp()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?pageSize=999");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?pageSize=999", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
 
@@ -268,10 +270,10 @@ public class ConversationEndpointsTests
     {
         var repo = new FakeConversationRepository([NewConversation(), NewConversation(), NewConversation()]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?pageSize=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(3, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual(3, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(3, doc.RootElement.GetProperty("pageSize").GetInt32(), "pageSize=0 reports the effective count, not the literal 0 requested");
@@ -281,10 +283,10 @@ public class ConversationEndpointsTests
     public async Task GetAllConversations_PageSizeOmitted_DefaultsTo20()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32());
     }
 
@@ -293,7 +295,7 @@ public class ConversationEndpointsTests
     {
         var repo = new FakeConversationRepository([NewConversation()]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?page=5");
+        var response = await factory.CreateClient().GetAsync("/api/v1/conversations?page=5", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -303,14 +305,16 @@ public class ConversationEndpointsTests
     public async Task ConversationEndpoints_OnLiveSpec_GetAllTaggedConversations()
     {
         using var factory = CreateFactory();
-        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
 
         var paths = doc!.RootElement.GetProperty("paths");
         var getAll = paths.GetProperty("/api/v1/conversations").GetProperty("get");
         var tags   = getAll.GetProperty("tags");
 
-        Assert.IsTrue(tags.EnumerateArray().Any(t => t.GetString() == "Conversations"));
-        Assert.IsFalse(tags.EnumerateArray().Any(t => t.GetString() == "MasterData"),
+        Assert.Contains(t => t.GetString() == "Conversations", tags.EnumerateArray());
+        Assert.DoesNotContain(t => t.GetString() == "MasterData", tags.EnumerateArray(),
             "Conversations is a masterdata consumer, not a masterdata entity — it must not carry the MasterData tag");
     }
+
+    public TestContext TestContext { get; set; }
 }

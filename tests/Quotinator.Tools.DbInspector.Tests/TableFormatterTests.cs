@@ -21,11 +21,11 @@ public class TableFormatterTests
         var result = TableFormatter.Format([row]);
         var lines  = result.Split(Environment.NewLine);
 
-        Assert.AreEqual(2, lines.Length);
-        StringAssert.Contains(lines[0], "Name");
-        StringAssert.Contains(lines[0], "Type");
-        StringAssert.Contains(lines[1], "curated.json");
-        StringAssert.Contains(lines[1], "Seed");
+        Assert.HasCount(2, lines);
+        Assert.Contains("Name", lines[0]);
+        Assert.Contains("Type", lines[0]);
+        Assert.Contains("curated.json", lines[1]);
+        Assert.Contains("Seed", lines[1]);
     }
 
     [TestMethod]
@@ -35,7 +35,7 @@ public class TableFormatterTests
 
         var result = TableFormatter.Format([row]);
 
-        StringAssert.Contains(result, "NULL");
+        Assert.Contains("NULL", result);
     }
 
     [TestMethod]
@@ -58,6 +58,6 @@ public class TableFormatterTests
 
         var result = TableFormatter.Format([row]);
 
-        StringAssert.Contains(result, "A  B");
+        Assert.Contains("A  B", result);
     }
 }

@@ -33,7 +33,7 @@ public class QuoteServiceTests
         var files = SourceFiles
             .Where(f => !Path.GetFileName(f).Equals("quotinator-series-universe.json", StringComparison.OrdinalIgnoreCase))
             .ToList();
-        Assert.IsTrue(files.Count > 0, "data/sources/ contains no JSON source files");
+        Assert.IsNotEmpty(files, "data/sources/ contains no JSON source files");
 
         foreach (var file in files)
         {

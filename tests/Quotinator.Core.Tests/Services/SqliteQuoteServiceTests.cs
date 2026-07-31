@@ -92,7 +92,7 @@ public class SqliteQuoteServiceTests
     {
         var result = _service.GetAll(1, 0);
 
-        Assert.AreEqual(5, result.Items.Count, "pageSize = 0 must reach SQLite as LIMIT -1, not a literal LIMIT 0");
+        Assert.HasCount(5, result.Items, "pageSize = 0 must reach SQLite as LIMIT -1, not a literal LIMIT 0");
         Assert.AreEqual(5, result.TotalCount);
     }
 
@@ -109,7 +109,7 @@ public class SqliteQuoteServiceTests
     {
         var result = _service.GetAll(1, 2);
 
-        Assert.AreEqual(2, result.Items.Count);
+        Assert.HasCount(2, result.Items);
         Assert.AreEqual(5, result.TotalCount);
         Assert.AreEqual(2, result.PageSize);
     }
@@ -309,7 +309,7 @@ public class SqliteQuoteServiceTests
 
         var result = _service.GetAll(1, 10, seriesId: series.Id);
 
-        Assert.AreEqual(1, result.Items.Count);
+        Assert.HasCount(1, result.Items);
         Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
     }
 
@@ -327,8 +327,8 @@ public class SqliteQuoteServiceTests
         var result = _service.GetAll(1, 10, universeId: universe.Id);
 
         var ids = result.Items.Select(i => i.Id).ToList();
-        CollectionAssert.Contains(ids, quoteA.Id.ToString("D"));
-        CollectionAssert.Contains(ids, quoteB.Id.ToString("D"));
+        Assert.Contains(quoteA.Id.ToString("D"), ids);
+        Assert.Contains(quoteB.Id.ToString("D"), ids);
     }
 
     [TestMethod]
@@ -340,7 +340,7 @@ public class SqliteQuoteServiceTests
 
         var result = _service.GetRandom(10, seriesId: series.Id);
 
-        Assert.AreEqual(1, result.Items.Count);
+        Assert.HasCount(1, result.Items);
         Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
     }
 
@@ -354,7 +354,7 @@ public class SqliteQuoteServiceTests
 
         var result = _service.GetRandom(10, universeId: universe.Id);
 
-        Assert.AreEqual(1, result.Items.Count);
+        Assert.HasCount(1, result.Items);
         Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
     }
 }

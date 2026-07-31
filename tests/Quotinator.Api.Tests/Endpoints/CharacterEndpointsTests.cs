@@ -49,10 +49,10 @@ public class CharacterEndpointsTests
     {
         var repo = new FakeCharacterRepository([NewCharacter(), NewCharacter(name: "Ilsa Lund")]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var root = doc.RootElement;
 
         Assert.IsTrue(root.TryGetProperty("items", out var items));
@@ -69,9 +69,9 @@ public class CharacterEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeCharacterRepository([NewCharacter(id: id)]);
         using var factory = CreateFactory(repo, new StubCharacterSourceLinkReader());
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters", TestContext.CancellationToken);
 
-        var doc   = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc   = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var items = doc.RootElement.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
 
@@ -91,9 +91,9 @@ public class CharacterEndpointsTests
             [characterId] = [(sourceId, "Casablanca")],
         });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters", TestContext.CancellationToken);
 
-        var doc   = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc   = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var items = doc.RootElement.GetProperty("items");
         Assert.AreEqual(1, items.GetArrayLength());
 
@@ -121,9 +121,9 @@ public class CharacterEndpointsTests
             [characterWithSourcesId] = [(sourceA, "Airplane!"), (sourceB, "Airplane II: The Sequel")],
         });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?pageSize=0", TestContext.CancellationToken);
 
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("items");
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement.GetProperty("items");
         Assert.AreEqual(2, items.GetArrayLength());
 
         foreach (var item in items.EnumerateArray())
@@ -134,8 +134,8 @@ public class CharacterEndpointsTests
                 case "Striker":
                     var sources = item.GetProperty("sources");
                     Assert.AreEqual(2, sources.GetArrayLength());
-                    Assert.IsTrue(sources.EnumerateArray().Any(s => s.GetProperty("name").GetString() == "Airplane!"));
-                    Assert.IsTrue(sources.EnumerateArray().Any(s => s.GetProperty("name").GetString() == "Airplane II: The Sequel"));
+                    Assert.Contains(s => s.GetProperty("name").GetString() == "Airplane!", sources.EnumerateArray());
+                    Assert.Contains(s => s.GetProperty("name").GetString() == "Airplane II: The Sequel", sources.EnumerateArray());
                     break;
                 case "Roger Murdock":
                     Assert.AreEqual(0, item.GetProperty("sources").GetArrayLength());
@@ -153,7 +153,7 @@ public class CharacterEndpointsTests
     public async Task GetAllCharacters_PageZero_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?page=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?page=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -161,7 +161,7 @@ public class CharacterEndpointsTests
     public async Task GetAllCharacters_PageMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?page=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?page=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -169,7 +169,7 @@ public class CharacterEndpointsTests
     public async Task GetAllCharacters_PageSizeMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?pageSize=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?pageSize=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -177,7 +177,7 @@ public class CharacterEndpointsTests
     public async Task GetAllCharacters_PageSizeNegative_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?pageSize=-1");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?pageSize=-1", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -185,7 +185,7 @@ public class CharacterEndpointsTests
     public async Task GetAllCharacters_PageSizeAbove500_Returns422NotSilentClamp()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?pageSize=999");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?pageSize=999", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
 
@@ -194,10 +194,10 @@ public class CharacterEndpointsTests
     {
         var repo = new FakeCharacterRepository([NewCharacter(), NewCharacter(name: "Ilsa Lund"), NewCharacter(name: "Sam")]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?pageSize=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(3, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual(3, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(3, doc.RootElement.GetProperty("pageSize").GetInt32(), "pageSize=0 reports the effective count, not the literal 0 requested");
@@ -207,10 +207,10 @@ public class CharacterEndpointsTests
     public async Task GetAllCharacters_PageSizeOmitted_DefaultsTo20()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32());
     }
 
@@ -219,7 +219,7 @@ public class CharacterEndpointsTests
     {
         var repo = new FakeCharacterRepository([NewCharacter()]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?page=5");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters?page=5", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -236,10 +236,10 @@ public class CharacterEndpointsTests
             [id] = [(sourceId, "Casablanca")],
         });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
 
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("Rick Blaine", root.GetProperty("name").GetString());
@@ -267,24 +267,24 @@ public class CharacterEndpointsTests
             [id] = [(sourceA, "The Fellowship of the Ring"), (sourceB, "The Hobbit")],
         });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var sources = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("sources");
+        var sources = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement.GetProperty("sources");
         Assert.AreEqual(2, sources.GetArrayLength());
-        Assert.IsTrue(sources.EnumerateArray().Any(s =>
+        Assert.Contains(s =>
             s.GetProperty("id").GetString() == sourceA.ToString("D") &&
-            s.GetProperty("name").GetString() == "The Fellowship of the Ring"));
-        Assert.IsTrue(sources.EnumerateArray().Any(s =>
+            s.GetProperty("name").GetString() == "The Fellowship of the Ring", sources.EnumerateArray());
+        Assert.Contains(s =>
             s.GetProperty("id").GetString() == sourceB.ToString("D") &&
-            s.GetProperty("name").GetString() == "The Hobbit"));
+            s.GetProperty("name").GetString() == "The Hobbit", sources.EnumerateArray());
     }
 
     [TestMethod]
     public async Task GetCharacterById_UnknownId_Returns404()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{Guid.NewGuid()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{Guid.NewGuid()}", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -292,7 +292,7 @@ public class CharacterEndpointsTests
     public async Task GetCharacterById_MalformedId_Returns404NotBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters/not-a-guid");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/characters/not-a-guid", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -302,10 +302,10 @@ public class CharacterEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeCharacterRepository([NewCharacter(id: id)]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{id.ToString("D").ToUpperInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{id.ToString("D").ToUpperInvariant()}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
@@ -321,10 +321,10 @@ public class CharacterEndpointsTests
             [id] = [],
         });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/characters/{id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var sources = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("sources");
+        var sources = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement.GetProperty("sources");
         Assert.AreEqual(0, sources.GetArrayLength());
     }
 
@@ -334,15 +334,15 @@ public class CharacterEndpointsTests
     public async Task CharacterEndpoints_OnLiveSpec_TaggedMasterData()
     {
         using var factory = CreateFactory();
-        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
 
         var paths = doc!.RootElement.GetProperty("paths");
 
         var listTags = paths.GetProperty("/api/v1/masterdata/characters").GetProperty("get").GetProperty("tags");
         var byIdTags = paths.GetProperty("/api/v1/masterdata/characters/{id}").GetProperty("get").GetProperty("tags");
 
-        Assert.IsTrue(listTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
-        Assert.IsTrue(byIdTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
+        Assert.Contains(t => t.GetString() == "MasterData", listTags.EnumerateArray());
+        Assert.Contains(t => t.GetString() == "MasterData", byIdTags.EnumerateArray());
     }
 
     // ── Test doubles ──────────────────────────────────────────────────────────
@@ -374,4 +374,6 @@ public class CharacterEndpointsTests
             return Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyList<(Guid Id, string Name)>>>(result);
         }
     }
+
+    public TestContext TestContext { get; set; }
 }

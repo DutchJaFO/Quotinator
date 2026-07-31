@@ -272,9 +272,9 @@ public class LinkRepositoryTests
 
         var tags = await _repo.GetRightAsync(widget.Id);
 
-        Assert.AreEqual(2, tags.Count);
-        Assert.IsTrue(tags.Any(t => t.Id == tagA.Id));
-        Assert.IsTrue(tags.Any(t => t.Id == tagB.Id));
+        Assert.HasCount(2, tags);
+        Assert.Contains(t => t.Id == tagA.Id, tags);
+        Assert.Contains(t => t.Id == tagB.Id, tags);
     }
 
     [TestMethod]
@@ -290,7 +290,7 @@ public class LinkRepositoryTests
 
         var tags = await _repo.GetRightAsync(widget.Id);
 
-        Assert.AreEqual(1, tags.Count);
+        Assert.HasCount(1, tags);
         Assert.AreEqual(tagB.Id, tags[0].Id);
     }
 
@@ -301,7 +301,7 @@ public class LinkRepositoryTests
 
         var tags = await _repo.GetRightAsync(widget.Id);
 
-        Assert.AreEqual(0, tags.Count);
+        Assert.IsEmpty(tags);
     }
 
     // ── GetLeftAsync ──────────────────────────────────────────────────────────
@@ -318,9 +318,9 @@ public class LinkRepositoryTests
 
         var widgets = await _repo.GetLeftAsync(tag.Id);
 
-        Assert.AreEqual(2, widgets.Count);
-        Assert.IsTrue(widgets.Any(w => w.Id == widgetA.Id));
-        Assert.IsTrue(widgets.Any(w => w.Id == widgetB.Id));
+        Assert.HasCount(2, widgets);
+        Assert.Contains(w => w.Id == widgetA.Id, widgets);
+        Assert.Contains(w => w.Id == widgetB.Id, widgets);
     }
 
     [TestMethod]
@@ -336,7 +336,7 @@ public class LinkRepositoryTests
 
         var widgets = await _repo.GetLeftAsync(tag.Id);
 
-        Assert.AreEqual(1, widgets.Count);
+        Assert.HasCount(1, widgets);
         Assert.AreEqual(widgetB.Id, widgets[0].Id);
     }
 
@@ -347,7 +347,7 @@ public class LinkRepositoryTests
 
         var widgets = await _repo.GetLeftAsync(tag.Id);
 
-        Assert.AreEqual(0, widgets.Count);
+        Assert.IsEmpty(widgets);
     }
 
     // ── UnitOfWork integration ────────────────────────────────────────────────

@@ -30,7 +30,7 @@ public class SqlSourceScanTests
             .Select(f => Path.GetRelativePath(RepoRoot, f))
             .ToList();
 
-        Assert.AreEqual(0, violations.Count,
+        Assert.IsEmpty(violations,
             $"Vulnerable SQL aggregate pattern found in:\n{string.Join("\n", violations)}\n\n" +
             "Review the query and consult docs/sql-safety.md before suppressing this failure.");
     }
@@ -62,7 +62,7 @@ public class SqlSourceScanTests
             .Select(f => Path.GetRelativePath(RepoRoot, f))
             .ToList();
 
-        Assert.AreEqual(0, violations.Count,
+        Assert.IsEmpty(violations,
             $"SQL DML string literals found outside the centralised SQL files:\n{string.Join("\n", violations)}\n\n" +
             "Move the SQL to a constant or factory method in Sql.cs or RepositorySql.cs.");
     }

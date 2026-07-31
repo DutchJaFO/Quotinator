@@ -116,7 +116,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var unresolved = (await conn.QueryAsync<(string Id, string EntityId, string Status, string? ExistingValue, string? IncomingValue)>(
             "SELECT Id, EntityId, Status, ExistingValue, IncomingValue FROM System_ImportActions WHERE Status NOT IN ('Decided', 'Applied') AND IsDeleted = 0;")).ToList();
@@ -134,7 +134,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var character = await conn.ExecuteScalarAsync<string?>(
             "SELECT c.Name FROM Quotes q JOIN Characters c ON c.Id = q.CharacterId " +
@@ -169,7 +169,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Series WHERE IsDeleted = 0;"), db.SeriesCount);
         Assert.AreEqual(await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Universe WHERE IsDeleted = 0;"), db.UniverseCount);
@@ -178,9 +178,9 @@ public class DatabaseInitializerTests
         Assert.AreEqual(await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE IsDeleted = 0;"), db.ConversationCount);
         Assert.AreEqual(0, db.SeriesCount, "AllFilesBatch() (curated/vilaboim/NikhilNamal17) does not include the separate series-universe bundled file");
         Assert.AreEqual(0, db.UniverseCount, "AllFilesBatch() (curated/vilaboim/NikhilNamal17) does not include the separate series-universe bundled file");
-        Assert.IsTrue(db.StageDirectionCount > 0, "Bundled data includes at least one StageDirection");
-        Assert.IsTrue(db.SoundCueCount > 0, "Bundled data includes at least one SoundCue");
-        Assert.IsTrue(db.ConversationCount > 0, "Bundled data includes at least one Conversation");
+        Assert.IsGreaterThan(0, db.StageDirectionCount, "Bundled data includes at least one StageDirection");
+        Assert.IsGreaterThan(0, db.SoundCueCount, "Bundled data includes at least one SoundCue");
+        Assert.IsGreaterThan(0, db.ConversationCount, "Bundled data includes at least one Conversation");
     }
 
     /// <summary>#221: cross-file duplicates between vilaboim and NikhilNamal17 show up as "modified" Quote
@@ -215,7 +215,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var actionsBefore = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions;");
         var batchesBefore = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ImportBatches;");
@@ -228,7 +228,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(actionsBefore, actionsAfter, "PreviewSeedAsync must never write to System_ImportActions");
         Assert.AreEqual(batchesBefore, batchesAfter, "PreviewSeedAsync must never create an ImportBatches row");
 
-        Assert.AreEqual(preview.Files.Count, preview.Reports.Count, "One report per previewed file");
+        Assert.HasCount(preview.Files.Count, preview.Reports, "One report per previewed file");
         Assert.IsTrue(preview.Reports.All(r => r.EntityTypes.ContainsKey("Quote")), "Every bundled file has at least one Quote action");
 
         var modified = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0);
@@ -267,15 +267,15 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var people = (await conn.QueryAsync<(string Name, string? DateOfBirth, string? DateOfDeath)>(
             "SELECT Name, DateOfBirth, DateOfDeath FROM People WHERE IsDeleted = 0;")).ToList();
 
         Assert.HasCount(3, people);
-        Assert.IsTrue(people.Any(p => p is { Name: "Winston Churchill", DateOfBirth: "1874-11-30", DateOfDeath: "1965-01-24" }));
-        Assert.IsTrue(people.Any(p => p is { Name: "Neil Armstrong", DateOfBirth: "1930-08-05", DateOfDeath: "2012-08-25" }));
-        Assert.IsTrue(people.Any(p => p is { Name: "Martin Luther King Jr.", DateOfBirth: "1929-01-15", DateOfDeath: "1968-04-04" }));
+        Assert.Contains(p => p is { Name: "Winston Churchill", DateOfBirth: "1874-11-30", DateOfDeath: "1965-01-24" }, people);
+        Assert.Contains(p => p is { Name: "Neil Armstrong", DateOfBirth: "1930-08-05", DateOfDeath: "2012-08-25" }, people);
+        Assert.Contains(p => p is { Name: "Martin Luther King Jr.", DateOfBirth: "1929-01-15", DateOfDeath: "1968-04-04" }, people);
     }
 
     /// <summary>#191: a Source discovered implicitly from a quote (never named in a sources[] section) still carries that quote's own Date once seeded — the curated file's own Airplane!/1980 entries are the fixture.</summary>
@@ -286,7 +286,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var airplaneDate = await conn.ExecuteScalarAsync<string?>(
             "SELECT Date FROM Sources WHERE Title = 'Airplane!' AND Type = 'Movie' AND IsDeleted = 0;");
@@ -311,7 +311,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var conversationCount    = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE IsDeleted = 0;");
         var stageDirectionCount  = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE IsDeleted = 0;");
@@ -329,8 +329,7 @@ public class DatabaseInitializerTests
 
         var actionEntityTypes = await conn.QueryAsync<string>(
             "SELECT DISTINCT EntityType FROM System_ImportActions WHERE EntityType IN ('Conversation', 'StageDirection', 'SoundCue');");
-        CollectionAssert.AreEquivalent(new[] { "Conversation", "StageDirection", "SoundCue" }, actionEntityTypes.ToList(),
-            "Conversation/StageDirection/SoundCue Add actions must be staged through System_ImportActions like every other entity type");
+        Assert.AreSequenceEqual(new[] { "Conversation", "StageDirection", "SoundCue" }, actionEntityTypes.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "Conversation/StageDirection/SoundCue Add actions must be staged through System_ImportActions like every other entity type");
     }
 
     /// <summary>
@@ -352,7 +351,7 @@ public class DatabaseInitializerTests
         await db.ReseedAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(4, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Conversations WHERE IsDeleted = 0;"));
         Assert.AreEqual(2, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM StageDirections WHERE IsDeleted = 0;"));
@@ -397,7 +396,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions WHERE Status = 'Pending';"),
             "The rule fully covers the only ambiguous field — nothing should be left Pending");
@@ -452,13 +451,13 @@ public class DatabaseInitializerTests
         // first, matching how every other test in this file lets InitialiseAsync create the schema.
         await CreateInitializer([batch]).InitialiseAsync();
         await registry.RegisterAsync(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled,
-            EffectiveRuleFileResolver.ComputeContentHash(overrideContent), sourceBatchId: null);
+            EffectiveRuleFileResolver.ComputeContentHash(overrideContent), sourceBatchId: null, TestContext.CancellationToken);
 
         var db = CreateInitializer([batch], ruleFileOverridePathResolver: pathResolver, sourceFileOverrideRegistry: registry);
         await db.ReseedAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual("Changed text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id;", new { id = quoteId }),
             "The registered override (Replace) must win over the bundled rule file (Keep)");
@@ -508,7 +507,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual("Original text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id;", new { id = quoteId }),
             "An unregistered override file must never be trusted — the bundled rule file (Keep) must be used instead");
@@ -540,7 +539,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions WHERE Status = 'Pending';"),
             "No rule file was referenced — behaviour must be unchanged from before #181");
@@ -576,7 +575,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE Title = 'The Avengers';"),
             "The alias must resolve the misspelled title to the already-existing canonical Source — no duplicate");
@@ -719,7 +718,7 @@ public class DatabaseInitializerTests
     private async Task InsertAuditMarkerAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(
             "INSERT INTO System_AuditEntries (Id, TableName, RecordId, Operation, Agent, PerformedAt, DateCreated) " +
             "VALUES (lower(hex(randomblob(16))), 'Quotes', 'test-id', 'Insert', @marker, '2026-01-01 00:00:00', '2026-01-01 00:00:00');",
@@ -729,7 +728,7 @@ public class DatabaseInitializerTests
     private async Task<int> CountAuditMarkerRowsAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_AuditEntries WHERE Agent = @marker;", new { marker = MarkerValue });
     }
@@ -737,7 +736,7 @@ public class DatabaseInitializerTests
     private async Task InsertSchemaVersionMarkerAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(
             "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
     }
@@ -745,7 +744,7 @@ public class DatabaseInitializerTests
     private async Task<int> CountSchemaVersionMarkerRowsAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_SchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
     }
@@ -753,7 +752,7 @@ public class DatabaseInitializerTests
     private async Task InsertConsumerSchemaVersionMarkerAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(
             "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
     }
@@ -761,7 +760,7 @@ public class DatabaseInitializerTests
     private async Task<int> CountConsumerSchemaVersionMarkerRowsAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_ConsumerSchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
     }
@@ -777,14 +776,14 @@ public class DatabaseInitializerTests
     public async Task GetUserTables_SystemPrefixedTable_IsExcluded()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("CREATE TABLE System_FooBar (Id INTEGER);");
         await conn.ExecuteAsync("CREATE TABLE FooBar (Id INTEGER);");
 
         var tables = (await conn.QueryAsync<string>(Sql.Schema.GetUserTables)).ToList();
 
-        Assert.IsFalse(tables.Contains("System_FooBar"), "System_-prefixed tables must be excluded");
-        Assert.IsTrue(tables.Contains("FooBar"), "Non-prefixed tables must still be included");
+        Assert.DoesNotContain("System_FooBar", tables, "System_-prefixed tables must be excluded");
+        Assert.Contains("FooBar", tables, "Non-prefixed tables must still be included");
     }
 
     /// <summary>
@@ -797,12 +796,12 @@ public class DatabaseInitializerTests
     public async Task GetUserTables_SystemPrefixWithoutUnderscore_IsNotExcluded()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("CREATE TABLE SystemInventory (Id INTEGER);");
 
         var tables = (await conn.QueryAsync<string>(Sql.Schema.GetUserTables)).ToList();
 
-        Assert.IsTrue(tables.Contains("SystemInventory"),
+        Assert.Contains("SystemInventory", tables,
             "A table starting with 'System' but no underscore must NOT be treated as protected");
     }
 
@@ -814,7 +813,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var legacyCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SchemaVersion';");
         var systemCount = await conn.ExecuteScalarAsync<int>(
@@ -839,7 +838,7 @@ public class DatabaseInitializerTests
     private async Task DowngradeToLegacyNamesAsync()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("DELETE FROM System_SchemaVersion;");
         await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion;");
         await conn.ExecuteAsync("ALTER TABLE System_SchemaVersion RENAME TO SchemaVersion;");
@@ -904,7 +903,7 @@ public class DatabaseInitializerTests
         await db2.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var legacyCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SchemaVersion';");
@@ -951,7 +950,7 @@ public class DatabaseInitializerTests
 
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await conn.OpenAsync();
+            await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(
                 "INSERT INTO AuditEntries (TableName, RecordId, Operation, Agent, PerformedAt) " +
                 "VALUES ('Quotes', 'test-id', 'Insert', @marker, '2026-01-01 00:00:00');",
@@ -966,7 +965,7 @@ public class DatabaseInitializerTests
         await db2.InitialiseAsync();
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
-        await verifyConn.OpenAsync();
+        await verifyConn.OpenAsync(TestContext.CancellationToken);
         var legacyCount = await verifyConn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'AuditEntries';");
         var preservedRow = await verifyConn.ExecuteScalarAsync<int>(
@@ -976,8 +975,8 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(0, legacyCount, "The legacy AuditEntries table must no longer exist after Data migration 2");
         Assert.AreEqual(1, preservedRow, "The pre-existing audit row must survive the rename");
-        Assert.IsTrue(indexNames.Contains("IX_System_AuditEntries_TableName_RecordId"), "TableName/RecordId index must exist under the new name");
-        Assert.IsTrue(indexNames.Contains("IX_System_AuditEntries_PerformedAt"), "PerformedAt index must exist under the new name");
+        Assert.Contains("IX_System_AuditEntries_TableName_RecordId", indexNames, "TableName/RecordId index must exist under the new name");
+        Assert.Contains("IX_System_AuditEntries_PerformedAt", indexNames, "PerformedAt index must exist under the new name");
     }
 
     // ── Regression ────────────────────────────────────────────────────────────
@@ -1009,7 +1008,7 @@ public class DatabaseInitializerTests
 
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await conn.OpenAsync();
+            await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion WHERE Version >= 3;");
         }
 
@@ -1018,7 +1017,7 @@ public class DatabaseInitializerTests
 
         using (var verifyConn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await verifyConn.OpenAsync();
+            await verifyConn.OpenAsync(TestContext.CancellationToken);
             var quoteCountAfterFailedAttempt = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes;");
             Assert.AreEqual(countAfterInit, quoteCountAfterFailedAttempt,
                 "Database must be restored to its pre-attempt state after a failed migration, not left partially migrated");
@@ -1104,16 +1103,15 @@ public class DatabaseInitializerTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={_dbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={dbPathB}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         foreach (var table in ConsumerDomainTables)
         {
             var schemaA = await DumpTableSchemaAsync(connA, table);
             var schemaB = await DumpTableSchemaAsync(connB, table);
-            CollectionAssert.AreEqual(schemaB, schemaA,
-                $"Table '{table}' schema differs between the baseline and incremental paths — " +
+            Assert.AreSequenceEqual(schemaB, schemaA, $"Table '{table}' schema differs between the baseline and incremental paths — " +
                 "update QuotinatorMigrations.Baseline to match QuotinatorMigrations.All's final result.");
         }
     }
@@ -1134,9 +1132,9 @@ public class DatabaseInitializerTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={_dbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={dbPathB}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         foreach (var conn in new[] { connA, connB })
         {
@@ -1221,7 +1219,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         foreach (var table in ConversationTablesWithRecordBase)
         {
@@ -1229,7 +1227,7 @@ public class DatabaseInitializerTests
                 $"SELECT name FROM pragma_table_info('{table}');")).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             foreach (var recordBaseColumn in new[] { "Id", "DateCreated", "DateModified", "DateDeleted", "IsDeleted" })
-                Assert.IsTrue(columns.Contains(recordBaseColumn), $"{table} is missing RecordBase column {recordBaseColumn}");
+                Assert.Contains(recordBaseColumn, columns, $"{table} is missing RecordBase column {recordBaseColumn}");
         }
     }
 
@@ -1241,7 +1239,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
         var now            = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
@@ -1266,7 +1264,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
         var now              = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
@@ -1302,7 +1300,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
         var lineId = Guid.NewGuid();
@@ -1331,7 +1329,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var dataRows     = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
         var consumerRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ConsumerSchemaVersion;");
 
@@ -1360,7 +1358,7 @@ public class DatabaseInitializerTests
 
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await conn.OpenAsync();
+            await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync("DROP TABLE System_ConsumerSchemaVersion;");
             await conn.ExecuteAsync("DELETE FROM System_SchemaVersion;");
             for (var v = 1; v <= 13; v++)
@@ -1374,7 +1372,7 @@ public class DatabaseInitializerTests
 
         using (var verifyConn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await verifyConn.OpenAsync();
+            await verifyConn.OpenAsync(TestContext.CancellationToken);
             var quoteCountAfterFailedAttempt = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes;");
             Assert.AreEqual(quoteCountBefore, quoteCountAfterFailedAttempt,
                 "Database must be restored to its pre-attempt state after the failed startup, not left partially migrated");
@@ -1395,7 +1393,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
         var universeId = Guid.NewGuid().ToString();
@@ -1429,18 +1427,18 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var columns = (await conn.QueryAsync<string>(
             "SELECT name FROM pragma_table_info('Characters');")).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        Assert.IsFalse(columns.Contains("SourceId"), "Characters.SourceId must be dropped by Migration009");
+        Assert.DoesNotContain("SourceId", columns, "Characters.SourceId must be dropped by Migration009");
 
         var indexes = await conn.QueryAsync<string>("SELECT name FROM pragma_index_list('Characters') WHERE [unique] = 1;");
         foreach (var idx in indexes)
         {
             var idxCols = (await conn.QueryAsync<string>($"SELECT name FROM pragma_index_info('{idx}');")).ToList();
-            Assert.IsFalse(idxCols.Contains("SourceId", StringComparer.OrdinalIgnoreCase),
+            Assert.DoesNotContain("SourceId", idxCols, StringComparer.OrdinalIgnoreCase,
                 $"Index '{idx}' still references SourceId — the old UNIQUE(SourceId, Name) constraint must be gone");
         }
     }
@@ -1485,7 +1483,7 @@ public class DatabaseInitializerTests
 
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await conn.OpenAsync();
+            await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration002_ReseedGenres);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration003_ImportBatches);
@@ -1543,7 +1541,7 @@ public class DatabaseInitializerTests
             await SeedPreMergeCharactersAsync(seriesId1: seriesId, seriesId2: seriesId);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var survivorCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Characters WHERE Name = 'Gandalf' AND IsDeleted = 0;");
@@ -1576,7 +1574,7 @@ public class DatabaseInitializerTests
             name: "Gandalf", name2: "GANDALF", seriesId1: seriesId, seriesId2: seriesId);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var survivorCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Characters WHERE LOWER(Name) = 'gandalf' AND IsDeleted = 0;");
@@ -1599,7 +1597,7 @@ public class DatabaseInitializerTests
             seriesId1: seriesId, seriesId2: seriesId);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var survivorCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Characters WHERE Name = 'Gandalf' AND IsDeleted = 0;");
@@ -1612,7 +1610,7 @@ public class DatabaseInitializerTests
         await SeedPreMergeCharactersAsync(name: "Sam", seriesId1: null, seriesId2: null);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var survivorCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Characters WHERE Name = 'Sam' AND IsDeleted = 0;");
@@ -1640,7 +1638,7 @@ public class DatabaseInitializerTests
 
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await conn.OpenAsync();
+            await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration002_ReseedGenres);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration003_ImportBatches);
@@ -1675,7 +1673,7 @@ public class DatabaseInitializerTests
         }
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
-        await verifyConn.OpenAsync();
+        await verifyConn.OpenAsync(TestContext.CancellationToken);
 
         var resolvedCharacterId = await verifyConn.ExecuteScalarAsync<string>(
             "SELECT CharacterId FROM Quotes WHERE Id = @id;", new { id = quoteId });
@@ -1691,7 +1689,7 @@ public class DatabaseInitializerTests
             completeness1: "Incomplete", completeness2: "Complete");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var survivorStatus = await conn.ExecuteScalarAsync<string>(
             "SELECT CompletenessStatus FROM Characters WHERE Id = @id;", new { id = character1Id });
@@ -1705,7 +1703,7 @@ public class DatabaseInitializerTests
             name: "Sam", type1: "Movie", type2: "Book", seriesId1: null, seriesId2: null);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var type1 = await conn.ExecuteScalarAsync<string>("SELECT SourceType FROM Characters WHERE Id = @id;", new { id = character1Id });
         var type2 = await conn.ExecuteScalarAsync<string>("SELECT SourceType FROM Characters WHERE Id = @id;", new { id = character2Id });
@@ -1721,7 +1719,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         foreach (var table in new[] { "Universe", "Series", "CharacterSources" })
         {
@@ -1729,7 +1727,7 @@ public class DatabaseInitializerTests
                 $"SELECT name FROM pragma_table_info('{table}');")).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             foreach (var recordBaseColumn in new[] { "Id", "DateCreated", "DateModified", "DateDeleted", "IsDeleted" })
-                Assert.IsTrue(columns.Contains(recordBaseColumn), $"{table} is missing RecordBase column {recordBaseColumn}");
+                Assert.Contains(recordBaseColumn, columns, $"{table} is missing RecordBase column {recordBaseColumn}");
         }
     }
 
@@ -1772,7 +1770,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var pendingCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_ImportActions WHERE EntityType = 'Source' AND Status = 'Pending';");
@@ -1806,14 +1804,14 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var seriesId = await conn.ExecuteScalarAsync<string?>("SELECT SeriesId FROM Sources WHERE Id = @id;", new { id = sourceId });
         Assert.IsNotNull(seriesId, "Sanity check — NewestWins applies immediately, so SeriesId must already be set before the second pass");
 
         var reapplyBatchId = Guid.NewGuid();
         using (var reapplyConn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await reapplyConn.OpenAsync();
+            await reapplyConn.OpenAsync(TestContext.CancellationToken);
             var actions = await Quotinator.Core.Database.ImportActionPlanner.PlanAsync(
                 (SqliteConnection)reapplyConn, [], reapplyBatchId, DuplicateResolutionPolicy.Review,
                 sources: [new Quotinator.Core.Import.SourceEntry { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Models.QuoteType.Movie, SeriesName = "Test Series" }]);
@@ -1821,4 +1819,6 @@ public class DatabaseInitializerTests
             Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Identical content — no change, no action staged at all");
         }
     }
+
+    public TestContext TestContext { get; set; }
 }

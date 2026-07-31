@@ -49,10 +49,10 @@ public class SeriesEndpointsTests
     {
         var repo = new FakeSeriesRepository([NewSeries(), NewSeries(name: "The Lord of the Rings")]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var root = doc.RootElement;
 
         Assert.IsTrue(root.TryGetProperty("items", out var items));
@@ -69,7 +69,7 @@ public class SeriesEndpointsTests
     public async Task GetAllSeries_PageZero_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?page=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?page=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -77,7 +77,7 @@ public class SeriesEndpointsTests
     public async Task GetAllSeries_PageMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?page=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?page=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -85,7 +85,7 @@ public class SeriesEndpointsTests
     public async Task GetAllSeries_PageSizeMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?pageSize=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?pageSize=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -93,7 +93,7 @@ public class SeriesEndpointsTests
     public async Task GetAllSeries_PageSizeNegative_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?pageSize=-1");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?pageSize=-1", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -101,7 +101,7 @@ public class SeriesEndpointsTests
     public async Task GetAllSeries_PageSizeAbove500_Returns422NotSilentClamp()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?pageSize=999");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?pageSize=999", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
 
@@ -110,10 +110,10 @@ public class SeriesEndpointsTests
     {
         var repo = new FakeSeriesRepository([NewSeries(), NewSeries(name: "The Lord of the Rings"), NewSeries(name: "Indiana Jones")]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?pageSize=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(3, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual(3, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(3, doc.RootElement.GetProperty("pageSize").GetInt32(), "pageSize=0 reports the effective count, not the literal 0 requested");
@@ -123,10 +123,10 @@ public class SeriesEndpointsTests
     public async Task GetAllSeries_PageSizeOmitted_DefaultsTo20()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32());
     }
 
@@ -135,7 +135,7 @@ public class SeriesEndpointsTests
     {
         var repo = new FakeSeriesRepository([NewSeries()]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?page=5");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?page=5", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -147,10 +147,10 @@ public class SeriesEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeSeriesRepository([NewSeries(id: id, name: "Star Wars", completeness: CompletenessStatus.Complete)]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
 
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("Star Wars", root.GetProperty("name").GetString());
@@ -165,7 +165,7 @@ public class SeriesEndpointsTests
     public async Task GetSeriesById_UnknownId_Returns404()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{Guid.NewGuid()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{Guid.NewGuid()}", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -175,10 +175,10 @@ public class SeriesEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeSeriesRepository([NewSeries(id: id)]);
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{id.ToString("D").ToUpperInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{id.ToString("D").ToUpperInvariant()}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
@@ -186,7 +186,7 @@ public class SeriesEndpointsTests
     public async Task GetSeriesById_MalformedId_Returns404NotBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series/not-a-guid");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series/not-a-guid", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -203,9 +203,9 @@ public class SeriesEndpointsTests
             [seriesId] = (universeId, "Star Wars Universe"),
         });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{seriesId}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{seriesId}", TestContext.CancellationToken);
 
-        var root     = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root     = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         var universe = root.GetProperty("universe");
         Assert.AreEqual(JsonValueKind.Object, universe.ValueKind);
         Assert.AreEqual(universeId.ToString("D"), universe.GetProperty("id").GetString());
@@ -218,9 +218,9 @@ public class SeriesEndpointsTests
         var seriesId = Guid.NewGuid();
         var repo = new FakeSeriesRepository([NewSeries(id: seriesId)]);
         using var factory = CreateFactory(repo, new FakeSeriesUniverseReferenceReader());
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{seriesId}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{seriesId}", TestContext.CancellationToken);
 
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         AssertPropertyIsNullOrAbsent(root, "universe");
     }
 
@@ -234,9 +234,9 @@ public class SeriesEndpointsTests
         var repo   = new FakeSeriesRepository([NewSeries(id: seriesId, universeId: universeId)]);
         var reader = new FakeSeriesUniverseReferenceReader(new Dictionary<Guid, (Guid, string)>());
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{seriesId}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/series/{seriesId}", TestContext.CancellationToken);
 
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         AssertPropertyIsNullOrAbsent(root, "universe", "a Series pointing at a soft-deleted Universe must resolve to null, not a dangling reference");
     }
 
@@ -261,9 +261,9 @@ public class SeriesEndpointsTests
             [seriesWithUniverseB] = (universeB, "Middle Earth"),
         });
         using var factory = CreateFactory(repo, reader);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/series?pageSize=0", TestContext.CancellationToken);
 
-        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("items");
+        var items = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement.GetProperty("items");
         Assert.AreEqual(3, items.GetArrayLength());
 
         foreach (var item in items.EnumerateArray())
@@ -293,15 +293,15 @@ public class SeriesEndpointsTests
     public async Task SeriesEndpoints_OnLiveSpec_TaggedMasterData()
     {
         using var factory = CreateFactory();
-        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
 
         var paths = doc!.RootElement.GetProperty("paths");
 
         var listTags = paths.GetProperty("/api/v1/masterdata/series").GetProperty("get").GetProperty("tags");
         var byIdTags = paths.GetProperty("/api/v1/masterdata/series/{id}").GetProperty("get").GetProperty("tags");
 
-        Assert.IsTrue(listTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
-        Assert.IsTrue(byIdTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
+        Assert.Contains(t => t.GetString() == "MasterData", listTags.EnumerateArray());
+        Assert.Contains(t => t.GetString() == "MasterData", byIdTags.EnumerateArray());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -317,4 +317,6 @@ public class SeriesEndpointsTests
         var isNullOrAbsent = !element.TryGetProperty(propertyName, out var value) || value.ValueKind == JsonValueKind.Null;
         Assert.IsTrue(isNullOrAbsent, message ?? $"'{propertyName}' must be null or omitted, never a non-null value");
     }
+
+    public TestContext TestContext { get; set; }
 }

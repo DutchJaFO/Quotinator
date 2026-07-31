@@ -17,7 +17,8 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParse(json, out var quotes);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(1, quotes!.Count);
+        Assert.IsNotNull(quotes);
+        Assert.HasCount(1, quotes);
         Assert.AreEqual("Hello", quotes[0].QuoteText);
     }
 
@@ -31,7 +32,8 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParse(json, out var quotes);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(1, quotes!.Count);
+        Assert.IsNotNull(quotes);
+        Assert.HasCount(1, quotes);
     }
 
     [TestMethod]
@@ -40,7 +42,8 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParse("{}", out var quotes);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(0, quotes!.Count);
+        Assert.IsNotNull(quotes);
+        Assert.IsEmpty(quotes);
     }
 
     [TestMethod]
@@ -88,11 +91,11 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(1, parsed!.Quotes.Count);
-        Assert.AreEqual(0, parsed.Sources.Count);
-        Assert.AreEqual(0, parsed.StageDirections.Count);
-        Assert.AreEqual(0, parsed.SoundCues.Count);
-        Assert.AreEqual(0, parsed.Conversations.Count);
+        Assert.HasCount(1, parsed!.Quotes);
+        Assert.IsEmpty(parsed.Sources);
+        Assert.IsEmpty(parsed.StageDirections);
+        Assert.IsEmpty(parsed.SoundCues);
+        Assert.IsEmpty(parsed.Conversations);
     }
 
     [TestMethod]
@@ -118,19 +121,19 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(1, parsed!.Quotes.Count);
-        Assert.AreEqual(1, parsed.Sources.Count);
+        Assert.HasCount(1, parsed!.Quotes);
+        Assert.HasCount(1, parsed.Sources);
         Assert.AreEqual("World", parsed.Sources[0].Title);
         Assert.AreEqual(QuoteType.Movie, parsed.Sources[0].Type);
         Assert.AreEqual("1994", parsed.Sources[0].Date.Value);
-        Assert.AreEqual(1, parsed.StageDirections.Count);
+        Assert.HasCount(1, parsed.StageDirections);
         Assert.AreEqual("[EXT. AIRPORT - DAY]", parsed.StageDirections[0].Text);
-        Assert.AreEqual(1, parsed.SoundCues.Count);
+        Assert.HasCount(1, parsed.SoundCues);
         Assert.AreEqual("[rimshot]", parsed.SoundCues[0].Text);
-        Assert.AreEqual(1, parsed.Conversations.Count);
+        Assert.HasCount(1, parsed.Conversations);
 
         var lines = parsed.Conversations[0].Lines;
-        Assert.AreEqual(3, lines.Count);
+        Assert.HasCount(3, lines);
         Assert.AreEqual(ConversationLineType.StageDirection, lines[0].Type);
         Assert.AreEqual("22222222-2222-2222-2222-222222222222", lines[0].StageDirectionId);
         Assert.AreEqual(ConversationLineType.Quote, lines[1].Type);
@@ -152,7 +155,7 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(1, parsed!.People.Count);
+        Assert.HasCount(1, parsed!.People);
         Assert.AreEqual("66666666-6666-6666-6666-666666666666", parsed.People[0].Id);
         Assert.AreEqual("Ada Lovelace", parsed.People[0].Name);
         Assert.AreEqual("1815-12-10", parsed.People[0].DateOfBirth.Value);
@@ -176,7 +179,7 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(1, parsed!.Characters.Count);
+        Assert.HasCount(1, parsed!.Characters);
         Assert.AreEqual("77777777-7777-7777-7777-777777777777", parsed.Characters[0].Id);
         Assert.AreEqual("Gandalf", parsed.Characters[0].Name);
         Assert.AreEqual("The Fellowship of the Ring", parsed.Characters[0].SourceTitle);
@@ -192,7 +195,7 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(0, parsed!.Characters.Count);
+        Assert.IsEmpty(parsed!.Characters);
     }
 
     /// <summary>#175: characters[] entries may omit id, matched/created via ADR 013's algorithm instead.</summary>
@@ -276,12 +279,12 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(0, parsed!.Sources.Count);
-        Assert.AreEqual(0, parsed.StageDirections.Count);
-        Assert.AreEqual(0, parsed.SoundCues.Count);
-        Assert.AreEqual(0, parsed.Conversations.Count);
-        Assert.AreEqual(0, parsed.Series.Count);
-        Assert.AreEqual(0, parsed.Universe.Count);
+        Assert.IsEmpty(parsed!.Sources);
+        Assert.IsEmpty(parsed.StageDirections);
+        Assert.IsEmpty(parsed.SoundCues);
+        Assert.IsEmpty(parsed.Conversations);
+        Assert.IsEmpty(parsed.Series);
+        Assert.IsEmpty(parsed.Universe);
     }
 
     [TestMethod]
@@ -299,12 +302,12 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(1, parsed!.Series.Count);
+        Assert.HasCount(1, parsed!.Series);
         Assert.AreEqual("World Series", parsed.Series[0].Name);
         Assert.AreEqual("World Universe", parsed.Series[0].UniverseName);
-        Assert.AreEqual(1, parsed.Universe.Count);
+        Assert.HasCount(1, parsed.Universe);
         Assert.AreEqual("World Universe", parsed.Universe[0].Name);
-        Assert.AreEqual(1, parsed.Sources.Count);
+        Assert.HasCount(1, parsed.Sources);
         Assert.AreEqual("World Series", parsed.Sources[0].SeriesName.Value);
     }
 
@@ -327,12 +330,12 @@ public class SourceQuoteFileReaderTests
         var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
 
         Assert.IsTrue(result);
-        Assert.AreEqual(4, parsed!.Conversations.Count);
+        Assert.HasCount(4, parsed!.Conversations);
         Assert.IsGreaterThanOrEqualTo(1, parsed.StageDirections.Count);
         Assert.IsGreaterThanOrEqualTo(1, parsed.SoundCues.Count);
-        Assert.IsTrue(parsed.Conversations.Any(c => c.Lines.Any(l => l.Type == ConversationLineType.StageDirection)),
+        Assert.Contains(c => c.Lines.Any(l => l.Type == ConversationLineType.StageDirection), parsed.Conversations,
             "At least one conversation should use a stage direction");
-        Assert.IsTrue(parsed.Conversations.Any(c => c.Lines.Any(l => l.Type == ConversationLineType.SoundCue)),
+        Assert.Contains(c => c.Lines.Any(l => l.Type == ConversationLineType.SoundCue), parsed.Conversations,
             "At least one conversation should use a sound cue");
     }
 }

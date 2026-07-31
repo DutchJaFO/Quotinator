@@ -78,7 +78,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogStarting();
-        Assert.AreEqual(1, logger.Messages.Count);
+        Assert.HasCount(1, logger.Messages);
     }
 
     [TestMethod]
@@ -86,7 +86,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogStarting();
-        StringAssert.Contains(logger.Messages[0], "##############################");
+        Assert.Contains("##############################", logger.Messages[0]);
     }
 
     [TestMethod]
@@ -94,7 +94,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogStarting();
-        StringAssert.Contains(logger.Messages[0], "Quotinator starting");
+        Assert.Contains("Quotinator starting", logger.Messages[0]);
     }
 
     #endregion
@@ -110,9 +110,9 @@ public class StartupSummaryLoggerTests
 
         var listeningIdx = logger.Messages.FindIndex(m => m.Contains("listening on"));
         var bannerIdx    = logger.Messages.FindIndex(m => m.Contains("Quotinator ready"));
-        Assert.IsTrue(listeningIdx >= 0,  "listening on line not found");
-        Assert.IsTrue(bannerIdx    >= 0,  "ready banner not found");
-        Assert.IsTrue(listeningIdx < bannerIdx, "listening line must come before the ready banner");
+        Assert.IsGreaterThanOrEqualTo(0, listeningIdx,  "listening on line not found");
+        Assert.IsGreaterThanOrEqualTo(0, bannerIdx,  "ready banner not found");
+        Assert.IsLessThan(bannerIdx, listeningIdx, "listening line must come before the ready banner");
     }
 
     [TestMethod]
@@ -122,7 +122,7 @@ public class StartupSummaryLoggerTests
         Build(logger).LogReady(["http://0.0.0.0:8080", "https://0.0.0.0:8443"]);
 
         var listeningLines = logger.Messages.Where(m => m.Contains("listening on")).ToList();
-        Assert.AreEqual(2, listeningLines.Count);
+        Assert.HasCount(2, listeningLines);
     }
 
     #endregion
@@ -135,7 +135,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "##############################");
+        Assert.Contains("##############################", AllMessages(logger));
     }
 
     [TestMethod]
@@ -143,7 +143,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "Quotinator ready");
+        Assert.Contains("Quotinator ready", AllMessages(logger));
     }
 
     [TestMethod]
@@ -151,7 +151,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "1.2.3");
+        Assert.Contains("1.2.3", AllMessages(logger));
     }
 
     [TestMethod]
@@ -160,12 +160,12 @@ public class StartupSummaryLoggerTests
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
         var all = AllMessages(logger);
-        StringAssert.Contains(all, "schema v3");
-        StringAssert.Contains(all, "Statistics:");
-        StringAssert.Contains(all, "780 quotes");
-        StringAssert.Contains(all, "3 sources");
-        StringAssert.Contains(all, "42 characters");
-        StringAssert.Contains(all, "12 people");
+        Assert.Contains("schema v3", all);
+        Assert.Contains("Statistics:", all);
+        Assert.Contains("780 quotes", all);
+        Assert.Contains("3 sources", all);
+        Assert.Contains("42 characters", all);
+        Assert.Contains("12 people", all);
     }
 
     /// <summary>#221: the five entity-type counts added alongside quotes/sources/characters/people
@@ -177,11 +177,11 @@ public class StartupSummaryLoggerTests
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
         var all = AllMessages(logger);
-        StringAssert.Contains(all, "0 series");
-        StringAssert.Contains(all, "0 universes");
-        StringAssert.Contains(all, "0 stage directions");
-        StringAssert.Contains(all, "0 sound cues");
-        StringAssert.Contains(all, "0 conversations");
+        Assert.Contains("0 series", all);
+        Assert.Contains("0 universes", all);
+        Assert.Contains("0 stage directions", all);
+        Assert.Contains("0 sound cues", all);
+        Assert.Contains("0 conversations", all);
     }
 
     [TestMethod]
@@ -189,7 +189,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger, migrationApplied: "v2 -> v3").LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "migration applied: v2 -> v3");
+        Assert.Contains("migration applied: v2 -> v3", AllMessages(logger));
     }
 
     [TestMethod]
@@ -197,7 +197,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger, migrationApplied: null).LogReady(["http://0.0.0.0:8080"]);
-        Assert.IsFalse(AllMessages(logger).Contains("migration applied"),
+        Assert.DoesNotContain("migration applied", AllMessages(logger),
             "migration line must not appear when no migration ran");
     }
 
@@ -206,7 +206,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "MCP server:     not implemented");
+        Assert.Contains("MCP server:     not implemented", AllMessages(logger));
     }
 
     [TestMethod]
@@ -214,7 +214,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "Log level:      info");
+        Assert.Contains("Log level:      info", AllMessages(logger));
     }
 
     [TestMethod]
@@ -222,7 +222,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger, adminKeyConfigured: true).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "Admin API key:  set");
+        Assert.Contains("Admin API key:  set", AllMessages(logger));
     }
 
     [TestMethod]
@@ -230,7 +230,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger, adminKeyConfigured: false).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "Admin API key:  not set");
+        Assert.Contains("Admin API key:  not set", AllMessages(logger));
     }
 
     [TestMethod]
@@ -238,7 +238,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger, sslEnabled: true).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "SSL:            on");
+        Assert.Contains("SSL:            on", AllMessages(logger));
     }
 
     [TestMethod]
@@ -246,7 +246,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger, sslEnabled: false).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "SSL:            off");
+        Assert.Contains("SSL:            off", AllMessages(logger));
     }
 
     [TestMethod]
@@ -254,7 +254,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger, logRequests: true).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "Log requests:   on");
+        Assert.Contains("Log requests:   on", AllMessages(logger));
     }
 
     [TestMethod]
@@ -262,7 +262,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "REST API:");
+        Assert.Contains("REST API:", AllMessages(logger));
     }
 
     [TestMethod]
@@ -270,7 +270,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "OpenAPI UI:");
+        Assert.Contains("OpenAPI UI:", AllMessages(logger));
     }
 
     [TestMethod]
@@ -278,7 +278,7 @@ public class StartupSummaryLoggerTests
     {
         var logger = new CapturingLogger<StartupSummaryLogger>();
         Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        StringAssert.Contains(AllMessages(logger), "OpenAPI spec:");
+        Assert.Contains("OpenAPI spec:", AllMessages(logger));
     }
 
     #endregion

@@ -249,7 +249,7 @@ public class SourceDataIntegrityTests
         {
             var name = Path.GetFileName(file);
             if (name.Equals("manifest.json", StringComparison.OrdinalIgnoreCase)) continue;
-            Assert.IsTrue(listed.Contains(name), $"'{name}' exists in data/sources/ but is not listed in manifest.json (as either 'file', 'ruleFile', or 'sourceAliasFile')");
+            Assert.Contains(name, listed, $"'{name}' exists in data/sources/ but is not listed in manifest.json (as either 'file', 'ruleFile', or 'sourceAliasFile')");
         }
     }
 
