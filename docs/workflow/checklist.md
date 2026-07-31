@@ -155,7 +155,8 @@ Releases follow a two-stage model. See `docs/release-verification.md` for tier d
       see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md)
 - [ ] Build clean: `dotnet build --configuration Release` — 0 warnings, 0 errors
 - [ ] Tests pass: `dotnet test --configuration Release` — all tests pass, 0 warnings
-- [ ] Changelogs updated (`CHANGELOG.md`, `addon/CHANGELOG.md`, `addon-beta/CHANGELOG.md`)
+- [ ] Changelogs updated (`CHANGELOG.md`, `addon/CHANGELOG.md`, `addon-beta/CHANGELOG.md`) — optionally
+      pick a fitting one-line release `quote` reflecting something notable about the release
 - [ ] Final PR merged to `main` (without `--delete-branch` — developer deletes the branch manually if desired)
 
 ### Beta tag (T1 + T2 gate)

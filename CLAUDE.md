@@ -874,7 +874,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
    **Release issue-list rule:** every release entry whose work traces back to a specific issue must carry that issue's number in its `issues[]` array — including hotfix releases spawned by the same issue. Example: issue #100 spawned both v1.6.3 (primary Serilog change) and v1.6.4 (HA crash hotfix); both entries carry `"issues": [100]`. If a release is already tagged when the gap is noticed, add the number to the matching entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep) and regenerate.
 
-   **When tagging a release**: promote the `unreleased` entries into a new release entry at the top of the `releases` array, set the `version` and `date` fields, and clear (or remove) the `unreleased` section. Then run the generator to regenerate both markdown files before committing.
+   **When tagging a release**: promote the `unreleased` entries into a new release entry at the top of the `releases` array, set the `version` and `date` fields, and clear (or remove) the `unreleased` section. Optionally pick a fitting one-line `quote` reflecting something notable about the release (freely-written release-note flavour text — not a served Quotinator quote, and not subject to the "never invent quotes" policy; see the `quote` field in `schemas/changelog.schema.json`'s `release` definition). Then run the generator to regenerate both markdown files before committing.
 
    Rules for `highlights` in `changelog.en.json`:
    - **An array of plain-English strings** (one sentence per element) — the Blazor UI renders each element as a bullet

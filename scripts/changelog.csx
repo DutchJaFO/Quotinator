@@ -194,6 +194,13 @@ static void GenerateKeepAChangelog(StringBuilder sb, List<JsonElement> releases,
         sb.AppendLine();
         sb.AppendLine($"## [{version}] - {date}");
 
+        var quote = GetQuote(r);
+        if (quote is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine(quote);
+        }
+
         var highlights = GetHighlights(r, fallback, fallbackMessage);
         if (highlights.Count > 0)
         {
@@ -303,6 +310,24 @@ static List<string> GetItems(JsonElement r, string key)
         .Select(i => i.GetString() ?? "")
         .Where(s => !string.IsNullOrEmpty(s))
         .ToList();
+}
+
+// Format must match Quotinator.Changelog.Formatting.ChangelogQuoteFormatter.Format().
+// Deliberately keepachangelog-only — ha-addon format already strips everything down to bullet
+// highlights (no added/changed/fixed/removed sections either), so this editorial flavour line
+// follows the same precedent and is omitted there.
+static string? GetQuote(JsonElement r)
+{
+    if (!r.TryGetProperty("quote", out var q)) return null;
+    if (!q.TryGetProperty("text", out var textEl)) return null;
+
+    var text = textEl.GetString();
+    if (string.IsNullOrWhiteSpace(text)) return null;
+
+    var attribution = q.TryGetProperty("attribution", out var attrEl) ? attrEl.GetString() : null;
+    return string.IsNullOrWhiteSpace(attribution)
+        ? $"> \"{text}\""
+        : $"> \"{text}\" — {attribution}";
 }
 
 static List<string> GetHighlights(JsonElement r, bool fallback, string fallbackMessage)
