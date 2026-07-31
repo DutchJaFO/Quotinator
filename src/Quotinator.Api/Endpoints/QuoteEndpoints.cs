@@ -7,6 +7,7 @@ using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Repositories;
 using Quotinator.Core.Services;
+using ProblemDetails = Microsoft.AspNetCore.Mvc.ProblemDetails;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -27,6 +28,7 @@ internal static class QuoteEndpoints
         group.MapGet("/random", GetRandom)
              .WithName("GetRandomQuotes")
              .WithSummary("Random quote(s)")
+             .Produces<FilteredQuoteResult<QuoteResponse>>(StatusCodes.Status200OK)
              .WithDescription(
                  "Returns a result envelope containing one or more randomly selected quotes. " +
                  "Use `n` to request up to 100 quotes. " +
@@ -49,6 +51,7 @@ internal static class QuoteEndpoints
         group.MapGet("/search", Search)
              .WithName("SearchQuotes")
              .WithSummary("Search quotes")
+             .Produces<FilteredQuoteResult<QuoteResponse>>(StatusCodes.Status200OK)
              .WithDescription(
                  "Returns quotes whose text, source, character, or author contain `q` (case-insensitive). " +
                  "Optionally filter by `type` or `genre` (both repeatable, OR logic within each), " +
@@ -60,6 +63,8 @@ internal static class QuoteEndpoints
         group.MapGet("/{id}", GetById)
              .WithName("GetQuoteById")
              .WithSummary("Quote by ID")
+             .Produces<QuoteResponse>(StatusCodes.Status200OK)
+             .Produces<ProblemDetails>(StatusCodes.Status404NotFound)
              .WithDescription(
                  "Returns a single quote by its UUID. Returns 404 if not found. " +
                  "Use `lang` to request a specific language.");
@@ -67,6 +72,7 @@ internal static class QuoteEndpoints
         group.MapGet("/", GetAll)
              .WithName("GetAllQuotes")
              .WithSummary("All quotes (paginated)")
+             .Produces<PagedResult<QuoteResponse>>(StatusCodes.Status200OK)
              .WithDescription(
                  "Returns a paginated list of all quotes. " +
                  "Optionally filter by `type` (movie, tv, anime, book, person) or `genre` — both parameters are repeatable (OR logic within each). " +
