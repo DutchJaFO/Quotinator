@@ -14,25 +14,27 @@ its own `feature/<slug>` branch and PR rather than sharing a single milestone br
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
 | [#166](https://github.com/DutchJaFO/Quotinator/issues/166) | HA add-on: split into separate stable and beta sub-add-ons | Waiting for release | T1 ✅ T2 ✅ T3 ✅ | [166-ha-addon-stable-beta-split-plan.md](166-ha-addon-stable-beta-split-plan.md) |
-| [#197](https://github.com/DutchJaFO/Quotinator/issues/197) | MSTest analyzer diagnostics (e.g. MSTEST0068) are invisible to the 0-warnings build policy — no .editorconfig exists | Planning | Not yet determined | No plan doc yet |
+| [#197](https://github.com/DutchJaFO/Quotinator/issues/197) | MSTest analyzer diagnostics (e.g. MSTEST0068) are invisible to the 0-warnings build policy — no .editorconfig exists | Waiting for release | T1 ⬜ T2 ✅ | No plan doc yet |
 | [#159](https://github.com/DutchJaFO/Quotinator/issues/159) | Document repository-is-C#-only tooling policy as an ADR | Planning | Not yet determined | No plan doc yet |
 | [#146](https://github.com/DutchJaFO/Quotinator/issues/146) | Audit memory-only project conventions and move genuine ones into CLAUDE.md/docs | Planning | Not yet determined | No plan doc yet |
 | [#208](https://github.com/DutchJaFO/Quotinator/issues/208) | Issue-creation process: always propose label + milestone in the same draft-review pass | Planning | Not yet determined | No plan doc yet |
-| [#150](https://github.com/DutchJaFO/Quotinator/issues/150) | Audit: ensure all enum-valued POCO properties have matching DB CHECK constraints | Planning | Not yet determined | No plan doc yet |
+| [#150](https://github.com/DutchJaFO/Quotinator/issues/150) | Audit: ensure all enum-valued POCO properties have matching DB CHECK constraints | Waiting for release | T1 ⬜ T2 ✅ | No plan doc yet |
 | [#151](https://github.com/DutchJaFO/Quotinator/issues/151) | Should System_-prefixed provenance tables purge rows referencing Reset-wiped entities? | Planning | Not yet determined | No plan doc yet |
 | [#156](https://github.com/DutchJaFO/Quotinator/issues/156) | Reset: use the fresh-database baseline script instead of drop-all-user-tables + replay | Planning | Not yet determined | No plan doc yet |
 | [#222](https://github.com/DutchJaFO/Quotinator/issues/222) | Unicode-aware case-insensitive LIKE matching (accented/non-ASCII characters) | Planning | Not yet determined | No plan doc yet |
-| [#148](https://github.com/DutchJaFO/Quotinator/issues/148) | OpenAPI: document response models for existing quote/admin endpoints | Planning | Not yet determined | No plan doc yet |
+| [#148](https://github.com/DutchJaFO/Quotinator/issues/148) | OpenAPI: document response models for existing quote/admin endpoints | Waiting for release | T1 ⬜ T2 ✅ | No plan doc yet |
 | [#227](https://github.com/DutchJaFO/Quotinator/issues/227) | Import-table naming standardization + general import-file content provenance (FileResource / FileResourceLine) | Planning | Not yet determined | No plan doc yet |
-| [#178](https://github.com/DutchJaFO/Quotinator/issues/178) | Changelog: add an optional one-line quote to each release entry | Planning | Not yet determined | No plan doc yet |
+| [#178](https://github.com/DutchJaFO/Quotinator/issues/178) | Changelog: add an optional one-line quote to each release entry | Waiting for release | T1 ⬜ T2 ✅ | No plan doc yet |
 | [#232](https://github.com/DutchJaFO/Quotinator/issues/232) | Reduce OS-level vulnerabilities in Docker base image (Docker Scout scan) | Planning | Not yet determined | No plan doc yet |
 | [#236](https://github.com/DutchJaFO/Quotinator/issues/236) | Release workflow: HA can see a config.yaml version bump before the matching Docker image is pushed | Planning | Not yet determined | No plan doc yet |
+| [#244](https://github.com/DutchJaFO/Quotinator/issues/244) | Hidden Roslyn code-style and .NET analyzer diagnostics are invisible to the 0-warnings build policy (IDE0xxx, CAxxxx) | Planning | Not yet determined | No plan doc yet |
+| [#245](https://github.com/DutchJaFO/Quotinator/issues/245) | Sources.Date stays NULL when a Source's only sources[] entry omits date (gap in #191's scope) | Planning | Not yet determined | No plan doc yet |
 
 ---
 
 ## Dependency map
 
-None of the 14 issues block each other. The order below is based on risk, effort, and
+None of the 16 issues block each other. The order below is based on risk, effort, and
 conflict-avoidance (e.g. doing a broad mechanical test-file change before other issues add more
 tests to the same files) rather than any hard dependency.
 
@@ -58,6 +60,11 @@ tests to the same files) rather than any hard dependency.
 14. **#236** — Release workflow config/image timing race (discovered live during #166's T3
     verification, 2026-07-30; appended here rather than reordered in since it has no dependency on
     the others)
+15. **#244** — Hidden IDE0xxx/CAxxxx analyzer diagnostics (discovered while reviewing #197's fix,
+    2026-07-31; appended here rather than reordered in since it has no dependency on the others)
+16. **#245** — Sources.Date gap for date-less explicit `sources[]` entries (discovered during the
+    full T2 smoke-test pass, 2026-07-31; appended here rather than reordered in since it has no
+    dependency on the others)
 
 ---
 
