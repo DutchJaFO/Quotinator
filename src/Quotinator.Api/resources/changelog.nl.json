@@ -10,9 +10,10 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [178],
+    "issues": [178, 148],
     "added": [
-      "Release-items kunnen nu een optioneel eenregelig `quote`-veld bevatten (sfeervolle tekst voor de release-notities, met optionele `attribution`) — weergegeven in `CHANGELOG.md` en de Blazor-changelog-UI, weggelaten uit de beknoptere `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)"
+      "Release-items kunnen nu een optioneel eenregelig `quote`-veld bevatten (sfeervolle tekst voor de release-notities, met optionele `attribution`) — weergegeven in `CHANGELOG.md` en de Blazor-changelog-UI, weggelaten uit de beknoptere `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)",
+      "OpenAPI/Scalar-documentatie publiceert nu echte, getypeerde responsschema's voor de quote-endpoints (`/quotes/random`, `/search`, `/{id}`, `/quotes`) en de admin-endpoints (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — voorheen toonde elk van deze alleen een kale `200 OK` zonder schema (issue #148)"
     ]
   },
   "releases": [

@@ -1,11 +1,15 @@
 using System.ComponentModel;
+using Microsoft.AspNetCore.Mvc;
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Endpoints;
@@ -32,27 +36,28 @@ internal static class AdminEndpoints
         publicGroup.MapGet("/database/seed/preview", async (IDatabaseInitializer db, IApiLocalizer localizer) =>
         {
             var preview = await db.PreviewSeedAsync();
-            return Results.Ok(new
+            return Results.Ok(new SeedPreviewResponse
             {
-                files = preview.Files.Select(f => new
+                Files = preview.Files.Select(f => new SeedFilePreviewResponse
                 {
-                    f.FileName,
-                    f.QuoteCount,
-                    refreshOutcome     = f.RefreshOutcome?.ToString().ToLowerInvariant(),
-                    lastRefreshedAtUtc = f.LastRefreshedAtUtc,
-                    issue              = f.Issue?.ToString().ToLowerInvariant(),
-                    message            = f.Issue switch
+                    FileName           = f.FileName,
+                    QuoteCount         = f.QuoteCount,
+                    RefreshOutcome     = f.RefreshOutcome?.ToString().ToLowerInvariant(),
+                    LastRefreshedAtUtc = f.LastRefreshedAtUtc,
+                    Issue              = f.Issue?.ToString().ToLowerInvariant(),
+                    Message            = f.Issue switch
                     {
                         SeedFileIssue.Missing     => localizer[ApiMessages.SeedFileMissing],
                         SeedFileIssue.InvalidJson => localizer[ApiMessages.SeedFileInvalidJson],
                         _                         => null
                     }
-                }),
-                reports = preview.Reports
+                }).ToList(),
+                Reports = preview.Reports
             });
         })
         .WithName("PreviewSeed")
         .WithSummary("Preview seed import")
+        .Produces<SeedPreviewResponse>(StatusCodes.Status200OK)
         .WithDescription(
             "Scans all configured source files without writing anything to the database. " +
             "Returns the quote count per file, plus a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale " +
@@ -86,6 +91,8 @@ internal static class AdminEndpoints
         })
         .WithName("GetAuditLog")
         .WithSummary("Get audit log")
+        .Produces<PagedItems<SystemAuditEntry>>(StatusCodes.Status200OK)
+        .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
         .WithDescription(
             "Returns a paginated list of audit entries, newest first. " +
             "Filter by `table` (e.g. `Quotes`, `Database`) and/or `recordId` (Guid). " +
@@ -96,22 +103,24 @@ internal static class AdminEndpoints
         adminGroup.MapPost("/database/reseed", async (IDatabaseInitializer db, bool forceSourceRefresh = false) =>
         {
             await db.ReseedAsync(forceSourceRefresh);
-            return Results.Ok(new
+            return Results.Ok(new DatabaseSeedSummaryResponse
             {
-                quotes          = db.QuoteCount,
-                sources         = db.SourceCount,
-                characters      = db.CharacterCount,
-                people          = db.PeopleCount,
-                series          = db.SeriesCount,
-                universes       = db.UniverseCount,
-                stageDirections = db.StageDirectionCount,
-                soundCues       = db.SoundCueCount,
-                conversations   = db.ConversationCount,
-                reports         = db.LastSeedReport
+                Quotes          = db.QuoteCount,
+                Sources         = db.SourceCount,
+                Characters      = db.CharacterCount,
+                People          = db.PeopleCount,
+                Series          = db.SeriesCount,
+                Universes       = db.UniverseCount,
+                StageDirections = db.StageDirectionCount,
+                SoundCues       = db.SoundCueCount,
+                Conversations   = db.ConversationCount,
+                Reports         = db.LastSeedReport
             });
         })
         .WithName("ReseedDatabase")
         .WithSummary("Reseed the database")
+        .Produces<DatabaseSeedSummaryResponse>(StatusCodes.Status200OK)
+        .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
         .WithDescription(
             "Clears all data tables and reimports every quote from the configured source files. " +
             "The schema version history is preserved — no migrations are re-applied. " +
@@ -125,22 +134,24 @@ internal static class AdminEndpoints
         adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
         {
             await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh);
-            return Results.Ok(new
+            return Results.Ok(new DatabaseSeedSummaryResponse
             {
-                quotes          = db.QuoteCount,
-                sources         = db.SourceCount,
-                characters      = db.CharacterCount,
-                people          = db.PeopleCount,
-                series          = db.SeriesCount,
-                universes       = db.UniverseCount,
-                stageDirections = db.StageDirectionCount,
-                soundCues       = db.SoundCueCount,
-                conversations   = db.ConversationCount,
-                reports         = db.LastSeedReport
+                Quotes          = db.QuoteCount,
+                Sources         = db.SourceCount,
+                Characters      = db.CharacterCount,
+                People          = db.PeopleCount,
+                Series          = db.SeriesCount,
+                Universes       = db.UniverseCount,
+                StageDirections = db.StageDirectionCount,
+                SoundCues       = db.SoundCueCount,
+                Conversations   = db.ConversationCount,
+                Reports         = db.LastSeedReport
             });
         })
         .WithName("ResetDatabase")
         .WithSummary("Reset the database")
+        .Produces<DatabaseSeedSummaryResponse>(StatusCodes.Status200OK)
+        .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
         .WithDescription(
             "Clears all data, reapplies all migrations from scratch, " +
             "then reimports every quote from the configured source files. " +
@@ -157,20 +168,22 @@ internal static class AdminEndpoints
         adminGroup.MapPost("/sources/refresh", async (IDatabaseInitializer db, bool force = false) =>
         {
             var resolution = await db.RefreshSourcesAsync(force);
-            return Results.Ok(new
+            return Results.Ok(new SourceRefreshResponse
             {
-                results = resolution.Results.Select(r => new
+                Results = resolution.Results.Select(r => new SourceRefreshResultResponse
                 {
-                    r.Name,
-                    r.Url,
-                    outcome = r.Outcome.ToString().ToLowerInvariant(),
-                    r.Detail,
-                    lastRefreshedAtUtc = r.LastRefreshedAtUtc
-                })
+                    Name               = r.Name,
+                    Url                = r.Url,
+                    Outcome            = r.Outcome.ToString().ToLowerInvariant(),
+                    Detail             = r.Detail,
+                    LastRefreshedAtUtc = r.LastRefreshedAtUtc
+                }).ToList()
             });
         })
         .WithName("RefreshSources")
         .WithSummary("Refresh downloaded source caches")
+        .Produces<SourceRefreshResponse>(StatusCodes.Status200OK)
+        .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
         .WithDescription(
             "Refreshes the internal and external download caches for every manifest entry that declares a `downloadUrl`/`github`, " +
             "without touching the database — the reimport itself only happens on the next reseed/reset/startup. " +
