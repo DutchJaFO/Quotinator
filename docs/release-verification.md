@@ -81,6 +81,38 @@ When the change touches schema/reset logic, also exercise the affected admin end
 
 ---
 
+## Never verify against an ad-hoc or shared database
+
+Neither T1 nor T2 may substitute a developer's own accumulated Visual Studio dev database, or a stale
+`bin/`-folder test artefact, for a deliberately constructed verification target. An ad-hoc database's
+schema version and history are unknown until something breaks and they have to be reverse-engineered —
+and worse, a *convenient* database (e.g. one that happens to already be empty) can silently take an
+easier code path (fresh-baseline creation) instead of the one actually under test (incremental
+migration replay), producing a false-positive "verified" that never exercised the real scenario.
+
+**How to apply:**
+- **T2 (Docker)**: use a purpose-built backup or snapshot representing a specific, known starting state
+  (e.g. a database matching a real released version) — never whatever state a container happens to have
+  accumulated across runs. If a scenario needs "an existing v8 database," construct that state
+  deliberately within the same verification run.
+- **Migration/schema-path verification specifically** belongs in a hermetic unit test against a fresh,
+  purpose-built in-memory or temp-file database — see `DatabaseInitializerTests.cs`'s
+  `InitialiseAsync_LegacyV172SchemaVersionTable_SplitsCorrectlyAndReplaysRemainingMigrations` and
+  `Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema` for the pattern: construct the
+  starting schema state explicitly, then verify the transition, with no dependency on any pre-existing
+  file.
+- The dedicated "verify against the last published release's schema" check ([ADR 009](architecture-decisions/009-verify-migrations-against-last-released-schema.md))
+  is a milestone-closing gate that reconstructs a real released snapshot on purpose — it is not
+  something a per-issue T1 check can casually substitute for by hoping the dev database happens to be
+  in the right state.
+
+**Why this matters even when a check "looks" green:** T1's own dev database can happen to be freshly
+reset, which means it silently takes the baseline-creation path instead of the incremental-migration
+path a plan doc's verification row actually claims to be checking — a "confirmed working" result that
+never touched the code path it was meant to prove.
+
+---
+
 ## How to declare tiers in a plan doc
 
 In the issue plan doc, add a **Tiers** line after the Status line:
