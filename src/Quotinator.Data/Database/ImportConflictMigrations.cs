@@ -155,4 +155,64 @@ public static class ImportConflictMigrations
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
         """;
+
+    /// <summary>
+    /// #150, ADR 008 — adds a <c>CHECK</c> constraint to <c>AppliedPolicy</c> (backed by
+    /// <c>DuplicateResolutionPolicy</c>, a real closed C# enum), closing a gap ADR 008 itself
+    /// documented as a known, tracked exception rather than fixing at the time. Same rebuild
+    /// technique as <see cref="AddStatusCheckConstraint"/> — SQLite has no <c>ALTER TABLE ... ADD
+    /// CHECK</c>, and this table's prior shape had already applied to real local databases.
+    /// <para>
+    /// No code in this repository has ever written a row to this table (confirmed by searching the
+    /// full git history for an <c>INSERT INTO System_ImportConflicts</c> outside this file's own
+    /// migration bodies — there is none), so in practice this CHECK affects zero real rows. The copy
+    /// step still normalises defensively — passing through anything already matching an enum member
+    /// name, or any genuinely unexpected value, via the same <c>ELSE</c>-passthrough safety property
+    /// <see cref="AddStatusCheckConstraint"/> established — in case a database was ever hand-edited
+    /// or written some other way outside this codebase's own tracked history.
+    /// </para>
+    /// </summary>
+    public const string AddAppliedPolicyCheckConstraint = """
+        CREATE TABLE IF NOT EXISTS System_ImportConflicts_New (
+            Id              TEXT    NOT NULL PRIMARY KEY,
+            BatchId         TEXT    NOT NULL,
+            EntityType      TEXT    NOT NULL,
+            EntityId        TEXT,
+            ExistingValue   TEXT,
+            IncomingValue   TEXT,
+            AppliedPolicy   TEXT
+                            CHECK (AppliedPolicy IS NULL OR AppliedPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
+            Status          TEXT    NOT NULL
+                            CHECK (Status IN ('Pending', 'Decided', 'Resolved')),
+            MergedFields    TEXT,
+            DetectedAt      TEXT    NOT NULL,
+            ResolvedAt      TEXT,
+            DateCreated     TEXT    NOT NULL,
+            DateModified    TEXT,
+            DateDeleted     TEXT,
+            IsDeleted       INTEGER NOT NULL DEFAULT 0,
+            ExistingBatchId TEXT
+        );
+
+        INSERT INTO System_ImportConflicts_New (Id, BatchId, EntityType, EntityId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, ResolvedAt, DateCreated, DateModified, DateDeleted, IsDeleted, ExistingBatchId)
+        SELECT
+            Id, BatchId, EntityType, EntityId, ExistingValue, IncomingValue,
+            CASE AppliedPolicy
+                WHEN 'skip'         THEN 'Skip'
+                WHEN 'newest-wins'  THEN 'NewestWins'
+                WHEN 'merge-ours'   THEN 'MergeOurs'
+                WHEN 'merge-theirs' THEN 'MergeTheirs'
+                WHEN 'review'       THEN 'Review'
+                ELSE AppliedPolicy
+            END,
+            Status, MergedFields, DetectedAt, ResolvedAt, DateCreated, DateModified, DateDeleted, IsDeleted, ExistingBatchId
+        FROM System_ImportConflicts;
+
+        DROP TABLE System_ImportConflicts;
+
+        ALTER TABLE System_ImportConflicts_New RENAME TO System_ImportConflicts;
+
+        CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
+        CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
+        """;
 }

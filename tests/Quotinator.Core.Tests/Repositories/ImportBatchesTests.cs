@@ -153,14 +153,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>App schema migration version is bumped to 11 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>App schema migration version is bumped to 5 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(4, db.SchemaVersion, "SchemaVersion should be 4 after #155's consolidation of migrations 4-11 into one");
+        Assert.AreEqual(5, db.SchemaVersion, "SchemaVersion should be 5: #155's consolidation of migrations 4-11 into one (4), plus #150's ImportBatches.ConflictPolicy CHECK constraint migration (5)");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────
@@ -403,5 +403,59 @@ public class ImportBatchesTests
             "SELECT ImportedById FROM ImportBatches WHERE Id = @id;", new { id = batchId });
         Assert.AreEqual("22222222-2222-4222-8222-222222222222", preservedValue,
             "The pre-existing value must survive the rename unchanged");
+    }
+
+    /// <summary>
+    /// #150, ADR 008: migration 5 adds a CHECK constraint to <c>ImportBatches.ConflictPolicy</c>.
+    /// Every row created via application code always stamps <c>DuplicateResolutionPolicy.ToString()</c>
+    /// (PascalCase), but the column's original <c>ALTER TABLE ... ADD COLUMN ... DEFAULT 'skip'</c>
+    /// backfill (migration 4) wrote that literal lowercase default directly into pre-existing rows,
+    /// never through application code. This proves migration 5's copy step normalises exactly that
+    /// legacy value to the PascalCase form the new CHECK requires, without losing the row.
+    /// </summary>
+    [TestMethod]
+    public async Task Migration_ImportBatchConflictPolicyCheckConstraint_NormalisesLegacyLowercaseDefault()
+    {
+        var batchId = Guid.NewGuid().ToString();
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration002_ReseedGenres);
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration003_ImportBatches);
+            await conn.ExecuteAsync(QuotinatorMigrations.Migration004_ConsolidatedSinceV172Core + QuotinatorMigrations.CharacterGlobalIdentityMerge);
+
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+
+            // Simulates a row that predates migration 4's ConflictPolicy column: its value is the
+            // literal SQL DEFAULT 'skip', never touched by application code (which always writes
+            // PascalCase via DuplicateResolutionPolicy.ToString()).
+            await conn.ExecuteAsync(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, ConflictPolicy) " +
+                "VALUES (@id, 'pre-check-constraint.json', 'Import', @now, 0, @now, 0, 'skip');",
+                new { id = batchId, now });
+
+            await conn.ExecuteAsync("CREATE TABLE System_ConsumerSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL)");
+            await conn.ExecuteAsync(
+                "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (1, @now), (2, @now), (3, @now), (4, @now);",
+                new { now });
+        }
+
+        var db = CreateInitializer([]);
+        await db.InitialiseAsync();
+
+        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        await verifyConn.OpenAsync();
+
+        var normalisedValue = await verifyConn.ExecuteScalarAsync<string>(
+            "SELECT ConflictPolicy FROM ImportBatches WHERE Id = @id;", new { id = batchId });
+        Assert.AreEqual("Skip", normalisedValue,
+            "The legacy lowercase 'skip' default must be normalised to 'Skip' to satisfy the new CHECK constraint");
+
+        await Assert.ThrowsExactlyAsync<SqliteException>(() => verifyConn.ExecuteAsync(
+            "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, ConflictPolicy) " +
+            "VALUES (@id, 'post-check-constraint.json', 'Import', @now, 0, @now, 0, 'skip');",
+            new { id = Guid.NewGuid().ToString(), now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") }),
+            "The new CHECK constraint must reject the old lowercase form going forward");
     }
 }

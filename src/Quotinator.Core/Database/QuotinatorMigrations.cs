@@ -21,6 +21,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 2, Sql = Migration002_ReseedGenres },
         new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
         new SchemaMigration { Version = 4, Sql = Migration004_ConsolidatedSinceV172 },
+        new SchemaMigration { Version = 5, Sql = Migration005_ImportBatchConflictPolicyCheckConstraint },
     ];
 
     /// <summary>
@@ -564,12 +565,81 @@ public static class QuotinatorMigrations
         DROP TABLE Character_MergeGroups;
         """;
 
+    /// <summary>
+    /// #150, ADR 008 — adds a <c>CHECK</c> constraint to <c>ImportBatches.ConflictPolicy</c>
+    /// (backed by <see cref="Quotinator.Data.Import.DuplicateResolutionPolicy"/>, a real closed C# enum), closing a gap ADR
+    /// 008 itself documented as a known, tracked exception rather than fixing at the time. Migration
+    /// 4 already applied to real databases with this column left unconstrained (added there via a
+    /// plain <c>ALTER TABLE ... ADD COLUMN</c>, which cannot carry a <c>CHECK</c> retroactively), so
+    /// per this project's append-only migration policy the fix is a new migration that rebuilds the
+    /// table under a temporary name — the same technique migration 4's own
+    /// <c>ImportBatchTypeUserSeed</c> section already uses to widen <c>Type</c>'s <c>CHECK</c>.
+    /// <para>
+    /// Every code path that constructs an <see cref="Quotinator.Data.Entities.ImportBatch"/> stamps
+    /// <c>ConflictPolicy</c> from <c>DuplicateResolutionPolicy.ToString()</c> (PascalCase, e.g.
+    /// <c>"NewestWins"</c>) — the same raw-enum-name convention every other CHECK'd enum column in
+    /// this project's own tables already uses (<c>Type</c>, <c>Status</c> on this very table). The
+    /// column's original <c>ALTER TABLE ... ADD COLUMN ... DEFAULT 'skip'</c> backfill, however, wrote
+    /// the literal lowercase default string directly into every pre-existing row at that migration's
+    /// own execution time — never through application code, so never PascalCase. The copy step below
+    /// normalises that one known legacy value (plus every other enum member, defensively, in case any
+    /// row was ever written some other way) to the PascalCase form the new <c>CHECK</c> requires;
+    /// anything already PascalCase — or any genuinely unexpected value — passes through the
+    /// <c>ELSE</c> branch unchanged, so a truly corrupt value correctly fails the <c>CHECK</c> instead
+    /// of being silently miscategorised (same safety property <see cref="ImportConflictMigrations.AddStatusCheckConstraint"/>
+    /// already established for this exact class of fix).
+    /// </para>
+    /// </summary>
+    internal const string Migration005_ImportBatchConflictPolicyCheckConstraint = """
+        CREATE TABLE ImportBatches_New (
+            Id             TEXT    PRIMARY KEY,
+            Name           TEXT    NOT NULL,
+            Type           TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System', 'UserSeed')),
+            Url            TEXT,
+            ImportedAt     TEXT    NOT NULL,
+            ImportedById   TEXT,
+            RecordCount    INTEGER NOT NULL DEFAULT 0,
+            DateCreated    TEXT    NOT NULL,
+            DateModified   TEXT,
+            DateDeleted    TEXT,
+            IsDeleted      INTEGER NOT NULL DEFAULT 0,
+            ConflictPolicy TEXT    NOT NULL DEFAULT 'Skip'
+                           CHECK (ConflictPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
+            Status         TEXT    NOT NULL DEFAULT 'Applied'
+                           CHECK (Status IN ('Staged', 'Applied', 'Discarded')),
+            AppliedAt      TEXT
+        );
+
+        INSERT INTO ImportBatches_New (Id, Name, Type, Url, ImportedAt, ImportedById, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted, ConflictPolicy, Status, AppliedAt)
+        SELECT
+            Id, Name, Type, Url, ImportedAt, ImportedById, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted,
+            CASE ConflictPolicy
+                WHEN 'skip'         THEN 'Skip'
+                WHEN 'newest-wins'  THEN 'NewestWins'
+                WHEN 'merge-ours'   THEN 'MergeOurs'
+                WHEN 'merge-theirs' THEN 'MergeTheirs'
+                WHEN 'review'       THEN 'Review'
+                ELSE ConflictPolicy
+            END,
+            Status, AppliedAt
+        FROM ImportBatches;
+
+        DROP TABLE ImportBatches;
+
+        ALTER TABLE ImportBatches_New RENAME TO ImportBatches;
+        """;
+
     // Consolidated schema for a genuinely fresh database — the union of migrations 1-8's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
     // ImportBatches using the final widened CHECK constraint (migration004), ImportBatches.
-    // ConflictPolicy (migration005's ALTER TABLE ADD COLUMN, also always appends, so it's listed
-    // last too) present with the same 'skip' default backfill value, CompletenessStatus/NoValueKnown
+    // ConflictPolicy (originally migration005's ALTER TABLE ADD COLUMN, also always appends, so it
+    // was listed last too) present with the CHECK constraint the real, later
+    // Migration005_ImportBatchConflictPolicyCheckConstraint (#150, ADR 008) adds — this baseline
+    // always reflects the column's final, current-day shape, not its shape as of the historical
+    // migration numbered 5 in this comment's own narrative (that number predates #155's consolidation
+    // and refers to a different, squashed-away migration; the real, currently-applied Migration005 is
+    // the CHECK-constraint one), CompletenessStatus/NoValueKnown
     // (migration006's ALTER TABLE ADD COLUMN, appended last again, revised from a plain IsComplete
     // BIT to the 3-state enum by #165 before ever shipping) on the four entity tables, and
     // ImportBatches.Status/AppliedAt (migration007's ALTER TABLE ADD COLUMN, appended last) with the
@@ -592,7 +662,8 @@ public static class QuotinatorMigrations
     // EXISTS-guarded, always a no-op before any quote has been seeded), migration009's
     // CharacterSources backfill INSERT (nothing to backfill on a fresh database — Characters is
     // always empty at baseline time), and migration011's own merge-consolidation UPDATEs (nothing to
-    // consolidate on a fresh database — same reasoning). Kept in sync with migrations 1-11 by
+    // consolidate on a fresh database — same reasoning). Kept in sync with migrations 1-11 (the
+    // pre-#155 historical narrative numbering) plus the real, current Migration005 by
     // DatabaseInitializerTests' schema-drift comparison.
     private const string BaselineSchema = """
         CREATE TABLE IF NOT EXISTS ImportBatches (
@@ -607,7 +678,8 @@ public static class QuotinatorMigrations
             DateModified TEXT,
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ConflictPolicy TEXT  NOT NULL DEFAULT 'skip',
+            ConflictPolicy TEXT  NOT NULL DEFAULT 'Skip'
+                           CHECK (ConflictPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
             Status       TEXT    NOT NULL DEFAULT 'Applied'
                          CHECK (Status IN ('Staged', 'Applied', 'Discarded')),
             AppliedAt    TEXT
