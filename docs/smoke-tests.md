@@ -9,7 +9,40 @@ avoid the two drifting apart). See `CLAUDE.md`'s Pre-Push Checklist step 6 for w
 verification command here in the same commit that fixes it — the list only grows, never shrinks.
 
 ---
-**Baseline** — health/version/random/search:
+
+## Contents
+
+1. [Baseline](#1-baseline--healthversionrandomsearch)
+2. [Import and staged-action review workflow](#2-import-and-staged-action-review-workflow-45-149-152-154) (#45, #149, #152, #154)
+3. [Two-phase decide→apply reversal](#3-two-phase-decideapply-reversal-177) (#177)
+4. [`batchId`-mode alias](#4-batchid-mode-alias-154) (#154)
+5. [Discard](#5-discard-154) (#154)
+6. [Reverse (undo)](#6-reverse-undo-59) (#59)
+7. [Bodyless request validation](#7-bodyless-request-validation-154) (#154)
+8. [StageDirection/SoundCue Modify/decidability](#8-stagedirectionsoundcue-modifydecidability-171172) (#171/#172)
+9. [Person: explicit id, Modify/decidability, dateOfBirth/dateOfDeath](#9-person-explicit-id-modifydecidability-dateofbirthdateofdeath-173) (#173)
+10. [Series/Universe schema, Character↔Source many-to-many identity](#10-seriesuniverse-schema-charactersource-many-to-many-identity-179) (#179)
+11. [Sources.Date populated from the resolving quote](#11-sourcesdate-populated-from-the-resolving-quote-191) (#191)
+12. [Canonicalize explicit ids at capture](#12-canonicalize-explicit-ids-at-capture-sourcepersonstagedirectionsoundcueconversation-209) (#209)
+13. [Pagination contract](#13-pagination-contract-pagesize0-max-500-default-20-page-beyond-last-195) (#195)
+14. [Quotes.Id case-insensitive lookup](#14-quotesid-case-insensitive-lookup-210) (#210)
+15. [ConversationLines.QuoteId FK safety](#15-conversationlinesquoteid-fk-safety-210s-casing-unification-revision) (#210 revision)
+16. [Systemic id-case guard](#16-systemic-id-case-guard-210s-scope-expansion) (#210 scope expansion)
+17. [Read-time presentation normalization for string-typed id-reference fields](#17-read-time-presentation-normalization-for-string-typed-id-reference-fields-210s-third-revision) (#210 third revision)
+18. [Uniform SELECT-list wrapping via IEntityColumnMetadata](#18-uniform-select-list-wrapping-via-ientitycolumnmetadata-210s-follow-on-round) (#210 follow-on)
+19. [`batchId` validated explicitly on apply/discard/reverse; request logging reports the real final status code](#19-batchid-validated-explicitly-on-actionsapply-actionsdiscard-actionsreverse-request-logging-reports-the-real-final-status-code)
+20. [Character Modify/decidability via the widened `characters[]` schema](#20-character-modifydecidability-via-the-widened-characters-schema-case-insensitive-source-natural-key-matching-175) (#175)
+21. [Bulk-decide a staged batch via file export/import — CSV and JSON](#21-bulk-decide-a-staged-batch-via-file-exportimport--csv-and-json-163) (#163)
+22. [Per-source conflict-resolution rule files and title-alias files — fresh seed produces zero pending actions](#22-per-source-conflict-resolution-rule-files-and-title-alias-files-181--fresh-4-file-seed-produces-zero-pending-actions) (#181)
+23. [Rule file live-read proof](#23-rule-file-live-read-proof-181) (#181)
+24. [ConflictResolutionRule staleness → new Stale status](#24-conflictresolutionrule-staleness--new-stale-status-153) (#153)
+25. [SourceAliasRule staleness](#25-sourcealiasrule-staleness-153) (#153)
+26. [Rule-file override endpoints](#26-rule-file-override-endpoints-153) (#153)
+27. [Per-file, per-entity-type import/seed report](#27-per-file-per-entity-type-importseed-report-221) (#221)
+
+---
+
+## 1. Baseline — health/version/random/search
 ```bash
 docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
 curl -s http://localhost:8080/api/v1/health
@@ -24,7 +57,11 @@ curl -s "http://localhost:8080/api/v1/quotes/search?q=love&type=person"
 Check that `/version` returns the expected version number — a missing `Directory.Build.props` in the build context silently produces `1.0.0` while `/health` still returns healthy.
 The search queries cover: default full-text (`love` should return results), `field=source` (`Casablanca` should return results), and `field=author` (`Churchill` should now return the curated Winston Churchill quote — see the curated `person`-type entries added below). `field=character` (`Rick`) and `type=person&q=love` may still return an empty `items` array with a `message`, since no bundled data currently matches either; that is expected behaviour, not a bug.
 
-**Import and staged-action review workflow** (#45, #149, #152, #154) — re-imports a bundled file with `review` policy forced, so the endpoint that would otherwise auto-resolve via the default policy instead produces a genuine pending action to exercise decide/undo/apply against. `/api/v1/import/actions/*` (#154's unified staging engine) is the live mechanism — every import and seed run stages through it now.
+---
+
+## 2. Import and staged-action review workflow (#45, #149, #152, #154)
+
+Re-imports a bundled file with `review` policy forced, so the endpoint that would otherwise auto-resolve via the default policy instead produces a genuine pending action to exercise decide/undo/apply against. `/api/v1/import/actions/*` (#154's unified staging engine) is the live mechanism — every import and seed run stages through it now.
 ```bash
 curl -s "http://localhost:8080/api/v1/import/actions"
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/conflicts"
@@ -52,7 +89,11 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 ```
 After `decide`, `status=Decided` must show it; after `undo`, it must be back under `status=Pending`; after `decide` again, ready to apply. **If the curated file's re-import produces more than one pending action** (it currently produces two — both `Airplane!` quotes), `apply` at this point correctly returns `422` with a `pendingActionIds` array listing the ones still undecided — this is the batch-apply-atomicity contract working as designed, not a bug. Decide each remaining id the same way, then re-run `apply` until it returns `200` and the quote's field reflects the decision. Applying with a deliberately lowercased `batchId` here also re-confirms the case-insensitive fix.
 
-**Two-phase decide→apply reversal** (#177) — a batch applied entirely through the staged
+---
+
+## 3. Two-phase decide→apply reversal (#177)
+
+A batch applied entirely through the staged
 review→decide→apply flow (i.e. via `POST /import/actions/apply` directly, not `POST /import`'s own
 single-shot path) previously never had its own `ImportBatches.Status` set to `Applied`, so
 `POST /import/actions/reverse` always rejected it with a bare `422` even though the batch had
@@ -70,7 +111,11 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 that sets `Status`/`AppliedAt` for every caller — check it wasn't bypassed by a new caller of
 `ApplyBatchAsync` or `TryApplyBatchAsync` added elsewhere.
 
-**`batchId`-mode alias** (#154) — `POST /import` can apply an already-staged batch directly, without re-uploading a file:
+---
+
+## 4. `batchId`-mode alias (#154)
+
+`POST /import` can apply an already-staged batch directly, without re-uploading a file:
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
@@ -83,7 +128,9 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 ```
 Must return `200` (the `skip` policy leaves nothing pending) and apply the previewed batch — proves `batchId` mode is a genuine alias for `POST /import/actions/apply`, not a dead code path.
 
-**Discard** (#154):
+---
+
+## 5. Discard (#154)
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
@@ -97,7 +144,9 @@ curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>"
 ```
 Discard must return `204`; every action in that batch must now show `"status":"Discarded"` — nothing was ever applied, since creation is deferred to apply time.
 
-**Reverse (undo)** (#59):
+---
+
+## 6. Reverse (undo) (#59)
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
@@ -139,7 +188,11 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 Must return `422` — the strict LIFO stack rule (#59): only the most recently applied batch still
 live may be reversed, regardless of whether it shares any entities with the older one.
 
-**Bodyless request validation** (#154) — a `POST /import` with no body, no `Content-Type`, and no `batchId` must be rejected with a clear, actionable message rather than a bare framework `400`:
+---
+
+## 7. Bodyless request validation (#154)
+
+A `POST /import` with no body, no `Content-Type`, and no `batchId` must be rejected with a clear, actionable message rather than a bare framework `400`:
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import"
 ```
@@ -149,7 +202,11 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 ```
 Must return `404` (unknown batch) even with zero body/`Content-Type` — proves `batchId` mode never attempts to read the request body at all.
 
-**StageDirection/SoundCue Modify/decidability** (#171/#172) — both entities were Add-only before
+---
+
+## 8. StageDirection/SoundCue Modify/decidability (#171/#172)
+
+Both entities were Add-only before
 these issues; this proves a `Complete` row blocks a silent overwrite, and a correctable row can be
 Modified/decided/reversed end to end. Create a small fixture (one quote is required — `POST /import`
 rejects a file with none):
@@ -179,7 +236,11 @@ pre-existing gap, see #171/#172's plan docs), confirm the write via DbInspector,
 `POST /import/actions/reverse?batchId=...` (`preview=true` first, then for real) and confirm the
 pre-correction text is restored via DbInspector.
 
-**Person: explicit id, Modify/decidability, dateOfBirth/dateOfDeath** (#173) — Person was Add-only
+---
+
+## 9. Person: explicit id, Modify/decidability, dateOfBirth/dateOfDeath (#173)
+
+Person was Add-only
 before this issue and never had a write path for `dateOfBirth`/`dateOfDeath`; this proves both a
 `Complete` Person blocks a silent overwrite and a correctable Person can be Modified/decided end to
 end, plus exercises the lowercase-explicit-id reversal fix found live during this issue's own T2
@@ -203,18 +264,47 @@ with a changed `dateOfBirth` under `{"duplicateResolution":{"default":"review"}}
 and `CompletenessStatus: Complete` via DbInspector. Re-import the same id again with another changed
 `dateOfBirth` under `review` policy — must now stage `Blocked`, not `Pending`
 (`GET /import/actions?status=Blocked`), and the on-disk value must be unchanged — proves a
-`Complete` Person can no longer be silently overwritten. Finally, exercise the lowercase-id
-reversal path: single-shot re-import a changed `dateOfBirth` under `newest-wins` (nothing pending,
-applies immediately), confirm the write via DbInspector, then `POST /import/actions/reverse?
-batchId=...` (`preview=true` first, then for real) — confirm via DbInspector that `IsDeleted` on
-the `People` row genuinely flips to `1` (this is the case-sensitivity regression found live during
-#173's own T2 pass: a Guid-typed repository call silently force-uppercases before comparing,
-matching zero rows against a lowercase-stored id, so the row would otherwise stay visibly present
-with `IsDeleted = 0` despite the endpoint reporting success). Re-import the exact same fixture one
-more time — must stage as a fresh `Add` (not `Modify`, which would mean the reversal silently
-no-op'd and the row was never truly gone), and `IsDeleted` must be back to `0` afterward.
+`Complete` Person can no longer be silently overwritten.
 
-**Series/Universe schema, Character↔Source many-to-many identity** (#179) — Character no longer
+**Correction (2026-07-31):** the paragraph below used to describe reversing the *same* Person from
+the steps above under `newest-wins`, expecting it to "apply immediately, nothing pending." That
+cannot happen: `CompletenessGuard.ShouldBlock` (`ImportActionPlanner.cs`, #168) is evaluated against
+the value a policy would actually *write*, not the raw incoming value — so once a row is `Complete`,
+every policy except `skip` blocks a genuine field change, `newest-wins` included. Re-running that
+exact sequence against a `Complete` Person stages `Blocked` again, exactly like the paragraph above,
+never a clean apply. The lowercase-id reversal fix is real and still needs proving, but only against
+a fresh row that was never marked `Complete` — reversing a `Modify`-only batch never touches
+`IsDeleted` at all; only reversing the row's own `Add` does. Use a **second, brand-new** Person for
+this part:
+
+```bash
+cat > .claude/temp/smoke-173-addonly.json <<'EOF'
+{
+  "quotes": [{"id":"f0000005-0000-4000-8000-000000000008","quote":"A #173 add-only smoke test quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":"Smoke Test Person AddOnly","type":"movie","genres":[],"translations":{}}],
+  "people": [{"id":"F0000007-0000-4000-8000-000000000007","name":"Smoke Test Person AddOnly","dateOfBirth":"1985-05-05","dateOfDeath":null}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-addonly.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+```
+Note the file's own id is deliberately uppercase (`F0000007-...`) — this is the case-sensitivity
+regression's actual reproduction shape: a Guid-typed repository call used to silently force-uppercase
+before comparing, matching zero rows against the lowercase-canonicalized stored id, so the row would
+otherwise stay visibly present with `IsDeleted = 0` despite the endpoint reporting success. Copy the
+returned `batchId`, then:
+```bash
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
+```
+Both must return `200`; confirm via DbInspector (`SELECT Id, IsDeleted FROM People WHERE Id =
+'f0000007-0000-4000-8000-000000000007'`) that `IsDeleted` genuinely flips to `1`. Re-import the exact
+same fixture one more time — must stage as a fresh `Add` (not `Modify`, which would mean the reversal
+silently no-op'd and the row was never truly gone), and `IsDeleted` must be back to `0` afterward.
+
+---
+
+## 10. Series/Universe schema, Character↔Source many-to-many identity (#179)
+
+Character no longer
 has a `SourceId` column; a Character's Source links live in `CharacterSources` instead, and today's
 matching remains per-Source in meaning (only the mechanism changed — reusing a Character across
 Sources is #174's job, not this one's). This proves both halves live: a brand-new Character on an
@@ -242,11 +332,27 @@ be `2` — a *second*, separate Character row, each linked to its own Source via
 — proving today's per-Source matching genuinely survived the mechanism change unchanged, not
 silently reused across Sources.
 
-**Sources.Date populated from the resolving quote** (#191) — a Source discovered implicitly from a
+---
+
+## 11. Sources.Date populated from the resolving quote (#191)
+
+A Source discovered implicitly from a
 quote (no `sources[]` entry naming it) previously never carried a date, even when the resolving
 quote had one. Re-imports the curated file's own `Airplane!`/`1980` quote to confirm the fix reaches
 a real import, not only startup seeding (already proven by a fresh container's seed — see the
 aggregate query below).
+
+**Known open gap (found 2026-07-31, not yet filed as its own issue — see #191's own T2 row 6, which
+already showed `439/479`, not `479/479`, right after the fix shipped): this fix only applies to a
+Source discovered *purely* by inference from a quote.** `PlanSourcesAsync` (the explicit `sources[]`-
+entry path #162/#180 use) was deliberately left untouched by #191. An entry that names a Source but
+omits `date` (as `quotinator-series-universe.json`'s Series-linking entries do — e.g. `"Frozen"`,
+`"Jurassic Park"`) creates the row with `Date = NULL` up front, and no later quote ever backfills it,
+even when that quote carries a real date and is processed in a later-seeded file. Confirmed live via
+`Frozen` (`NikhilNamal17_popular-movie-quotes.json` carries `"date": "2013"` for it, but
+`quotinator-series-universe.json` seeds its date-less `sources[]` entry first per `manifest.json`'s
+file order) and reproduces identically on the `Jurassic Park` cross-check below — do not be surprised
+if `Date` is `NULL` there; it is this gap, not a new regression.
 ```bash
 curl -s "http://localhost:8080/api/v1/quotes/search?q=Airplane&field=source"
 ```
@@ -262,15 +368,25 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
   --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Sources WHERE IsDeleted = 0"
 ```
 `have_date` must be nonzero and a large majority of `sources` (roughly 400+ of 479 on the current
-bundled dataset) — before the fix this was always `0`. Cross-check one specific title:
+bundled dataset) — before the fix this was always `0`. Cross-check one title with no `sources[]`
+entry at all (implicit-discovery path, the case #191 actually fixes):
+```bash
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
+  --sql "SELECT Title, Type, Date FROM Sources WHERE Title = 'Airplane!' AND IsDeleted = 0"
+```
+Must return `Date = 1980`. Then cross-check a title known to have a date-less explicit `sources[]`
+entry (the gap noted above):
 ```bash
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
   --sql "SELECT Title, Type, Date FROM Sources WHERE Title = 'Jurassic Park' AND IsDeleted = 0"
 ```
-Must return `Date = 1993`.
+Currently returns `Date = NULL` — expected until the open gap above is fixed, not a fresh failure.
 
-**Canonicalize explicit ids at capture — Source/Person/StageDirection/SoundCue/Conversation** (#209)
-— a file-authored explicit id previously reached storage in whatever raw casing the file used,
+---
+
+## 12. Canonicalize explicit ids at capture (Source/Person/StageDirection/SoundCue/Conversation) (#209)
+
+A file-authored explicit id previously reached storage in whatever raw casing the file used,
 never canonicalized; a `Guid`-typed lookup (which force-uppercases) then silently failed to find a
 non-canonically-stored row, even though the same row resolved fine via a join. Also proves the
 ConversationLines FOREIGN KEY fix: the bundled curated file's own Conversations reference
@@ -294,7 +410,11 @@ lowercase, ADR 012's system-wide convention) in the response. The quote lookup m
 to `"209 Smoke Test Film"` via the Quote→Source join, proving the fix didn't break the join to make
 the masterdata lookup work.
 
-**Pagination contract: pageSize=0, max 500, default 20, page-beyond-last** (#195) — `/quotes`,
+---
+
+## 13. Pagination contract: pageSize=0, max 500, default 20, page-beyond-last (#195)
+
+`/quotes`,
 `/admin/audit`, and `/import/actions` share one pagination contract; this proves it holds live on
 all three, not just at the unit-test/stub level. The two audit/import readers were caught passing
 `pageSize=0` straight into `LIMIT @pageSize` instead of translating it to `LIMIT -1` during this
@@ -341,7 +461,11 @@ deterministically in every `dotnet test` instead of requiring a live container. 
 pagination contract" earlier in this file for why this needs a dedicated live-pipeline test at all,
 given `NumericParameterSchemaTransformer` already has its own unit tests.
 
-**Quotes.Id case-insensitive lookup** (#210) — Quotes.Id canonicalizes to lowercase, the same
+---
+
+## 14. Quotes.Id case-insensitive lookup (#210)
+
+Quotes.Id canonicalizes to lowercase, the same
 convention every other entity uses (`EntityIdentity.StableId`, `GuidExtensions.ToCanonicalId`) —
 this project's single settled id format after two prior revisions (ADR 012's revision history).
 Before #210's first pass, `GET /quotes/{id}` had no case-insensitive read-side mitigation at all —
@@ -359,7 +483,11 @@ uppercase casing) must return `200` with the same quote, and the response's own 
 the canonical **lowercase** form (`f0000210-...`) regardless of the uppercase casing the file
 supplied — proving both the capture-time canonicalization and the case-insensitive read together.
 
-**ConversationLines.QuoteId FK safety** (#210's casing-unification revision) — a conversation line
+---
+
+## 15. ConversationLines.QuoteId FK safety (#210's casing-unification revision)
+
+A conversation line
 referencing a quote by an id whose casing doesn't match the quote's own now-canonical form must not
 violate `ConversationLines`' real `FOREIGN KEY` constraint to `Quotes(Id)` — the same bug class #209
 found for `StageDirectionId`/`SoundCueId`, now also covering `QuoteId`.
@@ -375,7 +503,11 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-21
 The quote's own `id` is lowercase; the conversation line's `quoteId` deliberately uses the uppercase
 form of the same id. Must return `200`, not a `SQLite Error 19: FOREIGN KEY constraint failed`.
 
-**Systemic id-case guard** (#210's scope expansion) — `Quotinator.Data.Diagnostics.SqlIdCaseGuard`
+---
+
+## 16. Systemic id-case guard (#210's scope expansion)
+
+`Quotinator.Data.Diagnostics.SqlIdCaseGuard`
 scans every SQL query in the codebase for an unwrapped id-comparison at build/test time
 (`SqlConstant_PassesIdCaseGuard`/`AssembledQuery_PassesIdCaseGuard` in both `Quotinator.Core.Tests`
 and `Quotinator.Data.Tests`, `RepositorySqlFactory_PassesIdCaseGuard` in
@@ -385,8 +517,11 @@ here only so a future reader knows why `RepositorySql.cs`'s generic `SelectById`
 now `LOWER()`-wrapped (ADR 012's system-wide lowercase revision — see that ADR for why `LOWER()`, not
 `UPPER()`) even though no single T2 scenario exercises them directly.
 
-**Read-time presentation normalization for string-typed id-reference fields** (#210's third
-revision) — `batchId`/`entityId`/`existingBatchId`/`recordId` are `string`-typed (not `Guid`-typed),
+---
+
+## 17. Read-time presentation normalization for string-typed id-reference fields (#210's third revision)
+
+`batchId`/`entityId`/`existingBatchId`/`recordId` are `string`-typed (not `Guid`-typed),
 so unlike `id` fields they get no automatic lowercase rendering from `System.Text.Json`'s `Guid`
 serialization default; a `LOWER(...) AS ColumnName` wrap was added to `Sql.SystemImportActions
 .SelectColumns` and `Sql.SystemAudit.SelectPaged` so these fields render canonically regardless of
@@ -410,7 +545,11 @@ fixture directly (bypassing capture-time canonicalization) and reads it back thr
 path — a live T2 run cannot easily manufacture pre-existing non-canonical data through the API alone,
 since every write path now canonicalizes at capture time.
 
-**Uniform SELECT-list wrapping via `IEntityColumnMetadata`** (#210's follow-on round) — `RepositorySql.cs`'s
+---
+
+## 18. Uniform SELECT-list wrapping via `IEntityColumnMetadata` (#210's follow-on round)
+
+`RepositorySql.cs`'s
 generic queries (`SelectById`, `SelectByIds`, `SelectDeleted`, `SelectByForeignKey`, `SelectJunctionRow`,
 `SelectPage`) build an explicit column list via a caller-supplied `IEntityColumnMetadata` instead of
 `SELECT *`, wrapping every id column the same way hand-written `Sql.cs` queries do. Confirms every
@@ -434,8 +573,11 @@ the only live paths that exercise `RepositorySql`'s rewritten queries end to end
 `GET .../sources/{id}` with both its original casing and an uppercased version; both must return `200`
 with the same, lowercase-rendered `id`.
 
-**`batchId` validated explicitly on `/actions/apply`, `/actions/discard`, `/actions/reverse`; request
-logging reports the real final status code** — found live via manual Visual Studio testing (T1), not
+---
+
+## 19. `batchId` validated explicitly on `/actions/apply`, `/actions/discard`, `/actions/reverse`; request logging reports the real final status code
+
+Found live via manual Visual Studio testing (T1), not
 this checklist: all three endpoints declared `batchId` as a required, non-nullable minimal-API
 parameter, so an omitted `batchId` threw `BadHttpRequestException` at the binding layer before the
 handler ever ran. The global safety net (`BadRequestExceptionHandler`) caught it and returned `422` —
@@ -460,8 +602,11 @@ requests must show `→ 422`, not `→ 200`. Re-run a normal `apply` with a real
 "Import and staged-action review workflow" section above) to confirm the fix didn't break the happy
 path — still `200`.
 
-**Character Modify/decidability via the widened `characters[]` schema, explicit-id-honoured-on-Add,
-case-insensitive Source natural-key matching** (#175) — before this issue, `characters[]` only ever
+---
+
+## 20. Character Modify/decidability via the widened `characters[]` schema, case-insensitive Source natural-key matching (#175)
+
+Before this issue, `characters[]` only ever
 supported Correction (`id` present, matched by id) or brand-new-via-natural-key; there was no way to
 correct an existing Character's `Name` through the staging/decide pipeline the way Source/Person/
 StageDirection/SoundCue already could. The widened schema adds `sourceTitle`/`sourceType` (required
@@ -538,7 +683,11 @@ resolved to the pre-existing Source rather than creating a case-sensitive duplic
 rm -f .claude/temp/smoke-175-*.json
 ```
 
-**Bulk-decide a staged batch via file export/import — CSV and JSON** (#163) — `GET
+---
+
+## 21. Bulk-decide a staged batch via file export/import — CSV and JSON (#163)
+
+`GET
 /import/actions/export` flattens every decidable field of a batch's Pending/Decided/Blocked Modify
 actions into rows; `POST /import/actions/bulk-decide` reads an edited version of that export back
 and applies each row's decision. Proves the export→edit→bulk-decide→apply round trip works over the
@@ -612,8 +761,11 @@ onto this newer endpoint. Fixed by switching the parameter to `HttpRequest reque
 `batchId`, then `request.HasFormContentType`, manually before ever attempting to read the form — mirroring
 `HandleImportFromRequestAsync`'s existing pattern exactly.
 
-**Per-source conflict-resolution rule files and title-alias files (#181) — fresh 4-file seed
-produces zero pending actions.** Every bundled file (`quotinator-curated.json`,
+---
+
+## 22. Per-source conflict-resolution rule files and title-alias files (#181) — fresh 4-file seed produces zero pending actions
+
+Every bundled file (`quotinator-curated.json`,
 `quotinator-series-universe.json`, `NikhilNamal17_popular-movie-quotes.json`,
 `vilaboim_movie-quotes.json`) runs under `review` policy with its own `ruleFile`/`sourceAliasFile`.
 A `ConflictResolutionRule` auto-resolves a genuinely ambiguous field on an already-seen entity id
@@ -641,8 +793,12 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
 Must return **no rows** — any row here is a genuine duplicate Source that slipped through both the
 rule and alias mechanisms.
 
-**Proves the lookup genuinely reads the rule file's live content, not a cached or hardcoded value —
-live-verified 2026-07-25.** Temporarily delete the Auntie Mame rule entirely from
+---
+
+## 23. Rule file live-read proof (#181)
+
+Proves the lookup genuinely reads the rule file's live content, not a cached or hardcoded value —
+live-verified 2026-07-25. Temporarily delete the Auntie Mame rule entirely from
 `nikhilnamal17-conflict-rules.json` (`entityId: 088603c0-...`), then rebuild and run a fresh
 container:
 ```bash
@@ -670,7 +826,11 @@ resolved by its own unmodified rule in `vilaboim-conflict-rules.json` — unaffe
 since each bundled file's rule file only governs that file's own batch. Revert both edits before
 committing — this is a temporary local mutation to prove the mechanism, not a real data change.
 
-**`ConflictResolutionRule` staleness → new `Stale` status** (#153) — a rule whose recorded
+---
+
+## 24. ConflictResolutionRule staleness → new Stale status (#153)
+
+A rule whose recorded
 `existingRecord`/`incomingRecord` snapshot no longer matches the current staging run's real field
 values is never silently reapplied; the action stages `Stale` instead of `Decided`. **Live-verified
 2026-07-26 against a genuine, pre-existing data bug this mechanism caught on its first real run,
@@ -697,7 +857,11 @@ stale` must return the Zootopia entity; with it fixed (current `main`), it retur
 confirm via `git stash`/checkout of the pre-fix rule file only if you need to see the "before" state
 again, since the shipped rule file is already corrected.
 
-**`SourceAliasRule` staleness** (#153) — an alias is stale only when the Source its own
+---
+
+## 25. SourceAliasRule staleness (#153)
+
+An alias is stale only when the Source its own
 `canonicalTitle`/`canonicalType` deterministically hashes to (`EntityIdentity.SourceId`, fixed at
 creation, never recomputed on a later Modify) already exists but under a *different* current title —
 a genuine rename since the alias was authored. **Two false-positive bugs were found and fixed live
@@ -723,7 +887,11 @@ Both the fresh-seed and post-reseed `status=pending`/`status=stale` checks must 
 0` — every real bundled alias's canonical Source either already exists under its exact recorded
 title, or is being legitimately created for the first time; none has actually been renamed away.
 
-**Rule-file override endpoints** (#153) — `GET`/`POST /generate`/`DELETE` under
+---
+
+## 26. Rule-file override endpoints (#153)
+
+`GET`/`POST /generate`/`DELETE` under
 `/api/v1/import/rules/conflict`, and the read-only `GET /api/v1/import/rules/alias`. A fresh
 container has no registered override for any bundled rule file, so the effective content is always
 the bundled copy at first:
@@ -774,7 +942,11 @@ the full live `Sources` table and genuinely finds real candidates, which is the 
 an empty result on this dataset. A confirmed, verified duplicate should be filed as a data-quality
 follow-up per `docs/workflow/source-verification.md`, not fixed inline as part of this checklist.
 
-**Per-file, per-entity-type import/seed report** (#221) — replaces the old flat `duplicates` count
+---
+
+## 27. Per-file, per-entity-type import/seed report (#221)
+
+Replaces the old flat `duplicates` count
 everywhere a seed/import operation reports back. Confirm all four surfaces on a fresh container:
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/database/seed/preview"
