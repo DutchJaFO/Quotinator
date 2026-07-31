@@ -4,8 +4,14 @@
 **Type:** Maintenance milestone (catch-all for bugs and minor improvements, targeting v1.8.x releases)
 **Previous maintenance milestone:** v1.7.0 (#17) — closed 2026-06-28
 
-Unlike a feature milestone, issues here are not necessarily related to each other. Each issue gets
-its own `feature/<slug>` branch and PR rather than sharing a single milestone branch.
+Unlike a feature milestone, issues here are not necessarily related to each other. That does not
+change the branching rule — see `docs/workflow/process.md`'s "Step 2 — Create the feature branch": a
+milestone always gets exactly one branch, covering every issue in it.
+
+**This milestone's own history (2026-07-31):** #166, #197, #159, and #146 each got their own
+branch/PR before that rule was written down — a direct cause of the GitHub Ruleset `BEHIND` friction
+that prompted writing it. From #208 onward, every remaining issue (#151, #156, #222, #227, #232,
+#236, #244, #245, and #208 itself) shares `feature/v1.8.0-maintenance-batch`, per the corrected rule.
 
 ---
 
@@ -22,7 +28,7 @@ its own `feature/<slug>` branch and PR rather than sharing a single milestone br
 | [#151](https://github.com/DutchJaFO/Quotinator/issues/151) | Should System_-prefixed provenance tables purge rows referencing Reset-wiped entities? | Planning | Not yet determined | No plan doc yet |
 | [#156](https://github.com/DutchJaFO/Quotinator/issues/156) | Reset: use the fresh-database baseline script instead of drop-all-user-tables + replay | Planning | Not yet determined | No plan doc yet |
 | [#222](https://github.com/DutchJaFO/Quotinator/issues/222) | Unicode-aware case-insensitive LIKE matching (accented/non-ASCII characters) | Planning | Not yet determined | No plan doc yet |
-| [#148](https://github.com/DutchJaFO/Quotinator/issues/148) | OpenAPI: document response models for existing quote/admin endpoints | Waiting for release | T1 ⬜ T2 ✅ | No plan doc yet |
+| [#148](https://github.com/DutchJaFO/Quotinator/issues/148) | OpenAPI: document response models for existing quote/admin endpoints | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
 | [#227](https://github.com/DutchJaFO/Quotinator/issues/227) | Import-table naming standardization + general import-file content provenance (FileResource / FileResourceLine) | Planning | Not yet determined | No plan doc yet |
 | [#178](https://github.com/DutchJaFO/Quotinator/issues/178) | Changelog: add an optional one-line quote to each release entry | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
 | [#232](https://github.com/DutchJaFO/Quotinator/issues/232) | Reduce OS-level vulnerabilities in Docker base image (Docker Scout scan) | Planning | Not yet determined | No plan doc yet |
@@ -74,6 +80,6 @@ tests to the same files) rather than any hard dependency.
 
 ## PR merge plan
 
-Not applicable in the usual sense — each issue in this milestone gets its own `feature/<slug>`
-branch and PR, merged independently as it completes its own T1/T2 verification, rather than a
-single shared milestone branch.
+#166, #197, #159, and #146 each used their own branch/PR, merged independently as each completed its
+own T1/T2 verification. From #208 onward, the remaining small/independent issues share
+`feature/v1.8.0-maintenance-batch` and merge together — see the branching-policy note above for why.

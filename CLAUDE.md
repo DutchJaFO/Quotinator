@@ -974,18 +974,24 @@ and wait for checks to re-run green (`gh pr checks <N> --watch`) before retrying
 
 Workflow:
 1. **At the start of a session** — check for open Dependabot PRs (`gh pr list --state open`) and merge any that are green before starting feature work. This avoids Dependabot reacting to your push mid-session.
-2. Push all feature/fix commits to `main`
+2. Push all feature/fix commits to `main` (via their own milestone/hotfix branch and PR — never a direct push; see `docs/workflow/process.md`'s "Step 2 — Create the feature branch")
 3. Wait for any remaining Dependabot PRs to finish CI
 4. Review and merge passing Dependabot PRs
-5. `git pull` to bring dependency bumps onto your local branch
-6. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate all three markdown files with `scripts/changelog.csx` (`--max-releases 3`)
-7. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, `changelog.en.json` version entry) and commit
-8. Run the full pre-push checklist above (including Docker build)
-9. Push the version bump commit, then push the tag:
-   ```bash
-   git tag v1.0.x
-   git push origin v1.0.x
-   ```
+5. **Create a release-prep branch** (e.g. `chore/v1.0.x-release-prep`) — the version bump and changelog
+   regeneration below are code changes like any other and go through this one branch/PR, not two
+   separate ones and never a direct commit to `main` (per `docs/workflow/process.md`'s "Branches
+   outside a milestone" — release preparation is its own standing exception, distinct from whatever
+   milestone branch produced the code being released)
+6. `git pull` to bring dependency bumps onto this branch
+7. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate all three markdown files with `scripts/changelog.csx` (`--max-releases 3`)
+8. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, `changelog.en.json` version entry) and commit — same branch
+9. Run the full pre-push checklist above (including Docker build)
+10. Push the release-prep branch, open a PR, and merge it to `main`
+11. From `main`, push the tag:
+    ```bash
+    git tag v1.0.x
+    git push origin v1.0.x
+    ```
 
 > **Tag push environment note.** Claude Code Desktop can push tags directly. Claude Code cloud and mobile environments receive a `403` on tag pushes — if running in those environments, the tag must be pushed from a local terminal instead.
 

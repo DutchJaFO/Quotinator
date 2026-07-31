@@ -141,6 +141,43 @@ All code and plan doc updates go on this branch. Milestone content does not go d
 
 **The feature branch lives for the entire milestone.** Do not delete it when doing a partial merge to `main`. A partial merge is a sync point — the branch continues to exist as the workspace for remaining issues.
 
+**A milestone always gets exactly one branch, for its entire duration, covering every issue in
+it — no exceptions for an issue's size or for needing an extra release gate (T3, etc.).** Found the
+hard way in v1.8.0 (2026-07-31): its first four issues (#166, #197, #159, #146) each got their own
+branch/PR before this was written down, and several small, unrelated one-issue PRs merging in quick
+succession each put the next one into GitHub Ruleset `mergeStateStatus: BEHIND` (see `CLAUDE.md`'s
+"Tagging a release — separate push cycle" section for the mechanics), requiring a
+`gh pr update-branch` + re-check cycle for every single merge — pure overhead a milestone's own single
+branch exists specifically to avoid. Being grouped into a milestone is itself the reason to share a
+branch; nothing about an individual issue overrides that.
+
+**A second, independent reason favours the same rule:** several issues in one milestone can genuinely
+need related database schema changes. On one shared branch, those land as a single, well-considered
+migration before the branch ever merges to `main` — matching the Schema migration policy's own "one
+schema change per migration where possible" guidance, applied at the *milestone* level rather than the
+*issue* level. Splitting issues across separate branches instead forces each one's schema change into
+its own separately-numbered migration, even when they'd have been better expressed as one coherent
+step — and once a migration is merged and applied anywhere, it's frozen (append-only, never edited),
+so a proliferation of small per-issue migrations can't be cleaned up retroactively the way an
+unmerged branch's own commits still can.
+
+### Branches outside a milestone
+
+Three other kinds of work get their own branch, for different reasons than a milestone's issues do:
+
+- **A standalone issue with no milestone** — only when it is genuinely self-contained and obviously
+  won't spawn related work. If it has a milestone, it uses that milestone's branch instead, full stop.
+- **A hotfix** — starts as its own branch for the immediate fix, but is allowed to grow to cover more
+  than one issue if root-cause investigation reveals the real fix needs to be broader than the
+  original report. Don't force a hotfix back into a single-issue branch once that happens.
+- **Release preparation** — tagging a release needs its own branch too (version bump, changelog
+  regeneration, and any issue-closeout housekeeping), separate from whatever milestone branch produced
+  the code being released. See `CLAUDE.md`'s "Tagging a release" section for the full sequence — the
+  version-bump commit and the changelog-regeneration commit both belong on this one branch, not two
+  separate ones.
+- **Dependabot** — the one case genuinely outside this project's control. Dependabot always opens its
+  own branch and PR per dependency; there is no way to batch these, and no attempt should be made to.
+
 **Branch deletion is never done by the AI assistant.** Only the developer deletes branches, and only when they have decided the branch is no longer needed. Never use `--delete-branch` or `git branch -d` or any equivalent. If a PR needs to be merged, merge it without the delete flag and let the developer decide what happens to the branch.
 
 ---
@@ -442,6 +479,10 @@ There is always exactly **one** open maintenance milestone at a time. It is the 
 2. **An issue requires a version outside the current range** — if an issue added to the maintenance milestone would require a version bump beyond the current range (e.g., a breaking change needing v2.0.0 while the maintenance milestone targets v1.7.x), create a separate milestone for it, move the issue there, and if the remaining issues in the maintenance milestone are all within range, it stays open.
 
 3. **A feature milestone release pushes the version outside the range** — if a feature milestone ships and its release version is higher than the maintenance milestone's range (e.g., a feature milestone releases as v2.0.0 while the maintenance milestone is v1.7.0 targeting v1.7.x), the maintenance milestone can no longer accept new issues at the old version range. Open a new maintenance milestone at the next patch of the new version (e.g., v2.1.0), move all open issues there, and close the old maintenance milestone.
+
+**Branching:** same rule as every other milestone — one branch, always, covering every issue in it.
+See "Step 2 — Create the feature branch" above. A maintenance milestone's issues being unrelated to
+each other is not a reason to give each one its own branch.
 
 ### Checklist when replacing the maintenance milestone
 
