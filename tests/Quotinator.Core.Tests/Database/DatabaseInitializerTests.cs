@@ -938,7 +938,7 @@ public class DatabaseInitializerTests
             Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
         }
 
-        Assert.AreEqual(2, db2.DataSchemaVersion, "Data migration 2 (the #155 consolidation) should have replayed from the correctly-seeded starting point of 1");
+        Assert.AreEqual(4, db2.DataSchemaVersion, "Data migrations 2-4 (the #155 consolidation plus #150's two AppliedPolicy CHECK constraint migrations) should have replayed from the correctly-seeded starting point of 1");
     }
 
     /// <summary>Data migration 2 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
@@ -1026,7 +1026,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(4, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+        Assert.AreEqual(5, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
     }
 
     // ── #143 — migration ownership split + baseline schema ─────────────────────
@@ -1154,6 +1154,17 @@ public class DatabaseInitializerTests
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
                 "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) " +
                 "VALUES (@id, 'bad.json', 'NotARealType', @now, 0, @now, 0);",
+                new { id = Guid.NewGuid().ToString(), now }));
+
+            // #150, ADR 008: ImportBatches.ConflictPolicy's CHECK constraint.
+            await conn.ExecuteAsync(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, ConflictPolicy) " +
+                "VALUES (@id, 'check-test-policy.json', 'Import', @now, 0, @now, 0, 'NewestWins');",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, ConflictPolicy) " +
+                "VALUES (@id, 'bad-policy.json', 'Import', @now, 0, @now, 0, 'NotARealPolicy');",
                 new { id = Guid.NewGuid().ToString(), now }));
 
             await conn.ExecuteAsync(
@@ -1326,8 +1337,8 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(2, db.DataSchemaVersion);
-        Assert.AreEqual(4, db.SchemaVersion);
+        Assert.AreEqual(4, db.DataSchemaVersion);
+        Assert.AreEqual(5, db.SchemaVersion);
     }
 
     /// <summary>
@@ -1371,7 +1382,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(4, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+        Assert.AreEqual(5, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
     // ── #179 — Series/Universe schema, Character↔Source many-to-many ───────────

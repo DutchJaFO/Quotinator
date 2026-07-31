@@ -175,4 +175,75 @@ public static class ImportActionMigrations
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_BatchId ON System_ImportActions (BatchId);
         CREATE INDEX IF NOT EXISTS IX_System_ImportActions_Status ON System_ImportActions (Status);
         """;
+
+    /// <summary>
+    /// #150, ADR 008 — adds a <c>CHECK</c> constraint to <c>AppliedPolicy</c> (backed by
+    /// <c>DuplicateResolutionPolicy</c>, a real closed C# enum), closing a gap ADR 008 itself
+    /// documented as a known, tracked exception rather than fixing at the time. Same rebuild
+    /// technique as <see cref="AddStaleStatus"/> — SQLite has no <c>ALTER TABLE ... ADD CHECK</c>,
+    /// and this table's prior shape had already applied to real local databases.
+    /// <para>
+    /// Unlike <see cref="ImportConflictMigrations.AddAppliedPolicyCheckConstraint"/>'s sibling table,
+    /// this column is actively written by <c>ImportActionPlanner</c> — always via
+    /// <c>DuplicateResolutionPolicy.ToString()</c> (PascalCase), consistently, and this column never
+    /// had an <c>ALTER TABLE ... ADD COLUMN ... DEFAULT</c> backfill (it was created in its final
+    /// nullable, default-less shape from the start), so there is no known legacy-casing value to
+    /// normalise. The copy step still passes every value through the same defensive
+    /// <c>CASE</c>/<c>ELSE</c> pattern for consistency with the sibling migration and as a safety net
+    /// against any value written outside this codebase's own tracked history.
+    /// </para>
+    /// </summary>
+    public const string AddAppliedPolicyCheckConstraint = """
+        CREATE TABLE System_ImportActions_New (
+            Id                 TEXT    NOT NULL PRIMARY KEY,
+            BatchId            TEXT    NOT NULL,
+            ActionType         TEXT    NOT NULL
+                               CHECK (ActionType IN ('Add', 'Modify')),
+            EntityType         TEXT    NOT NULL,
+            EntityId           TEXT    NOT NULL,
+            ExistingBatchId    TEXT,
+            ExistingValue      TEXT,
+            IncomingValue      TEXT    NOT NULL,
+            AppliedPolicy      TEXT
+                               CHECK (AppliedPolicy IS NULL OR AppliedPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
+            Status             TEXT    NOT NULL
+                               CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked', 'Stale')),
+            MergedFields       TEXT,
+            MarkCompletenessAs TEXT
+                               CHECK (MarkCompletenessAs IS NULL OR MarkCompletenessAs IN ('Incomplete', 'NeedsReview', 'Complete')),
+            DetectedAt         TEXT    NOT NULL,
+            AppliedAt          TEXT,
+            DiscardedAt        TEXT,
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0,
+            OriginalDecision   TEXT
+        );
+
+        INSERT INTO System_ImportActions_New (
+            Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue,
+            IncomingValue, AppliedPolicy, Status, MergedFields, MarkCompletenessAs, DetectedAt,
+            AppliedAt, DiscardedAt, DateCreated, DateModified, DateDeleted, IsDeleted, OriginalDecision)
+        SELECT
+            Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue, IncomingValue,
+            CASE AppliedPolicy
+                WHEN 'skip'         THEN 'Skip'
+                WHEN 'newest-wins'  THEN 'NewestWins'
+                WHEN 'merge-ours'   THEN 'MergeOurs'
+                WHEN 'merge-theirs' THEN 'MergeTheirs'
+                WHEN 'review'       THEN 'Review'
+                ELSE AppliedPolicy
+            END,
+            Status, MergedFields, MarkCompletenessAs, DetectedAt, AppliedAt, DiscardedAt,
+            DateCreated, DateModified, DateDeleted, IsDeleted, OriginalDecision
+        FROM System_ImportActions;
+
+        DROP TABLE System_ImportActions;
+
+        ALTER TABLE System_ImportActions_New RENAME TO System_ImportActions;
+
+        CREATE INDEX IF NOT EXISTS IX_System_ImportActions_BatchId ON System_ImportActions (BatchId);
+        CREATE INDEX IF NOT EXISTS IX_System_ImportActions_Status ON System_ImportActions (Status);
+        """;
 }

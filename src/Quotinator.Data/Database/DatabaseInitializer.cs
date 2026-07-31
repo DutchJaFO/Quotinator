@@ -28,6 +28,8 @@ public class DatabaseInitializer : IDatabaseInitializer
     [
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
         new SchemaMigration { Version = 2, Sql = DataConsolidatedMigrations.SinceV172 },
+        new SchemaMigration { Version = 3, Sql = ImportConflictMigrations.AddAppliedPolicyCheckConstraint },
+        new SchemaMigration { Version = 4, Sql = ImportActionMigrations.AddAppliedPolicyCheckConstraint },
     ];
 
     // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and
@@ -59,7 +61,8 @@ public class DatabaseInitializer : IDatabaseInitializer
             EntityId        TEXT,
             ExistingValue   TEXT,
             IncomingValue   TEXT,
-            AppliedPolicy   TEXT,
+            AppliedPolicy   TEXT
+                            CHECK (AppliedPolicy IS NULL OR AppliedPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
             Status          TEXT    NOT NULL
                             CHECK (Status IN ('Pending', 'Decided', 'Resolved')),
             MergedFields    TEXT,
@@ -84,7 +87,8 @@ public class DatabaseInitializer : IDatabaseInitializer
             ExistingBatchId    TEXT,
             ExistingValue      TEXT,
             IncomingValue      TEXT    NOT NULL,
-            AppliedPolicy      TEXT,
+            AppliedPolicy      TEXT
+                               CHECK (AppliedPolicy IS NULL OR AppliedPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
             Status             TEXT    NOT NULL
                                CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked', 'Stale')),
             MergedFields       TEXT,

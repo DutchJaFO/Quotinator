@@ -236,8 +236,9 @@ public class DatabaseInitializerOwnershipTests
 
     /// <summary>
     /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural
-    /// round-trip closes that gap for <c>System_ImportActions.Status</c>'s <c>Blocked</c> value and
-    /// <c>MarkCompletenessAs</c>'s constraint, for both the baseline and incremental paths.
+    /// round-trip closes that gap for <c>System_ImportActions.Status</c>'s <c>Blocked</c> value,
+    /// <c>MarkCompletenessAs</c>'s constraint, and (#150, ADR 008) <c>AppliedPolicy</c>'s constraint,
+    /// for both the baseline and incremental paths.
     /// </summary>
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameImportActionsCheckConstraintValues()
@@ -261,8 +262,8 @@ public class DatabaseInitializerOwnershipTests
             var id  = Guid.NewGuid().ToString();
 
             await conn.ExecuteAsync(
-                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
-                "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Blocked', 'Complete', @now, @now);",
+                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, AppliedPolicy, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'NewestWins', 'Blocked', 'Complete', @now, @now);",
                 new { id, now });
 
             // #153: Stale must be accepted identically by both paths too — migration 12 widened the
@@ -270,6 +271,12 @@ public class DatabaseInitializerOwnershipTests
             await conn.ExecuteAsync(
                 "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Stale', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            // AppliedPolicy is nullable — a Pending/Blocked action has no policy decided yet.
+            await conn.ExecuteAsync(
+                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Pending', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
@@ -280,6 +287,54 @@ public class DatabaseInitializerOwnershipTests
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
                 "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Pending', 'NotARealCompletenessValue', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, AppliedPolicy, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'NotARealPolicy', 'Pending', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+        }
+    }
+
+    /// <summary>
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural
+    /// round-trip closes that gap for <c>System_ImportConflicts.AppliedPolicy</c>'s constraint
+    /// (#150, ADR 008), for both the baseline and incremental paths.
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameImportConflictsCheckConstraintValues()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync();
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync();
+
+        foreach (var conn in new[] { connA, connB })
+        {
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+
+            await conn.ExecuteAsync(
+                "INSERT INTO System_ImportConflicts (Id, BatchId, EntityType, AppliedPolicy, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Quote', 'MergeTheirs', 'Resolved', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            // AppliedPolicy is nullable — a still-Pending conflict has no policy applied yet.
+            await conn.ExecuteAsync(
+                "INSERT INTO System_ImportConflicts (Id, BatchId, EntityType, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Quote', 'Pending', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_ImportConflicts (Id, BatchId, EntityType, AppliedPolicy, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Quote', 'NotARealPolicy', 'Resolved', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
         }
     }
@@ -340,9 +395,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync();
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(2, dataRows,
+        Assert.AreEqual(4, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(2, db.DataSchemaVersion);
+        Assert.AreEqual(4, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

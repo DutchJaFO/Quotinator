@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-07-07
-**GitHub issues:** #154
+**GitHub issues:** #154, #150
 
 ---
 
@@ -134,3 +134,33 @@ picks it up, not settled by this ADR.
   et al.) already verify a `CHECK`, once added, behaves identically on both the incremental-replay
   and fresh-baseline paths — this ADR doesn't change that test's job, it just governs *when* a
   `CHECK` must exist in the first place.
+
+---
+
+## Revision — issue #150 closed the tracked `ConflictPolicy`/`AppliedPolicy` gaps
+
+The `ImportBatches.ConflictPolicy` gap this ADR documented as deliberately out of scope is now
+closed, via a new migration that rebuilds the table under a temporary name (`ImportBatches.ConflictPolicy`
+CHECK, `Migration005_ImportBatchConflictPolicyCheckConstraint` in `QuotinatorMigrations`) —
+`ImportBatches.ConflictPolicy`'s pre-existing rows needed a normalising `CASE` in the rebuild's copy
+step, since the column's original `ALTER TABLE ... ADD COLUMN ... DEFAULT 'skip'` backfill wrote that
+literal lowercase default directly into every pre-existing row, never through application code (which
+has always written `DuplicateResolutionPolicy.ToString()`, PascalCase).
+
+`System_ImportConflicts.AppliedPolicy`, the other gap this issue's own filing identified, is fixed the
+same way (`ImportConflictMigrations.AddAppliedPolicyCheckConstraint`). Re-deriving the full inventory
+at implementation time (per this issue's own instruction not to treat the original table as gospel)
+found one further, previously-unlisted gap: `System_ImportActions.AppliedPolicy` — same enum, same
+missing `CHECK`, fixed the same way (`ImportActionMigrations.AddAppliedPolicyCheckConstraint`). Unlike
+its sibling table, this column has always been actively written (by `ImportActionPlanner`), always in
+PascalCase, with no `ALTER TABLE ... ADD COLUMN ... DEFAULT` backfill ever applied to it — so no
+legacy-casing values were expected in practice, though the copy step still normalises defensively.
+
+The six "no persisted column" enums this ADR's originating issue confirmed exempt were re-checked
+against the code as it stood at #150's implementation time, per that issue's own instruction to treat
+the six-enum list as a starting point, not gospel. One of them, `SeedBatchOrigin`, had in fact gained
+a persisted column since #150 was filed (`SourceFileOverride.Origin`, backing
+`System_SourceFileOverrides.Origin`) — but it already carries a `CHECK` constraint from the migration
+that introduced it, so this is confirmed compliant, not a new gap. The remaining five
+(`InsertStrategy`, `FilteredResultStatus`, `DownloadTarget`, `SeedFileIssue`, `SourceRefreshOutcome`)
+still have no persisted column at all.
