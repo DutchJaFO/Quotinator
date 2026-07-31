@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Json.Schema;
 
 namespace Quotinator.Changelog.Tests;
 
@@ -7,6 +8,10 @@ namespace Quotinator.Changelog.Tests;
 public sealed class ChangelogSchemaTests
 {
     private static readonly Regex CvePattern = new(@"^CVE-\d{4}-\d{4,}$", RegexOptions.Compiled);
+
+    private static readonly JsonSchema DocumentSchema = JsonSchema.FromFile(FindSchemaFile());
+
+    private static readonly EvaluationOptions StrictOptions = new() { OutputFormat = OutputFormat.List };
 
     private static List<(string Filename, JsonDocument Doc)> _docs = [];
 
@@ -104,6 +109,62 @@ public sealed class ChangelogSchemaTests
     }
 
     [TestMethod]
+    public void AllChangelogFiles_ConformToSchema()
+    {
+        foreach (var (filename, doc) in _docs)
+        {
+            var result = DocumentSchema.Evaluate(doc.RootElement, StrictOptions);
+            Assert.IsTrue(result.IsValid, FormatErrors(filename, result));
+        }
+    }
+
+    [TestMethod]
+    public void ReleaseWithQuote_ValidatesSuccessfully()
+    {
+        var json = """
+            {
+              "language": "en",
+              "sourceLanguage": "en",
+              "machineTranslated": false,
+              "releases": [
+                {
+                  "version": "1.9.0",
+                  "date": "2026-08-01",
+                  "quote": { "text": "Simplicity is the ultimate sophistication.", "attribution": "Leonardo da Vinci" },
+                  "highlights": ["Test release."]
+                }
+              ]
+            }
+            """;
+        var element = JsonSerializer.Deserialize<JsonElement>(json);
+        var result  = DocumentSchema.Evaluate(element, StrictOptions);
+        Assert.IsTrue(result.IsValid, FormatErrors("synthetic release with quote", result));
+    }
+
+    [TestMethod]
+    public void ReleaseQuoteMissingText_FailsValidation()
+    {
+        var json = """
+            {
+              "language": "en",
+              "sourceLanguage": "en",
+              "machineTranslated": false,
+              "releases": [
+                {
+                  "version": "1.9.0",
+                  "date": "2026-08-01",
+                  "quote": { "attribution": "Leonardo da Vinci" },
+                  "highlights": ["Test release."]
+                }
+              ]
+            }
+            """;
+        var element = JsonSerializer.Deserialize<JsonElement>(json);
+        var result  = DocumentSchema.Evaluate(element, StrictOptions);
+        Assert.IsFalse(result.IsValid, "A release quote without 'text' should fail schema validation");
+    }
+
+    [TestMethod]
     public void AllReleases_AudienceHighlights_ContainNoNullEntries()
     {
         foreach (var (filename, r) in Releases())
@@ -195,5 +256,26 @@ public sealed class ChangelogSchemaTests
         }
         throw new DirectoryNotFoundException(
             "changelog.*.json not found — expected at src/Quotinator.Api/resources/ under the repo root.");
+    }
+
+    private static string FindSchemaFile()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var path = Path.Combine(dir.FullName, "schemas", "changelog.schema.json");
+            if (File.Exists(path)) return path;
+            dir = dir.Parent;
+        }
+        throw new FileNotFoundException(
+            "schemas/changelog.schema.json not found under the repo root.");
+    }
+
+    private static string FormatErrors(string label, EvaluationResults result)
+    {
+        var errors = (result.Details ?? [])
+            .Where(d => !d.IsValid && d.Errors != null)
+            .SelectMany(d => d.Errors!.Select(e => $"  {d.InstanceLocation}: {e.Value}"));
+        return $"Schema validation failed for {label}:\n{string.Join('\n', errors)}";
     }
 }

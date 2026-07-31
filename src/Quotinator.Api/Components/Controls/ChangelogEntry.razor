@@ -6,6 +6,16 @@
         <span class="text-muted ms-2">@Release.Date</span>
     </summary>
     <div class="mt-2 ps-3">
+        @if (Release.Quote is not null && !string.IsNullOrWhiteSpace(Release.Quote.Text))
+        {
+            <blockquote class="blockquote small text-muted fst-italic mb-2">
+                <p class="mb-0">"@Release.Quote.Text"</p>
+                @if (!string.IsNullOrWhiteSpace(Release.Quote.Attribution))
+                {
+                    <footer class="blockquote-footer">@Release.Quote.Attribution</footer>
+                }
+            </blockquote>
+        }
         @{ var highlights = Release.Highlights; }
         @if (highlights.Count == 1)
         {

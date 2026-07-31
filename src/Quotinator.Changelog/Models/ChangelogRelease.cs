@@ -9,10 +9,14 @@ namespace Quotinator.Changelog.Models;
 public sealed class ChangelogRelease : ChangelogUnreleased
 {
     /// <summary>Version string, e.g. <c>1.1.0</c>.</summary>
-    [JsonPropertyOrder(-2)]
+    [JsonPropertyOrder(-3)]
     public string Version { get; init; } = "";
 
     /// <summary>Release date in ISO 8601 format, e.g. <c>2026-06-15</c>.</summary>
-    [JsonPropertyOrder(-1)]
+    [JsonPropertyOrder(-2)]
     public string Date { get; init; } = "";
+
+    /// <summary>Optional one-line release-note flavour quote. <see langword="null"/> when this release has none.</summary>
+    [JsonPropertyOrder(-1)]
+    public ChangelogQuote? Quote { get; init; }
 }

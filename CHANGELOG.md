@@ -1,10 +1,17 @@
-##### *GENERATED FILE [2026-07-31 05:11 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-31 10:38 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Added
+- Release entries can now carry an optional one-line `quote` (release-note flavour text, with optional `attribution`) — rendered in `CHANGELOG.md` and the Blazor changelog UI, omitted from the more concise `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)
 
 ---
 
@@ -202,6 +209,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 Older releases are available in the full history on [GitHub Releases](https://github.com/DutchJaFO/Quotinator/releases).
 
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.2...HEAD
 [1.8.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.1-beta...v1.8.2
 [1.8.1-beta]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.0...v1.8.1-beta
 [1.8.0]: https://github.com/DutchJaFO/Quotinator/compare/v1.7.2...v1.8.0
