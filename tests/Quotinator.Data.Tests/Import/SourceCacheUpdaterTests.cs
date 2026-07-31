@@ -39,7 +39,7 @@ public class SourceCacheUpdaterTests
         var batch = Batch(SeedBatchOrigin.Bundled, file);
         var updater = CreateUpdater(NeverCallNetwork());
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual("/bundled/a.json", result.EffectiveBatches[0].Files[0].FilePath);
         Assert.AreEqual(SourceRefreshOutcome.UpToDate, result.Results.Single().Outcome);
@@ -53,7 +53,7 @@ public class SourceCacheUpdaterTests
         var batch = Batch(SeedBatchOrigin.Bundled, file);
         var updater = CreateUpdater(NeverCallNetwork());
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(cachedPath, result.EffectiveBatches[0].Files[0].FilePath);
         Assert.AreEqual(SourceRefreshOutcome.UpToDate, result.Results.Single().Outcome);
@@ -68,7 +68,7 @@ public class SourceCacheUpdaterTests
         var batch = Batch(SeedBatchOrigin.Bundled, file);
         var updater = CreateUpdater(NeverCallNetwork());
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.UpToDate, result.Results.Single().Outcome);
         Assert.AreEqual(cachedPath, result.EffectiveBatches[0].Files[0].FilePath);
@@ -85,11 +85,11 @@ public class SourceCacheUpdaterTests
         var batch = Batch(SeedBatchOrigin.Bundled, file);
         var updater = CreateUpdater(NeverCallNetwork());
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         var lastRefreshedAtUtc = result.Results.Single().LastRefreshedAtUtc;
         Assert.IsNotNull(lastRefreshedAtUtc);
-        Assert.IsTrue((lastRefreshedAtUtc.Value - writeTime).Duration() < TimeSpan.FromSeconds(1));
+        Assert.IsLessThan(TimeSpan.FromSeconds(1), (lastRefreshedAtUtc.Value - writeTime).Duration());
     }
 
     [TestMethod]
@@ -99,7 +99,7 @@ public class SourceCacheUpdaterTests
         var batch = Batch(SeedBatchOrigin.Bundled, file);
         var updater = CreateUpdater(NeverCallNetwork());
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.IsNull(result.Results.Single().LastRefreshedAtUtc);
     }
@@ -114,11 +114,11 @@ public class SourceCacheUpdaterTests
         var logger  = new RecordingLogger();
         var updater = CreateUpdater(RespondWith("new content"), logger);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Updated, result.Results.Single().Outcome);
-        Assert.AreEqual("new content", await File.ReadAllTextAsync(cachedPath));
-        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Information));
+        Assert.AreEqual("new content", await File.ReadAllTextAsync(cachedPath, TestContext.CancellationToken));
+        Assert.Contains(e => e.Level == LogLevel.Information, logger.Entries);
     }
 
     // Row 4: per-entry refreshIntervalHours overrides the global default.
@@ -131,10 +131,10 @@ public class SourceCacheUpdaterTests
         var batch = Batch(SeedBatchOrigin.Bundled, file);
         var updater = CreateUpdater(RespondWith("refreshed"), defaultTtlHours: 24);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Updated, result.Results.Single().Outcome);
-        Assert.AreEqual("refreshed", await File.ReadAllTextAsync(cachedPath));
+        Assert.AreEqual("refreshed", await File.ReadAllTextAsync(cachedPath, TestContext.CancellationToken));
     }
 
     // Row 5: network failure logs a Warning and falls back to the most recent available copy; the operation still succeeds.
@@ -147,12 +147,12 @@ public class SourceCacheUpdaterTests
         var logger  = new RecordingLogger();
         var updater = CreateUpdater(ThrowOnRequest(), logger);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Failed, result.Results.Single().Outcome);
         Assert.AreEqual(cachedPath, result.EffectiveBatches[0].Files[0].FilePath);
-        Assert.AreEqual("stale but usable", await File.ReadAllTextAsync(cachedPath));
-        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning));
+        Assert.AreEqual("stale but usable", await File.ReadAllTextAsync(cachedPath, TestContext.CancellationToken));
+        Assert.Contains(e => e.Level == LogLevel.Warning, logger.Entries);
     }
 
     // Row 6: forceSourceRefresh=true bypasses the TTL check.
@@ -164,10 +164,10 @@ public class SourceCacheUpdaterTests
         var batch = Batch(SeedBatchOrigin.Bundled, file);
         var updater = CreateUpdater(RespondWith("forced update"));
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: true);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: true, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Updated, result.Results.Single().Outcome);
-        Assert.AreEqual("forced update", await File.ReadAllTextAsync(cachedPath));
+        Assert.AreEqual("forced update", await File.ReadAllTextAsync(cachedPath, TestContext.CancellationToken));
     }
 
     // Row 7: forceSourceRefresh=true does not bypass AutoUpdateSources=false, and logs a distinct message.
@@ -179,11 +179,11 @@ public class SourceCacheUpdaterTests
         var logger  = new RecordingLogger();
         var updater = CreateUpdater(NeverCallNetwork(), logger);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: true);
+        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: true, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.UpToDate, result.Results.Single().Outcome);
-        Assert.IsTrue(logger.Entries.Any(e =>
-            e.Message.Contains("forceSourceRefresh requested but") && e.Message.Contains("AutoUpdateSources")));
+        Assert.Contains(e =>
+            e.Message.Contains("forceSourceRefresh requested but") && e.Message.Contains("AutoUpdateSources"), logger.Entries);
     }
 
     // Row 9: a user-imports manifest entry with a downloadUrl is downloaded and cached, same as a bundled entry.
@@ -194,12 +194,12 @@ public class SourceCacheUpdaterTests
         var batch = Batch(SeedBatchOrigin.UserImports, file);
         var updater = CreateUpdater(RespondWith("imported content"));
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         var expectedPath = Path.Combine(_externalDir, "b.json");
         Assert.AreEqual(SourceRefreshOutcome.Updated, result.Results.Single().Outcome);
         Assert.AreEqual(expectedPath, result.EffectiveBatches[0].Files[0].FilePath);
-        Assert.AreEqual("imported content", await File.ReadAllTextAsync(expectedPath));
+        Assert.AreEqual("imported content", await File.ReadAllTextAsync(expectedPath, TestContext.CancellationToken));
     }
 
     // Row 10: bundled defaults to internal; user-imports defaults to external.
@@ -212,7 +212,7 @@ public class SourceCacheUpdaterTests
         var importsBatch = Batch(SeedBatchOrigin.UserImports, importsFile);
         var updater = CreateUpdater(RespondWith("x"));
 
-        var result = await updater.ResolveAsync([bundledBatch, importsBatch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([bundledBatch, importsBatch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(Path.Combine(_internalDir, "a.json"), result.EffectiveBatches[0].Files[0].FilePath);
         Assert.AreEqual(Path.Combine(_externalDir, "b.json"), result.EffectiveBatches[1].Files[0].FilePath);
@@ -226,7 +226,7 @@ public class SourceCacheUpdaterTests
         var batch = Batch(SeedBatchOrigin.UserImports, file);
         var updater = CreateUpdater(RespondWith("x"));
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(Path.Combine(_internalDir, "c.json"), result.EffectiveBatches[0].Files[0].FilePath);
     }
@@ -244,13 +244,13 @@ public class SourceCacheUpdaterTests
         var logger  = new RecordingLogger();
         var updater = CreateUpdater(NeverCallNetwork(), logger);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.IsTrue(result.Results.All(r => r.Outcome == SourceRefreshOutcome.SkippedCollision));
         Assert.AreEqual("/bundled/same.json", result.EffectiveBatches[0].Files[0].FilePath);
         Assert.AreEqual("/bundled/other/same.json", result.EffectiveBatches[0].Files[1].FilePath);
-        Assert.AreEqual("pre-existing", await File.ReadAllTextAsync(collidingPath));
-        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Error));
+        Assert.AreEqual("pre-existing", await File.ReadAllTextAsync(collidingPath, TestContext.CancellationToken));
+        Assert.Contains(e => e.Level == LogLevel.Error, logger.Entries);
     }
 
     // Converter feature: a registered converter transforms downloaded content before it's cached.
@@ -265,10 +265,10 @@ public class SourceCacheUpdaterTests
         };
         var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Updated, result.Results.Single().Outcome);
-        Assert.AreEqual("RAW CONTENT", await File.ReadAllTextAsync(Path.Combine(_internalDir, "a.json")));
+        Assert.AreEqual("RAW CONTENT", await File.ReadAllTextAsync(Path.Combine(_internalDir, "a.json"), TestContext.CancellationToken));
     }
 
     // A SeedFile's ConverterOptions is passed through verbatim to ConvertAsync.
@@ -282,7 +282,7 @@ public class SourceCacheUpdaterTests
         var converters = new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase) { ["upper"] = fakeConverter };
         var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters);
 
-        await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.IsNotNull(fakeConverter.LastReceivedOptions);
         Assert.AreEqual("movie", fakeConverter.LastReceivedOptions!.Value.GetProperty("propertyMapping").GetProperty("source").GetString());
@@ -302,10 +302,10 @@ public class SourceCacheUpdaterTests
         var logger  = new RecordingLogger();
         var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters, logger: logger);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Failed, result.Results.Single().Outcome);
-        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning && e.Message.Contains("internal-only")));
+        Assert.Contains(e => e.Level == LogLevel.Warning && e.Message.Contains("internal-only"), logger.Entries);
     }
 
     // The same internal-only converter is allowed when the batch comes from the bundled sources manifest.
@@ -320,7 +320,7 @@ public class SourceCacheUpdaterTests
         };
         var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Updated, result.Results.Single().Outcome);
     }
@@ -334,11 +334,11 @@ public class SourceCacheUpdaterTests
         var logger  = new RecordingLogger();
         var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters: null, logger: logger);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Failed, result.Results.Single().Outcome);
         Assert.AreEqual("/bundled/a.json", result.EffectiveBatches[0].Files[0].FilePath);
-        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning && e.Message.Contains("missing")));
+        Assert.Contains(e => e.Level == LogLevel.Warning && e.Message.Contains("missing"), logger.Entries);
     }
 
     // A converter that throws SourceConversionException falls back exactly like a network failure.
@@ -355,12 +355,12 @@ public class SourceCacheUpdaterTests
         var logger  = new RecordingLogger();
         var updater = CreateUpdaterWithOptions(RespondWith("raw content"), converters, validate: _ => true, logger: logger);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Failed, result.Results.Single().Outcome);
         Assert.AreEqual(cachedPath, result.EffectiveBatches[0].Files[0].FilePath);
-        Assert.AreEqual("stale but valid", await File.ReadAllTextAsync(cachedPath));
-        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning));
+        Assert.AreEqual("stale but valid", await File.ReadAllTextAsync(cachedPath, TestContext.CancellationToken));
+        Assert.Contains(e => e.Level == LogLevel.Warning, logger.Entries);
     }
 
     // The actual production bug, reproduced and fixed: no converter declared, upstream content is not
@@ -375,12 +375,12 @@ public class SourceCacheUpdaterTests
         var updater = CreateUpdaterWithOptions(RespondWith("raw non-canonical content"), converters: null,
             validate: json => json == "working canonical content", logger: logger);
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Failed, result.Results.Single().Outcome);
         Assert.AreEqual(cachedPath, result.EffectiveBatches[0].Files[0].FilePath);
-        Assert.AreEqual("working canonical content", await File.ReadAllTextAsync(cachedPath));
-        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning && e.Message.Contains("validation")));
+        Assert.AreEqual("working canonical content", await File.ReadAllTextAsync(cachedPath, TestContext.CancellationToken));
+        Assert.Contains(e => e.Level == LogLevel.Warning && e.Message.Contains("validation"), logger.Entries);
     }
 
     // An already-corrupted cache file must not be trusted just because it's within the TTL window —
@@ -394,10 +394,10 @@ public class SourceCacheUpdaterTests
         var updater = CreateUpdaterWithOptions(RespondWith("good content"), converters: null,
             validate: json => json == "good content");
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: true, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual(SourceRefreshOutcome.Updated, result.Results.Single().Outcome);
-        Assert.AreEqual("good content", await File.ReadAllTextAsync(cachedPath));
+        Assert.AreEqual("good content", await File.ReadAllTextAsync(cachedPath, TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -408,7 +408,7 @@ public class SourceCacheUpdaterTests
         var batch = Batch(SeedBatchOrigin.Bundled, file);
         var updater = CreateUpdaterWithOptions(NeverCallNetwork(), converters: null, validate: json => json == "good content");
 
-        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: false);
+        var result = await updater.ResolveAsync([batch], allowNetwork: false, forceRefresh: false, TestContext.CancellationToken);
 
         Assert.AreEqual("/bundled/a.json", result.EffectiveBatches[0].Files[0].FilePath);
     }
@@ -488,6 +488,8 @@ public class SourceCacheUpdaterTests
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             => Entries.Add((logLevel, formatter(state, exception)));
     }
+
+    public TestContext TestContext { get; set; }
 
     #endregion
 }

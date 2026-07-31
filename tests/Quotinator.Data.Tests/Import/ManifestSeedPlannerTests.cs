@@ -33,9 +33,8 @@ public class ManifestSeedPlannerTests
         var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
         var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
 
-        CollectionAssert.AreEqual(
-            new[] { "a.json", "b.json" },
-            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+        Assert.AreSequenceEqual(
+            new[] { "a.json", "b.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList());
         Assert.IsFalse(File.Exists(Path.Combine(_tempDir, "manifest.json")), "No manifest should be written when allowAutoCreate is false");
     }
 
@@ -54,9 +53,8 @@ public class ManifestSeedPlannerTests
         var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
         var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
 
-        CollectionAssert.AreEqual(
-            new[] { "z.json", "a.json" },
-            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+        Assert.AreSequenceEqual(
+            new[] { "z.json", "a.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList());
     }
 
     [TestMethod]
@@ -101,9 +99,8 @@ public class ManifestSeedPlannerTests
         var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
         var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
 
-        CollectionAssert.AreEqual(
-            new[] { "z.json", "a.json", "m.json" },
-            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+        Assert.AreSequenceEqual(
+            new[] { "z.json", "a.json", "m.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList());
     }
 
     [TestMethod]
@@ -128,9 +125,8 @@ public class ManifestSeedPlannerTests
         var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
         var (files, policy) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
 
-        CollectionAssert.AreEqual(
-            new[] { "a.json", "b.json" },
-            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+        Assert.AreSequenceEqual(
+            new[] { "a.json", "b.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList());
         Assert.AreEqual(ManifestPolicy.HardcodedDefault, policy);
     }
 
@@ -154,11 +150,10 @@ public class ManifestSeedPlannerTests
 
         var (files, policy) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
 
-        CollectionAssert.AreEqual(
-            new[] { "a.json", "b.json" },
-            files.Select(f => Path.GetFileName(f.FilePath)).ToList());
+        Assert.AreSequenceEqual(
+            new[] { "a.json", "b.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList());
         Assert.AreEqual(ManifestPolicy.HardcodedDefault, policy);
-        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning));
+        Assert.Contains(e => e.Level == LogLevel.Warning, logger.Entries);
     }
 
     [TestMethod]
@@ -167,7 +162,7 @@ public class ManifestSeedPlannerTests
         var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
         var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: true);
 
-        Assert.AreEqual(0, files.Count);
+        Assert.IsEmpty(files);
         Assert.IsFalse(File.Exists(Path.Combine(_tempDir, "manifest.json")), "An empty directory must never get an auto-created manifest (files would violate minItems: 1)");
     }
 
@@ -188,7 +183,7 @@ public class ManifestSeedPlannerTests
         var root  = JsonNode.Parse(File.ReadAllText(manifestPath))!;
         var files = root["files"]!.AsArray().Select(e => e!["file"]!.GetValue<string>()).ToList();
 
-        CollectionAssert.AreEqual(new[] { "a.json", "b.json" }, files);
+        Assert.AreSequenceEqual(new[] { "a.json", "b.json" }, files);
         Assert.IsNull(root["duplicateResolution"], "Auto-created manifest must not freeze a duplicateResolution policy");
     }
 
@@ -201,10 +196,10 @@ public class ManifestSeedPlannerTests
 
         planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: true);
 
-        Assert.IsTrue(logger.Entries.Any(e =>
+        Assert.Contains(e =>
             e.Level == LogLevel.Warning &&
             e.Message.Contains("[Database - Init]") &&
-            e.Message.Contains("auto-created")),
+            e.Message.Contains("auto-created"), logger.Entries,
             "Expected a warning log line announcing the manifest auto-creation");
     }
 
@@ -217,7 +212,7 @@ public class ManifestSeedPlannerTests
 
         planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
 
-        Assert.IsFalse(logger.Entries.Any(e => e.Level == LogLevel.Warning),
+        Assert.DoesNotContain(e => e.Level == LogLevel.Warning, logger.Entries,
             "The disabled/bundled-dir path must stay at Information level — no warning");
     }
 
@@ -485,8 +480,7 @@ public class ManifestSeedPlannerTests
         var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
         var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
 
-        CollectionAssert.AreEqual(new[] { "a.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList(),
-            "The rule file must not be appended as an unlisted quote source");
+        Assert.AreSequenceEqual(new[] { "a.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList(), "The rule file must not be appended as an unlisted quote source");
     }
 
     // ── #181: sourceAliasFile ────────────────────────────────────────────────
@@ -545,8 +539,7 @@ public class ManifestSeedPlannerTests
         var planner = new ManifestSeedPlanner(NullLogger<ManifestSeedPlanner>.Instance);
         var (files, _) = planner.PlanSeed(_tempDir, ManifestPolicy.HardcodedDefault, allowAutoCreate: false);
 
-        CollectionAssert.AreEqual(new[] { "a.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList(),
-            "The source-alias file must not be appended as an unlisted quote source");
+        Assert.AreSequenceEqual(new[] { "a.json" }, files.Select(f => Path.GetFileName(f.FilePath)).ToList(), "The source-alias file must not be appended as an unlisted quote source");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

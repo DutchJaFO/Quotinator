@@ -48,10 +48,10 @@ public class PersonEndpointsTests
             ReturnPage = new PagedItems<Person>([NewPerson(), NewPerson(name: "Ingrid Bergman")], 1, 20, 2)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var root = doc.RootElement;
 
         Assert.IsTrue(root.TryGetProperty("items", out var items));
@@ -68,7 +68,7 @@ public class PersonEndpointsTests
     public async Task GetAllPeople_PageZero_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?page=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?page=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -76,7 +76,7 @@ public class PersonEndpointsTests
     public async Task GetAllPeople_PageMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?page=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?page=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -84,7 +84,7 @@ public class PersonEndpointsTests
     public async Task GetAllPeople_PageSizeMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?pageSize=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?pageSize=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -92,7 +92,7 @@ public class PersonEndpointsTests
     public async Task GetAllPeople_PageSizeNegative_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?pageSize=-1");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?pageSize=-1", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -100,7 +100,7 @@ public class PersonEndpointsTests
     public async Task GetAllPeople_PageSizeAbove500_Returns422NotSilentClamp()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?pageSize=999");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?pageSize=999", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
 
@@ -112,10 +112,10 @@ public class PersonEndpointsTests
             ReturnPage = new PagedItems<Person>([NewPerson(), NewPerson(name: "Ingrid Bergman"), NewPerson(name: "Claude Rains")], 1, 3, 3)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?pageSize=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(3, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual(3, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(3, doc.RootElement.GetProperty("pageSize").GetInt32(), "pageSize=0 reports the effective count, not the literal 0 requested");
@@ -125,10 +125,10 @@ public class PersonEndpointsTests
     public async Task GetAllPeople_PageSizeOmitted_DefaultsTo20()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32());
     }
 
@@ -140,7 +140,7 @@ public class PersonEndpointsTests
             ReturnPage = new PagedItems<Person>([NewPerson()], 1, 20, 1)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?page=5");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?page=5", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -155,10 +155,10 @@ public class PersonEndpointsTests
             ReturnById = NewPerson(id: id, name: "Humphrey Bogart", completeness: CompletenessStatus.Complete)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/people/{id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/people/{id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
 
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("Humphrey Bogart", root.GetProperty("name").GetString());
@@ -182,10 +182,10 @@ public class PersonEndpointsTests
             ReturnById = NewPerson(id: id, dateOfBirth: null, dateOfDeath: null)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/people/{id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/people/{id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         AssertPropertyIsNullOrAbsent(root, "dateOfBirth");
         AssertPropertyIsNullOrAbsent(root, "dateOfDeath");
     }
@@ -194,7 +194,7 @@ public class PersonEndpointsTests
     public async Task GetPersonById_UnknownId_Returns404()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/people/{Guid.NewGuid()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/people/{Guid.NewGuid()}", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -202,7 +202,7 @@ public class PersonEndpointsTests
     public async Task GetPersonById_MalformedId_Returns404NotBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people/not-a-guid");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people/not-a-guid", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -212,10 +212,10 @@ public class PersonEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakePersonRepository { ReturnById = NewPerson(id: id) };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/people/{id.ToString("D").ToUpperInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/people/{id.ToString("D").ToUpperInvariant()}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
@@ -225,15 +225,15 @@ public class PersonEndpointsTests
     public async Task PersonEndpoints_OnLiveSpec_TaggedMasterData()
     {
         using var factory = CreateFactory();
-        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
 
         var paths = doc!.RootElement.GetProperty("paths");
 
         var listTags = paths.GetProperty("/api/v1/masterdata/people").GetProperty("get").GetProperty("tags");
         var byIdTags = paths.GetProperty("/api/v1/masterdata/people/{id}").GetProperty("get").GetProperty("tags");
 
-        Assert.IsTrue(listTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
-        Assert.IsTrue(byIdTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
+        Assert.Contains(t => t.GetString() == "MasterData", listTags.EnumerateArray());
+        Assert.Contains(t => t.GetString() == "MasterData", byIdTags.EnumerateArray());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -249,4 +249,6 @@ public class PersonEndpointsTests
         var isNullOrAbsent = !element.TryGetProperty(propertyName, out var value) || value.ValueKind == JsonValueKind.Null;
         Assert.IsTrue(isNullOrAbsent, message ?? $"'{propertyName}' must be null or omitted, never a non-null value");
     }
+
+    public TestContext TestContext { get; set; }
 }

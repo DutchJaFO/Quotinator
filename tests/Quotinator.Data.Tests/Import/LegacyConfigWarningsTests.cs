@@ -13,10 +13,10 @@ public class LegacyConfigWarningsTests
 
         LegacyConfigWarnings.WarnIfDataPathStillSet("/data/quotes.json", logger);
 
-        Assert.AreEqual(1, logger.Entries.Count);
+        Assert.HasCount(1, logger.Entries);
         Assert.AreEqual(LogLevel.Warning, logger.Entries[0].Level);
-        StringAssert.Contains(logger.Entries[0].Message, "Quotinator__DataPath");
-        StringAssert.Contains(logger.Entries[0].Message, "Quotinator__DataDir");
+        Assert.Contains("Quotinator__DataPath", logger.Entries[0].Message);
+        Assert.Contains("Quotinator__DataDir", logger.Entries[0].Message);
     }
 
     [TestMethod]
@@ -26,7 +26,7 @@ public class LegacyConfigWarningsTests
 
         LegacyConfigWarnings.WarnIfDataPathStillSet(null, logger);
 
-        Assert.AreEqual(0, logger.Entries.Count);
+        Assert.IsEmpty(logger.Entries);
     }
 
     [TestMethod]
@@ -36,7 +36,7 @@ public class LegacyConfigWarningsTests
 
         LegacyConfigWarnings.WarnIfDataPathStillSet(string.Empty, logger);
 
-        Assert.AreEqual(0, logger.Entries.Count);
+        Assert.IsEmpty(logger.Entries);
     }
 
     private sealed class RecordingLogger : ILogger

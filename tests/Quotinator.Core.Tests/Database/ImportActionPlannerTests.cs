@@ -91,7 +91,7 @@ public class ImportActionPlannerTests
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(4, actions.Count, "Quote + Source + Character + Person, all brand new");
+        Assert.HasCount(4, actions, "Quote + Source + Character + Person, all brand new");
         Assert.IsTrue(actions.All(a => a.ActionType.Parsed == ImportActionKind.Add));
         Assert.IsTrue(actions.All(a => a.Status.Parsed == ImportActionStatus.Decided), "Add is never ambiguous");
 
@@ -117,8 +117,8 @@ public class ImportActionPlannerTests
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(2, actions.Count);
-        CollectionAssert.AreEquivalent(new[] { "Quote", "Source" }, actions.Select(a => a.EntityType).ToList());
+        Assert.HasCount(2, actions);
+        Assert.AreSequenceEqual(new[] { "Quote", "Source" }, actions.Select(a => a.EntityType).ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -143,7 +143,7 @@ public class ImportActionPlannerTests
         var quote = BuildQuote("31111111-1111-4111-8111-111111111111", author: "Someone");
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(1, actions.Count, "Only the Quote is new — Source/Character/Person all already exist");
+        Assert.HasCount(1, actions, "Only the Quote is new — Source/Character/Person all already exist");
         var quoteAction = actions.Single();
         Assert.AreEqual("Quote", quoteAction.EntityType);
 
@@ -224,7 +224,7 @@ public class ImportActionPlannerTests
         var quote = BuildQuote("e3111111-1111-4111-8111-111111111111", source: "The Fellowship of the Ring (Book)", character: "Gandalf", type: Core.Models.QuoteType.Book);
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Character"), "Source.Type anchor (ADR 011) must never be crossed, even within a shared Series");
+        Assert.ContainsSingle(a => a.EntityType == "Character", actions, "Source.Type anchor (ADR 011) must never be crossed, even within a shared Series");
     }
 
     [TestMethod]
@@ -238,7 +238,7 @@ public class ImportActionPlannerTests
         var quote = BuildQuote("e4111111-1111-4111-8111-111111111111", source: "A Different Unrelated Movie", character: "Sam");
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Character"), "Same Name, same Type, but no known Series relationship — conservative default must create a new, separate Character");
+        Assert.ContainsSingle(a => a.EntityType == "Character", actions, "Same Name, same Type, but no known Series relationship — conservative default must create a new, separate Character");
     }
 
     [TestMethod]
@@ -515,7 +515,7 @@ public class ImportActionPlannerTests
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
 
-        Assert.IsFalse(actions.Any(a => a.EntityType == "Source"), "The alias must resolve to the already-existing canonical Source — no new Source Add should be staged");
+        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must resolve to the already-existing canonical Source — no new Source Add should be staged");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         var payload     = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(canonicalSourceId, payload.SourceId, "The quote must link to the existing canonical Source, not a spurious alias-derived one");
@@ -543,7 +543,7 @@ public class ImportActionPlannerTests
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
 
-        Assert.IsFalse(actions.Any(a => a.EntityType == "Source"), "The alias must normalise type before Source resolution runs — no spurious anime-typed Source should ever be staged");
+        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must normalise type before Source resolution runs — no spurious anime-typed Source should ever be staged");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed);
         var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.MergedFields!)!;
@@ -685,7 +685,7 @@ public class ImportActionPlannerTests
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [q1, q2], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Source"), "Both quotes share the same Source — must be staged once, not twice");
+        Assert.ContainsSingle(a => a.EntityType == "Source", actions, "Both quotes share the same Source — must be staged once, not twice");
     }
 
     [TestMethod]
@@ -1333,7 +1333,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [BuildSourceEntry(newFileId, title: "Casablanca", type: Core.Models.QuoteType.Movie, date: null)]);
 
-        Assert.AreEqual(0, actions.Count, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#162 scope boundary)");
+        Assert.IsEmpty(actions, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#162 scope boundary)");
     }
 
     [TestMethod]
@@ -1391,7 +1391,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [BuildSourceEntry(newFileId, title: "A Brand New Film")]);
 
-        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Source"), "Only one Source Add — the quote must resolve to the same row the sources[] section staged, not a second one");
+        Assert.ContainsSingle(a => a.EntityType == "Source", actions, "Only one Source Add — the quote must resolve to the same row the sources[] section staged, not a second one");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
         // #209/#210: the quote resolves to the canonicalized form of the file's declared id (ADR 012).
@@ -1609,7 +1609,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [BuildPersonEntry(newFileId, name: "Ada Lovelace")]);
 
-        Assert.AreEqual(0, actions.Count, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#173 scope boundary, same as #162's)");
+        Assert.IsEmpty(actions, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#173 scope boundary, same as #162's)");
     }
 
     /// <summary>
@@ -1629,7 +1629,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [BuildPersonEntry(newFileId, name: "ADA LOVELACE")]);
 
-        Assert.AreEqual(0, actions.Count, "Differing casing must still match the existing row via natural key, not stage a duplicate Add");
+        Assert.IsEmpty(actions, "Differing casing must still match the existing row via natural key, not stage a duplicate Add");
     }
 
     [TestMethod]
@@ -1751,7 +1751,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             characters: [BuildCharacterEntry(null, name: "A Brand New Character", sourceTitle: "A Never-Before-Seen Film", sourceType: Core.Models.QuoteType.Movie)]);
 
-        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Source"), "The referenced Source must be resolved/created too, same as a quote's own ResolveSourceAsync");
+        Assert.ContainsSingle(a => a.EntityType == "Source", actions, "The referenced Source must be resolved/created too, same as a quote's own ResolveSourceAsync");
         var characterAction = actions.Single(a => a.EntityType == "Character");
         Assert.AreEqual(ImportActionKind.Add, characterAction.ActionType.Parsed);
     }
@@ -1850,7 +1850,7 @@ public class ImportActionPlannerTests
 
         var action = actions.Single(a => a.EntityType == "Conversation");
         var merged = System.Text.Json.JsonSerializer.Deserialize<ConversationActionPayload>(action.MergedFields!)!;
-        Assert.AreEqual(0, merged.Lines.Count, "Lines are never read or included in a Modify payload — out of scope for this issue");
+        Assert.IsEmpty(merged.Lines, "Lines are never read or included in a Modify payload — out of scope for this issue");
     }
 
     [TestMethod]
@@ -1908,7 +1908,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [BuildSourceEntry(canonicalId.ToUpperInvariant(), title: "Casablanca (Corrected)")]);
 
-        Assert.AreEqual(1, actions.Count(a => a.EntityType == "Source"), "The correction-match must be found via case-insensitive lookup — no duplicate Add");
+        Assert.ContainsSingle(a => a.EntityType == "Source", actions, "The correction-match must be found via case-insensitive lookup — no duplicate Add");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(canonicalId, payload.SourceId, "sourceIndex must be seeded with the canonicalized (lowercase) form of the file's uppercase id, not the raw file casing, so a same-batch quote resolves to the row's real stored id");

@@ -128,7 +128,7 @@ public sealed class ChangelogServiceTests
         {
             WriteFile(dir, "en");
             WriteFile(dir, "nl");
-            Assert.AreEqual(2, Build(dir).AvailableLanguages.Count);
+            Assert.HasCount(2, Build(dir).AvailableLanguages);
         }
         finally { Directory.Delete(dir, recursive: true); }
     }
@@ -137,7 +137,7 @@ public sealed class ChangelogServiceTests
     public void Constructor_NonExistentDirectory_AvailableLanguagesEmpty()
     {
         var service = Build(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString()));
-        Assert.AreEqual(0, service.AvailableLanguages.Count);
+        Assert.IsEmpty(service.AvailableLanguages);
     }
 
     [TestMethod]

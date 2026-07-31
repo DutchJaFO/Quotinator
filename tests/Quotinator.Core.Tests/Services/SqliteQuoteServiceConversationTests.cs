@@ -204,7 +204,7 @@ public class SqliteQuoteServiceConversationTests
         Assert.AreEqual("stage_direction", stageDirectionLine.Type);
         Assert.AreEqual("[EXT. COCKPIT]", stageDirectionLine.Text);
         Assert.AreEqual("en", stageDirectionLine.Language);
-        Assert.AreEqual(false, stageDirectionLine.IsTranslated);
+        Assert.IsFalse(stageDirectionLine.IsTranslated);
         Assert.IsNull(stageDirectionLine.Quote);
 
         var quoteLine = result.Lines[1];
@@ -225,12 +225,12 @@ public class SqliteQuoteServiceConversationTests
         var stageDirectionLine = result!.Lines[0];
         Assert.AreEqual("[EXT. COCKPIT NL]", stageDirectionLine.Text);
         Assert.AreEqual("nl", stageDirectionLine.Language);
-        Assert.AreEqual(true, stageDirectionLine.IsTranslated);
+        Assert.IsTrue(stageDirectionLine.IsTranslated);
 
         var soundCueLine = result.Lines[2];
         Assert.AreEqual("[pijnlijke stilte]", soundCueLine.Text);
         Assert.AreEqual("nl", soundCueLine.Language);
-        Assert.AreEqual(true, soundCueLine.IsTranslated);
+        Assert.IsTrue(soundCueLine.IsTranslated);
     }
 
     [TestMethod]
@@ -241,7 +241,7 @@ public class SqliteQuoteServiceConversationTests
 
         Assert.AreEqual("[EXT. COCKPIT]", result!.Lines[0].Text);
         Assert.AreEqual("en", result.Lines[0].Language);
-        Assert.AreEqual(false, result.Lines[0].IsTranslated);
+        Assert.IsFalse(result.Lines[0].IsTranslated);
     }
 
     // ── GetRandom conversation-aware dedup ──────────────────────────────────
@@ -263,8 +263,7 @@ public class SqliteQuoteServiceConversationTests
                 .Select(m => m.ConversationId)
                 .ToList();
 
-            CollectionAssert.AllItemsAreUnique(conversationIds,
-                "The same conversation must never be represented by two different quotes in one /random result");
+            Assert.AreAllDistinct(conversationIds, "The same conversation must never be represented by two different quotes in one /random result");
         }
     }
 
@@ -282,7 +281,7 @@ public class SqliteQuoteServiceConversationTests
 
         Assert.IsNotNull(found, "Expected at least one /random draw to embed a conversation across 20 attempts");
         var withEmbed = found!.Items.First(q => q.EmbeddedConversation is not null);
-        Assert.IsTrue(withEmbed.EmbeddedConversation!.Lines.Count >= 2);
+        Assert.IsGreaterThanOrEqualTo(2, withEmbed.EmbeddedConversation!.Lines.Count);
     }
 
     [TestMethod]
@@ -312,7 +311,7 @@ public class SqliteQuoteServiceConversationTests
     {
         var result = CreateService().Search("cockpit before", 10, field: "quote");
 
-        Assert.AreEqual(1, result.Items.Count);
+        Assert.HasCount(1, result.Items);
         Assert.IsNotNull(result.Items[0].Conversations);
     }
 }

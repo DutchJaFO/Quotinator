@@ -42,8 +42,8 @@ public class SqlSelectPresentationGuardTests
         var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(
             "SELECT Id, BatchId, EntityId, ExistingBatchId FROM System_ImportActions;");
 
-        CollectionAssert.AreEquivalent(
-            new[] { "Id", "BatchId", "EntityId", "ExistingBatchId" }, violations.ToList());
+        Assert.AreSequenceEqual(
+            new[] { "Id", "BatchId", "EntityId", "ExistingBatchId" }, violations.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -52,7 +52,7 @@ public class SqlSelectPresentationGuardTests
         var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(
             "SELECT Id, LOWER(BatchId) AS BatchId, EntityId FROM System_ImportActions;");
 
-        CollectionAssert.AreEquivalent(new[] { "Id", "EntityId" }, violations.ToList());
+        Assert.AreSequenceEqual(new[] { "Id", "EntityId" }, violations.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]

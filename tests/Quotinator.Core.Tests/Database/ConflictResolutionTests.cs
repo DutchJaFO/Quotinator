@@ -114,7 +114,7 @@ public class ConflictResolutionTests
 
         Assert.AreEqual("Updated quote text", quoteText, "NewestWins replaces the whole record with the incoming one");
         Assert.AreEqual("Neo", character);
-        CollectionAssert.AreEquivalent(new[] { "Comedy" }, genres);
+        Assert.AreSequenceEqual(new[] { "Comedy" }, genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -129,7 +129,7 @@ public class ConflictResolutionTests
 
         Assert.AreEqual("Original quote text", quoteText, "True conflict on quote text — MergeOurs keeps the existing value");
         Assert.AreEqual("Neo", character, "Existing character was blank — auto-filled from the incoming side regardless of policy direction");
-        CollectionAssert.AreEquivalent(new[] { "Drama" }, genres, "True conflict on genres (array field) — MergeOurs keeps the existing array wholesale, no union with the incoming array");
+        Assert.AreSequenceEqual(new[] { "Drama" }, genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "True conflict on genres (array field) — MergeOurs keeps the existing array wholesale, no union with the incoming array");
     }
 
     [TestMethod]
@@ -144,7 +144,7 @@ public class ConflictResolutionTests
 
         Assert.AreEqual("Updated quote text", quoteText, "True conflict on quote text — MergeTheirs takes the incoming value");
         Assert.AreEqual("Neo", character, "Existing character was blank — auto-filled from the incoming side regardless of policy direction");
-        CollectionAssert.AreEquivalent(new[] { "Comedy" }, genres, "True conflict on genres (array field) — MergeTheirs takes the incoming array wholesale, no union with the existing array");
+        Assert.AreSequenceEqual(new[] { "Comedy" }, genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "True conflict on genres (array field) — MergeTheirs takes the incoming array wholesale, no union with the existing array");
     }
 
     [TestMethod]
@@ -159,7 +159,7 @@ public class ConflictResolutionTests
 
         Assert.AreEqual("Original quote text", quoteText, "Review does not auto-resolve — behaves exactly like Skip today");
         Assert.IsNull(character);
-        CollectionAssert.AreEquivalent(new[] { "Drama" }, genres);
+        Assert.AreSequenceEqual(new[] { "Drama" }, genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     // ── #55/#165: CompletenessStatus / NoValueKnown ──────────────────────────
@@ -283,8 +283,7 @@ public class ConflictResolutionTests
             "SELECT Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id ORDER BY OccurredAt",
             new { id = SharedId })).ToList();
 
-        CollectionAssert.AreEqual(new[] { "Created", "Modified" }, quoteActions,
-            "The first file's insert logs Created; the second file's newest-wins rewrite logs Modified");
+        Assert.AreSequenceEqual(new[] { "Created", "Modified" }, quoteActions, "The first file's insert logs Created; the second file's newest-wins rewrite logs Modified");
     }
 
     [TestMethod]
@@ -305,8 +304,7 @@ public class ConflictResolutionTests
             "SELECT Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id",
             new { id = SharedId })).ToList();
 
-        CollectionAssert.AreEqual(new[] { "Created" }, quoteActions,
-            $"{policy} never executes the UPDATE, so no Modified row should exist — only the first file's Created row");
+        Assert.AreSequenceEqual(new[] { "Created" }, quoteActions, $"{policy} never executes the UPDATE, so no Modified row should exist — only the first file's Created row");
     }
 
     /// <summary>System_ChangeLog is System_-prefixed protected infrastructure — a Reset must never drop or replay it, same as System_AuditEntries/System_ImportConflicts.</summary>
@@ -332,7 +330,7 @@ public class ConflictResolutionTests
         conn.Open();
         var countAfterReset = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ChangeLog;");
 
-        Assert.IsTrue(countAfterReset >= countBeforeReset * 2,
+        Assert.IsGreaterThanOrEqualTo(countBeforeReset * 2, countAfterReset,
             "The pre-Reset rows must survive Reset, plus at least as many new rows from the re-seed pass");
     }
 }

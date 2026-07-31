@@ -40,7 +40,7 @@ public class SeedBatchesBuilderTests
             includeDefaultSources: true, createMissingManifest: false,
             FakePlanner(), NullLogger.Instance);
 
-        Assert.IsTrue(batches.Any(b => b.Label == "bundled sources"), "Bundled batch should be present when IncludeDefaultSources is true");
+        Assert.Contains(b => b.Label == "bundled sources", batches, "Bundled batch should be present when IncludeDefaultSources is true");
     }
 
     [TestMethod]
@@ -53,7 +53,7 @@ public class SeedBatchesBuilderTests
             includeDefaultSources: false, createMissingManifest: false,
             FakePlanner(), NullLogger.Instance);
 
-        Assert.IsFalse(batches.Any(b => b.Label == "bundled sources"), "Bundled batch must be excluded when IncludeDefaultSources is false, even though files exist");
+        Assert.DoesNotContain(b => b.Label == "bundled sources", batches, "Bundled batch must be excluded when IncludeDefaultSources is false, even though files exist");
     }
 
     [TestMethod]
@@ -66,7 +66,7 @@ public class SeedBatchesBuilderTests
             includeDefaultSources: false, createMissingManifest: false,
             FakePlanner(), NullLogger.Instance);
 
-        Assert.IsTrue(batches.Any(b => b.Label == "user imports"), "IncludeDefaultSources must only gate the bundled batch, not imports");
+        Assert.Contains(b => b.Label == "user imports", batches, "IncludeDefaultSources must only gate the bundled batch, not imports");
     }
 
     [TestMethod]
@@ -80,7 +80,7 @@ public class SeedBatchesBuilderTests
             includeDefaultSources: true, createMissingManifest: false,
             FakePlanner(), logger);
 
-        Assert.IsTrue(logger.Entries.Any(e => e.Level == LogLevel.Warning && e.Message.Contains("bundled sources directory not found")),
+        Assert.Contains(e => e.Level == LogLevel.Warning && e.Message.Contains("bundled sources directory not found"), logger.Entries,
             "Expected a warning when the bundled directory doesn't exist");
     }
 
@@ -94,7 +94,7 @@ public class SeedBatchesBuilderTests
             includeDefaultSources: true, createMissingManifest: false,
             FakePlanner(), NullLogger.Instance);
 
-        Assert.IsTrue(batches.Any(b => b.Label == "user imports"));
+        Assert.Contains(b => b.Label == "user imports", batches);
     }
 
     [TestMethod]
@@ -107,7 +107,7 @@ public class SeedBatchesBuilderTests
             includeDefaultSources: true, createMissingManifest: false,
             FakePlanner(), NullLogger.Instance);
 
-        Assert.IsFalse(batches.Any(b => b.Label == "user imports"));
+        Assert.DoesNotContain(b => b.Label == "user imports", batches);
     }
 
     private sealed class StubManifestSeedPlanner : IManifestSeedPlanner

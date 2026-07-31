@@ -62,7 +62,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions");
+        var response = await client.GetAsync("/api/v1/import/actions", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
@@ -92,8 +92,8 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory(fake);
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions");
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var response = await client.GetAsync("/api/v1/import/actions", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
@@ -108,7 +108,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?pageSize=999");
+        var response = await client.GetAsync("/api/v1/import/actions?pageSize=999", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
@@ -119,8 +119,8 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions");
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var response = await client.GetAsync("/api/v1/import/actions", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32(), "the standard shared default is 20, not import/actions' old default of 50");
     }
@@ -131,7 +131,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?page=0");
+        var response = await client.GetAsync("/api/v1/import/actions?page=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -142,7 +142,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?page=abc");
+        var response = await client.GetAsync("/api/v1/import/actions?page=abc", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -153,7 +153,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?pageSize=abc");
+        var response = await client.GetAsync("/api/v1/import/actions?pageSize=abc", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -164,7 +164,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?pageSize=-1");
+        var response = await client.GetAsync("/api/v1/import/actions?pageSize=-1", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -175,7 +175,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?pageSize=0");
+        var response = await client.GetAsync("/api/v1/import/actions?pageSize=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "pageSize=0 means every row as one page — must succeed, not 422");
     }
@@ -205,7 +205,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory(fake);
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?page=5");
+        var response = await client.GetAsync("/api/v1/import/actions?page=5", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page beyond the last page must be rejected");
     }
@@ -218,7 +218,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1");
+        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
@@ -229,7 +229,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions/export");
+        var response = await client.GetAsync("/api/v1/import/actions/export", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -240,7 +240,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1&format=xml");
+        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1&format=xml", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -267,11 +267,12 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory(fake);
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1");
-        var rows = await response.Content.ReadFromJsonAsync<List<ImportActionFieldRow>>();
+        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1", TestContext.CancellationToken);
+        var rows = await response.Content.ReadFromJsonAsync<List<ImportActionFieldRow>>(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(1, rows!.Count);
+        Assert.IsNotNull(rows);
+        Assert.HasCount(1, rows);
         Assert.AreEqual("name", rows[0].Field);
         Assert.AreEqual("BATCH-1", fake.LastExportedBatchId);
     }
@@ -297,8 +298,8 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory(fake);
         using var client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1&format=csv");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1&format=csv", TestContext.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("text/csv", response.Content.Headers.ContentType?.MediaType);
@@ -335,7 +336,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory(adminApiKey: TestKey);
         using var client  = factory.CreateClient();
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm("[]"));
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm("[]"), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -346,7 +347,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide", BuildBulkDecideForm("[]"));
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide", BuildBulkDecideForm("[]"), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -357,7 +358,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm("", includeFile: false));
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm("", includeFile: false), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -375,11 +376,11 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide", content: null);
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide", content: null, TestContext.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        StringAssert.Contains(body, "batchId",
+        Assert.Contains("batchId", body,
             "Must be a clear detail message naming batchId, not a bare framework 400 with no detail.");
     }
 
@@ -389,11 +390,11 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", content: null);
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", content: null, TestContext.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        StringAssert.Contains(body, "file",
+        Assert.Contains("file", body,
             "Once batchId is present, a bodyless request must still be reported as a missing file, not a bare 400.");
     }
 
@@ -403,7 +404,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1&format=xml", BuildBulkDecideForm("[]"));
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1&format=xml", BuildBulkDecideForm("[]"), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -424,13 +425,14 @@ public class ImportActionEndpointsTests
             new { ActionId = actionId, EntityId = "e0000001-0000-4000-8000-000000000001", EntityType = "Person", Field = "name", Decision = "Replace" },
         });
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json));
-        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>();
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json), TestContext.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(1, body!.ActionsDecided);
         Assert.AreEqual("BATCH-1", fake.LastBulkDecidedBatchId);
-        Assert.AreEqual(1, fake.LastBulkDecideRows!.Count);
+        Assert.IsNotNull(fake.LastBulkDecideRows);
+        Assert.HasCount(1, fake.LastBulkDecideRows);
         Assert.AreEqual(actionId, fake.LastBulkDecideRows[0].ActionId);
     }
 
@@ -459,12 +461,13 @@ public class ImportActionEndpointsTests
             [{"actionId":"{{actionId}}","entityId":"e0000001-0000-4000-8000-000000000001","entityType":"Person","field":"name","existingValue":"Old","incomingValue":"New","decision":"Replace"}]
             """;
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json));
-        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>();
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json), TestContext.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(0, body!.Errors.Count, "camelCase property names (export's own output shape) must parse without error");
-        Assert.AreEqual(1, fake.LastBulkDecideRows!.Count);
+        Assert.IsEmpty(body!.Errors, "camelCase property names (export's own output shape) must parse without error");
+        Assert.IsNotNull(fake.LastBulkDecideRows);
+        Assert.HasCount(1, fake.LastBulkDecideRows);
         Assert.AreEqual(actionId, fake.LastBulkDecideRows[0].ActionId);
         Assert.AreEqual(FieldResolutionChoice.Replace, fake.LastBulkDecideRows[0].Decision);
     }
@@ -488,12 +491,13 @@ public class ImportActionEndpointsTests
             ]
             """;
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json));
-        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>();
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json), TestContext.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(1, body!.Errors.Count, "The malformed row must be reported as an error");
-        Assert.AreEqual(1, fake.LastBulkDecideRows!.Count, "Only the well-formed row reaches the service");
+        Assert.HasCount(1, body!.Errors, "The malformed row must be reported as an error");
+        Assert.IsNotNull(fake.LastBulkDecideRows);
+        Assert.HasCount(1, fake.LastBulkDecideRows, "Only the well-formed row reaches the service");
         Assert.AreEqual(validActionId, fake.LastBulkDecideRows[0].ActionId);
     }
 
@@ -511,10 +515,11 @@ public class ImportActionEndpointsTests
         var csv = "ActionId,EntityId,EntityType,Field,ExistingValue,IncomingValue,Decision,CustomValue,MarkCompletenessAs\r\n" +
                   $"{actionId},e0000001-0000-4000-8000-000000000001,Person,name,Old Name,New Name,Replace,,\r\n";
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1&format=csv", BuildBulkDecideForm(csv));
+        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1&format=csv", BuildBulkDecideForm(csv), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(1, fake.LastBulkDecideRows!.Count);
+        Assert.IsNotNull(fake.LastBulkDecideRows);
+        Assert.HasCount(1, fake.LastBulkDecideRows);
         Assert.AreEqual(actionId, fake.LastBulkDecideRows[0].ActionId);
         Assert.AreEqual(FieldResolutionChoice.Replace, fake.LastBulkDecideRows[0].Decision);
     }
@@ -527,7 +532,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest());
+        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -543,7 +548,7 @@ public class ImportActionEndpointsTests
         var actionId = Guid.NewGuid();
         var request = new ConflictDecisionRequest { QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace } };
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{actionId}/decide", request);
+        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{actionId}/decide", request, cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
         Assert.AreEqual(actionId, fake.LastDecidedActionId);
@@ -572,7 +577,7 @@ public class ImportActionEndpointsTests
             MarkCompletenessAs = CompletenessStatus.Complete,
         };
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{actionId}/decide", request);
+        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{actionId}/decide", request, cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
         Assert.AreEqual(CompletenessStatus.Complete, fake.LastDecisionRequest!.MarkCompletenessAs);
@@ -586,7 +591,7 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest());
+        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -599,12 +604,12 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest());
-        var body     = await response.Content.ReadAsStringAsync();
+        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        StringAssert.Contains(body, "genres");
-        StringAssert.Contains(body, "source");
+        Assert.Contains("genres", body);
+        Assert.Contains("source", body);
     }
 
     [TestMethod]
@@ -615,7 +620,7 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest());
+        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -628,11 +633,11 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest());
-        var body     = await response.Content.ReadAsStringAsync();
+        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        StringAssert.Contains(body, "Source");
+        Assert.Contains("Source", body);
     }
 
     // ── POST /actions/{id}/undo — requires X-Api-Key ─────────────────────────
@@ -643,7 +648,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.PostAsync($"/api/v1/import/actions/{Guid.NewGuid()}/undo", null);
+        var response = await client.PostAsync($"/api/v1/import/actions/{Guid.NewGuid()}/undo", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -657,7 +662,7 @@ public class ImportActionEndpointsTests
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
         var actionId = Guid.NewGuid();
-        var response = await client.PostAsync($"/api/v1/import/actions/{actionId}/undo", null);
+        var response = await client.PostAsync($"/api/v1/import/actions/{actionId}/undo", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
         Assert.AreEqual(actionId, fake.LastUndoneActionId);
@@ -671,7 +676,7 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync($"/api/v1/import/actions/{Guid.NewGuid()}/undo", null);
+        var response = await client.PostAsync($"/api/v1/import/actions/{Guid.NewGuid()}/undo", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -684,7 +689,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null);
+        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -696,11 +701,11 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply", null);
-        var body     = await response.Content.ReadAsStringAsync();
+        var response = await client.PostAsync("/api/v1/import/actions/apply", null, TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.IsFalse(body.Contains("Numeric parameters"), "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
+        Assert.DoesNotContain("Numeric parameters", body, "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
     }
 
     [TestMethod]
@@ -711,7 +716,7 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null);
+        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("BATCH-1", fake.LastAppliedBatchId);
@@ -729,11 +734,11 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null);
-        var body     = await response.Content.ReadAsStringAsync();
+        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        StringAssert.Contains(body, pendingId.ToString());
+        Assert.Contains(pendingId.ToString(), body);
     }
 
     // ── POST /actions/discard — requires X-Api-Key ───────────────────────────
@@ -744,7 +749,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null);
+        var response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -756,11 +761,11 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/discard", null);
-        var body     = await response.Content.ReadAsStringAsync();
+        var response = await client.PostAsync("/api/v1/import/actions/discard", null, TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.IsFalse(body.Contains("Numeric parameters"), "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
+        Assert.DoesNotContain("Numeric parameters", body, "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
     }
 
     [TestMethod]
@@ -771,7 +776,7 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null);
+        var response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
         Assert.AreEqual("BATCH-1", fake.LastDiscardedBatchId);
@@ -785,7 +790,7 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null);
+        var response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -798,7 +803,7 @@ public class ImportActionEndpointsTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null);
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -810,11 +815,11 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse", null);
-        var body     = await response.Content.ReadAsStringAsync();
+        var response = await client.PostAsync("/api/v1/import/actions/reverse", null, TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        Assert.IsFalse(body.Contains("Numeric parameters"), "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
+        Assert.DoesNotContain("Numeric parameters", body, "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
     }
 
     [TestMethod]
@@ -825,11 +830,11 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null);
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("BATCH-1", fake.LastReversedBatchId);
-        Assert.AreEqual(false, fake.LastReversePreview);
+        Assert.IsFalse(fake.LastReversePreview);
     }
 
     [TestMethod]
@@ -843,7 +848,7 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=batch-1", null);
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=batch-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("batch-1", fake.LastReversedBatchId);
@@ -857,10 +862,10 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1&preview=true", null);
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1&preview=true", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(true, fake.LastReversePreview);
+        Assert.IsTrue(fake.LastReversePreview);
     }
 
     [TestMethod]
@@ -871,7 +876,7 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null);
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -884,8 +889,10 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null);
+        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
+
+    public TestContext TestContext { get; set; }
 }

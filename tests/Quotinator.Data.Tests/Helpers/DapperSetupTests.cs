@@ -67,7 +67,7 @@ public class DapperSetupTests
 
         var result = await conn.QuerySingleAsync<IReadOnlyList<string>>("SELECT NoValueKnown FROM T");
 
-        CollectionAssert.AreEqual(new[] { "date", "character" }, result.ToList());
+        Assert.AreSequenceEqual(new[] { "date", "character" }, result.ToList());
     }
 
     /// <summary>An empty list must round-trip as the column's <c>'[]'</c> default, not as <c>NULL</c> or an error.</summary>
@@ -82,7 +82,7 @@ public class DapperSetupTests
 
         var result = await conn.QuerySingleAsync<IReadOnlyList<string>>("SELECT NoValueKnown FROM T");
 
-        Assert.AreEqual(0, result.Count);
+        Assert.IsEmpty(result);
     }
 
     /// <summary>

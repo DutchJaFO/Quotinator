@@ -55,7 +55,7 @@ public class AdminEndpointsTests
     public async Task PreviewSeed_NoKey_Returns200()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/admin/database/seed/preview");
+        var response = await factory.CreateClient().GetAsync("/api/v1/admin/database/seed/preview", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -64,10 +64,10 @@ public class AdminEndpointsTests
     public async Task PreviewSeed_Returns200WithPreviewShape()
     {
         using var factory = CreateFactory(TestKey);
-        var response = await factory.CreateClient().GetAsync("/api/v1/admin/database/seed/preview");
+        var response = await factory.CreateClient().GetAsync("/api/v1/admin/database/seed/preview", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(doc.RootElement.TryGetProperty("files",   out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("reports", out _));
     }
@@ -79,7 +79,7 @@ public class AdminEndpointsTests
     public async Task ReseedDatabase_NoKeyConfigured_Returns401()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().PostAsync("/api/v1/admin/database/reseed", null);
+        var response = await factory.CreateClient().PostAsync("/api/v1/admin/database/reseed", null, TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -88,7 +88,7 @@ public class AdminEndpointsTests
     public async Task ReseedDatabase_MissingAuthHeader_Returns401()
     {
         using var factory = CreateFactory(TestKey);
-        var response = await factory.CreateClient().PostAsync("/api/v1/admin/database/reseed", null);
+        var response = await factory.CreateClient().PostAsync("/api/v1/admin/database/reseed", null, TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -99,7 +99,7 @@ public class AdminEndpointsTests
         using var factory = CreateFactory(TestKey);
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.TryAddWithoutValidation("X-Api-Key", "wrong-key");
-        var response = await client.PostAsync("/api/v1/admin/database/reseed", null);
+        var response = await client.PostAsync("/api/v1/admin/database/reseed", null, TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -108,10 +108,10 @@ public class AdminEndpointsTests
     public async Task ReseedDatabase_CorrectKey_Returns200WithStatsShape()
     {
         using var factory = CreateFactory(TestKey);
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reseed", null);
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reseed", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(doc.RootElement.TryGetProperty("quotes",          out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("sources",         out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("characters",      out _));
@@ -131,7 +131,7 @@ public class AdminEndpointsTests
     public async Task ResetDatabase_NoKeyConfigured_Returns401()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().PostAsync("/api/v1/admin/database/reset", null);
+        var response = await factory.CreateClient().PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -140,7 +140,7 @@ public class AdminEndpointsTests
     public async Task ResetDatabase_MissingAuthHeader_Returns401()
     {
         using var factory = CreateFactory(TestKey);
-        var response = await factory.CreateClient().PostAsync("/api/v1/admin/database/reset", null);
+        var response = await factory.CreateClient().PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -151,7 +151,7 @@ public class AdminEndpointsTests
         using var factory = CreateFactory(TestKey);
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.TryAddWithoutValidation("X-Api-Key", "wrong-key");
-        var response = await client.PostAsync("/api/v1/admin/database/reset", null);
+        var response = await client.PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -160,10 +160,10 @@ public class AdminEndpointsTests
     public async Task ResetDatabase_CorrectKey_Returns200WithStatsShape()
     {
         using var factory = CreateFactory(TestKey);
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null);
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(doc.RootElement.TryGetProperty("quotes",          out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("sources",         out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("characters",      out _));
@@ -182,10 +182,10 @@ public class AdminEndpointsTests
     {
         var spy = new SpyDatabaseInitializer();
         using var factory = CreateFactory(TestKey, spy);
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null);
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(false, spy.LastPreserveSchemaVersion);
+        Assert.IsFalse(spy.LastPreserveSchemaVersion);
     }
 
     /// <summary>POST /admin/database/reset?preserveSchemaVersion=true threads the flag through to ResetAsync (#141).</summary>
@@ -195,10 +195,10 @@ public class AdminEndpointsTests
         var spy = new SpyDatabaseInitializer();
         using var factory = CreateFactory(TestKey, spy);
         var response = await CreateClientWithKey(factory)
-            .PostAsync("/api/v1/admin/database/reset?preserveSchemaVersion=true", null);
+            .PostAsync("/api/v1/admin/database/reset?preserveSchemaVersion=true", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(true, spy.LastPreserveSchemaVersion);
+        Assert.IsTrue(spy.LastPreserveSchemaVersion);
     }
 
     private sealed class SpyDatabaseInitializer : IDatabaseInitializer
@@ -234,4 +234,6 @@ public class AdminEndpointsTests
         public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false)
             => Task.FromResult(new SourceCacheResolution([], []));
     }
+
+    public TestContext TestContext { get; set; }
 }

@@ -97,7 +97,7 @@ public class SqliteImportActionServiceTests
         IReadOnlyList<CharacterEntry>? characters = null)
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         // Sources.ImportBatchId (and Characters/People/Quotes) is a real FK to ImportBatches — the
         // applier's writes need a genuine row to reference, same as production's own batch-first flow.
@@ -125,13 +125,13 @@ public class SqliteImportActionServiceTests
         var sourceAction = actions.Single(a => a.EntityType == "Source");
 
         await Assert.ThrowsExactlyAsync<ImportActionNotDecidableException>(
-            () => _service.DecideAsync(sourceAction.Id, new ConflictDecisionRequest()));
+            () => _service.DecideAsync(sourceAction.Id, new ConflictDecisionRequest(), TestContext.CancellationToken));
     }
 
     [TestMethod]
     public async Task DecideAsync_UnknownId_ThrowsImportActionNotFoundException()
         => await Assert.ThrowsExactlyAsync<ImportActionNotFoundException>(
-            () => _service.DecideAsync(Guid.NewGuid(), new ConflictDecisionRequest()));
+            () => _service.DecideAsync(Guid.NewGuid(), new ConflictDecisionRequest(), TestContext.CancellationToken));
 
     [TestMethod]
     public async Task DecideAsync_AmbiguousFieldLeftUndecided_ThrowsUnresolvedFieldConflictException()
@@ -143,7 +143,7 @@ public class SqliteImportActionServiceTests
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
 
         await Assert.ThrowsExactlyAsync<UnresolvedFieldConflictException>(
-            () => _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest()));
+            () => _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest(), TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -158,7 +158,7 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
         {
             QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
+        }, TestContext.CancellationToken);
 
         var found = await _actionReader.GetByIdAsync(quoteAction.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -179,8 +179,8 @@ public class SqliteImportActionServiceTests
         {
             QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
             MarkCompletenessAs = CompletenessStatus.Complete,
-        });
-        await _service.ApplyBatchAsync(batchId);
+        }, TestContext.CancellationToken);
+        await _service.ApplyBatchAsync(batchId, cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -217,8 +217,8 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
         {
             QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
-        await _service.ApplyBatchAsync(batchId);
+        }, TestContext.CancellationToken);
+        await _service.ApplyBatchAsync(batchId, cancellationToken: TestContext.CancellationToken);
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         verifyConn.Open();
@@ -234,7 +234,7 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote("41111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
 
-        var result = await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        var result = await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         Assert.IsNull(result, "Nothing pending — the whole batch must apply");
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -258,10 +258,10 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([BuildQuote("d1111111-1111-4111-8111-111111111111", character: null)], batchId, DuplicateResolutionPolicy.NewestWins);
         var lowercaseBatchId = batchId.ToString("D");
 
-        var page = await _service.GetPagedAsync(lowercaseBatchId, null, null, 1, 50);
+        var page = await _service.GetPagedAsync(lowercaseBatchId, null, null, 1, 50, TestContext.CancellationToken);
         Assert.AreEqual(2, page.TotalCount, "Quote + Source actions for a brand-new quote with no character");
 
-        var result = await _service.ApplyBatchAsync(lowercaseBatchId);
+        var result = await _service.ApplyBatchAsync(lowercaseBatchId, cancellationToken: TestContext.CancellationToken);
 
         Assert.IsNull(result, "Nothing pending — the whole batch must apply despite the lowercase batch id");
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -278,10 +278,10 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote(id)], batchId, DuplicateResolutionPolicy.Review);
 
-        var result = await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        var result = await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(1, result!.PendingActionIds.Count);
+        Assert.HasCount(1, result!.PendingActionIds);
     }
 
     /// <summary>
@@ -304,8 +304,8 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
         {
             QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
-        var result = await _service.ApplyBatchAsync(batchId);
+        }, TestContext.CancellationToken);
+        var result = await _service.ApplyBatchAsync(batchId, cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(result, "The batch's only action was decided — nothing should remain pending");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -324,8 +324,8 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([BuildQuote("61111111-1111-4111-8111-111111111111", character: "Rick Blaine")], batch1, DuplicateResolutionPolicy.NewestWins);
         await PlanAndStageAsync([BuildQuote("71111111-1111-4111-8111-111111111111", character: "Ilsa Lund")], batch2, DuplicateResolutionPolicy.NewestWins);
 
-        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant());
-        await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
+        await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -350,7 +350,7 @@ public class SqliteImportActionServiceTests
         var quote   = BuildQuote(quoteId);
         var batch1  = Guid.NewGuid();
         await PlanAndStageAsync([quote], batch1, DuplicateResolutionPolicy.NewestWins);
-        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
@@ -365,7 +365,7 @@ public class SqliteImportActionServiceTests
 
         var batch2 = Guid.NewGuid();
         await PlanAndStageAsync([quote], batch2, DuplicateResolutionPolicy.NewestWins);
-        var result = await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant());
+        var result = await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         Assert.IsNull(result, "Nothing pending — re-adding previously soft-deleted content must apply cleanly");
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
@@ -392,11 +392,11 @@ public class SqliteImportActionServiceTests
         var quote   = BuildQuote("b2111111-1111-4111-8111-111111111111", genres: ["comedy"]);
         var batchId = await StageAndApplyAsync(quote, DuplicateResolutionPolicy.NewestWins);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         var batch2 = Guid.NewGuid();
         await PlanAndStageAsync([quote], batch2, DuplicateResolutionPolicy.NewestWins);
-        var result = await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant());
+        var result = await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         Assert.IsNull(result, "Re-import after reversal must apply cleanly, not throw a FOREIGN KEY constraint error");
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -411,14 +411,14 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote("91111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
 
-        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, null, 1, 50);
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, null, 1, 50, TestContext.CancellationToken);
 
         var quoteItem     = page.Items.Single(i => i.EntityType == "Quote");
         var sourceItem    = page.Items.Single(i => i.EntityType == "Source");
         var characterItem = page.Items.Single(i => i.EntityType == "Character");
 
-        CollectionAssert.AreEquivalent(new[] { sourceItem.Id, characterItem.Id }, quoteItem.RelatedActionIds.ToList());
-        Assert.IsTrue(sourceItem.RelatedActionIds.Count == 0, "Source actions never relate to other actions");
+        Assert.AreSequenceEqual(new[] { sourceItem.Id, characterItem.Id }, quoteItem.RelatedActionIds.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.IsEmpty(sourceItem.RelatedActionIds, "Source actions never relate to other actions");
     }
 
     [TestMethod]
@@ -430,11 +430,11 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote(id)], batchId, DuplicateResolutionPolicy.Review);
 
-        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, null, 1, 50);
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, null, 1, 50, TestContext.CancellationToken);
         var quoteItem = page.Items.Single(i => i.EntityType == "Quote");
 
         Assert.AreEqual("Pending", quoteItem.Status);
-        CollectionAssert.Contains(quoteItem.AmbiguousFields.ToList(), "quoteText");
+        Assert.Contains("quoteText", quoteItem.AmbiguousFields.ToList());
     }
 
     [TestMethod]
@@ -443,10 +443,10 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote("b1111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
 
-        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, null, 1, 50);
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, null, 1, 50, TestContext.CancellationToken);
         var quoteItem = page.Items.Single(i => i.EntityType == "Quote");
 
-        Assert.AreEqual(0, quoteItem.AmbiguousFields.Count, "A Decided Add is never ambiguous");
+        Assert.IsEmpty(quoteItem.AmbiguousFields, "A Decided Add is never ambiguous");
     }
 
     [TestMethod]
@@ -455,9 +455,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote("c1111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
 
-        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, "Source", 1, 50);
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, "Source", 1, 50, TestContext.CancellationToken);
 
-        Assert.IsTrue(page.Items.Count > 0);
+        Assert.IsNotEmpty(page.Items);
         Assert.IsTrue(page.Items.All(i => i.EntityType == "Source"));
     }
 
@@ -467,9 +467,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote("e1111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
 
-        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, "source", 1, 50);
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, "source", 1, 50, TestContext.CancellationToken);
 
-        Assert.IsTrue(page.Items.Count > 0);
+        Assert.IsNotEmpty(page.Items);
         Assert.IsTrue(page.Items.All(i => i.EntityType == "Source"));
     }
 
@@ -479,9 +479,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote("f1111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
 
-        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), "decided", null, 1, 50);
+        var page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), "decided", null, 1, 50, TestContext.CancellationToken);
 
-        Assert.IsTrue(page.Items.Count > 0);
+        Assert.IsNotEmpty(page.Items);
         Assert.IsTrue(page.Items.All(i => i.Status == "Decided"));
     }
 
@@ -491,7 +491,7 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote("81111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
 
-        await _service.DiscardBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.DiscardBatchAsync(batchId.ToString("D").ToUpperInvariant(), TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -505,7 +505,7 @@ public class SqliteImportActionServiceTests
     private async Task SeedExistingQuoteAsync(string id, string quoteText)
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var now      = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         var sourceId = Guid.NewGuid();
         await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
@@ -525,7 +525,7 @@ public class SqliteImportActionServiceTests
     {
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([quote], batchId, policy);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
         return batchId;
     }
 
@@ -545,7 +545,7 @@ public class SqliteImportActionServiceTests
             ],
         };
         await PlanAndStageAsync([quote], batchId, DuplicateResolutionPolicy.NewestWins, stageDirections: [stageDirection], conversations: [conversation]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
         return batchId;
     }
 
@@ -569,10 +569,10 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
         {
             QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
-        await _service.ApplyBatchAsync(batchId);
+        }, TestContext.CancellationToken);
+        await _service.ApplyBatchAsync(batchId, cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId);
+        await _service.ReverseBatchAsync(batchId, cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -594,7 +594,7 @@ public class SqliteImportActionServiceTests
         var conversationId   = "d3333333-3333-4333-8333-333333333333";
         var batchId = await StageAndApplyConversationAsync(quoteId, stageDirectionId, conversationId);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -641,9 +641,9 @@ public class SqliteImportActionServiceTests
         await PlanAndStageAsync([quote2], newerBatchId, DuplicateResolutionPolicy.NewestWins,
             stageDirections: [new SourceStageDirection { Id = sharedStageDirectionId, Text = "[A stage direction]" }],
             conversations: [conversation2]);
-        await _service.ApplyBatchAsync(newerBatchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(newerBatchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(newerBatchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(newerBatchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -659,7 +659,7 @@ public class SqliteImportActionServiceTests
         var id = "a1111111-1111-4111-8111-111111111111";
         var batchId = await StageAndApplyAsync(BuildQuote(id), DuplicateResolutionPolicy.NewestWins);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -674,7 +674,7 @@ public class SqliteImportActionServiceTests
         var id = "a2111111-1111-4111-8111-111111111111";
         var batchId = await StageAndApplyAsync(BuildQuote(id), DuplicateResolutionPolicy.NewestWins);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -695,10 +695,10 @@ public class SqliteImportActionServiceTests
         var newerBatch = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote(olderId, character: "Rick Blaine")], olderBatch, DuplicateResolutionPolicy.NewestWins);
         await PlanAndStageAsync([BuildQuote(newerId, character: "Ilsa Lund")], newerBatch, DuplicateResolutionPolicy.NewestWins);
-        await _service.ApplyBatchAsync(olderBatch.ToString("D").ToUpperInvariant());
-        await _service.ApplyBatchAsync(newerBatch.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(olderBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
+        await _service.ApplyBatchAsync(newerBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(newerBatch.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(newerBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -717,7 +717,7 @@ public class SqliteImportActionServiceTests
 
         var batchId = await StageAndApplyAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -748,7 +748,7 @@ public class SqliteImportActionServiceTests
             Assert.AreNotEqual(originalSourceId, changedSourceId, "Sanity check: the Modify must actually have changed the Source linkage before reversal can prove anything");
         }
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         verifyConn.Open();
@@ -782,7 +782,7 @@ public class SqliteImportActionServiceTests
         }
 
         await Assert.ThrowsExactlyAsync<ImportBatchStateException>(
-            () => _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant()));
+            () => _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -800,7 +800,7 @@ public class SqliteImportActionServiceTests
 
         var modifyBatchId = await StageAndApplyAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
 
-        await _service.ReverseBatchAsync(modifyBatchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(modifyBatchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -827,7 +827,7 @@ public class SqliteImportActionServiceTests
 
         var batchId = await StageAndApplyAsync(BuildQuote(id, character: null, quoteText: "Modified text"), DuplicateResolutionPolicy.NewestWins);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         verifyConn.Open();
@@ -850,7 +850,7 @@ public class SqliteImportActionServiceTests
             Assert.AreEqual("Original text", text, "Sanity check: Skip must never have written anything");
         }
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         verifyConn.Open();
@@ -866,27 +866,27 @@ public class SqliteImportActionServiceTests
         // Never applied — ImportBatches.Status stays whatever PlanAndStageAsync's raw insert left it as, never 'Applied'.
 
         await Assert.ThrowsExactlyAsync<ImportBatchStateException>(
-            () => _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant()));
+            () => _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken));
     }
 
     [TestMethod]
     public async Task ReverseBatchAsync_UnknownBatchId_ThrowsImportBatchNotFoundException()
         => await Assert.ThrowsExactlyAsync<ImportBatchNotFoundException>(
-            () => _service.ReverseBatchAsync(Guid.NewGuid().ToString("D")));
+            () => _service.ReverseBatchAsync(Guid.NewGuid().ToString("D"), cancellationToken: TestContext.CancellationToken));
 
     [TestMethod]
     public async Task ReverseBatchAsync_MalformedBatchId_ThrowsImportBatchNotFoundException()
         => await Assert.ThrowsExactlyAsync<ImportBatchNotFoundException>(
-            () => _service.ReverseBatchAsync("not-a-guid"));
+            () => _service.ReverseBatchAsync("not-a-guid", cancellationToken: TestContext.CancellationToken));
 
     [TestMethod]
     public async Task ReverseBatchAsync_AlreadyReversed_ThrowsImportBatchNotFoundException()
     {
         var batchId = await StageAndApplyAsync(BuildQuote("ab111111-1111-4111-8111-111111111111"), DuplicateResolutionPolicy.NewestWins);
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         await Assert.ThrowsExactlyAsync<ImportBatchNotFoundException>(
-            () => _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant()));
+            () => _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -896,8 +896,8 @@ public class SqliteImportActionServiceTests
         await StageAndApplyAsync(BuildQuote("ad111111-1111-4111-8111-111111111111", character: "Ilsa Lund"), DuplicateResolutionPolicy.NewestWins);
 
         var ex = await Assert.ThrowsExactlyAsync<ImportBatchStateException>(
-            () => _service.ReverseBatchAsync(olderBatch.ToString("D").ToUpperInvariant()));
-        StringAssert.Contains(ex.Message, "most recently applied");
+            () => _service.ReverseBatchAsync(olderBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken));
+        Assert.Contains("most recently applied", ex.Message);
     }
 
     [TestMethod]
@@ -906,8 +906,8 @@ public class SqliteImportActionServiceTests
         var olderBatch = await StageAndApplyAsync(BuildQuote("ae111111-1111-4111-8111-111111111111", character: "Rick Blaine"), DuplicateResolutionPolicy.NewestWins);
         var newerBatch = await StageAndApplyAsync(BuildQuote("af111111-1111-4111-8111-111111111111", character: "Ilsa Lund"), DuplicateResolutionPolicy.NewestWins);
 
-        await _service.ReverseBatchAsync(newerBatch.ToString("D").ToUpperInvariant());
-        await _service.ReverseBatchAsync(olderBatch.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(newerBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
+        await _service.ReverseBatchAsync(olderBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -920,14 +920,14 @@ public class SqliteImportActionServiceTests
         var id = "b0111111-1111-4111-8111-111111111111";
         var batchId = await StageAndApplyAsync(BuildQuote(id), DuplicateResolutionPolicy.NewestWins);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ImportBatches WHERE Id = @id AND IsDeleted = 1", new { id = batchId }));
 
         var actions = await _actionReader.GetAllForBatchAsync(batchId.ToString("D").ToUpperInvariant());
-        Assert.IsTrue(actions.Count > 0);
+        Assert.IsNotEmpty(actions);
         Assert.IsTrue(actions.All(a => a.Status.Parsed == ImportActionStatus.Applied), "SystemImportAction rows stay Applied permanently — no Reversed status is introduced");
     }
 
@@ -936,7 +936,7 @@ public class SqliteImportActionServiceTests
     {
         var batchId = await StageAndApplyAsync(BuildQuote("b1111111-1111-4111-8111-111111111111"), DuplicateResolutionPolicy.NewestWins);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -946,8 +946,8 @@ public class SqliteImportActionServiceTests
         var sourceDeleted = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE IsDeleted = 1");
         Console.WriteLine($"Sources soft-deleted: {sourceDeleted}");
 
-        Assert.IsTrue(rows.Any(r => r.EntityType == "quote" && r.Action == "SoftDelete"));
-        Assert.IsTrue(rows.Any(r => r.EntityType == "source" && r.Action == "SoftDelete"));
+        Assert.Contains(r => r.EntityType == "quote" && r.Action == "SoftDelete", rows);
+        Assert.Contains(r => r.EntityType == "source" && r.Action == "SoftDelete", rows);
     }
 
     // ── #162 — Source decidability ───────────────────────────────────────────
@@ -955,7 +955,7 @@ public class SqliteImportActionServiceTests
     private async Task SeedExplicitSourceAsync(string id, string title = "Casablanca", string type = "Movie", string? date = "1942")
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO Sources (Id, Title, Type, Date, DateCreated) VALUES (@Id, @Title, @Type, @Date, @now)",
@@ -978,7 +978,7 @@ public class SqliteImportActionServiceTests
             SourceTitle = new FieldDecision { Choice = FieldResolutionChoice.Replace },
             SourceType  = new FieldDecision { Choice = FieldResolutionChoice.Keep },
             SourceDate  = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
+        }, TestContext.CancellationToken);
 
         var found = await _actionReader.GetByIdAsync(sourceAction.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -996,7 +996,7 @@ public class SqliteImportActionServiceTests
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed, "NewestWins resolves immediately");
 
-        var result = await _service.ApplyBatchAsync(sourceAction.BatchId);
+        var result = await _service.ApplyBatchAsync(sourceAction.BatchId, cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(result);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1019,7 +1019,7 @@ public class SqliteImportActionServiceTests
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
 
-        var result = await _service.ApplyBatchAsync(sourceAction.BatchId);
+        var result = await _service.ApplyBatchAsync(sourceAction.BatchId, cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(result);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1041,7 +1041,7 @@ public class SqliteImportActionServiceTests
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
 
-        var result = await _service.ApplyBatchAsync(sourceAction.BatchId);
+        var result = await _service.ApplyBatchAsync(sourceAction.BatchId, cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(result);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1074,9 +1074,9 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(sourceAction.Id, new ConflictDecisionRequest
         {
             SourceSeriesId = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
+        }, TestContext.CancellationToken);
 
-        var result = await _service.ApplyBatchAsync(sourceAction.BatchId);
+        var result = await _service.ApplyBatchAsync(sourceAction.BatchId, cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(result, "Every action in the batch (the Series Add and the now-Decided Source Modify) must apply cleanly");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1094,9 +1094,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             sources: [new SourceEntry { Id = id, Title = "Casablanca (Corrected)", Type = QuoteType.Movie, Date = "1942-11-26" }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1113,9 +1113,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             sources: [new SourceEntry { Id = newFileId, Title = "A Brand New Film", Type = QuoteType.Movie }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1147,12 +1147,12 @@ public class SqliteImportActionServiceTests
         var batch1 = Guid.NewGuid();
         await PlanAndStageAsync([quote], batch1, DuplicateResolutionPolicy.NewestWins,
             sources: [new SourceEntry { Id = sourceId, Title = "T2 Regression Movie", Type = QuoteType.Movie }]);
-        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         var batch2 = Guid.NewGuid();
         await PlanAndStageAsync([quote], batch2, DuplicateResolutionPolicy.NewestWins,
             sources: [new SourceEntry { Id = sourceId, Title = "T2 Regression Movie (Corrected)", Type = QuoteType.Movie }]);
-        await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1199,7 +1199,7 @@ public class SqliteImportActionServiceTests
     public async Task CanonicalizedLowercaseId_InsertedDirectly_FoundByGuidTypedLookup(string tableName, Func<SqliteConnection, string, Task> insertRow)
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
 
         var rawUppercaseId = Guid.NewGuid().ToString("D").ToUpperInvariant();
         var canonicalId = EntityIdCanonicalizer.CanonicalizeLowercase(rawUppercaseId);
@@ -1219,10 +1219,10 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([quote], batchId, DuplicateResolutionPolicy.NewestWins,
             sources: [new SourceEntry { Id = lowercaseSourceId, Title = "Canonicalization Join Test Film", Type = QuoteType.Movie, Date = "1999" }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var (title, date) = await conn.QuerySingleAsync<(string Title, string Date)>(
             "SELECT s.Title, s.Date FROM Quotes q JOIN Sources s ON s.Id = q.SourceId WHERE UPPER(q.Id) = UPPER(@id)", new { id = quoteId });
         Assert.AreEqual("Canonicalization Join Test Film", title, "The Quote->Source join must still resolve after the Source's explicit id was canonicalized at capture");
@@ -1237,7 +1237,7 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             sources: [new SourceEntry { Id = lowercaseSourceId, Title = "Canonicalization Repository Test Film", Type = QuoteType.Movie }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         // The exact call the masterdata GET /sources/{id} endpoint makes (SourceEndpoints.GetById).
         var repository = new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
@@ -1281,10 +1281,10 @@ public class SqliteImportActionServiceTests
             conversations: [conversation]);
 
         // Must not throw SQLite Error 19 (FOREIGN KEY constraint failed).
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var lineCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM ConversationLines WHERE UPPER(ConversationId) = UPPER(@id) AND IsDeleted = 0", new { id = conversationId });
         Assert.AreEqual(2, lineCount, "Both lines must have actually been written — a caught-and-swallowed FK failure would leave this at 0, not just throw");
@@ -1295,7 +1295,7 @@ public class SqliteImportActionServiceTests
     private async Task SeedExplicitStageDirectionAsync(string id, string text = "A shot rings out.", string? imageUrl = null, string completenessStatus = "Incomplete")
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO StageDirections (Id, Text, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @ImageUrl, @CompletenessStatus, @now)",
@@ -1317,7 +1317,7 @@ public class SqliteImportActionServiceTests
         {
             StageDirectionText     = new FieldDecision { Choice = FieldResolutionChoice.Replace },
             StageDirectionImageUrl = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
+        }, TestContext.CancellationToken);
 
         var found = await _actionReader.GetByIdAsync(action.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -1331,7 +1331,7 @@ public class SqliteImportActionServiceTests
         await SeedExplicitStageDirectionAsync(id, text: "A shot rings out.", imageUrl: "https://example.com/original.jpg");
         using (var seedConn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await seedConn.OpenAsync();
+            await seedConn.OpenAsync(TestContext.CancellationToken);
             var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
             await seedConn.ExecuteAsync(
                 "INSERT INTO StageDirectionTranslations (Id, StageDirectionId, Language, Text, DateCreated) VALUES (@Id, @StageDirectionId, 'nl', 'Er klinkt een schot.', @now)",
@@ -1341,9 +1341,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             stageDirections: [new SourceStageDirection { Id = id, Text = "A different action entirely.", ImageUrl = "https://example.com/corrected.jpg" }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1362,7 +1362,7 @@ public class SqliteImportActionServiceTests
     private async Task SeedExplicitSoundCueAsync(string id, string text = "Distant thunder.", string? soundFileUrl = null, string? imageUrl = null, string completenessStatus = "Incomplete")
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO SoundCues (Id, Text, SoundFileUrl, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @SoundFileUrl, @ImageUrl, @CompletenessStatus, @now)",
@@ -1385,7 +1385,7 @@ public class SqliteImportActionServiceTests
             SoundCueText         = new FieldDecision { Choice = FieldResolutionChoice.Replace },
             SoundCueSoundFileUrl = new FieldDecision { Choice = FieldResolutionChoice.Replace },
             SoundCueImageUrl     = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
+        }, TestContext.CancellationToken);
 
         var found = await _actionReader.GetByIdAsync(action.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -1399,7 +1399,7 @@ public class SqliteImportActionServiceTests
         await SeedExplicitSoundCueAsync(id, text: "Distant thunder.", soundFileUrl: "https://example.com/original.mp3");
         using (var seedConn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await seedConn.OpenAsync();
+            await seedConn.OpenAsync(TestContext.CancellationToken);
             var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
             await seedConn.ExecuteAsync(
                 "INSERT INTO SoundCueTranslations (Id, SoundCueId, Language, Text, DateCreated) VALUES (@Id, @SoundCueId, 'nl', 'Ver gerommel van de donder.', @now)",
@@ -1409,9 +1409,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             soundCues: [new SourceSoundCue { Id = id, Text = "A completely different sound.", SoundFileUrl = "https://example.com/corrected.mp3" }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1430,7 +1430,7 @@ public class SqliteImportActionServiceTests
     private async Task SeedExplicitConversationAsync(string id, string? description = "A tense standoff.", string completenessStatus = "Incomplete")
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO Conversations (Id, Description, CompletenessStatus, DateCreated) VALUES (@Id, @Description, @CompletenessStatus, @now)",
@@ -1451,7 +1451,7 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(action.Id, new ConflictDecisionRequest
         {
             ConversationDescription = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
+        }, TestContext.CancellationToken);
 
         var found = await _actionReader.GetByIdAsync(action.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -1467,9 +1467,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             conversations: [new SourceConversation { Id = id, Description = "A completely different scene.", Lines = [] }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1485,7 +1485,7 @@ public class SqliteImportActionServiceTests
     private async Task SeedExplicitPersonAsync(string id, string name = "Ada Lovelace", string? dateOfBirth = "1815-12-10", string? dateOfDeath = "1852-11-27", string completenessStatus = "Incomplete")
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO People (Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @DateOfBirth, @DateOfDeath, @CompletenessStatus, @now)",
@@ -1510,7 +1510,7 @@ public class SqliteImportActionServiceTests
         var action = actions.Single(a => a.EntityType == "Person");
         Assert.AreEqual(ImportActionKind.Add, action.ActionType.Parsed);
 
-        var result = await _service.ApplyBatchAsync(action.BatchId);
+        var result = await _service.ApplyBatchAsync(action.BatchId, cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(result);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1532,7 +1532,7 @@ public class SqliteImportActionServiceTests
         var action = actions.Single(a => a.EntityType == "Person");
         Assert.AreEqual(ImportActionStatus.Decided, action.Status.Parsed, "NewestWins resolves immediately");
 
-        var result = await _service.ApplyBatchAsync(action.BatchId);
+        var result = await _service.ApplyBatchAsync(action.BatchId, cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(result);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1559,7 +1559,7 @@ public class SqliteImportActionServiceTests
             PersonName          = new FieldDecision { Choice = FieldResolutionChoice.Replace },
             PersonDateOfBirth   = new FieldDecision { Choice = FieldResolutionChoice.Replace },
             PersonDateOfDeath   = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
+        }, TestContext.CancellationToken);
 
         var found = await _actionReader.GetByIdAsync(action.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -1575,9 +1575,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             people: [new PersonEntry { Id = id, Name = "A Completely Different Name", DateOfBirth = "1900-01-01", DateOfDeath = "1980-01-01" }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1603,13 +1603,13 @@ public class SqliteImportActionServiceTests
         var batch1 = Guid.NewGuid();
         await PlanAndStageAsync([], batch1, DuplicateResolutionPolicy.NewestWins,
             people: [new PersonEntry { Id = id, Name = "Original Name" }]);
-        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant());
-        await _service.ReverseBatchAsync(batch1.ToString("D").ToUpperInvariant()); // soft-deletes the lowercase-id row
+        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
+        await _service.ReverseBatchAsync(batch1.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken); // soft-deletes the lowercase-id row
 
         var batch2 = Guid.NewGuid();
         await PlanAndStageAsync([], batch2, DuplicateResolutionPolicy.NewestWins,
             people: [new PersonEntry { Id = id, Name = "Fresh Name After Undo" }]);
-        var result = await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant());
+        var result = await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(result);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1631,7 +1631,7 @@ public class SqliteImportActionServiceTests
     private async Task<string> SeedExplicitCharacterAsync(string id, string sourceId, string name = "Gandalf", string sourceType = "Movie", string completenessStatus = "Incomplete")
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO Characters (Id, Name, SourceType, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @SourceType, @CompletenessStatus, @now)",
@@ -1658,7 +1658,7 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(action.Id, new ConflictDecisionRequest
         {
             CharacterName = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
+        }, TestContext.CancellationToken);
 
         var found = await _actionReader.GetByIdAsync(action.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
@@ -1676,9 +1676,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             characters: [new CharacterEntry { Id = id, Name = "A Completely Different Name", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1702,13 +1702,13 @@ public class SqliteImportActionServiceTests
         var batch1 = Guid.NewGuid();
         await PlanAndStageAsync([], batch1, DuplicateResolutionPolicy.NewestWins,
             characters: [new CharacterEntry { Id = id, Name = "Original Name", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
-        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant());
-        await _service.ReverseBatchAsync(batch1.ToString("D").ToUpperInvariant()); // soft-deletes the lowercase-id row
+        await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
+        await _service.ReverseBatchAsync(batch1.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken); // soft-deletes the lowercase-id row
 
         var batch2 = Guid.NewGuid();
         await PlanAndStageAsync([], batch2, DuplicateResolutionPolicy.NewestWins,
             characters: [new CharacterEntry { Id = id, Name = "Fresh Name After Undo", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
-        var result = await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant());
+        var result = await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(result);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1730,9 +1730,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             characters: [new CharacterEntry { Id = id, Name = "Gandalf", SourceTitle = "Existing Film", SourceType = QuoteType.Movie }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1745,7 +1745,7 @@ public class SqliteImportActionServiceTests
     private async Task<string> SeedExplicitSeriesAsync(string id, string name = "The Hobbit", string? universeId = null, string completenessStatus = "Incomplete")
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO Series (Id, Name, UniverseId, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @UniverseId, @CompletenessStatus, @now)",
@@ -1756,7 +1756,7 @@ public class SqliteImportActionServiceTests
     private async Task<string> SeedExplicitUniverseAsync(string id, string name = "Middle Earth", string completenessStatus = "Incomplete")
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @CompletenessStatus, @now)",
@@ -1778,8 +1778,8 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(action.Id, new ConflictDecisionRequest
         {
             SeriesName = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
-        var stillPending = await _service.ApplyBatchAsync(action.BatchId);
+        }, TestContext.CancellationToken);
+        var stillPending = await _service.ApplyBatchAsync(action.BatchId, cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(stillPending, "The batch must apply cleanly once its only action is decided");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1802,8 +1802,8 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(action.Id, new ConflictDecisionRequest
         {
             UniverseName = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
-        var stillPending = await _service.ApplyBatchAsync(action.BatchId);
+        }, TestContext.CancellationToken);
+        var stillPending = await _service.ApplyBatchAsync(action.BatchId, cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(stillPending, "The batch must apply cleanly once its only action is decided");
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1821,9 +1821,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             series: [new SeriesEntry { Id = id, Name = "A Completely Different Name" }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1840,9 +1840,9 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
         await PlanAndStageAsync([], batchId, DuplicateResolutionPolicy.NewestWins,
             universe: [new UniverseEntry { Id = id, Name = "A Completely Different Name" }]);
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
-        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ReverseBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1868,7 +1868,7 @@ public class SqliteImportActionServiceTests
 
         using (var setupConn = new SqliteConnection($"Data Source={_dbPath}"))
         {
-            await setupConn.OpenAsync();
+            await setupConn.OpenAsync(TestContext.CancellationToken);
             var setupNow = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
             await setupConn.ExecuteAsync(
                 "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
@@ -1887,7 +1887,7 @@ public class SqliteImportActionServiceTests
             DetectedAt    = DateTime.UtcNow,
         });
 
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
@@ -1911,7 +1911,7 @@ public class SqliteImportActionServiceTests
         var batchId = Guid.NewGuid();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var setupNow = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
@@ -1928,7 +1928,7 @@ public class SqliteImportActionServiceTests
         // Deliberately skip staging the Universe action — simulates it never having applied in this batch.
         await _actionWriter.WriteAsync(seriesAction);
 
-        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant());
+        await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         var universeName = await conn.ExecuteScalarAsync<string>(
             "SELECT Name FROM Universe WHERE UPPER(Id) = UPPER(@id)", new { id = stagedUniverseId });
@@ -1973,7 +1973,7 @@ public class SqliteImportActionServiceTests
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Decided, incoming, existing);
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Blocked, incoming, existing);
 
-        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
 
         var distinctActionIds = rows.Select(r => r.ActionId).Distinct().Count();
         Assert.AreEqual(3, distinctActionIds, "Pending, Decided, and Blocked Modify actions must all be exported");
@@ -1986,9 +1986,9 @@ public class SqliteImportActionServiceTests
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Add, ImportActionStatus.Decided,
             JsonSerializer.Serialize(new PersonActionPayload("Brand New")));
 
-        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
 
-        Assert.AreEqual(0, rows.Count, "Add actions have nothing to decide and must not appear in the export");
+        Assert.IsEmpty(rows, "Add actions have nothing to decide and must not appear in the export");
     }
 
     [TestMethod]
@@ -1999,9 +1999,9 @@ public class SqliteImportActionServiceTests
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Applied, incoming);
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Discarded, incoming);
 
-        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
 
-        Assert.AreEqual(0, rows.Count, "Already-applied or discarded actions are no longer decidable and must not appear in the export");
+        Assert.IsEmpty(rows, "Already-applied or discarded actions are no longer decidable and must not appear in the export");
     }
 
     [TestMethod]
@@ -2012,9 +2012,9 @@ public class SqliteImportActionServiceTests
         var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name", "1980-01-01", null));
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
-        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
 
-        Assert.AreEqual(3, rows.Count, "Person has 3 decidable fields: name, dateOfBirth, dateOfDeath");
+        Assert.HasCount(3, rows, "Person has 3 decidable fields: name, dateOfBirth, dateOfDeath");
         var nameRow = rows.Single(r => r.Field == "name");
         Assert.AreEqual("Old Name", nameRow.ExistingValue);
         Assert.AreEqual("New Name", nameRow.IncomingValue);
@@ -2039,7 +2039,7 @@ public class SqliteImportActionServiceTests
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Decided,
             incoming, existing, merged, originalDecision);
 
-        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
 
         var nameRow = rows.Single(r => r.Field == "name");
         Assert.AreEqual(FieldResolutionChoice.Custom, nameRow.Decision);
@@ -2067,7 +2067,7 @@ public class SqliteImportActionServiceTests
             JsonSerializer.Serialize(incomingPayload), JsonSerializer.Serialize(existingPayload),
             originalDecision: originalDecision);
 
-        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
 
         var genresRow = rows.Single(r => r.Field == "genres");
         Assert.AreEqual("comedy", genresRow.ExistingValue);
@@ -2084,9 +2084,9 @@ public class SqliteImportActionServiceTests
         var existing = JsonSerializer.Serialize(new ConversationActionPayload("Old description", []));
         await StageActionAsync(batchId, ImportActionEntityTypes.Conversation, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
-        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
 
-        Assert.AreEqual(1, rows.Count, "Conversation has exactly one decidable field: description");
+        Assert.HasCount(1, rows, "Conversation has exactly one decidable field: description");
         Assert.AreEqual("description", rows[0].Field);
         Assert.AreEqual("Old description", rows[0].ExistingValue);
         Assert.AreEqual("New description", rows[0].IncomingValue);
@@ -2100,9 +2100,9 @@ public class SqliteImportActionServiceTests
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Blocked,
             incoming, markCompletenessAs: CompletenessStatus.Complete);
 
-        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
 
-        Assert.IsTrue(rows.Count > 0);
+        Assert.IsNotEmpty(rows);
         Assert.IsTrue(rows.All(r => r.MarkCompletenessAs == CompletenessStatus.Complete),
             "MarkCompletenessAs is one value per ActionId group, repeated on every row of that group");
     }
@@ -2131,11 +2131,11 @@ public class SqliteImportActionServiceTests
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace) };
-        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows, TestContext.CancellationToken);
 
         Assert.AreEqual(1, response.RowsProcessed);
         Assert.AreEqual(1, response.ActionsDecided);
-        Assert.AreEqual(0, response.Errors.Count);
+        Assert.IsEmpty(response.Errors);
 
         var reread = await _actionReader.GetByIdAsync(action.Id);
         Assert.AreEqual(ImportActionStatus.Decided, reread!.Status.Parsed);
@@ -2155,11 +2155,11 @@ public class SqliteImportActionServiceTests
             Field(unknownActionId, "e0000001-0000-4000-8000-000000000001", ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace),
             Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace),
         };
-        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows, TestContext.CancellationToken);
 
         Assert.AreEqual(2, response.RowsProcessed);
         Assert.AreEqual(1, response.ActionsDecided, "The valid action must still be decided despite the other group failing");
-        Assert.AreEqual(1, response.Errors.Count);
+        Assert.HasCount(1, response.Errors);
         Assert.AreEqual(unknownActionId, response.Errors[0].ActionId);
     }
 
@@ -2172,10 +2172,10 @@ public class SqliteImportActionServiceTests
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Character, "name", FieldResolutionChoice.Replace) };
-        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows, TestContext.CancellationToken);
 
         Assert.AreEqual(0, response.ActionsDecided);
-        Assert.AreEqual(1, response.Errors.Count);
+        Assert.HasCount(1, response.Errors);
         Assert.AreEqual(action.Id, response.Errors[0].ActionId);
     }
 
@@ -2188,10 +2188,10 @@ public class SqliteImportActionServiceTests
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "quoteText", FieldResolutionChoice.Replace) };
-        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows, TestContext.CancellationToken);
 
         Assert.AreEqual(0, response.ActionsDecided);
-        Assert.AreEqual(1, response.Errors.Count);
+        Assert.HasCount(1, response.Errors);
     }
 
     [TestMethod]
@@ -2203,10 +2203,10 @@ public class SqliteImportActionServiceTests
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Blocked, incoming, existing);
 
         var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace, markCompletenessAs: CompletenessStatus.Complete) };
-        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows, TestContext.CancellationToken);
 
         Assert.AreEqual(1, response.ActionsDecided);
-        Assert.AreEqual(0, response.Errors.Count);
+        Assert.IsEmpty(response.Errors);
     }
 
     [TestMethod]
@@ -2222,10 +2222,10 @@ public class SqliteImportActionServiceTests
             Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace),
             Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "dateOfBirth", FieldResolutionChoice.Keep),
         };
-        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows);
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), rows, TestContext.CancellationToken);
 
         Assert.AreEqual(1, response.ActionsDecided);
-        Assert.AreEqual(0, response.Errors.Count);
+        Assert.IsEmpty(response.Errors);
     }
 
     /// <summary>
@@ -2247,19 +2247,19 @@ public class SqliteImportActionServiceTests
         {
             PersonName        = new FieldDecision { Choice = FieldResolutionChoice.Replace },
             PersonDateOfBirth = new FieldDecision { Choice = FieldResolutionChoice.Keep },
-        });
+        }, TestContext.CancellationToken);
 
-        var exportedRows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
-        Assert.AreEqual(3, exportedRows.Count, "Person has 3 decidable fields: name, dateOfBirth, dateOfDeath");
+        var exportedRows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
+        Assert.HasCount(3, exportedRows, "Person has 3 decidable fields: name, dateOfBirth, dateOfDeath");
         Assert.AreEqual(FieldResolutionChoice.Replace, exportedRows.Single(r => r.Field == "name").Decision,
             "Export must reflect the actual recorded decision, not an inference");
         Assert.AreEqual(FieldResolutionChoice.Keep, exportedRows.Single(r => r.Field == "dateOfBirth").Decision);
         Assert.IsNull(exportedRows.Single(r => r.Field == "dateOfDeath").Decision,
             "dateOfDeath was never actually decided (both sides null, auto-resolved) — no entry in OriginalDecision");
 
-        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), exportedRows);
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), exportedRows, TestContext.CancellationToken);
 
-        Assert.AreEqual(0, response.Errors.Count, "The unmodified export must round-trip through bulk-decide with zero errors");
+        Assert.IsEmpty(response.Errors, "The unmodified export must round-trip through bulk-decide with zero errors");
         Assert.AreEqual(1, response.ActionsDecided);
     }
 
@@ -2280,15 +2280,15 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(action.Id, new ConflictDecisionRequest
         {
             PersonName = new FieldDecision { Choice = FieldResolutionChoice.Replace },
-        });
+        }, TestContext.CancellationToken);
 
-        var exportedRows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var exportedRows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
         var json          = JsonSerializer.Serialize(exportedRows);
         var deserialized  = JsonSerializer.Deserialize<List<ImportActionFieldRow>>(json)!;
 
-        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), deserialized);
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), deserialized, TestContext.CancellationToken);
 
-        Assert.AreEqual(0, response.Errors.Count, "The JSON-serialized export must round-trip through bulk-decide with zero errors");
+        Assert.IsEmpty(response.Errors, "The JSON-serialized export must round-trip through bulk-decide with zero errors");
         Assert.AreEqual(1, response.ActionsDecided);
     }
 
@@ -2310,9 +2310,9 @@ public class SqliteImportActionServiceTests
         await _service.DecideAsync(action.Id, new ConflictDecisionRequest
         {
             Genres = new GenresFieldDecision { Choice = FieldResolutionChoice.Custom, Value = ["drama", "comedy", "sci-fi"] },
-        });
+        }, TestContext.CancellationToken);
 
-        var exportedRows = await _service.ExportBatchAsync(batchId.ToCanonicalId());
+        var exportedRows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
         var csvRows = new List<IEnumerable<string?>> { ImportActionFieldRowMapper.CsvHeader };
         csvRows.AddRange(exportedRows.Select(ImportActionFieldRowMapper.ToCsvRow));
         var csv = CsvLineWriter.Write(csvRows);
@@ -2320,12 +2320,14 @@ public class SqliteImportActionServiceTests
         var parsedLines = CsvLineParser.Parse(csv);
         var parsedRows  = parsedLines.Skip(1).Select(ImportActionFieldRowMapper.FromCsvRow).ToList();
 
-        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), parsedRows);
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), parsedRows, TestContext.CancellationToken);
 
-        Assert.AreEqual(0, response.Errors.Count, "The CSV-serialized export (including a comma-containing genre list) must round-trip through bulk-decide with zero errors");
+        Assert.IsEmpty(response.Errors, "The CSV-serialized export (including a comma-containing genre list) must round-trip through bulk-decide with zero errors");
         Assert.AreEqual(1, response.ActionsDecided);
 
         var genresRow = parsedRows.Single(r => r.Field == "genres");
         Assert.AreEqual("drama;comedy;sci-fi", genresRow.CustomValue);
     }
+
+    public TestContext TestContext { get; set; }
 }

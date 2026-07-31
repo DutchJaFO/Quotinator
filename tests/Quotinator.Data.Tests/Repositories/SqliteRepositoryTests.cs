@@ -150,7 +150,7 @@ public class SqliteRepositoryTests
 
         var result = await _repository.GetPageAsync(1, 2);
 
-        Assert.AreEqual(2, result.Items.Count);
+        Assert.HasCount(2, result.Items);
         Assert.AreEqual(5, result.TotalCount);
     }
 
@@ -166,7 +166,7 @@ public class SqliteRepositoryTests
         var result = await _repository.GetPageAsync(1, 10);
 
         Assert.AreEqual(2, result.TotalCount);
-        Assert.IsFalse(result.Items.Any(w => w.Id == deleted.Id));
+        Assert.DoesNotContain(w => w.Id == deleted.Id, result.Items);
     }
 
     [TestMethod]
@@ -177,7 +177,7 @@ public class SqliteRepositoryTests
 
         var result = await _repository.GetPageAsync(3, 2);
 
-        Assert.AreEqual(1, result.Items.Count);
+        Assert.HasCount(1, result.Items);
         Assert.AreEqual(5, result.TotalCount);
     }
 
@@ -189,7 +189,7 @@ public class SqliteRepositoryTests
 
         var result = await _repository.GetPageAsync(1, 100);
 
-        Assert.AreEqual(3, result.Items.Count);
+        Assert.HasCount(3, result.Items);
         Assert.AreEqual(3, result.TotalCount);
     }
 
@@ -201,7 +201,7 @@ public class SqliteRepositoryTests
 
         var result = await _repository.GetPageAsync(1, 0);
 
-        Assert.AreEqual(5, result.Items.Count);
+        Assert.HasCount(5, result.Items);
         Assert.AreEqual(5, result.TotalCount);
         Assert.AreEqual(5, result.PageSize, "PageSize must report the effective count actually returned, not the literal 0 requested");
     }
@@ -214,7 +214,7 @@ public class SqliteRepositoryTests
 
         var result = await _repository.GetPageAsync(5, 2);
 
-        Assert.AreEqual(0, result.Items.Count);
+        Assert.IsEmpty(result.Items);
         Assert.AreEqual(3, result.TotalCount);
     }
 
@@ -236,8 +236,8 @@ public class SqliteRepositoryTests
             seen.AddRange(result.Items.Select(w => w.Id));
         }
 
-        CollectionAssert.AreEquivalent(inserted, seen);
-        Assert.AreEqual(inserted.Count, seen.Distinct().Count(), "a row was repeated across pages");
+        Assert.AreSequenceEqual(inserted, seen, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.HasCount(inserted.Count, seen.Distinct(), "a row was repeated across pages");
     }
 
     [TestMethod]
@@ -248,7 +248,7 @@ public class SqliteRepositoryTests
 
         var result = await _repository.GetPageAsync(1, 3);
 
-        Assert.AreEqual(3, result.Items.Count);
+        Assert.HasCount(3, result.Items);
         Assert.AreEqual(10, result.TotalCount);
     }
 
@@ -261,7 +261,7 @@ public class SqliteRepositoryTests
 
         var result = await _repository.GetPageAsync(1, 10, [new SortColumn("Label")]);
 
-        CollectionAssert.AreEqual(new[] { "Apple", "Banana", "Cherry" }, result.Items.Select(w => w.Label).ToList());
+        Assert.AreSequenceEqual(new[] { "Apple", "Banana", "Cherry" }, result.Items.Select(w => w.Label).ToList());
     }
 
     [TestMethod]
@@ -273,7 +273,7 @@ public class SqliteRepositoryTests
 
         var result = await _repository.GetPageAsync(1, 10, [new SortColumn("Label", Descending: true)]);
 
-        CollectionAssert.AreEqual(new[] { "Cherry", "Banana", "Apple" }, result.Items.Select(w => w.Label).ToList());
+        Assert.AreSequenceEqual(new[] { "Cherry", "Banana", "Apple" }, result.Items.Select(w => w.Label).ToList());
     }
 
     [TestMethod]
@@ -289,9 +289,8 @@ public class SqliteRepositoryTests
         var result = await _repository.GetPageAsync(
             1, 10, [new SortColumn("Label"), new SortColumn("DateCreated", Descending: true)]);
 
-        CollectionAssert.AreEqual(
-            new[] { other.Id, sameNewer.Id, sameOlder.Id },
-            result.Items.Select(w => w.Id).ToList());
+        Assert.AreSequenceEqual(
+            new[] { other.Id, sameNewer.Id, sameOlder.Id }, result.Items.Select(w => w.Id).ToList());
     }
 
     [TestMethod]
@@ -302,7 +301,7 @@ public class SqliteRepositoryTests
         var ex = await Assert.ThrowsExactlyAsync<ArgumentException>(
             () => _repository.GetPageAsync(1, 10, [new SortColumn("NotARealColumn")]));
 
-        StringAssert.Contains(ex.Message, "NotARealColumn");
+        Assert.Contains("NotARealColumn", ex.Message);
     }
 
     [TestMethod]

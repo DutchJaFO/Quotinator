@@ -6,6 +6,30 @@ Write unit tests for everything where it is relevant and possible. Every service
 
 - **MSTest** — Visual Studio default
 
+## MSTest analyzer policy
+
+`MSTest.Analyzers` (bundled with the `MSTest` package) ships its own official severity presets as
+`MSTestAnalysisMode` values (`None`/`Default`/`Recommended`/`All`) — see the `mstest-*.globalconfig`
+files inside the `MSTest.Analyzers` NuGet package. This project pins `<MSTestAnalysisMode>Recommended</MSTestAnalysisMode>`
+in `Directory.Build.props` rather than hand-writing per-rule severities in an `.editorconfig`, so the
+project automatically picks up whatever future MSTest releases add to their own curated "Recommended"
+set instead of silently missing them (issue #197: `MSTEST0068`/`MSTEST0046`/`MSTEST0037` had all been
+sitting at the analyzer's default `suggestion` severity — invisible to `dotnet build` at any verbosity,
+regardless of whether an `.editorconfig` existed, since nothing had ever escalated them).
+
+**Why not the full `All` mode:** `Recommended` was chosen over `All` after actually measuring the
+difference — `All` additionally enables `MSTEST0049` ("flow `TestContext.CancellationToken` into
+async calls that accept one") at a severity that, empirically, produced *more* violations on its own
+(1,708) than every other currently-relevant rule combined. `Recommended` already includes `MSTEST0049`
+at `warning`, so this project already enforces it going forward — the `All` vs. `Recommended`
+difference is a small number of stricter analyzer/style preferences, not this rule.
+
+**No project-level `NoWarn` suppressions for any `MSTEST0NNN` rule.** A rule that isn't right for this
+project belongs in a documented decision (like this section), not a silent per-project suppression —
+the six test projects that suppressed `MSTEST0037` were all found to have zero actual justification
+for it once traced back (a copy-pasted "style-only analyzer" comment, not a considered exemption), and
+the suppression was removed project-wide when #197 adopted `Recommended` mode fully.
+
 ## Project structure
 
 Every project in `src/` has a paired test project in `tests/` with the same name plus a `.Tests` suffix. This applies to infrastructure projects (`Quotinator.Data`, `Quotinator.Changelog`) exactly as it applies to feature projects. When a new `src/` project is created, its `tests/` counterpart is created in the same commit.

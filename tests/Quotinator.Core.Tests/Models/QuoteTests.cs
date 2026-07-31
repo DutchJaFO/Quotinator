@@ -81,7 +81,7 @@ public class QuoteTests
         Assert.IsNull(quote.Author);
         Assert.AreEqual(QuoteType.Movie, quote.Type);
         Assert.HasCount(2, quote.Genres);
-        Assert.IsTrue(quote.Genres.Contains("drama"));
+        Assert.Contains("drama", quote.Genres);
         Assert.IsTrue(quote.Translations.ContainsKey("nl"));
     }
 

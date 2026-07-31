@@ -44,8 +44,8 @@ public class AdminApiKeySecurityTransformerTests
         var security = await TransformAndGetSecurity([AdminApiKeyRequiredMarker.Instance]);
 
         Assert.IsNotNull(security);
-        Assert.AreEqual(1, security!.Count);
-        Assert.AreEqual(1, security[0].Count);
+        Assert.HasCount(1, security);
+        Assert.HasCount(1, security[0]);
     }
 
     #endregion

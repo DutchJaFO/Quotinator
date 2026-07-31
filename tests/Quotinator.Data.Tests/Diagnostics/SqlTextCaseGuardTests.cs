@@ -112,21 +112,21 @@ public class SqlTextCaseGuardTests
     {
         var names = SqlTextCaseGuard.DiscoverTextColumnNames(typeof(FakeEntity));
 
-        CollectionAssert.Contains(names.ToList(), "Name");
-        CollectionAssert.Contains(names.ToList(), "Description");
+        Assert.Contains("Name", names.ToList());
+        Assert.Contains("Description", names.ToList());
     }
 
     [TestMethod]
     public void DiscoverTextColumnNames_IdSuffixedProperty_IsExcluded()
-        => CollectionAssert.DoesNotContain(
-            SqlTextCaseGuard.DiscoverTextColumnNames(typeof(FakeEntity)).ToList(), "SomeId");
+        => Assert.DoesNotContain(
+"SomeId", SqlTextCaseGuard.DiscoverTextColumnNames(typeof(FakeEntity)).ToList());
 
     [TestMethod]
     public void DiscoverTextColumnNames_NonStringProperties_AreExcluded()
     {
         var names = SqlTextCaseGuard.DiscoverTextColumnNames(typeof(FakeEntity)).ToList();
 
-        CollectionAssert.DoesNotContain(names, "RecordId");
-        CollectionAssert.DoesNotContain(names, "Status", "An enum-typed property (even nullable) is not a string property and must be skipped automatically.");
+        Assert.DoesNotContain("RecordId", names);
+        Assert.DoesNotContain("Status", names, "An enum-typed property (even nullable) is not a string property and must be skipped automatically.");
     }
 }

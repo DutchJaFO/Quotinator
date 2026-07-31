@@ -61,7 +61,7 @@ public class SqliteRestorableRepositoryTests
 
         var deleted = await _repository.GetDeletedAsync();
 
-        Assert.AreEqual(0, deleted.Count);
+        Assert.IsEmpty(deleted);
     }
 
     [TestMethod]
@@ -75,7 +75,7 @@ public class SqliteRestorableRepositoryTests
 
         var result = await _repository.GetDeletedAsync();
 
-        Assert.AreEqual(1, result.Count);
+        Assert.HasCount(1, result);
         Assert.AreEqual(deleted.Id, result[0].Id);
     }
 
@@ -91,7 +91,7 @@ public class SqliteRestorableRepositoryTests
 
         var result = await _repository.GetDeletedAsync();
 
-        Assert.AreEqual(3, result.Count);
+        Assert.HasCount(3, result);
         Assert.IsTrue(result.All(r => r.IsDeleted));
     }
 
@@ -123,7 +123,7 @@ public class SqliteRestorableRepositoryTests
         var deleted = await _repository.GetDeletedAsync();
         var active  = await _repository.GetByIdAsync(entity.Id);
 
-        Assert.AreEqual(0, deleted.Count);
+        Assert.IsEmpty(deleted);
         Assert.IsNotNull(active);
         Assert.IsFalse(active.DateDeleted.IsValid);
         Assert.IsTrue(active.DateModified.IsValid);
@@ -135,11 +135,11 @@ public class SqliteRestorableRepositoryTests
         var entity = new Widget { Label = "ToRestore" };
         await _repository.InsertAsync(entity);
         await _repository.SoftDeleteAsync(entity.Id);
-        Assert.AreEqual(1, (await _repository.GetDeletedAsync()).Count);
+        Assert.HasCount(1, await _repository.GetDeletedAsync());
 
         await _repository.RestoreAsync(entity.Id);
 
-        Assert.AreEqual(0, (await _repository.GetDeletedAsync()).Count);
+        Assert.IsEmpty(await _repository.GetDeletedAsync());
     }
 
     [TestMethod]
@@ -171,7 +171,7 @@ public class SqliteRestorableRepositoryTests
 
         await _repository.HardDeleteAsync(entity.Id);
 
-        Assert.AreEqual(0, (await _repository.GetDeletedAsync()).Count);
+        Assert.IsEmpty(await _repository.GetDeletedAsync());
     }
 
     [TestMethod]
@@ -206,7 +206,7 @@ public class SqliteRestorableRepositoryTests
 
         await _repository.PurgeAsync();
 
-        Assert.AreEqual(0, (await _repository.GetDeletedAsync()).Count);
+        Assert.IsEmpty(await _repository.GetDeletedAsync());
     }
 
     [TestMethod]

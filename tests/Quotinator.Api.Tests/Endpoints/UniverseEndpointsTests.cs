@@ -45,10 +45,10 @@ public class UniverseEndpointsTests
             ReturnPage = new PagedItems<UniverseEntity>([NewUniverse(), NewUniverse(name: "Discworld")], 1, 20, 2)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc  = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         var root = doc.RootElement;
 
         Assert.IsTrue(root.TryGetProperty("items", out var items));
@@ -65,7 +65,7 @@ public class UniverseEndpointsTests
     public async Task GetAllUniverses_PageZero_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?page=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?page=0", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -73,7 +73,7 @@ public class UniverseEndpointsTests
     public async Task GetAllUniverses_PageMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?page=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?page=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -81,7 +81,7 @@ public class UniverseEndpointsTests
     public async Task GetAllUniverses_PageSizeMalformed_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?pageSize=abc");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?pageSize=abc", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -89,7 +89,7 @@ public class UniverseEndpointsTests
     public async Task GetAllUniverses_PageSizeNegative_Returns422()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?pageSize=-1");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?pageSize=-1", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -97,7 +97,7 @@ public class UniverseEndpointsTests
     public async Task GetAllUniverses_PageSizeAbove500_Returns422NotSilentClamp()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?pageSize=999");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?pageSize=999", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
 
@@ -109,10 +109,10 @@ public class UniverseEndpointsTests
             ReturnPage = new PagedItems<UniverseEntity>([NewUniverse(), NewUniverse(name: "Discworld"), NewUniverse(name: "Narnia")], 1, 3, 3)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?pageSize=0");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?pageSize=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(3, doc.RootElement.GetProperty("items").GetArrayLength());
         Assert.AreEqual(3, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(3, doc.RootElement.GetProperty("pageSize").GetInt32(), "pageSize=0 reports the effective count, not the literal 0 requested");
@@ -122,10 +122,10 @@ public class UniverseEndpointsTests
     public async Task GetAllUniverses_PageSizeOmitted_DefaultsTo20()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32());
     }
 
@@ -137,7 +137,7 @@ public class UniverseEndpointsTests
             ReturnPage = new PagedItems<UniverseEntity>([NewUniverse()], 1, 20, 1)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?page=5");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes?page=5", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -152,10 +152,10 @@ public class UniverseEndpointsTests
             ReturnById = NewUniverse(id: id, name: "Middle Earth", completeness: CompletenessStatus.Complete)
         };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/universes/{id}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/universes/{id}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
 
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
         Assert.AreEqual("Middle Earth", root.GetProperty("name").GetString());
@@ -170,7 +170,7 @@ public class UniverseEndpointsTests
     public async Task GetUniverseById_UnknownId_Returns404()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/universes/{Guid.NewGuid()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/universes/{Guid.NewGuid()}", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -178,7 +178,7 @@ public class UniverseEndpointsTests
     public async Task GetUniverseById_MalformedId_Returns404NotBadRequest()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes/not-a-guid");
+        var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/universes/not-a-guid", TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -188,10 +188,10 @@ public class UniverseEndpointsTests
         var id   = Guid.NewGuid();
         var repo = new FakeUniverseRepository { ReturnById = NewUniverse(id: id) };
         using var factory = CreateFactory(repo);
-        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/universes/{id.ToString("D").ToUpperInvariant()}");
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/universes/{id.ToString("D").ToUpperInvariant()}", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
         Assert.AreEqual(id.ToString("D"), root.GetProperty("id").GetString());
     }
 
@@ -201,14 +201,16 @@ public class UniverseEndpointsTests
     public async Task UniverseEndpoints_OnLiveSpec_TaggedMasterData()
     {
         using var factory = CreateFactory();
-        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var doc = await factory.CreateClient().GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
 
         var paths = doc!.RootElement.GetProperty("paths");
 
         var listTags = paths.GetProperty("/api/v1/masterdata/universes").GetProperty("get").GetProperty("tags");
         var byIdTags = paths.GetProperty("/api/v1/masterdata/universes/{id}").GetProperty("get").GetProperty("tags");
 
-        Assert.IsTrue(listTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
-        Assert.IsTrue(byIdTags.EnumerateArray().Any(t => t.GetString() == "MasterData"));
+        Assert.Contains(t => t.GetString() == "MasterData", listTags.EnumerateArray());
+        Assert.Contains(t => t.GetString() == "MasterData", byIdTags.EnumerateArray());
     }
+
+    public TestContext TestContext { get; set; }
 }

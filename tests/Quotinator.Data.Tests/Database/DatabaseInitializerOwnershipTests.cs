@@ -75,15 +75,14 @@ public class DatabaseInitializerOwnershipTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         var schemaA = await DumpTableSchemaAsync(connA, "System_AuditEntries");
         var schemaB = await DumpTableSchemaAsync(connB, "System_AuditEntries");
 
-        CollectionAssert.AreEqual(schemaB, schemaA,
-            "System_AuditEntries schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_AuditEntries schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -104,15 +103,14 @@ public class DatabaseInitializerOwnershipTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         var schemaA = await DumpTableSchemaAsync(connA, "System_ImportConflicts");
         var schemaB = await DumpTableSchemaAsync(connB, "System_ImportConflicts");
 
-        CollectionAssert.AreEqual(schemaB, schemaA,
-            "System_ImportConflicts schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_ImportConflicts schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -132,15 +130,14 @@ public class DatabaseInitializerOwnershipTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         var schemaA = await DumpTableSchemaAsync(connA, "System_ChangeLog");
         var schemaB = await DumpTableSchemaAsync(connB, "System_ChangeLog");
 
-        CollectionAssert.AreEqual(schemaB, schemaA,
-            "System_ChangeLog schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_ChangeLog schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -161,15 +158,14 @@ public class DatabaseInitializerOwnershipTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         var schemaA = await DumpTableSchemaAsync(connA, "System_ImportActions");
         var schemaB = await DumpTableSchemaAsync(connB, "System_ImportActions");
 
-        CollectionAssert.AreEqual(schemaB, schemaA,
-            "System_ImportActions schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_ImportActions schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -186,15 +182,14 @@ public class DatabaseInitializerOwnershipTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         var schemaA = await DumpTableSchemaAsync(connA, "System_SourceFileOverrides");
         var schemaB = await DumpTableSchemaAsync(connB, "System_SourceFileOverrides");
 
-        CollectionAssert.AreEqual(schemaB, schemaA,
-            "System_SourceFileOverrides schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_SourceFileOverrides schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -214,9 +209,9 @@ public class DatabaseInitializerOwnershipTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         foreach (var conn in new[] { connA, connB })
         {
@@ -252,9 +247,9 @@ public class DatabaseInitializerOwnershipTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         foreach (var conn in new[] { connA, connB })
         {
@@ -313,9 +308,9 @@ public class DatabaseInitializerOwnershipTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         foreach (var conn in new[] { connA, connB })
         {
@@ -357,9 +352,9 @@ public class DatabaseInitializerOwnershipTests
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
         using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
-        await connA.OpenAsync();
+        await connA.OpenAsync(TestContext.CancellationToken);
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
-        await connB.OpenAsync();
+        await connB.OpenAsync(TestContext.CancellationToken);
 
         foreach (var conn in new[] { connA, connB })
         {
@@ -392,7 +387,7 @@ public class DatabaseInitializerOwnershipTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
         Assert.AreEqual(4, dataRows,
@@ -428,7 +423,7 @@ public class DatabaseInitializerOwnershipTests
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var probeCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_AuditEntries WHERE TableName = 'Probe';");
 
@@ -496,8 +491,10 @@ public class DatabaseInitializerOwnershipTests
         await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.ResetAsync());
 
         using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         var probeValue = await conn.ExecuteScalarAsync<int>("SELECT Id FROM Probe;");
         Assert.AreEqual(999, probeValue, "Pre-reset data must be fully restored after a failed reset, not left dropped");
     }
+
+    public TestContext TestContext { get; set; }
 }

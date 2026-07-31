@@ -30,10 +30,10 @@ public class VersionEndpointTests
     public async Task GetVersion_DatabaseStats_IncludesEveryEntityTypeCount()
     {
         using var factory = CreateFactory();
-        var response = await factory.CreateClient().GetAsync("/api/v1/version");
+        var response = await factory.CreateClient().GetAsync("/api/v1/version", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var database = JsonDocument.Parse(await response.Content.ReadAsStringAsync())
+        var database = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken))
             .RootElement.GetProperty("database");
 
         foreach (var field in new[]
@@ -43,4 +43,6 @@ public class VersionEndpointTests
         })
             Assert.IsTrue(database.TryGetProperty(field, out _), $"database.{field} missing from /version response");
     }
+
+    public TestContext TestContext { get; set; }
 }

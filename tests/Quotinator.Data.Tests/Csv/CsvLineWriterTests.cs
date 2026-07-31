@@ -41,8 +41,8 @@ public class CsvLineWriterTests
         var csv    = CsvLineWriter.Write(original);
         var parsed = CsvLineParser.Parse(csv);
 
-        Assert.AreEqual(original.Count, parsed.Count);
+        Assert.HasCount(original.Count, parsed);
         for (var i = 0; i < original.Count; i++)
-            CollectionAssert.AreEqual(original[i].Select(f => f ?? "").ToList(), parsed[i]);
+            Assert.AreSequenceEqual(original[i].Select(f => f ?? "").ToList(), parsed[i]);
     }
 }

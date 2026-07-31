@@ -80,8 +80,8 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build();
         await middleware.InvokeAsync(MakeContext("GET", "/api/v1/health"), Respond(200));
 
-        StringAssert.Contains(sink.Lines[1], "→ 200 in");
-        StringAssert.Contains(sink.Lines[1], "ms");
+        Assert.Contains("→ 200 in", sink.Lines[1]);
+        Assert.Contains("ms", sink.Lines[1]);
     }
 
     [TestMethod]
@@ -90,7 +90,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build();
         await middleware.InvokeAsync(MakeContext("GET", "/api/v1/quotes/0"), Respond(404));
 
-        StringAssert.Contains(sink.Lines[1], "→ 404 in");
+        Assert.Contains("→ 404 in", sink.Lines[1]);
     }
 
     #endregion
@@ -104,7 +104,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build();
         await middleware.InvokeAsync(MakeContext("GET", "/api/v1/health"), Respond());
 
-        Assert.AreEqual(2, sink.Lines.Count);
+        Assert.HasCount(2, sink.Lines);
         var id0 = ExtractId(sink.Lines[0]);
         var id1 = ExtractId(sink.Lines[1]);
         Assert.AreEqual(id0, id1, "Both lines must carry the same correlation ID");
@@ -136,11 +136,11 @@ public class RequestLogFormattingTests
         await middleware.InvokeAsync(MakeContext("GET", "/api/v1/health"), Respond());
 
         var start = sink.Lines[0];
-        Assert.IsFalse(start.Contains("\"GET\""),
+        Assert.DoesNotContain("\"GET\"", start,
             "HTTP method must not be wrapped in quotes by Serilog");
-        Assert.IsFalse(start.Contains("\"/api/v1/health\""),
+        Assert.DoesNotContain("\"/api/v1/health\"", start,
             "URL must not be wrapped in quotes by Serilog");
-        StringAssert.Contains(start, "GET /api/v1/health");
+        Assert.Contains("GET /api/v1/health", start);
     }
 
     #endregion
@@ -155,8 +155,8 @@ public class RequestLogFormattingTests
         await middleware.InvokeAsync(
             MakeContext("GET", "/api/v1/quotes/search", "?q=back"), Respond());
 
-        StringAssert.Contains(sink.Lines[0], "/api/v1/quotes/search?q=back");
-        Assert.IsFalse(sink.Lines[0].Contains("search\"\"?"),
+        Assert.Contains("/api/v1/quotes/search?q=back", sink.Lines[0]);
+        Assert.DoesNotContain("search\"\"?", sink.Lines[0],
             "Must not have double-quote between path and query string");
     }
 
@@ -166,7 +166,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build();
         await middleware.InvokeAsync(MakeContext("GET", "/api/v1/health"), Respond());
 
-        Assert.IsTrue(sink.Lines[0].EndsWith("/api/v1/health"),
+        Assert.EndsWith("/api/v1/health", sink.Lines[0],
             "Start line must end with the path when there is no query string");
     }
 
@@ -183,11 +183,11 @@ public class RequestLogFormattingTests
         await middleware.InvokeAsync(MakeContext("GET",  "/api/v1/health"),               Respond());
         await middleware.InvokeAsync(MakeContext("POST", "/api/v1/admin/database/reseed"), Respond());
 
-        Assert.AreEqual(4, sink.Lines.Count,
+        Assert.HasCount(4, sink.Lines,
             "Each request must produce exactly 2 log lines");
-        Assert.IsTrue(sink.Lines.Any(l => l.Contains("/api/v1/health")),
+        Assert.Contains(l => l.Contains("/api/v1/health"), sink.Lines,
             "Health endpoint must appear in log");
-        Assert.IsTrue(sink.Lines.Any(l => l.Contains("/api/v1/admin/database/reseed")),
+        Assert.Contains(l => l.Contains("/api/v1/admin/database/reseed"), sink.Lines,
             "Admin endpoint must appear in log");
     }
 
@@ -202,9 +202,9 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build();
         await middleware.InvokeAsync(MakeContext("GET", "/api/v1/health"), Respond());
 
-        Assert.AreEqual(2, sink.Lines.Count);
-        StringAssert.StartsWith(sink.Lines[0], Prefix);
-        StringAssert.StartsWith(sink.Lines[1], Prefix);
+        Assert.HasCount(2, sink.Lines);
+        Assert.StartsWith(Prefix, sink.Lines[0]);
+        Assert.StartsWith(Prefix, sink.Lines[1]);
     }
 
     [TestMethod]
@@ -213,7 +213,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build();
         await middleware.InvokeAsync(MakeContext("GET", "/api/v1/health"), Respond());
 
-        Assert.AreEqual(2, sink.Lines.Count);
+        Assert.HasCount(2, sink.Lines);
     }
 
     #endregion
@@ -227,7 +227,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build(LogEventLevel.Debug);
         await middleware.InvokeAsync(MakeContext("GET", "/api/v1/quotes/random"), Respond());
 
-        StringAssert.Contains(sink.Lines[0], "[Api - Request]");
+        Assert.Contains("[Api - Request]", sink.Lines[0]);
     }
 
     [TestMethod]
@@ -236,7 +236,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build(LogEventLevel.Debug);
         await middleware.InvokeAsync(MakeContext("GET", "/about"), Respond());
 
-        StringAssert.Contains(sink.Lines[0], "[Web - Request]");
+        Assert.Contains("[Web - Request]", sink.Lines[0]);
     }
 
     [TestMethod]
@@ -246,7 +246,7 @@ public class RequestLogFormattingTests
         await middleware.InvokeAsync(
             MakeContext("GET", "/Culture/Set", "?culture=nl&redirectUri=%2Fabout"), Respond());
 
-        StringAssert.Contains(sink.Lines[0], "[Web - Request]");
+        Assert.Contains("[Web - Request]", sink.Lines[0]);
     }
 
     [TestMethod]
@@ -255,7 +255,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build(LogEventLevel.Debug);
         await middleware.InvokeAsync(MakeContext("GET", "/scalar/v1"), Respond());
 
-        StringAssert.Contains(sink.Lines[0], "[Web - Request]");
+        Assert.Contains("[Web - Request]", sink.Lines[0]);
     }
 
     [TestMethod]
@@ -264,7 +264,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build(LogEventLevel.Debug);
         await middleware.InvokeAsync(MakeContext("GET", "/app.khy4lop6wu.css"), Respond());
 
-        StringAssert.Contains(sink.Lines[0], "[Web - Asset]");
+        Assert.Contains("[Web - Asset]", sink.Lines[0]);
     }
 
     [TestMethod]
@@ -273,7 +273,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build(LogEventLevel.Debug);
         await middleware.InvokeAsync(MakeContext("GET", "/scalar/scalar.js"), Respond());
 
-        StringAssert.Contains(sink.Lines[0], "[Web - Asset]");
+        Assert.Contains("[Web - Asset]", sink.Lines[0]);
     }
 
     [TestMethod]
@@ -283,7 +283,7 @@ public class RequestLogFormattingTests
         await middleware.InvokeAsync(
             MakeContext("GET", "/_framework/blazor.web.ne14ti1q68.js"), Respond());
 
-        StringAssert.Contains(sink.Lines[0], "[Web - Asset]");
+        Assert.Contains("[Web - Asset]", sink.Lines[0]);
     }
 
     [TestMethod]
@@ -293,7 +293,7 @@ public class RequestLogFormattingTests
         await middleware.InvokeAsync(
             MakeContext("GET", "/_content/Toolbelt.Blazor.I18nText/i18n.js"), Respond());
 
-        StringAssert.Contains(sink.Lines[0], "[Web - Asset]");
+        Assert.Contains("[Web - Asset]", sink.Lines[0]);
     }
 
     [TestMethod]
@@ -302,7 +302,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build(LogEventLevel.Debug);
         await middleware.InvokeAsync(MakeContext("GET", "/logo.svg"), Respond());
 
-        StringAssert.Contains(sink.Lines[0], "[Web - Asset]");
+        Assert.Contains("[Web - Asset]", sink.Lines[0]);
     }
 
     #endregion
@@ -347,7 +347,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build();
         await middleware.InvokeAsync(MakeContext("GET", "/about"), Respond());
 
-        Assert.AreEqual(0, sink.Lines.Count,
+        Assert.IsEmpty(sink.Lines,
             "Blazor pages must not appear in the log at Information level");
     }
 
@@ -357,7 +357,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build();
         await middleware.InvokeAsync(MakeContext("GET", "/logo.svg"), Respond());
 
-        Assert.AreEqual(0, sink.Lines.Count,
+        Assert.IsEmpty(sink.Lines,
             "Static assets must not appear in the log at Information level");
     }
 
@@ -377,9 +377,9 @@ public class RequestLogFormattingTests
         try { await middleware.InvokeAsync(ctx, throws); }
         catch (BadHttpRequestException) { /* expected — handler is not in this test */ }
 
-        Assert.AreEqual(2, sink.Lines.Count,
+        Assert.HasCount(2, sink.Lines,
             "Both start and completion lines must be emitted even when the next delegate throws");
-        StringAssert.Contains(sink.Lines[1], "→",
+        Assert.Contains("→", sink.Lines[1],
             "Completion line must contain the arrow separator");
     }
 

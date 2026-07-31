@@ -18,7 +18,7 @@ public class SourceAliasCandidateGeneratorTests
 
         var candidates = SourceAliasCandidateGenerator.Generate(sources, SourceAliasLookup.Empty);
 
-        Assert.AreEqual(1, candidates.Count);
+        Assert.HasCount(1, candidates);
         Assert.AreEqual("movie", candidates[0].Type);
     }
 
@@ -33,7 +33,7 @@ public class SourceAliasCandidateGeneratorTests
 
         var candidates = SourceAliasCandidateGenerator.Generate(sources, SourceAliasLookup.Empty);
 
-        Assert.AreEqual(1, candidates.Count);
+        Assert.HasCount(1, candidates);
     }
 
     [TestMethod]
@@ -47,7 +47,7 @@ public class SourceAliasCandidateGeneratorTests
 
         var candidates = SourceAliasCandidateGenerator.Generate(sources, SourceAliasLookup.Empty);
 
-        Assert.AreEqual(1, candidates.Count);
+        Assert.HasCount(1, candidates);
     }
 
     [TestMethod]
@@ -63,7 +63,7 @@ public class SourceAliasCandidateGeneratorTests
 
         var candidates = SourceAliasCandidateGenerator.Generate(sources, SourceAliasLookup.Empty);
 
-        Assert.AreEqual(0, candidates.Count);
+        Assert.IsEmpty(candidates);
     }
 
     [TestMethod]
@@ -77,7 +77,7 @@ public class SourceAliasCandidateGeneratorTests
 
         var candidates = SourceAliasCandidateGenerator.Generate(sources, SourceAliasLookup.Empty);
 
-        Assert.AreEqual(0, candidates.Count);
+        Assert.IsEmpty(candidates);
     }
 
     [TestMethod]
@@ -91,7 +91,7 @@ public class SourceAliasCandidateGeneratorTests
 
         var candidates = SourceAliasCandidateGenerator.Generate(sources, SourceAliasLookup.Empty);
 
-        Assert.AreEqual(0, candidates.Count);
+        Assert.IsEmpty(candidates);
     }
 
     [TestMethod]
@@ -109,7 +109,7 @@ public class SourceAliasCandidateGeneratorTests
 
         var candidates = SourceAliasCandidateGenerator.Generate(sources, existingAliases);
 
-        Assert.AreEqual(0, candidates.Count);
+        Assert.IsEmpty(candidates);
     }
 
     [TestMethod]
@@ -128,7 +128,7 @@ public class SourceAliasCandidateGeneratorTests
 
         var candidates = SourceAliasCandidateGenerator.Generate(sources, existingAliases);
 
-        Assert.AreEqual(0, candidates.Count);
+        Assert.IsEmpty(candidates);
     }
 
     [TestMethod]
@@ -143,7 +143,7 @@ public class SourceAliasCandidateGeneratorTests
 
         var candidates = SourceAliasCandidateGenerator.Generate(sources, SourceAliasLookup.Empty);
 
-        Assert.AreEqual(3, candidates.Count);
+        Assert.HasCount(3, candidates);
     }
 
     [TestMethod]
@@ -159,8 +159,8 @@ public class SourceAliasCandidateGeneratorTests
 
         var candidates = SourceAliasCandidateGenerator.Generate(sources, SourceAliasLookup.Empty);
 
-        Assert.AreEqual(1, candidates.Count);
-        Assert.IsFalse(typeof(SourceAliasCandidate).GetProperties().Any(p => p.CanWrite && p.Name is "CanonicalTitle" or "CanonicalType"),
+        Assert.HasCount(1, candidates);
+        Assert.DoesNotContain(p => p.CanWrite && p.Name is "CanonicalTitle" or "CanonicalType", typeof(SourceAliasCandidate).GetProperties(),
             "SourceAliasCandidate must never carry a canonical title/type to write — that requires human research per docs/workflow/source-verification.md");
     }
 }

@@ -36,7 +36,7 @@ public sealed class ChangelogSchemaTests
     [TestMethod]
     public void AtLeastOneChangelogFile_IsLoaded()
     {
-        Assert.IsTrue(_docs.Count > 0,
+        Assert.IsNotEmpty(_docs,
             "No changelog.*.json files found in src/Quotinator.Api/resources/ — expected at least changelog.en.json.");
     }
 
@@ -227,9 +227,9 @@ public sealed class ChangelogSchemaTests
             var missing = enVersions.Except(versions).OrderBy(v => v).ToList();
             var extra   = versions.Except(enVersions).OrderBy(v => v).ToList();
 
-            Assert.AreEqual(0, missing.Count,
+            Assert.IsEmpty(missing,
                 $"{filename}: missing releases that exist in changelog.en.json: {string.Join(", ", missing)}");
-            Assert.AreEqual(0, extra.Count,
+            Assert.IsEmpty(extra,
                 $"{filename}: contains releases not present in changelog.en.json: {string.Join(", ", extra)}");
         }
     }

@@ -71,7 +71,7 @@ public class SystemAuditReaderTests
 
         var result = await _reader.GetPagedAsync(null, null, 1, 0);
 
-        Assert.AreEqual(3, result.Items.Count, "pageSize = 0 must reach SQLite as LIMIT -1, not a literal LIMIT 0");
+        Assert.HasCount(3, result.Items, "pageSize = 0 must reach SQLite as LIMIT -1, not a literal LIMIT 0");
         Assert.AreEqual(3, result.TotalCount);
         Assert.AreEqual(3, result.PageSize, "PageSize must report the effective count actually returned, not the literal 0 requested");
     }
@@ -115,6 +115,6 @@ public class SystemAuditReaderTests
 
         var result = await _reader.GetPagedAsync("quotes", null, 1, 20);
 
-        Assert.AreEqual(1, result.Items.Count, "Lowercase ?table=quotes must still match the stored 'Quotes' row");
+        Assert.HasCount(1, result.Items, "Lowercase ?table=quotes must still match the stored 'Quotes' row");
     }
 }

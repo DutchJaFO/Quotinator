@@ -39,7 +39,7 @@ public class RegexArrayConverterTests
         var outputPath = Path.Combine(_tempDir, "output.json");
         var options = VilaboimOptions();
 
-        await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options);
+        await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
@@ -54,11 +54,12 @@ public class RegexArrayConverterTests
             """);
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions());
+        await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken);
 
-        var text = await File.ReadAllTextAsync(outputPath);
+        var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
         SourceQuoteFileReader.TryParse(text, out var quotes);
-        Assert.AreEqual(2, quotes!.Count);
+        Assert.IsNotNull(quotes);
+        Assert.HasCount(2, quotes);
     }
 
     [TestMethod]
@@ -73,7 +74,7 @@ public class RegexArrayConverterTests
             Defaults     = new QuoteFieldDefaults { Type = QuoteType.Book }
         });
 
-        await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options);
+        await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual(QuoteType.Book, quote.Type);
@@ -95,7 +96,7 @@ public class RegexArrayConverterTests
         });
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
-            () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options));
+            () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -106,7 +107,7 @@ public class RegexArrayConverterTests
         var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptions { Pattern = VilaboimPattern });
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
-            () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options));
+            () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -117,11 +118,12 @@ public class RegexArrayConverterTests
             """);
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions());
+        await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken);
 
-        var text = await File.ReadAllTextAsync(outputPath);
+        var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
         SourceQuoteFileReader.TryParse(text, out var quotes);
-        Assert.AreEqual(1, quotes!.Count);
+        Assert.IsNotNull(quotes);
+        Assert.HasCount(1, quotes);
         Assert.AreEqual("A real quote.", quotes[0].QuoteText);
     }
 
@@ -132,7 +134,7 @@ public class RegexArrayConverterTests
         var outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
-            () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions()));
+            () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -142,7 +144,7 @@ public class RegexArrayConverterTests
         var outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
-            () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions()));
+            () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken));
     }
 
     #endregion
@@ -160,9 +162,9 @@ public class RegexArrayConverterTests
         var inputPath  = WriteInput("[\"\\\"Frankly, my dear, I don't give a damn.\\\" Gone with the Wind\"]");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions());
+        await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken);
 
-        var text = await File.ReadAllTextAsync(outputPath);
+        var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
         Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
         Assert.AreEqual(expectedId, quotes!.Single().Id);
     }
@@ -195,4 +197,6 @@ public class RegexArrayConverterTests
         Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
         return quotes!.Single();
     }
+
+    public TestContext TestContext { get; set; }
 }

@@ -21,7 +21,7 @@ public class InitiatorContextTests
         {
             context.InitiatedByType = InitiatorType.Seed;
             context.InitiatedById   = "seed-batch";
-            await Task.Delay(50);
+            await Task.Delay(50, TestContext.CancellationToken);
             return (context.InitiatedByType, context.InitiatedById);
         });
 
@@ -29,7 +29,7 @@ public class InitiatorContextTests
         {
             context.InitiatedByType = InitiatorType.Import;
             context.InitiatedById   = "import-batch";
-            await Task.Delay(50);
+            await Task.Delay(50, TestContext.CancellationToken);
             return (context.InitiatedByType, context.InitiatedById);
         });
 
@@ -61,4 +61,6 @@ public class InitiatorContextTests
         Assert.AreEqual(InitiatorType.WriteEndpoint, context.InitiatedByType);
         Assert.AreEqual("PUT /api/v1/quotes/{id}", context.InitiatedById);
     }
+
+    public TestContext TestContext { get; set; }
 }

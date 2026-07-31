@@ -28,7 +28,7 @@ public class CsvQuoteConverterTests
         var inputPath  = WriteInput("quote,source\n\"A quote.\",A Source\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
@@ -38,7 +38,7 @@ public class CsvQuoteConverterTests
         Assert.IsNull(quote.Date);
         Assert.IsNull(quote.Character);
         Assert.IsNull(quote.Author);
-        Assert.AreEqual(0, quote.Genres.Count);
+        Assert.IsEmpty(quote.Genres);
     }
 
     [TestMethod]
@@ -47,7 +47,7 @@ public class CsvQuoteConverterTests
         var inputPath  = WriteInput("quote,source\nA quote.,A Source\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual(QuoteIdentity.StableId("A quote.", "A Source"), quote.Id);
@@ -60,7 +60,7 @@ public class CsvQuoteConverterTests
         var inputPath  = WriteInput($"id,quote,source\n{explicitId},A quote.,A Source\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual(explicitId, quote.Id);
@@ -75,7 +75,7 @@ public class CsvQuoteConverterTests
             "11111111-1111-4111-8111-111111111111,A quote.,nl,A Source,1994,A Character,An Author,book,drama;sci-fi\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("11111111-1111-4111-8111-111111111111", quote.Id);
@@ -93,7 +93,7 @@ public class CsvQuoteConverterTests
         var inputPath  = WriteInput("quote,source\n\"A quote, with a comma.\",A Source\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote, with a comma.", quote.QuoteText);
@@ -105,7 +105,7 @@ public class CsvQuoteConverterTests
         var inputPath  = WriteInput("quote,source\n\"She said \"\"hello\"\".\",A Source\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("She said \"hello\".", quote.QuoteText);
@@ -117,11 +117,12 @@ public class CsvQuoteConverterTests
         var inputPath  = WriteInput("quote,source\nMissing a source,\nA real quote.,A Real Source\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var text = await File.ReadAllTextAsync(outputPath);
+        var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
         SourceQuoteFileReader.TryParse(text, out var quotes);
-        Assert.AreEqual(1, quotes!.Count);
+        Assert.IsNotNull(quotes);
+        Assert.HasCount(1, quotes);
         Assert.AreEqual("A real quote.", quotes[0].QuoteText);
     }
 
@@ -132,7 +133,7 @@ public class CsvQuoteConverterTests
         var outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
-            () => new CsvQuoteConverter().ConvertAsync(inputPath, outputPath));
+            () => new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -142,7 +143,7 @@ public class CsvQuoteConverterTests
         var outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
-            () => new CsvQuoteConverter().ConvertAsync(inputPath, outputPath));
+            () => new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -152,7 +153,7 @@ public class CsvQuoteConverterTests
         var outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
-            () => new CsvQuoteConverter().ConvertAsync(inputPath, outputPath));
+            () => new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
     }
 
     [TestMethod]
@@ -161,7 +162,7 @@ public class CsvQuoteConverterTests
         var inputPath  = WriteInput("QUOTE,SOURCE\nA quote.,A Source\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
@@ -185,7 +186,7 @@ public class CsvQuoteConverterTests
             ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
         });
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
@@ -203,7 +204,7 @@ public class CsvQuoteConverterTests
             ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
         });
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
@@ -219,7 +220,7 @@ public class CsvQuoteConverterTests
             Defaults = new QuoteFieldDefaults { OriginalLanguage = "nl", Type = QuoteType.Book }
         });
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual("nl", quote.OriginalLanguage);
@@ -238,7 +239,7 @@ public class CsvQuoteConverterTests
             Defaults      = new QuoteFieldDefaults { Type = QuoteType.Tv }
         });
 
-        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options);
+        await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
         Assert.AreEqual(QuoteType.Book, quote.Type);
@@ -262,4 +263,6 @@ public class CsvQuoteConverterTests
         Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
         return quotes!.Single();
     }
+
+    public TestContext TestContext { get; set; }
 }

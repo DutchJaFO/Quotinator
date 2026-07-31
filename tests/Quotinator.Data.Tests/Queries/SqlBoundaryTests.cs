@@ -26,10 +26,8 @@ public class SqlBoundaryTests
             .Select(t => t.Name)
             .ToHashSet();
 
-        CollectionAssert.AreEquivalent(
-            expected.ToList(),
-            actual.ToList(),
-            "Quotinator.Data.Queries.Sql contains a nested type outside the documented generic-infrastructure " +
+        Assert.AreSequenceEqual(
+            expected.ToList(), actual.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "Quotinator.Data.Queries.Sql contains a nested type outside the documented generic-infrastructure " +
             "set. Domain-specific query sets (Quotes, Characters, Sources, Conversations, etc.) must live in " +
             "Quotinator.Core.Queries.Sql instead — see ADR 004 and issues #157/#206.");
     }

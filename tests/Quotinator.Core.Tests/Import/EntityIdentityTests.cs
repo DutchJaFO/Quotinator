@@ -87,6 +87,6 @@ public class EntityIdentityTests
         var quoteId     = QuoteIdentity.StableId("X", "Y");
 
         var ids = new[] { sourceId, characterId, personId, quoteId };
-        CollectionAssert.AllItemsAreUnique(ids);
+        Assert.AreAllDistinct(ids);
     }
 }

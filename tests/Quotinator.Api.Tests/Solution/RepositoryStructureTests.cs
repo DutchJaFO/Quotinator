@@ -83,7 +83,7 @@ public class RepositoryStructureTests
     public void DataQuotesJson_IsNotInSlnx()
     {
         var paths = LoadSlnxFilePaths();
-        Assert.IsFalse(paths.Contains("data/quotes.json"),
+        Assert.DoesNotContain("data/quotes.json", paths,
             "data/quotes.json is still referenced in Quotinator.slnx.");
     }
 
@@ -165,7 +165,7 @@ public class RepositoryStructureTests
                 var outputPath   = Path.Combine(tempDir, baselineFile);
                 var baselinePath = Path.Combine(RepoRoot, "data", "sources", baselineFile);
 
-                await converter.ConvertAsync(rawPath, outputPath, convOptions);
+                await converter.ConvertAsync(rawPath, outputPath, convOptions, TestContext.CancellationToken);
 
                 if (!File.Exists(outputPath))
                 {
@@ -213,4 +213,6 @@ public class RepositoryStructureTests
             Directory.Delete(tempDir, recursive: true);
         }
     }
+
+    public TestContext TestContext { get; set; }
 }

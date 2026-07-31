@@ -69,7 +69,7 @@ public class ImportEndpointTests
     public async Task Import_NoKeyConfigured_Returns401(string path)
     {
         using var factory = CreateFactory(null, new FakeQuoteImportService());
-        var response = await factory.CreateClient().PostAsync(path, BuildForm());
+        var response = await factory.CreateClient().PostAsync(path, BuildForm(), TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -79,7 +79,7 @@ public class ImportEndpointTests
     public async Task Import_MissingAuthHeader_Returns401(string path)
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
-        var response = await factory.CreateClient().PostAsync(path, BuildForm());
+        var response = await factory.CreateClient().PostAsync(path, BuildForm(), TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -87,7 +87,7 @@ public class ImportEndpointTests
     public async Task Import_MissingFile_Returns422()
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm(includeFile: false));
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm(includeFile: false), TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -95,11 +95,11 @@ public class ImportEndpointTests
     public async Task Import_NoBodyAndNoBatchId_Returns422()
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", content: null);
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", content: null, TestContext.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        StringAssert.Contains(body, "file to import or a batchId",
+        Assert.Contains("file to import or a batchId", body,
             "Must be the specific file-or-batchId message, not the generic numeric-parameters fallback " +
             "a bodyless request without this fix would otherwise fall through to under a real Kestrel host.");
     }
@@ -109,7 +109,7 @@ public class ImportEndpointTests
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
         var response = await CreateClientWithKey(factory)
-            .PostAsync("/api/v1/import", BuildForm(settingsJson: "{ not json"));
+            .PostAsync("/api/v1/import", BuildForm(settingsJson: "{ not json"), TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -119,7 +119,7 @@ public class ImportEndpointTests
         var service = new FakeQuoteImportService();
         using var factory = CreateFactory(TestKey, service);
         var response = await CreateClientWithKey(factory)
-            .PostAsync("/api/v1/import", BuildForm(settingsJson: """{"enrich":true}"""));
+            .PostAsync("/api/v1/import", BuildForm(settingsJson: """{"enrich":true}"""), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NotImplemented, response.StatusCode);
         Assert.IsNull(service.LastFileName, "The service must never be called when enrich=true short-circuits first");
@@ -131,7 +131,7 @@ public class ImportEndpointTests
         var service = new FakeQuoteImportService { ThrowOnImport = new UnknownConverterException("bogus") };
         using var factory = CreateFactory(TestKey, service);
         var response = await CreateClientWithKey(factory)
-            .PostAsync("/api/v1/import", BuildForm(settingsJson: """{"converter":"bogus"}"""));
+            .PostAsync("/api/v1/import", BuildForm(settingsJson: """{"converter":"bogus"}"""), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -141,7 +141,7 @@ public class ImportEndpointTests
     {
         var service = new FakeQuoteImportService { ThrowOnImport = new QuoteImportValidationException("File contained no quotes.") };
         using var factory = CreateFactory(TestKey, service);
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm());
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm(), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -150,10 +150,10 @@ public class ImportEndpointTests
     public async Task Import_CorrectKeyAndValidFile_Returns200WithResultShape()
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm());
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm(), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(doc.RootElement.TryGetProperty("summary", out _));
         Assert.IsTrue(doc.RootElement.TryGetProperty("preview", out var preview));
         Assert.IsFalse(preview.GetBoolean());
@@ -189,7 +189,7 @@ public class ImportEndpointTests
             }
         };
         using var factory = CreateFactory(TestKey, service);
-        var response = await CreateClientWithKey(factory).PostAsync(path, BuildForm());
+        var response = await CreateClientWithKey(factory).PostAsync(path, BuildForm(), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Accepted, response.StatusCode);
     }
@@ -221,7 +221,7 @@ public class ImportEndpointTests
             }
         };
         using var factory = CreateFactory(TestKey, service);
-        var response = await CreateClientWithKey(factory).PostAsync(path, BuildForm());
+        var response = await CreateClientWithKey(factory).PostAsync(path, BuildForm(), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Accepted, response.StatusCode);
     }
@@ -254,7 +254,7 @@ public class ImportEndpointTests
             }
         };
         using var factory = CreateFactory(TestKey, service);
-        var response = await CreateClientWithKey(factory).PostAsync(path, BuildForm());
+        var response = await CreateClientWithKey(factory).PostAsync(path, BuildForm(), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode,
             "A non-empty conflicts list must NOT force a 202 by itself -- only a genuinely 'pending' entry should. " +
@@ -266,11 +266,11 @@ public class ImportEndpointTests
     {
         var service = new FakeQuoteImportService();
         using var factory = CreateFactory(TestKey, service);
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import/preview", BuildForm());
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import/preview", BuildForm(), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(true, service.LastPreview);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.IsTrue(service.LastPreview);
+        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
         Assert.IsTrue(doc.RootElement.GetProperty("preview").GetBoolean());
     }
 
@@ -284,7 +284,7 @@ public class ImportEndpointTests
         var batchId = Guid.NewGuid();
 
         var response = await CreateClientWithKey(factory)
-            .PostAsync($"/api/v1/import?batchId={batchId}", BuildForm(includeFile: false));
+            .PostAsync($"/api/v1/import?batchId={batchId}", BuildForm(includeFile: false), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(batchId, service.LastAppliedBatchId);
@@ -299,7 +299,7 @@ public class ImportEndpointTests
         var batchId = Guid.NewGuid();
 
         var response = await CreateClientWithKey(factory)
-            .PostAsync($"/api/v1/import?batchId={batchId}", content: null);
+            .PostAsync($"/api/v1/import?batchId={batchId}", content: null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(batchId, service.LastAppliedBatchId);
@@ -310,7 +310,7 @@ public class ImportEndpointTests
     {
         using var factory = CreateFactory(TestKey, new FakeQuoteImportService());
         var response = await factory.CreateClient()
-            .PostAsync($"/api/v1/import?batchId={Guid.NewGuid()}", BuildForm(includeFile: false));
+            .PostAsync($"/api/v1/import?batchId={Guid.NewGuid()}", BuildForm(includeFile: false), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -322,7 +322,7 @@ public class ImportEndpointTests
         using var factory = CreateFactory(TestKey, service);
 
         var response = await CreateClientWithKey(factory)
-            .PostAsync($"/api/v1/import?batchId={Guid.NewGuid()}", BuildForm(includeFile: false));
+            .PostAsync($"/api/v1/import?batchId={Guid.NewGuid()}", BuildForm(includeFile: false), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -357,7 +357,7 @@ public class ImportEndpointTests
         using var factory = CreateFactory(TestKey, service);
 
         var response = await CreateClientWithKey(factory)
-            .PostAsync($"/api/v1/import?batchId={batchId}", BuildForm(includeFile: false));
+            .PostAsync($"/api/v1/import?batchId={batchId}", BuildForm(includeFile: false), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Accepted, response.StatusCode);
     }
@@ -368,10 +368,12 @@ public class ImportEndpointTests
         var service = new FakeQuoteImportService();
         using var factory = CreateFactory(TestKey, service);
         var settingsJson = """{"converter":"csv","duplicateResolution":{"default":"merge-theirs"}}""";
-        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm(settingsJson: settingsJson));
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm(settingsJson: settingsJson), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("csv", service.LastSettings?.Converter);
         Assert.AreEqual(Quotinator.Data.Import.DuplicateResolutionPolicy.MergeTheirs, service.LastSettings?.DuplicateResolution?.Default);
     }
+
+    public TestContext TestContext { get; set; }
 }

@@ -54,7 +54,7 @@ public class OpenApiSpecEndpointTests
         using var factory = CreateFactory();
         using var client  = factory.CreateClient();
 
-        var doc = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json");
+        var doc = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
 
         var parameter = doc!.RootElement
             .GetProperty("paths").GetProperty(path)
@@ -67,6 +67,8 @@ public class OpenApiSpecEndpointTests
             ? typeProperty.EnumerateArray().Select(t => t.GetString()).ToList()
             : [typeProperty.GetString()];
 
-        CollectionAssert.Contains(types, "integer", $"{paramName} on {path} must publish an integer type on the live spec, not string");
+        Assert.Contains("integer", types, $"{paramName} on {path} must publish an integer type on the live spec, not string");
     }
+
+    public TestContext TestContext { get; set; }
 }

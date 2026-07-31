@@ -43,7 +43,7 @@ public class JoinQueryRepositoryTests
         var repo   = MakeRepo();
         var result = await repo.QueryAsync();
 
-        Assert.AreEqual(1, result.Count);
+        Assert.HasCount(1, result);
     }
 
     [TestMethod]
@@ -55,7 +55,7 @@ public class JoinQueryRepositoryTests
         var repo   = MakeRepo();
         var result = await repo.QueryAsync();
 
-        Assert.AreEqual(1, result.Count);
+        Assert.HasCount(1, result);
         Assert.AreEqual(widgetId,  result[0].WidgetId);
         Assert.AreEqual("Widget B", result[0].Label);
         Assert.AreEqual("Bob",      result[0].OwnerName);
@@ -87,7 +87,7 @@ public class JoinQueryRepositoryTests
         var repo     = new JoinQueryRepository<WidgetWithOwner>(_db.ConnectionFactory, strategy);
         var result   = await repo.QueryAsync();
 
-        Assert.AreEqual(1, result.Count);
+        Assert.HasCount(1, result);
         Assert.AreEqual(widgetId,     result[0].WidgetId);
         Assert.AreEqual(string.Empty, result[0].OwnerName);
     }

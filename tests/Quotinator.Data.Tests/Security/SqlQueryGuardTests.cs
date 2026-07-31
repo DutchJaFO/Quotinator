@@ -158,10 +158,8 @@ public class SqlQueryGuardTests
             .Select(x => x.Name)
             .ToHashSet();
 
-        CollectionAssert.AreEquivalent(
-            documented.ToList(),
-            actual.ToList(),
-            "The set of SQL constants containing aggregate functions has changed. " +
+        Assert.AreSequenceEqual(
+            documented.ToList(), actual.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of SQL constants containing aggregate functions has changed. " +
             "Review any new or removed aggregate queries against docs/sql-safety.md " +
             "and update the documented list in this test.");
     }
@@ -212,24 +210,24 @@ public class SqlQueryGuardTests
     public void SqlJoins_Inner_OutputIsBracketQuoted()
     {
         var sql = Sql.Joins.Inner("Owners", "o", "w", "OwnerId", "Id");
-        StringAssert.Contains(sql, "[Owners]",  "Table name must be bracket-quoted");
-        StringAssert.Contains(sql, "[o]",       "Right alias must be bracket-quoted");
-        StringAssert.Contains(sql, "[w]",       "Left alias must be bracket-quoted");
-        StringAssert.Contains(sql, "[OwnerId]", "Left key must be bracket-quoted");
-        StringAssert.Contains(sql, "[Id]",      "Right key must be bracket-quoted");
-        StringAssert.Contains(sql, "INNER JOIN", "Fragment must be an INNER JOIN");
+        Assert.Contains("[Owners]", sql,  "Table name must be bracket-quoted");
+        Assert.Contains("[o]", sql,       "Right alias must be bracket-quoted");
+        Assert.Contains("[w]", sql,       "Left alias must be bracket-quoted");
+        Assert.Contains("[OwnerId]", sql, "Left key must be bracket-quoted");
+        Assert.Contains("[Id]", sql,      "Right key must be bracket-quoted");
+        Assert.Contains("INNER JOIN", sql, "Fragment must be an INNER JOIN");
     }
 
     [TestMethod]
     public void SqlJoins_Left_OutputIsBracketQuoted()
     {
         var sql = Sql.Joins.Left("Owners", "o", "w", "OwnerId", "Id");
-        StringAssert.Contains(sql, "[Owners]",  "Table name must be bracket-quoted");
-        StringAssert.Contains(sql, "[o]",       "Right alias must be bracket-quoted");
-        StringAssert.Contains(sql, "[w]",       "Left alias must be bracket-quoted");
-        StringAssert.Contains(sql, "[OwnerId]", "Left key must be bracket-quoted");
-        StringAssert.Contains(sql, "[Id]",      "Right key must be bracket-quoted");
-        StringAssert.Contains(sql, "LEFT JOIN", "Fragment must be a LEFT JOIN");
+        Assert.Contains("[Owners]", sql,  "Table name must be bracket-quoted");
+        Assert.Contains("[o]", sql,       "Right alias must be bracket-quoted");
+        Assert.Contains("[w]", sql,       "Left alias must be bracket-quoted");
+        Assert.Contains("[OwnerId]", sql, "Left key must be bracket-quoted");
+        Assert.Contains("[Id]", sql,      "Right key must be bracket-quoted");
+        Assert.Contains("LEFT JOIN", sql, "Fragment must be a LEFT JOIN");
     }
 
     // ── ImportBatches (#212) ─────────────────────────────────────────────────
@@ -244,9 +242,9 @@ public class SqlQueryGuardTests
     [TestMethod]
     public void ImportBatches_SelectAllAndSelectByType_DoNotUseSelectStar()
     {
-        Assert.IsFalse(Sql.ImportBatches.SelectAll.Contains("SELECT *"),
+        Assert.DoesNotContain("SELECT *", Sql.ImportBatches.SelectAll,
             "Sql.ImportBatches.SelectAll must not use SELECT * — it is invisible to SqlSelectPresentationGuard's text scan.");
-        Assert.IsFalse(Sql.ImportBatches.SelectByType.Contains("SELECT *"),
+        Assert.DoesNotContain("SELECT *", Sql.ImportBatches.SelectByType,
             "Sql.ImportBatches.SelectByType must not use SELECT * — it is invisible to SqlSelectPresentationGuard's text scan.");
     }
 
@@ -254,8 +252,8 @@ public class SqlQueryGuardTests
     [TestMethod]
     public void ImportBatches_SelectAllAndSelectByType_WrapIdColumnViaLower()
     {
-        StringAssert.Contains(Sql.ImportBatches.SelectAll, "LOWER(Id) AS Id");
-        StringAssert.Contains(Sql.ImportBatches.SelectByType, "LOWER(Id) AS Id");
+        Assert.Contains("LOWER(Id) AS Id", Sql.ImportBatches.SelectAll);
+        Assert.Contains("LOWER(Id) AS Id", Sql.ImportBatches.SelectByType);
     }
 
     /// <summary>
@@ -273,7 +271,7 @@ public class SqlQueryGuardTests
         foreach (var name in columns.ValidColumnNames)
         {
             var expected = columns.IdColumnNames.Contains(name) ? $"LOWER({name}) AS {name}" : name;
-            StringAssert.Contains(Sql.ImportBatches.SelectAll, expected,
+            Assert.Contains(expected, Sql.ImportBatches.SelectAll,
                 $"Sql.ImportBatches.SelectAll is missing ImportBatch's '{name}' property — the column list must stay reflection-driven, not hand-typed.");
         }
     }
@@ -377,10 +375,8 @@ public class SqlQueryGuardTests
 
         var actual = EnumerateParameterizedSqlFactoryMethodNames().ToHashSet();
 
-        CollectionAssert.AreEquivalent(
-            documented.ToList(),
-            actual.ToList(),
-            "The set of static SQL factory methods requiring at least one parameter has changed. " +
+        Assert.AreSequenceEqual(
+            documented.ToList(), actual.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of static SQL factory methods requiring at least one parameter has changed. " +
             "Add the new method to AssembledQueryCases with a case for every meaningfully distinct " +
             "call shape, then update this documented list. See #214.");
     }

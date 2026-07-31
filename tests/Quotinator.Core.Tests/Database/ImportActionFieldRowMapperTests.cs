@@ -40,7 +40,7 @@ public class ImportActionFieldRowMapperTests
 
         var fields = ImportActionFieldRowMapper.ToCsvRow(row).ToList();
 
-        CollectionAssert.AreEqual(new[]
+        Assert.AreSequenceEqual(new[]
         {
             actionId.ToString(), "e0000001-0000-4000-8000-000000000001", "Person", "name",
             "Old Name", "New Name", "Custom", "Custom Name", "Complete",
@@ -148,13 +148,13 @@ public class ImportActionFieldRowMapperTests
 
     [TestMethod]
     public void DecodeGenres_EmptyString_ReturnsEmptyList() =>
-        CollectionAssert.AreEqual(Array.Empty<string>(), ImportActionFieldRowMapper.DecodeGenres(""));
+        Assert.AreSequenceEqual(Array.Empty<string>(), ImportActionFieldRowMapper.DecodeGenres(""));
 
     [TestMethod]
     public void DecodeGenres_DelimitedString_RoundTripsFromEncode()
     {
         var encoded = ImportActionFieldRowMapper.EncodeGenres(["drama", "comedy", "sci-fi"]);
-        CollectionAssert.AreEqual(new[] { "drama", "comedy", "sci-fi" }, ImportActionFieldRowMapper.DecodeGenres(encoded));
+        Assert.AreSequenceEqual(new[] { "drama", "comedy", "sci-fi" }, ImportActionFieldRowMapper.DecodeGenres(encoded));
     }
 
     [TestMethod]
@@ -225,7 +225,7 @@ public class ImportActionFieldRowMapperTests
         Assert.AreEqual(FieldResolutionChoice.Keep, request.Author!.Choice);
         Assert.AreEqual(FieldResolutionChoice.Replace, request.Type!.Choice);
         Assert.AreEqual(FieldResolutionChoice.Custom, request.Genres!.Choice);
-        CollectionAssert.AreEqual(new[] { "drama", "comedy" }, request.Genres.Value);
+        Assert.AreSequenceEqual(new[] { "drama", "comedy" }, request.Genres.Value);
     }
 
     [TestMethod]
@@ -344,6 +344,6 @@ public class ImportActionFieldRowMapperTests
     {
         foreach (var entityType in ImportActionEntityTypes.All)
             Assert.IsTrue(ImportActionFieldRowMapper.DecidableFieldsByEntityType.ContainsKey(entityType), $"Missing decidable-fields entry for '{entityType}'");
-        Assert.AreEqual(9, ImportActionFieldRowMapper.DecidableFieldsByEntityType.Count);
+        Assert.HasCount(9, ImportActionFieldRowMapper.DecidableFieldsByEntityType);
     }
 }

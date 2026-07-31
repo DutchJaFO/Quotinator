@@ -124,7 +124,7 @@ public class SqliteQuoteServiceSearchTests
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
-        StringAssert.Contains(result.Items[0].Quote, "serious");
+        Assert.Contains("serious", result.Items[0].Quote);
     }
 
     /// <summary>Quote-field search with no match returns NoResults envelope.</summary>
@@ -135,7 +135,7 @@ public class SqliteQuoteServiceSearchTests
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.AreEqual(0, result.TotalMatching);
-        Assert.AreEqual(0, result.Items.Count);
+        Assert.IsEmpty(result.Items);
     }
 
     // ── field=source ──────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ public class SqliteQuoteServiceSearchTests
         var result = CreateService().Search("Gandalf", 10, field: "character");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
-        Assert.AreEqual(0, result.Items.Count);
+        Assert.IsEmpty(result.Items);
     }
 
     /// <summary>
@@ -186,7 +186,7 @@ public class SqliteQuoteServiceSearchTests
         var result = CreateService().Search("Churchill", 10, field: "character");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
-        Assert.AreEqual(0, result.Items.Count);
+        Assert.IsEmpty(result.Items);
     }
 
     // ── field=author ──────────────────────────────────────────────────────
@@ -209,7 +209,7 @@ public class SqliteQuoteServiceSearchTests
         var result = CreateService().Search("Tolkien", 10, field: "author");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
-        Assert.AreEqual(0, result.Items.Count);
+        Assert.IsEmpty(result.Items);
     }
 
     /// <summary>
@@ -224,7 +224,7 @@ public class SqliteQuoteServiceSearchTests
         var result = CreateService().Search("serious", 10, field: "author");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
-        Assert.AreEqual(0, result.Items.Count);
+        Assert.IsEmpty(result.Items);
     }
 
     // ── type filter ───────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ public class SqliteQuoteServiceSearchTests
         var result = CreateService().Search("the", 10, types: ["anime"]);
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
-        Assert.AreEqual(0, result.Items.Count);
+        Assert.IsEmpty(result.Items);
     }
 
     // ── default (all fields) ──────────────────────────────────────────────
@@ -272,6 +272,6 @@ public class SqliteQuoteServiceSearchTests
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(2, result.TotalMatching);
-        Assert.AreEqual(2, result.Items.Count);
+        Assert.HasCount(2, result.Items);
     }
 }
