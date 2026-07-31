@@ -46,6 +46,8 @@ The Scalar API reference is at `/scalar/v1` and the OpenAPI spec at `/openapi/v1
 
 **Draft, review, then act — for every `git commit` and every GitHub issue create/edit, no exceptions.** Write the full intended text (commit message, or issue title + body) to a file, **and paste that same full text directly into the chat response** — not a summary, not a diff-only excerpt, and not a `Read` tool call whose output happens to render the file, which is not the same thing as the assistant's own words containing the text. Only run the actual command after explicit approval. See `docs/workflow/process.md`'s "Commit message format and content" for the exact mechanics (`.claude/temp/commit-draft.md`, `git commit -F`). The `commit-msg` hook installed above enforces the commit side of this mechanically; `gh issue create`/`edit` have no equivalent hook, so that side relies on this rule being followed, not on tooling.
 
+**A new-issue draft must propose a label and a milestone in the same message as the title/body — never as a separate follow-up question after the issue already exists.** Found live (#207, #208): creating an issue with only title/body and asking about label/milestone afterward let #207 sit unlabeled and unassigned until manually corrected. The `gh issue create` command run after approval must include `--label` and `--milestone` from the start (see `docs/workflow/issues.md` for the label set and `docs/workflow/checklist.md`'s "Filing a new issue" for the milestone rule) — waiting for a second approval round on label/milestone is the exact gap this closes.
+
 ---
 
 ## What is Quotinator?
