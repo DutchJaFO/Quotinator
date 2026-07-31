@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-07-30 21:00 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-07-31 05:11 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -6,7 +6,7 @@ All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
-## [1.8.2-beta] - 2026-07-30
+## [1.8.2] - 2026-07-31
 
 - Security: a SQLite library vulnerability (CVE-2025-6965) has now been fixed directly by upgrading the affected native library; no user data was affected.
 
