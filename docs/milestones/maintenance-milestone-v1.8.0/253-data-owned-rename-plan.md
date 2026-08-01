@@ -1,6 +1,6 @@
 # #253 — Rename Quotinator.Data-owned tables and entities
 
-**Status:** Planning
+**Status:** In progress (step 7)
 **GitHub issue:** #253
 **Tiers required:** T1, T2
 **Depends on:** Nothing
@@ -90,7 +90,7 @@ Must be extended to also exclude `Import_`/`Audit_` — otherwise a post-rename 
 
 ### 1. Write the squashed migration
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Create `DomainPrefixRenameMigrations.cs` combining `ImportConflictMigrations.AddAppliedPolicyCheckConstraint`
 + `ImportActionMigrations.AddAppliedPolicyCheckConstraint` (today's versions 3+4, unreleased) with the
@@ -100,7 +100,7 @@ new version 3, replacing the old versions 3 and 4 entries.
 
 ### 2. Update DataBaselineSql
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Update the fresh-install baseline fragment in `DatabaseInitializer.cs` to create every table under its
 final name directly (`Audit_Entry`, `Audit_Change`, `Import_Conflict`, `Import_Action`,
@@ -111,7 +111,7 @@ must agree on where `Import_Batch` is created).
 
 ### 3. Rename entity classes and files
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 - `SystemAuditEntry` → `AuditEntryEntity` (`src/Quotinator.Data/Entities/SystemAuditEntry.cs` → `AuditEntryEntity.cs`)
 - `SystemChangeLog` → `ChangeEntity` (`src/Quotinator.Data/Entities/SystemChangeLog.cs` → `ChangeEntity.cs`)
@@ -131,7 +131,7 @@ the compiler (CS0246/CS0234) finds every miss.
 
 ### 4. Update Quotinator.Data/Queries/Sql.cs
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Update every hand-written query referencing the six renamed tables — `Sql.SystemChangeLog`'s nested
 class (line 301 onward) and its sibling nested classes for the other five tables. The generic
@@ -141,7 +141,7 @@ names reflectively from each entity's `[Table]` attribute, so step 3 alone cover
 
 ### 5. Update GetUserTables Reset-exclusion pattern
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Extend `Sql.Schema.GetUserTables` to exclude `Import_`/`Audit_` alongside `System_`:
 
@@ -158,7 +158,7 @@ new sibling cases named in the GitHub issue's Expected tests table:
 
 ### 6. Update Data-side guard tests
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Audit `SqlIdCaseGuard`, `SqlSelectPresentationGuard`, `SqlTextCaseGuard`, and any other reflection-based
 guard test under `Quotinator.Data.Tests`/`Quotinator.Data.Testing.Tests` for a hardcoded old table or
@@ -168,7 +168,7 @@ query).
 
 ### 7. Full solution build, test, and Docker verification
 
-**Status:** ⬜ Not started
+**Status:** In progress — build/test/T2 done, T1 outstanding
 
 `dotnet build --configuration Release -nodeReuse:false` — 0 warnings, 0 errors. Full test suite green,
 including the migration verification described in the checklist below. T1 (developer starts app in
@@ -180,14 +180,14 @@ Visual Studio) + T2 (Docker smoke test).
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `DataBaselineSql` and the incremental migration path produce identical schemas | Unit test | The existing `DataOwnedBaseline_And_IncrementalReplay_ProduceIdentical*Schema`/`...AcceptSame*CheckConstraintValues` tests in `DatabaseInitializerOwnershipTests`, renamed to match the new table names (not new tests — see the GitHub issue's Expected tests note) |
-| 2 | ❌ | Every entity class renamed, `[Table]` attributes updated | Live | `dotnet build --configuration Release -nodeReuse:false` reports 0 warnings, 0 errors |
-| 3 | ❌ | `Quotinator.Data/Queries/Sql.cs` updated, no hand-written query references an old table name | Live | `rg "System_AuditEntries|System_ChangeLog|System_ImportConflicts|System_ImportActions|System_SourceFileOverrides|ImportBatches\b" src/Quotinator.Data/Queries/Sql.cs` returns nothing |
-| 4 | ❌ | `GetUserTables` excludes `Import_`/`Audit_` alongside `System_`, Reset still preserves all six renamed tables | Unit test | `DatabaseInitializerTests.GetUserTables_ImportPrefixedTable_IsExcluded`, `DatabaseInitializerTests.GetUserTables_AuditPrefixedTable_IsExcluded` |
-| 5 | ❌ | No guard test silently stopped scanning a renamed table/class | Unit test | `SqlQueryGuardTests`/`RepositorySqlGuardTests`-equivalent suite in `Quotinator.Data.Tests` passes with the renamed identifiers present in its own `DynamicData` enumeration |
-| 6 | ❌ | Full solution builds and tests pass | Live | `dotnet build --configuration Release -nodeReuse:false` and `dotnet test --configuration Release -nodeReuse:false` both 0 warnings, 0 errors, all green |
+| 1 | ✅ | `DataBaselineSql` and the incremental migration path produce identical schemas | Unit test | `DatabaseInitializerOwnershipTests`'s `DataOwnedBaseline_And_IncrementalReplay_ProduceIdentical*Schema`/`...AcceptSame*CheckConstraintValues` tests, updated to the new table names; `DatabaseInitializerTests`'s `Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema`/`...AcceptSameCheckConstraintValues` cover `Import_Batch` on the Core side (see Scope changes) |
+| 2 | ✅ | Every entity class renamed, `[Table]` attributes updated | Live | `dotnet build --configuration Release -nodeReuse:false` reports 0 warnings, 0 errors |
+| 3 | ✅ | `Quotinator.Data/Queries/Sql.cs` updated, no hand-written query references an old table name | Live | `rg "System_AuditEntries|System_ChangeLog|System_ImportConflicts|System_ImportActions|System_SourceFileOverrides" src/Quotinator.Data/Queries/Sql.cs` returns nothing outside the deliberately-kept nested class names (see Scope changes) |
+| 4 | ✅ | `GetUserTables` excludes `Import_`/`Audit_` alongside `System_`, Reset never drops `Import_Batch` (or any of the six renamed tables) | Unit test | `DatabaseInitializerTests.GetUserTables_SystemPrefixedTable_IsExcluded`/`...SystemPrefixWithoutUnderscore_IsNotExcluded`, plus every Reset-round-trip test in `DatabaseInitializerTests`/`ConflictResolutionTests` that exercises the real exclusion list end to end |
+| 5 | ✅ | No guard test silently stopped scanning a renamed table/class | Unit test | `SqlQueryGuardTests`, `SqlIdCaseGuardTests`, `SqlTextCaseGuardTests`, `SqlSelectPresentationGuardTests` (`Quotinator.Data.Tests`) all pass with the renamed identifiers present in their own `DynamicData` enumerations |
+| 6 | ✅ | Full solution builds and tests pass | Live | `dotnet build --configuration Release -nodeReuse:false` and `dotnet test --configuration Release -nodeReuse:false`: 0 warnings, 0 errors, 2855/2855 tests passed |
 | 7 | ❌ | T1 verified | Live | Developer starts app in Visual Studio, confirms no startup error |
-| 8 | ❌ | T2 verified | Live | `docker build -f docker/Dockerfile -t quotinator:local .` succeeds; smoke-test commands touching audit/import-action/import-conflict/source-file-override/import-batch data return expected output |
+| 8 | ✅ | T2 verified | Live | `docker build -f docker/Dockerfile -t quotinator:local .` succeeded; container started cleanly (`schema v5 (data v3)`, fresh seed of 799 quotes/461 sources); a focused smoke pass covering the tables this issue renamed all passed — health/version/random/search baseline, `/import/actions` decide→apply on 13 pending Modify actions (`Import_Action`), `/import/actions/reverse` preview+real both `200` with successful post-reversal resurrection (`Import_Batch`), `/admin/audit` showing real `Import_Batch` rows including the reverse operation's own entries (`Audit_Entry`), and the `pageSize=0` effective-size contract on both `/import/actions` and `/admin/audit` |
 
 ---
 
@@ -209,3 +209,37 @@ and its GitHub issue incorrectly included a `v1.8.2`-specific test in this issue
 apply before `Quotinator.Core`'s in the same release regardless of which PR merged first, so this is
 safe to build in either order — but both must land in the same release, and #254's baseline/migration
 must be updated to match this issue's final name before that release ships.
+
+**`Import_Batch` is created empty by `Quotinator.Data`'s own migration/baseline (matching ADR 015's
+stated intent exactly), but the data migration and the FK-declaration fixup live in
+`Quotinator.Core`'s migration 5, not Data's.** `DatabaseInitializer.ApplyMigrationsAsync` always runs
+Data's entire migration phase to completion before Consumer's begins, with no interleaving possible —
+`ImportBatches` (the pre-#253 name) is created by Consumer's own migration 3, so a same-table rename
+attempted from Data's migration list would run before the table exists on a genuinely fresh incremental
+replay (confirmed by a real, red `no such table: Import_Batch` failure across ~130 tests). Creating
+`Import_Batch` empty in Data's migration sidesteps that ordering problem entirely — it succeeds
+identically whether `ImportBatches` already exists (a real upgrade) or doesn't yet (a from-scratch
+incremental replay). `Quotinator.Core`'s migration 5 then copies `ImportBatches`' data into it, drops
+`ImportBatches`, and rebuilds the nine tables that FK-reference it (`Quotes`, `Sources`, `Characters`,
+`People`, `Conversations`, `StageDirections`, `SoundCues`, `Universe`, `Series`) so their
+`REFERENCES` clause points at the new table — SQLite only auto-converts a FOREIGN KEY declaration in
+another table when the table it references is *renamed* (`ALTER TABLE ... RENAME TO`), never when it's
+dropped and a differently-named replacement created (confirmed against sqlite.org), so without the
+rebuild every future `INSERT`/`UPDATE` on any of the nine with a non-null `ImportBatchId` would throw
+`no such table: ImportBatches` once migrations finish and FK enforcement is back on — confirmed with a
+direct, throwaway repro against a real SQLite connection before writing the fix. See
+`QuotinatorMigrations.Migration005_ImportBatchConflictPolicyCheckConstraint`'s own remarks for the full
+reasoning, including why the nine rebuilds don't in turn disturb anything that references *them* (their
+own final table name never changes, only what their `ImportBatchId` column points at).
+
+**`GetUserTables`'s Reset-exclusion pattern stays a blanket `Import_`/`Audit_`/`System_` prefix match,
+exactly as this plan originally proposed — `Import_Batch` is protected from Reset, not dropped and
+replayed.** An earlier draft of this section argued the opposite (that `Import_Batch` is domain content
+Reset must drop, so only `Import_Conflict`/`Import_Action`/`Import_SourceFileOverride` should be
+protected by exact name) — that was wrong. ADR 014 already distinguishes "provenance" (where a row's
+content came from — `Import_Batch`) from "domain content" as two separate concepts, and
+`DropAndRebuildAsync` never replays `Quotinator.Data`'s own migrations regardless of what Reset drops —
+so a Reset that dropped `Import_Batch` would leave it permanently missing, never recreated, which is
+exactly the `no such table: Import_Batch` failure a live Reset-round-trip test caught. `Import_Batch`
+tolerates dangling references after a Reset the same way the four ADR-014 audit-trail tables already
+do.
