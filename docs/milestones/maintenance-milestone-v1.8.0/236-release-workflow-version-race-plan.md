@@ -84,6 +84,27 @@ image is already confirmed pullable on both architectures.
   as "image first" instead of "config.yaml last." They converge on the same design once `config.yaml`
   is recognised as decoupled from the tagged build.
 
+**Also considered: automate steps 12–14 inside `release.yml` itself, instead of a manual checklist.**
+Investigated, not pursued:
+- The branch ruleset protecting `main` (`gh api repos/DutchJaFO/Quotinator/rulesets/17924200`) has
+  `bypass_actors: []` — even a job with `contents: write` cannot push directly to `main`; it would
+  still have to open a PR, same as a human.
+- `gh api repos/DutchJaFO/Quotinator -q '.allow_auto_merge'` → `false`. That PR would still need a
+  human to merge it — automation would only save writing the PR by hand, not the wait, unless
+  auto-merge were also enabled as a standing, repo-wide setting change (affecting every PR, not just
+  this one).
+- `build-and-push` is currently a pure Docker job with no .NET SDK; regenerating
+  `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` needs `dotnet-script`, so automating this adds a real
+  tooling dependency to a job that doesn't have one today.
+- Like the manual process itself, an automated version could only be proven correct by watching it run
+  on a real tag — no dry run possible either way.
+
+Given this project's "Simplicity — homelab project, avoid over-engineering" priority and its existing
+pattern of every `main` change going through a human-reviewed PR, the manual two-PR checklist was kept.
+Revisit only if the manual process itself starts failing in practice (a step consistently skipped or
+forgotten), not pre-emptively. Recorded in `CLAUDE.md`'s "Tagging a release" section alongside steps
+12–14 so a future reader doesn't have to re-derive this.
+
 ---
 
 ## 1. Update `CLAUDE.md`'s "Tagging a release" workflow

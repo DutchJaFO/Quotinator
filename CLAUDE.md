@@ -1059,6 +1059,17 @@ only files safe to defer:
 14. Open and merge this as its own PR to `main`. Only after this merge has HA's add-on store actually
     finished catching up with an image that exists.
 
+**Steps 12–14 are deliberately manual, not CI-automated — considered and rejected when #236 was
+implemented (2026-08-01).** The branch ruleset (`bypass_actors: []`) blocks even a workflow with
+`contents: write` from pushing directly to `main` — automation would still need to open a PR. This
+repo also has `allow_auto_merge: false`, so that PR would still need a human to merge it manually
+either way, meaning automation would only save writing the PR by hand, not the wait itself. It would
+also require installing `dotnet-script` in `build-and-push` (currently a pure Docker job with no .NET
+SDK) just to regenerate the addon changelog, and — like the manual process itself — could only be
+proven correct by actually watching it run on a real tag, no dry run possible. Revisit only if the
+manual process itself starts failing in practice (a step consistently skipped or forgotten), not
+pre-emptively.
+
 ---
 
 ## Issue and improvement tracking
