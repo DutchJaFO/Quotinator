@@ -13,7 +13,8 @@ branch/PR before that rule was written down — a direct cause of the GitHub Rul
 that prompted writing it. From #208 onward, every remaining issue (#151, #156, #222, #227, #232,
 #236, #244, #245, #249, and #208 itself) shares `feature/v1.8.0-maintenance-batch`, per the corrected
 rule. #249 was filed 2026-08-01 while planning #151 (see ADR 014) — a new dependency, not a
-pre-existing part of this list.
+pre-existing part of this list. #227 was resequenced to run immediately next, ahead of every other
+not-yet-implemented issue, the same day — see the Dependency map below for why.
 
 ---
 
@@ -43,12 +44,19 @@ pre-existing part of this list.
 
 ## Dependency map
 
-One release-level gate: **#249 must ship in the same release as #156**, per
+**#227 blocks every other not-yet-implemented issue in this milestone** (#249, #156, #222, #232,
+#236, #244, #245) — per [ADR 015](../architecture-decisions/015-domain-prefixed-table-naming.md)/
+[ADR 016](../architecture-decisions/016-class-naming-suffixes-and-enum-placement.md), its rename
+touches every table name, every persistence/response/DTO class, and the SQL query strings that
+reference them. Any of those issues written against today's names would need to be rewritten the
+moment #227 lands — sequenced first, per explicit developer direction, given that scale. This is an
+implementation-order dependency (#227 must actually be merged first), not just a release gate.
+
+Separately, a release-level gate: **#249 must ship in the same release as #156**, per
 [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) — not
-an implementation-order dependency, so #249 and #156 can be built/merged in either order. None of the
-other 15 issues block each other. The order below is otherwise based on risk, effort, and
-conflict-avoidance (e.g. doing a broad mechanical test-file change before other issues add more
-tests to the same files) rather than any hard dependency.
+an implementation-order dependency between the two of them, so #249 and #156 can still be built/merged
+in either order *relative to each other*, as long as both land after #227 and both ship in the same
+release. None of the remaining issues block each other beyond these two relationships.
 
 ---
 
@@ -69,12 +77,21 @@ tests to the same files) rather than any hard dependency.
 7. **#151** — System_-prefixed audit-trail table purge-on-Reset policy decision (docs-only; resolved
    2026-08-01 via [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) — dangling references are
    permanent by design; filed #249 as a release gate on #156)
-8. **#249** — Export audit-trail tables to a dedicated folder before a destructive Reset (must ship in
-   the same release as #156, not necessarily built first; filed while planning #151)
-9. **#156** — Reset: baseline script instead of drop-all-user-tables + replay
-10. **#222** — Unicode-aware case-insensitive LIKE matching (real correctness bug, medium effort)
-11. **#148** — OpenAPI: document response models for quote/admin endpoints
-12. **#227** — Import-table naming standardization + FileResource/FileResourceLine provenance (largest schema/structural change)
+8. **#227** — Domain-prefixed table naming + class-naming/enum-placement conventions (moved to first
+   position among remaining work, 2026-08-01, per explicit developer direction — its rename touches
+   every table, entity/response/DTO class, and SQL query string, so every issue below would otherwise
+   be written against names #227 immediately invalidates. Naming decided via
+   [ADR 015](../architecture-decisions/015-domain-prefixed-table-naming.md)/
+   [ADR 016](../architecture-decisions/016-class-naming-suffixes-and-enum-placement.md); the
+   implementation plan — full rename mapping and migration-squash inventory — is still to be written)
+9. **#249** — Export audit-trail tables to a dedicated folder before a destructive Reset (must ship in
+   the same release as #156, not necessarily built before it; filed while planning #151; targets the
+   post-#227 table names)
+10. **#156** — Reset: baseline script instead of drop-all-user-tables + replay (also targets the
+    post-#227 table names, and its own `GetUserTables` exclusion-pattern question per ADR 015's
+    Consequences is easier to resolve once #227 has landed)
+11. **#222** — Unicode-aware case-insensitive LIKE matching (real correctness bug, medium effort)
+12. **#148** — OpenAPI: document response models for quote/admin endpoints
 13. **#178** — Changelog: optional one-line quote per release entry
 14. **#232** — Docker Scout OS vulnerability research (no confirmed code change yet)
 15. **#236** — Release workflow config/image timing race (discovered live during #166's T3
