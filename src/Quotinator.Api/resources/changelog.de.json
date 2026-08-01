@@ -10,13 +10,14 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151],
+    "issues": [178, 148, 150, 197, 151, 232],
     "added": [
       "Release-Einträge können jetzt ein optionales einzeiliges `quote`-Feld enthalten (stimmungsvoller Text für die Release-Notizen, mit optionaler `attribution`) — wird in `CHANGELOG.md` und der Blazor-Changelog-UI angezeigt, jedoch in den knapperen Dateien `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` weggelassen (Issue #178)",
       "Die OpenAPI/Scalar-Dokumentation veröffentlicht jetzt echte, typisierte Antwortschemata für die Quote-Endpunkte (`/quotes/random`, `/search`, `/{id}`, `/quotes`) und die Admin-Endpunkte (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — zuvor zeigte jeder von ihnen nur ein nacktes `200 OK` ohne Schema (Issue #148)"
     ],
     "changed": [
-      "Dokumentiert, dass die internen Audit-Trail-Tabellen der Datenbank (Ereignis-/Audit-Verlauf) ihren Eintrag bewusst beibehalten, nachdem die beschriebene Entität später geändert oder ersetzt wurde — eine rein interne Dokumentationsklarstellung ohne Verhaltensänderung (Issue #151)"
+      "Dokumentiert, dass die internen Audit-Trail-Tabellen der Datenbank (Ereignis-/Audit-Verlauf) ihren Eintrag bewusst beibehalten, nachdem die beschriebene Entität später geändert oder ersetzt wurde — eine rein interne Dokumentationsklarstellung ohne Verhaltensänderung (Issue #151)",
+      "Die von Docker Scout gemeldeten Schwachstellen auf Betriebssystemebene im Basis-Image des Containers wurden untersucht; ein gewöhnlicher Rebuild behob fast alle davon, und der Rest wird als akzeptiertes Restrisiko geführt, da derzeit kein Upstream-Fix verfügbar ist — keine Änderung an der Anwendung (Issue #232)"
     ],
     "fixed": [
       "Datenbankspalten, die die Konfliktlösungsrichtlinie speichern (`ImportBatches.ConflictPolicy` sowie die interne Spalte `AppliedPolicy` in zwei Herkunftstabellen), lehnen einen ungültigen Wert jetzt auf Datenbankebene über eine CHECK-Constraint ab, wie jede andere enum-basierte Spalte im Schema; eine dadurch aufgedeckte, bereits bestehende Dateninkonsistenz wird dabei ebenfalls automatisch normalisiert (Issue #150)",

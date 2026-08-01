@@ -35,7 +35,8 @@ not-yet-implemented issue, the same day — see the Dependency map below for why
 | [#148](https://github.com/DutchJaFO/Quotinator/issues/148) | OpenAPI: document response models for existing quote/admin endpoints | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
 | [#227](https://github.com/DutchJaFO/Quotinator/issues/227) | Import-table naming standardization + general import-file content provenance (FileResource / FileResourceLine) | Planning | Not yet determined | No plan doc yet |
 | [#178](https://github.com/DutchJaFO/Quotinator/issues/178) | Changelog: add an optional one-line quote to each release entry | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
-| [#232](https://github.com/DutchJaFO/Quotinator/issues/232) | Reduce OS-level vulnerabilities in Docker base image (Docker Scout scan) | Planning | Not yet determined | No plan doc yet |
+| [#232](https://github.com/DutchJaFO/Quotinator/issues/232) | Reduce OS-level vulnerabilities in Docker base image (Docker Scout scan) | Waiting for release | N/A (research, no code change) | No plan doc — findings recorded in `docs/security/README.md`'s "Docker base image (OS packages)" section |
+| [#250](https://github.com/DutchJaFO/Quotinator/issues/250) | Periodically re-scan the Docker image with Docker Scout after fresh builds | Planning | Not yet determined | No plan doc yet |
 | [#236](https://github.com/DutchJaFO/Quotinator/issues/236) | Release workflow: HA can see a config.yaml version bump before the matching Docker image is pushed | Planning | Not yet determined | No plan doc yet |
 | [#244](https://github.com/DutchJaFO/Quotinator/issues/244) | Hidden Roslyn code-style and .NET analyzer diagnostics are invisible to the 0-warnings build policy (IDE0xxx, CAxxxx) | Planning | Not yet determined | No plan doc yet |
 | [#245](https://github.com/DutchJaFO/Quotinator/issues/245) | Sources.Date stays NULL when a Source's only sources[] entry omits date (gap in #191's scope) | Planning | Not yet determined | No plan doc yet |
@@ -93,7 +94,10 @@ release. None of the remaining issues block each other beyond these two relation
 11. **#222** — Unicode-aware case-insensitive LIKE matching (real correctness bug, medium effort)
 12. **#148** — OpenAPI: document response models for quote/admin endpoints
 13. **#178** — Changelog: optional one-line quote per release entry
-14. **#232** — Docker Scout OS vulnerability research (no confirmed code change yet)
+14. **#232** — Docker Scout OS vulnerability research (resolved 2026-08-01: a fresh `--no-cache`
+    rebuild alone dropped 23 reported vulnerabilities to 8, all in the base image, all currently
+    unfixable upstream; documented as accepted residual risk in `docs/security/README.md`; chiseled
+    base image evaluated and rejected for now — no code change)
 15. **#236** — Release workflow config/image timing race (discovered live during #166's T3
     verification, 2026-07-30; appended here rather than reordered in since it has no dependency on
     the others)
@@ -102,6 +106,8 @@ release. None of the remaining issues block each other beyond these two relation
 17. **#245** — Sources.Date gap for date-less explicit `sources[]` entries (discovered during the
     full T2 smoke-test pass, 2026-07-31; appended here rather than reordered in since it has no
     dependency on the others)
+18. **#250** — Periodic Docker Scout re-scan added to the T2 smoke-test checklist (filed while closing
+    #232, 2026-08-01; appended here rather than reordered in since it has no dependency on the others)
 
 ---
 

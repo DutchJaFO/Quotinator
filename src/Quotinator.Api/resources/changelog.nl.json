@@ -10,13 +10,14 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151],
+    "issues": [178, 148, 150, 197, 151, 232],
     "added": [
       "Release-items kunnen nu een optioneel eenregelig `quote`-veld bevatten (sfeervolle tekst voor de release-notities, met optionele `attribution`) — weergegeven in `CHANGELOG.md` en de Blazor-changelog-UI, weggelaten uit de beknoptere `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)",
       "OpenAPI/Scalar-documentatie publiceert nu echte, getypeerde responsschema's voor de quote-endpoints (`/quotes/random`, `/search`, `/{id}`, `/quotes`) en de admin-endpoints (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — voorheen toonde elk van deze alleen een kale `200 OK` zonder schema (issue #148)"
     ],
     "changed": [
-      "Gedocumenteerd dat de interne audit-trailtabellen van de database (gebeurtenis-/audit-geschiedenis) hun vastlegging bewust behouden nadat de entiteit die ze beschrijven later is gewijzigd of vervangen — een zuiver interne documentatieverduidelijking zonder gedragswijziging (issue #151)"
+      "Gedocumenteerd dat de interne audit-trailtabellen van de database (gebeurtenis-/audit-geschiedenis) hun vastlegging bewust behouden nadat de entiteit die ze beschrijven later is gewijzigd of vervangen — een zuiver interne documentatieverduidelijking zonder gedragswijziging (issue #151)",
+      "De OS-niveau kwetsbaarheden die Docker Scout meldt in de basisimage van de container zijn onderzocht; een gewone rebuild loste vrijwel alles op, en de rest wordt bijgehouden als geaccepteerd restrisico zonder dat er momenteel een upstream-fix beschikbaar is — geen wijziging aan de applicatie (issue #232)"
     ],
     "fixed": [
       "Databasekolommen die het conflictoplossingsbeleid vastleggen (`ImportBatches.ConflictPolicy` en de interne `AppliedPolicy`-kolom op twee herkomsttabellen) wijzen nu een ongeldige waarde af op databaseniveau via een CHECK-constraint, net als elke andere enum-gebaseerde kolom in het schema; een bestaande data-inconsistentie die dit blootlegde, wordt daarbij ook automatisch genormaliseerd (issue #150)",
