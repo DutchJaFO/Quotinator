@@ -31,7 +31,7 @@ not-yet-implemented issue, the same day — see the Dependency map below for why
 | [#151](https://github.com/DutchJaFO/Quotinator/issues/151) | Should System_-prefixed audit-trail tables purge rows referencing Reset-wiped entities? | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — decision recorded in [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) |
 | [#249](https://github.com/DutchJaFO/Quotinator/issues/249) | Export audit-trail tables to a dedicated folder before a destructive Reset | Planning | Not yet determined | No plan doc yet |
 | [#156](https://github.com/DutchJaFO/Quotinator/issues/156) | Reset: use the fresh-database baseline script instead of drop-all-user-tables + replay | Planning | Not yet determined | No plan doc yet |
-| [#222](https://github.com/DutchJaFO/Quotinator/issues/222) | Unicode-aware case-insensitive LIKE matching (accented/non-ASCII characters) | Planning | Not yet determined | No plan doc yet |
+| [#222](https://github.com/DutchJaFO/Quotinator/issues/222) | Unicode-aware case-insensitive LIKE matching (accented/non-ASCII characters) | Planning | T1, T2 | [222-unicode-like-matching-plan.md](222-unicode-like-matching-plan.md) |
 | [#148](https://github.com/DutchJaFO/Quotinator/issues/148) | OpenAPI: document response models for existing quote/admin endpoints | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
 | [#227](https://github.com/DutchJaFO/Quotinator/issues/227) | Import-table naming standardization + general import-file content provenance (FileResource / FileResourceLine) | Planning | Not yet determined | No plan doc yet |
 | [#178](https://github.com/DutchJaFO/Quotinator/issues/178) | Changelog: add an optional one-line quote to each release entry | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
@@ -45,12 +45,18 @@ not-yet-implemented issue, the same day — see the Dependency map below for why
 
 ## Dependency map
 
-**#227 blocks the issues that actually touch renamed tables, entities, or SQL** — #249, #156, #222,
-and #245 — per [ADR 015](../architecture-decisions/015-domain-prefixed-table-naming.md)/
+**#227 blocks the issues that actually touch renamed tables, entities, or SQL** — #249, #156, and
+#245 — per [ADR 015](../architecture-decisions/015-domain-prefixed-table-naming.md)/
 [ADR 016](../architecture-decisions/016-class-naming-suffixes-and-enum-placement.md). Code written
-against today's names in any of those four would need to be rewritten the moment #227 lands, so they
+against today's names in any of those three would need to be rewritten the moment #227 lands, so they
 wait for it. This is an implementation-order dependency (#227 must actually be merged first for these
-four), not just a release gate.
+three), not just a release gate.
+
+**#222 turned out independent too, on closer inspection while planning it (2026-08-01).** Its own SQL
+changes touch only column aliases (`q.QuoteText`, `s.Title`, `c.Name`, `p.Name`) inside
+`Sql.SearchField`, never the table names themselves — those live in a different query
+(`Sql.Quotes.SelectSearch`'s `FROM`/`JOIN`) that #222 doesn't touch. No entity class involved is
+`[Table]`-attributed either. Planned and implemented ahead of #227 like #232/#236 before it.
 
 **#244 should follow #227 for conflict-avoidance, not a hard dependency** — its mechanical
 IDE0xxx/CAxxxx fixes touch the same class definitions #227 renames; doing #244 first would mean #227
@@ -100,7 +106,11 @@ release. None of the remaining issues block each other beyond these two relation
 10. **#156** — Reset: baseline script instead of drop-all-user-tables + replay (also targets the
     post-#227 table names, and its own `GetUserTables` exclusion-pattern question per ADR 015's
     Consequences is easier to resolve once #227 has landed)
-11. **#222** — Unicode-aware case-insensitive LIKE matching (real correctness bug, medium effort)
+11. **#222** — Unicode-aware case-insensitive LIKE matching (real correctness bug, medium effort;
+    planned 2026-08-01 — confirmed independent of #227, worked out of order like #232/#236; opt-in
+    `Quotinator:UnicodeAwareSearch` flag (default off) using a custom `CreateFunction`-registered
+    `UNICODE_CONTAINS`, not `LIKE`/ICU, see
+    [222-unicode-like-matching-plan.md](222-unicode-like-matching-plan.md))
 12. **#148** — OpenAPI: document response models for quote/admin endpoints
 13. **#178** — Changelog: optional one-line quote per release entry
 14. **#232** — Docker Scout OS vulnerability research (resolved 2026-08-01: a fresh `--no-cache`
