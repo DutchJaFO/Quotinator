@@ -115,6 +115,10 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 
 **SQL injection policy (mandatory for v2):** All database access must use parameterised queries or a query builder that parameterises automatically. Never build SQL strings by concatenating user input. This applies to every parameter that originates from an HTTP request — `id`, `q`, `type`, `genre`, `lang`, `page`, `pageSize`. The same inputs that reach the in-memory service in v1 will reach the database in v2; the v1 input validation layer is the first defence, parameterised queries are the second.
 
+**Table naming (domain prefixes):** every table is named `[Domain]_[TableName]`, singular — see [ADR 015](docs/architecture-decisions/015-domain-prefixed-table-naming.md) and `docs/database-conventions.md`'s "Table naming" section for the full rule and the standard domains (`Import_`/`Audit_`/`System_` for `Quotinator.Data`, `Quotinator_` for this project's own tables).
+
+**Class naming and enum placement:** every class carries exactly one of `Entity`/`Request`/`Response`/`Dto`, chosen by which boundary it crosses — `Request`/`Response` apply only to the top-level type bound directly to an endpoint, never to a member of that type. Every enum lives in its own `Enums/` folder per project, never mixed into `Entities`/`Models`/`Import`. See [ADR 016](docs/architecture-decisions/016-class-naming-suffixes-and-enum-placement.md) and `docs/database-conventions.md`'s "Class naming and enum placement" section for the full rule.
+
 **Schema migration policy:** Migrations are numbered, append-only sequences in `DatabaseInitializer.Migrations`. Rules that must be followed for every migration:
 
 - **Never reorder or edit an existing migration** — once applied to a real database, a migration is frozen. Changing it silently corrupts installations that already ran it.

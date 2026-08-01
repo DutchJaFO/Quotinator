@@ -19,6 +19,37 @@ itself.
 
 ---
 
+## Table naming (domain prefixes)
+
+| | Rule |
+|---|---|
+| ✅ Do | Name every table `[Domain]_[TableName]`, singular — `Quotinator_Person`, not `People` or `Quotinator_People`. |
+| ✅ Do | Use `Quotinator.Data`'s three standard domains for its own tables: `Import_` (import mechanism), `Audit_` (audit trail), `System_` (residual/generic infrastructure only — not a catch-all for anything import- or audit-related). |
+| ✅ Do | Use `Quotinator_` for every table `Quotinator.Core` owns — this project's one consumer-level domain prefix. |
+| ❌ Don't | Add a table to `System_` because it's Data-owned infrastructure in general — `System_` is specifically for tables that are neither `Import_` nor `Audit_` (e.g. `System_SchemaVersion`). A new Data-owned import or audit table always gets `Import_`/`Audit_`, never `System_`. |
+| ❌ Don't | Assume a third-party consumer of `Quotinator.Data` must adopt this convention — it binds `Quotinator.Data`'s own tables and the Quotinator project's own tables, not anyone else's schema. |
+
+📖 [ADR 015](architecture-decisions/015-domain-prefixed-table-naming.md) — table names only; see
+"Class naming and enum placement" below for the C# side.
+
+---
+
+## Class naming and enum placement
+
+| | Rule |
+|---|---|
+| ✅ Do | Give every class exactly one of four suffixes, chosen by which boundary it crosses: `Entity` (persistence, maps a table), `Request`/`Response` (HTTP endpoint body — top-level only), `Dto` (any other wire format, e.g. a JSON file shape). |
+| ✅ Do | Suffix only the *top-level* type bound directly to an endpoint's request/response. A member of that type (a property, a list element) is never suffixed, no matter how substantial. |
+| ✅ Do | If a member type also needs its own independent endpoint later, create a new wrapper type for that (`OrderRecordResponse : BaseResponse<OrderRecord>`) rather than suffixing the shared member type itself. |
+| ✅ Do | Prefer a generic base (`BaseResponse<T>`/`BaseRequest<T>`) for the concrete wrapper when several `Response`/`Request` types share the same standard shape (paging, a data payload) — DRY over re-implementing it per type. |
+| ✅ Do | Keep every enum in its own `Enums/` folder/namespace per project (`Quotinator.Core.Enums`, `Quotinator.Data.Enums`) — never mixed into `Entities`/`Models`/`Import`. A `*JsonConverter` dedicated to one enum moves with it. |
+| ❌ Don't | Leave a persistence class, response body, or wire-format DTO without its suffix because "nothing collides with it today" — the suffix signals the boundary, not just disambiguates a clash. |
+| ❌ Don't | Suffix a class with more than one of the four — resolve to the one boundary it actually represents (a JSON-file DTO that happens to also read like a request body still gets `Dto`, not `Request`). |
+
+📖 [ADR 016](architecture-decisions/016-class-naming-suffixes-and-enum-placement.md)
+
+---
+
 ## Audit-trail tables (`System_AuditEntries`, `System_ImportConflicts`, `System_ImportActions`, `System_ChangeLog`)
 
 | | Rule |

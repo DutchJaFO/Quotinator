@@ -115,6 +115,8 @@
     <File Path="docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md" />
     <File Path="docs/architecture-decisions/013-character-merge-algorithm.md" />
     <File Path="docs/architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md" />
+    <File Path="docs/architecture-decisions/015-domain-prefixed-table-naming.md" />
+    <File Path="docs/architecture-decisions/016-class-naming-suffixes-and-enum-placement.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
