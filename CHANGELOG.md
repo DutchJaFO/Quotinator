@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-01 09:02 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-01 09:36 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Fixed
 - Database columns backed by the duplicate-resolution-policy setting (`ImportBatches.ConflictPolicy`, and the internal `AppliedPolicy` column on two provenance tables) now reject an invalid value at the database level via a CHECK constraint, matching every other enum-backed column in the schema; a pre-existing data inconsistency this closed is also normalised automatically (issue #150)
 - The test suite's build now surfaces outdated MSTest assertion patterns (e.g. `CollectionAssert`/`StringAssert` instead of the modern `Assert` equivalents) as visible warnings instead of silently allowing them to accumulate; around 2,700 existing occurrences across the test suite were also modernised in the same change (issue #197)
+- The release process no longer publishes a Home Assistant add-on version update until its matching Docker image is confirmed available, closing a window where installing or updating the add-on right after a new version appeared could fail (issue #236)
 
 ---
 

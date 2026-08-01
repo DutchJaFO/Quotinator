@@ -968,14 +968,20 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
    ```
    Commit the regenerated files alongside the JSON change.
-4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
+4. **Versions in sync** — two of these must match the tag (without the `v` prefix) **at the moment the
+   tag is pushed**:
    - `Directory.Build.props` → `<Version>` (shared across all projects — **this is the only file to update**)
-   - `addon/config.yaml` → `version`
-   - `changelog.en.json` → new version entry at the top; regenerate `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md`
+   - `changelog.en.json` → new version entry at the top; regenerate `CHANGELOG.md` (only — see below)
 
-   `addon-beta/config.yaml`'s own `version` is **not** part of this final-tag trio — it only moves at
-   a beta tag (see `docs/workflow/checklist.md`'s "Beta tag" section) and is expected to sit behind
-   the stable version between releases, tracking whatever prerelease was most recently pushed.
+   **`addon/config.yaml`'s `version` (final tag) / `addon-beta/config.yaml`'s `version` (beta tag), and
+   the matching `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md`, do *not* go in the same PR or match the
+   tag at push time.** Per [#236](docs/milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md),
+   bumping the HA-facing `config.yaml` before the matching Docker image is confirmed pullable creates a
+   window where a Home Assistant supervisor sees a version with no image to install. They're bumped in
+   a **second, separate PR merged only after the release workflow for that tag has completed green** —
+   see `CLAUDE.md`'s "Tagging a release" workflow steps 12–14 and `docs/workflow/checklist.md`'s Beta
+   tag / Final tag sections for the exact sequencing. `addon-beta/config.yaml` is never touched by a
+   final tag's follow-up PR, and `addon/config.yaml` is never touched by a beta tag's.
 
    `AssemblyVersion` and `FileVersion` are derived automatically as `$(Version).0` (e.g. `1.4.1` → `1.4.1.0`). Do not set them manually.
 5. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
@@ -1016,8 +1022,11 @@ Workflow:
    outside a milestone" — release preparation is its own standing exception, distinct from whatever
    milestone branch produced the code being released)
 6. `git pull` to bring dependency bumps onto this branch
-7. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate all three markdown files with `scripts/changelog.csx` (`--max-releases 3`)
-8. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, `changelog.en.json` version entry) and commit — same branch
+7. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate
+   `CHANGELOG.md` with `scripts/changelog.csx` (`--max-releases 3`). **Do not regenerate
+   `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` yet — see step 11.**
+8. Bump `Directory.Build.props` → `<Version>` and `changelog.en.json`'s version entry, and commit —
+   same branch. **Do not bump `addon/config.yaml`/`addon-beta/config.yaml` yet — see step 11.**
 9. Run the full pre-push checklist above (including Docker build)
 10. Push the release-prep branch, open a PR, and merge it to `main`
 11. From `main`, push the tag:
@@ -1027,6 +1036,28 @@ Workflow:
     ```
 
 > **Tag push environment note.** Claude Code Desktop can push tags directly. Claude Code cloud and mobile environments receive a `403` on tag pushes — if running in those environments, the tag must be pushed from a local terminal instead.
+
+**After the tag — wait, then a second, separate PR for the HA-facing files.** Per
+[#236's plan doc](docs/milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md):
+`addon/config.yaml`/`addon-beta/config.yaml`'s `version` field is read by the Home Assistant supervisor
+directly from `main` via git — independent of GitHub Actions and the Docker image entirely. Bumping it
+in the same PR as the tagged code (the order used before this fix) means a supervisor refreshing its
+add-on store during the release workflow's ~13–16 minute run sees a version with no matching image on
+GHCR yet, and any install/update attempt during that window fails. Neither `addon/config.yaml`/
+`addon-beta/config.yaml` nor `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` are read by the Docker
+image or by the release workflow itself (which reads only the root `CHANGELOG.md`), so they are the
+only files safe to defer:
+
+12. Wait for the release workflow triggered by the tag to complete **green** —
+    `gh run list --workflow=release.yml` or watch it in the Actions UI. Its own "Verify image is
+    pullable (amd64 + arm64)" step is the authoritative signal that the image actually exists on GHCR
+    for both platforms — do not proceed on the basis of the push step alone.
+13. Bump the version field of whichever `config.yaml` matches this tag — `addon-beta/config.yaml` for
+    a beta tag, `addon/config.yaml` for a final tag (never both in the same cycle) — and regenerate
+    the matching `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` from the already-merged
+    `changelog.en.json` (no content changes, just re-running the generator and committing the output).
+14. Open and merge this as its own PR to `main`. Only after this merge has HA's add-on store actually
+    finished catching up with an image that exists.
 
 ---
 

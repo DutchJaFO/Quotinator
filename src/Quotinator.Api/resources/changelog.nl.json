@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 232],
+    "issues": [178, 148, 150, 197, 151, 232, 236],
     "added": [
       "Release-items kunnen nu een optioneel eenregelig `quote`-veld bevatten (sfeervolle tekst voor de release-notities, met optionele `attribution`) — weergegeven in `CHANGELOG.md` en de Blazor-changelog-UI, weggelaten uit de beknoptere `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)",
       "OpenAPI/Scalar-documentatie publiceert nu echte, getypeerde responsschema's voor de quote-endpoints (`/quotes/random`, `/search`, `/{id}`, `/quotes`) en de admin-endpoints (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — voorheen toonde elk van deze alleen een kale `200 OK` zonder schema (issue #148)"
@@ -21,7 +21,8 @@
     ],
     "fixed": [
       "Databasekolommen die het conflictoplossingsbeleid vastleggen (`ImportBatches.ConflictPolicy` en de interne `AppliedPolicy`-kolom op twee herkomsttabellen) wijzen nu een ongeldige waarde af op databaseniveau via een CHECK-constraint, net als elke andere enum-gebaseerde kolom in het schema; een bestaande data-inconsistentie die dit blootlegde, wordt daarbij ook automatisch genormaliseerd (issue #150)",
-      "De testsuite laat verouderde MSTest-assertiepatronen (zoals `CollectionAssert`/`StringAssert` in plaats van de moderne `Assert`-varianten) nu zichtbaar als waarschuwing zien in plaats van deze stilzwijgend te laten oplopen; ongeveer 2.700 bestaande voorkomens in de testsuite zijn in dezelfde wijziging ook gemoderniseerd (issue #197)"
+      "De testsuite laat verouderde MSTest-assertiepatronen (zoals `CollectionAssert`/`StringAssert` in plaats van de moderne `Assert`-varianten) nu zichtbaar als waarschuwing zien in plaats van deze stilzwijgend te laten oplopen; ongeveer 2.700 bestaande voorkomens in de testsuite zijn in dezelfde wijziging ook gemoderniseerd (issue #197)",
+      "Het releaseproces publiceert een update van de Home Assistant-add-onversie nu pas zodra de bijbehorende Docker-image bevestigd beschikbaar is, waardoor een venster wordt gesloten waarin het installeren of bijwerken van de add-on vlak na het verschijnen van een nieuwe versie kon mislukken (issue #236)"
     ]
   },
   "releases": [

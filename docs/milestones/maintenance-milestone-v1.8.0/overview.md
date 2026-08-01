@@ -37,7 +37,7 @@ not-yet-implemented issue, the same day — see the Dependency map below for why
 | [#178](https://github.com/DutchJaFO/Quotinator/issues/178) | Changelog: add an optional one-line quote to each release entry | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
 | [#232](https://github.com/DutchJaFO/Quotinator/issues/232) | Reduce OS-level vulnerabilities in Docker base image (Docker Scout scan) | Waiting for release | N/A (research, no code change) | No plan doc — findings recorded in `docs/security/README.md`'s "Docker base image (OS packages)" section |
 | [#250](https://github.com/DutchJaFO/Quotinator/issues/250) | Periodically re-scan the Docker image with Docker Scout after fresh builds | Planning | Not yet determined | No plan doc yet |
-| [#236](https://github.com/DutchJaFO/Quotinator/issues/236) | Release workflow: HA can see a config.yaml version bump before the matching Docker image is pushed | Planning | Not yet determined | No plan doc yet |
+| [#236](https://github.com/DutchJaFO/Quotinator/issues/236) | Release workflow: HA can see a config.yaml version bump before the matching Docker image is pushed | Waiting for release | N/A (process/documentation change only) | [236-release-workflow-version-race-plan.md](236-release-workflow-version-race-plan.md) |
 | [#244](https://github.com/DutchJaFO/Quotinator/issues/244) | Hidden Roslyn code-style and .NET analyzer diagnostics are invisible to the 0-warnings build policy (IDE0xxx, CAxxxx) | Planning | Not yet determined | No plan doc yet |
 | [#245](https://github.com/DutchJaFO/Quotinator/issues/245) | Sources.Date stays NULL when a Source's only sources[] entry omits date (gap in #191's scope) | Planning | Not yet determined | No plan doc yet |
 
@@ -45,13 +45,22 @@ not-yet-implemented issue, the same day — see the Dependency map below for why
 
 ## Dependency map
 
-**#227 blocks every other not-yet-implemented issue in this milestone** (#249, #156, #222, #232,
-#236, #244, #245) — per [ADR 015](../architecture-decisions/015-domain-prefixed-table-naming.md)/
-[ADR 016](../architecture-decisions/016-class-naming-suffixes-and-enum-placement.md), its rename
-touches every table name, every persistence/response/DTO class, and the SQL query strings that
-reference them. Any of those issues written against today's names would need to be rewritten the
-moment #227 lands — sequenced first, per explicit developer direction, given that scale. This is an
-implementation-order dependency (#227 must actually be merged first), not just a release gate.
+**#227 blocks the issues that actually touch renamed tables, entities, or SQL** — #249, #156, #222,
+and #245 — per [ADR 015](../architecture-decisions/015-domain-prefixed-table-naming.md)/
+[ADR 016](../architecture-decisions/016-class-naming-suffixes-and-enum-placement.md). Code written
+against today's names in any of those four would need to be rewritten the moment #227 lands, so they
+wait for it. This is an implementation-order dependency (#227 must actually be merged first for these
+four), not just a release gate.
+
+**#244 should follow #227 for conflict-avoidance, not a hard dependency** — its mechanical
+IDE0xxx/CAxxxx fixes touch the same class definitions #227 renames; doing #244 first would mean #227
+has to re-touch already-modified files, the same reasoning that sequenced #197 early for a different
+set of files.
+
+**#232 and #236 turned out not to depend on #227 at all** — #232 (Docker base image research) and
+#236 (release-workflow process/CI change) touch neither the database schema nor any renamed class, and
+both were confirmed independent and completed/planned out of order from the original blanket claim
+here. Corrected 2026-08-01 after actually working both.
 
 Separately, a release-level gate: **#249 must ship in the same release as #156**, per
 [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) — not
@@ -100,7 +109,9 @@ release. None of the remaining issues block each other beyond these two relation
     base image evaluated and rejected for now — no code change)
 15. **#236** — Release workflow config/image timing race (discovered live during #166's T3
     verification, 2026-07-30; appended here rather than reordered in since it has no dependency on
-    the others)
+    the others; planned 2026-08-01 — split the version-bump PR into a before-tag PR and an after-tag,
+    workflow-confirmed-green follow-up PR, see
+    [236-release-workflow-version-race-plan.md](236-release-workflow-version-race-plan.md))
 16. **#244** — Hidden IDE0xxx/CAxxxx analyzer diagnostics (discovered while reviewing #197's fix,
     2026-07-31; appended here rather than reordered in since it has no dependency on the others)
 17. **#245** — Sources.Date gap for date-less explicit `sources[]` entries (discovered during the

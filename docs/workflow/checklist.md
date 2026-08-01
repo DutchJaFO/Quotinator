@@ -170,23 +170,33 @@ Releases follow a two-stage model. See `docs/release-verification.md` for tier d
 
 A beta tag is mandatory for every release. The release workflow enforces this — pushing a final tag without a prior beta tag for the same version fails the workflow immediately.
 
+**Before the tag** (one PR, merged to `main` before pushing the tag):
 - [ ] T1 verified: app starts in VS without error; affected Razor pages render correctly
 - [ ] T2 verified: `docker build -f docker/Dockerfile -t quotinator:local .` succeeds; smoke-test commands return expected output
-- [ ] `addon-beta/config.yaml version` set to beta version (e.g. `1.7.0-beta`) — the stable `addon/config.yaml` is not touched by a beta tag
 - [ ] `Directory.Build.props <Version>` set to beta version
-- [ ] Changelog beta entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep); `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md` all regenerated with `--max-releases 3`
+- [ ] Changelog beta entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep); `CHANGELOG.md` regenerated with `--max-releases 3`. **Do not regenerate `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` yet.**
 - [ ] Push beta tag: `git tag vX.Y.Z-beta && git push origin vX.Y.Z-beta`
-- [ ] Confirm GitHub Actions release workflow completes; pre-release created on GitHub with correct Docker image
+- [ ] Confirm GitHub Actions release workflow completes; pre-release created on GitHub with correct Docker image; its own "Verify image is pullable (amd64 + arm64)" step passed
+
+**After the workflow is green** (second, separate PR — see [#236](../milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md) for why this can't be the same PR as above):
+- [ ] `addon-beta/config.yaml version` set to beta version (e.g. `1.7.0-beta`) — the stable `addon/config.yaml` is not touched by a beta tag
+- [ ] `addon-beta/CHANGELOG.md` regenerated with `--max-releases 3` from the already-merged `changelog.en.json` (`addon/CHANGELOG.md` is untouched by a beta tag)
+- [ ] This PR merged to `main`
 
 ### Final tag (T3 gate)
 
 Push the final tag after T3 is verified in the live HA add-on.
 
+**Before the tag** (one PR, merged to `main` before pushing the tag):
 - [ ] T3 verified: beta add-on installed in HA; all T3-classified requirements confirmed in the live supervisor
-- [ ] `addon/config.yaml version` bumped to final version (e.g. `1.7.0`) — the beta `addon-beta/config.yaml` is not touched by a final tag
 - [ ] `Directory.Build.props <Version>` bumped to final version (remove prerelease suffix; also remove the pinned `AssemblyVersion`/`FileVersion` lines — they are only needed when `<Version>` carries a suffix)
-- [ ] Changelog final entry promoted from beta; `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md` all regenerated with `--max-releases 3`
-- [ ] **Version bump PR merged to `main` before tagging** — confirm the above three changes are on `main`, not just a local commit. Tags are immutable once pushed; pushing a tag against un-merged version files burns a patch version.
+- [ ] Changelog final entry promoted from beta; `CHANGELOG.md` regenerated with `--max-releases 3`. **Do not regenerate `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` yet.**
+- [ ] **This PR merged to `main` before tagging** — confirm the above changes are on `main`, not just a local commit. Tags are immutable once pushed; pushing a tag against un-merged version files burns a patch version.
 - [ ] Push final tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
-- [ ] Confirm GitHub Actions release workflow completes; full release created on GitHub; `latest` Docker tag updated
+- [ ] Confirm GitHub Actions release workflow completes; full release created on GitHub; `latest` Docker tag updated; its own "Verify image is pullable (amd64 + arm64)" step passed
+
+**After the workflow is green** (second, separate PR — see [#236](../milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md) for why this can't be the same PR as above):
+- [ ] `addon/config.yaml version` bumped to final version (e.g. `1.7.0`) — the beta `addon-beta/config.yaml` is not touched by a final tag
+- [ ] `addon/CHANGELOG.md` regenerated with `--max-releases 3` from the already-merged `changelog.en.json` (`addon-beta/CHANGELOG.md` is untouched by a final tag)
+- [ ] This PR merged to `main`
 - [ ] Milestone closed on GitHub: `gh api repos/DutchJaFO/Quotinator/milestones/<N> -X PATCH -f state=closed`
