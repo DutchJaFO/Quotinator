@@ -35,3 +35,5 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 010 | [010-repository-is-csharp-only.md](010-repository-is-csharp-only.md) | Repository is C#-only; tooling scripts follow the same rule as application code |
 | 011 | [011-series-universe-hierarchy-and-character-source-identity.md](011-series-universe-hierarchy-and-character-source-identity.md) | Series/Universe hierarchy and Character↔Source many-to-many identity |
 | 012 | [012-canonicalize-entity-ids-at-capture.md](012-canonicalize-entity-ids-at-capture.md) | External entity ids are canonicalized once, at the point of capture |
+| 013 | [013-character-merge-algorithm.md](013-character-merge-algorithm.md) | Character merge algorithm: Type-anchored, Series-scoped global identity |
+| 014 | [014-audit-trail-tables-do-not-purge-dangling-references.md](014-audit-trail-tables-do-not-purge-dangling-references.md) | Audit-trail tables don't purge dangling references; a destructive Reset needs its own export step |

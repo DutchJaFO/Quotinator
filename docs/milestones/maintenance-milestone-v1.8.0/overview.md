@@ -11,7 +11,9 @@ milestone always gets exactly one branch, covering every issue in it.
 **This milestone's own history (2026-07-31):** #166, #197, #159, and #146 each got their own
 branch/PR before that rule was written down — a direct cause of the GitHub Ruleset `BEHIND` friction
 that prompted writing it. From #208 onward, every remaining issue (#151, #156, #222, #227, #232,
-#236, #244, #245, and #208 itself) shares `feature/v1.8.0-maintenance-batch`, per the corrected rule.
+#236, #244, #245, #249, and #208 itself) shares `feature/v1.8.0-maintenance-batch`, per the corrected
+rule. #249 was filed 2026-08-01 while planning #151 (see ADR 014) — a new dependency, not a
+pre-existing part of this list.
 
 ---
 
@@ -25,7 +27,8 @@ that prompted writing it. From #208 onward, every remaining issue (#151, #156, #
 | [#146](https://github.com/DutchJaFO/Quotinator/issues/146) | Audit memory-only project conventions and move genuine ones into CLAUDE.md/docs | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — pure content fix, no implementation decisions required |
 | [#208](https://github.com/DutchJaFO/Quotinator/issues/208) | Issue-creation process: always propose label + milestone in the same draft-review pass | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — pure content fix, no implementation decisions required |
 | [#150](https://github.com/DutchJaFO/Quotinator/issues/150) | Audit: ensure all enum-valued POCO properties have matching DB CHECK constraints | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
-| [#151](https://github.com/DutchJaFO/Quotinator/issues/151) | Should System_-prefixed provenance tables purge rows referencing Reset-wiped entities? | Planning | Not yet determined | No plan doc yet |
+| [#151](https://github.com/DutchJaFO/Quotinator/issues/151) | Should System_-prefixed audit-trail tables purge rows referencing Reset-wiped entities? | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — decision recorded in [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) |
+| [#249](https://github.com/DutchJaFO/Quotinator/issues/249) | Export audit-trail tables to a dedicated folder before a destructive Reset | Planning | Not yet determined | No plan doc yet |
 | [#156](https://github.com/DutchJaFO/Quotinator/issues/156) | Reset: use the fresh-database baseline script instead of drop-all-user-tables + replay | Planning | Not yet determined | No plan doc yet |
 | [#222](https://github.com/DutchJaFO/Quotinator/issues/222) | Unicode-aware case-insensitive LIKE matching (accented/non-ASCII characters) | Planning | Not yet determined | No plan doc yet |
 | [#148](https://github.com/DutchJaFO/Quotinator/issues/148) | OpenAPI: document response models for existing quote/admin endpoints | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
@@ -40,9 +43,11 @@ that prompted writing it. From #208 onward, every remaining issue (#151, #156, #
 
 ## Dependency map
 
-None of the 16 issues block each other. The order below is based on risk, effort, and
-conflict-avoidance (e.g. doing a broad mechanical test-file change before other issues add more
-tests to the same files) rather than any hard dependency.
+One hard dependency: **#249 blocks #156** (per [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) — #156's destructive full-database-rebuild Reset must not ship without #249's
+export-before-reset path already in place). None of the other 15 issues block each other. The order
+below is otherwise based on risk, effort, and conflict-avoidance (e.g. doing a broad mechanical
+test-file change before other issues add more tests to the same files) rather than any hard
+dependency.
 
 ---
 
@@ -60,19 +65,23 @@ tests to the same files) rather than any hard dependency.
    smoke-tests-on-dev-db, and import-file minimalism)
 5. **#208** — Issue-creation process: label + milestone in the same draft pass (process/docs-only)
 6. **#150** — Audit enum-valued POCO properties for missing CHECK constraints (one known gap already found)
-7. **#151** — System_-prefixed provenance table purge-on-Reset policy decision
-8. **#156** — Reset: baseline script instead of drop-all-user-tables + replay
-9. **#222** — Unicode-aware case-insensitive LIKE matching (real correctness bug, medium effort)
-10. **#148** — OpenAPI: document response models for quote/admin endpoints
-11. **#227** — Import-table naming standardization + FileResource/FileResourceLine provenance (largest schema/structural change)
-12. **#178** — Changelog: optional one-line quote per release entry
-13. **#232** — Docker Scout OS vulnerability research (no confirmed code change yet)
-14. **#236** — Release workflow config/image timing race (discovered live during #166's T3
+7. **#151** — System_-prefixed audit-trail table purge-on-Reset policy decision (docs-only; resolved
+   2026-08-01 via [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) — dangling references are
+   permanent by design; filed #249 as a hard prerequisite for #156)
+8. **#249** — Export audit-trail tables to a dedicated folder before a destructive Reset (blocks #156;
+   filed while planning #151)
+9. **#156** — Reset: baseline script instead of drop-all-user-tables + replay
+10. **#222** — Unicode-aware case-insensitive LIKE matching (real correctness bug, medium effort)
+11. **#148** — OpenAPI: document response models for quote/admin endpoints
+12. **#227** — Import-table naming standardization + FileResource/FileResourceLine provenance (largest schema/structural change)
+13. **#178** — Changelog: optional one-line quote per release entry
+14. **#232** — Docker Scout OS vulnerability research (no confirmed code change yet)
+15. **#236** — Release workflow config/image timing race (discovered live during #166's T3
     verification, 2026-07-30; appended here rather than reordered in since it has no dependency on
     the others)
-15. **#244** — Hidden IDE0xxx/CAxxxx analyzer diagnostics (discovered while reviewing #197's fix,
+16. **#244** — Hidden IDE0xxx/CAxxxx analyzer diagnostics (discovered while reviewing #197's fix,
     2026-07-31; appended here rather than reordered in since it has no dependency on the others)
-16. **#245** — Sources.Date gap for date-less explicit `sources[]` entries (discovered during the
+17. **#245** — Sources.Date gap for date-less explicit `sources[]` entries (discovered during the
     full T2 smoke-test pass, 2026-07-31; appended here rather than reordered in since it has no
     dependency on the others)
 

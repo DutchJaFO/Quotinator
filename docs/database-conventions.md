@@ -19,6 +19,19 @@ itself.
 
 ---
 
+## Audit-trail tables (`System_AuditEntries`, `System_ImportConflicts`, `System_ImportActions`, `System_ChangeLog`)
+
+| | Rule |
+|---|---|
+| ✅ Do | Treat a dangling `EntityId`/`RecordId` (referencing a domain row that no longer exists or now has a different id) as expected and permanent — it is a historical fact about an event, not corrupted data. |
+| ✅ Do | Remember domain entity ids are deterministic content hashes, not random UUIDs — a Reset/Reseed that reimports unchanged source content reproduces the same id, so dangling references are the exception (content changed/removed across a reimport), not the norm. |
+| ❌ Don't | Build a mechanism to detect a stale `EntityId` and purge or flag the referencing row — considered and rejected in ADR 014; it would require `Quotinator.Data` to resolve domain-specific `EntityType` values, which ADR 004 keeps out of it. |
+| ❌ Don't | Assume these four tables will keep surviving Reset unconditionally forever — that survival is scoped to today's Reset implementation only. #156's proposed baseline-rebuild Reset removes it, and per ADR 014, #249 (export-before-reset) is a hard prerequisite for that change shipping. |
+
+📖 [ADR 014](architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md)
+
+---
+
 ## Entity id casing
 
 The canonical stored/presented id format (lowercase) and the case-insensitivity mechanism SQL
