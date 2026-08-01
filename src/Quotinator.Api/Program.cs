@@ -184,6 +184,11 @@ var includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeD
 var autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoUpdateSources", true);
 var sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
 
+// Unicode-aware LIKE-style matching (issue #222) — opt-in, off by default until validated against
+// real-world non-ASCII search traffic. See docs/milestones/maintenance-milestone-v1.8.0/
+// 222-unicode-like-matching-plan.md for why this isn't unconditional.
+var unicodeAwareSearch = builder.Configuration.GetValue("Quotinator:UnicodeAwareSearch", false);
+
 // Bundled sources are always read from the Docker image (AppContext.BaseDirectory/data/sources/).
 // No file copy to the persistent volume is needed — only the database and DataProtection keys
 // need to be on a writable, persistent path.
@@ -404,7 +409,7 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<ISourceFileOverrideRegistry>(),
         QuotinatorMigrations.Baseline);
 });
-builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Core.Services.SqliteQuoteService(connectionFactory));
+builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Core.Services.SqliteQuoteService(connectionFactory, unicodeAwareSearch));
 builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp => new Quotinator.Core.Services.SqliteQuoteImportService(
     connectionFactory,
     sp.GetRequiredService<IImportBatchRepository>(),

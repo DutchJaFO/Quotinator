@@ -1,6 +1,6 @@
 # #222 — Unicode-aware case-insensitive LIKE matching (accented/non-ASCII characters)
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #222
 **Tiers required:** T1, T2
 **Depends on:** Nothing (independent of #227 — the SQL sites touched all reference tables/columns
@@ -77,7 +77,7 @@ value itself is what keeps it off by default — nothing about being a real add-
 
 ## 1. Register `UNICODE_CONTAINS` unconditionally in `SqliteConnectionFactory`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Subscribe to `SqliteConnection.StateChange` in `CreateConnection()`; on transition to `Open`, call
 `CreateFunction<string?, string?, bool>("UNICODE_CONTAINS", (h, n) => h is not null && n is not null &&
@@ -85,7 +85,7 @@ h.Contains(n, StringComparison.InvariantCultureIgnoreCase), isDeterministic: tru
 
 ## 2. Add the `Quotinator:UnicodeAwareSearch` flag
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `Program.cs`: `builder.Configuration.GetValue("Quotinator:UnicodeAwareSearch", false)`, threaded into
 `SqliteQuoteService`'s constructor (service-provider factory overload, matching the existing
@@ -93,7 +93,11 @@ h.Contains(n, StringComparison.InvariantCultureIgnoreCase), isDeterministic: tru
 
 ## 3. Convert `Sql.SearchField` to flag-aware factory methods; centralise the 3 inline clauses
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done. `Clause` implemented as a `static readonly Func<...>` field rather than a
+private method — a private method with a non-optional parameter would have been picked up by
+`SqlQueryGuardTests`' reflection-based drift detector (`EnumerateParameterizedSqlFactoryMethodNames`)
+as if it were its own directly-called query fragment needing an `AssembledQueryCases` entry, when it's
+really just a template the real factory methods share.
 
 `Sql.SearchField.Quote`/`Source`/`Character`/`Author`/`All` become `static` methods taking
 `bool unicodeAware`, returning either the existing `LIKE` clause or the `UNICODE_CONTAINS(...)` form —
@@ -107,7 +111,7 @@ containment check).
 
 ## 4. Add `unicode_aware_search` as an HA add-on option (both channels)
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Following CLAUDE.md's "When adding or renaming an HA add-on config option" checklist exactly:
 1. `addon/config.yaml`: `options.unicode_aware_search: false`, `schema.unicode_aware_search: bool`,
@@ -120,14 +124,23 @@ Following CLAUDE.md's "When adding or renaming an HA add-on config option" check
 
 ## 5. Update `SqlQueryGuardTests.AssembledQueryCases`
 
-**Status:** ⬜ Not started
-
-Each of the 8 sites now produces two distinct clause shapes (flag off/on) — 16 total entries replacing
-today's 5, per CLAUDE.md's "add a case for every clause combination a factory method can produce."
+**Status:** ✅ Done. Not a literal 8×2 explosion — the 14-row `filterCases` matrix is invariant to
+the flag except for the `character`/`author`/`source` rows (only they ever produce a
+`CharacterFilter`/`AuthorFilter`/`SourceFilter` clause), so only those 3 got a dedicated
+`unicodeAware: true` variant instead of doubling all 14. The `SearchField` loop (`Quote`/`Source`/
+`Character`/`Author`/`All`) doubled cleanly (5 → 10) since every one of those is flag-sensitive.
+`ParameterizedSqlFactoryMethods_MatchDocumentedInventory`'s `documented` set also gained the 8 new
+`SearchField.*` method names. Full solution: 2,836 tests, all passing.
 
 ## 6. Unit tests — red/green, with the feature both off and on
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done. New file `SqliteQuoteServiceUnicodeSearchTests.cs`, 19 test cases across 5 methods
+(refactored to `[DataRow]`-parameterized tests, matching this project's existing convention — see
+`QuoteTypeNormalisationTests.cs` — instead of 16 near-identical hand-written methods): canary (1),
+function registration/correctness (2), `Search` across 5 field variants × 2 flag states (10 rows in
+one method), `GetRandom`'s 3 fuzzy filters × 2 flag states (6 rows in one method). Full
+`SqliteQuoteService` test surface (60 tests) still green — no regression from the `BuildFilterWhere`
+signature change.
 
 New file `tests/Quotinator.Core.Tests/Services/SqliteQuoteServiceUnicodeSearchTests.cs`, real-SQLite
 integration style matching `SqliteQuoteServiceSearchTests.cs`'s existing pattern (temp DB, JSON
@@ -148,7 +161,10 @@ active" comparison.
 
 ## 7. Smoke tests (T2) — the toggle itself, against a real running container
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — written to `docs/smoke-tests.md` section 28, and actually run live against
+`quotinator:local` (not just documented): flag-off container returned `NoResults` for `q=CAFÉ&
+field=source`; a fresh flag-on container (`-e Quotinator__UnicodeAwareSearch=true`), same import,
+same query, returned `Ok` with the `Café de Flore` fixture — matching the unit tests exactly.
 
 New numbered section in `docs/smoke-tests.md` (`## 28. Unicode-aware search toggle (#222)`), following
 its established pattern (fenced `curl` commands + expected-output prose). Unlike the unit tests, this
@@ -170,7 +186,10 @@ fresh container.
 
 ## 8. Documentation
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done. `README.md` gained a config-flag paragraph next to the `AutoUpdateSources` one,
+plus a note on the `/search`/`/random` filter-parameter paragraph. CLAUDE.md's `LIKE`-exemption note
+rewritten to describe the actual resolution (`UNICODE_CONTAINS`, opt-in flag) instead of pointing at
+#222 as still-open; also records the `COLLATE`-doesn't-affect-`LIKE` finding for future readers.
 
 - `README.md`'s configuration section: add `Quotinator:UnicodeAwareSearch` / `unicode_aware_search`
   next to `Quotinator:AutoUpdateSources`, stating the default (`false`).
@@ -188,14 +207,14 @@ fresh container.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Raw SQLite `LIKE` is confirmed ASCII-only case-insensitive (canary) | Unit test | `SqliteQuoteServiceUnicodeSearchTests.RawSqliteLike_AccentedCharacters_IsCaseSensitive` |
-| 2 | ❌ | `UNICODE_CONTAINS` is registered on every connection from `SqliteConnectionFactory`, including a second connection | Unit test | `SqliteQuoteServiceUnicodeSearchTests.UnicodeContains_RegisteredOnEveryConnection` |
-| 3 | ❌ | `UNICODE_CONTAINS('café', 'CAFÉ')` returns true | Unit test | `SqliteQuoteServiceUnicodeSearchTests.UnicodeContains_MatchesAccentedCaseVariant` |
-| 4 | ❌ | With the flag off (default), `Search`/fuzzy filters do not match accented case variants | Unit test | `SqliteQuoteServiceUnicodeSearchTests.*_FlagOff_DoesNotMatchAccentedCaseVariant` (one per call path) |
-| 5 | ❌ | With the flag on, `Search`/fuzzy filters do match accented case variants | Unit test | `SqliteQuoteServiceUnicodeSearchTests.*_FlagOn_MatchesAccentedCaseVariant` (one per call path) |
-| 6 | ❌ | Every existing ASCII search/filter behaviour is unchanged with the flag off | Unit test | Existing `SqliteQuoteServiceSearchTests` suite still passes unmodified |
-| 7 | ❌ | `SqlQueryGuardTests.AssembledQueryCases` covers both flag states for all 8 sites | Unit test | `SqlQueryGuardTests` full run, 16 cases |
-| 8 | ❌ | `unicode_aware_search` option present, schema'd, and translated identically in both `addon/` and `addon-beta/` | Live | Re-read both `config.yaml`s and all 6 translation files after editing; confirm option/schema/description match between channels |
-| 9 | ❌ | T1: app starts in VS without error | Live | Visual Studio boot, no errors |
-| 10 | ❌ | T2: toggle proven against a real container in both states | Live | `docs/smoke-tests.md` section 28 — import fixture, search with flag off (no match) then flag on (match), per two separate `docker run` invocations |
-| 11 | ❌ | `README.md`/CLAUDE.md documentation updated | Live | Re-read both after editing |
+| 1 | ✅ | Raw SQLite `LIKE` is confirmed ASCII-only case-insensitive (canary) | Unit test | `SqliteQuoteServiceUnicodeSearchTests.RawSqliteLike_AccentedCharacters_IsCaseSensitive` |
+| 2 | ✅ | `UNICODE_CONTAINS` is registered on every connection from `SqliteConnectionFactory`, including a second connection | Unit test | `SqliteQuoteServiceUnicodeSearchTests.UnicodeContains_RegisteredOnEveryConnection` |
+| 3 | ✅ | `UNICODE_CONTAINS('café', 'CAFÉ')` returns true | Unit test | `SqliteQuoteServiceUnicodeSearchTests.UnicodeContains_MatchesAccentedCaseVariant` |
+| 4 | ✅ | With the flag off (default), `Search`/fuzzy filters do not match accented case variants | Unit test | `SqliteQuoteServiceUnicodeSearchTests.*_FlagOff_DoesNotMatchAccentedCaseVariant` — 8 tests (5 `Search` field variants + 3 `GetRandom` filters) |
+| 5 | ✅ | With the flag on, `Search`/fuzzy filters do match accented case variants | Unit test | `SqliteQuoteServiceUnicodeSearchTests.*_FlagOn_MatchesAccentedCaseVariant` — same 8 call paths |
+| 6 | ✅ | Every existing ASCII search/filter behaviour is unchanged with the flag off | Unit test | `SqliteQuoteServiceSearchTests` + `SqliteQuoteServiceConversationTests` — 60 `SqliteQuoteService*` tests total, all passing |
+| 7 | ✅ | `SqlQueryGuardTests.AssembledQueryCases` covers both flag states for all 8 sites | Unit test | `SqlQueryGuardTests` full run — full solution 2,836 tests passing |
+| 8 | ✅ | `unicode_aware_search` option present, schema'd, and translated identically in both `addon/` and `addon-beta/` | Live | Re-read both `config.yaml`s and all 6 translation files after editing — confirmed matching |
+| 9 | ⬜ | T1: app starts in VS without error | Live | Developer's own action — not run by the assistant, see CLAUDE.md |
+| 10 | ✅ | T2: toggle proven against a real container in both states | Live | Actually run against `quotinator:local`: flag-off → `NoResults`; fresh flag-on container, same import/query → `Ok` with the fixture returned |
+| 11 | ✅ | `README.md`/CLAUDE.md documentation updated | Live | Re-read both after editing — confirmed |

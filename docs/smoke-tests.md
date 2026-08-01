@@ -39,6 +39,7 @@ verification command here in the same commit that fixes it — the list only gro
 25. [SourceAliasRule staleness](#25-sourcealiasrule-staleness-153) (#153)
 26. [Rule-file override endpoints](#26-rule-file-override-endpoints-153) (#153)
 27. [Per-file, per-entity-type import/seed report](#27-per-file-per-entity-type-importseed-report-221) (#221)
+28. [Unicode-aware search toggle](#28-unicode-aware-search-toggle-222) (#222)
 
 ---
 
@@ -979,4 +980,39 @@ docker logs <container> 2>&1 | grep "\[Database - Stats\]"
 ```
 The startup log line must show all nine counts — quotes, sources, characters, people, series,
 universes, stage directions, sound cues, conversations — not just the original four.
+
+---
+
+## 28. Unicode-aware search toggle (#222)
+
+Proves the container-level wiring, not the matching logic itself (already covered by unit tests) —
+that `Quotinator__UnicodeAwareSearch` (or the HA add-on's `unicode_aware_search` option) actually
+reaches the running app and flips real query behaviour. No bundled/curated data contains a
+case-varying accented string, so this imports a small throwaway fixture instead.
+
+**Flag off (default) — start a fresh container without the env var:**
+```bash
+docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+cat > .claude/temp/smoke-222.json <<'EOF'
+{
+  "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"I will always have Café de Flore.","originalLanguage":"en","source":"Café de Flore","date":"1990","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
+```
+Import must return `200`. The search (`CAFÉ`, percent-encoded) must return an empty `items` array
+with a `message` — the fixture's `Café de Flore` is not matched, proving default behaviour is
+unchanged.
+
+**Flag on — stop that container, start a fresh one with the env var set:**
+```bash
+docker stop <container>
+docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__UnicodeAwareSearch=true quotinator:local
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
+```
+A fresh container has no persisted data, so the same import is required again. The search — same
+query, same fixture — must now return `200` with one item, `source: "Café de Flore"`. Same query,
+same data, only the env var differs — the direct "with and without the feature active" comparison.
 

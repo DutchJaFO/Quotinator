@@ -45,5 +45,11 @@ configuration:
     description: >-
       Hoe lang een gedownload bronbestand als actueel wordt beschouwd voordat het opnieuw wordt gecontroleerd.
       Individuele bronnen kunnen dit overschrijven in hun eigen manifestvermelding.
+  unicode_aware_search:
+    name: Unicode-bewust zoeken
+    description: >-
+      Zorgt ervoor dat zoeken op quote, personage, auteur en bron ook overeenkomt met
+      geaccentueerde en andere niet-ASCII-tekens, ongeacht hoofd-/kleine letters (bijv. é/É).
+      Standaard uitgeschakeld — nog niet gevalideerd tegen echt zoekverkeer.
 network:
   8080/tcp: Directe webtoegang — HTTP (SSL uitgeschakeld) of HTTPS (SSL ingeschakeld)

@@ -10,10 +10,11 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 232, 236],
+    "issues": [178, 148, 150, 197, 151, 232, 236, 222],
     "added": [
       "Release-Einträge können jetzt ein optionales einzeiliges `quote`-Feld enthalten (stimmungsvoller Text für die Release-Notizen, mit optionaler `attribution`) — wird in `CHANGELOG.md` und der Blazor-Changelog-UI angezeigt, jedoch in den knapperen Dateien `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` weggelassen (Issue #178)",
-      "Die OpenAPI/Scalar-Dokumentation veröffentlicht jetzt echte, typisierte Antwortschemata für die Quote-Endpunkte (`/quotes/random`, `/search`, `/{id}`, `/quotes`) und die Admin-Endpunkte (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — zuvor zeigte jeder von ihnen nur ein nacktes `200 OK` ohne Schema (Issue #148)"
+      "Die OpenAPI/Scalar-Dokumentation veröffentlicht jetzt echte, typisierte Antwortschemata für die Quote-Endpunkte (`/quotes/random`, `/search`, `/{id}`, `/quotes`) und die Admin-Endpunkte (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — zuvor zeigte jeder von ihnen nur ein nacktes `200 OK` ohne Schema (Issue #148)",
+      "Die Quote-Suche sowie die Fuzzy-Filter für Figur/Autor/Quelle können jetzt optional auch auf akzentuierte und andere Nicht-ASCII-Zeichen unabhängig von Groß-/Kleinschreibung passen (z. B. é/É) — opt-in über die neue Add-on-Option `unicode_aware_search` (Umgebungsvariable `Quotinator__UnicodeAwareSearch`), standardmäßig deaktiviert, bis dies anhand realer Suchanfragen validiert wurde (Issue #222)"
     ],
     "changed": [
       "Dokumentiert, dass die internen Audit-Trail-Tabellen der Datenbank (Ereignis-/Audit-Verlauf) ihren Eintrag bewusst beibehalten, nachdem die beschriebene Entität später geändert oder ersetzt wurde — eine rein interne Dokumentationsklarstellung ohne Verhaltensänderung (Issue #151)",

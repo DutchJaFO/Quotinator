@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-01 09:36 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-01 13:03 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Added
 - Release entries can now carry an optional one-line `quote` (release-note flavour text, with optional `attribution`) — rendered in `CHANGELOG.md` and the Blazor changelog UI, omitted from the more concise `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)
 - OpenAPI/Scalar documentation now publishes real typed response schemas for the quote endpoints (`/quotes/random`, `/search`, `/{id}`, `/quotes`) and the admin endpoints (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — previously every one of these showed only a bare `200 OK` with no schema (issue #148)
+- Quote search and the character/author/source fuzzy filters can now optionally match accented and other non-ASCII characters regardless of case (e.g. é/É) — opt-in via the new `unicode_aware_search` add-on option (env var `Quotinator__UnicodeAwareSearch`), off by default until validated against real-world search traffic (issue #222)
 
 ### Changed
 - Documented that the database's internal audit-trail tables (event/audit history) intentionally retain their record after the entity they describe is later changed or replaced — a purely internal documentation clarification with no behaviour change (issue #151)

@@ -10,10 +10,11 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 232, 236],
+    "issues": [178, 148, 150, 197, 151, 232, 236, 222],
     "added": [
       "Release-items kunnen nu een optioneel eenregelig `quote`-veld bevatten (sfeervolle tekst voor de release-notities, met optionele `attribution`) — weergegeven in `CHANGELOG.md` en de Blazor-changelog-UI, weggelaten uit de beknoptere `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)",
-      "OpenAPI/Scalar-documentatie publiceert nu echte, getypeerde responsschema's voor de quote-endpoints (`/quotes/random`, `/search`, `/{id}`, `/quotes`) en de admin-endpoints (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — voorheen toonde elk van deze alleen een kale `200 OK` zonder schema (issue #148)"
+      "OpenAPI/Scalar-documentatie publiceert nu echte, getypeerde responsschema's voor de quote-endpoints (`/quotes/random`, `/search`, `/{id}`, `/quotes`) en de admin-endpoints (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — voorheen toonde elk van deze alleen een kale `200 OK` zonder schema (issue #148)",
+      "Quote-zoekopdrachten en de fuzzy filters voor personage/auteur/bron kunnen nu optioneel ook overeenkomen met geaccentueerde en andere niet-ASCII-tekens, ongeacht hoofd-/kleine letters (bijv. é/É) — opt-in via de nieuwe add-on-optie `unicode_aware_search` (omgevingsvariabele `Quotinator__UnicodeAwareSearch`), standaard uitgeschakeld totdat dit is gevalideerd tegen echt zoekverkeer (issue #222)"
     ],
     "changed": [
       "Gedocumenteerd dat de interne audit-trailtabellen van de database (gebeurtenis-/audit-geschiedenis) hun vastlegging bewust behouden nadat de entiteit die ze beschrijven later is gewijzigd of vervangen — een zuiver interne documentatieverduidelijking zonder gedragswijziging (issue #151)",

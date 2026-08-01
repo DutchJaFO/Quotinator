@@ -225,7 +225,28 @@ public class SqlQueryGuardTests
         foreach (var (label, types, genres, lang, character, author, source, seriesId, universeId, yearFrom, yearTo) in filterCases)
         {
             var (whereClause, _) = SqliteQuoteService.BuildFilterWhere(
-                types, genres, lang, character, author, source, seriesId, universeId, yearFrom, yearTo);
+                types, genres, lang, unicodeAwareSearch: false, character, author, source, seriesId, universeId, yearFrom, yearTo);
+
+            yield return [$"CountRandom({label})",    Sql.Quotes.CountRandom(whereClause)];
+            yield return [$"CountGetAll({label})",    Sql.Quotes.CountGetAll(whereClause)];
+            yield return [$"SelectRandom({label})",   Sql.Quotes.SelectRandom(whereClause)];
+            yield return [$"SelectPaged({label})",    Sql.Quotes.SelectPaged(whereClause)];
+        }
+
+        // #222: unicodeAwareSearch only changes the generated clause for character/author/source —
+        // every other filterCases row above is invariant to the flag (no CharacterFilter/AuthorFilter/
+        // SourceFilter clause gets added when those params are null), so doubling the whole matrix
+        // would add no distinct coverage. Only these three need a unicodeAware:true variant.
+        var unicodeFilterCases = new (string Label, string? Character, string? Author, string? Source)[]
+        {
+            ("character (unicode)", "Hannibal", null,    null),
+            ("author (unicode)",    null,       "Twain", null),
+            ("source (unicode)",    null,       null,    "Matrix"),
+        };
+        foreach (var (label, character, author, source) in unicodeFilterCases)
+        {
+            var (whereClause, _) = SqliteQuoteService.BuildFilterWhere(
+                null, null, null, unicodeAwareSearch: true, character, author, source, null, null, null, null);
 
             yield return [$"CountRandom({label})",    Sql.Quotes.CountRandom(whereClause)];
             yield return [$"CountGetAll({label})",    Sql.Quotes.CountGetAll(whereClause)];
@@ -236,18 +257,21 @@ public class SqlQueryGuardTests
         // SelectById()/SelectRawById() are 0-arg — #214's widened EnumerateSqlConstants now discovers
         // and guard-checks them automatically via AllNamedSqlConstants, so no manual case is needed here.
 
-        // SelectSearch: one case per field-filter constant × a representative where clause.
-        var (baseWhere, _) = SqliteQuoteService.BuildFilterWhere(["movie"], ["drama"], null, null, null, null, null, null, null, null);
-        foreach (var (fieldName, fieldFilter) in new[]
+        // SelectSearch: one case per field-filter method × unicodeAware state × a representative where clause.
+        var (baseWhere, _) = SqliteQuoteService.BuildFilterWhere(["movie"], ["drama"], null, unicodeAwareSearch: false, null, null, null, null, null, null, null);
+        foreach (var unicodeAware in new[] { false, true })
         {
-            (nameof(Sql.SearchField.Quote),     Sql.SearchField.Quote),
-            (nameof(Sql.SearchField.Source),    Sql.SearchField.Source),
-            (nameof(Sql.SearchField.Character), Sql.SearchField.Character),
-            (nameof(Sql.SearchField.Author),    Sql.SearchField.Author),
-            (nameof(Sql.SearchField.All),       Sql.SearchField.All),
-        })
-        {
-            yield return [$"SelectSearch(field={fieldName})", Sql.Quotes.SelectSearch(baseWhere, fieldFilter)];
+            foreach (var (fieldName, fieldFilter) in new[]
+            {
+                (nameof(Sql.SearchField.Quote),     Sql.SearchField.Quote(unicodeAware)),
+                (nameof(Sql.SearchField.Source),    Sql.SearchField.Source(unicodeAware)),
+                (nameof(Sql.SearchField.Character), Sql.SearchField.Character(unicodeAware)),
+                (nameof(Sql.SearchField.Author),    Sql.SearchField.Author(unicodeAware)),
+                (nameof(Sql.SearchField.All),       Sql.SearchField.All(unicodeAware)),
+            })
+            {
+                yield return [$"SelectSearch(field={fieldName}, unicodeAware={unicodeAware})", Sql.Quotes.SelectSearch(baseWhere, fieldFilter)];
+            }
         }
     }
 
@@ -284,6 +308,15 @@ public class SqlQueryGuardTests
             "Quotes.SelectSearch",
             "Quotes.CountRandom",
             "Quotes.CountGetAll",
+            // #222: bool unicodeAware — chooses between LIKE and UNICODE_CONTAINS(...).
+            "SearchField.Quote",
+            "SearchField.Source",
+            "SearchField.Character",
+            "SearchField.Author",
+            "SearchField.All",
+            "SearchField.CharacterFilter",
+            "SearchField.AuthorFilter",
+            "SearchField.SourceFilter",
         };
 
         var actual = EnumerateParameterizedSqlFactoryMethodNames().ToHashSet();

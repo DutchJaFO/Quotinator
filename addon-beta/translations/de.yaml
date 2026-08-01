@@ -45,5 +45,11 @@ configuration:
     description: >-
       Wie lange eine heruntergeladene Quelldatei als aktuell gilt, bevor sie erneut geprüft wird.
       Einzelne Quellen können dies in ihrem eigenen Manifest-Eintrag überschreiben.
+  unicode_aware_search:
+    name: Unicode-bewusste Suche
+    description: >-
+      Sorgt dafür, dass die Suche nach Zitat, Figur, Autor und Quelle unabhängig von
+      Groß-/Kleinschreibung auch auf akzentuierte und andere Nicht-ASCII-Zeichen passt (z. B.
+      é/É). Standardmäßig deaktiviert — noch nicht anhand realer Suchanfragen validiert.
 network:
   8080/tcp: Direkter Webzugriff — HTTP (SSL deaktiviert) oder HTTPS (SSL aktiviert)

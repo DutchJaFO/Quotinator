@@ -155,14 +155,44 @@ internal static class Sql
             => $"{CountForGetAllBase} {whereClause}";
     }
 
-    /// <summary>Field-filter predicates for the Search endpoint — one per searchable column.</summary>
+    /// <summary>
+    /// Field-filter predicates for fuzzy/contains matching — the Search endpoint's per-column
+    /// filters plus the character/author/source fuzzy filters used elsewhere. Each takes
+    /// <c>unicodeAware</c>: when <c>false</c> (default), builds SQLite's own ASCII-only <c>LIKE</c>;
+    /// when <c>true</c>, builds a call to the <c>UNICODE_CONTAINS</c> function registered by
+    /// <c>SqliteConnectionFactory</c> instead (issue #222 — opt-in, see
+    /// <c>Quotinator:UnicodeAwareSearch</c>). Both forms take the same parameter name; only the
+    /// caller decides whether that parameter value is <c>%wrapped%</c> (for <c>LIKE</c>) or raw
+    /// (for <c>UNICODE_CONTAINS</c>, which does its own containment check).
+    /// </summary>
     internal static class SearchField
     {
-        internal const string Quote     = "q.QuoteText LIKE @like";
-        internal const string Source    = "s.Title LIKE @like";
-        internal const string Character = "c.Name LIKE @like";
-        internal const string Author    = "p.Name LIKE @like";
-        internal const string All       = "(q.QuoteText LIKE @like OR s.Title LIKE @like OR c.Name LIKE @like OR p.Name LIKE @like)";
+        // static readonly Func, not a method — SqlQueryGuardTests' reflection-based drift detectors
+        // (EnumerateSqlConstants/EnumerateParameterizedSqlFactoryMethodNames) only look at fields and
+        // methods respectively; a Func-typed field is invisible to both, which is correct here since
+        // this is a template shared by the real factory methods below, not itself a directly-called
+        // query fragment needing its own AssembledQueryCases entry.
+        private static readonly Func<string, string, bool, string> Clause =
+            (column, paramName, unicodeAware) => unicodeAware
+                ? $"UNICODE_CONTAINS({column}, @{paramName})"
+                : $"{column} LIKE @{paramName}";
+
+        internal static string Quote(bool unicodeAware)     => Clause("q.QuoteText", "like", unicodeAware);
+        internal static string Source(bool unicodeAware)    => Clause("s.Title", "like", unicodeAware);
+        internal static string Character(bool unicodeAware) => Clause("c.Name", "like", unicodeAware);
+        internal static string Author(bool unicodeAware)    => Clause("p.Name", "like", unicodeAware);
+
+        internal static string All(bool unicodeAware)
+            => $"({Quote(unicodeAware)} OR {Source(unicodeAware)} OR {Character(unicodeAware)} OR {Author(unicodeAware)})";
+
+        /// <summary>Character-name fuzzy filter (distinct parameter name — combinable with <see cref="AuthorFilter"/>/<see cref="SourceFilter"/> in the same WHERE clause).</summary>
+        internal static string CharacterFilter(bool unicodeAware) => Clause("c.Name", "characterLike", unicodeAware);
+
+        /// <summary>Author-name fuzzy filter (distinct parameter name — combinable with <see cref="CharacterFilter"/>/<see cref="SourceFilter"/> in the same WHERE clause).</summary>
+        internal static string AuthorFilter(bool unicodeAware) => Clause("p.Name", "authorLike", unicodeAware);
+
+        /// <summary>Source-title fuzzy filter (distinct parameter name — combinable with <see cref="CharacterFilter"/>/<see cref="AuthorFilter"/> in the same WHERE clause).</summary>
+        internal static string SourceFilter(bool unicodeAware) => Clause("s.Title", "sourceLike", unicodeAware);
     }
 
     /// <summary>QuoteGenres junction table.</summary>
