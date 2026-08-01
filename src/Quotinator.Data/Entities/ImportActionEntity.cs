@@ -20,8 +20,8 @@ namespace Quotinator.Data.Entities;
 /// ADR 004 forbids. <see cref="EntityType"/> is likewise free-text, entirely caller-defined — Data
 /// never branches on its value beyond storing/filtering by it.
 /// </remarks>
-[Table("System_ImportActions")]
-public sealed class SystemImportAction : RecordBase
+[Table("Import_Action")]
+public sealed class ImportActionEntity : RecordBase
 {
     /// <summary>Loose reference to the batch this action was staged under. No FK — this project doesn't know the consumer's batch table name.</summary>
     public string BatchId { get; init; } = string.Empty;
@@ -80,7 +80,7 @@ public sealed class SystemImportAction : RecordBase
 }
 
 /// <summary>
-/// The states a <see cref="SystemImportAction"/> row can be in — a closed set defined and
+/// The states a <see cref="ImportActionEntity"/> row can be in — a closed set defined and
 /// maintained entirely by this project's own coordinator logic (<see cref="Import.IImportActionCoordinator"/>),
 /// not by any consuming project's schema. Per ADR 008, backed by a matching SQL CHECK constraint.
 /// </summary>
@@ -119,7 +119,7 @@ public enum ImportActionStatus
 }
 
 /// <summary>
-/// The kinds of action a <see cref="SystemImportAction"/> row can represent — a closed set defined
+/// The kinds of action a <see cref="ImportActionEntity"/> row can represent — a closed set defined
 /// and maintained entirely by this project's own coordinator logic, not by any consuming project's
 /// schema (a consumer decides, per row, which of these two kinds applies — it does not invent new
 /// kinds of its own). Per ADR 008, backed by a matching SQL CHECK constraint.

@@ -8,13 +8,13 @@ using Quotinator.Data.Repositories;
 namespace Quotinator.Data.Tests.Repositories;
 
 [TestClass]
-public class SystemImportActionWriterReaderTests
+public class ImportActionWriterReaderTests
 {
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private IDbConnectionFactory _factory = null!;
-    private SystemImportActionWriter _writer = null!;
-    private SystemImportActionReader _reader = null!;
+    private ImportActionWriter _writer = null!;
+    private ImportActionReader _reader = null!;
 
     [TestInitialize]
     public void TestInitialize()
@@ -25,7 +25,7 @@ public class SystemImportActionWriterReaderTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         conn.Execute("""
-            CREATE TABLE System_ImportActions (
+            CREATE TABLE Import_Action (
                 Id                 TEXT    NOT NULL PRIMARY KEY,
                 BatchId            TEXT    NOT NULL,
                 ActionType         TEXT    NOT NULL
@@ -53,8 +53,8 @@ public class SystemImportActionWriterReaderTests
             """);
 
         _factory = new SqliteConnectionFactory(_dbPath);
-        _writer  = new SystemImportActionWriter(_factory);
-        _reader  = new SystemImportActionReader(_factory);
+        _writer  = new ImportActionWriter(_factory);
+        _reader  = new ImportActionReader(_factory);
     }
 
     [TestCleanup]
@@ -65,7 +65,7 @@ public class SystemImportActionWriterReaderTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private static SystemImportAction BuildPendingModify(string batchId, string? existingBatchId = null) => new()
+    private static ImportActionEntity BuildPendingModify(string batchId, string? existingBatchId = null) => new()
     {
         BatchId         = batchId,
         ExistingBatchId = existingBatchId,
@@ -78,7 +78,7 @@ public class SystemImportActionWriterReaderTests
         DetectedAt      = DateTime.UtcNow,
     };
 
-    private static SystemImportAction BuildDecidedAdd(string batchId) => new()
+    private static ImportActionEntity BuildDecidedAdd(string batchId) => new()
     {
         BatchId    = batchId,
         ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -142,7 +142,7 @@ public class SystemImportActionWriterReaderTests
         {
             conn.Open();
             await conn.ExecuteAsync("""
-                INSERT INTO System_ImportActions
+                INSERT INTO Import_Action
                     (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated, IsDeleted)
                 VALUES
                     (@Id, 'BATCH-1', 'Add', 'Quote', @Id, '{}', 'Pending', @now, @now, 0);
@@ -226,7 +226,7 @@ public class SystemImportActionWriterReaderTests
 
     /// <summary>
     /// Found in passing during #163's export/bulk-decide work: the OriginalDecision column (added in
-    /// this same issue, step 2) was being written by MarkDecidedAsync but SystemImportAction had no
+    /// this same issue, step 2) was being written by MarkDecidedAsync but ImportActionEntity had no
     /// property to bind it back to, so the reflection-driven SELECT column list (ReflectedColumnMetadata)
     /// never selected it — every existing MarkDecidedAsync test passed null for this parameter, so the
     /// gap went uncaught. Proves the round trip now works: write a non-null value, read it back.

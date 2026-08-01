@@ -9,25 +9,25 @@ using Quotinator.Data.Queries;
 namespace Quotinator.Data.Repositories;
 
 /// <summary>
-/// SQLite implementation of <see cref="ISystemImportActionWriter"/>.
+/// SQLite implementation of <see cref="IImportActionWriter"/>.
 /// Extends <see cref="SqliteRepositoryBase{T}"/> directly — NOT <see cref="SqliteRepository{T}"/> —
 /// so that writes do not trigger an audit write for a table this project doesn't audit.
 /// Dapper.Contrib generates the INSERT statement from the <c>[Table]</c> and <c>[Key]</c>
-/// attributes on <see cref="SystemImportAction"/>; no SQL string is required for the initial write.
+/// attributes on <see cref="ImportActionEntity"/>; no SQL string is required for the initial write.
 /// The status-transition methods (#154) use the raw <see cref="Sql.SystemImportActions"/> factory
 /// methods instead, since Dapper.Contrib's <c>UpdateAsync</c> always rewrites every column.
 /// </summary>
-public sealed class SystemImportActionWriter : SqliteRepositoryBase<SystemImportAction>, ISystemImportActionWriter
+public sealed class ImportActionWriter : SqliteRepositoryBase<ImportActionEntity>, IImportActionWriter
 {
     /// <summary>Initialises the writer with the connection factory.</summary>
-    public SystemImportActionWriter(IDbConnectionFactory factory) : base(factory) { }
+    public ImportActionWriter(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
-    public async Task WriteAsync(SystemImportAction entry, IDbConnection connection, IDbTransaction? transaction = null)
+    public async Task WriteAsync(ImportActionEntity entry, IDbConnection connection, IDbTransaction? transaction = null)
         => await connection.InsertAsync(entry, transaction);
 
     /// <inheritdoc/>
-    public async Task WriteAsync(SystemImportAction entry)
+    public async Task WriteAsync(ImportActionEntity entry)
     {
         using var conn = Factory.CreateConnection();
         conn.Open();
@@ -35,7 +35,7 @@ public sealed class SystemImportActionWriter : SqliteRepositoryBase<SystemImport
     }
 
     /// <inheritdoc/>
-    public async Task WriteManyAsync(IEnumerable<SystemImportAction> entries, IDbConnection connection, IDbTransaction? transaction = null)
+    public async Task WriteManyAsync(IEnumerable<ImportActionEntity> entries, IDbConnection connection, IDbTransaction? transaction = null)
         => await connection.InsertAsync(entries, transaction);
 
     /// <inheritdoc/>

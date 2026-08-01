@@ -43,7 +43,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         IImportBatchRepository         importBatches,
         IImportActionCoordinator       actionCoordinator,
         IImportActionService           actionService,
-        ISystemAuditWriter             auditWriter,
+        IAuditEntryWriter             auditWriter,
         ICallerContext                 callerContext,
         ILogger<DatabaseInitializer>   logger,
         ISourceCacheUpdater            sourceCacheUpdater,
@@ -91,7 +91,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         }
 
         await LogDatabaseStatsAsync(connection);
-        await AuditWriter.WriteAsync(new SystemAuditEntry
+        await AuditWriter.WriteAsync(new AuditEntryEntity
         {
             TableName   = "Database",
             Operation   = AuditOperation.Reseed,
@@ -120,7 +120,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         }
 
         await LogDatabaseStatsAsync(connection);
-        await AuditWriter.WriteAsync(new SystemAuditEntry
+        await AuditWriter.WriteAsync(new AuditEntryEntity
         {
             TableName   = "Database",
             Operation   = AuditOperation.Reset,
@@ -269,7 +269,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 var importBatch = await CreateImportBatchAsync(batch, seedFile, filePolicy);
                 var batchIdStr  = importBatch.Id.ToCanonicalId();
 
-                IReadOnlyList<SystemImportAction> actions;
+                IReadOnlyList<ImportActionEntity> actions;
                 using (var tx = connection.BeginTransaction())
                 {
                     actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx,
@@ -295,7 +295,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                     importBatch.RecordCount = imported + updated;
                     await _importBatches.UpdateAsync(importBatch);
 
-                    await AuditWriter.WriteAsync(new SystemAuditEntry
+                    await AuditWriter.WriteAsync(new AuditEntryEntity
                     {
                         TableName   = "Quotes",
                         RecordId    = batchIdStr,
@@ -386,11 +386,11 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             SeriesCount, UniverseCount, StageDirectionCount, SoundCueCount, ConversationCount);
     }
 
-    private async Task<ImportBatch> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile, ManifestPolicy filePolicy)
+    private async Task<ImportBatchEntity> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile, ManifestPolicy filePolicy)
     {
         var type   = DetermineType(seedBatch.Origin);
         var policy = filePolicy.ForQuotes;
-        var batch = new ImportBatch
+        var batch = new ImportBatchEntity
         {
             Name           = Path.GetFileName(seedFile.FilePath),
             Type           = new SafeValue<ImportBatchType?>(type.ToString(), type),

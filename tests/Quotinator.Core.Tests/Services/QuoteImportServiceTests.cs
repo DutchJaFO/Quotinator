@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
@@ -30,6 +31,8 @@ public class QuoteImportServiceTests
     private string _dbPath  = null!;
     private string _backups = null!;
     private SqliteConnectionFactory _factory = null!;
+    private ChangeReader _changeReader = null!;
+    private ImportActionReader _testActionReader = null!;
 
     [TestInitialize]
     public async Task TestInitialize()
@@ -38,25 +41,27 @@ public class QuoteImportServiceTests
         _dbPath  = Path.Combine(_tempDir, "test.db");
         _backups = Path.Combine(_tempDir, "backups");
         _factory = new SqliteConnectionFactory(_dbPath);
+        _changeReader = new ChangeReader(_factory);
+        _testActionReader = new ImportActionReader(_factory);
 
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
-        var actionReader  = new SystemImportActionReader(_factory);
-        var actionWriter  = new SystemImportActionWriter(_factory);
+        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader  = new ImportActionReader(_factory);
+        var actionWriter  = new ImportActionWriter(_factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Source>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Character>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Person>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory);
         var db = new QuotinatorDatabaseInitializer(
             _factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance,
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
             NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
@@ -72,22 +77,22 @@ public class QuoteImportServiceTests
     }
 
     private SqliteQuoteImportService CreateService(
-        ISystemChangeLogWriter? changeLogWriter = null,
+        IChangeWriter? changeLogWriter = null,
         IReadOnlyDictionary<string, IQuoteSourceConverter>? converters = null,
         ManifestPolicy? configPolicy = null)
     {
-        var importBatches  = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
-        var actionReader   = new SystemImportActionReader(_factory);
-        var actionWriter   = new SystemImportActionWriter(_factory);
+        var importBatches  = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader   = new ImportActionReader(_factory);
+        var actionWriter   = new ImportActionWriter(_factory);
         var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        var actionService  = new SqliteImportActionService(actionReader, coordinator, changeLogWriter ?? NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService  = new SqliteImportActionService(actionReader, coordinator, changeLogWriter ?? NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Source>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Character>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Person>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory);
         return new SqliteQuoteImportService(
             _factory, importBatches, coordinator, actionService, actionReader,
@@ -133,7 +138,7 @@ public class QuoteImportServiceTests
         Assert.IsNotNull(result.BatchId);
         Assert.IsEmpty(result.Conflicts, "A brand-new quote is an Add action, never surfaced as a conflict entry — this is what makes a zero-conflict import map to 200, not 202");
         Assert.AreEqual(1, await CountAsync("Quotes"));
-        Assert.AreEqual(1, await CountAsync("ImportBatches"));
+        Assert.AreEqual(1, await CountAsync("Import_Batch"));
         Assert.AreEqual("newest-wins", result.ConflictPolicy, "Response-facing wire value must be kebab-case, matching every other DuplicateResolutionPolicy JSON value in this API");
     }
 
@@ -387,46 +392,38 @@ public class QuoteImportServiceTests
         Assert.AreEqual("pending", result.Conflicts.Single().Status);
     }
 
-    // ── #56: System_ChangeLog ────────────────────────────────────────────────
+    // ── #56: Audit_Change ────────────────────────────────────────────────
 
     [TestMethod]
     public async Task ImportAsync_FreshDatabase_WritesCreatedChangeLogRowWithImportInitiator()
     {
-        var changeLogWriter = new SystemChangeLogWriter(_factory);
+        var changeLogWriter = new ChangeWriter(_factory);
         var service = CreateService(changeLogWriter: changeLogWriter);
 
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: false, TestContext.CancellationToken);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var row = await conn.QuerySingleAsync<(string InitiatedByType, string InitiatedById, string Action)>(
-            "SELECT InitiatedByType, InitiatedById, Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id",
-            new { id = SharedId });
+        var row = (await _changeReader.GetHistoryAsync("quote", SharedId)).Single();
 
-        Assert.AreEqual("Import", row.InitiatedByType);
+        Assert.AreEqual(InitiatorType.Import, row.InitiatedByType.Parsed);
         Assert.AreEqual(result.BatchId!.Value.ToString("D"), row.InitiatedById);
-        Assert.AreEqual("Created", row.Action);
+        Assert.AreEqual(ChangeAction.Created, row.Action.Parsed);
     }
 
     [TestMethod]
     public async Task ImportAsync_NewestWins_WritesModifiedChangeLogRowWithSameImportBatchId()
     {
-        var changeLogWriter = new SystemChangeLogWriter(_factory);
+        var changeLogWriter = new ChangeWriter(_factory);
         var service = CreateService(changeLogWriter: changeLogWriter);
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, TestContext.CancellationToken);
 
         var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.NewestWins } };
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var rows = (await conn.QueryAsync<(string InitiatedById, string Action)>(
-            "SELECT InitiatedById, Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id ORDER BY OccurredAt",
-            new { id = SharedId })).ToList();
+        var rows = (await _changeReader.GetHistoryAsync("quote", SharedId)).OrderBy(r => r.OccurredAt).ToList();
 
         Assert.HasCount(2, rows, "One Created row from the first import, one Modified row from the newest-wins rewrite");
-        Assert.AreEqual("Created", rows[0].Action);
-        Assert.AreEqual("Modified", rows[1].Action);
+        Assert.AreEqual(ChangeAction.Created, rows[0].Action.Parsed);
+        Assert.AreEqual(ChangeAction.Modified, rows[1].Action.Parsed);
         Assert.AreEqual(result.BatchId!.Value.ToString("D"), rows[1].InitiatedById,
             "The Modified row's InitiatedById must be the second import's own batch, not the first");
     }
@@ -434,31 +431,27 @@ public class QuoteImportServiceTests
     [TestMethod]
     public async Task ImportAsync_Skip_WritesNoModifiedChangeLogRow()
     {
-        var changeLogWriter = new SystemChangeLogWriter(_factory);
+        var changeLogWriter = new ChangeWriter(_factory);
         var service = CreateService(changeLogWriter: changeLogWriter);
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, TestContext.CancellationToken);
 
         var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Skip } };
         await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var actions = (await conn.QueryAsync<string>(
-            "SELECT Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id",
-            new { id = SharedId })).ToList();
+        var actions = (await _changeReader.GetHistoryAsync("quote", SharedId)).Select(r => r.Action.Parsed).ToList();
 
-        Assert.AreSequenceEqual(new[] { "Created" }, actions, "Skip never executes the UPDATE, so no Modified row should exist");
+        Assert.AreSequenceEqual(new ChangeAction?[] { ChangeAction.Created }, actions, "Skip never executes the UPDATE, so no Modified row should exist");
     }
 
     [TestMethod]
     public async Task ImportAsync_PreviewWithNewRow_NoChangeLogRowPersisted()
     {
-        var changeLogWriter = new SystemChangeLogWriter(_factory);
+        var changeLogWriter = new ChangeWriter(_factory);
         var service = CreateService(changeLogWriter: changeLogWriter);
 
         await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: true, TestContext.CancellationToken);
 
-        Assert.AreEqual(0, await CountAsync("System_ChangeLog"), "Rolled back — no change-log row persisted for a preview run");
+        Assert.IsEmpty(await _changeReader.GetHistoryAsync("quote", SharedId), "Rolled back — no change-log row persisted for a preview run");
     }
 
     // ── Preview ──────────────────────────────────────────────────────────────
@@ -479,8 +472,8 @@ public class QuoteImportServiceTests
         Assert.IsNotNull(result.BatchId, "Preview now stages a real batch, unlike the old rollback contract");
         Assert.AreEqual(1, result.Summary.Imported, "Response still reports what would have happened");
         Assert.AreEqual(0, await CountAsync("Quotes"), "Staging never applies — no quote written");
-        Assert.AreEqual(1, await CountAsync("ImportBatches"), "The batch itself is durably staged");
-        Assert.AreEqual(2, await CountAsync("System_ImportActions"), "The planned Quote and Source Add actions are both durably staged");
+        Assert.AreEqual(1, await CountAsync("Import_Batch"), "The batch itself is durably staged");
+        Assert.HasCount(2, await _testActionReader.GetAllForBatchAsync(result.BatchId!.Value.ToString("D")), "The planned Quote and Source Add actions are both durably staged");
     }
 
     [TestMethod]
@@ -492,7 +485,7 @@ public class QuoteImportServiceTests
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", null, preview: true, TestContext.CancellationToken);
 
         Assert.HasCount(1, result.Conflicts, "Response reflects the conflict that would have been detected");
-        Assert.IsGreaterThan(0, await CountAsync("System_ImportActions"), "The Modify action is durably staged, not rolled back");
+        Assert.IsNotEmpty(await _testActionReader.GetAllForBatchAsync(result.BatchId!.Value.ToString("D")), "The Modify action is durably staged, not rolled back");
         Assert.AreEqual("Original.", await ReadQuoteTextAsync(), "Never applied — original row untouched");
     }
 
@@ -625,10 +618,11 @@ public class QuoteImportServiceTests
         Assert.AreEqual(1, await CountAsync("StageDirections"));
         Assert.AreEqual(2, await CountAsync("ConversationLines"));
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var actionTypes = (await conn.QueryAsync<string>(
-            "SELECT DISTINCT EntityType FROM System_ImportActions WHERE EntityType IN ('Conversation', 'StageDirection');")).ToList();
+        var actionTypes = (await _testActionReader.GetAllForBatchAsync(result.BatchId!.Value.ToString("D")))
+            .Select(a => a.EntityType)
+            .Where(t => t is "Conversation" or "StageDirection")
+            .Distinct()
+            .ToList();
         Assert.AreSequenceEqual(new[] { "Conversation", "StageDirection" }, actionTypes, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 

@@ -12,7 +12,7 @@ namespace Quotinator.Data.Repositories;
 public interface ISourceFileOverrideRegistry
 {
     /// <summary>The registered override for this exact (fileName, origin) pair, if one exists.</summary>
-    Task<SourceFileOverride?> FindAsync(string fileName, SeedBatchOrigin origin, CancellationToken cancellationToken = default);
+    Task<SourceFileOverrideEntity?> FindAsync(string fileName, SeedBatchOrigin origin, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Registers or updates the override for (fileName, origin) — an upsert keyed by that pair, not a

@@ -566,51 +566,42 @@ public static class QuotinatorMigrations
         """;
 
     /// <summary>
-    /// #150, ADR 008 — adds a <c>CHECK</c> constraint to <c>ImportBatches.ConflictPolicy</c>
-    /// (backed by <see cref="Quotinator.Data.Import.DuplicateResolutionPolicy"/>, a real closed C# enum), closing a gap ADR
-    /// 008 itself documented as a known, tracked exception rather than fixing at the time. Migration
-    /// 4 already applied to real databases with this column left unconstrained (added there via a
-    /// plain <c>ALTER TABLE ... ADD COLUMN</c>, which cannot carry a <c>CHECK</c> retroactively), so
-    /// per this project's append-only migration policy the fix is a new migration that rebuilds the
-    /// table under a temporary name — the same technique migration 4's own
-    /// <c>ImportBatchTypeUserSeed</c> section already uses to widen <c>Type</c>'s <c>CHECK</c>.
-    /// <para>
-    /// Every code path that constructs an <see cref="Quotinator.Data.Entities.ImportBatch"/> stamps
-    /// <c>ConflictPolicy</c> from <c>DuplicateResolutionPolicy.ToString()</c> (PascalCase, e.g.
-    /// <c>"NewestWins"</c>) — the same raw-enum-name convention every other CHECK'd enum column in
-    /// this project's own tables already uses (<c>Type</c>, <c>Status</c> on this very table). The
-    /// column's original <c>ALTER TABLE ... ADD COLUMN ... DEFAULT 'skip'</c> backfill, however, wrote
-    /// the literal lowercase default string directly into every pre-existing row at that migration's
-    /// own execution time — never through application code, so never PascalCase. The copy step below
-    /// normalises that one known legacy value (plus every other enum member, defensively, in case any
-    /// row was ever written some other way) to the PascalCase form the new <c>CHECK</c> requires;
-    /// anything already PascalCase — or any genuinely unexpected value — passes through the
-    /// <c>ELSE</c> branch unchanged, so a truly corrupt value correctly fails the <c>CHECK</c> instead
-    /// of being silently miscategorised (same safety property <see cref="ImportConflictMigrations.AddStatusCheckConstraint"/>
-    /// already established for this exact class of fix).
-    /// </para>
+    /// #253/ADR 015 — migrates <c>ImportBatches</c>' data into <c>Import_Batch</c> (created empty by
+    /// <see cref="Quotinator.Data.Database.DomainPrefixRenameMigrations.RenameDataOwnedTables"/>,
+    /// which always runs first), drops <c>ImportBatches</c>, and rebuilds the nine tables that
+    /// FK-reference it so their <c>REFERENCES</c> clause points at the new name. Originally added a
+    /// CHECK constraint to <c>ImportBatches.ConflictPolicy</c> (#150, ADR 008) via a same-table
+    /// rebuild-under-temporary-name; that CHECK constraint is still applied here, now as part of
+    /// <c>Import_Batch</c>'s own <c>CREATE TABLE</c>. This migration never shipped, so per this
+    /// project's migration policy its text may still be edited in place — the rename/nine-table-rebuild
+    /// work was folded in without bumping the version number.
     /// </summary>
+    /// <remarks>
+    /// <c>ImportBatches</c> → <c>Import_Batch</c> can't be a same-table rename here (the way every
+    /// other #253 table rename is one) without breaking the ordering constraint documented on
+    /// <c>RenameDataOwnedTables</c> — so this migration instead copies the data across after Data's
+    /// migration has already created the empty destination table. That copy-then-drop means
+    /// <c>ImportBatches</c> is a genuinely different physical table from <c>Import_Batch</c>, not a
+    /// renamed one — and SQLite only auto-converts a <c>FOREIGN KEY</c> declaration in another table
+    /// when the table it references is renamed via <c>ALTER TABLE ... RENAME TO</c>, never when it's
+    /// dropped and a differently-named replacement created (confirmed against sqlite.org, 2026-08-01).
+    /// Left alone, <c>Quotes</c>/<c>Sources</c>/<c>Characters</c>/<c>People</c>/<c>Conversations</c>/
+    /// <c>StageDirections</c>/<c>SoundCues</c>/<c>Universe</c>/<c>Series</c> would keep their existing
+    /// <c>REFERENCES ImportBatches(Id)</c> declarations, and every future <c>INSERT</c>/<c>UPDATE</c>
+    /// on any of them with a non-null <c>ImportBatchId</c> would throw <c>no such table: ImportBatches</c>
+    /// once migrations finish and <c>PRAGMA foreign_keys</c> is back on — confirmed with a direct,
+    /// throwaway repro against a real SQLite connection before writing this fix. Each of the nine is
+    /// therefore rebuilt under the identical create-new/copy/drop/rename-back pattern already used
+    /// throughout this codebase's frozen migrations (e.g. <c>ImportBatches_New</c> above) — critically,
+    /// each one's own final name never changes, only what its <c>ImportBatchId</c> column references,
+    /// so nothing that in turn references *them* (e.g. <c>ConversationLines</c> → <c>Conversations</c>)
+    /// is affected. Rebuilt in FK dependency order (<c>Universe</c> → <c>Series</c> → <c>Sources</c> →
+    /// <c>Characters</c>/<c>People</c> → <c>Quotes</c> → <c>Conversations</c>/<c>StageDirections</c>/
+    /// <c>SoundCues</c>) even though <c>PRAGMA foreign_keys</c> is off for the duration of every
+    /// migration, purely so this text reads the same way the schema itself is structured.
+    /// </remarks>
     internal const string Migration005_ImportBatchConflictPolicyCheckConstraint = """
-        CREATE TABLE ImportBatches_New (
-            Id             TEXT    PRIMARY KEY,
-            Name           TEXT    NOT NULL,
-            Type           TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System', 'UserSeed')),
-            Url            TEXT,
-            ImportedAt     TEXT    NOT NULL,
-            ImportedById   TEXT,
-            RecordCount    INTEGER NOT NULL DEFAULT 0,
-            DateCreated    TEXT    NOT NULL,
-            DateModified   TEXT,
-            DateDeleted    TEXT,
-            IsDeleted      INTEGER NOT NULL DEFAULT 0,
-            ConflictPolicy TEXT    NOT NULL DEFAULT 'Skip'
-                           CHECK (ConflictPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
-            Status         TEXT    NOT NULL DEFAULT 'Applied'
-                           CHECK (Status IN ('Staged', 'Applied', 'Discarded')),
-            AppliedAt      TEXT
-        );
-
-        INSERT INTO ImportBatches_New (Id, Name, Type, Url, ImportedAt, ImportedById, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted, ConflictPolicy, Status, AppliedAt)
+        INSERT INTO Import_Batch (Id, Name, Type, Url, ImportedAt, ImportedById, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted, ConflictPolicy, Status, AppliedAt)
         SELECT
             Id, Name, Type, Url, ImportedAt, ImportedById, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted,
             CASE ConflictPolicy
@@ -626,7 +617,177 @@ public static class QuotinatorMigrations
 
         DROP TABLE ImportBatches;
 
-        ALTER TABLE ImportBatches_New RENAME TO ImportBatches;
+        CREATE TABLE IF NOT EXISTS Universe_New (
+            Id                 TEXT    PRIMARY KEY,
+            Name               TEXT    NOT NULL UNIQUE,
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO Universe_New (Id, Name, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Name, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted FROM Universe;
+        DROP TABLE Universe;
+        ALTER TABLE Universe_New RENAME TO Universe;
+
+        CREATE TABLE IF NOT EXISTS Series_New (
+            Id                 TEXT    PRIMARY KEY,
+            Name               TEXT    NOT NULL UNIQUE,
+            UniverseId         TEXT    REFERENCES Universe(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO Series_New (Id, Name, UniverseId, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Name, UniverseId, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted FROM Series;
+        DROP TABLE Series;
+        ALTER TABLE Series_New RENAME TO Series;
+        CREATE INDEX IF NOT EXISTS IX_Series_UniverseId ON Series(UniverseId);
+
+        CREATE TABLE IF NOT EXISTS Sources_New (
+            Id           TEXT    PRIMARY KEY,
+            Title        TEXT    NOT NULL,
+            Type         TEXT    NOT NULL DEFAULT 'Movie'
+                         CHECK (Type IN ('Unknown','Movie','Tv','Anime','Book','Person')),
+            Date         TEXT,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+                         CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]',
+            SeriesId     TEXT    REFERENCES Series(Id),
+            UNIQUE (Title, Type)
+        );
+        INSERT INTO Sources_New (Id, Title, Type, Date, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown, SeriesId)
+        SELECT Id, Title, Type, Date, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown, SeriesId FROM Sources;
+        DROP TABLE Sources;
+        ALTER TABLE Sources_New RENAME TO Sources;
+        CREATE INDEX IF NOT EXISTS IX_Sources_SeriesId ON Sources(SeriesId);
+
+        CREATE TABLE IF NOT EXISTS Characters_New (
+            Id           TEXT    PRIMARY KEY,
+            Name         TEXT    NOT NULL,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+                         CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]',
+            SourceType   TEXT    NOT NULL DEFAULT 'Unknown'
+                         CHECK (SourceType IN ('Unknown','Movie','Tv','Anime','Book','Person'))
+        );
+        INSERT INTO Characters_New (Id, Name, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown, SourceType)
+        SELECT Id, Name, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown, SourceType FROM Characters;
+        DROP TABLE Characters;
+        ALTER TABLE Characters_New RENAME TO Characters;
+
+        CREATE TABLE IF NOT EXISTS People_New (
+            Id           TEXT    PRIMARY KEY,
+            Name         TEXT    NOT NULL UNIQUE,
+            DateOfBirth  TEXT,
+            DateOfDeath  TEXT,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+                         CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]'
+        );
+        INSERT INTO People_New (Id, Name, DateOfBirth, DateOfDeath, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown)
+        SELECT Id, Name, DateOfBirth, DateOfDeath, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown FROM People;
+        DROP TABLE People;
+        ALTER TABLE People_New RENAME TO People;
+
+        CREATE TABLE IF NOT EXISTS Quotes_New (
+            Id               TEXT    PRIMARY KEY,
+            QuoteText        TEXT    NOT NULL,
+            OriginalLanguage TEXT    NOT NULL DEFAULT 'en',
+            SourceId         TEXT    NOT NULL REFERENCES Sources(Id),
+            CharacterId      TEXT    REFERENCES Characters(Id),
+            PersonId         TEXT    REFERENCES People(Id),
+            DateCreated      TEXT    NOT NULL,
+            DateModified     TEXT,
+            DateDeleted      TEXT,
+            IsDeleted        INTEGER NOT NULL DEFAULT 0,
+            ImportBatchId    TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT  NOT NULL DEFAULT 'Incomplete'
+                             CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown     TEXT    NOT NULL DEFAULT '[]'
+        );
+        INSERT INTO Quotes_New (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown)
+        SELECT Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown FROM Quotes;
+        DROP TABLE Quotes;
+        ALTER TABLE Quotes_New RENAME TO Quotes;
+
+        CREATE TABLE IF NOT EXISTS Conversations_New (
+            Id                 TEXT    PRIMARY KEY,
+            Description        TEXT,
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO Conversations_New (Id, Description, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Description, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted FROM Conversations;
+        DROP TABLE Conversations;
+        ALTER TABLE Conversations_New RENAME TO Conversations;
+
+        CREATE TABLE IF NOT EXISTS StageDirections_New (
+            Id                 TEXT    PRIMARY KEY,
+            Text               TEXT    NOT NULL,
+            ImageUrl           TEXT,
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO StageDirections_New (Id, Text, ImageUrl, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Text, ImageUrl, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted FROM StageDirections;
+        DROP TABLE StageDirections;
+        ALTER TABLE StageDirections_New RENAME TO StageDirections;
+
+        CREATE TABLE IF NOT EXISTS SoundCues_New (
+            Id                 TEXT    PRIMARY KEY,
+            Text               TEXT    NOT NULL,
+            SoundFileUrl       TEXT,
+            ImageUrl           TEXT,
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO SoundCues_New (Id, Text, SoundFileUrl, ImageUrl, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Text, SoundFileUrl, ImageUrl, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted FROM SoundCues;
+        DROP TABLE SoundCues;
+        ALTER TABLE SoundCues_New RENAME TO SoundCues;
         """;
 
     // Consolidated schema for a genuinely fresh database — the union of migrations 1-8's final
@@ -665,30 +826,17 @@ public static class QuotinatorMigrations
     // consolidate on a fresh database — same reasoning). Kept in sync with migrations 1-11 (the
     // pre-#155 historical narrative numbering) plus the real, current Migration005 by
     // DatabaseInitializerTests' schema-drift comparison.
+    // #253/ADR 015 — Import_Batch (formerly ImportBatches) is created by Quotinator.Data's own
+    // DataBaselineSql, not here — Data's baseline always runs before this one in the same
+    // ApplyBaselineAsync call, so it already exists by the time any REFERENCES Import_Batch(Id) clause
+    // below is evaluated. Only the C# entity/repository types and the table's creation moved to Data
+    // (ADR 004/015); the nine tables below still carry their own ImportBatchId FK column here, since
+    // they remain Quotinator.Core's own domain tables.
     private const string BaselineSchema = """
-        CREATE TABLE IF NOT EXISTS ImportBatches (
-            Id           TEXT    PRIMARY KEY,
-            Name         TEXT    NOT NULL,
-            Type         TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System', 'UserSeed')),
-            Url          TEXT,
-            ImportedAt   TEXT    NOT NULL,
-            ImportedById TEXT,
-            RecordCount  INTEGER NOT NULL DEFAULT 0,
-            DateCreated  TEXT    NOT NULL,
-            DateModified TEXT,
-            DateDeleted  TEXT,
-            IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ConflictPolicy TEXT  NOT NULL DEFAULT 'Skip'
-                           CHECK (ConflictPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
-            Status       TEXT    NOT NULL DEFAULT 'Applied'
-                         CHECK (Status IN ('Staged', 'Applied', 'Discarded')),
-            AppliedAt    TEXT
-        );
-
         CREATE TABLE IF NOT EXISTS Universe (
             Id                 TEXT    PRIMARY KEY,
             Name               TEXT    NOT NULL UNIQUE,
-            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
                                CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
@@ -702,7 +850,7 @@ public static class QuotinatorMigrations
             Id                 TEXT    PRIMARY KEY,
             Name               TEXT    NOT NULL UNIQUE,
             UniverseId         TEXT    REFERENCES Universe(Id),
-            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
                                CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
@@ -722,7 +870,7 @@ public static class QuotinatorMigrations
             DateModified TEXT,
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ImportBatchId TEXT   REFERENCES ImportBatches(Id),
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
                          CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]',
@@ -749,7 +897,7 @@ public static class QuotinatorMigrations
             DateModified TEXT,
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ImportBatchId TEXT   REFERENCES ImportBatches(Id),
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
                          CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]',
@@ -789,7 +937,7 @@ public static class QuotinatorMigrations
             DateModified TEXT,
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ImportBatchId TEXT   REFERENCES ImportBatches(Id),
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
                          CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]'
@@ -806,7 +954,7 @@ public static class QuotinatorMigrations
             DateModified     TEXT,
             DateDeleted      TEXT,
             IsDeleted        INTEGER NOT NULL DEFAULT 0,
-            ImportBatchId    TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId    TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT  NOT NULL DEFAULT 'Incomplete'
                              CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown     TEXT    NOT NULL DEFAULT '[]'
@@ -841,7 +989,7 @@ public static class QuotinatorMigrations
         CREATE TABLE IF NOT EXISTS Conversations (
             Id                 TEXT    PRIMARY KEY,
             Description        TEXT,
-            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
                                CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
@@ -855,7 +1003,7 @@ public static class QuotinatorMigrations
             Id                 TEXT    PRIMARY KEY,
             Text               TEXT    NOT NULL,
             ImageUrl           TEXT,
-            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
                                CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
@@ -882,7 +1030,7 @@ public static class QuotinatorMigrations
             Text               TEXT    NOT NULL,
             SoundFileUrl       TEXT,
             ImageUrl           TEXT,
-            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
                                CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown       TEXT    NOT NULL DEFAULT '[]',

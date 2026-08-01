@@ -2,15 +2,15 @@ using Quotinator.Data.Entities;
 
 namespace Quotinator.Data.Import;
 
-/// <summary>Builds a <see cref="FileImportReport"/> from the <see cref="SystemImportAction"/> rows one file's planning pass produced (#221).</summary>
+/// <summary>Builds a <see cref="FileImportReport"/> from the <see cref="ImportActionEntity"/> rows one file's planning pass produced (#221).</summary>
 public static class ImportActionReportBuilder
 {
     /// <summary>
-    /// Groups <paramref name="actions"/> by <see cref="SystemImportAction.EntityType"/> and classifies
+    /// Groups <paramref name="actions"/> by <see cref="ImportActionEntity.EntityType"/> and classifies
     /// each into exactly one of 6 buckets by its <see cref="ImportActionKind"/>/<see cref="ImportActionStatus"/>
     /// pair. An entity type with no actions is omitted from the result.
     /// </summary>
-    public static FileImportReport Build(string fileName, IReadOnlyList<SystemImportAction> actions)
+    public static FileImportReport Build(string fileName, IReadOnlyList<ImportActionEntity> actions)
     {
         var byEntityType = new Dictionary<string, (int New, int Modified, int Blocked, int Discarded, int Pending, int Stale)>();
 

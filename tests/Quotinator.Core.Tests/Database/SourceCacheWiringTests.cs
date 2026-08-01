@@ -52,25 +52,25 @@ public class SourceCacheWiringTests
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         var batch         = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "bundled sources");
-        var actionReader  = new SystemImportActionReader(factory);
-        var actionWriter  = new SystemImportActionWriter(factory);
+        var actionReader  = new ImportActionReader(factory);
+        var actionWriter  = new ImportActionWriter(factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Source>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Character>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Person>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
 
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
             coordinator, actionService,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
             spy, autoUpdateSources,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
     }
@@ -149,25 +149,25 @@ public class SourceCacheWiringTests
 
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         var batch = new SeedBatch(
             [new SeedFile(CuratedFile, null), new SeedFile(malformedPath, null)],
             ManifestPolicy.HardcodedDefault, "bundled sources");
-        var actionReader  = new SystemImportActionReader(factory);
-        var actionWriter  = new SystemImportActionWriter(factory);
+        var actionReader  = new ImportActionReader(factory);
+        var actionWriter  = new ImportActionWriter(factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Source>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Character>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Person>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
             coordinator, actionService,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             new SpySourceCacheUpdater(), autoUpdateSources: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
@@ -185,23 +185,23 @@ public class SourceCacheWiringTests
 
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         var batch = new SeedBatch([new SeedFile(missingPath, null)], ManifestPolicy.HardcodedDefault, "bundled sources");
-        var actionReader2  = new SystemImportActionReader(factory);
-        var actionWriter2  = new SystemImportActionWriter(factory);
+        var actionReader2  = new ImportActionReader(factory);
+        var actionWriter2  = new ImportActionWriter(factory);
         var coordinator2   = new ImportActionResolutionCoordinator(actionReader2, actionWriter2, factory);
-        var actionService2 = new SqliteImportActionService(actionReader2, coordinator2, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService2 = new SqliteImportActionService(actionReader2, coordinator2, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Source>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Character>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Person>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
             coordinator2, actionService2,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             new SpySourceCacheUpdater(), autoUpdateSources: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();

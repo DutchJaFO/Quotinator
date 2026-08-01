@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
@@ -59,23 +60,23 @@ public class DatabaseInitializerTests
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
-        var actionReader   = new SystemImportActionReader(factory);
-        var actionWriter   = new SystemImportActionWriter(factory);
+        var actionReader   = new ImportActionReader(factory);
+        var actionWriter   = new ImportActionWriter(factory);
         var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService  = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService  = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Source>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Character>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Person>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
             coordinator, actionService,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             ruleFileOverridePathResolver ?? NoOpRuleFileOverridePathResolver.Instance,
             sourceFileOverrideRegistry ?? NoOpSourceFileOverrideRegistry.Instance,
@@ -115,14 +116,11 @@ public class DatabaseInitializerTests
         var db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync(TestContext.CancellationToken);
-
-        var unresolved = (await conn.QueryAsync<(string Id, string EntityId, string Status, string? ExistingValue, string? IncomingValue)>(
-            "SELECT Id, EntityId, Status, ExistingValue, IncomingValue FROM System_ImportActions WHERE Status NOT IN ('Decided', 'Applied') AND IsDeleted = 0;")).ToList();
+        var allActions = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items;
+        var unresolved = allActions.Where(a => a.Status.Parsed is not (ImportActionStatus.Decided or ImportActionStatus.Applied)).ToList();
 
         Assert.IsEmpty(unresolved,
-            $"Every action must auto-resolve under Review with the real rule file — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
+            $"Every action must auto-resolve under Review with the real rule file — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
     }
 
     /// <summary>#153: the Galadriel Custom rule (nikhilnamal17-conflict-rules.json) must correct the
@@ -217,15 +215,16 @@ public class DatabaseInitializerTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var actionsBefore = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions;");
-        var batchesBefore = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ImportBatches;");
+        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        var actionsBefore = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+        var batchesBefore = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Import_Batch;");
 
         var preview = await db.PreviewSeedAsync();
 
-        var actionsAfter = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions;");
-        var batchesAfter = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ImportBatches;");
+        var actionsAfter = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+        var batchesAfter = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Import_Batch;");
 
-        Assert.AreEqual(actionsBefore, actionsAfter, "PreviewSeedAsync must never write to System_ImportActions");
+        Assert.AreEqual(actionsBefore, actionsAfter, "PreviewSeedAsync must never write to Import_Action");
         Assert.AreEqual(batchesBefore, batchesAfter, "PreviewSeedAsync must never create an ImportBatches row");
 
         Assert.HasCount(preview.Files.Count, preview.Reports, "One report per previewed file");
@@ -327,9 +326,14 @@ public class DatabaseInitializerTests
             "SELECT DISTINCT ImportBatchId FROM Conversations UNION SELECT DISTINCT ImportBatchId FROM StageDirections UNION SELECT DISTINCT ImportBatchId FROM SoundCues;");
         Assert.HasCount(1, distinctBatchIds.ToList(), "All conversation-related rows from one file should share one ImportBatchId");
 
-        var actionEntityTypes = await conn.QueryAsync<string>(
-            "SELECT DISTINCT EntityType FROM System_ImportActions WHERE EntityType IN ('Conversation', 'StageDirection', 'SoundCue');");
-        Assert.AreSequenceEqual(new[] { "Conversation", "StageDirection", "SoundCue" }, actionEntityTypes.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "Conversation/StageDirection/SoundCue Add actions must be staged through System_ImportActions like every other entity type");
+        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        var actionEntityTypes = new List<string>();
+        foreach (var entityType in new[] { "Conversation", "StageDirection", "SoundCue" })
+        {
+            if ((await actionReader.GetPagedAsync(null, null, entityType, 1, 0)).TotalCount > 0)
+                actionEntityTypes.Add(entityType);
+        }
+        Assert.AreSequenceEqual(new[] { "Conversation", "StageDirection", "SoundCue" }, actionEntityTypes, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "Conversation/StageDirection/SoundCue Add actions must be staged through Import_Action like every other entity type");
     }
 
     /// <summary>
@@ -398,7 +402,7 @@ public class DatabaseInitializerTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions WHERE Status = 'Pending';"),
+        Assert.AreEqual(0, (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", null, 1, 0)).TotalCount,
             "The rule fully covers the only ambiguous field — nothing should be left Pending");
         Assert.AreEqual("Original text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id;", new { id = quoteId }),
             "Keep must resolve to the existing (baseline) value");
@@ -538,10 +542,7 @@ public class DatabaseInitializerTests
         var db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync(TestContext.CancellationToken);
-
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ImportActions WHERE Status = 'Pending';"),
+        Assert.AreEqual(1, (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", null, 1, 0)).TotalCount,
             "No rule file was referenced — behaviour must be unchanged from before #181");
     }
 
@@ -633,7 +634,7 @@ public class DatabaseInitializerTests
     private const string LegacyV3Marker = "legacy-v3-import-batches";
     private const string LegacyV4Marker = "legacy-v4-create-audit-entries-table";
 
-    /// <summary>A full Reset must not destroy the audit trail — System_AuditEntries is excluded from the table wipe.</summary>
+    /// <summary>A full Reset must not destroy the audit trail — Audit_Entry is excluded from the table wipe.</summary>
     [TestMethod]
     public async Task ResetAsync_AfterInitialise_PreservesExistingAuditEntries()
     {
@@ -644,11 +645,11 @@ public class DatabaseInitializerTests
 
         await db.ResetAsync();
 
-        Assert.AreEqual(1, await CountAuditMarkerRowsAsync(), "Full Reset must preserve existing System_AuditEntries rows");
+        Assert.AreEqual(1, await CountAuditMarkerRowsAsync(), "Full Reset must preserve existing Audit_Entry rows");
     }
 
     /// <summary>
-    /// Quotinator.Data's own migrations concern only System_-prefixed tables (System_AuditEntries),
+    /// Quotinator.Data's own migrations concern only System_-prefixed tables (Audit_Entry),
     /// which a Reset never drops — so System_SchemaVersion must never be wiped or replayed by a
     /// Reset, regardless of preserveSchemaVersion. This is stronger than "preserved": it's simply
     /// never touched.
@@ -699,7 +700,7 @@ public class DatabaseInitializerTests
             "preserveSchemaVersion:true should leave existing System_ConsumerSchemaVersion rows untouched");
     }
 
-    /// <summary>Reseed (not Reset) has always left System_AuditEntries and System_SchemaVersion alone — this makes that behaviour explicit.</summary>
+    /// <summary>Reseed (not Reset) has always left Audit_Entry and System_SchemaVersion alone — this makes that behaviour explicit.</summary>
     [TestMethod]
     public async Task ReseedAsync_AfterInitialise_LeavesAuditEntriesAndSchemaVersionUntouched()
     {
@@ -711,7 +712,7 @@ public class DatabaseInitializerTests
 
         await db.ReseedAsync();
 
-        Assert.AreEqual(1, await CountAuditMarkerRowsAsync(),        "Reseed must not touch System_AuditEntries");
+        Assert.AreEqual(1, await CountAuditMarkerRowsAsync(),        "Reseed must not touch Audit_Entry");
         Assert.AreEqual(1, await CountSchemaVersionMarkerRowsAsync(), "Reseed must not touch System_SchemaVersion");
     }
 
@@ -720,17 +721,15 @@ public class DatabaseInitializerTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(
-            "INSERT INTO System_AuditEntries (Id, TableName, RecordId, Operation, Agent, PerformedAt, DateCreated) " +
+            "INSERT INTO Audit_Entry (Id, TableName, RecordId, Operation, Agent, PerformedAt, DateCreated) " +
             "VALUES (lower(hex(randomblob(16))), 'Quotes', 'test-id', 'Insert', @marker, '2026-01-01 00:00:00', '2026-01-01 00:00:00');",
             new { marker = MarkerValue });
     }
 
     private async Task<int> CountAuditMarkerRowsAsync()
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync(TestContext.CancellationToken);
-        return await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM System_AuditEntries WHERE Agent = @marker;", new { marker = MarkerValue });
+        var entries = (await new AuditEntryReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync("Quotes", null, 1, 0)).Items;
+        return entries.Count(e => e.Agent == MarkerValue);
     }
 
     private async Task InsertSchemaVersionMarkerAsync()
@@ -863,10 +862,23 @@ public class DatabaseInitializerTests
             """);
         await conn.ExecuteAsync(
             "INSERT INTO AuditEntries (TableName, RecordId, Operation, Agent, PerformedAt) " +
-            "SELECT TableName, RecordId, Operation, Agent, PerformedAt FROM System_AuditEntries;");
-        await conn.ExecuteAsync("DROP TABLE System_AuditEntries;");
+            "SELECT TableName, RecordId, Operation, Agent, PerformedAt FROM Audit_Entry;");
+        await conn.ExecuteAsync("DROP TABLE Audit_Entry;");
         await conn.ExecuteAsync("CREATE INDEX IX_AuditEntries_TableName_RecordId ON AuditEntries (TableName, RecordId);");
         await conn.ExecuteAsync("CREATE INDEX IX_AuditEntries_PerformedAt ON AuditEntries (PerformedAt);");
+
+        // #253: Audit_Change/Import_Conflict/Import_Action/Import_SourceFileOverride are all created
+        // by migration 2 (SinceV172), not migration 1 — a genuinely pre-migration-2 database has none
+        // of them yet. Migration 2's own CREATE TABLE IF NOT EXISTS statements are idempotent against
+        // a table that never existed under their old (pre-rename) names, but migration 3's ALTER
+        // TABLE ... RENAME TO is not — it fails outright if the final name is already taken. Dropping
+        // these four here (instead of just leaving them under their post-#253 final names) is what
+        // makes replaying migrations 2+3 from this fixture safe, the same way the AuditEntries rebuild
+        // above is.
+        await conn.ExecuteAsync("DROP TABLE Audit_Change;");
+        await conn.ExecuteAsync("DROP TABLE Import_Conflict;");
+        await conn.ExecuteAsync("DROP TABLE Import_Action;");
+        await conn.ExecuteAsync("DROP TABLE Import_SourceFileOverride;");
     }
 
     /// <summary>
@@ -930,19 +942,19 @@ public class DatabaseInitializerTests
         // The actual bug symptom: these three tables must exist and be queryable — a bare rename
         // left them permanently missing on a real v1.7.2 upgrade despite DataSchemaVersion claiming
         // "up to date".
-        foreach (var table in new[] { "System_AuditEntries", "System_ImportConflicts", "System_ChangeLog" })
+        foreach (var table in new[] { "Audit_Entry", "Import_Conflict", "Audit_Change" })
         {
             var tableExists = await conn.ExecuteScalarAsync<int>(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @table;", new { table });
             Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
         }
 
-        Assert.AreEqual(4, db2.DataSchemaVersion, "Data migrations 2-4 (the #155 consolidation plus #150's two AppliedPolicy CHECK constraint migrations) should have replayed from the correctly-seeded starting point of 1");
+        Assert.AreEqual(3, db2.DataSchemaVersion, "Data migrations 2-3 (the #155 consolidation plus #253's domain-prefix rename) should have replayed from the correctly-seeded starting point of 1");
     }
 
-    /// <summary>Data migration 2 renames AuditEntries to System_AuditEntries and preserves existing rows and both indexes.</summary>
+    /// <summary>Replaying from a legacy v1.7.2 AuditEntries table renames it all the way to Audit_Entry (via migration 2's Audit_Entry then migration 3's domain-prefix rename) and preserves existing rows and both indexes.</summary>
     [TestMethod]
-    public async Task InitialiseAsync_LegacyAuditEntriesTable_MigratesToSystemAuditEntriesWithRowsPreserved()
+    public async Task InitialiseAsync_LegacyAuditEntriesTable_MigratesToAuditEntryWithRowsPreserved()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
@@ -969,14 +981,14 @@ public class DatabaseInitializerTests
         var legacyCount = await verifyConn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'AuditEntries';");
         var preservedRow = await verifyConn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM System_AuditEntries WHERE Agent = @marker;", new { marker = MarkerValue });
+            "SELECT COUNT(*) FROM Audit_Entry WHERE Agent = @marker;", new { marker = MarkerValue });
         var indexNames = (await verifyConn.QueryAsync<string>(
-            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'System_AuditEntries';")).ToList();
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'Audit_Entry';")).ToList();
 
-        Assert.AreEqual(0, legacyCount, "The legacy AuditEntries table must no longer exist after Data migration 2");
+        Assert.AreEqual(0, legacyCount, "The legacy AuditEntries table must no longer exist after replay");
         Assert.AreEqual(1, preservedRow, "The pre-existing audit row must survive the rename");
-        Assert.Contains("IX_System_AuditEntries_TableName_RecordId", indexNames, "TableName/RecordId index must exist under the new name");
-        Assert.Contains("IX_System_AuditEntries_PerformedAt", indexNames, "PerformedAt index must exist under the new name");
+        Assert.Contains("IX_Audit_Entry_TableName_RecordId", indexNames, "TableName/RecordId index must exist under the final name");
+        Assert.Contains("IX_Audit_Entry_PerformedAt", indexNames, "PerformedAt index must exist under the final name");
     }
 
     // ── Regression ────────────────────────────────────────────────────────────
@@ -1035,22 +1047,22 @@ public class DatabaseInitializerTests
         var dbPath        = Path.Combine(_tempDir, $"test_incremental_{Guid.NewGuid():N}.db");
         var factory       = new SqliteConnectionFactory(dbPath);
         var options       = new DatabaseOptions { DbPath = dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
-        var actionReader  = new SystemImportActionReader(factory);
-        var actionWriter  = new SystemImportActionWriter(factory);
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader  = new ImportActionReader(factory);
+        var actionWriter  = new ImportActionWriter(factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Source>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Character>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Person>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             QuotinatorMigrations.Baseline);
@@ -1080,7 +1092,7 @@ public class DatabaseInitializerTests
     }
 
     private static readonly string[] ConsumerDomainTables =
-        ["ImportBatches", "Sources", "SourceTranslations", "Characters", "CharacterTranslations",
+        ["Import_Batch", "Sources", "SourceTranslations", "Characters", "CharacterTranslations",
          "People", "Quotes", "QuoteTranslations", "QuoteGenres",
          "Conversations", "ConversationLines", "StageDirections", "StageDirectionTranslations",
          "SoundCues", "SoundCueTranslations",
@@ -1145,33 +1157,33 @@ public class DatabaseInitializerTests
             var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) " +
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) " +
                 "VALUES (@id, 'check-test.json', 'UserSeed', @now, 0, @now, 0);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) " +
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) " +
                 "VALUES (@id, 'bad.json', 'NotARealType', @now, 0, @now, 0);",
                 new { id = Guid.NewGuid().ToString(), now }));
 
             // #150, ADR 008: ImportBatches.ConflictPolicy's CHECK constraint.
             await conn.ExecuteAsync(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, ConflictPolicy) " +
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, ConflictPolicy) " +
                 "VALUES (@id, 'check-test-policy.json', 'Import', @now, 0, @now, 0, 'NewestWins');",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, ConflictPolicy) " +
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, ConflictPolicy) " +
                 "VALUES (@id, 'bad-policy.json', 'Import', @now, 0, @now, 0, 'NotARealPolicy');",
                 new { id = Guid.NewGuid().ToString(), now }));
 
             await conn.ExecuteAsync(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, Status) " +
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, Status) " +
                 "VALUES (@id, 'check-test-staged.json', 'Import', @now, 0, @now, 0, 'Staged');",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, Status) " +
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, Status) " +
                 "VALUES (@id, 'bad-status.json', 'Import', @now, 0, @now, 0, 'NotARealStatus');",
                 new { id = Guid.NewGuid().ToString(), now }));
 
@@ -1335,7 +1347,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(4, db.DataSchemaVersion);
+        Assert.AreEqual(3, db.DataSchemaVersion);
         Assert.AreEqual(5, db.SchemaVersion);
     }
 
@@ -1772,8 +1784,7 @@ public class DatabaseInitializerTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var pendingCount = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM System_ImportActions WHERE EntityType = 'Source' AND Status = 'Pending';");
+        var pendingCount = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", "Source", 1, 0)).TotalCount;
         Assert.AreEqual(1, pendingCount, "Review policy stages Pending for any changed field, including a first-time null-to-value SeriesId fill");
 
         var seriesId = await conn.ExecuteScalarAsync<string?>(

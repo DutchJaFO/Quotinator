@@ -16,7 +16,8 @@ public class OneToOneRepositoryTests
     private string _tempDir       = null!;
     private string _dbPath        = null!;
     private IDbConnectionFactory _factory  = null!;
-    private SystemAuditWriter _auditWriter = null!;
+    private AuditEntryWriter _auditWriter = null!;
+    private AuditEntryReader _auditReader = null!;
     private CallerContext _callerContext   = null!;
 
     [TestInitialize]
@@ -53,7 +54,7 @@ public class OneToOneRepositoryTests
                 DateDeleted  TEXT,
                 IsDeleted    INTEGER NOT NULL DEFAULT 0
             );
-            CREATE TABLE System_AuditEntries (
+            CREATE TABLE Audit_Entry (
                 Id           TEXT    NOT NULL PRIMARY KEY,
                 TableName    TEXT    NOT NULL,
                 RecordId     TEXT,
@@ -69,7 +70,8 @@ public class OneToOneRepositoryTests
 
         _factory       = new SqliteConnectionFactory(_dbPath);
         _callerContext = new CallerContext();
-        _auditWriter   = new SystemAuditWriter(_factory, _callerContext);
+        _auditWriter   = new AuditEntryWriter(_factory, _callerContext);
+        _auditReader   = new AuditEntryReader(_factory);
     }
 
     [TestCleanup]
@@ -93,13 +95,8 @@ public class OneToOneRepositoryTests
         return conn.ExecuteScalar<int>($"SELECT COUNT(*) FROM {table} WHERE IsDeleted = 0;");
     }
 
-    private int CountAuditFor(string table)
-    {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        return conn.ExecuteScalar<int>(
-            "SELECT COUNT(*) FROM System_AuditEntries WHERE TableName = @t;", new { t = table });
-    }
+    private async Task<int> CountAuditForAsync(string table)
+        => (await _auditReader.GetPagedAsync(table, null, 1, 0)).TotalCount;
 
     // ── Shared PK ─────────────────────────────────────────────────────────────
 
@@ -123,8 +120,8 @@ public class OneToOneRepositoryTests
 
         await repo.InsertAsync(parent);
 
-        Assert.AreEqual(1, CountAuditFor("Widgets"),      "One audit entry for the parent");
-        Assert.AreEqual(1, CountAuditFor("WidgetDetails"), "One audit entry for the detail");
+        Assert.AreEqual(1, await CountAuditForAsync("Widgets"),      "One audit entry for the parent");
+        Assert.AreEqual(1, await CountAuditForAsync("WidgetDetails"), "One audit entry for the detail");
     }
 
     [TestMethod]
@@ -186,8 +183,8 @@ public class OneToOneRepositoryTests
 
         await repo.InsertAsync(parent);
 
-        Assert.AreEqual(1, CountAuditFor("Widgets"),        "One audit entry for the parent");
-        Assert.AreEqual(1, CountAuditFor("WidgetDetailsFk"), "One audit entry for the detail");
+        Assert.AreEqual(1, await CountAuditForAsync("Widgets"),        "One audit entry for the parent");
+        Assert.AreEqual(1, await CountAuditForAsync("WidgetDetailsFk"), "One audit entry for the detail");
     }
 
     [TestMethod]

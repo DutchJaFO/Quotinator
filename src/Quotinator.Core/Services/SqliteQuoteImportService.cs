@@ -27,7 +27,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
     private readonly IImportBatchRepository _importBatches;
     private readonly IImportActionCoordinator _actionCoordinator;
     private readonly IImportActionService _actionService;
-    private readonly ISystemImportActionReader _actionReader;
+    private readonly IImportActionReader _actionReader;
     private readonly IReadOnlyDictionary<string, IQuoteSourceConverter> _converters;
     private readonly ManifestPolicy _configPolicy;
 
@@ -37,7 +37,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         IImportBatchRepository importBatches,
         IImportActionCoordinator actionCoordinator,
         IImportActionService actionService,
-        ISystemImportActionReader actionReader,
+        IImportActionReader actionReader,
         IReadOnlyDictionary<string, IQuoteSourceConverter> converters,
         ManifestPolicy configPolicy)
     {
@@ -62,7 +62,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
 
         var (valid, errors) = ValidateRows(quotes);
 
-        var batch = new ImportBatch
+        var batch = new ImportBatchEntity
         {
             Name           = fileName,
             Type           = new SafeValue<ImportBatchType?>(ImportBatchType.Import.ToString(), ImportBatchType.Import),
@@ -73,7 +73,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         await _importBatches.InsertAsync(batch);
         var batchIdStr = batch.Id.ToCanonicalId();
 
-        IReadOnlyList<SystemImportAction> actions;
+        IReadOnlyList<ImportActionEntity> actions;
         using (var conn = (SqliteConnection)_factory.CreateConnection())
         {
             conn.Open();
@@ -193,7 +193,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
 
     // ── Response shaping (temporary — Task 33 replaces this with the /import/actions response shape) ──
 
-    private static IReadOnlyList<ImportConflictEntry> BuildConflictEntries(IReadOnlyList<SystemImportAction> actions)
+    private static IReadOnlyList<ImportConflictEntry> BuildConflictEntries(IReadOnlyList<ImportActionEntity> actions)
     {
         var entries = new List<ImportConflictEntry>();
         foreach (var action in actions)

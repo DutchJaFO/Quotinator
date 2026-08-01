@@ -20,9 +20,9 @@ namespace Quotinator.Core.Services;
 /// <inheritdoc/>
 public sealed class SqliteImportActionService : IImportActionService
 {
-    private readonly ISystemImportActionReader _actionReader;
+    private readonly IImportActionReader _actionReader;
     private readonly IImportActionCoordinator _coordinator;
-    private readonly ISystemChangeLogWriter _changeLogWriter;
+    private readonly IChangeWriter _changeLogWriter;
     private readonly IRestorableRepository<QuoteEntity> _quoteRepository;
     private readonly IRestorableRepository<Source> _sourceRepository;
     private readonly IRestorableRepository<Character> _characterRepository;
@@ -35,9 +35,9 @@ public sealed class SqliteImportActionService : IImportActionService
 
     /// <summary>Initialises the service with the generic Data-layer pieces it wraps.</summary>
     public SqliteImportActionService(
-        ISystemImportActionReader actionReader,
+        IImportActionReader actionReader,
         IImportActionCoordinator coordinator,
-        ISystemChangeLogWriter changeLogWriter,
+        IChangeWriter changeLogWriter,
         IRestorableRepository<QuoteEntity> quoteRepository,
         IRestorableRepository<Source> sourceRepository,
         IRestorableRepository<Character> characterRepository,
@@ -66,7 +66,7 @@ public sealed class SqliteImportActionService : IImportActionService
     public async Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var result     = await _actionReader.GetPagedAsync(batchId, status, entityType, page, pageSize);
-        var batchCache = new Dictionary<string, IReadOnlyList<SystemImportAction>>();
+        var batchCache = new Dictionary<string, IReadOnlyList<ImportActionEntity>>();
 
         var items = new List<ImportActionSummaryResponse>(result.Items.Count);
         foreach (var action in result.Items)
@@ -394,7 +394,7 @@ public sealed class SqliteImportActionService : IImportActionService
     /// <summary>
     /// #177: every caller of <see cref="ApplyBatchAsync"/> — the direct <c>/actions/apply</c> route and
     /// both call sites in <see cref="SqliteQuoteImportService"/> — must mark the owning
-    /// <see cref="ImportBatch"/> <see cref="ImportBatchStatus.Applied"/> once every one of its actions
+    /// <see cref="ImportBatchEntity"/> <see cref="ImportBatchStatus.Applied"/> once every one of its actions
     /// has genuinely applied, or it can never satisfy <see cref="ReverseBatchAsync"/>'s own
     /// <c>Status == Applied</c> precondition. This is the single shared choke point for that write.
     /// </summary>
@@ -569,7 +569,7 @@ public sealed class SqliteImportActionService : IImportActionService
     /// because it was checked before those quotes were cleared). As the last step, soft-deletes the
     /// batch's own <c>ImportBatch</c> row — see Scope changes decision 6.
     /// </summary>
-    private async Task ReverseAppliedActionsAsync(IReadOnlyList<SystemImportAction> actions, IDbConnection connection, IDbTransaction transaction, InitiatorType initiatedByType)
+    private async Task ReverseAppliedActionsAsync(IReadOnlyList<ImportActionEntity> actions, IDbConnection connection, IDbTransaction transaction, InitiatorType initiatedByType)
     {
         var sqliteConnection  = (SqliteConnection)connection;
         var sqliteTransaction = (SqliteTransaction)transaction;
@@ -802,7 +802,7 @@ public sealed class SqliteImportActionService : IImportActionService
     }
 
     /// <summary>Reverses one Quote action: soft-delete for an Add, field-restore for a genuine Modify, no-op write for a Skip-policy Modify.</summary>
-    private async Task ReverseQuoteActionAsync(SystemImportAction action, SqliteConnection connection, SqliteTransaction transaction, IUnitOfWork uow, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+    private async Task ReverseQuoteActionAsync(ImportActionEntity action, SqliteConnection connection, SqliteTransaction transaction, IUnitOfWork uow, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
         var isAdd = action.ActionType.Parsed == ImportActionKind.Add;
 
@@ -891,12 +891,12 @@ public sealed class SqliteImportActionService : IImportActionService
 
     /// <summary>
     /// Given a <c>Decided</c> action, writes it to the entity's own table. Dispatches on
-    /// <see cref="SystemImportAction.EntityType"/> — Source/Character/Person are idempotent
+    /// <see cref="ImportActionEntity.EntityType"/> — Source/Character/Person are idempotent
     /// insert-if-not-exists using the precomputed stable id (safe even if a concurrently-applied
     /// batch already created the same row); Quote is a uniform, policy-agnostic write, since the
     /// planner/<see cref="DecideAsync"/> already computed the final resolved field values.
     /// </summary>
-    private async Task ApplyResolvedActionAsync(SystemImportAction action, IDbConnection connection, IDbTransaction transaction, InitiatorType initiatedByType)
+    private async Task ApplyResolvedActionAsync(ImportActionEntity action, IDbConnection connection, IDbTransaction transaction, InitiatorType initiatedByType)
     {
         var sqliteConnection  = (SqliteConnection)connection;
         var sqliteTransaction = (SqliteTransaction)transaction;
@@ -1401,7 +1401,7 @@ public sealed class SqliteImportActionService : IImportActionService
 
     // ── GetPagedAsync helpers ────────────────────────────────────────────────
 
-    private async Task<ImportActionSummaryResponse> ToSummaryAsync(SystemImportAction action, Dictionary<string, IReadOnlyList<SystemImportAction>> batchCache)
+    private async Task<ImportActionSummaryResponse> ToSummaryAsync(ImportActionEntity action, Dictionary<string, IReadOnlyList<ImportActionEntity>> batchCache)
         => new()
         {
             Id               = action.Id,
@@ -1466,7 +1466,7 @@ public sealed class SqliteImportActionService : IImportActionService
     private static IReadOnlyDictionary<string, object?> ToFieldMap(UniverseActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name };
 
-    private static IReadOnlyList<string> ComputeAmbiguousFields(SystemImportAction action)
+    private static IReadOnlyList<string> ComputeAmbiguousFields(ImportActionEntity action)
     {
         if (action.Status.Parsed != ImportActionStatus.Pending)
             return [];
@@ -1549,7 +1549,7 @@ public sealed class SqliteImportActionService : IImportActionService
         }
     }
 
-    private async Task<IReadOnlyList<Guid>> ComputeRelatedActionIdsAsync(SystemImportAction action, Dictionary<string, IReadOnlyList<SystemImportAction>> batchCache)
+    private async Task<IReadOnlyList<Guid>> ComputeRelatedActionIdsAsync(ImportActionEntity action, Dictionary<string, IReadOnlyList<ImportActionEntity>> batchCache)
     {
         if (action.EntityType != ImportActionEntityTypes.Quote) return [];
 

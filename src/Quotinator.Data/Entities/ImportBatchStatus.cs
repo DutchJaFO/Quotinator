@@ -1,6 +1,6 @@
 namespace Quotinator.Data.Entities;
 
-/// <summary>Lifecycle state of an <see cref="ImportBatch"/> under the staging model (#154).</summary>
+/// <summary>Lifecycle state of an <see cref="ImportBatchEntity"/> under the staging model (#154).</summary>
 public enum ImportBatchStatus
 {
     /// <summary>Every planned action has been recorded; nothing has been written to any domain table yet.</summary>

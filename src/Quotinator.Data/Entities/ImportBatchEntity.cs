@@ -5,8 +5,8 @@ using Quotinator.Data.Models;
 namespace Quotinator.Data.Entities;
 
 /// <summary>Tracks a discrete group of records introduced into the database together, capturing provenance for all entity rows.</summary>
-[Table("ImportBatches")]
-public sealed class ImportBatch : RecordBase
+[Table("Import_Batch")]
+public sealed class ImportBatchEntity : RecordBase
 {
     /// <summary>Human-readable name identifying the batch (e.g. a filename or dataset name).</summary>
     public string Name { get; init; } = string.Empty;
@@ -31,7 +31,7 @@ public sealed class ImportBatch : RecordBase
 
     /// <summary>
     /// Batch lifecycle state (#154). Defaults to <see cref="ImportBatchStatus.Applied"/> — every call
-    /// site that constructs an <see cref="ImportBatch"/> without setting this explicitly (every
+    /// site that constructs an <see cref="ImportBatchEntity"/> without setting this explicitly (every
     /// pre-#154 code path: live import, preview, seeding) always commits immediately, so this default
     /// matches their actual behaviour. Dapper.Contrib's generated INSERT always supplies every
     /// property explicitly, so the column's own SQL-level <c>DEFAULT 'Applied'</c> is never actually

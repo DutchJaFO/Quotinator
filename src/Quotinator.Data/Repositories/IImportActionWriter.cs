@@ -3,25 +3,25 @@ using Quotinator.Data.Entities;
 
 namespace Quotinator.Data.Repositories;
 
-/// <summary>Writes import-action rows to the <c>System_ImportActions</c> table.</summary>
+/// <summary>Writes import-action rows to the <c>Import_Action</c> table.</summary>
 /// <remarks>
 /// The connection overload is used by callers (e.g. staging) that already hold an open connection,
 /// so the write participates in the same transaction as the triggering stage/apply operation; the
 /// no-connection overload is for callers with no connection of their own.
 /// </remarks>
-public interface ISystemImportActionWriter
+public interface IImportActionWriter
 {
     /// <summary>
     /// Writes an action entry using an existing connection and optional transaction.
     /// The INSERT participates in <paramref name="transaction"/> when supplied.
     /// </summary>
-    Task WriteAsync(Entities.SystemImportAction entry, IDbConnection connection, IDbTransaction? transaction = null);
+    Task WriteAsync(Entities.ImportActionEntity entry, IDbConnection connection, IDbTransaction? transaction = null);
 
     /// <summary>Writes an action entry by opening its own connection.</summary>
-    Task WriteAsync(Entities.SystemImportAction entry);
+    Task WriteAsync(Entities.ImportActionEntity entry);
 
     /// <summary>Writes every planned action for a staged batch in one call — the bulk path staging uses.</summary>
-    Task WriteManyAsync(IEnumerable<Entities.SystemImportAction> entries, IDbConnection connection, IDbTransaction? transaction = null);
+    Task WriteManyAsync(IEnumerable<Entities.ImportActionEntity> entries, IDbConnection connection, IDbTransaction? transaction = null);
 
     /// <summary>
     /// Stages a per-field decision for one action — transitions <c>Status</c> from

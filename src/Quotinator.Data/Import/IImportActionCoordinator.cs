@@ -5,7 +5,7 @@ namespace Quotinator.Data.Import;
 
 /// <summary>
 /// Generic, domain-agnostic orchestration for a stage → decide/undo → apply/discard workflow over
-/// <see cref="SystemImportAction"/> (#154). A consumer with their own schema needs to supply only
+/// <see cref="ImportActionEntity"/> (#154). A consumer with their own schema needs to supply only
 /// two things — the already-classified actions passed to <see cref="StageAsync"/> (produced by the
 /// consumer's own classifier) and <c>applyResolvedAction</c> in <see cref="TryApplyBatchAsync"/>
 /// (the domain-specific step that writes a decided action's values to the consumer's own tables).
@@ -14,26 +14,26 @@ namespace Quotinator.Data.Import;
 /// batch outright — is fully generic.
 /// </summary>
 /// <remarks>
-/// Nothing in this coordinator knows what a "Quote" is: <see cref="SystemImportAction.ExistingValue"/>/
-/// <see cref="SystemImportAction.IncomingValue"/>/<see cref="SystemImportAction.MergedFields"/> are
+/// Nothing in this coordinator knows what a "Quote" is: <see cref="ImportActionEntity.ExistingValue"/>/
+/// <see cref="ImportActionEntity.IncomingValue"/>/<see cref="ImportActionEntity.MergedFields"/> are
 /// never deserialized here; they stay opaque JSON.
 /// </remarks>
 public interface IImportActionCoordinator
 {
     /// <summary>
     /// Persists every already-classified action for a batch in one call. The caller (a
-    /// domain-specific classifier) decides what each action's <see cref="SystemImportAction.Status"/>
+    /// domain-specific classifier) decides what each action's <see cref="ImportActionEntity.Status"/>
     /// starts as — <see cref="ImportActionStatus.Pending"/> for a genuinely ambiguous Modify,
     /// <see cref="ImportActionStatus.Decided"/> for everything else (an Add, or an unambiguous
     /// Modify) — this method just writes what it's given.
     /// </summary>
-    Task StageAsync(IEnumerable<SystemImportAction> actions, IDbConnection? connection = null, IDbTransaction? transaction = null);
+    Task StageAsync(IEnumerable<ImportActionEntity> actions, IDbConnection? connection = null, IDbTransaction? transaction = null);
 
     /// <summary>
     /// Stages a decision for one action — transitions <see cref="ImportActionStatus.Pending"/> to
     /// <see cref="ImportActionStatus.Decided"/> and stores <paramref name="decisionsJson"/> (already
     /// serialized by the caller — this method never inspects its content) in
-    /// <see cref="SystemImportAction.MergedFields"/>. Nothing is written to any domain table.
+    /// <see cref="ImportActionEntity.MergedFields"/>. Nothing is written to any domain table.
     /// Idempotent — calling again for the same action overwrites the prior decision.
     /// </summary>
     /// <paramref name="markCompletenessAs"/> (#165) optionally sets the target record's completeness
@@ -71,7 +71,7 @@ public interface IImportActionCoordinator
     /// <returns><c>null</c> if the whole batch was applied; otherwise the ids still <see cref="ImportActionStatus.Pending"/>, <see cref="ImportActionStatus.Blocked"/>, or <see cref="ImportActionStatus.Stale"/>.</returns>
     Task<IReadOnlyList<Guid>?> TryApplyBatchAsync(
         string batchId,
-        Func<SystemImportAction, IDbConnection, IDbTransaction, Task> applyResolvedAction,
+        Func<ImportActionEntity, IDbConnection, IDbTransaction, Task> applyResolvedAction,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -104,6 +104,6 @@ public interface IImportActionCoordinator
     /// <returns><c>null</c> if the whole batch was reversed; otherwise the ids not yet <see cref="ImportActionStatus.Applied"/>.</returns>
     Task<IReadOnlyList<Guid>?> TryReverseBatchAsync(
         string batchId,
-        Func<IReadOnlyList<SystemImportAction>, IDbConnection, IDbTransaction, Task> reverseActions,
+        Func<IReadOnlyList<ImportActionEntity>, IDbConnection, IDbTransaction, Task> reverseActions,
         CancellationToken cancellationToken = default);
 }

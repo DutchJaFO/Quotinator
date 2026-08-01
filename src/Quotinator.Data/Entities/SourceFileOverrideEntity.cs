@@ -10,12 +10,10 @@ namespace Quotinator.Data.Entities;
 /// upserted whenever the generate-rules endpoint writes a new version. Exists so the seeding pipeline
 /// can know, for certain, whether an override is genuinely the one this project's own generation
 /// mechanism produced (<see cref="ContentHash"/> matches what's actually on disk) rather than
-/// inferring it from file existence alone. Named with today's dominant <c>System_</c> convention,
-/// understood to be a temporary name pending a broader <c>Import_</c>-prefix standardization pass
-/// across every import-related table, tracked separately in #227 (not #153's own scope).
+/// inferring it from file existence alone. Named under the <c>Import_</c> domain per ADR 015/#253.
 /// </summary>
-[Table("System_SourceFileOverrides")]
-public sealed class SourceFileOverride : RecordBase
+[Table("Import_SourceFileOverride")]
+public sealed class SourceFileOverrideEntity : RecordBase
 {
     /// <summary>Plain filename (no path segments) of the overridden <c>ruleFile</c>/<c>sourceAliasFile</c>, matching the manifest entry's own value.</summary>
     public string FileName { get; init; } = string.Empty;

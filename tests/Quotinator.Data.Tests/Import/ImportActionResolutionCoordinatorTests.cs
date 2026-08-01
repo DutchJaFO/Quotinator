@@ -19,8 +19,8 @@ public class ImportActionResolutionCoordinatorTests
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private IDbConnectionFactory _factory = null!;
-    private SystemImportActionWriter _writer = null!;
-    private SystemImportActionReader _reader = null!;
+    private ImportActionWriter _writer = null!;
+    private ImportActionReader _reader = null!;
     private ImportActionResolutionCoordinator _coordinator = null!;
 
     [TestInitialize]
@@ -32,7 +32,7 @@ public class ImportActionResolutionCoordinatorTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         conn.Execute("""
-            CREATE TABLE System_ImportActions (
+            CREATE TABLE Import_Action (
                 Id                 TEXT    NOT NULL PRIMARY KEY,
                 BatchId            TEXT    NOT NULL,
                 ActionType         TEXT    NOT NULL
@@ -60,8 +60,8 @@ public class ImportActionResolutionCoordinatorTests
             """);
 
         _factory     = new SqliteConnectionFactory(_dbPath);
-        _writer      = new SystemImportActionWriter(_factory);
-        _reader      = new SystemImportActionReader(_factory);
+        _writer      = new ImportActionWriter(_factory);
+        _reader      = new ImportActionReader(_factory);
         _coordinator = new ImportActionResolutionCoordinator(_reader, _writer, _factory);
     }
 
@@ -73,7 +73,7 @@ public class ImportActionResolutionCoordinatorTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private static SystemImportAction BuildPendingModify(string batchId) => new()
+    private static ImportActionEntity BuildPendingModify(string batchId) => new()
     {
         BatchId       = batchId,
         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -85,7 +85,7 @@ public class ImportActionResolutionCoordinatorTests
         DetectedAt    = DateTime.UtcNow,
     };
 
-    private static SystemImportAction BuildDecidedAdd(string batchId) => new()
+    private static ImportActionEntity BuildDecidedAdd(string batchId) => new()
     {
         BatchId       = batchId,
         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -96,7 +96,7 @@ public class ImportActionResolutionCoordinatorTests
         DetectedAt    = DateTime.UtcNow,
     };
 
-    private static SystemImportAction BuildBlockedModify(string batchId) => new()
+    private static ImportActionEntity BuildBlockedModify(string batchId) => new()
     {
         BatchId       = batchId,
         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -404,7 +404,7 @@ public class ImportActionResolutionCoordinatorTests
         await MarkAppliedAsync(a2.Id);
 
         var invocationCount = 0;
-        IReadOnlyList<SystemImportAction>? seenBatch = null;
+        IReadOnlyList<ImportActionEntity>? seenBatch = null;
         var result = await _coordinator.TryReverseBatchAsync("BATCH-1", (actions, connection, transaction) =>
         {
             invocationCount++;

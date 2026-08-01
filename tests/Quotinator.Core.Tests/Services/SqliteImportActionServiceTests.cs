@@ -30,8 +30,8 @@ public class SqliteImportActionServiceTests
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private SqliteConnectionFactory _factory = null!;
-    private ISystemImportActionReader _actionReader = null!;
-    private ISystemImportActionWriter _actionWriter = null!;
+    private IImportActionReader _actionReader = null!;
+    private IImportActionWriter _actionWriter = null!;
     private IImportActionCoordinator _coordinator = null!;
     private SqliteImportActionService _service = null!;
 
@@ -43,23 +43,23 @@ public class SqliteImportActionServiceTests
         _factory = new SqliteConnectionFactory(_dbPath);
 
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
 
-        _actionReader = new SystemImportActionReader(_factory);
-        _actionWriter = new SystemImportActionWriter(_factory);
+        _actionReader = new ImportActionReader(_factory);
+        _actionWriter = new ImportActionWriter(_factory);
         _coordinator  = new ImportActionResolutionCoordinator(_actionReader, _actionWriter, _factory);
-        _service      = new SqliteImportActionService(_actionReader, _coordinator, new SystemChangeLogWriter(_factory),
-            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        _service      = new SqliteImportActionService(_actionReader, _coordinator, new ChangeWriter(_factory),
+            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Source>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Character>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Person>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory);
 
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
-            _coordinator, _service, NoOpSystemAuditWriter.Instance,
+            _coordinator, _service, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
@@ -85,7 +85,7 @@ public class SqliteImportActionServiceTests
         Genres           = genres ?? [],
     };
 
-    private async Task<IReadOnlyList<SystemImportAction>> PlanAndStageAsync(
+    private async Task<IReadOnlyList<ImportActionEntity>> PlanAndStageAsync(
         IReadOnlyList<SourceQuote> quotes, Guid batchId, DuplicateResolutionPolicy policy,
         IReadOnlyList<SourceEntry>? sources = null,
         IReadOnlyList<SourceStageDirection>? stageDirections = null,
@@ -109,7 +109,7 @@ public class SqliteImportActionServiceTests
         // exercises ReverseBatchAsync without going through the real production insert path.
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO ImportBatches (Id, Name, Type, Status, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', 'Staged', @now, @now)",
+            "INSERT INTO Import_Batch (Id, Name, Type, Status, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', 'Staged', @now, @now)",
             new { Id = batchId, now });
 
         var actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations, people: people, series: series, universe: universe, characters: characters);
@@ -310,8 +310,8 @@ public class SqliteImportActionServiceTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var status    = await conn.ExecuteScalarAsync<string>("SELECT Status FROM ImportBatches WHERE UPPER(Id) = UPPER(@id)", new { id = batchId });
-        var appliedAt = await conn.ExecuteScalarAsync<string?>("SELECT AppliedAt FROM ImportBatches WHERE UPPER(Id) = UPPER(@id)", new { id = batchId });
+        var status    = await conn.ExecuteScalarAsync<string>("SELECT Status FROM Import_Batch WHERE UPPER(Id) = UPPER(@id)", new { id = batchId });
+        var appliedAt = await conn.ExecuteScalarAsync<string?>("SELECT AppliedAt FROM Import_Batch WHERE UPPER(Id) = UPPER(@id)", new { id = batchId });
         Assert.AreEqual("Applied", status);
         Assert.IsNotNull(appliedAt);
     }
@@ -794,7 +794,7 @@ public class SqliteImportActionServiceTests
         setupConn.Open();
         var originalBatchId = Guid.NewGuid();
         await setupConn.ExecuteAsync(
-            "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated, Status) VALUES (@Id, 'original', 'Import', @now, @now, 'Applied')",
+            "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, DateCreated, Status) VALUES (@Id, 'original', 'Import', @now, @now, 'Applied')",
             new { Id = originalBatchId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
         await setupConn.ExecuteAsync("UPDATE Quotes SET ImportBatchId = @batchId WHERE Id = @id", new { batchId = originalBatchId, id });
 
@@ -924,11 +924,11 @@ public class SqliteImportActionServiceTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM ImportBatches WHERE Id = @id AND IsDeleted = 1", new { id = batchId }));
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Import_Batch WHERE Id = @id AND IsDeleted = 1", new { id = batchId }));
 
         var actions = await _actionReader.GetAllForBatchAsync(batchId.ToString("D").ToUpperInvariant());
         Assert.IsNotEmpty(actions);
-        Assert.IsTrue(actions.All(a => a.Status.Parsed == ImportActionStatus.Applied), "SystemImportAction rows stay Applied permanently — no Reversed status is introduced");
+        Assert.IsTrue(actions.All(a => a.Status.Parsed == ImportActionStatus.Applied), "ImportActionEntity rows stay Applied permanently — no Reversed status is introduced");
     }
 
     [TestMethod]
@@ -941,7 +941,7 @@ public class SqliteImportActionServiceTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var rows = (await conn.QueryAsync<(string EntityType, string Action)>(
-            "SELECT EntityType, Action FROM System_ChangeLog")).ToList();
+            "SELECT EntityType, Action FROM Audit_Change")).ToList();
         Console.WriteLine(string.Join("; ", rows.Select(r => $"{r.EntityType}:{r.Action}")));
         var sourceDeleted = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources WHERE IsDeleted = 1");
         Console.WriteLine($"Sources soft-deleted: {sourceDeleted}");
@@ -1240,7 +1240,7 @@ public class SqliteImportActionServiceTests
         await _service.ApplyBatchAsync(batchId.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
         // The exact call the masterdata GET /sources/{id} endpoint makes (SourceEndpoints.GetById).
-        var repository = new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var repository = new SqliteRestorableRepository<Source>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         var source = await repository.GetByIdAsync(Guid.Parse(lowercaseSourceId));
         Assert.IsNotNull(source, "The masterdata repository's Guid-typed lookup must resolve a Source whose explicit id was file-authored in lowercase");
         Assert.AreEqual("Canonicalization Repository Test Film", source!.Title);
@@ -1871,12 +1871,12 @@ public class SqliteImportActionServiceTests
             await setupConn.OpenAsync(TestContext.CancellationToken);
             var setupNow = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
             await setupConn.ExecuteAsync(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
                 new { Id = batchId, now = setupNow });
         }
 
         var payload = new SeriesActionPayload("The Lord of the Rings", universeId, "Middle Earth");
-        await _actionWriter.WriteAsync(new SystemImportAction
+        await _actionWriter.WriteAsync(new ImportActionEntity
         {
             BatchId       = batchId.ToCanonicalId(),
             ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -1914,7 +1914,7 @@ public class SqliteImportActionServiceTests
         await conn.OpenAsync(TestContext.CancellationToken);
         var setupNow = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
+            "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', @now, @now)",
             new { Id = batchId, now = setupNow });
 
         var actions = await ImportActionPlanner.PlanAsync(
@@ -1938,11 +1938,11 @@ public class SqliteImportActionServiceTests
 
     // ── #163: ExportBatchAsync ───────────────────────────────────────────────
 
-    private async Task<SystemImportAction> StageActionAsync(Guid batchId, string entityType, ImportActionKind kind, ImportActionStatus status,
+    private async Task<ImportActionEntity> StageActionAsync(Guid batchId, string entityType, ImportActionKind kind, ImportActionStatus status,
         string incomingValue, string? existingValue = null, string? mergedFields = null, string? originalDecision = null,
         CompletenessStatus? markCompletenessAs = null)
     {
-        var action = new SystemImportAction
+        var action = new ImportActionEntity
         {
             BatchId            = batchId.ToCanonicalId(),
             ActionType         = new SafeValue<ImportActionKind?>(kind.ToString(), kind),

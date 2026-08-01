@@ -279,12 +279,12 @@ builder.Services.AddTransient<IUnitOfWork>(sp =>
 builder.Services.AddSingleton<InitiatorContext>();
 builder.Services.AddSingleton<ICallerContext>(sp => sp.GetRequiredService<InitiatorContext>());
 builder.Services.AddSingleton<IInitiatorContext>(sp => sp.GetRequiredService<InitiatorContext>());
-builder.Services.AddSingleton<ISystemAuditWriter, SystemAuditWriter>();
-builder.Services.AddSingleton<ISystemAuditReader, SystemAuditReader>();
-builder.Services.AddSingleton<ISystemChangeLogWriter, SystemChangeLogWriter>();
-builder.Services.AddSingleton<ISystemChangeLogReader, SystemChangeLogReader>();
-builder.Services.AddSingleton<ISystemImportActionWriter, SystemImportActionWriter>();
-builder.Services.AddSingleton<ISystemImportActionReader, SystemImportActionReader>();
+builder.Services.AddSingleton<IAuditEntryWriter, AuditEntryWriter>();
+builder.Services.AddSingleton<IAuditEntryReader, AuditEntryReader>();
+builder.Services.AddSingleton<IChangeWriter, ChangeWriter>();
+builder.Services.AddSingleton<IChangeReader, ChangeReader>();
+builder.Services.AddSingleton<IImportActionWriter, ImportActionWriter>();
+builder.Services.AddSingleton<IImportActionReader, ImportActionReader>();
 builder.Services.AddSingleton<ISourceFileOverrideRegistry, SourceFileOverrideRegistry>();
 builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
 builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
@@ -400,7 +400,7 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<IImportBatchRepository>(),
         sp.GetRequiredService<IImportActionCoordinator>(),
         sp.GetRequiredService<IImportActionService>(),
-        sp.GetRequiredService<ISystemAuditWriter>(),
+        sp.GetRequiredService<IAuditEntryWriter>(),
         sp.GetRequiredService<ICallerContext>(),
         sp.GetRequiredService<ILogger<DatabaseInitializer>>(),
         sp.GetRequiredService<ISourceCacheUpdater>(),
@@ -415,7 +415,7 @@ builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp =
     sp.GetRequiredService<IImportBatchRepository>(),
     sp.GetRequiredService<IImportActionCoordinator>(),
     sp.GetRequiredService<IImportActionService>(),
-    sp.GetRequiredService<ISystemImportActionReader>(),
+    sp.GetRequiredService<IImportActionReader>(),
     quoteSourceConverters,
     configPolicy));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();

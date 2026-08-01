@@ -1,11 +1,11 @@
 namespace Quotinator.Core.Helpers;
 
 /// <summary>
-/// The canonical <see cref="Quotinator.Data.Entities.SystemImportAction.EntityType"/> values this
+/// The canonical <see cref="Quotinator.Data.Entities.ImportActionEntity.EntityType"/> values this
 /// project's own code writes and compares against.
 /// </summary>
 /// <remarks>
-/// <see cref="Quotinator.Data.Entities.SystemImportAction.EntityType"/> is deliberately free-text in
+/// <see cref="Quotinator.Data.Entities.ImportActionEntity.EntityType"/> is deliberately free-text in
 /// <c>Quotinator.Data</c> — per ADR 004, Data cannot reference Engine's entity types, so nothing in
 /// Data can anchor these values to a shared enum. This class is Engine's own single source of truth
 /// instead, replacing what were independent string literals repeated across

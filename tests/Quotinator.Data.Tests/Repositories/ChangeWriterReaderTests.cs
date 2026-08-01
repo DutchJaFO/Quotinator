@@ -8,13 +8,13 @@ using Quotinator.Data.Repositories;
 namespace Quotinator.Data.Tests.Repositories;
 
 [TestClass]
-public class SystemChangeLogWriterReaderTests
+public class ChangeWriterReaderTests
 {
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private IDbConnectionFactory _factory = null!;
-    private SystemChangeLogWriter _writer = null!;
-    private SystemChangeLogReader _reader = null!;
+    private ChangeWriter _writer = null!;
+    private ChangeReader _reader = null!;
 
     [TestInitialize]
     public void TestInitialize()
@@ -25,7 +25,7 @@ public class SystemChangeLogWriterReaderTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         conn.Execute("""
-            CREATE TABLE System_ChangeLog (
+            CREATE TABLE Audit_Change (
                 Id               TEXT NOT NULL PRIMARY KEY,
                 EntityType       TEXT NOT NULL,
                 EntityId         TEXT NOT NULL,
@@ -46,8 +46,8 @@ public class SystemChangeLogWriterReaderTests
             """);
 
         _factory = new SqliteConnectionFactory(_dbPath);
-        _writer  = new SystemChangeLogWriter(_factory);
-        _reader  = new SystemChangeLogReader(_factory);
+        _writer  = new ChangeWriter(_factory);
+        _reader  = new ChangeReader(_factory);
     }
 
     [TestCleanup]
@@ -69,7 +69,7 @@ public class SystemChangeLogWriterReaderTests
     [TestMethod]
     public async Task GetHistoryAsync_MixedCaseEntityId_ReturnsLowercase()
     {
-        var entry = new SystemChangeLog
+        var entry = new ChangeEntity
         {
             Id              = Guid.NewGuid(),
             EntityType      = "quote",
@@ -94,7 +94,7 @@ public class SystemChangeLogWriterReaderTests
     [TestMethod]
     public async Task GetHistoryAsync_MixedCaseEntityType_StillMatches()
     {
-        var entry = new SystemChangeLog
+        var entry = new ChangeEntity
         {
             Id              = Guid.NewGuid(),
             EntityType      = "Quote",
@@ -118,7 +118,7 @@ public class SystemChangeLogWriterReaderTests
     [TestMethod]
     public async Task GetHistoryAsync_MixedCaseInitiatedById_PreservesCasing()
     {
-        var entry = new SystemChangeLog
+        var entry = new ChangeEntity
         {
             Id              = Guid.NewGuid(),
             EntityType      = "quote",

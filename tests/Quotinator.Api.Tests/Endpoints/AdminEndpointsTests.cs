@@ -25,8 +25,8 @@ public class AdminEndpointsTests
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton(dbInitializer ?? NoOpDatabaseInitializer.Instance);
-                services.AddSingleton<ISystemAuditWriter>(new NoOpSystemAuditWriter());
-                services.AddSingleton<ISystemAuditReader>(new NoOpSystemAuditReader());
+                services.AddSingleton<IAuditEntryWriter>(new NoOpAuditEntryWriter());
+                services.AddSingleton<IAuditEntryReader>(new NoOpAuditEntryReader());
                 services.AddSingleton<ICallerContext>(new NoOpCallerContext());
             });
 

@@ -17,29 +17,52 @@ namespace Quotinator.Data.Database;
 /// </summary>
 public class DatabaseInitializer : IDatabaseInitializer
 {
-    // Quotinator.Data's own migrations, for its own tables (System_AuditEntries currently; any
-    // future System_-prefixed table Quotinator.Data itself defines). Never passed through the
-    // constructor — Quotinator.Data owns and maintains these scripts itself, and they always
-    // apply before any consumer-supplied migration, tracked in their own System_SchemaVersion
-    // table, independent of the consumer's own System_ConsumerSchemaVersion count.
+    // Quotinator.Data's own migrations, for its own tables (Audit_Entry/Audit_Change/Import_Conflict/
+    // Import_Action/Import_SourceFileOverride currently; any future Import_/Audit_/System_-prefixed
+    // table Quotinator.Data itself defines). Never passed through the constructor — Quotinator.Data
+    // owns and maintains these scripts itself, and they always apply before any consumer-supplied
+    // migration, tracked in their own System_SchemaVersion table, independent of the consumer's own
+    // System_ConsumerSchemaVersion count. ImportBatches/Import_Batch is NOT here despite ADR 015
+    // classifying it as Data-owned — see DomainPrefixRenameMigrations' own remarks for why that
+    // specific rename must instead live in Quotinator.Core's migration list (#254).
     // #155: version 2 consolidates every Data-owned migration shipped since v1.7.2's single frozen
     // migration (version 1) — see DataConsolidatedMigrations.SinceV172 for the full reasoning.
+    // #253/ADR 015: version 3 replaces the previously-separate, unreleased versions 3+4 (each adding
+    // an AppliedPolicy CHECK constraint) with the domain-prefix rename — see
+    // DomainPrefixRenameMigrations.RenameDataOwnedTables for the full reasoning.
     private static readonly IReadOnlyList<SchemaMigration> DataOwnedMigrations =
     [
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
         new SchemaMigration { Version = 2, Sql = DataConsolidatedMigrations.SinceV172 },
-        new SchemaMigration { Version = 3, Sql = ImportConflictMigrations.AddAppliedPolicyCheckConstraint },
-        new SchemaMigration { Version = 4, Sql = ImportActionMigrations.AddAppliedPolicyCheckConstraint },
+        new SchemaMigration { Version = 3, Sql = DomainPrefixRenameMigrations.RenameDataOwnedTables },
     ];
 
-    // Data's own baseline fragment — creates System_AuditEntries, System_ImportConflicts, and
-    // System_ChangeLog directly under their final names for a genuinely fresh database, skipping
-    // System_AuditEntries' historical create-then-rename-then-RecordBase-migrate dance entirely (the
-    // other two never had a legacy name to begin with, and were never shipped pre-RecordBase). All
-    // three carry RecordBase's DateCreated/DateModified/DateDeleted/IsDeleted per ADR 002. Kept in
-    // sync with DataOwnedMigrations by this project's own schema-drift test.
+    // Data's own baseline fragment — creates every Data-owned table directly under its final,
+    // domain-prefixed name for a genuinely fresh database, skipping the historical
+    // create-then-rename-then-RecordBase-migrate dance entirely. All tables carry RecordBase's
+    // DateCreated/DateModified/DateDeleted/IsDeleted per ADR 002. Kept in sync with
+    // DataOwnedMigrations by this project's own schema-drift test.
     private const string DataBaselineSql = """
-        CREATE TABLE IF NOT EXISTS System_AuditEntries (
+        CREATE TABLE IF NOT EXISTS Import_Batch (
+            Id             TEXT    PRIMARY KEY,
+            Name           TEXT    NOT NULL,
+            Type           TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System', 'UserSeed')),
+            Url            TEXT,
+            ImportedAt     TEXT    NOT NULL,
+            ImportedById   TEXT,
+            RecordCount    INTEGER NOT NULL DEFAULT 0,
+            DateCreated    TEXT    NOT NULL,
+            DateModified   TEXT,
+            DateDeleted    TEXT,
+            IsDeleted      INTEGER NOT NULL DEFAULT 0,
+            ConflictPolicy TEXT    NOT NULL DEFAULT 'Skip'
+                           CHECK (ConflictPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
+            Status         TEXT    NOT NULL DEFAULT 'Applied'
+                           CHECK (Status IN ('Staged', 'Applied', 'Discarded')),
+            AppliedAt      TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS Audit_Entry (
             Id           TEXT    NOT NULL PRIMARY KEY,
             TableName    TEXT    NOT NULL,
             RecordId     TEXT,
@@ -51,10 +74,10 @@ public class DatabaseInitializer : IDatabaseInitializer
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0
         );
-        CREATE INDEX IF NOT EXISTS IX_System_AuditEntries_TableName_RecordId ON System_AuditEntries (TableName, RecordId);
-        CREATE INDEX IF NOT EXISTS IX_System_AuditEntries_PerformedAt ON System_AuditEntries (PerformedAt);
+        CREATE INDEX IF NOT EXISTS IX_Audit_Entry_TableName_RecordId ON Audit_Entry (TableName, RecordId);
+        CREATE INDEX IF NOT EXISTS IX_Audit_Entry_PerformedAt ON Audit_Entry (PerformedAt);
 
-        CREATE TABLE IF NOT EXISTS System_ImportConflicts (
+        CREATE TABLE IF NOT EXISTS Import_Conflict (
             Id              TEXT    NOT NULL PRIMARY KEY,
             BatchId         TEXT    NOT NULL,
             EntityType      TEXT    NOT NULL,
@@ -74,10 +97,10 @@ public class DatabaseInitializer : IDatabaseInitializer
             IsDeleted       INTEGER NOT NULL DEFAULT 0,
             ExistingBatchId TEXT
         );
-        CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_BatchId ON System_ImportConflicts (BatchId);
-        CREATE INDEX IF NOT EXISTS IX_System_ImportConflicts_Status ON System_ImportConflicts (Status);
+        CREATE INDEX IF NOT EXISTS IX_Import_Conflict_BatchId ON Import_Conflict (BatchId);
+        CREATE INDEX IF NOT EXISTS IX_Import_Conflict_Status ON Import_Conflict (Status);
 
-        CREATE TABLE IF NOT EXISTS System_ImportActions (
+        CREATE TABLE IF NOT EXISTS Import_Action (
             Id                 TEXT    NOT NULL PRIMARY KEY,
             BatchId            TEXT    NOT NULL,
             ActionType         TEXT    NOT NULL
@@ -103,10 +126,10 @@ public class DatabaseInitializer : IDatabaseInitializer
             IsDeleted          INTEGER NOT NULL DEFAULT 0,
             OriginalDecision   TEXT
         );
-        CREATE INDEX IF NOT EXISTS IX_System_ImportActions_BatchId ON System_ImportActions (BatchId);
-        CREATE INDEX IF NOT EXISTS IX_System_ImportActions_Status ON System_ImportActions (Status);
+        CREATE INDEX IF NOT EXISTS IX_Import_Action_BatchId ON Import_Action (BatchId);
+        CREATE INDEX IF NOT EXISTS IX_Import_Action_Status ON Import_Action (Status);
 
-        CREATE TABLE IF NOT EXISTS System_SourceFileOverrides (
+        CREATE TABLE IF NOT EXISTS Import_SourceFileOverride (
             Id            TEXT    NOT NULL PRIMARY KEY,
             FileName      TEXT    NOT NULL,
             Origin        TEXT    NOT NULL
@@ -118,10 +141,10 @@ public class DatabaseInitializer : IDatabaseInitializer
             DateDeleted   TEXT,
             IsDeleted     INTEGER NOT NULL DEFAULT 0
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS UX_System_SourceFileOverrides_FileName_Origin
-            ON System_SourceFileOverrides (FileName, Origin) WHERE IsDeleted = 0;
+        CREATE UNIQUE INDEX IF NOT EXISTS UX_Import_SourceFileOverride_FileName_Origin
+            ON Import_SourceFileOverride (FileName, Origin) WHERE IsDeleted = 0;
 
-        CREATE TABLE IF NOT EXISTS System_ChangeLog (
+        CREATE TABLE IF NOT EXISTS Audit_Change (
             Id               TEXT NOT NULL PRIMARY KEY,
             EntityType       TEXT NOT NULL,
             EntityId         TEXT NOT NULL,
@@ -139,7 +162,7 @@ public class DatabaseInitializer : IDatabaseInitializer
             DateDeleted      TEXT,
             IsDeleted        INTEGER NOT NULL DEFAULT 0
         );
-        CREATE INDEX IF NOT EXISTS IX_System_ChangeLog_Entity ON System_ChangeLog (EntityType, EntityId, OccurredAt DESC);
+        CREATE INDEX IF NOT EXISTS IX_Audit_Change_Entity ON Audit_Change (EntityType, EntityId, OccurredAt DESC);
         """;
 
     private readonly IDbConnectionFactory           _factory;
@@ -151,7 +174,7 @@ public class DatabaseInitializer : IDatabaseInitializer
     protected readonly ILogger Logger;
 
     /// <summary>Audit writer available to subclasses for recording reseed and reset operations.</summary>
-    protected readonly ISystemAuditWriter AuditWriter;
+    protected readonly IAuditEntryWriter AuditWriter;
 
     /// <summary>Caller context available to subclasses for populating audit entries.</summary>
     protected readonly ICallerContext CallerContext;
@@ -215,7 +238,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         IDbConnectionFactory           factory,
         DatabaseOptions                options,
         IReadOnlyList<SchemaMigration> migrations,
-        ISystemAuditWriter             auditWriter,
+        IAuditEntryWriter             auditWriter,
         ICallerContext                 callerContext,
         ILogger<DatabaseInitializer>   logger,
         SchemaBaseline?                baseline = null)
@@ -306,10 +329,10 @@ public class DatabaseInitializer : IDatabaseInitializer
 
     /// <summary>
     /// Drops and recreates the consumer's own domain tables by reapplying its migrations.
-    /// Subclasses call this during reset. <c>System_AuditEntries</c> is never dropped (see
+    /// Subclasses call this during reset. <c>Audit_Entry</c> is never dropped (see
     /// <see cref="Sql.Schema.GetUserTables"/>), and — because Quotinator.Data's own migrations
-    /// concern only <c>System_</c>-prefixed tables that a Reset never touches — Quotinator.Data's
-    /// own migration history (<c>System_SchemaVersion</c>) is never wiped or replayed here either,
+    /// concern only <c>Import_</c>/<c>Audit_</c>/<c>System_</c>-prefixed tables that a Reset never
+    /// touches — Quotinator.Data's own migration history (<c>System_SchemaVersion</c>) is never wiped or replayed here either,
     /// regardless of <paramref name="preserveSchemaVersion"/>. Only <c>System_ConsumerSchemaVersion</c>
     /// is cleared and replayed; when <paramref name="preserveSchemaVersion"/> is <c>true</c>, its
     /// rows are snapshotted first and restored afterward. A full backup is always taken before any

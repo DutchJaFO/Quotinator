@@ -1,6 +1,6 @@
 namespace Quotinator.Data.Models;
 
-/// <summary>The kind of database operation a <see cref="Quotinator.Data.Entities.SystemChangeLog"/> row records.</summary>
+/// <summary>The kind of database operation a <see cref="Quotinator.Data.Entities.ChangeEntity"/> row records.</summary>
 public enum ChangeAction
 {
     /// <summary>A new record was written.</summary>

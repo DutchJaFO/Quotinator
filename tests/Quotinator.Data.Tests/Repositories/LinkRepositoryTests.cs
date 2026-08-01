@@ -16,7 +16,8 @@ public class LinkRepositoryTests
     private string _tempDir         = null!;
     private string _dbPath          = null!;
     private IDbConnectionFactory _factory = null!;
-    private SystemAuditWriter _auditWriter = null!;
+    private AuditEntryWriter _auditWriter = null!;
+    private AuditEntryReader _auditReader = null!;
     private CallerContext _callerContext = null!;
     private WidgetTagLinkRepository _repo = null!;
 
@@ -55,7 +56,7 @@ public class LinkRepositoryTests
                 IsDeleted    INTEGER NOT NULL DEFAULT 0,
                 UNIQUE (WidgetId, TagId)
             );
-            CREATE TABLE System_AuditEntries (
+            CREATE TABLE Audit_Entry (
                 Id           TEXT    NOT NULL PRIMARY KEY,
                 TableName    TEXT    NOT NULL,
                 RecordId     TEXT,
@@ -71,7 +72,8 @@ public class LinkRepositoryTests
 
         _factory       = new SqliteConnectionFactory(_dbPath);
         _callerContext = new CallerContext();
-        _auditWriter   = new SystemAuditWriter(_factory, _callerContext);
+        _auditWriter   = new AuditEntryWriter(_factory, _callerContext);
+        _auditReader   = new AuditEntryReader(_factory);
         _repo          = new WidgetTagLinkRepository(_factory, _auditWriter, _callerContext);
     }
 
@@ -109,13 +111,8 @@ public class LinkRepositoryTests
         return conn.ExecuteScalar<int>($"SELECT COUNT(*) FROM WidgetTags {filter};");
     }
 
-    private int CountAuditFor(string tableName)
-    {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        return conn.ExecuteScalar<int>(
-            "SELECT COUNT(*) FROM System_AuditEntries WHERE TableName = @t;", new { t = tableName });
-    }
+    private async Task<int> CountAuditForAsync(string tableName)
+        => (await _auditReader.GetPagedAsync(tableName, null, 1, 0)).TotalCount;
 
     // ── LinkAsync ─────────────────────────────────────────────────────────────
 
@@ -138,7 +135,7 @@ public class LinkRepositoryTests
 
         await _repo.LinkAsync(widget.Id, tag.Id);
 
-        Assert.AreEqual(1, CountAuditFor("WidgetTags"));
+        Assert.AreEqual(1, await CountAuditForAsync("WidgetTags"));
     }
 
     [TestMethod]
@@ -151,7 +148,7 @@ public class LinkRepositoryTests
         await _repo.UnlinkAsync(widget.Id, tag.Id); // SoftDelete → 2
         await _repo.LinkAsync(widget.Id, tag.Id);   // Restore → 3
 
-        Assert.AreEqual(3, CountAuditFor("WidgetTags"));
+        Assert.AreEqual(3, await CountAuditForAsync("WidgetTags"));
     }
 
     [TestMethod]
@@ -204,7 +201,7 @@ public class LinkRepositoryTests
         await _repo.LinkAsync(widget.Id, tag.Id);   // Insert → 1
         await _repo.UnlinkAsync(widget.Id, tag.Id); // SoftDelete → 2
 
-        Assert.AreEqual(2, CountAuditFor("WidgetTags"));
+        Assert.AreEqual(2, await CountAuditForAsync("WidgetTags"));
     }
 
     [TestMethod]
@@ -243,7 +240,7 @@ public class LinkRepositoryTests
         await _repo.UnlinkAsync(widget.Id, tag.Id);      // SoftDelete → 2
         await _repo.RestoreLinkAsync(widget.Id, tag.Id); // Restore → 3
 
-        Assert.AreEqual(3, CountAuditFor("WidgetTags"));
+        Assert.AreEqual(3, await CountAuditForAsync("WidgetTags"));
     }
 
     [TestMethod]

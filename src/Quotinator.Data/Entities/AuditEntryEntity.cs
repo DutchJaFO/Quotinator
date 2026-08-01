@@ -16,8 +16,8 @@ namespace Quotinator.Data.Entities;
 /// a week — corrected retroactively via a new migration (<c>AuditMigrations.MigrateToRecordBase</c>)
 /// since this table already shipped in v1.7.2, so the column-type change can't be made in place.
 /// </remarks>
-[Table("System_AuditEntries")]
-public sealed class SystemAuditEntry : RecordBase
+[Table("Audit_Entry")]
+public sealed class AuditEntryEntity : RecordBase
 {
     /// <summary>Name of the table the operation touched, or <c>"Database"</c> for admin-level actions.</summary>
     public string TableName { get; init; } = string.Empty;
@@ -25,7 +25,7 @@ public sealed class SystemAuditEntry : RecordBase
     /// <summary>
     /// Guid (lowercase D format) of the affected row, or <c>null</c> for bulk or admin-level entries.
     /// A row written under an earlier revision of this project's id-casing convention may still hold
-    /// a different casing on disk — <see cref="Quotinator.Data.Queries.Sql.SystemAudit.SelectPaged"/>
+    /// a different casing on disk — <see cref="Quotinator.Data.Queries.Sql.SystemAudit.SelectPaged"/> (still named for the historical table)
     /// reads this column through <c>LOWER(...)</c> so every consumer of this property always sees the
     /// current canonical form regardless of what casing is actually stored (ADR 012's "read-time
     /// presentation normalization" revision).

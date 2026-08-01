@@ -79,7 +79,7 @@ internal static class AdminEndpoints
             IApiLocalizer localizer,
             [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
             [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
-            ISystemAuditReader auditReader = null!) =>
+            IAuditEntryReader auditReader = null!) =>
         {
             if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
                 return pageError!;
@@ -91,7 +91,7 @@ internal static class AdminEndpoints
         })
         .WithName("GetAuditLog")
         .WithSummary("Get audit log")
-        .Produces<PagedItems<SystemAuditEntry>>(StatusCodes.Status200OK)
+        .Produces<PagedItems<AuditEntryEntity>>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
         .WithDescription(
             "Returns a paginated list of audit entries, newest first. " +
@@ -193,7 +193,7 @@ internal static class AdminEndpoints
             "still shows exactly how old the cached copy is rather than only that it was within the TTL window. `null` when no trusted cache file exists (e.g. a collision). " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapDelete("/audit", async (string? table, ISystemAuditWriter auditWriter) =>
+        adminGroup.MapDelete("/audit", async (string? table, IAuditEntryWriter auditWriter) =>
         {
             await auditWriter.ClearAsync(table);
             return Results.NoContent();

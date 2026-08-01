@@ -6,21 +6,21 @@ using Quotinator.Data.Queries;
 namespace Quotinator.Data.Repositories;
 
 /// <summary>
-/// SQLite implementation of <see cref="ISystemChangeLogReader"/>.
+/// SQLite implementation of <see cref="IChangeReader"/>.
 /// Extends <see cref="SqliteRepositoryBase{T}"/> directly — no audit writes are triggered by reads.
 /// </summary>
-public sealed class SystemChangeLogReader : SqliteRepositoryBase<SystemChangeLog>, ISystemChangeLogReader
+public sealed class ChangeReader : SqliteRepositoryBase<ChangeEntity>, IChangeReader
 {
     /// <summary>Initialises the reader with the connection factory.</summary>
-    public SystemChangeLogReader(IDbConnectionFactory factory) : base(factory) { }
+    public ChangeReader(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<SystemChangeLog>> GetHistoryAsync(string entityType, string entityId)
+    public async Task<IReadOnlyList<ChangeEntity>> GetHistoryAsync(string entityType, string entityId)
     {
         using var conn = Factory.CreateConnection();
         conn.Open();
 
-        var rows = await conn.QueryAsync<SystemChangeLog>(
+        var rows = await conn.QueryAsync<ChangeEntity>(
             Sql.SystemChangeLog.SelectByEntity, new { entityType, entityId });
 
         return rows.ToList();

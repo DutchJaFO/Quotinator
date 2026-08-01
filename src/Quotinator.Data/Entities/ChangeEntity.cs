@@ -10,17 +10,17 @@ namespace Quotinator.Data.Entities;
 /// <see cref="RecordBase.IsDeleted"/> are never meaningfully used here (a change-log row is never
 /// itself modified or soft-deleted), and <see cref="RecordBase.DateCreated"/> duplicates
 /// <see cref="OccurredAt"/> — this redundancy is the ADR's own accepted trade-off, same as
-/// <see cref="SystemAuditEntry"/> and <see cref="SystemImportAction"/>.
+/// <see cref="AuditEntryEntity"/> and <see cref="ImportActionEntity"/>.
 /// <c>EntityType</c>/<c>EntityId</c> are plain strings, not enums — this project has no dependency on
 /// any specific domain schema, so it cannot know which entity types a consumer defines, now or in the
-/// future (mirrors <see cref="SystemImportAction.EntityType"/> for the identical reason).
+/// future (mirrors <see cref="ImportActionEntity.EntityType"/> for the identical reason).
 /// <c>InitiatedByType</c>/<c>Action</c> ARE enums (<see cref="InitiatorType"/>/<see cref="ChangeAction"/>)
 /// despite living in this domain-agnostic project — both vocabularies describe generic mechanisms/
 /// operation kinds ("Seed", "Created") that don't require knowing anything about a consumer's specific
 /// entities, unlike <c>EntityType</c>'s values.
 /// </remarks>
-[Table("System_ChangeLog")]
-public sealed class SystemChangeLog : RecordBase
+[Table("Audit_Change")]
+public sealed class ChangeEntity : RecordBase
 {
     /// <summary>Free-text entity type the change occurred on (e.g. <c>"quote"</c>). Not an enum — see remarks.</summary>
     public string EntityType { get; init; } = string.Empty;

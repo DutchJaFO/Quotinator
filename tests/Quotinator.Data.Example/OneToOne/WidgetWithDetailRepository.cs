@@ -14,7 +14,7 @@ namespace Quotinator.Data.Example.OneToOne;
 /// </remarks>
 public sealed class WidgetWithDetailRepository(
     IDbConnectionFactory factory,
-    ISystemAuditWriter auditWriter,
+    IAuditEntryWriter auditWriter,
     ICallerContext callerContext)
     : SqliteOneToOneRepository<Widget, WidgetDetail>(factory, auditWriter, callerContext)
 {

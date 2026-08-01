@@ -1,7 +1,6 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
-using Quotinator.Data.Database;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 
@@ -22,7 +21,22 @@ public class SourceFileOverrideRegistryTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        conn.Execute(SourceFileOverrideMigrations.CreateSourceFileOverridesTable);
+        conn.Execute("""
+            CREATE TABLE IF NOT EXISTS Import_SourceFileOverride (
+                Id            TEXT    NOT NULL PRIMARY KEY,
+                FileName      TEXT    NOT NULL,
+                Origin        TEXT    NOT NULL
+                              CHECK (Origin IN ('Bundled', 'UserImports')),
+                ContentHash   TEXT    NOT NULL,
+                SourceBatchId TEXT,
+                DateCreated   TEXT    NOT NULL,
+                DateModified  TEXT,
+                DateDeleted   TEXT,
+                IsDeleted     INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS UX_Import_SourceFileOverride_FileName_Origin
+                ON Import_SourceFileOverride (FileName, Origin) WHERE IsDeleted = 0;
+            """);
 
         _registry = new SourceFileOverrideRegistry(new SqliteConnectionFactory(_dbPath));
     }
