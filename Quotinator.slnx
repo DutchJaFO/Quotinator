@@ -239,6 +239,7 @@
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/166-ha-addon-stable-beta-split-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/222-unicode-like-matching-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/227-domain-prefixed-naming-implementation-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
