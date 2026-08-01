@@ -203,6 +203,31 @@ Routes/        → Quotinator.Constants.Routes     (ApiRoutes, RouteExtensions)
 
 Any use of bare `new` for a type that could reasonably be registered must have a comment explaining why DI was not used.
 
+### Endpoint side-effect policy (Single Responsibility)
+
+**An endpoint must not bundle an automatic side effect that silently makes a data-retention or
+data-content decision on the caller's behalf.** Per the Single Responsibility Principle, an endpoint
+has exactly one job. A second, independent decision bolted onto that same call — "and also reimport
+this optional content" — means the endpoint is now doing two things, and a caller who wants only the
+first is forced to accept the second every time. The fix is never to add a request parameter that lets
+the caller opt in or out of the bundled side effect — a flag that changes *what data survives the
+call* is the same problem in a different shape, just made explicit instead of implicit. The fix is to
+not bundle the second decision into the endpoint at all: split it into its own explicit action, or
+remove it entirely if nothing actually depends on it.
+
+This does not forbid an endpoint from populating content it structurally requires to function (e.g. a
+true system/reference table with fixed, non-optional rows) — that content is not the caller's decision
+to make, so seeding it is part of the endpoint's one job, not a second one. It only forbids
+automatically reimporting *optional* domain content the caller might reasonably want to discard.
+
+**Found live in #156:** `POST /admin/database/reset` unconditionally reimported bundled quote content
+immediately after rebuilding the schema (`OnResetAsync` calling `SeedIfEmptyInternalAsync`). Bundled
+quotes are optional, discardable domain content, not fixed reference data — a user resetting the
+database to start fresh with their own content should never be forced to re-accept the bundled dataset
+every time they reset. Reset's one job is rebuilding the schema; any table needing guaranteed content
+gets it from the fresh-database baseline script itself (see "Baseline schema for fresh databases"
+above), never from a reseed step bolted onto Reset afterward.
+
 ### JSON parsing policy
 
 **Always deserialize JSON into POCOs via `JsonSerializer.Deserialize<T>` — never walk a parsed document by hand (`JsonNode`/`JsonDocument` indexers, `["field"]`, `GetValue<T>()`) to extract data.** Define a DTO class per JSON shape (e.g. `SourceQuote` for quote files, `ChangelogRoot` for the changelog, `ManifestDto`/`ManifestFileEntryDto`/`ManifestGithubDto`/`ManifestPolicyDto` for `manifest.json`), with `[JsonPropertyName("...")]` on each property mapping the wire name to a PascalCase C# name. If a schema exists (`schemas/*.json`), every field it defines must be representable as a DTO property — a schema field with no corresponding POCO property is a policy violation. The same applies to writing JSON: build a DTO and call `JsonSerializer.Serialize`, never hand-assemble a `JsonObject`/`JsonArray`.

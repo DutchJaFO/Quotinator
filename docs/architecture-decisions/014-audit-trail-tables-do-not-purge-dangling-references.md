@@ -55,6 +55,15 @@ ever deletes rows from named *domain* tables (Quotes, Sources, Characters, ...) 
 a reimport) still applies to audit-trail rows referencing Reseed-wiped-and-reimported domain entities,
 regardless of how #156 resolves — only Reset's own wholesale-loss behaviour is new.
 
+A related clarification (2026-08-01): #156's Reset will not automatically reimport bundled/imported
+domain content (quotes, sources, ...) afterward either — per CLAUDE.md's "Endpoint side-effect policy
+(Single Responsibility)", Reset's one job is rebuilding the schema, and deciding whether to keep or
+discard bundled quote content is the operator's own call, not something Reset should force by
+unconditional side effect. This narrows, rather than widens, what a post-#156 Reset actually does: an
+empty rebuilt schema, nothing reimported automatically. It doesn't change this ADR's own conclusions —
+the audit trail is still lost unless exported first — but it means the "audit trail loss" this ADR
+accepts happens against an empty database, not a freshly-repopulated one.
+
 ---
 
 ## Decision
@@ -78,9 +87,12 @@ regardless of how #156 resolves — only Reset's own wholesale-loss behaviour is
    keep it has a way to do so beforehand. This ADR does not implement that export mechanism — it
    requires its own design (target format, what "a dedicated audit-history folder" means operationally,
    whether it runs automatically before every destructive Reset or only on request) — but it establishes
-   that **a destructive Reset must not ship (via #156) without an accompanying export-before-reset path**
-   for the audit-trail tables. Tracked as [#249](https://github.com/DutchJaFO/Quotinator/issues/249),
-   sequenced before or alongside #156's implementation.
+   that **the released product must never carry #156's destructive Reset without an accompanying
+   export-before-reset path** for the audit-trail tables. Tracked as
+   [#249](https://github.com/DutchJaFO/Quotinator/issues/249) — this is a **release gate, not an
+   implementation-order dependency**: #249 and #156 can be designed, built, and merged in either order
+   or in parallel, but a tagged release must never ship #156's behaviour change without #249 already
+   present in that same release.
 
 No code changes follow from this ADR directly. It records the decision on point 1 (already
 implemented, now confirmed permanent) and the design constraint on point 2 (not yet implemented,
@@ -94,9 +106,10 @@ scoped to a new issue).
 future `System_`-prefixed table shaped as "one row, one event, one `EntityId`-shaped reference"
 inherits this rule automatically.
 
-**#156 may not ship a destructive, full-database-rebuild Reset without a working export-before-reset
-path for the audit trail.** This is a hard dependency from #156's implementation onto #249, not just a
-nice-to-have — recorded here so it isn't lost between the two issues.
+**No tagged release may carry a destructive, full-database-rebuild Reset without a working
+export-before-reset path for the audit trail.** This is a release-level gate — #249 must ship in the
+same release as #156's behaviour change, not necessarily be built or merged before it — recorded here
+so it isn't lost between the two issues.
 
 **Tooling that reads these tables must expect dangling references regardless of the above.**
 `tools/Quotinator.Tools.DbInspector` or any future admin/audit view over `System_AuditEntries`/

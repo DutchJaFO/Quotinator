@@ -43,11 +43,12 @@ pre-existing part of this list.
 
 ## Dependency map
 
-One hard dependency: **#249 blocks #156** (per [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) — #156's destructive full-database-rebuild Reset must not ship without #249's
-export-before-reset path already in place). None of the other 15 issues block each other. The order
-below is otherwise based on risk, effort, and conflict-avoidance (e.g. doing a broad mechanical
-test-file change before other issues add more tests to the same files) rather than any hard
-dependency.
+One release-level gate: **#249 must ship in the same release as #156**, per
+[ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) — not
+an implementation-order dependency, so #249 and #156 can be built/merged in either order. None of the
+other 15 issues block each other. The order below is otherwise based on risk, effort, and
+conflict-avoidance (e.g. doing a broad mechanical test-file change before other issues add more
+tests to the same files) rather than any hard dependency.
 
 ---
 
@@ -67,9 +68,9 @@ dependency.
 6. **#150** — Audit enum-valued POCO properties for missing CHECK constraints (one known gap already found)
 7. **#151** — System_-prefixed audit-trail table purge-on-Reset policy decision (docs-only; resolved
    2026-08-01 via [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) — dangling references are
-   permanent by design; filed #249 as a hard prerequisite for #156)
-8. **#249** — Export audit-trail tables to a dedicated folder before a destructive Reset (blocks #156;
-   filed while planning #151)
+   permanent by design; filed #249 as a release gate on #156)
+8. **#249** — Export audit-trail tables to a dedicated folder before a destructive Reset (must ship in
+   the same release as #156, not necessarily built first; filed while planning #151)
 9. **#156** — Reset: baseline script instead of drop-all-user-tables + replay
 10. **#222** — Unicode-aware case-insensitive LIKE matching (real correctness bug, medium effort)
 11. **#148** — OpenAPI: document response models for quote/admin endpoints
