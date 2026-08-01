@@ -215,6 +215,6 @@ rewritten to describe the actual resolution (`UNICODE_CONTAINS`, opt-in flag) in
 | 6 | ✅ | Every existing ASCII search/filter behaviour is unchanged with the flag off | Unit test | `SqliteQuoteServiceSearchTests` + `SqliteQuoteServiceConversationTests` — 60 `SqliteQuoteService*` tests total, all passing |
 | 7 | ✅ | `SqlQueryGuardTests.AssembledQueryCases` covers both flag states for all 8 sites | Unit test | `SqlQueryGuardTests` full run — full solution 2,836 tests passing |
 | 8 | ✅ | `unicode_aware_search` option present, schema'd, and translated identically in both `addon/` and `addon-beta/` | Live | Re-read both `config.yaml`s and all 6 translation files after editing — confirmed matching |
-| 9 | ⬜ | T1: app starts in VS without error | Live | Developer's own action — not run by the assistant, see CLAUDE.md |
+| 9 | ✅ | T1: app starts in VS without error | Live | Confirmed by developer — schema v5 (data v4), 799 quotes/461 sources/... startup stats logged cleanly, no errors |
 | 10 | ✅ | T2: toggle proven against a real container in both states | Live | Actually run against `quotinator:local`: flag-off → `NoResults`; fresh flag-on container, same import/query → `Ok` with the fixture returned |
 | 11 | ✅ | `README.md`/CLAUDE.md documentation updated | Live | Re-read both after editing — confirmed |
