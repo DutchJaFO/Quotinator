@@ -647,12 +647,22 @@ These rules apply to all Blazor components and pages:
 
 ### Keeping API documentation in sync
 
-When adding, removing, or changing any endpoint, parameter, or behaviour, update **all four** of these in the same commit:
+`docs/api-endpoints.md` is the single source of truth for the full endpoint reference (every route, its
+query parameters, and a description of its behaviour) — `README.md` only links to it. When adding,
+removing, or changing any endpoint, parameter, or behaviour, update **both** of these in the same commit:
 
-1. `README.md` — the REST API Endpoints table and any parameter descriptions
-2. `addon/DOCS.md` — the API Endpoints table (HA add-on users read this)
-3. `addon-beta/DOCS.md` — same table, same content as `addon/DOCS.md` (same underlying software)
-4. `src/Quotinator.Api/Endpoints/QuoteEndpoints.cs` — the `[Description]` attributes on the endpoint and its parameters (these feed the OpenAPI/Scalar UI)
+1. `docs/api-endpoints.md` — the full endpoint table and any parameter descriptions
+2. `src/Quotinator.Api/Endpoints/*.cs` — the `[Description]` attributes on the endpoint and its parameters
+   in whichever `*Endpoints.cs` file defines it (these feed the OpenAPI/Scalar UI)
+
+**`addon/DOCS.md` and `addon-beta/DOCS.md` do not carry the full endpoint table** — each shows only a
+short, curated list of common examples plus a link to `/scalar/v1`, `/openapi/v1.json`, and
+`docs/api-endpoints.md` on GitHub. This is deliberate: a single file shared by both channels would violate
+the "no shared/symlinked file between `addon/` and `addon-beta/`" rule above (see #166's plan doc), and
+duplicating the full table into both add-on folders on every endpoint change was the exact bloat this
+structure replaces. Only touch these two files when an endpoint used in that example list itself changes
+shape or is removed; a new unrelated endpoint does not require touching them. `addon-beta/DOCS.md` must
+still mirror `addon/DOCS.md`'s example list exactly when it does change, per the mirroring rule above.
 
 The Scalar API reference is at `/scalar/v1` and the raw spec at `/openapi/v1.json` — both are available in all environments including production. Do not gate them behind `IsDevelopment()`.
 

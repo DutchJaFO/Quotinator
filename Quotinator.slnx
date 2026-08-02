@@ -79,6 +79,7 @@
   </Folder>
   <Folder Name="/docs/">
     <File Path="docs/README.md" />
+    <File Path="docs/api-endpoints.md" />
     <File Path="docs/ci-cd.md" />
     <File Path="docs/data-access.md" />
     <File Path="docs/data-import.md" />
