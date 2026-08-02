@@ -39,8 +39,8 @@ and #255/#256 do not carry that urgency.
 | [#227](https://github.com/DutchJaFO/Quotinator/issues/227) | Import-table naming standardization + general import-file content provenance (FileResource / FileResourceLine) | Waiting for release | N/A (decision/scoping only — decomposed into #251/#252/#253/#254/#255/#256) | [227-domain-prefixed-naming-implementation-plan.md](227-domain-prefixed-naming-implementation-plan.md) (now reference research, not an active plan) |
 | [#251](https://github.com/DutchJaFO/Quotinator/issues/251) | FileResource/FileResourceLine: general import-file content provenance (design + implementation) | Planning | T1, T2 | [251-file-resource-provenance-plan.md](251-file-resource-provenance-plan.md) |
 | [#252](https://github.com/DutchJaFO/Quotinator/issues/252) | Confirm whether #153's SourceFileOverride registry should be superseded by FileResource | Planning | N/A | [252-source-file-override-supersession-plan.md](252-source-file-override-supersession-plan.md) — depends on #251 |
-| [#253](https://github.com/DutchJaFO/Quotinator/issues/253) | Rename Quotinator.Data-owned tables and entities to Import_/Audit_/System_ domains | In progress | T1 ⬜ T2 ✅ | [253-data-owned-rename-plan.md](253-data-owned-rename-plan.md) |
-| [#254](https://github.com/DutchJaFO/Quotinator/issues/254) | Rename Quotinator.Core-owned tables and entities to the Quotinator_ domain | Planning | T1, T2 | [254-core-owned-rename-plan.md](254-core-owned-rename-plan.md) |
+| [#253](https://github.com/DutchJaFO/Quotinator/issues/253) | Rename Quotinator.Data-owned tables and entities to Import_/Audit_/System_ domains | Waiting for release | T1 ✅ T2 ✅ | [253-data-owned-rename-plan.md](253-data-owned-rename-plan.md) |
+| [#254](https://github.com/DutchJaFO/Quotinator/issues/254) | Rename Quotinator.Core-owned tables and entities to the Quotinator_ domain | Waiting for release | T1 ✅ T2 ✅ | [254-core-owned-rename-plan.md](254-core-owned-rename-plan.md) |
 | [#255](https://github.com/DutchJaFO/Quotinator/issues/255) | Move enums to dedicated Enums/ folders (Data + Core) | Planning | N/A | [255-enum-folder-moves-plan.md](255-enum-folder-moves-plan.md) |
 | [#256](https://github.com/DutchJaFO/Quotinator/issues/256) | Fix Response/Dto/class-suffix violations (SeedFilePreview, *Dto renames, ChangelogRoot) | Planning | N/A | [256-response-dto-suffix-fixes-plan.md](256-response-dto-suffix-fixes-plan.md) |
 | [#178](https://github.com/DutchJaFO/Quotinator/issues/178) | Changelog: add an optional one-line quote to each release entry | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
@@ -49,6 +49,7 @@ and #255/#256 do not carry that urgency.
 | [#236](https://github.com/DutchJaFO/Quotinator/issues/236) | Release workflow: HA can see a config.yaml version bump before the matching Docker image is pushed | Waiting for release | N/A (process/documentation change only) | [236-release-workflow-version-race-plan.md](236-release-workflow-version-race-plan.md) |
 | [#244](https://github.com/DutchJaFO/Quotinator/issues/244) | Hidden Roslyn code-style and .NET analyzer diagnostics are invisible to the 0-warnings build policy (IDE0xxx, CAxxxx) | Planning | Not yet determined | No plan doc yet |
 | [#245](https://github.com/DutchJaFO/Quotinator/issues/245) | Sources.Date stays NULL when a Source's only sources[] entry omits date (gap in #191's scope) | Planning | Not yet determined | No plan doc yet |
+| [#263](https://github.com/DutchJaFO/Quotinator/issues/263) | Make recovering from critical startup/database errors easier (Blazor UI, HA add-on experience) | Planning | Not yet determined | No plan doc yet |
 
 ---
 

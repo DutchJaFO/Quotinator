@@ -40,6 +40,7 @@ verification command here in the same commit that fixes it — the list only gro
 26. [Rule-file override endpoints](#26-rule-file-override-endpoints-153) (#153)
 27. [Per-file, per-entity-type import/seed report](#27-per-file-per-entity-type-importseed-report-221) (#221)
 28. [Unicode-aware search toggle](#28-unicode-aware-search-toggle-222) (#222)
+29. [Seeding-stage backup/restore safety net, degraded startup, and Reset recovery](#29-seeding-stage-backuprestore-safety-net-degraded-startup-and-reset-recovery-254) (#254)
 
 ---
 
@@ -1015,4 +1016,116 @@ curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
 A fresh container has no persisted data, so the same import is required again. The search — same
 query, same fixture — must now return `200` with one item, `source: "Café de Flore"`. Same query,
 same data, only the env var differs — the direct "with and without the feature active" comparison.
+
+---
+
+## 29. Seeding-stage backup/restore safety net, degraded startup, and Reset recovery (#254)
+
+Found live during #254's own T1 pass, as three compounding gaps in the same startup path:
+
+1. `DatabaseInitializer`'s migration-version tracking only detects a pending migration by comparing
+   recorded counts — rewriting an unreleased migration's content in place (same slot, same final
+   count) left an already-migrated database reading as "up to date" while its on-disk schema no
+   longer matched, and seeding then crashed with no exception safety net (unlike the migration
+   phase, which already had one). Fixed by wrapping seeding in the same backup/restore/rethrow net.
+2. That exception, left uncaught, propagated out of `Main` before Kestrel ever bound — under IIS
+   Express/ANCM this rendered a raw, technical stack-trace page to whoever was looking at the
+   browser. An initial fix caught it and exited the process cleanly instead — but that broke the
+   *only* documented remedy (`POST /api/v1/admin/database/reset`), since a fully-exited process has
+   no server left to receive that request. Corrected to degrade instead of exit:
+   `DatabaseHealthState` + `DatabaseHealthGateMiddleware` keep the app bound and reachable for
+   health/version/admin traffic, and return a clear `503` (never a raw exception) for everything
+   else.
+3. Calling Reset while degraded genuinely repairs the on-disk schema, but `DatabaseHealthState` is
+   in-memory and does not observe that on its own — a first pass left the app stuck reporting
+   unhealthy forever after a successful Reset. Fixed by having the Reset endpoint call
+   `DatabaseHealthState.MarkHealthy()` once `ResetAsync` returns without throwing.
+
+This proves all three end to end against a real container, using a bind-mounted data directory so
+the host can manipulate the SQLite file directly. `Quotinator.Tools.DbInspector` is deliberately
+**read-only** (`Mode=ReadOnly` — see its `README.md`) and cannot run the `DROP TABLE` this needs;
+`scripts/execute-sql.csx` (a real, checked-in dotnet-script — the writable counterpart to DbInspector,
+per this project's own scripting policy, ADR 010) opens a normal connection instead.
+
+**Start a container with a bind-mounted data directory and let it seed normally:**
+```bash
+mkdir -p .claude/temp/smoke-254-data
+MSYS_NO_PATHCONV=1 docker run -d --name smoke254 -p 8080:8080 \
+  -v "C:/repos/Quotinator/.claude/temp/smoke-254-data:/data" \
+  -e Quotinator__DataDir=/data quotinator:local
+sleep 8
+docker logs smoke254 2>&1 | grep "\[Database - Init\]"
+ls .claude/temp/smoke-254-data/backups/ 2>/dev/null
+```
+`MSYS_NO_PATHCONV=1` and an explicit Windows-style source path are required under Git Bash — without
+them, Git Bash's automatic POSIX-to-Windows path conversion mangles the `-v` argument (confirmed live:
+`$(pwd)/...:/data` silently became a bind mount to `\Program Files\Git\data`, and the container wrote
+nothing to the intended host directory at all).
+The init log must show `schema created at baseline` (fresh database, baseline path) and the
+`backups/` directory must not exist yet or must be empty — a baseline run has nothing to lose, so no
+backup is taken.
+
+**Restart the same container unchanged — an ordinary restart now takes a backup too:**
+```bash
+docker restart smoke254
+sleep 5
+docker logs smoke254 2>&1 | grep "\[Database - Init\]" | tail -3
+ls .claude/temp/smoke-254-data/backups/*.db 2>/dev/null | wc -l
+```
+Must show `schema is up to date`, and the backup count must now be `1` — this is the deliberately
+chosen tradeoff (see #254's plan doc discussion), not a bug: every non-baseline startup backs up
+before seeding, since seeding has no cheaper "is there real work to do" signal to gate on the way
+migrations do (a version-count check alone is exactly what missed the schema/version mismatch this
+fix exists to protect against). Only the very first baseline run is skipped, confirmed by the
+previous step.
+
+**Break the schema directly on the host side, then restart (start the container with an admin key
+this time — needed for the Reset call in the next step):**
+```bash
+docker rm -f smoke254
+MSYS_NO_PATHCONV=1 docker run -d --name smoke254 -p 8080:8080 \
+  -v "C:/repos/Quotinator/.claude/temp/smoke-254-data:/data" \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 8
+docker stop smoke254
+dotnet script scripts/execute-sql.csx -- \
+  --db .claude/temp/smoke-254-data/quotinatordata.db \
+  --sql "PRAGMA foreign_keys=OFF; DROP TABLE Quotinator_Quote;"
+docker start smoke254
+sleep 8
+docker logs smoke254 2>&1 | tail -20
+ls .claude/temp/smoke-254-data/backups/*.db 2>/dev/null | wc -l
+docker ps -a --filter name=smoke254 --format "{{.Status}}"
+```
+- The log must show, in order: `[Database - Backup] backup complete`, `[Database - Init] seeding
+  failed — restoring pre-seed backup, database left unchanged...` (ERR), `[Database - Init] pre-seed
+  backup restored.` (INF), then `[Server] Database initialisation failed...` (CRIT/FTL) with the
+  underlying `SqliteException: ... no such table: Quotinator_Quote` attached as the log event's
+  exception — not a bare ".NET Unhandled exception" runtime dump.
+- At least one new backup `.db` file must exist (one per `CreateBackup` call — its own `-shm`/`-wal`
+  WAL sidecars don't count as separate backups).
+- `docker ps -a` must show the container as `Up ...` — **not** `Exited` — the app degrades, it does
+  not crash.
+
+**Confirm the degraded HTTP surface, then call Reset and confirm it actually recovers:**
+```bash
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  http://localhost:8080/api/v1/admin/database/reset -o /dev/null
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
+```
+- `/health` must return `503` with `{"status":"unhealthy","reason":"..."}` (not a bare `200`) —
+  and `/quotes/random` must return `503` with `{"status":"unavailable","reason":"..."}`, never a raw
+  exception. A Reset call made with a wrong/missing `X-Api-Key` must return `401` (not `503`) even
+  while degraded — confirming the health gate exempts `/api/v1/admin/*` from the 503 gate entirely,
+  rather than blocking the route outright and only letting a correctly-authenticated call through.
+- The Reset call must return `200` with a real row-count summary (799 quotes, etc.) — it does its
+  own independent schema rebuild, unaffected by the degraded state.
+- After Reset, `/health` must return `200` with `{"status":"healthy"}` and `/quotes/random` must
+  return `200` with real data — proving `DatabaseHealthState.MarkHealthy()` actually clears the
+  degraded state rather than requiring a process restart to recover.
+
+Clean up: `docker rm -f smoke254 && rm -rf .claude/temp/smoke-254-data`.
 
