@@ -5,7 +5,7 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A fictional world or franchise spanning one or more Series (e.g. "Middle Earth").</summary>
-[Table("Universe")]
+[Table("Quotinator_Universe")]
 public sealed class UniverseEntity : RecordBase
 {
     /// <summary>The universe's name. Unique.</summary>

@@ -3,9 +3,9 @@ using Quotinator.Data.Models;
 
 namespace Quotinator.Core.Entities;
 
-/// <summary>A translated title for a <see cref="Source"/>.</summary>
-[Table("SourceTranslations")]
-public sealed class SourceTranslation : RecordBase
+/// <summary>A translated title for a <see cref="SourceEntity"/>.</summary>
+[Table("Quotinator_SourceTranslation")]
+public sealed class SourceTranslationEntity : RecordBase
 {
     /// <summary>The source this translation belongs to.</summary>
     public Guid   SourceId { get; init; }

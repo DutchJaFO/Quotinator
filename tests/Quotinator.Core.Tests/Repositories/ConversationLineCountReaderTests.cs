@@ -35,13 +35,13 @@ public class ConversationLineCountReaderTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         conn.Execute("""
-            CREATE TABLE Conversations (
+            CREATE TABLE Quotinator_Conversation (
                 Id TEXT PRIMARY KEY,
                 Description TEXT,
                 DateCreated TEXT NOT NULL,
                 IsDeleted INTEGER NOT NULL DEFAULT 0
             );
-            CREATE TABLE ConversationLines (
+            CREATE TABLE Quotinator_ConversationLine (
                 Id TEXT PRIMARY KEY,
                 ConversationId TEXT NOT NULL,
                 [Order] INTEGER NOT NULL,
@@ -60,12 +60,12 @@ public class ConversationLineCountReaderTests
     }
 
     private void InsertConversation(Guid id, bool lowercaseId = false) =>
-        Execute("INSERT INTO Conversations (Id, DateCreated) VALUES (@id, '2026-01-01 00:00:00');",
+        Execute("INSERT INTO Quotinator_Conversation (Id, DateCreated) VALUES (@id, '2026-01-01 00:00:00');",
             new { id = FormatId(id, lowercaseId) });
 
     private void InsertLine(Guid conversationId, int order, bool isDeleted = false, bool lowercaseId = false) =>
         Execute(
-            "INSERT INTO ConversationLines (Id, ConversationId, [Order], DateCreated, IsDeleted) " +
+            "INSERT INTO Quotinator_ConversationLine (Id, ConversationId, [Order], DateCreated, IsDeleted) " +
             "VALUES (@id, @conversationId, @order, '2026-01-01 00:00:00', @isDeleted);",
             new
             {

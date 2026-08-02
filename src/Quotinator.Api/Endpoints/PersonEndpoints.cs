@@ -43,7 +43,7 @@ internal static class PersonEndpoints
         ILogger<Log> logger,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
-        IListableRepository<Person> repository = null!)
+        IListableRepository<PersonEntity> repository = null!)
     {
         logger.LogInformation("[Api - GetAllPeople] page={Page} pageSize={PageSize}", page, pageSize);
 
@@ -62,7 +62,7 @@ internal static class PersonEndpoints
         [Description("UUID of the person.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        IListableRepository<Person> repository)
+        IListableRepository<PersonEntity> repository)
     {
         logger.LogInformation("[Api - GetPersonById] id={Id}", id);
 
@@ -73,7 +73,7 @@ internal static class PersonEndpoints
         return NotFoundResult.OkOrNotFound(response, localizer, ApiMessages.PersonNotFound);
     }
 
-    private static PersonResponse ToResponse(Person person) => new()
+    private static PersonResponse ToResponse(PersonEntity person) => new()
     {
         Id                 = person.Id.ToCanonicalId(),
         Name               = person.Name,

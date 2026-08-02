@@ -131,9 +131,10 @@ internal static class AdminEndpoints
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
+        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
         {
             await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh);
+            dbHealth.MarkHealthy();
             return Results.Ok(new DatabaseSeedSummaryResponse
             {
                 Quotes          = db.QuoteCount,

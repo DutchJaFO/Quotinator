@@ -5,7 +5,7 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>An ordered grouping of quotes, stage directions, and sound cues (see <see cref="ConversationLineEntity"/>).</summary>
-[Table("Conversations")]
+[Table("Quotinator_Conversation")]
 public sealed class ConversationEntity : RecordBase
 {
     /// <summary>Optional human-readable label for the conversation.</summary>

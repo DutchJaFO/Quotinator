@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
 using Quotinator.Core.Services;
+using Quotinator.Data.Database;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
@@ -24,7 +25,7 @@ public class ImportEndpointTests
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
-                services.AddSingleton(NoOpDatabaseInitializer.Instance);
+                services.AddSingleton<IDatabaseInitializer>(NoOpDatabaseInitializer.Instance);
                 services.AddSingleton<IAuditEntryWriter>(new NoOpAuditEntryWriter());
                 services.AddSingleton<IAuditEntryReader>(new NoOpAuditEntryReader());
                 services.AddSingleton<ICallerContext>(new NoOpCallerContext());

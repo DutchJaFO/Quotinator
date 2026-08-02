@@ -5,8 +5,8 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A fictional character who delivers a quote. May appear in multiple Sources — see <see cref="CharacterSourceEntity"/> (#179).</summary>
-[Table("Characters")]
-public sealed class Character : RecordBase
+[Table("Quotinator_Character")]
+public sealed class CharacterEntity : RecordBase
 {
     /// <summary>The character's name in the source's original language.</summary>
     public string Name     { get; init; } = string.Empty;

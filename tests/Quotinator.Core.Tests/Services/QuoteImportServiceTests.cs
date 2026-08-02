@@ -51,9 +51,9 @@ public class QuoteImportServiceTests
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
         var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -87,9 +87,9 @@ public class QuoteImportServiceTests
         var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
         var actionService  = new SqliteImportActionService(actionReader, coordinator, changeLogWriter ?? NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -119,7 +119,7 @@ public class QuoteImportServiceTests
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        return (await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id", new { id = SharedId }))!;
+        return (await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId }))!;
     }
 
     // ── Fresh insert ─────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ public class QuoteImportServiceTests
         Assert.AreEqual(0, result.Summary.Errors);
         Assert.IsNotNull(result.BatchId);
         Assert.IsEmpty(result.Conflicts, "A brand-new quote is an Add action, never surfaced as a conflict entry — this is what makes a zero-conflict import map to 200, not 202");
-        Assert.AreEqual(1, await CountAsync("Quotes"));
+        Assert.AreEqual(1, await CountAsync("Quotinator_Quote"));
         Assert.AreEqual(1, await CountAsync("Import_Batch"));
         Assert.AreEqual("newest-wins", result.ConflictPolicy, "Response-facing wire value must be kebab-case, matching every other DuplicateResolutionPolicy JSON value in this API");
     }
@@ -242,7 +242,7 @@ public class QuoteImportServiceTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var (completenessStatus, noValueKnown) = await conn.QuerySingleAsync<(string CompletenessStatus, string NoValueKnown)>(
-            "SELECT CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+            "SELECT CompletenessStatus, NoValueKnown FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
 
         // #165: nothing currently populates NoValueKnown with real per-field markers at creation, so
         // it's always empty for a brand-new row — which CompletenessGuard.ComputeNextStatus correctly
@@ -273,7 +273,7 @@ public class QuoteImportServiceTests
         {
             conn.Open();
             await conn.ExecuteAsync(
-                "UPDATE Quotes SET CompletenessStatus = 'Complete', NoValueKnown = '[\"date\"]' WHERE Id = @id",
+                "UPDATE Quotinator_Quote SET CompletenessStatus = 'Complete', NoValueKnown = '[\"date\"]' WHERE Id = @id",
                 new { id = SharedId });
         }
 
@@ -286,7 +286,7 @@ public class QuoteImportServiceTests
         using var conn2 = new SqliteConnection($"Data Source={_dbPath}");
         conn2.Open();
         var (quoteText, completenessStatus, noValueKnown) = await conn2.QuerySingleAsync<(string QuoteText, string CompletenessStatus, string NoValueKnown)>(
-            "SELECT QuoteText, CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+            "SELECT QuoteText, CompletenessStatus, NoValueKnown FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
 
         Assert.AreEqual("Original.", quoteText, "The row itself must be untouched — this is what 'survives reimport unchanged' actually means");
         Assert.AreEqual("Complete", completenessStatus, "A human's completed review must survive a held re-import attempt");
@@ -309,7 +309,7 @@ public class QuoteImportServiceTests
         using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             conn.Open();
-            await conn.ExecuteAsync("UPDATE Quotes SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = SharedId });
+            await conn.ExecuteAsync("UPDATE Quotinator_Quote SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = SharedId });
         }
 
         var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
@@ -319,7 +319,7 @@ public class QuoteImportServiceTests
 
         using var conn2 = new SqliteConnection($"Data Source={_dbPath}");
         conn2.Open();
-        var quoteText = await conn2.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotes WHERE Id = @id", new { id = SharedId });
+        var quoteText = await conn2.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
         Assert.AreEqual("Original.", quoteText, "MergeOurs must keep the existing (Complete) value, not the incoming one");
     }
 
@@ -352,7 +352,7 @@ public class QuoteImportServiceTests
             conn.Open();
             // #209: the row is stored under its canonicalized (uppercase) id, not the lowercase id
             // this test declared — UPPER() makes the update tolerant of either.
-            await conn.ExecuteAsync("UPDATE Sources SET CompletenessStatus = 'Complete' WHERE UPPER(Id) = UPPER(@id)", new { id = sourceId });
+            await conn.ExecuteAsync("UPDATE Quotinator_Source SET CompletenessStatus = 'Complete' WHERE UPPER(Id) = UPPER(@id)", new { id = sourceId });
         }
 
         var unrelatedQuoteId = "dddddddd-4444-4444-8444-444444444444";
@@ -373,7 +373,7 @@ public class QuoteImportServiceTests
         using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         verifyConn.Open();
         var unrelatedQuoteCount = await verifyConn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM Quotes WHERE Id = @id", new { id = unrelatedQuoteId });
+            "SELECT COUNT(*) FROM Quotinator_Quote WHERE Id = @id", new { id = unrelatedQuoteId });
         Assert.AreEqual(0, unrelatedQuoteCount, "The whole batch must be held — an unrelated quote sharing the batch must not be written either");
     }
 
@@ -471,7 +471,7 @@ public class QuoteImportServiceTests
         Assert.IsTrue(result.Preview);
         Assert.IsNotNull(result.BatchId, "Preview now stages a real batch, unlike the old rollback contract");
         Assert.AreEqual(1, result.Summary.Imported, "Response still reports what would have happened");
-        Assert.AreEqual(0, await CountAsync("Quotes"), "Staging never applies — no quote written");
+        Assert.AreEqual(0, await CountAsync("Quotinator_Quote"), "Staging never applies — no quote written");
         Assert.AreEqual(1, await CountAsync("Import_Batch"), "The batch itself is durably staged");
         Assert.HasCount(2, await _testActionReader.GetAllForBatchAsync(result.BatchId!.Value.ToString("D")), "The planned Quote and Source Add actions are both durably staged");
     }
@@ -496,7 +496,7 @@ public class QuoteImportServiceTests
     {
         var service = CreateService();
         var previewResult = await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: true, TestContext.CancellationToken);
-        Assert.AreEqual(0, await CountAsync("Quotes"), "Still just staged, not applied");
+        Assert.AreEqual(0, await CountAsync("Quotinator_Quote"), "Still just staged, not applied");
 
         var applyResult = await service.ApplyStagedBatchAsync(previewResult.BatchId!.Value, TestContext.CancellationToken);
 
@@ -504,7 +504,7 @@ public class QuoteImportServiceTests
         Assert.IsFalse(applyResult.Preview);
         Assert.AreEqual(1, applyResult.Summary.Imported);
         Assert.AreEqual(0, applyResult.Conflicts.Count(c => c.Status == "pending"), "Nothing pending — endpoint would return 200");
-        Assert.AreEqual(1, await CountAsync("Quotes"), "Applying the staged batch actually writes the quote");
+        Assert.AreEqual(1, await CountAsync("Quotinator_Quote"), "Applying the staged batch actually writes the quote");
     }
 
     [TestMethod]
@@ -551,7 +551,7 @@ public class QuoteImportServiceTests
         Assert.AreEqual(1, result.Summary.Imported);
         Assert.AreEqual(1, result.Summary.Errors);
         Assert.AreEqual(1, result.Errors.Single().Row);
-        Assert.AreEqual(1, await CountAsync("Quotes"));
+        Assert.AreEqual(1, await CountAsync("Quotinator_Quote"));
     }
 
     [TestMethod]
@@ -614,9 +614,9 @@ public class QuoteImportServiceTests
             JsonStream(ConversationJson(conversationId, quoteId, stageDirectionId)), "conversation.json", null, preview: false, TestContext.CancellationToken);
 
         Assert.AreEqual(0, result.Summary.Errors);
-        Assert.AreEqual(1, await CountAsync("Conversations"));
-        Assert.AreEqual(1, await CountAsync("StageDirections"));
-        Assert.AreEqual(2, await CountAsync("ConversationLines"));
+        Assert.AreEqual(1, await CountAsync("Quotinator_Conversation"));
+        Assert.AreEqual(1, await CountAsync("Quotinator_StageDirection"));
+        Assert.AreEqual(2, await CountAsync("Quotinator_ConversationLine"));
 
         var actionTypes = (await _testActionReader.GetAllForBatchAsync(result.BatchId!.Value.ToString("D")))
             .Select(a => a.EntityType)
@@ -641,9 +641,9 @@ public class QuoteImportServiceTests
         // ids a second time must detect they already exist and skip, not violate a PK/UNIQUE constraint.
         await service.ImportAsync(JsonStream(json), "second.json", null, preview: false, TestContext.CancellationToken);
 
-        Assert.AreEqual(1, await CountAsync("Conversations"));
-        Assert.AreEqual(1, await CountAsync("StageDirections"));
-        Assert.AreEqual(2, await CountAsync("ConversationLines"), "Re-importing must not double the line count either");
+        Assert.AreEqual(1, await CountAsync("Quotinator_Conversation"));
+        Assert.AreEqual(1, await CountAsync("Quotinator_StageDirection"));
+        Assert.AreEqual(2, await CountAsync("Quotinator_ConversationLine"), "Re-importing must not double the line count either");
     }
 
     [TestMethod]

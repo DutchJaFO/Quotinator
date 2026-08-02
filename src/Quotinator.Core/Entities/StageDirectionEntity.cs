@@ -5,7 +5,7 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A reusable scene-setting or action description (e.g. "[EXT. AIRPORT - DAY]") that can appear in a conversation.</summary>
-[Table("StageDirections")]
+[Table("Quotinator_StageDirection")]
 public sealed class StageDirectionEntity : RecordBase
 {
     /// <summary>The stage direction text in its original language.</summary>

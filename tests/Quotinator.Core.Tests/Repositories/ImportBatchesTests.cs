@@ -59,9 +59,9 @@ public class ImportBatchesTests
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
         var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -86,20 +86,32 @@ public class ImportBatchesTests
         await conn.ExecuteAsync("CREATE TABLE System_ConsumerSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL)");
         await conn.ExecuteAsync("INSERT INTO System_ConsumerSchemaVersion VALUES (1, '2025-01-01 00:00:00')");
         await conn.ExecuteAsync("INSERT INTO System_ConsumerSchemaVersion VALUES (2, '2025-01-01 00:00:00')");
-        // #253's Migration005 rebuilds Sources/Characters/People/Quotes (to repoint ImportBatchId at
-        // Import_Batch instead of ImportBatches), so — same reasoning as the pre-existing Characters
-        // comment below — every one of these stubs must carry the same base columns Migration001
-        // actually created, or migration replay from this simulated v2 state fails with
-        // "no such column" once it reaches Migration005.
+        // This fixture simulates the state BEFORE migration 6 (the domain-prefix rename) runs, so
+        // every stub below is deliberately created under its pre-#254 name (Sources/Characters/
+        // People/Quotes/QuoteGenres) — migration 6 is what rebuilds these into their final
+        // Quotinator_-prefixed names (and repoints ImportBatchId at Import_Batch instead of
+        // ImportBatches), so replaying it from here is exactly what these tests exercise. Migration 5
+        // (#150's CHECK constraint, frozen/already-shipped — never edit its content, only add new
+        // migrations after it) also replays for real from this v2 state, but it only touches
+        // ImportBatches.ConflictPolicy and needs no stub tables of its own. Every one of these stubs
+        // must carry the same base columns Migration001 actually created, or migration replay from
+        // this simulated v2 state fails with "no such column" once it reaches migration 6.
         await conn.ExecuteAsync("CREATE TABLE Sources (Id TEXT PRIMARY KEY, Title TEXT NOT NULL DEFAULT '', Type TEXT NOT NULL DEFAULT 'Movie', Date TEXT, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        // Migration006's rebuild pass touches every one of Migration001's original tables, not just
+        // Sources/Characters/People/Quotes/QuoteGenres — SourceTranslations/CharacterTranslations/
+        // QuoteTranslations must exist too (even empty) or its "INSERT ... SELECT ... FROM
+        // SourceTranslations" step fails with "no such table" once replay reaches migration 6.
+        await conn.ExecuteAsync("CREATE TABLE SourceTranslations (Id TEXT PRIMARY KEY, SourceId TEXT NOT NULL, Language TEXT NOT NULL, Title TEXT NOT NULL, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
         // #179's Migration009 reads Characters.SourceId/DateCreated (before dropping the column) and
         // Characters.Name/DateModified/DateDeleted/IsDeleted (rebuilding the table) — this stub must
         // carry the same base columns Migration001 actually created, or migration replay from this
         // simulated v2 state fails with "no such column" once it reaches Migration009.
         await conn.ExecuteAsync("CREATE TABLE Characters (Id TEXT PRIMARY KEY, SourceId TEXT, Name TEXT NOT NULL DEFAULT '', DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        await conn.ExecuteAsync("CREATE TABLE CharacterTranslations (Id TEXT PRIMARY KEY, CharacterId TEXT NOT NULL, Language TEXT NOT NULL, Name TEXT NOT NULL, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
         await conn.ExecuteAsync("CREATE TABLE People (Id TEXT PRIMARY KEY, Name TEXT NOT NULL DEFAULT '', DateOfBirth TEXT, DateOfDeath TEXT, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
         await conn.ExecuteAsync("CREATE TABLE Quotes (Id TEXT PRIMARY KEY, QuoteText TEXT NOT NULL, OriginalLanguage TEXT NOT NULL DEFAULT 'en', SourceId TEXT NOT NULL REFERENCES Sources(Id), CharacterId TEXT, PersonId TEXT, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
-        await conn.ExecuteAsync("CREATE TABLE QuoteGenres (Id TEXT PRIMARY KEY, QuoteId TEXT NOT NULL, Genre TEXT NOT NULL)");
+        await conn.ExecuteAsync("CREATE TABLE QuoteTranslations (Id TEXT PRIMARY KEY, QuoteId TEXT NOT NULL, Language TEXT NOT NULL, QuoteText TEXT NOT NULL, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        await conn.ExecuteAsync("CREATE TABLE QuoteGenres (Id TEXT PRIMARY KEY, QuoteId TEXT NOT NULL, Genre TEXT NOT NULL, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
         await conn.ExecuteAsync(
             "INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES ('TEST-SOURCE-ID', 'Existing test source', 'Movie', '2025-01-01 00:00:00');");
         await conn.ExecuteAsync(
@@ -152,7 +164,7 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
 
-        foreach (var table in new[] { "Quotes", "Sources", "Characters", "People" })
+        foreach (var table in new[] { "Quotinator_Quote", "Quotinator_Source", "Quotinator_Character", "Quotinator_Person" })
         {
             var col = await conn.QuerySingleOrDefaultAsync<(string name, int notNull)>(
                 $"SELECT name, [notnull] FROM pragma_table_info('{table}') WHERE name = 'ImportBatchId'");
@@ -161,14 +173,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>App schema migration version is bumped to 5 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>App schema migration version is bumped to 6 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(5, db.SchemaVersion, "SchemaVersion should be 5: #155's consolidation of migrations 4-11 into one (4), plus #150's ImportBatches.ConflictPolicy CHECK constraint migration (5)");
+        Assert.AreEqual(6, db.SchemaVersion, "SchemaVersion should be 6: #155's consolidation of migrations 4-11 into one (4), #150's ImportBatches.ConflictPolicy CHECK constraint migration (5), plus #254's domain-prefix rename (6)");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────
@@ -218,7 +230,7 @@ public class ImportBatchesTests
         var curatedBatch  = batches.Single(b => b.Name == Path.GetFileName(CuratedFile));
         var vilaboimBatch = batches.Single(b => b.Name == Path.GetFileName(VilaboimFile));
 
-        var quoteBatchIds = (await conn.QueryAsync<string?>("SELECT ImportBatchId FROM Quotes")).ToList();
+        var quoteBatchIds = (await conn.QueryAsync<string?>("SELECT ImportBatchId FROM Quotinator_Quote")).ToList();
 
         Assert.IsTrue(quoteBatchIds.All(id => id is not null), "Every seeded quote must have a non-null ImportBatchId");
         Assert.IsTrue(quoteBatchIds.All(id => id == curatedBatch.Id || id == vilaboimBatch.Id),
@@ -250,7 +262,7 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
 
-        var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes");
+        var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote");
         Assert.IsGreaterThan(0, quoteCount, "Quotes from the valid curated file should still be seeded");
 
         var emptyBatch = await conn.QuerySingleAsync<(string Id, int RecordCount)>(
@@ -352,7 +364,7 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var importBatchId = await conn.ExecuteScalarAsync<string?>(
-            "SELECT ImportBatchId FROM Quotes WHERE Id = 'TEST-QUOTE-ID'");
+            "SELECT ImportBatchId FROM Quotinator_Quote WHERE Id = 'TEST-QUOTE-ID'");
 
         Assert.IsNull(importBatchId, "Pre-migration records must have NULL ImportBatchId");
     }

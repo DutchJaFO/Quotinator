@@ -24,9 +24,9 @@ public sealed class SqliteImportActionService : IImportActionService
     private readonly IImportActionCoordinator _coordinator;
     private readonly IChangeWriter _changeLogWriter;
     private readonly IRestorableRepository<QuoteEntity> _quoteRepository;
-    private readonly IRestorableRepository<Source> _sourceRepository;
-    private readonly IRestorableRepository<Character> _characterRepository;
-    private readonly IRestorableRepository<Person> _personRepository;
+    private readonly IRestorableRepository<SourceEntity> _sourceRepository;
+    private readonly IRestorableRepository<CharacterEntity> _characterRepository;
+    private readonly IRestorableRepository<PersonEntity> _personRepository;
     private readonly IRestorableRepository<ConversationEntity> _conversationRepository;
     private readonly IRestorableRepository<StageDirectionEntity> _stageDirectionRepository;
     private readonly IRestorableRepository<SoundCueEntity> _soundCueRepository;
@@ -39,9 +39,9 @@ public sealed class SqliteImportActionService : IImportActionService
         IImportActionCoordinator coordinator,
         IChangeWriter changeLogWriter,
         IRestorableRepository<QuoteEntity> quoteRepository,
-        IRestorableRepository<Source> sourceRepository,
-        IRestorableRepository<Character> characterRepository,
-        IRestorableRepository<Person> personRepository,
+        IRestorableRepository<SourceEntity> sourceRepository,
+        IRestorableRepository<CharacterEntity> characterRepository,
+        IRestorableRepository<PersonEntity> personRepository,
         IRestorableRepository<ConversationEntity> conversationRepository,
         IRestorableRepository<StageDirectionEntity> stageDirectionRepository,
         IRestorableRepository<SoundCueEntity> soundCueRepository,
@@ -450,7 +450,7 @@ public sealed class SqliteImportActionService : IImportActionService
             // avoid. Found live (T2), not by the unit suite — the test fixture used had no genres.
             await quoteConn.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote, new { id = action.EntityId });
             await quoteConn.ExecuteAsync(Sql.QuoteTranslations.DeleteForQuote, new { id = action.EntityId });
-            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotes"), new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Quote"), new { id = action.EntityId });
         }
 
         // Character/Person Add ids are always freshly computed via EntityIdentity (never a
@@ -472,12 +472,12 @@ public sealed class SqliteImportActionService : IImportActionService
         // be canonically cased the way EntityIdentity.StableId is. Raw SQL, not the Guid-typed
         // repository path, same reasoning as Conversation/StageDirection/SoundCue below.
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Source))
-            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Sources"), new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Source"), new { id = action.EntityId });
 
         // #173: a people[] entry supplies its own file-authored id, not guaranteed to be canonically
         // cased — raw SQL, not the Guid-typed repository path, same fix #162 made for Source above.
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Person))
-            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("People"), new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Person"), new { id = action.EntityId });
 
         // #180: Series/Universe entries have no explicit-id file section (matched by Name only, like
         // Character/Person implicitly), so their Add id is always EntityIdentity-derived (always
@@ -485,10 +485,10 @@ public sealed class SqliteImportActionService : IImportActionService
         // consistency with Sql.Series/Sql.Universe's own no-repository query set (#183/#187/#188 are
         // where a real IRestorableRepository<SeriesEntity>/<UniverseEntity> gets introduced).
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Series))
-            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Series"), new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Series"), new { id = action.EntityId });
 
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Universe))
-            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Universe"), new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Universe"), new { id = action.EntityId });
 
         // #68: Conversation/StageDirection/SoundCue ids are explicit-in-file, like Quote's — not
         // EntityIdentity-derived like Character/Person's — so the same raw-SQL, no-forced-canonical-
@@ -498,21 +498,21 @@ public sealed class SqliteImportActionService : IImportActionService
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Conversation))
         {
             await quoteConn.ExecuteAsync(Sql.ConversationLines.DeleteForConversation, new { id = action.EntityId });
-            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Conversations"), new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Conversation"), new { id = action.EntityId });
         }
 
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.StageDirection))
         {
             await quoteConn.ExecuteAsync(Sql.ConversationLines.DeleteForStageDirection, new { id = action.EntityId });
             await quoteConn.ExecuteAsync(Sql.StageDirectionTranslations.DeleteForStageDirection, new { id = action.EntityId });
-            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("StageDirections"), new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_StageDirection"), new { id = action.EntityId });
         }
 
         foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.SoundCue))
         {
             await quoteConn.ExecuteAsync(Sql.ConversationLines.DeleteForSoundCue, new { id = action.EntityId });
             await quoteConn.ExecuteAsync(Sql.SoundCueTranslations.DeleteForSoundCue, new { id = action.EntityId });
-            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("SoundCues"), new { id = action.EntityId });
+            await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_SoundCue"), new { id = action.EntityId });
         }
     }
 
@@ -652,7 +652,7 @@ public sealed class SqliteImportActionService : IImportActionService
                     // #162: raw SQL, not the Guid-typed repository path — see ClearStaleAddTargetsAsync's
                     // remark; a Source Add's id may now be an explicit, not-necessarily-canonically-cased
                     // file-authored id, not always an EntityIdentity-derived one.
-                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Sources"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_Source"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "source", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Person:
@@ -677,7 +677,7 @@ public sealed class SqliteImportActionService : IImportActionService
                     // #173: raw SQL, not the Guid-typed repository path — a people[] Add's id may now
                     // be an explicit, not-necessarily-canonically-cased file-authored id, same fix #162
                     // made for Source (SqliteImportActionService.cs's Source case above).
-                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("People"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_Person"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "person", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Series:
@@ -701,7 +701,7 @@ public sealed class SqliteImportActionService : IImportActionService
                     // point at it).
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Series.CountActiveReferences, action.EntityId))
                         break;
-                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Series"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_Series"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "series", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Universe:
@@ -722,7 +722,7 @@ public sealed class SqliteImportActionService : IImportActionService
                     // A Universe Add is soft-deleted — see Series' remark above.
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Universe.CountActiveReferences, action.EntityId))
                         break;
-                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Universe"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_Universe"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "universe", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.Conversation:
@@ -747,7 +747,7 @@ public sealed class SqliteImportActionService : IImportActionService
                     // carries an FK to a Conversation (see Sql.Conversations' own remark). Its
                     // ConversationLines are left orphaned, same precedent as QuoteGenres/
                     // QuoteTranslations on a reversed Quote Add.
-                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Conversations"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_Conversation"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "conversation", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.StageDirection:
@@ -768,7 +768,7 @@ public sealed class SqliteImportActionService : IImportActionService
                     }
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.StageDirections.CountActiveReferences, action.EntityId))
                         break;
-                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("StageDirections"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_StageDirection"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "stageDirection", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 case ImportActionEntityTypes.SoundCue:
@@ -790,7 +790,7 @@ public sealed class SqliteImportActionService : IImportActionService
                     }
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.SoundCues.CountActiveReferences, action.EntityId))
                         break;
-                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("SoundCues"), new { now, id = action.EntityId }, sqliteTransaction);
+                    await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_SoundCue"), new { now, id = action.EntityId }, sqliteTransaction);
                     await QuoteSeedWriter.LogChangeAsync(changeLog, "soundCue", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, sqliteConnection, sqliteTransaction);
                     break;
                 default:
@@ -811,7 +811,7 @@ public sealed class SqliteImportActionService : IImportActionService
             // Raw SQL, not _quoteRepository.SoftDeleteAsync — see ClearStaleAddTargetsAsync's remarks
             // on why Quote uses the same raw-SQL convention as Source/Person/Conversation/
             // StageDirection/SoundCue.
-            await connection.ExecuteAsync(RepositorySql.SoftDelete("Quotes"),
+            await connection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_Quote"),
                 new { now = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat), id = action.EntityId }, transaction);
             await QuoteSeedWriter.LogChangeAsync(changeLog, "quote", action.EntityId, ChangeAction.SoftDelete, oldValue: null, newValue: null, connection, transaction);
             return;

@@ -297,7 +297,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
                     await AuditWriter.WriteAsync(new AuditEntryEntity
                     {
-                        TableName   = "Quotes",
+                        TableName   = "Quotinator_Quote",
                         RecordId    = batchIdStr,
                         Operation   = AuditOperation.BulkInsert,
                         Agent       = CallerContext.Agent,

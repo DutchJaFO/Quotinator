@@ -164,7 +164,7 @@ internal static class ImportRuleEndpoints
         publicGroup.MapGet("/alias", async (
                 string? fileName,
                 string? origin,
-                IListableRepository<Source> sourceRepository,
+                IListableRepository<SourceEntity> sourceRepository,
                 IRuleFileOverridePathResolver pathResolver,
                 ISourceFileOverrideRegistry registry,
                 IApiLocalizer localizer,

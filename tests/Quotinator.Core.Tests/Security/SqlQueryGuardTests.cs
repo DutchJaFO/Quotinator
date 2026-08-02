@@ -15,9 +15,9 @@ public class SqlQueryGuardTests
     /// registry). Computed once and reused by every text-case-guard test in this class.
     /// </summary>
     private static readonly IReadOnlySet<string> CoreTextColumnNames = SqlTextCaseGuard.DiscoverTextColumnNames(
-        typeof(Character), typeof(CharacterTranslation), typeof(ConversationEntity), typeof(Person),
+        typeof(CharacterEntity), typeof(CharacterTranslationEntity), typeof(ConversationEntity), typeof(PersonEntity),
         typeof(QuoteEntity), typeof(QuoteTranslationEntity), typeof(SeriesEntity), typeof(SoundCueEntity),
-        typeof(SoundCueTranslationEntity), typeof(Source), typeof(SourceTranslation),
+        typeof(SoundCueTranslationEntity), typeof(SourceEntity), typeof(SourceTranslationEntity),
         typeof(StageDirectionEntity), typeof(StageDirectionTranslationEntity), typeof(UniverseEntity));
 
     /// <summary>

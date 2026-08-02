@@ -388,14 +388,14 @@ public sealed class SqliteQuoteService : IQuoteService
 
         var clauses = new List<string> { "q.IsDeleted = 0", "s.IsDeleted = 0" };
         if (dbTypes  is not null) clauses.Add("s.Type IN @dbTypes");
-        if (dbGenres is not null) clauses.Add($"EXISTS (SELECT 1 FROM QuoteGenres qg WHERE {IdClauses.Join("qg.QuoteId", "q.Id")} AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)");
+        if (dbGenres is not null) clauses.Add($"EXISTS (SELECT 1 FROM Quotinator_QuoteGenre qg WHERE {IdClauses.Join("qg.QuoteId", "q.Id")} AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)");
         if (character is not null) clauses.Add(Sql.SearchField.CharacterFilter(unicodeAwareSearch));
         if (author    is not null) clauses.Add(Sql.SearchField.AuthorFilter(unicodeAwareSearch));
         if (source    is not null) clauses.Add(Sql.SearchField.SourceFilter(unicodeAwareSearch));
         // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
         if (seriesId  is not null) clauses.Add(IdClauses.Equals("s.SeriesId", "seriesId"));
         if (universeId is not null) clauses.Add(
-            $"LOWER(s.SeriesId) IN (SELECT LOWER(Id) FROM Series WHERE {IdClauses.Equals("UniverseId", "universeId")} AND IsDeleted = 0)");
+            $"LOWER(s.SeriesId) IN (SELECT LOWER(Id) FROM Quotinator_Series WHERE {IdClauses.Equals("UniverseId", "universeId")} AND IsDeleted = 0)");
         if (yearFrom  is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom");
         if (yearTo    is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo");
 

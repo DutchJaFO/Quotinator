@@ -6,8 +6,8 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A film, television series, book, or other source from which quotes are drawn.</summary>
-[Table("Sources")]
-public sealed class Source : RecordBase
+[Table("Quotinator_Source")]
+public sealed class SourceEntity : RecordBase
 {
     /// <summary>The title of the source in its original language.</summary>
     public string Title { get; init; } = string.Empty;

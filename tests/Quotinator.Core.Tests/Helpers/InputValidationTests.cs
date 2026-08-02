@@ -209,7 +209,7 @@ public class InputValidationTests
 
     [TestMethod]
     [DataRow("' OR 1=1 --")]
-    [DataRow("'; DROP TABLE Quotes --")]
+    [DataRow("'; DROP TABLE Quotinator_Quote --")]
     [DataRow("UNION SELECT * FROM Users")]
     [DataRow("/* comment */")]
     [DataRow("EXEC(xp_cmdshell)")]

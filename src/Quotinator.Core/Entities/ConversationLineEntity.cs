@@ -10,7 +10,7 @@ namespace Quotinator.Core.Entities;
 /// matching <see cref="LineType"/> — enforced in SQL by a CHECK constraint (see
 /// <c>QuotinatorMigrations.Migration008_Conversations</c>), not just in application code.
 /// </summary>
-[Table("ConversationLines")]
+[Table("Quotinator_ConversationLine")]
 public sealed class ConversationLineEntity : RecordBase
 {
     /// <summary>The conversation this line belongs to.</summary>

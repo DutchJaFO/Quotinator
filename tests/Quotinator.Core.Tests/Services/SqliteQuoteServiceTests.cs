@@ -45,9 +45,9 @@ public class SqliteQuoteServiceTests
         var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
         var actionService  = new SqliteImportActionService(actionReader, coordinator, new ChangeWriter(_factory),
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -60,8 +60,8 @@ public class SqliteQuoteServiceTests
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
-        var sourceRepo = new SqliteRestorableRepository<Source>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var source = new Source
+        var sourceRepo = new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        var source = new SourceEntity
         {
             Title = "Test Source",
             Type = new SafeValue<QuoteType?>(nameof(QuoteType.Movie), QuoteType.Movie),
@@ -141,10 +141,10 @@ public class SqliteQuoteServiceTests
         return series;
     }
 
-    private async Task<Source> InsertSourceAsync(string title, Guid? seriesId = null)
+    private async Task<SourceEntity> InsertSourceAsync(string title, Guid? seriesId = null)
     {
-        var repo = new SqliteRestorableRepository<Source>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var source = new Source
+        var repo = new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        var source = new SourceEntity
         {
             Title = title,
             Type = new SafeValue<QuoteType?>(nameof(QuoteType.Movie), QuoteType.Movie),

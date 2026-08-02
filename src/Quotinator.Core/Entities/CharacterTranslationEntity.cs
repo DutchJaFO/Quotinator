@@ -3,9 +3,9 @@ using Quotinator.Data.Models;
 
 namespace Quotinator.Core.Entities;
 
-/// <summary>A translated name for a <see cref="Character"/>.</summary>
-[Table("CharacterTranslations")]
-public sealed class CharacterTranslation : RecordBase
+/// <summary>A translated name for a <see cref="CharacterEntity"/>.</summary>
+[Table("Quotinator_CharacterTranslation")]
+public sealed class CharacterTranslationEntity : RecordBase
 {
     /// <summary>The character this translation belongs to.</summary>
     public Guid   CharacterId { get; init; }

@@ -4,7 +4,7 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A translated version of a quote's text for a specific language.</summary>
-[Table("QuoteTranslations")]
+[Table("Quotinator_QuoteTranslation")]
 public sealed class QuoteTranslationEntity : RecordBase
 {
     /// <summary>The quote this translation belongs to.</summary>

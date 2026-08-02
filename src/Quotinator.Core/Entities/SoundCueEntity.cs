@@ -5,7 +5,7 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A reusable audio element (e.g. "[awkward silence]") that can appear in a conversation.</summary>
-[Table("SoundCues")]
+[Table("Quotinator_SoundCue")]
 public sealed class SoundCueEntity : RecordBase
 {
     /// <summary>The sound cue text in its original language.</summary>

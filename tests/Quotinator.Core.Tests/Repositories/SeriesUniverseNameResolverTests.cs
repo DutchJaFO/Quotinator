@@ -40,9 +40,9 @@ public class SeriesUniverseNameResolverTests
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
         var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<Quotinator.Core.Entities.QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Quotinator.Core.Entities.Source>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Quotinator.Core.Entities.Character>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Quotinator.Core.Entities.Person>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Quotinator.Core.Entities.SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Quotinator.Core.Entities.CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Quotinator.Core.Entities.PersonEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -69,7 +69,7 @@ public class SeriesUniverseNameResolverTests
         await conn.OpenAsync();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Series (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
+            "INSERT INTO Quotinator_Series (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
             new { Id = Guid.NewGuid().ToString("D"), Name = name, now });
     }
 
@@ -79,7 +79,7 @@ public class SeriesUniverseNameResolverTests
         await conn.OpenAsync();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
+            "INSERT INTO Quotinator_Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
             new { Id = Guid.NewGuid().ToString("D"), Name = name, now });
     }
 

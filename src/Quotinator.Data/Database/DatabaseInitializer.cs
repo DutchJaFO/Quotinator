@@ -27,14 +27,24 @@ public class DatabaseInitializer : IDatabaseInitializer
     // specific rename must instead live in Quotinator.Core's migration list (#254).
     // #155: version 2 consolidates every Data-owned migration shipped since v1.7.2's single frozen
     // migration (version 1) — see DataConsolidatedMigrations.SinceV172 for the full reasoning.
-    // #253/ADR 015: version 3 replaces the previously-separate, unreleased versions 3+4 (each adding
-    // an AppliedPolicy CHECK constraint) with the domain-prefix rename — see
-    // DomainPrefixRenameMigrations.RenameDataOwnedTables for the full reasoning.
+    // Versions 3 and 4 (each adding an AppliedPolicy CHECK constraint, one for
+    // System_ImportConflicts and one for System_ImportActions) are frozen — found live during #254's
+    // own T1 pass (2026-08-02): an earlier version of #253 squashed these two into a single new
+    // version 3 (the domain-prefix rename), reasoning that neither had ever shipped in a tagged
+    // release. That reasoning was wrong: this project's own local dev database had already run both
+    // in an earlier session, so the squash left that database's already-recorded version 4 reading
+    // as "up to date" under the new 3-migration count, silently skipping the rename entirely and
+    // leaving Import_Batch never created — this project's "never edit an existing migration" policy
+    // protects any database that has already run a migration, not only tagged releases. Corrected:
+    // versions 3 and 4 are restored to their original, unedited content; the domain-prefix rename is
+    // a new version 5, appended after them — see DomainPrefixRenameMigrations.RenameDataOwnedTables.
     private static readonly IReadOnlyList<SchemaMigration> DataOwnedMigrations =
     [
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
         new SchemaMigration { Version = 2, Sql = DataConsolidatedMigrations.SinceV172 },
-        new SchemaMigration { Version = 3, Sql = DomainPrefixRenameMigrations.RenameDataOwnedTables },
+        new SchemaMigration { Version = 3, Sql = ImportConflictMigrations.AddAppliedPolicyCheckConstraint },
+        new SchemaMigration { Version = 4, Sql = ImportActionMigrations.AddAppliedPolicyCheckConstraint },
+        new SchemaMigration { Version = 5, Sql = DomainPrefixRenameMigrations.RenameDataOwnedTables },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -261,8 +271,8 @@ public class DatabaseInitializer : IDatabaseInitializer
         await connection.OpenAsync();
 
         EnableWal(connection);
-        await ApplyMigrationsAsync(connection);
-        await OnInitialisedAsync(connection);
+        var tookBaselinePath = await ApplyMigrationsAsync(connection);
+        await RunInitialisedHookAsync(connection, tookBaselinePath);
     }
 
     /// <summary>
@@ -278,8 +288,8 @@ public class DatabaseInitializer : IDatabaseInitializer
         await connection.OpenAsync();
 
         EnableWal(connection);
-        await ApplyMigrationsAsync(connection, forceIncremental);
-        await OnInitialisedAsync(connection);
+        var tookBaselinePath = await ApplyMigrationsAsync(connection, forceIncremental);
+        await RunInitialisedHookAsync(connection, tookBaselinePath);
     }
 
     /// <summary>
@@ -287,6 +297,37 @@ public class DatabaseInitializer : IDatabaseInitializer
     /// statistics collection. The base implementation is a no-op.
     /// </summary>
     protected virtual Task OnInitialisedAsync(SqliteConnection connection) => Task.CompletedTask;
+
+    // The migration phase has its own backup/restore/rethrow net (ApplyMigrationsAsync below), but
+    // only ever fires when a migration is genuinely pending — an already-up-to-date database skips
+    // it entirely, so there is no cost on an ordinary restart. OnInitialisedAsync (seeding) has no
+    // equivalent condition to key off: it runs unconditionally on every startup (a cheap
+    // existence/count check even when there is nothing to seed), and a version/schema mismatch can
+    // only surface once that check actually runs against the live tables — there is no cheaper
+    // signal to gate on. So the only two honest options are "back up before every non-baseline
+    // startup" (this) or "never back up seeding at all" — a genuinely fresh (baseline) database has
+    // nothing to lose and is skipped, matching ApplyMigrationsAsync's own baseline short-circuit.
+    private async Task RunInitialisedHookAsync(SqliteConnection connection, bool tookBaselinePath)
+    {
+        if (tookBaselinePath)
+        {
+            await OnInitialisedAsync(connection);
+            return;
+        }
+
+        var backupPath = CreateBackup(connection, Math.Max(DataSchemaVersion, SchemaVersion));
+        try
+        {
+            await OnInitialisedAsync(connection);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "[Database - Init] seeding failed — restoring pre-seed backup, database left unchanged...");
+            RestoreBackup(connection, backupPath);
+            Logger.LogInformation("[Database - Init] pre-seed backup restored.");
+            throw;
+        }
+    }
 
     /// <inheritdoc/>
     public async Task ReseedAsync(bool forceSourceRefresh = false)
@@ -450,7 +491,8 @@ public class DatabaseInitializer : IDatabaseInitializer
         await connection.ExecuteAsync(Sql.Schema.DropLegacySchemaVersionTable);
     }
 
-    private async Task ApplyMigrationsAsync(SqliteConnection connection, bool forceIncremental = false, bool skipOwnBackup = false)
+    /// <summary>Applies pending migrations (or the baseline for a genuinely fresh database). Returns <c>true</c> when the baseline path was taken — the caller uses this to decide whether a pre-seed backup is worth taking (a freshly-created database has nothing to lose).</summary>
+    private async Task<bool> ApplyMigrationsAsync(SqliteConnection connection, bool forceIncremental = false, bool skipOwnBackup = false)
     {
         // Must run before either CreateXVersionTable call below — those would otherwise make every
         // fresh database register as "not empty" on the very next line, permanently disabling the
@@ -465,7 +507,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         if (isEmptyDatabase && !forceIncremental && _consumerBaseline is not null)
         {
             await ApplyBaselineAsync(connection);
-            return;
+            return true;
         }
 
         var dataCurrent     = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetDataCurrentVersion);
@@ -481,7 +523,7 @@ public class DatabaseInitializer : IDatabaseInitializer
             Logger.LogInformation(
                 "[Database - Init] schema is up to date (data v{DataVersion}, app v{AppVersion})",
                 dataCurrent, consumerCurrent);
-            return;
+            return false;
         }
 
         // skipOwnBackup: DropAndRebuildAsync (Reset) already took its own backup before this call —
@@ -523,6 +565,8 @@ public class DatabaseInitializer : IDatabaseInitializer
         Logger.LogInformation(
             "[Database - Init] schema updated (data v{DataVersion}, app v{AppVersion})",
             DataSchemaVersion, SchemaVersion);
+
+        return false;
     }
 
     private async Task ApplyBaselineAsync(SqliteConnection connection)

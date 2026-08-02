@@ -56,9 +56,9 @@ public class ConflictResolutionTests
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
         var actionService = new SqliteImportActionService(actionReader, coordinator, changeLogWriter ?? NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -94,11 +94,11 @@ public class ConflictResolutionTests
         conn.Open();
 
         var row = await conn.QuerySingleAsync<(string QuoteText, string? Character)>(
-            "SELECT q.QuoteText, c.Name AS Character FROM Quotes q " +
-            "LEFT JOIN Characters c ON c.Id = q.CharacterId " +
+            "SELECT q.QuoteText, c.Name AS Character FROM Quotinator_Quote q " +
+            "LEFT JOIN Quotinator_Character c ON c.Id = q.CharacterId " +
             "WHERE q.Id = @id", new { id = SharedId });
         var genres = (await conn.QueryAsync<string>(
-            "SELECT Genre FROM QuoteGenres WHERE QuoteId = @id", new { id = SharedId })).ToList();
+            "SELECT Genre FROM Quotinator_QuoteGenre WHERE QuoteId = @id", new { id = SharedId })).ToList();
 
         return (row.QuoteText, row.Character, genres);
     }
@@ -174,7 +174,7 @@ public class ConflictResolutionTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var (completenessStatus, noValueKnown) = await conn.QuerySingleAsync<(string CompletenessStatus, string NoValueKnown)>(
-            "SELECT CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+            "SELECT CompletenessStatus, NoValueKnown FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
 
         // #165: see QuoteImportServiceTests's sibling test for why NeedsReview, not Incomplete, is
         // the correct expectation here — nothing populates NoValueKnown with real markers yet, so an
@@ -199,10 +199,10 @@ public class ConflictResolutionTests
         conn.Open();
 
         await conn.ExecuteAsync(
-            "UPDATE Quotes SET CompletenessStatus = 'Complete', NoValueKnown = '[\"date\"]' WHERE Id = @id",
+            "UPDATE Quotinator_Quote SET CompletenessStatus = 'Complete', NoValueKnown = '[\"date\"]' WHERE Id = @id",
             new { id = SharedId });
 
-        var sourceId = await conn.ExecuteScalarAsync<string>("SELECT SourceId FROM Quotes WHERE Id = @id", new { id = SharedId });
+        var sourceId = await conn.ExecuteScalarAsync<string>("SELECT SourceId FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
 
         await conn.ExecuteAsync(Sql.Quotes.UpdateOnNewestWins, new
         {
@@ -217,7 +217,7 @@ public class ConflictResolutionTests
         });
 
         var (quoteText, completenessStatus, noValueKnown) = await conn.QuerySingleAsync<(string QuoteText, string CompletenessStatus, string NoValueKnown)>(
-            "SELECT QuoteText, CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+            "SELECT QuoteText, CompletenessStatus, NoValueKnown FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
 
         Assert.AreEqual("Rewritten by a later reseed", quoteText, "The statement must still update the fields it's meant to");
         Assert.AreEqual("Complete", completenessStatus, "CompletenessStatus must survive an UpdateOnNewestWins rewrite unchanged");

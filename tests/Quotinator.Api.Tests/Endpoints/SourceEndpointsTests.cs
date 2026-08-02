@@ -27,11 +27,11 @@ public class SourceEndpointsTests
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
-                services.AddSingleton<IListableRepository<Source>>(repository ?? new FakeSourceRepository());
+                services.AddSingleton<IListableRepository<SourceEntity>>(repository ?? new FakeSourceRepository());
                 services.AddSingleton<ISourceSeriesReferenceReader>(seriesReader ?? new FakeSourceSeriesReferenceReader());
             }));
 
-    private static Source NewSource(
+    private static SourceEntity NewSource(
         Guid? id = null, string title = "Casablanca", QuoteType type = QuoteType.Movie,
         string date = "1942", Guid? seriesId = null,
         CompletenessStatus completeness = CompletenessStatus.Incomplete,

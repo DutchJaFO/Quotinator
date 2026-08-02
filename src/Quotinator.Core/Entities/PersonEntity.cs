@@ -5,8 +5,8 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A real person who said or wrote a quote — an author or public figure.</summary>
-[Table("People")]
-public sealed class Person : RecordBase
+[Table("Quotinator_Person")]
+public sealed class PersonEntity : RecordBase
 {
     /// <summary>The person's full name.</summary>
     public string Name { get; init; } = string.Empty;

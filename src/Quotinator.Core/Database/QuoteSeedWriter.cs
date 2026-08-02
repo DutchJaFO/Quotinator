@@ -78,7 +78,7 @@ internal static class QuoteSeedWriter
         }
 
         var id = Guid.NewGuid();
-        await connection.InsertAsync(new Source
+        await connection.InsertAsync(new SourceEntity
         {
             Id            = id,
             Title         = q.Source,
@@ -116,7 +116,7 @@ internal static class QuoteSeedWriter
         }
 
         var id = Guid.NewGuid();
-        await connection.InsertAsync(new Person
+        await connection.InsertAsync(new PersonEntity
         {
             Id            = id,
             Name          = q.Author,
@@ -163,7 +163,7 @@ internal static class QuoteSeedWriter
                     Sql.SourceTranslations.CountForSource,
                     new { sid = sourceId, lang }, transaction);
                 if (exists == 0)
-                    await connection.InsertAsync(new SourceTranslation
+                    await connection.InsertAsync(new SourceTranslationEntity
                     {
                         SourceId = sourceId,
                         Language = lang,

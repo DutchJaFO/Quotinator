@@ -43,7 +43,7 @@ internal static class CharacterEndpoints
     private static async Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        IListableRepository<Character> repository,
+        IListableRepository<CharacterEntity> repository,
         ICharacterSourceLinkReader linkReader,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
@@ -74,7 +74,7 @@ internal static class CharacterEndpoints
         [Description("UUID of the character.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        IListableRepository<Character> repository,
+        IListableRepository<CharacterEntity> repository,
         ICharacterSourceLinkReader linkReader)
     {
         logger.LogInformation("[Api - GetCharacterById] id={Id}", id);
@@ -90,7 +90,7 @@ internal static class CharacterEndpoints
         return NotFoundResult.OkOrNotFound(ToResponse(character, sources), localizer, ApiMessages.CharacterNotFound);
     }
 
-    private static CharacterResponse ToResponse(Character character, IReadOnlyList<(Guid Id, string Name)> sources) => new()
+    private static CharacterResponse ToResponse(CharacterEntity character, IReadOnlyList<(Guid Id, string Name)> sources) => new()
     {
         Id                 = character.Id.ToCanonicalId(),
         Name               = character.Name,

@@ -2,11 +2,19 @@ namespace Quotinator.Data.Database;
 
 /// <summary>
 /// #253/ADR 015 — renames every <c>Quotinator.Data</c>-owned table to its domain-prefixed final name
-/// (<c>Import_</c>/<c>Audit_</c>), folding in the <c>AppliedPolicy</c> CHECK constraint work that was
-/// previously two separate, unreleased migrations (<see cref="ImportConflictMigrations.AddAppliedPolicyCheckConstraint"/>,
-/// <see cref="ImportActionMigrations.AddAppliedPolicyCheckConstraint"/>) — safe to squash per this
-/// project's migration policy, since neither had ever shipped. Consumed by
-/// <see cref="DatabaseInitializer.DataOwnedMigrations"/>.
+/// (<c>Import_</c>/<c>Audit_</c>). Consumed by <see cref="DatabaseInitializer.DataOwnedMigrations"/>
+/// as version 5 — appended after versions 3/4 (<see cref="ImportConflictMigrations.AddAppliedPolicyCheckConstraint"/>,
+/// <see cref="ImportActionMigrations.AddAppliedPolicyCheckConstraint"/>), not folded into them. An
+/// earlier version of this migration squashed versions 3+4 into a new version 3 alongside this rename,
+/// reasoning that neither had ever shipped in a tagged release — found live during #254's own T1 pass
+/// (2026-08-02) to be wrong: this project's own local dev database had already run both in an earlier
+/// session, so the squash silently skipped the entire rename on that database (its already-recorded
+/// version 4 read as "up to date" under the new 3-migration count). See
+/// <see cref="DatabaseInitializer.DataOwnedMigrations"/>'s own remarks for the full incident. Because
+/// versions 3/4 always run before this one and already rebuild <c>System_ImportConflicts</c>/
+/// <c>System_ImportActions</c> with the <c>AppliedPolicy</c> CHECK constraint applied (including the
+/// legacy-casing normalisation), this migration's own rename step for those two tables is a plain
+/// <c>ALTER TABLE ... RENAME TO</c> — no rebuild, no casing normalisation to repeat.
 /// </summary>
 /// <remarks>
 /// <c>Import_Batch</c> is created fresh here (<c>CREATE TABLE IF NOT EXISTS</c>, empty) rather than
@@ -17,10 +25,10 @@ namespace Quotinator.Data.Database;
 /// here would run before that table exists on a genuinely fresh incremental replay. Creating the final
 /// table empty sidesteps the ordering problem entirely: it works identically whether
 /// <c>ImportBatches</c> already exists (a real upgrade) or doesn't yet (a fresh incremental replay).
-/// <c>Quotinator.Core</c>'s own migration then copies <c>ImportBatches</c>' data into this table,
+/// <c>Quotinator.Core</c>'s own migration 6 then copies <c>ImportBatches</c>' data into this table,
 /// drops <c>ImportBatches</c>, and rebuilds the nine tables that FK-reference it — see
-/// <c>Quotinator.Core.Database.QuotinatorMigrations.Migration005_ImportBatchConflictPolicyCheckConstraint</c>'s
-/// own remarks for why that half can't live here too (<c>Quotinator.Data</c> has no dependency on
+/// <c>Quotinator.Core.Database.QuotinatorMigrations.Migration006_DomainPrefixRename</c>'s own remarks
+/// for why that half can't live here too (<c>Quotinator.Data</c> has no dependency on
 /// <c>Quotinator.Core</c> per ADR 004, so this can only be a text reference, not a <c>cref</c>).
 /// SQLite only auto-updates a FOREIGN KEY
 /// declaration in another table when the referenced table is renamed via
@@ -31,13 +39,11 @@ namespace Quotinator.Data.Database;
 public static class DomainPrefixRenameMigrations
 {
     /// <summary>
-    /// Creates <c>Import_Batch</c> fresh and empty (see the class's own remarks for why), renames
-    /// <c>System_AuditEntries</c>/<c>System_ChangeLog</c>/<c>System_SourceFileOverrides</c>
-    /// (plain <c>ALTER TABLE ... RENAME TO</c> where no column changes are needed), and rebuilds
-    /// <c>System_ImportConflicts</c>/<c>System_ImportActions</c> under their final names with the
-    /// <c>AppliedPolicy</c> CHECK constraint applied in the same step (SQLite has no
-    /// <c>ALTER TABLE ... ADD CHECK</c>, and a rebuild was already required for that constraint, so it
-    /// is combined with the rename rather than done as two separate steps).
+    /// Creates <c>Import_Batch</c> fresh and empty (see the class's own remarks for why) and renames
+    /// every other Data-owned table to its final domain-prefixed name via plain
+    /// <c>ALTER TABLE ... RENAME TO</c> — no column or constraint changes needed for any of them,
+    /// since versions 3/4 already rebuilt <c>System_ImportConflicts</c>/<c>System_ImportActions</c>
+    /// with the <c>AppliedPolicy</c> CHECK constraint applied before this migration ever runs.
     /// </summary>
     public const string RenameDataOwnedTables = """
         CREATE TABLE IF NOT EXISTS Import_Batch (
@@ -74,93 +80,15 @@ public static class DomainPrefixRenameMigrations
         CREATE UNIQUE INDEX IF NOT EXISTS UX_Import_SourceFileOverride_FileName_Origin
             ON Import_SourceFileOverride (FileName, Origin) WHERE IsDeleted = 0;
 
-        CREATE TABLE Import_Conflict (
-            Id              TEXT    NOT NULL PRIMARY KEY,
-            BatchId         TEXT    NOT NULL,
-            EntityType      TEXT    NOT NULL,
-            EntityId        TEXT,
-            ExistingValue   TEXT,
-            IncomingValue   TEXT,
-            AppliedPolicy   TEXT
-                            CHECK (AppliedPolicy IS NULL OR AppliedPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
-            Status          TEXT    NOT NULL
-                            CHECK (Status IN ('Pending', 'Decided', 'Resolved')),
-            MergedFields    TEXT,
-            DetectedAt      TEXT    NOT NULL,
-            ResolvedAt      TEXT,
-            DateCreated     TEXT    NOT NULL,
-            DateModified    TEXT,
-            DateDeleted     TEXT,
-            IsDeleted       INTEGER NOT NULL DEFAULT 0,
-            ExistingBatchId TEXT
-        );
-
-        INSERT INTO Import_Conflict (Id, BatchId, EntityType, EntityId, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, DetectedAt, ResolvedAt, DateCreated, DateModified, DateDeleted, IsDeleted, ExistingBatchId)
-        SELECT
-            Id, BatchId, EntityType, EntityId, ExistingValue, IncomingValue,
-            CASE AppliedPolicy
-                WHEN 'skip'         THEN 'Skip'
-                WHEN 'newest-wins'  THEN 'NewestWins'
-                WHEN 'merge-ours'   THEN 'MergeOurs'
-                WHEN 'merge-theirs' THEN 'MergeTheirs'
-                WHEN 'review'       THEN 'Review'
-                ELSE AppliedPolicy
-            END,
-            Status, MergedFields, DetectedAt, ResolvedAt, DateCreated, DateModified, DateDeleted, IsDeleted, ExistingBatchId
-        FROM System_ImportConflicts;
-
-        DROP TABLE System_ImportConflicts;
-
+        ALTER TABLE System_ImportConflicts RENAME TO Import_Conflict;
+        DROP INDEX IF EXISTS IX_System_ImportConflicts_BatchId;
+        DROP INDEX IF EXISTS IX_System_ImportConflicts_Status;
         CREATE INDEX IF NOT EXISTS IX_Import_Conflict_BatchId ON Import_Conflict (BatchId);
         CREATE INDEX IF NOT EXISTS IX_Import_Conflict_Status ON Import_Conflict (Status);
 
-        CREATE TABLE Import_Action (
-            Id                 TEXT    NOT NULL PRIMARY KEY,
-            BatchId            TEXT    NOT NULL,
-            ActionType         TEXT    NOT NULL
-                               CHECK (ActionType IN ('Add', 'Modify')),
-            EntityType         TEXT    NOT NULL,
-            EntityId           TEXT    NOT NULL,
-            ExistingBatchId    TEXT,
-            ExistingValue      TEXT,
-            IncomingValue      TEXT    NOT NULL,
-            AppliedPolicy      TEXT
-                               CHECK (AppliedPolicy IS NULL OR AppliedPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
-            Status             TEXT    NOT NULL
-                               CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked', 'Stale')),
-            MergedFields       TEXT,
-            MarkCompletenessAs TEXT
-                               CHECK (MarkCompletenessAs IS NULL OR MarkCompletenessAs IN ('Incomplete', 'NeedsReview', 'Complete')),
-            DetectedAt         TEXT    NOT NULL,
-            AppliedAt          TEXT,
-            DiscardedAt        TEXT,
-            DateCreated        TEXT    NOT NULL,
-            DateModified       TEXT,
-            DateDeleted        TEXT,
-            IsDeleted          INTEGER NOT NULL DEFAULT 0,
-            OriginalDecision   TEXT
-        );
-
-        INSERT INTO Import_Action (
-            Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue,
-            IncomingValue, AppliedPolicy, Status, MergedFields, MarkCompletenessAs, DetectedAt,
-            AppliedAt, DiscardedAt, DateCreated, DateModified, DateDeleted, IsDeleted, OriginalDecision)
-        SELECT
-            Id, BatchId, ActionType, EntityType, EntityId, ExistingBatchId, ExistingValue, IncomingValue,
-            CASE AppliedPolicy
-                WHEN 'skip'         THEN 'Skip'
-                WHEN 'newest-wins'  THEN 'NewestWins'
-                WHEN 'merge-ours'   THEN 'MergeOurs'
-                WHEN 'merge-theirs' THEN 'MergeTheirs'
-                WHEN 'review'       THEN 'Review'
-                ELSE AppliedPolicy
-            END,
-            Status, MergedFields, MarkCompletenessAs, DetectedAt, AppliedAt, DiscardedAt,
-            DateCreated, DateModified, DateDeleted, IsDeleted, OriginalDecision
-        FROM System_ImportActions;
-
-        DROP TABLE System_ImportActions;
-
+        ALTER TABLE System_ImportActions RENAME TO Import_Action;
+        DROP INDEX IF EXISTS IX_System_ImportActions_BatchId;
+        DROP INDEX IF EXISTS IX_System_ImportActions_Status;
         CREATE INDEX IF NOT EXISTS IX_Import_Action_BatchId ON Import_Action (BatchId);
         CREATE INDEX IF NOT EXISTS IX_Import_Action_Status ON Import_Action (Status);
         """;

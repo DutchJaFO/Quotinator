@@ -277,6 +277,7 @@
     <File Path="scripts/changelog.csx" />
     <File Path="scripts/changelog-import.csx" />
     <File Path="scripts/changelog-upgrade.csx" />
+    <File Path="scripts/execute-sql.csx" />
     <File Path="scripts/SOURCES.md" />
   </Folder>
   <Folder Name="/scripts/changelog-reference/">
