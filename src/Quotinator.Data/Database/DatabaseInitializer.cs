@@ -38,6 +38,11 @@ public class DatabaseInitializer : IDatabaseInitializer
     // protects any database that has already run a migration, not only tagged releases. Corrected:
     // versions 3 and 4 are restored to their original, unedited content; the domain-prefix rename is
     // a new version 5, appended after them — see DomainPrefixRenameMigrations.RenameDataOwnedTables.
+    // Version 6 (#251) adds Import_FileResource/Import_FileResourceLine/Import_FileResourceBatch.
+    // Import_FileResourceBatch references Import_Batch(Id) (Core-owned, created by Core's own
+    // migration phase which always runs immediately after this one within the same FK-enforcement-off
+    // window — see ApplyMigrationsAsync/ApplyBaselineAsync's own PRAGMA foreign_keys toggling) — safe
+    // as a forward reference despite Import_Batch not existing yet at the moment this migration runs.
     private static readonly IReadOnlyList<SchemaMigration> DataOwnedMigrations =
     [
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
@@ -45,6 +50,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 3, Sql = ImportConflictMigrations.AddAppliedPolicyCheckConstraint },
         new SchemaMigration { Version = 4, Sql = ImportActionMigrations.AddAppliedPolicyCheckConstraint },
         new SchemaMigration { Version = 5, Sql = DomainPrefixRenameMigrations.RenameDataOwnedTables },
+        new SchemaMigration { Version = 6, Sql = FileResourceMigrations.CreateFileResourceTables },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -153,6 +159,52 @@ public class DatabaseInitializer : IDatabaseInitializer
         );
         CREATE UNIQUE INDEX IF NOT EXISTS UX_Import_SourceFileOverride_FileName_Origin
             ON Import_SourceFileOverride (FileName, Origin) WHERE IsDeleted = 0;
+
+        CREATE TABLE IF NOT EXISTS Import_FileResource (
+            Id                      TEXT    NOT NULL PRIMARY KEY,
+            FileName                TEXT    NOT NULL,
+            OriginalFolderPath      TEXT,
+            Origin                  TEXT    NOT NULL
+                                    CHECK (Origin IN ('Bundled', 'UserImports', 'Uploaded')),
+            ContentHash             TEXT    NOT NULL,
+            LineEnding              TEXT    NOT NULL
+                                    CHECK (LineEnding IN ('LF', 'CRLF', 'CR')),
+            EndsWithTrailingNewline INTEGER NOT NULL,
+            Converter               TEXT,
+            ConverterOptions        TEXT,
+            FirstSeenAtUtc          TEXT    NOT NULL,
+            LastSeenAtUtc           TEXT    NOT NULL,
+            DateCreated             TEXT    NOT NULL,
+            DateModified            TEXT,
+            DateDeleted             TEXT,
+            IsDeleted               INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS UX_Import_FileResource_ContentHash ON Import_FileResource (ContentHash);
+        CREATE INDEX IF NOT EXISTS IX_Import_FileResource_FileName ON Import_FileResource (FileName);
+
+        CREATE TABLE IF NOT EXISTS Import_FileResourceLine (
+            Id             TEXT    NOT NULL PRIMARY KEY,
+            FileResourceId TEXT    NOT NULL REFERENCES Import_FileResource(Id) ON DELETE CASCADE,
+            LineNumber     INTEGER NOT NULL,
+            Text           TEXT    NOT NULL,
+            DateCreated    TEXT    NOT NULL,
+            DateModified   TEXT,
+            DateDeleted    TEXT,
+            IsDeleted      INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (FileResourceId, LineNumber)
+        );
+
+        CREATE TABLE IF NOT EXISTS Import_FileResourceBatch (
+            Id             TEXT    NOT NULL PRIMARY KEY,
+            FileResourceId TEXT    NOT NULL REFERENCES Import_FileResource(Id) ON DELETE CASCADE,
+            ImportBatchId  TEXT    NOT NULL REFERENCES Import_Batch(Id),
+            ImportedAt     TEXT    NOT NULL,
+            DateCreated    TEXT    NOT NULL,
+            DateModified   TEXT,
+            DateDeleted    TEXT,
+            IsDeleted      INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (FileResourceId, ImportBatchId)
+        );
 
         CREATE TABLE IF NOT EXISTS Audit_Change (
             Id               TEXT NOT NULL PRIMARY KEY,

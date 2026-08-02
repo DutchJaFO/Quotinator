@@ -82,6 +82,7 @@ public class DatabaseInitializerTests
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             ruleFileOverridePathResolver ?? NoOpRuleFileOverridePathResolver.Instance,
             sourceFileOverrideRegistry ?? NoOpSourceFileOverrideRegistry.Instance,
+            NoOpFileResourceRepository.Instance,
             useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 
@@ -951,7 +952,7 @@ public class DatabaseInitializerTests
             Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
         }
 
-        Assert.AreEqual(5, db2.DataSchemaVersion, "Data migrations 2-5 (the #155 consolidation, the two AppliedPolicy CHECK constraint migrations, and #253's domain-prefix rename) should have replayed from the correctly-seeded starting point of 1");
+        Assert.AreEqual(6, db2.DataSchemaVersion, "Data migrations 2-6 (the #155 consolidation, the two AppliedPolicy CHECK constraint migrations, #253's domain-prefix rename, and #251's FileResource tables) should have replayed from the correctly-seeded starting point of 1");
     }
 
     /// <summary>Replaying from a legacy v1.7.2 AuditEntries table renames it all the way to Audit_Entry (via migration 2's Audit_Entry then migration 3's domain-prefix rename) and preserves existing rows and both indexes.</summary>
@@ -1108,6 +1109,7 @@ public class DatabaseInitializerTests
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
+            NoOpFileResourceRepository.Instance,
             QuotinatorMigrations.Baseline);
         return (db, dbPath);
     }
@@ -1390,7 +1392,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(5, db.DataSchemaVersion);
+        Assert.AreEqual(6, db.DataSchemaVersion);
         Assert.AreEqual(6, db.SchemaVersion);
     }
 

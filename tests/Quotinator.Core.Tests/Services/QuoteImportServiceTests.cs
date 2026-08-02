@@ -65,7 +65,7 @@ public class QuoteImportServiceTests
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
             NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
-            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
     }
 
@@ -98,7 +98,8 @@ public class QuoteImportServiceTests
         return new SqliteQuoteImportService(
             _factory, importBatches, coordinator, actionService, actionReader,
             converters ?? new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase),
-            configPolicy ?? new ManifestPolicy(DuplicateResolutionPolicy.NewestWins));
+            configPolicy ?? new ManifestPolicy(DuplicateResolutionPolicy.NewestWins),
+            NoOpFileResourceRepository.Instance);
     }
 
     private static Stream JsonStream(string json) => new MemoryStream(Encoding.UTF8.GetBytes(json));

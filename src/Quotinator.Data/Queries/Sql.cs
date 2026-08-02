@@ -164,6 +164,29 @@ internal static class Sql
             $"UPDATE Import_Batch SET RecordCount = @count, DateModified = @now WHERE {IdClauses.Equals("Id", "id")};";
 
         internal const string DeleteAll = "DELETE FROM Import_Batch;";
+
+        // COUNT base — shared by CountPaged factory method below.
+        private const string CountPagedBase = "SELECT COUNT(*) FROM Import_Batch WHERE IsDeleted = 0";
+
+        /// <summary>Paginated batch listing (#251's own GET endpoint), newest first, with optional filters.</summary>
+        internal static string SelectPaged(bool filterType, bool filterStatus)
+            => $"SELECT {SelectColumns} FROM Import_Batch WHERE IsDeleted = 0" +
+               BuildWhere(filterType, filterStatus) +
+               " ORDER BY ImportedAt DESC, ROWID DESC LIMIT @pageSize OFFSET @offset;";
+
+        /// <summary>Total matching count for the paginated batch listing.</summary>
+        internal static string CountPaged(bool filterType, bool filterStatus)
+            => CountPagedBase + BuildWhere(filterType, filterStatus) + ";";
+
+        // Type/Status comparisons are case-insensitive (project-wide convention — see CLAUDE.md's
+        // "GUID/enum/id/Name/Title comparisons are case-insensitive by default").
+        private static string BuildWhere(bool filterType, bool filterStatus)
+        {
+            var parts = new List<string>(2);
+            if (filterType)   parts.Add(TextClauses.Equals("Type", "type"));
+            if (filterStatus) parts.Add(TextClauses.Equals("Status", "status"));
+            return parts.Count > 0 ? " AND " + string.Join(" AND ", parts) : string.Empty;
+        }
     }
 
     /// <summary>Audit_Entry table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.AuditEntryWriter"/>.</summary>
@@ -345,5 +368,105 @@ internal static class Sql
         internal static readonly string SelectByFileNameAndOrigin =
             $"SELECT {IdClauses.SelectColumn("Id")}, FileName, Origin, ContentHash, {IdClauses.SelectColumn("SourceBatchId")}, DateCreated, DateModified, DateDeleted, IsDeleted " +
             $"FROM Import_SourceFileOverride WHERE {TextClauses.Equals("FileName", "fileName")} AND {TextClauses.Equals("Origin", "origin")} AND IsDeleted = 0;";
+    }
+
+    /// <summary>
+    /// Import_FileResource/Import_FileResourceLine/Import_FileResourceBatch tables (#251). INSERT of
+    /// the parent row and its line rows are handled by Dapper.Contrib via
+    /// <see cref="Repositories.SqliteFileResourceRepository"/>; hand-written SQL covers the dedup
+    /// lookup, ordered line read, download read, and the per-FileName prune sweep.
+    /// </summary>
+    internal static class FileResources
+    {
+        /// <summary>The one row for a given content hash, if this exact content has been captured before.</summary>
+        internal static readonly string SelectByContentHash =
+            $"SELECT {IdClauses.SelectColumn("Id")}, FileName, OriginalFolderPath, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, " +
+            "Converter, ConverterOptions, FirstSeenAtUtc, LastSeenAtUtc, DateCreated, DateModified, DateDeleted, IsDeleted " +
+            "FROM Import_FileResource WHERE ContentHash = @contentHash AND IsDeleted = 0;";
+
+        /// <summary>A single file resource by id, for the download endpoint. Case-insensitive per this project's id-comparison convention.</summary>
+        internal static readonly string SelectById =
+            $"SELECT {IdClauses.SelectColumn("Id")}, FileName, OriginalFolderPath, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, " +
+            $"Converter, ConverterOptions, FirstSeenAtUtc, LastSeenAtUtc, DateCreated, DateModified, DateDeleted, IsDeleted " +
+            $"FROM Import_FileResource WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+
+        /// <summary>
+        /// Touches an existing row's LastSeenAtUtc/DateModified and overwrites Converter/ConverterOptions
+        /// with the latest capture's values — content already captured, seen again, possibly under
+        /// different converter settings than last time (see FileResourceMigrations' own correction note).
+        /// </summary>
+        internal static readonly string UpdateLastSeenAtUtc =
+            $"UPDATE Import_FileResource SET LastSeenAtUtc = @lastSeenAtUtc, Converter = @converter, " +
+            $"ConverterOptions = @converterOptions, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+
+        /// <summary>Every line of a file resource's content, in order — used to reconstruct it.</summary>
+        internal static readonly string SelectLinesByFileResourceId =
+            $"SELECT {IdClauses.SelectColumn("Id")}, {IdClauses.SelectColumn("FileResourceId")}, LineNumber, Text, DateCreated, DateModified, DateDeleted, IsDeleted " +
+            $"FROM Import_FileResourceLine WHERE {IdClauses.Equals("FileResourceId", "fileResourceId")} AND IsDeleted = 0 ORDER BY LineNumber;";
+
+        /// <summary>
+        /// Ids of every Import_FileResource row beyond the <c>keepPerFile</c> most-recently-seen
+        /// (by LastSeenAtUtc) distinct rows per FileName — the set a prune sweep hard-deletes.
+        /// Secondary sort on the table's own implicit <c>rowid</c> (insertion order) breaks ties —
+        /// LastSeenAtUtc has only second-level precision (SafeValue.TimestampFormat), so two writes
+        /// within the same second would otherwise leave SQLite's own tie-break order unspecified.
+        /// </summary>
+        internal static readonly string SelectIdsBeyondRetentionPerFileName =
+            $"SELECT {IdClauses.SelectColumn("Id")} FROM (" +
+            $"  SELECT {IdClauses.SelectColumn("Id")}, ROW_NUMBER() OVER (PARTITION BY FileName ORDER BY LastSeenAtUtc DESC, rowid DESC) AS rn " +
+            "  FROM Import_FileResource WHERE IsDeleted = 0" +
+            ") WHERE rn > @keepPerFile;";
+
+        /// <summary>
+        /// Hard-deletes the given Import_FileResource rows — relies on the schema's own
+        /// ON DELETE CASCADE to remove the matching Import_FileResourceLine/Import_FileResourceBatch
+        /// rows, which requires the issuing connection to have foreign_keys = ON (the caller's
+        /// responsibility; off by default per connection).
+        /// </summary>
+        internal static readonly string DeleteByIds =
+            $"DELETE FROM Import_FileResource WHERE {IdClauses.In("Id", "ids")};";
+
+        /// <summary>Ids of every batch a file resource is linked to, most recent first — the detail endpoint's <c>linkedBatchIds</c>.</summary>
+        internal static readonly string SelectBatchIdsForFileResource =
+            $"SELECT {IdClauses.SelectColumn("ImportBatchId")} FROM Import_FileResourceBatch " +
+            $"WHERE {IdClauses.Equals("FileResourceId", "fileResourceId")} AND IsDeleted = 0 ORDER BY ImportedAt DESC;";
+
+        // COUNT base — shared by CountPage factory method below. Aliased "fr" even without a join, so
+        // CountPage and SelectPage below can share the same BuildWhere.
+        private const string CountPageBase = "SELECT COUNT(*) FROM Import_FileResource fr WHERE fr.IsDeleted = 0";
+
+        /// <summary>Total matching count for the paginated file-resource listing.</summary>
+        internal static string CountPage(bool filterFileName, bool filterOrigin)
+            => CountPageBase + BuildWhere(filterFileName, filterOrigin) + ";";
+
+        /// <summary>
+        /// Paginated file-resource listing (#251's own GET endpoint) with each row's linked-batch count.
+        /// Deliberately a correlated scalar subquery, not an outer join with a row-grouping clause — the
+        /// latter is exactly the aggregate-plus-grouping shape <c>SqlAggregateGuard</c> flags for
+        /// CVE-2025-6965 review (see docs/sql-safety.md), and a per-row scalar subquery avoids the
+        /// question entirely (no grouping clause anywhere in the statement) while still costing one
+        /// index-backed lookup per row, the same as the join would — chosen to sidestep the guard rather
+        /// than argue past it. Avoids the N+1 a separate follow-up query per row would cost (matching
+        /// #195's own N+1-avoidance rule for pagination generally). No line content — that stays on the
+        /// dedicated download endpoint.
+        /// </summary>
+        internal static string SelectPage(bool filterFileName, bool filterOrigin)
+            => $"SELECT {IdClauses.SelectColumn("fr.Id")}, fr.FileName, fr.OriginalFolderPath, fr.Origin, fr.ContentHash, " +
+               "fr.LineEnding, fr.EndsWithTrailingNewline, fr.Converter, fr.ConverterOptions, " +
+               "fr.FirstSeenAtUtc, fr.LastSeenAtUtc, " +
+               "(SELECT COUNT(*) FROM Import_FileResourceBatch frb " +
+               $"WHERE {IdClauses.Join("frb.FileResourceId", "fr.Id")} AND frb.IsDeleted = 0) AS LinkedBatchCount " +
+               "FROM Import_FileResource fr " +
+               "WHERE fr.IsDeleted = 0" + BuildWhere(filterFileName, filterOrigin) +
+               " ORDER BY fr.FileName ASC, fr.LastSeenAtUtc DESC LIMIT @pageSize OFFSET @offset;";
+
+        // FileName/Origin comparisons are case-insensitive (project-wide convention).
+        private static string BuildWhere(bool filterFileName, bool filterOrigin)
+        {
+            var parts = new List<string>(2);
+            if (filterFileName) parts.Add(TextClauses.Equals("fr.FileName", "fileName"));
+            if (filterOrigin)   parts.Add(TextClauses.Equals("fr.Origin", "origin"));
+            return parts.Count > 0 ? " AND " + string.Join(" AND ", parts) : string.Empty;
+        }
     }
 }

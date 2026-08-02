@@ -197,4 +197,59 @@ public class SqliteImportBatchRepositoryTests
         Assert.AreEqual(seedBatch.RecordCount, result.RecordCount);
         Assert.AreEqual(ImportBatchStatus.Applied, result.Status.Parsed);
     }
+
+    // ── GetPagedAsync (#251) ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task GetPagedAsync_NoFilters_ReturnsAllBatches()
+    {
+        await _repository.InsertAsync(BuildBatch(ImportBatchType.Seed, "a.json"));
+        await _repository.InsertAsync(BuildBatch(ImportBatchType.Import, "b.json"));
+
+        var result = await _repository.GetPagedAsync(type: null, status: null, page: 1, pageSize: 20);
+
+        Assert.AreEqual(2, result.TotalCount);
+        Assert.HasCount(2, result.Items);
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_FilterByType_ReturnsOnlyMatchingType()
+    {
+        var seedBatch = BuildBatch(ImportBatchType.Seed, "seed.json");
+        await _repository.InsertAsync(seedBatch);
+        await _repository.InsertAsync(BuildBatch(ImportBatchType.Import, "import.json"));
+
+        var result = await _repository.GetPagedAsync(ImportBatchType.Seed, status: null, page: 1, pageSize: 20);
+
+        Assert.AreEqual(1, result.TotalCount);
+        Assert.AreEqual(seedBatch.Id, result.Items.Single().Id);
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_FilterByStatus_ReturnsOnlyMatchingStatus()
+    {
+        var applied = BuildBatch(ImportBatchType.Import, "applied.json");
+        await _repository.InsertAsync(applied);
+        var staged = BuildBatch(ImportBatchType.Import, "staged.json");
+        staged.Status = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Staged.ToString(), ImportBatchStatus.Staged);
+        await _repository.InsertAsync(staged);
+
+        var result = await _repository.GetPagedAsync(type: null, ImportBatchStatus.Staged, page: 1, pageSize: 20);
+
+        Assert.AreEqual(1, result.TotalCount);
+        Assert.AreEqual(staged.Id, result.Items.Single().Id);
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_PageSizeZero_ReturnsAllRowsAsOnePage()
+    {
+        for (var i = 0; i < 3; i++)
+            await _repository.InsertAsync(BuildBatch(ImportBatchType.Import, $"batch-{i}.json"));
+
+        var result = await _repository.GetPagedAsync(type: null, status: null, page: 1, pageSize: 0);
+
+        Assert.AreEqual(3, result.TotalCount);
+        Assert.AreEqual(3, result.PageSize);
+        Assert.HasCount(3, result.Items);
+    }
 }

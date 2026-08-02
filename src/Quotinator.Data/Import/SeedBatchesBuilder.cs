@@ -31,7 +31,7 @@ public static class SeedBatchesBuilder
         {
             var (files, policy) = planner.PlanSeed(bundledDir, configPolicy, allowAutoCreate: false);
             if (files.Count > 0)
-                batches.Add(new SeedBatch(files, policy, "bundled sources", SeedBatchOrigin.Bundled));
+                batches.Add(new SeedBatch(files, policy, "bundled sources", SeedBatchOrigin.Bundled, bundledDir));
         }
         else
         {
@@ -42,7 +42,7 @@ public static class SeedBatchesBuilder
         {
             var (files, policy) = planner.PlanSeed(importsDir, configPolicy, allowAutoCreate: createMissingManifest);
             if (files.Count > 0)
-                batches.Add(new SeedBatch(files, policy, "user imports", SeedBatchOrigin.UserImports));
+                batches.Add(new SeedBatch(files, policy, "user imports", SeedBatchOrigin.UserImports, importsDir));
         }
 
         return batches;

@@ -47,6 +47,25 @@ public sealed class SqliteImportBatchRepository : SqliteRepository<ImportBatchEn
     }
 
     /// <inheritdoc/>
+    public async Task<PagedItems<ImportBatchEntity>> GetPagedAsync(ImportBatchType? type, ImportBatchStatus? status, int page, int pageSize)
+    {
+        var filterType   = type   is not null;
+        var filterStatus = status is not null;
+        var limit        = pageSize == 0 ? -1 : pageSize;
+        var offset       = pageSize == 0 ? 0  : (page - 1) * pageSize;
+        var param        = new { type = type?.ToString(), status = status?.ToString(), pageSize = limit, offset };
+
+        using var conn = Factory.CreateConnection();
+        conn.Open();
+
+        var total = await conn.ExecuteScalarAsync<int>(Sql.ImportBatches.CountPaged(filterType, filterStatus), param);
+        var items = (await conn.QueryAsync<ImportBatchEntity>(Sql.ImportBatches.SelectPaged(filterType, filterStatus), param)).ToList();
+
+        var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
+        return new PagedItems<ImportBatchEntity>(items, page, effectivePageSize, total);
+    }
+
+    /// <inheritdoc/>
     public async Task UpdateRecordCountAsync(Guid id, int count, IUnitOfWork? unitOfWork = null)
     {
         var param = new { count, now = SafeDateValue.Now.Raw, id = id.ToCanonicalId() };

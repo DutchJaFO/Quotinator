@@ -31,6 +31,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
     private readonly IImportActionReader _actionReader;
     private readonly IReadOnlyDictionary<string, IQuoteSourceConverter> _converters;
     private readonly ManifestPolicy _configPolicy;
+    private readonly IFileResourceRepository _fileResources;
 
     /// <summary>Initialises the service with all dependencies required to import a single file.</summary>
     public SqliteQuoteImportService(
@@ -40,7 +41,8 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         IImportActionService actionService,
         IImportActionReader actionReader,
         IReadOnlyDictionary<string, IQuoteSourceConverter> converters,
-        ManifestPolicy configPolicy)
+        ManifestPolicy configPolicy,
+        IFileResourceRepository fileResources)
     {
         _factory           = factory;
         _importBatches     = importBatches;
@@ -49,6 +51,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         _actionReader      = actionReader;
         _converters        = converters;
         _configPolicy      = configPolicy;
+        _fileResources     = fileResources;
     }
 
     /// <inheritdoc/>
@@ -56,7 +59,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         Stream file, string fileName, ImportSettingsDto? settings, bool preview,
         CancellationToken cancellationToken = default)
     {
-        var parsed = await LoadSourceFileAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
+        var (parsed, rawContent) = await LoadSourceFileAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
         var quotes = parsed.Quotes;
         var policy = ManifestPolicy.Resolve(ToManifestPolicy(settings?.DuplicateResolution), _configPolicy);
         var effectivePolicy = policy.ForQuotes;
@@ -73,6 +76,13 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         };
         await _importBatches.InsertAsync(batch);
         var batchIdStr = batch.Id.ToCanonicalId();
+
+        // #251 — a multipart upload carries no folder information, only a bare filename. Converter/
+        // ConverterOptions come from the request's own settings, not the raw content itself, since the
+        // same bytes could be uploaded again later under different settings.
+        await _fileResources.WriteAsync(
+            fileName, originalFolderPath: null, FileResourceOrigin.Uploaded, rawContent, batch.Id,
+            settings?.Converter, settings?.ConverterOptions?.GetRawText(), cancellationToken);
 
         IReadOnlyList<ImportActionEntity> actions;
         using (var conn = (SqliteConnection)_factory.CreateConnection())
@@ -261,7 +271,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
     /// conditional needed; conversations are only ever present when the uploaded file is already in
     /// Quotinator's own extended format (e.g. re-uploading a curated source file with no converter).
     /// </summary>
-    private async Task<ParsedSourceFileDto> LoadSourceFileAsync(Stream file, string? converterName, JsonElement? converterOptions, CancellationToken cancellationToken)
+    private async Task<(ParsedSourceFileDto Parsed, string RawContent)> LoadSourceFileAsync(Stream file, string? converterName, JsonElement? converterOptions, CancellationToken cancellationToken)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "quotinator-import-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -271,6 +281,10 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             await using (var rawStream = File.Create(rawPath))
                 await file.CopyToAsync(rawStream, cancellationToken);
 
+            // #251 — captured before any converter runs: this is the file the caller actually
+            // uploaded, not a converter's transformed output, matching "reconstruct the original
+            // content of a file" as the provenance record's own stated goal.
+            var rawContent = await File.ReadAllTextAsync(rawPath, cancellationToken);
             var contentPath = rawPath;
 
             if (!string.IsNullOrEmpty(converterName))
@@ -297,7 +311,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             if (parsed is null || parsed.Quotes.Count == 0)
                 throw new QuoteImportValidationException("File contained no quotes.");
 
-            return parsed;
+            return (parsed, rawContent);
         }
         finally
         {

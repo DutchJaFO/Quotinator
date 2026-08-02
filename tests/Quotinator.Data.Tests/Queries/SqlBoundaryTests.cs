@@ -14,12 +14,14 @@ public class SqlBoundaryTests
     /// <c>ImportBatches</c> stays here — it never interacts with a consumer-defined entity (see
     /// ADR 004's consumer-entity-interaction test, issue #158) — after #157 briefly moved it to
     /// Engine on the mistaken assumption that its existing (also-misplaced) entity location was
-    /// correct.
+    /// correct. <c>FileResources</c> (#251) stays here for the same reason — it only touches
+    /// Import_FileResource/Import_FileResourceLine/Import_FileResourceBatch and the already-Data-owned
+    /// Import_Batch, never a consumer-defined entity.
     /// </summary>
     [TestMethod]
     public void Sql_ContainsOnlyGenericInfrastructureQueries()
     {
-        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides" };
+        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides", "FileResources" };
 
         var actual = typeof(Sql)
             .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)

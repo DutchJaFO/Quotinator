@@ -16,6 +16,9 @@ public interface IImportBatchRepository : IRepository<ImportBatchEntity>
     /// <param name="unitOfWork">Optional. When supplied, the query runs on the unit of work's connection and transaction.</param>
     Task<IReadOnlyList<ImportBatchEntity>> GetByTypeAsync(ImportBatchType type, IUnitOfWork? unitOfWork = null);
 
+    /// <summary>Paginated batch listing (#251), newest first, optionally filtered by <paramref name="type"/> and/or <paramref name="status"/>.</summary>
+    Task<PagedItems<ImportBatchEntity>> GetPagedAsync(ImportBatchType? type, ImportBatchStatus? status, int page, int pageSize);
+
     /// <summary>Updates the <see cref="ImportBatchEntity.RecordCount"/> for the batch with the given <paramref name="id"/>.</summary>
     /// <param name="id">The batch identifier.</param>
     /// <param name="count">The new record count.</param>

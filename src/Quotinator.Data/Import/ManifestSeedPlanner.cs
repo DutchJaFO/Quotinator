@@ -7,7 +7,8 @@ namespace Quotinator.Data.Import;
 /// <inheritdoc/>
 public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : IManifestSeedPlanner
 {
-    private const string ManifestFileName = "manifest.json";
+    /// <summary>The well-known manifest filename within a source directory — shared with #251's own manifest-content capture.</summary>
+    public const string ManifestFileName = "manifest.json";
 
     private static readonly JsonSerializerOptions ReadOptions = new() { PropertyNameCaseInsensitive = true };
 

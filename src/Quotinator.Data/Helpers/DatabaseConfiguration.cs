@@ -53,6 +53,11 @@ public abstract class DatabaseConfiguration
         // SeedBatchOrigin (#153) backs System_SourceFileOverrides.Origin — pure import/seed
         // bookkeeping, the same category as ImportBatchType/ImportBatchStatus above.
         RegisterEnumHandler<SeedBatchOrigin>();
+        // FileResourceOrigin (#251) backs Import_FileResource.Origin — same category as
+        // SeedBatchOrigin above, a closed set this project's own import pipeline assigns.
+        RegisterEnumHandler<FileResourceOrigin>();
+        // LineEndingStyle (#251) backs Import_FileResource.LineEnding — same category.
+        RegisterEnumHandler<LineEndingStyle>();
         RegisterDomainHandlers();
     }
 

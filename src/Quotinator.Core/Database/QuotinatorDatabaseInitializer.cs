@@ -34,6 +34,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     private readonly bool                           _autoUpdateSources;
     private readonly IRuleFileOverridePathResolver  _ruleFileOverridePathResolver;
     private readonly ISourceFileOverrideRegistry    _sourceFileOverrideRegistry;
+    private readonly IFileResourceRepository        _fileResources;
 
     /// <summary>Initialises the instance with all dependencies required for Quotinator seeding.</summary>
     public QuotinatorDatabaseInitializer(
@@ -51,6 +52,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         bool                           autoUpdateSources,
         IRuleFileOverridePathResolver  ruleFileOverridePathResolver,
         ISourceFileOverrideRegistry    sourceFileOverrideRegistry,
+        IFileResourceRepository        fileResources,
         SchemaBaseline?                baseline = null)
         : base(factory, options, migrations, auditWriter, callerContext, logger, baseline)
     {
@@ -62,6 +64,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         _autoUpdateSources  = autoUpdateSources;
         _ruleFileOverridePathResolver = ruleFileOverridePathResolver;
         _sourceFileOverrideRegistry   = sourceFileOverrideRegistry;
+        _fileResources                = fileResources;
     }
 
     /// <inheritdoc/>
@@ -401,6 +404,42 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             Status         = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Staged.ToString(), ImportBatchStatus.Staged),
         };
         await _importBatches.InsertAsync(batch);
+
+        // #251 — capture this file's own content for provenance. Skipped only when the file is
+        // genuinely missing (already surfaced separately via LoadSourceFileAsync's own SeedFileIssue
+        // path elsewhere in this seed pass) — a real failure during the write itself is not swallowed
+        // here; it propagates and is caught by the outer seeding backup/restore/rethrow net #254
+        // already wraps this whole hook in, the same as any other seeding failure.
+        if (File.Exists(seedFile.FilePath))
+        {
+            var fileResourceOrigin = seedBatch.Origin == SeedBatchOrigin.UserImports
+                ? FileResourceOrigin.UserImports
+                : FileResourceOrigin.Bundled;
+            var content = await File.ReadAllTextAsync(seedFile.FilePath);
+            // OriginalFolderPath is null here — today's directory scan is flat (no subfolders under
+            // data/sources/ or {dataDir}/imports/), confirmed via ManifestSeedPlanner's own
+            // non-recursive Directory.GetFiles call, so there is no folder segment to record yet.
+            await _fileResources.WriteAsync(
+                Path.GetFileName(seedFile.FilePath), originalFolderPath: null, fileResourceOrigin, content, batch.Id,
+                seedFile.Converter, seedFile.ConverterOptions?.GetRawText());
+
+            // Also capture the manifest.json that drove this seed pass, linked to this same batch —
+            // content-hash dedup means only a new Import_FileResourceBatch link row is added for every
+            // file in the same directory after the first, correctly reflecting that one manifest.json
+            // version governed every batch created from it this session. Uses seedBatch.SourceDirectory
+            // rather than seedFile.FilePath's own directory — ISourceCacheUpdater rewrites a downloaded
+            // file's FilePath to a separate cache directory that never contains manifest.json, which
+            // would silently miss the link for every downloaded source otherwise (found live in a T2 pass).
+            var manifestDir  = seedBatch.SourceDirectory ?? Path.GetDirectoryName(seedFile.FilePath)!;
+            var manifestPath = Path.Combine(manifestDir, ManifestSeedPlanner.ManifestFileName);
+            if (File.Exists(manifestPath))
+            {
+                var manifestContent = await File.ReadAllTextAsync(manifestPath);
+                await _fileResources.WriteAsync(
+                    ManifestSeedPlanner.ManifestFileName, originalFolderPath: null, fileResourceOrigin, manifestContent, batch.Id);
+            }
+        }
+
         return batch;
     }
 

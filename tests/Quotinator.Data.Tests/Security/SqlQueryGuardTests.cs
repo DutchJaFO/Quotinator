@@ -151,6 +151,8 @@ public class SqlQueryGuardTests
             "Schema.AnyTableExists",              // COUNT(*) — fresh-database detection for the baseline path (#143)
             "SystemAudit.CountPagedBase",         // COUNT(*) — private base for CountPaged factory
             "SystemImportActions.CountPagedBase", // COUNT(*) — private base for CountPaged factory
+            "ImportBatches.CountPagedBase",       // COUNT(*) — private base for CountPaged factory (#251)
+            "FileResources.CountPageBase",        // COUNT(*) — private base for CountPage factory (#251)
         };
 
         var actual = EnumerateSqlConstants()
@@ -199,6 +201,20 @@ public class SqlQueryGuardTests
         {
             yield return [$"SystemImportActions.SelectPaged({filterBatchId},{filterStatus},{filterEntityType})", Sql.SystemImportActions.SelectPaged(filterBatchId, filterStatus, filterEntityType)];
             yield return [$"SystemImportActions.CountPaged({filterBatchId},{filterStatus},{filterEntityType})", Sql.SystemImportActions.CountPaged(filterBatchId, filterStatus, filterEntityType)];
+        }
+
+        // ImportBatches.SelectPaged/CountPaged (#251) — one case per filter-flag combination.
+        foreach (var (filterType, filterStatus) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        {
+            yield return [$"ImportBatches.SelectPaged({filterType},{filterStatus})", Sql.ImportBatches.SelectPaged(filterType, filterStatus)];
+            yield return [$"ImportBatches.CountPaged({filterType},{filterStatus})", Sql.ImportBatches.CountPaged(filterType, filterStatus)];
+        }
+
+        // FileResources.SelectPage/CountPage (#251) — one case per filter-flag combination.
+        foreach (var (filterFileName, filterOrigin) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        {
+            yield return [$"FileResources.SelectPage({filterFileName},{filterOrigin})", Sql.FileResources.SelectPage(filterFileName, filterOrigin)];
+            yield return [$"FileResources.CountPage({filterFileName},{filterOrigin})", Sql.FileResources.CountPage(filterFileName, filterOrigin)];
         }
     }
 
@@ -371,6 +387,12 @@ public class SqlQueryGuardTests
             "SystemImportActions.SelectPaged",
             "SystemImportActions.CountPaged",
             "SystemImportActions.BuildWhere",
+            "ImportBatches.SelectPaged",
+            "ImportBatches.CountPaged",
+            "ImportBatches.BuildWhere",
+            "FileResources.SelectPage",
+            "FileResources.CountPage",
+            "FileResources.BuildWhere",
         };
 
         var actual = EnumerateParameterizedSqlFactoryMethodNames().ToHashSet();

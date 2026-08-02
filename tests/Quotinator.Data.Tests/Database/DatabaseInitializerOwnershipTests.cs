@@ -194,6 +194,84 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
+    /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
+    /// for all three tables #251's migration 6 introduces together: <c>Import_FileResource</c>,
+    /// <c>Import_FileResourceLine</c>, <c>Import_FileResourceBatch</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalFileResourceSchema()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync(TestContext.CancellationToken);
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync(TestContext.CancellationToken);
+
+        foreach (var table in new[] { "Import_FileResource", "Import_FileResourceLine", "Import_FileResourceBatch" })
+        {
+            var schemaA = await DumpTableSchemaAsync(connA, table);
+            var schemaB = await DumpTableSchemaAsync(connB, table);
+
+            Assert.AreSequenceEqual(schemaB, schemaA, $"{table} schema differs between Data's baseline and incremental paths — " +
+                "update DataBaselineSql to match DataOwnedMigrations' final result.");
+        }
+    }
+
+    /// <summary>
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural round-trip
+    /// closes that gap for <c>Import_FileResource.Origin</c>/<c>LineEnding</c>'s enum values (#251,
+    /// ADR 008), for both the baseline and incremental paths.
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameFileResourceCheckConstraintValues()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync(TestContext.CancellationToken);
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync(TestContext.CancellationToken);
+
+        foreach (var conn in new[] { connA, connB })
+        {
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+
+            await conn.ExecuteAsync(
+                "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
+                "VALUES (@id, 'quotinator-curated.json', 'Bundled', 'abc123', 'LF', 1, @now, @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await conn.ExecuteAsync(
+                "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
+                "VALUES (@id, 'upload.json', 'Uploaded', 'def456', 'CRLF', 0, @now, @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
+                "VALUES (@id, 'x.json', 'NotARealOrigin', 'abc123', 'LF', 1, @now, @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
+                "VALUES (@id, 'x.json', 'Bundled', 'abc123', 'NotARealLineEnding', 1, @now, @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+        }
+    }
+
+    /// <summary>
     /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural round-trip
     /// closes that gap for <c>Import_SourceFileOverride.Origin</c>'s enum values.
     /// </summary>
@@ -390,9 +468,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync(TestContext.CancellationToken);
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(5, dataRows,
+        Assert.AreEqual(6, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(5, db.DataSchemaVersion);
+        Assert.AreEqual(6, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────
