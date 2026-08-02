@@ -50,6 +50,8 @@ and #255/#256 do not carry that urgency.
 | [#244](https://github.com/DutchJaFO/Quotinator/issues/244) | Hidden Roslyn code-style and .NET analyzer diagnostics are invisible to the 0-warnings build policy (IDE0xxx, CAxxxx) | Planning | Not yet determined | No plan doc yet |
 | [#245](https://github.com/DutchJaFO/Quotinator/issues/245) | Sources.Date stays NULL when a Source's only sources[] entry omits date (gap in #191's scope) | Planning | Not yet determined | No plan doc yet |
 | [#263](https://github.com/DutchJaFO/Quotinator/issues/263) | Make recovering from critical startup/database errors easier (Blazor UI, HA add-on experience) | Planning | Not yet determined | No plan doc yet |
+| [#264](https://github.com/DutchJaFO/Quotinator/issues/264) | Clarify ADR 016's Dto boundary for DB-stored JSON and dual-boundary classes | Planning | N/A (research) | No plan doc yet |
+| [#265](https://github.com/DutchJaFO/Quotinator/issues/265) | Admin audit endpoint returns AuditEntryEntity directly with no Response DTO layer | Planning | N/A (research) | No plan doc yet |
 
 ---
 
