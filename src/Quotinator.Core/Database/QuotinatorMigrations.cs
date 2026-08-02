@@ -576,7 +576,7 @@ public static class QuotinatorMigrations
     /// table under a temporary name — the same technique migration 4's own
     /// <c>ImportBatchTypeUserSeed</c> section already uses to widen <c>Type</c>'s <c>CHECK</c>.
     /// <para>
-    /// Every code path that constructs an <see cref="Quotinator.Data.Entities.ImportBatch"/> stamps
+    /// Every code path that constructs an <see cref="Quotinator.Data.Entities.ImportBatchEntity"/> stamps
     /// <c>ConflictPolicy</c> from <c>DuplicateResolutionPolicy.ToString()</c> (PascalCase, e.g.
     /// <c>"NewestWins"</c>) — the same raw-enum-name convention every other CHECK'd enum column in
     /// this project's own tables already uses (<c>Type</c>, <c>Status</c> on this very table). The
