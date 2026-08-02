@@ -97,7 +97,7 @@ After `decide`, `status=Decided` must show it; after `undo`, it must be back und
 
 A batch applied entirely through the staged
 review→decide→apply flow (i.e. via `POST /import/actions/apply` directly, not `POST /import`'s own
-single-shot path) previously never had its own `ImportBatches.Status` set to `Applied`, so
+single-shot path) previously never had its own `Import_Batch.Status` set to `Applied`, so
 `POST /import/actions/reverse` always rejected it with a bare `422` even though the batch had
 genuinely applied. Re-import the curated file under `review` again and decide every pending action
 from the sequence above (repeat the `decide` call for each remaining `id` until none are left
@@ -166,7 +166,7 @@ curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>"
 `preview=true` must return `200` without changing anything; the real call must also return `200`.
 The actions listing must still show every action `"status":"Applied"` afterwards — reversal never
 introduces a new action status; the batch's own record being gone is the only signal it was undone
-(confirm via `GET /api/v1/admin/audit` or `Quotinator.Tools.DbInspector` against `ImportBatches`
+(confirm via `GET /api/v1/admin/audit` or `Quotinator.Tools.DbInspector` against `Import_Batch`
 showing `IsDeleted=1` for this batch, since there is no `GET /import-batches` listing endpoint).
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
@@ -222,7 +222,7 @@ cat > .claude/temp/smoke-171-172.json <<'EOF'
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
 ```
-Must return `200` with both rows added (check via `Quotinator.Tools.DbInspector` — `SELECT Id, Text, CompletenessStatus FROM StageDirections WHERE Id = 'f0000002-...'`). Re-import the same ids with a
+Must return `200` with both rows added (check via `Quotinator.Tools.DbInspector` — `SELECT Id, Text, CompletenessStatus FROM Quotinator_StageDirection WHERE Id = 'f0000002-...'`). Re-import the same ids with a
 changed `text` under `{"duplicateResolution":{"default":"review"}}` — must stage a `Pending` `Modify`
 action for each (`GET /import/actions?status=pending`) with `ambiguousFields: ["text"]`. Decide each
 with `{"stageDirectionText":{"choice":"replace"},"markCompletenessAs":"Complete"}` /
@@ -232,7 +232,7 @@ via DbInspector. Re-import the same ids again with another changed `text` under 
 now stage `Blocked`, not `Pending` (`GET /import/actions?status=Blocked`), and the on-disk text must be
 unchanged — proves a `Complete` row can no longer be silently overwritten. Finally, exercise
 correct/apply/reverse on a still-correctable row: single-shot re-import a changed `text` under
-`newest-wins` (nothing pending, applies immediately, `ImportBatches.Status` set to `Applied` by this
+`newest-wins` (nothing pending, applies immediately, `Import_Batch.Status` set to `Applied` by this
 direct-apply path — the two-phase decide→apply path used above does **not** set it, a known
 pre-existing gap, see #171/#172's plan docs), confirm the write via DbInspector, then
 `POST /import/actions/reverse?batchId=...` (`preview=true` first, then for real) and confirm the
@@ -257,7 +257,7 @@ EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
 ```
 Must return `200` with the Person added (check via `Quotinator.Tools.DbInspector` — `SELECT Id,
-Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM People WHERE Id = 'f0000005-...'` — note
+Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM Quotinator_Person WHERE Id = 'f0000005-...'` — note
 the id is deliberately lowercase, as a file-authored explicit id always is). Re-import the same id
 with a changed `dateOfBirth` under `{"duplicateResolution":{"default":"review"}}` — must stage a
 `Pending` `Modify` action (`GET /import/actions?status=pending`) with `ambiguousFields:
@@ -297,7 +297,7 @@ returned `batchId`, then:
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
-Both must return `200`; confirm via DbInspector (`SELECT Id, IsDeleted FROM People WHERE Id =
+Both must return `200`; confirm via DbInspector (`SELECT Id, IsDeleted FROM Quotinator_Person WHERE Id =
 'f0000007-0000-4000-8000-000000000007'`) that `IsDeleted` genuinely flips to `1`. Re-import the exact
 same fixture one more time — must stage as a fresh `Add` (not `Modify`, which would mean the reversal
 silently no-op'd and the row was never truly gone), and `IsDeleted` must be back to `0` afterward.
@@ -307,10 +307,10 @@ silently no-op'd and the row was never truly gone), and `IsDeleted` must be back
 ## 10. Series/Universe schema, Character↔Source many-to-many identity (#179)
 
 Character no longer
-has a `SourceId` column; a Character's Source links live in `CharacterSources` instead, and today's
+has a `SourceId` column; a Character's Source links live in `Quotinator_CharacterSource` instead, and today's
 matching remains per-Source in meaning (only the mechanism changed — reusing a Character across
 Sources is #174's job, not this one's). This proves both halves live: a brand-new Character on an
-existing Source creates exactly one new `CharacterSources` link, and the same Character *name*
+existing Source creates exactly one new `Quotinator_CharacterSource` link, and the same Character *name*
 under a *different* Source still creates a separate row (no premature cross-Source reuse).
 ```bash
 cat > .claude/temp/smoke-179.json <<'EOF'
@@ -319,8 +319,8 @@ EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-179.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
 ```
 Must return `200`. Confirm via `Quotinator.Tools.DbInspector` — `SELECT COUNT(*) FROM
-CharacterSources;` must have increased by exactly 1, and `SELECT c.Name, s.Title FROM Characters c
-JOIN CharacterSources cs ON cs.CharacterId = c.Id JOIN Sources s ON s.Id = cs.SourceId WHERE
+Quotinator_CharacterSource;` must have increased by exactly 1, and `SELECT c.Name, s.Title FROM Quotinator_Character c
+JOIN Quotinator_CharacterSource cs ON cs.CharacterId = c.Id JOIN Quotinator_Source s ON s.Id = cs.SourceId WHERE
 c.Name = 'Striker (Smoke Test)';` must show one row linking to `Airplane!`. Then re-import the same
 character name under a different Source:
 ```bash
@@ -329,8 +329,8 @@ cat > .claude/temp/smoke-179b.json <<'EOF'
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-179b.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
 ```
-Must return `200`. `SELECT COUNT(*) FROM Characters WHERE Name = 'Striker (Smoke Test)';` must now
-be `2` — a *second*, separate Character row, each linked to its own Source via `CharacterSources`
+Must return `200`. `SELECT COUNT(*) FROM Quotinator_Character WHERE Name = 'Striker (Smoke Test)';` must now
+be `2` — a *second*, separate Character row, each linked to its own Source via `Quotinator_CharacterSource`
 — proving today's per-Source matching genuinely survived the mechanism change unchanged, not
 silently reused across Sources.
 
@@ -367,20 +367,20 @@ reproduction steps:
 docker stop -t 15 <container>
 docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-191.db
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
-  --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Sources WHERE IsDeleted = 0"
+  --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Quotinator_Source WHERE IsDeleted = 0"
 ```
 `have_date` must be nonzero and a large majority of `sources` (roughly 400+ of 479 on the current
 bundled dataset) — before the fix this was always `0`. Cross-check one title with no `sources[]`
 entry at all (implicit-discovery path, the case #191 actually fixes):
 ```bash
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
-  --sql "SELECT Title, Type, Date FROM Sources WHERE Title = 'Airplane!' AND IsDeleted = 0"
+  --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Airplane!' AND IsDeleted = 0"
 ```
 Must return `Date = 1980`. Then cross-check a title known to have a date-less explicit `sources[]`
 entry (the gap noted above):
 ```bash
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
-  --sql "SELECT Title, Type, Date FROM Sources WHERE Title = 'Jurassic Park' AND IsDeleted = 0"
+  --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Jurassic Park' AND IsDeleted = 0"
 ```
 Currently returns `Date = NULL` — expected until the open gap above is fixed, not a fresh failure.
 
@@ -491,7 +491,7 @@ supplied — proving both the capture-time canonicalization and the case-insensi
 
 A conversation line
 referencing a quote by an id whose casing doesn't match the quote's own now-canonical form must not
-violate `ConversationLines`' real `FOREIGN KEY` constraint to `Quotes(Id)` — the same bug class #209
+violate `Quotinator_ConversationLine`'s real `FOREIGN KEY` constraint to `Quotinator_Quote(Id)` — the same bug class #209
 found for `StageDirectionId`/`SoundCueId`, now also covering `QuoteId`.
 ```bash
 cat > .claude/temp/smoke-210-conv.json <<'EOF'
@@ -570,7 +570,7 @@ curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/soundcues
 All must return `200` with populated `items` and lowercase `id` fields — these endpoints all go
 through `SqliteRepository<T>`/`SqliteRestorableRepository<T>`'s generic `GetPageAsync`/`GetByIdAsync`,
 the only live paths that exercise `RepositorySql`'s rewritten queries end to end (Characters'
-`CharacterSources` many-to-many link also exercises `SqliteLinkRepository`). Also confirm
+`Quotinator_CharacterSource` many-to-many link also exercises `SqliteLinkRepository`). Also confirm
 `GetByIdAsync`'s case-insensitive lookup survived the rewrite — fetch one of the returned ids from
 `GET .../sources/{id}` with both its original casing and an uppercased version; both must return `200`
 with the same, lowercase-rendered `id`.
@@ -790,7 +790,7 @@ rule or alias. Cross-check for duplicate Sources directly, using `Quotinator.Too
 against a copy of the running container's database (`docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db`):
 ```bash
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
-  --sql "SELECT Title, Type, COUNT(*) AS c FROM Sources WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
+  --sql "SELECT Title, Type, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
 ```
 Must return **no rows** — any row here is a genuine duplicate Source that slipped through both the
 rule and alias mechanisms.
@@ -812,14 +812,14 @@ With the rule removed, that one quote's conflict must now stage `Pending` again 
 `ambiguousFields: ["date"]`) — proving the mechanism actually consults the file's content on every
 seed, not a cached decision from an earlier run. Restore the rule, then change its `resolution` from
 `Keep` to `Replace` and reseed again — `GET /quotes/{id}` will **not** show the change (`date` is
-Source-derived, read via JOIN from `Sources.Date`, and the Source was already fixed at the film's
+Source-derived, read via JOIN from `Quotinator_Source.Date`, and the Source was already fixed at the film's
 correct year by whichever occurrence was seen first — a per-quote rule only ever affects that Quote's
 own `MergedFields` audit trail, never a Source-owned field's real stored value, the same limitation
 #181's own Step 10 addendum documents). Check via `Quotinator.Tools.DbInspector` instead:
 ```bash
 docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
-  --sql "SELECT MergedFields FROM System_ImportActions WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
+  --sql "SELECT MergedFields FROM Import_Action WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
 ```
 The row for the batch matching NikhilNamal17's own rule file must show `"date":"2005"` (the incoming
 value — Replace won), confirmed changed from `"date":"1958"` under the original `Keep` rule; a
@@ -940,7 +940,7 @@ this is not empty** — it found 3 genuine near-duplicates the curated alias fil
 and `"Airplane"` vs. `"Airplane!"`, already aliased in a *different* bundled file's own alias list,
 not curated's — the file-scoped design means a duplicate covered elsewhere can still surface here,
 a known, accepted trade-off, not a bug). This confirms the endpoint runs cleanly end to end against
-the full live `Sources` table and genuinely finds real candidates, which is the point — do not expect
+the full live `Quotinator_Source` table and genuinely finds real candidates, which is the point — do not expect
 an empty result on this dataset. A confirmed, verified duplicate should be filed as a data-quality
 follow-up per `docs/workflow/source-verification.md`, not fixed inline as part of this checklist.
 
