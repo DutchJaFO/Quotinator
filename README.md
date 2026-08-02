@@ -128,70 +128,7 @@ API responses include `language`, `originalLanguage`, and `isTranslated` so cons
 
 All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a specific language. Responses always include `language`, `originalLanguage`, and `isTranslated` so consumers know whether they received a translation or the original. See [`docs/localisation.md`](docs/localisation.md) for details.
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/v1/quotes/random` | Random quote(s) — returns a `FilteredQuoteResult` envelope. When a returned quote belongs to a conversation, one is chosen at random and its full line list embedded on that item's `embeddedConversation`; every other quote in that conversation is excluded from the rest of the result |
-| GET | `/api/v1/quotes/random?n=10` | N random quotes (1–100) |
-| GET | `/api/v1/quotes/random?type=movie&type=book` | Random quote from movies or books (multi-value OR logic) |
-| GET | `/api/v1/quotes/random?genre=sci-fi&genre=drama` | Random quote matching either genre |
-| GET | `/api/v1/quotes/random?character=Gandalf` | Random quote by or featuring Gandalf |
-| GET | `/api/v1/quotes/random?author=Tolkien&source=Fellowship` | Combine filters with AND logic |
-| GET | `/api/v1/quotes/random?decade=1980` | Random quote from the 1980s (expands to yearFrom=1980&yearTo=1989) |
-| GET | `/api/v1/quotes/random?yearFrom=1970&yearTo=1989` | Random quote from an explicit year range |
-| GET | `/api/v1/quotes/random?universe=Middle%20Earth` | Random quote from any Series in the Middle Earth Universe. Also accepts `seriesId`/`series` (mutually exclusive with `universeId`/`universe`) |
-| GET | `/api/v1/quotes` | All quotes, paginated (`page`, `pageSize`, `type`, `genre`, `yearFrom`, `yearTo`, `year`, `decade`, `seriesId`/`series`, `universeId`/`universe` — all optional) |
-| GET | `/api/v1/quotes/{id}` | Quote by UUID. Response includes `series`/`universe` references (`{id, name}`, or `null` if the source has no series / the series has no universe) |
-| GET | `/api/v1/quotes/search?q=term` | Search quotes; returns a result envelope (`status`, `items`, `totalMatching`, `message`). Add `&type=movie&type=book`, `&field=quote\|source\|character\|author`, and/or `&seriesId=`/`&series=`/`&universeId=`/`&universe=` |
-| GET | `/api/v1/conversations` | Paginated list of Conversations — summaries only (`id`, `description`, `completenessStatus`, `lineCount`), never the full line list (`page`, `pageSize`) |
-| GET | `/api/v1/conversations/{id}` | A conversation's full ordered line list — quotes, stage directions, and sound cues |
-| GET | `/api/v1/masterdata/sources` | Paginated list of Sources — the films, television series, books, and other works quotes are drawn from (`page`, `pageSize`) |
-| GET | `/api/v1/masterdata/sources/{id}` | Source by UUID. Includes a `series` reference (`{id, name}`, or `null` if the source has no series) |
-| GET | `/api/v1/masterdata/characters` | Paginated list of Characters — fictional characters who deliver quotes (`page`, `pageSize`) |
-| GET | `/api/v1/masterdata/characters/{id}` | Character by UUID. Includes a `sources` array of `{id, name}` references for every Source the character appears in (#179) |
-| GET | `/api/v1/masterdata/people` | Paginated list of People — real individuals who said or wrote a quote (`page`, `pageSize`) |
-| GET | `/api/v1/masterdata/people/{id}` | Person by UUID |
-| GET | `/api/v1/masterdata/series` | Paginated list of Series — direct continuities of Sources within a Universe (`page`, `pageSize`) |
-| GET | `/api/v1/masterdata/series/{id}` | Series by UUID. Includes a `universe` reference (`{id, name}`, or `null` if the series has no universe) |
-| GET | `/api/v1/masterdata/universes` | Paginated list of Universes — fictional worlds or franchises spanning one or more Series (`page`, `pageSize`) |
-| GET | `/api/v1/masterdata/universes/{id}` | Universe by UUID |
-| GET | `/api/v1/masterdata/stagedirections` | Paginated list of StageDirections — reusable scene-setting or action descriptions that can appear in a conversation (`page`, `pageSize`) |
-| GET | `/api/v1/masterdata/stagedirections/{id}` | StageDirection by UUID |
-| GET | `/api/v1/masterdata/soundcues` | Paginated list of SoundCues — reusable audio elements that can appear in a conversation (`page`, `pageSize`) |
-| GET | `/api/v1/masterdata/soundcues/{id}` | SoundCue by UUID |
-| GET | `/api/v1/health` | Health check |
-| GET | `/api/v1/version` | Running version and environment |
-| POST | `/api/v1/import` | Import one source file (JSON or, via `converter: "csv"` in `settings`, CSV) — same duplicate-detection engine as startup seeding. Multipart fields: `file`, `settings` (optional JSON: `converter`, `duplicateResolution`, `enrich`) — or pass `batchId` (query string) instead of `file` to apply a batch already staged by a prior `/import`/`/import/preview` call. Stages then attempts to apply — `200` when everything applied, `202` when any row needs a decision, `422` if neither `file` nor `batchId` is given. Returns a summary/conflicts/errors/`report` envelope — `report` is a per-entity-type new/modified/blocked/discarded/pending/stale action breakdown for this file (requires `X-Api-Key`) |
-| POST | `/api/v1/import/preview` | Same as `/import` but never applies — a real, inspectable batch is staged (review via `GET /import/actions?batchId=`), nothing is written to quote data. `200` when the batch would apply cleanly as-is, `202` when any row needs a decision (requires `X-Api-Key`) |
-| GET | `/api/v1/import/actions` | List staged import actions (Quote/Source/Character/Person), paginated. Filter by `status` (`Pending`, `Decided`, `Applied`, `Discarded`, `Blocked`, `Stale`), `batchId`, and/or `entityType`. Each item includes `relatedActionIds` and `ambiguousFields` |
-| GET | `/api/v1/import/actions/export?batchId=&format=` | Export every decidable field across `batchId`'s Pending/Decided/Blocked/Stale Modify actions as a flat row list — `format=json` (default) or `format=csv`. A Decided action's `Decision`/`CustomValue` reflect the caller's actual prior choice, not an inference |
-| POST | `/api/v1/import/actions/bulk-decide?batchId=&format=` | Apply the edited export file back — one `Decision`/`CustomValue` per row, grouped by `ActionId`. A malformed row or a failing action group is reported in `errors` without aborting the rest of the file (requires `X-Api-Key`) |
-| POST | `/api/v1/import/actions/{id}/decide` | Stage a per-field keep/replace/custom decision for one staged Quote or Source action — git-merge-style, nothing is written yet. Any decision may also set `markCompletenessAs` to directly set the target record's completeness status once applied (requires `X-Api-Key`) |
-| POST | `/api/v1/import/actions/{id}/undo` | Revert a staged action's decision back to pending (requires `X-Api-Key`) |
-| POST | `/api/v1/import/actions/apply?batchId=` | Apply every action in a batch atomically, once every one of them has a decision — refuses with the still-pending ids otherwise (requires `X-Api-Key`) |
-| POST | `/api/v1/import/actions/discard?batchId=` | Discard every staged action in a batch — never touches domain tables (requires `X-Api-Key`) |
-| POST | `/api/v1/import/actions/reverse?batchId=` | Undo an applied import batch — Add actions are soft-deleted, Modify actions are restored to their pre-change values. Only the most recently applied batch still live may be reversed (strict LIFO stack); the batch's own record is itself soft-deleted on success. Pass `?preview=true` to check whether it would succeed without changing anything (requires `X-Api-Key`) |
-| GET | `/api/v1/import/rules/conflict?fileName=&origin=` | View the currently effective per-source `ConflictResolutionRule` file (a registered override when one exists, otherwise the bundled/image copy). `404` if neither exists |
-| POST | `/api/v1/import/rules/conflict/generate?fileName=&origin=&batchId=` | Generate `ConflictResolutionRule`s from a decided batch's export rows, merge into the currently effective rule file (never overwriting an already-covered entity/field), and persist the result as a registered override (requires `X-Api-Key`) |
-| DELETE | `/api/v1/import/rules/conflict?fileName=&origin=` | Remove a registered conflict-resolution override — the seeding pipeline falls back to the bundled/image copy. `404` if nothing is registered (requires `X-Api-Key`) |
-| GET | `/api/v1/import/rules/alias?fileName=&origin=` | Suggest near-duplicate Source `(Title, Type)` pairs not already covered by `fileName`'s `SourceAliasRule` file — detect-and-suggest only, never writes an alias entry |
-| GET | `/api/v1/admin/database/seed/preview` | Preview what a reseed would import — no data is changed. Reflects any already-downloaded source cache, but never triggers a network call itself. Each file includes `isValidJson` (whether it parsed at all) and, when it has a `downloadUrl`, `refreshOutcome`/`lastRefreshedAtUtc`; `reports` gives a per-file, per-entity-type new/modified/blocked/discarded/pending/stale breakdown computed read-only against the current database (requires `X-Api-Key`) |
-| POST | `/api/v1/admin/database/reseed` | Clear all data and reimport from `data/sources/` — schema history preserved. Pass `?forceSourceRefresh=true` to bypass the download cache's freshness check for this call. Returns row counts for all nine entity types plus `reports` (per-file, per-entity-type action breakdown) (requires `X-Api-Key`) |
-| POST | `/api/v1/admin/database/reset` | Full reset: clear data, reapply migrations, reimport (requires `X-Api-Key`). Audit log always survives. Schema version history is cleared and replayed by default; pass `?preserveSchemaVersion=true` to keep it. Pass `?forceSourceRefresh=true` to bypass the download cache's freshness check for this call. Returns row counts for all nine entity types plus `reports` (per-file, per-entity-type action breakdown) |
-| POST | `/api/v1/admin/sources/refresh` | Refresh the download cache for any source with a `downloadUrl`/`github` manifest entry, without touching the database. Pass `?force=true` to bypass the freshness check. Each result includes `lastRefreshedAtUtc` — the cached copy's own last-write time, so an `uptodate` outcome still shows how old the data actually is (requires `X-Api-Key`) |
-
-Admin endpoints require the `X-Api-Key: <key>` request header matching the `admin_api_key` set in the add-on configuration. Requests without the header, or with an incorrect key, receive `401 Unauthorized`. The endpoints return `401` if no key is configured.
-
-Sources declaring a `downloadUrl` or `github` manifest entry are automatically refreshed from the network before seeding — controlled by `Quotinator__AutoUpdateSources` (default `true`; set `false` for fully offline/air-gapped installs) and `Quotinator__SourceUpdateIntervalHours` (default `24`, overridable per-entry via the manifest's `refreshIntervalHours` field). A network failure never blocks startup, reseed, or reset — the app falls back to whatever copy is already on disk.
-
-By default, `/search` and `/random`'s fuzzy text filters (`q`, `character`, `author`, `source`) are case-insensitive for ASCII only — an accented or other non-ASCII character (e.g. `é`/`É`) is matched case-*sensitively*, a limitation of SQLite's own `LIKE` operator. Set `Quotinator__UnicodeAwareSearch=true` (default `false`; not yet validated against real-world search traffic) to make these filters Unicode-aware instead.
-
-**`/random` and `/search` filter parameters:** `type` and `genre` are repeatable (OR logic within each, AND between them). `yearFrom` / `yearTo` are inclusive year bounds; `year` is shorthand for a single year; `decade` (must be divisible by 10) is shorthand for a 10-year range. All filter combinations are ANDed. Both endpoints return a result envelope with `status` (`Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`), `items`, `totalMatching`, and an optional `message` (set when status is not `Ok`). `/random` additionally supports `character`, `author`, and `source` as case-insensitive contains filters on the random pool, and includes `requestedCount`/`returnedCount` (`null` on `/search`) — `returnedCount` can be lower than `requestedCount` when the pool is smaller than requested or conversation-aware deduplication excluded quotes sharing a conversation with an already-selected one; `/search` uses `field` (`quote`, `source`, `character`, `author`) to restrict which field the search term is matched against.
-
-Every quote response includes a `conversations` field — `null` unless the quote belongs to one or more conversations, in which case it lists `{ conversationId, position, totalLines }` for each (fetch the full line list via `GET /api/v1/conversations/{id}`).
-
-All endpoints return [RFC 7807 ProblemDetails](https://www.rfc-editor.org/rfc/rfc7807) on structural errors (invalid `lang`, out-of-range `n`, etc.), with localised `detail` messages driven by the `Accept-Language` request header. The API applies a sliding-window rate limit of 100 requests per minute per IP.
-
-The interactive API reference (Scalar) is available at `/scalar/v1` and the raw OpenAPI spec at `/openapi/v1.json`.
+See [`docs/api-endpoints.md`](docs/api-endpoints.md) for the full endpoint reference — every route, its query parameters, and a description of its behavior. For an interactive, always-current view of the same API on a running instance, use the Scalar reference at `/scalar/v1` or the raw OpenAPI spec at `/openapi/v1.json`.
 
 The web UI includes a language selector in the navbar. It overrides the browser's automatic language detection (English, Deutsch, Nederlands) and persists the choice as a cookie for one year. Selecting "Auto-detect" clears the override and returns to browser language detection.
 
