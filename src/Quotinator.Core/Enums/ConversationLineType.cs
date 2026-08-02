@@ -1,4 +1,4 @@
-namespace Quotinator.Core.Models;
+namespace Quotinator.Core.Enums;
 
 /// <summary>
 /// Discriminates what one line of a conversation points to — shared by

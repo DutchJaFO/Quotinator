@@ -1,3 +1,4 @@
+using Quotinator.Core.Enums;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Quotinator.Core.Models;

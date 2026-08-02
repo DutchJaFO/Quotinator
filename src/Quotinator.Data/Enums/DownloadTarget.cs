@@ -1,4 +1,4 @@
-namespace Quotinator.Data.Import;
+namespace Quotinator.Data.Enums;
 
 /// <summary>Which cache folder an auto-updated source's downloaded copy is written to.</summary>
 public enum DownloadTarget

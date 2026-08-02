@@ -568,7 +568,7 @@ public static class QuotinatorMigrations
 
     /// <summary>
     /// #150, ADR 008 — adds a <c>CHECK</c> constraint to <c>ImportBatches.ConflictPolicy</c>
-    /// (backed by <see cref="Quotinator.Data.Import.DuplicateResolutionPolicy"/>, a real closed C# enum), closing a gap ADR
+    /// (backed by <see cref="Quotinator.Data.Enums.DuplicateResolutionPolicy"/>, a real closed C# enum), closing a gap ADR
     /// 008 itself documented as a known, tracked exception rather than fixing at the time. Migration
     /// 4 already applied to real databases with this column left unconstrained (added there via a
     /// plain <c>ALTER TABLE ... ADD COLUMN</c>, which cannot carry a <c>CHECK</c> retroactively), so

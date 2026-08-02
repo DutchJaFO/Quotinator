@@ -1,4 +1,6 @@
-namespace Quotinator.Data.Repositories;
+using Quotinator.Data.Repositories;
+
+namespace Quotinator.Data.Enums;
 
 /// <summary>Controls how <see cref="IRepository{T}.InsertManyAsync"/> writes a collection of entities.</summary>
 public enum InsertStrategy

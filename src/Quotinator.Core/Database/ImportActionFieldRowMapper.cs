@@ -1,6 +1,7 @@
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Database;

@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.ComponentModel;
 using Microsoft.AspNetCore.Mvc;
 using Quotinator.Api.Endpoints.Filters;

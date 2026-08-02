@@ -1,4 +1,4 @@
-namespace Quotinator.Core.Models;
+namespace Quotinator.Core.Enums;
 
 /// <summary>The media category of a quote's source.</summary>
 public enum QuoteType

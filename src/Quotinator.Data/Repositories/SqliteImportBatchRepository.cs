@@ -1,6 +1,7 @@
 using Dapper;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Queries;

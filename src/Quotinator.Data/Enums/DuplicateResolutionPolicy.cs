@@ -1,4 +1,4 @@
-namespace Quotinator.Data.Import;
+namespace Quotinator.Data.Enums;
 
 /// <summary>How the seeder handles a duplicate record when the same primary key appears in more than one source file.</summary>
 public enum DuplicateResolutionPolicy

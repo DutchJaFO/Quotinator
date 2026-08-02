@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Quotinator.Core.Models;
+namespace Quotinator.Core.Enums;
 
 /// <summary>Outcome of a filtered quote query, scoped to application semantics rather than HTTP status codes.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]

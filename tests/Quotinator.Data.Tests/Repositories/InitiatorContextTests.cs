@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 

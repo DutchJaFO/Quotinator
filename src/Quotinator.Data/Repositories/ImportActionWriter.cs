@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Data;
 using Dapper;
 using Dapper.Contrib.Extensions;

@@ -1,4 +1,4 @@
-namespace Quotinator.Data.Models;
+namespace Quotinator.Data.Enums;
 
 /// <summary>The kind of database operation a <see cref="Quotinator.Data.Entities.ChangeEntity"/> row records.</summary>
 public enum ChangeAction

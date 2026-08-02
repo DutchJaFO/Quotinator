@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Quotinator.Data.Entities;
+namespace Quotinator.Data.Enums;
 
 /// <summary>
 /// Whether a content record's fields are known to be fully populated and reviewed. A closed set

@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;

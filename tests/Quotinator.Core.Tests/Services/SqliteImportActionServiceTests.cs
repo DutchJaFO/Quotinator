@@ -1,3 +1,5 @@
+using Quotinator.Core.Enums;
+using Quotinator.Data.Enums;
 using System.Text.Json;
 using Dapper;
 using Microsoft.Data.Sqlite;

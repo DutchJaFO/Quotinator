@@ -1,4 +1,4 @@
-namespace Quotinator.Data.Models;
+namespace Quotinator.Data.Enums;
 
 /// <summary>The mechanism that initiated a <see cref="Quotinator.Data.Entities.ChangeEntity"/> row — the specific identifying detail (which batch, which route, which provider) lives in <see cref="Quotinator.Data.Repositories.IInitiatorContext"/>'s own <c>InitiatedById</c> property, not here.</summary>
 public enum InitiatorType

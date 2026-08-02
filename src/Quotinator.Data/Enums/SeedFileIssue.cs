@@ -1,4 +1,4 @@
-namespace Quotinator.Data.Import;
+namespace Quotinator.Data.Enums;
 
 /// <summary>Why a source file contributed zero quotes to a seed/preview operation, when it isn't simply empty.</summary>
 public enum SeedFileIssue

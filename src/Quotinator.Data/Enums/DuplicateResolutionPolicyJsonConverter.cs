@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Quotinator.Data.Import;
+namespace Quotinator.Data.Enums;
 
 /// <summary>
 /// Serializes <see cref="DuplicateResolutionPolicy"/> using kebab-case wire values (e.g. <c>MergeOurs</c> becomes

@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Data;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;

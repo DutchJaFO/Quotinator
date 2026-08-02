@@ -1,3 +1,5 @@
+using Quotinator.Data.Enums;
+
 namespace Quotinator.Data.Import;
 
 /// <summary>Resolution helpers for <see cref="Optional{T}"/> (#190).</summary>

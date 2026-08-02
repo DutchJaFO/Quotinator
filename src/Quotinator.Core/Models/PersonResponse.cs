@@ -1,3 +1,5 @@
+using Quotinator.Data.Enums;
+
 namespace Quotinator.Core.Models;
 
 /// <summary>The API response shape for a single Person.</summary>
@@ -16,5 +18,5 @@ public sealed class PersonResponse
     public string? DateOfDeath { get; init; }
 
     /// <summary>Whether the record's fields are known to be fully populated and reviewed. Null when not yet assessed.</summary>
-    public Quotinator.Data.Entities.CompletenessStatus? CompletenessStatus { get; init; }
+    public CompletenessStatus? CompletenessStatus { get; init; }
 }

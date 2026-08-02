@@ -1,4 +1,5 @@
 using System.Data;
+using Quotinator.Data.Enums;
 
 namespace Quotinator.Data.Repositories;
 

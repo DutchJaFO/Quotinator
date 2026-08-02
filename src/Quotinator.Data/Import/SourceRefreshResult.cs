@@ -1,3 +1,5 @@
+using Quotinator.Data.Enums;
+
 namespace Quotinator.Data.Import;
 
 /// <summary>The outcome of resolving a single manifest entry with a <c>downloadUrl</c>.</summary>

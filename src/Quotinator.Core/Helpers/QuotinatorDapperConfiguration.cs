@@ -1,3 +1,4 @@
+using Quotinator.Core.Enums;
 using Quotinator.Core.Models;
 using Quotinator.Data.Helpers;
 using Quotinator.Core.Entities;
@@ -9,7 +10,7 @@ namespace Quotinator.Core.Helpers;
 /// infrastructure handlers (base <see cref="DatabaseConfiguration"/>) and domain enum handlers.
 /// </summary>
 /// <remarks>
-/// <see cref="Quotinator.Data.Import.DuplicateResolutionPolicy"/> and <c>ImportBatchType</c>/
+/// <see cref="Quotinator.Data.Enums.DuplicateResolutionPolicy"/> and <c>ImportBatchType</c>/
 /// <c>ImportBatchStatus</c> are registered by the base class, not here — they live in
 /// <c>Quotinator.Data</c>, not this project's own domain, same as <c>ChangeAction</c>/<c>InitiatorType</c>.
 /// </remarks>

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Quotinator.Core.Models;
+namespace Quotinator.Core.Enums;
 
 /// <summary>
 /// Serializes <see cref="ConversationLineType"/> using snake_case wire values (<c>stage_direction</c>,

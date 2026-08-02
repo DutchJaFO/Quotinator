@@ -1,3 +1,4 @@
+using Quotinator.Core.Enums;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Import;
@@ -183,7 +184,7 @@ public class SourceQuoteFileReaderTests
         Assert.AreEqual("77777777-7777-7777-7777-777777777777", parsed.Characters[0].Id);
         Assert.AreEqual("Gandalf", parsed.Characters[0].Name);
         Assert.AreEqual("The Fellowship of the Ring", parsed.Characters[0].SourceTitle);
-        Assert.AreEqual(Core.Models.QuoteType.Movie, parsed.Characters[0].SourceType);
+        Assert.AreEqual(Core.Enums.QuoteType.Movie, parsed.Characters[0].SourceType);
     }
 
     /// <summary>A file without a characters section parses identically to today — purely additive.</summary>

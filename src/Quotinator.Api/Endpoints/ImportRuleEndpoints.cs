@@ -8,6 +8,7 @@ using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;

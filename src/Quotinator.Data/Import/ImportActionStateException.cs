@@ -10,7 +10,7 @@ public sealed class ImportActionStateException : Exception
     /// <summary>The action id the operation was attempted on.</summary>
     public Guid ActionId { get; }
 
-    /// <summary>The action's actual status at the time of the attempt — one of the <see cref="Entities.ImportActionStatus"/> constants.</summary>
+    /// <summary>The action's actual status at the time of the attempt — one of the <see cref="Enums.ImportActionStatus"/> constants.</summary>
     public string CurrentStatus { get; }
 
     /// <summary>Creates the exception with the action id and its actual current status.</summary>

@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Quotinator.Core.Import;

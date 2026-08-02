@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Quotinator.Converters.BasicJsonArray;
+using Quotinator.Core.Enums;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Import;

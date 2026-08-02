@@ -1,3 +1,4 @@
+using Quotinator.Core.Enums;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;

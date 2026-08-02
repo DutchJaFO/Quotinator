@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Text.Json;
 using Quotinator.Core.Database;
 using Quotinator.Core.Helpers;

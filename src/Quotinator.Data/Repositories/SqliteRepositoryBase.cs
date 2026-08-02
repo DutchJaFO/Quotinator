@@ -1,6 +1,7 @@
 using System.Reflection;
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Enums;
 
 namespace Quotinator.Data.Repositories;
 

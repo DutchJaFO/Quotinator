@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 

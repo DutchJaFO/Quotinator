@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Quotinator.Data.Import;
+namespace Quotinator.Data.Enums;
 
 /// <summary>How a single field's value was decided during manual conflict resolution (#149).</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]

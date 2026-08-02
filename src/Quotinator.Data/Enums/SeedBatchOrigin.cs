@@ -1,4 +1,6 @@
-namespace Quotinator.Data.Import;
+using Quotinator.Data.Import;
+
+namespace Quotinator.Data.Enums;
 
 /// <summary>Where a <see cref="SeedBatch"/>'s files were discovered from.</summary>
 public enum SeedBatchOrigin

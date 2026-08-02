@@ -1,4 +1,4 @@
-namespace Quotinator.Data.Import;
+namespace Quotinator.Data.Enums;
 
 /// <summary>What happened when a single manifest entry with a <c>downloadUrl</c> was resolved.</summary>
 public enum SourceRefreshOutcome

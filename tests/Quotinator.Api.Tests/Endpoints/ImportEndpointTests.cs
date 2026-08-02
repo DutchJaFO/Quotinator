@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -373,7 +374,7 @@ public class ImportEndpointTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("csv", service.LastSettings?.Converter);
-        Assert.AreEqual(Quotinator.Data.Import.DuplicateResolutionPolicy.MergeTheirs, service.LastSettings?.DuplicateResolution?.Default);
+        Assert.AreEqual(Quotinator.Data.Enums.DuplicateResolutionPolicy.MergeTheirs, service.LastSettings?.DuplicateResolution?.Default);
     }
 
     public TestContext TestContext { get; set; }

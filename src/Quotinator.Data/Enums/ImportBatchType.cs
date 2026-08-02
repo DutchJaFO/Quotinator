@@ -1,4 +1,4 @@
-namespace Quotinator.Data.Entities;
+namespace Quotinator.Data.Enums;
 
 /// <summary>Classifies how an import batch was introduced into the database.</summary>
 public enum ImportBatchType

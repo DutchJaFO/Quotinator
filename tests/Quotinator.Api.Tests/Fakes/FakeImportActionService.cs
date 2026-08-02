@@ -1,4 +1,5 @@
 using Quotinator.Core.Models;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Core.Services;
 

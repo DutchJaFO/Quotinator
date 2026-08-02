@@ -1,3 +1,5 @@
+using Quotinator.Data.Enums;
+
 namespace Quotinator.Data.Import;
 
 /// <summary>A group of source files that share a common manifest and duplicate-resolution policy.</summary>

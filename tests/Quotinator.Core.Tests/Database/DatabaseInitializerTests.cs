@@ -1,10 +1,12 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
+using Quotinator.Core.Enums;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
@@ -1345,7 +1347,7 @@ public class DatabaseInitializerTests
             new { id = Guid.NewGuid().ToString(), soundCueId, now }));
     }
 
-    /// <summary><see cref="ConversationLineType"/> round-trips through Dapper as a real enum, not an int — the <see cref="Quotinator.Data.Helpers.SafeEnumHandler{TEnum}"/> pattern already used for <see cref="Quotinator.Data.Entities.ImportBatchType"/>/<see cref="Quotinator.Data.Entities.ImportBatchStatus"/>.</summary>
+    /// <summary><see cref="ConversationLineType"/> round-trips through Dapper as a real enum, not an int — the <see cref="Quotinator.Data.Helpers.SafeEnumHandler{TEnum}"/> pattern already used for <see cref="Quotinator.Data.Enums.ImportBatchType"/>/<see cref="Quotinator.Data.Enums.ImportBatchStatus"/>.</summary>
     [TestMethod]
     public async Task ConversationLineType_RoundTripsThroughDapper()
     {
@@ -1866,7 +1868,7 @@ public class DatabaseInitializerTests
             await reapplyConn.OpenAsync(TestContext.CancellationToken);
             var actions = await Quotinator.Core.Database.ImportActionPlanner.PlanAsync(
                 (SqliteConnection)reapplyConn, [], reapplyBatchId, DuplicateResolutionPolicy.Review,
-                sources: [new Quotinator.Core.Import.SourceEntry { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Models.QuoteType.Movie, SeriesName = "Test Series" }]);
+                sources: [new Quotinator.Core.Import.SourceEntry { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Enums.QuoteType.Movie, SeriesName = "Test Series" }]);
 
             Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Identical content — no change, no action staged at all");
         }
