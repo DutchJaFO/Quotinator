@@ -1868,7 +1868,7 @@ public class DatabaseInitializerTests
             await reapplyConn.OpenAsync(TestContext.CancellationToken);
             var actions = await Quotinator.Core.Database.ImportActionPlanner.PlanAsync(
                 (SqliteConnection)reapplyConn, [], reapplyBatchId, DuplicateResolutionPolicy.Review,
-                sources: [new Quotinator.Core.Import.SourceEntry { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Enums.QuoteType.Movie, SeriesName = "Test Series" }]);
+                sources: [new Quotinator.Core.Import.SourceEntryDto { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Enums.QuoteType.Movie, SeriesName = "Test Series" }]);
 
             Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Identical content — no change, no action staged at all");
         }

@@ -2,8 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace Quotinator.Core.Import;
 
-/// <summary>A translated version of a <see cref="SourceQuote"/>'s text and source title for a specific language.</summary>
-public class SourceQuoteTranslation
+/// <summary>A translated version of a <see cref="SourceQuoteDto"/>'s text and source title for a specific language.</summary>
+public class SourceQuoteTranslationDto
 {
     /// <summary>The translated quote text.</summary>
     [JsonPropertyName("quote")]

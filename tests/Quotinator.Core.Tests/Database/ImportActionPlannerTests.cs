@@ -66,7 +66,7 @@ public class ImportActionPlannerTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private static SourceQuote BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null, string quoteText = "Here's looking at you, kid.", string? date = null, Core.Enums.QuoteType type = Core.Enums.QuoteType.Movie) => new()
+    private static SourceQuoteDto BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null, string quoteText = "Here's looking at you, kid.", string? date = null, Core.Enums.QuoteType type = Core.Enums.QuoteType.Movie) => new()
     {
         Id               = id,
         QuoteText        = quoteText,
@@ -757,7 +757,7 @@ public class ImportActionPlannerTests
 
     // ── #162: PlanSourcesAsync ────────────────────────────────────────────────
 
-    private static SourceEntry BuildSourceEntry(string? id, string title = "Casablanca", Core.Enums.QuoteType type = Core.Enums.QuoteType.Movie, string? date = "1942", string? seriesName = null) => new()
+    private static SourceEntryDto BuildSourceEntry(string? id, string title = "Casablanca", Core.Enums.QuoteType type = Core.Enums.QuoteType.Movie, string? date = "1942", string? seriesName = null) => new()
     {
         Id         = id,
         Title      = title,
@@ -767,7 +767,7 @@ public class ImportActionPlannerTests
     };
 
     /// <summary>#180: an enrichment-shaped entry — no explicit id (matched by natural key), no date (not intended to be set), just the Series link.</summary>
-    private static SourceEntry BuildEnrichmentEntry(string title = "Casablanca", Core.Enums.QuoteType type = Core.Enums.QuoteType.Movie, string? seriesName = "The Hobbit") => new()
+    private static SourceEntryDto BuildEnrichmentEntry(string title = "Casablanca", Core.Enums.QuoteType type = Core.Enums.QuoteType.Movie, string? seriesName = "The Hobbit") => new()
     {
         Title      = title,
         Type       = type,
@@ -784,9 +784,9 @@ public class ImportActionPlannerTests
 
     // ── #180: PlanUniverseAsync / PlanSeriesAsync / Source.SeriesId ─────────────
 
-    private static UniverseEntry BuildUniverseEntry(string name = "Middle Earth") => new() { Name = name };
+    private static UniverseEntryDto BuildUniverseEntry(string name = "Middle Earth") => new() { Name = name };
 
-    private static SeriesEntry BuildSeriesEntry(string name = "The Lord of the Rings", string? universeName = null) => new()
+    private static SeriesEntryDto BuildSeriesEntry(string name = "The Lord of the Rings", string? universeName = null) => new()
     {
         Name         = name,
         UniverseName = universeName,
@@ -865,7 +865,7 @@ public class ImportActionPlannerTests
         var id = await SeedExistingUniverseAsync(conn, "Middle Earth");
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            universe: [new UniverseEntry { Id = id, Name = "Middle-earth (corrected)" }]);
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle-earth (corrected)" }]);
 
         var universeAction = actions.Single(a => a.EntityType == "Universe");
         Assert.AreEqual(ImportActionKind.Modify, universeAction.ActionType.Parsed);
@@ -890,7 +890,7 @@ public class ImportActionPlannerTests
         ]);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
-            universe: [new UniverseEntry { Id = id, Name = "Middle-earth (corrected)" }], conflictRules: rules);
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle-earth (corrected)" }], conflictRules: rules);
 
         var universeAction = actions.Single(a => a.EntityType == "Universe");
         Assert.AreEqual(ImportActionStatus.Decided, universeAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
@@ -921,7 +921,7 @@ public class ImportActionPlannerTests
         // Name is identical between existing and incoming — would hit the "unchanged" early exit
         // before #181, and never even reach the rule lookup.
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
-            universe: [new UniverseEntry { Id = id, Name = "Middle Earth" }], conflictRules: rules);
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle Earth" }], conflictRules: rules);
 
         var universeAction = actions.SingleOrDefault(a => a.EntityType == "Universe");
         Assert.IsNotNull(universeAction, "The Custom rule must produce an action even though nothing 'changed' in the ordinary sense");
@@ -968,7 +968,7 @@ public class ImportActionPlannerTests
         var id = await SeedExistingSeriesAsync(conn, "The Hobbit");
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            series: [new SeriesEntry { Id = id, Name = "The Hobbit Trilogy" }]);
+            series: [new SeriesEntryDto { Id = id, Name = "The Hobbit Trilogy" }]);
 
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionKind.Modify, seriesAction.ActionType.Parsed);
@@ -987,7 +987,7 @@ public class ImportActionPlannerTests
         var id = await SeedExistingSeriesAsync(conn, "The Hobbit", universeId: originalUniverseId);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            series: [new SeriesEntry { Id = id, Name = "The Hobbit", UniverseName = "The Shire Cinematic Universe" }]);
+            series: [new SeriesEntryDto { Id = id, Name = "The Hobbit", UniverseName = "The Shire Cinematic Universe" }]);
 
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionKind.Modify, seriesAction.ActionType.Parsed);
@@ -1011,7 +1011,7 @@ public class ImportActionPlannerTests
         ]);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
-            series: [new SeriesEntry { Id = id, Name = "The Hobbit Trilogy" }], conflictRules: rules);
+            series: [new SeriesEntryDto { Id = id, Name = "The Hobbit Trilogy" }], conflictRules: rules);
 
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
@@ -1402,7 +1402,7 @@ public class ImportActionPlannerTests
 
     // ── #171: PlanStageDirectionsAsync ───────────────────────────────────────
 
-    private static SourceStageDirection BuildStageDirectionEntry(string id, string text = "A shot rings out.", string? imageUrl = null) => new()
+    private static SourceStageDirectionDto BuildStageDirectionEntry(string id, string text = "A shot rings out.", string? imageUrl = null) => new()
     {
         Id       = id,
         Text     = text,
@@ -1477,7 +1477,7 @@ public class ImportActionPlannerTests
 
     // ── #172: PlanSoundCuesAsync ──────────────────────────────────────────────
 
-    private static SourceSoundCue BuildSoundCueEntry(string id, string text = "Distant thunder.", string? soundFileUrl = null, string? imageUrl = null) => new()
+    private static SourceSoundCueDto BuildSoundCueEntry(string id, string text = "Distant thunder.", string? soundFileUrl = null, string? imageUrl = null) => new()
     {
         Id           = id,
         Text         = text,
@@ -1553,7 +1553,7 @@ public class ImportActionPlannerTests
 
     // ── #173: PlanPeopleAsync ─────────────────────────────────────────────────
 
-    private static PersonEntry BuildPersonEntry(string id, string name = "Ada Lovelace", string? dateOfBirth = "1815-12-10", string? dateOfDeath = "1852-11-27") => new()
+    private static PersonEntryDto BuildPersonEntry(string id, string name = "Ada Lovelace", string? dateOfBirth = "1815-12-10", string? dateOfDeath = "1852-11-27") => new()
     {
         Id          = id,
         Name        = name,
@@ -1665,7 +1665,7 @@ public class ImportActionPlannerTests
 
     // ── #175: PlanCharactersAsync (widened schema — id optional, sourceTitle/sourceType required) ──
 
-    private static CharacterEntry BuildCharacterEntry(string? id, string name = "Gandalf", string sourceTitle = "Existing Film", Core.Enums.QuoteType sourceType = Core.Enums.QuoteType.Movie) => new()
+    private static CharacterEntryDto BuildCharacterEntry(string? id, string name = "Gandalf", string sourceTitle = "Existing Film", Core.Enums.QuoteType sourceType = Core.Enums.QuoteType.Movie) => new()
     {
         Id          = id,
         Name        = name,
@@ -1791,7 +1791,7 @@ public class ImportActionPlannerTests
 
     // ── #176: PlanConversationsAsync ─────────────────────────────────────────
 
-    private static SourceConversation BuildConversationEntry(string id, string? description = "A tense standoff.") => new()
+    private static SourceConversationDto BuildConversationEntry(string id, string? description = "A tense standoff.") => new()
     {
         Id          = id,
         Description = description,
@@ -1842,11 +1842,11 @@ public class ImportActionPlannerTests
         var id = "db111111-1111-4111-8111-111111111176";
         await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.");
 
-        var entry = new SourceConversation
+        var entry = new SourceConversationDto
         {
             Id          = id,
             Description = "A tense standoff in the saloon.",
-            Lines       = [new SourceConversationLine { Order = 0, Type = Core.Enums.ConversationLineType.Quote, QuoteId = "11111111-1111-4111-8111-111111111111" }],
+            Lines       = [new SourceConversationLineDto { Order = 0, Type = Core.Enums.ConversationLineType.Quote, QuoteId = "11111111-1111-4111-8111-111111111111" }],
         };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, conversations: [entry]);
 
@@ -2015,11 +2015,11 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         var uppercaseQuoteId = "DF222222-2222-4222-8222-222222222280";
         var quote = BuildQuote(uppercaseQuoteId, source: "A Film With A Referenced Line (Canonical Id Test)");
-        var conversationEntry = new SourceConversation
+        var conversationEntry = new SourceConversationDto
         {
             Id          = "df333333-3333-4333-8333-333333333380",
             Description = "A conversation referencing an uppercase-authored quote id.",
-            Lines       = [new SourceConversationLine { Order = 0, Type = Core.Enums.ConversationLineType.Quote, QuoteId = uppercaseQuoteId }],
+            Lines       = [new SourceConversationLineDto { Order = 0, Type = Core.Enums.ConversationLineType.Quote, QuoteId = uppercaseQuoteId }],
         };
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
@@ -2040,7 +2040,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111181";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942");
 
-        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie };
+        var entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -2054,7 +2054,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111182";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942");
 
-        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = Optional<string>.Of(null) };
+        var entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = Optional<string>.Of(null) };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -2072,7 +2072,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111183";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942", seriesId: seriesId);
 
-        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1942" };
+        var entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1942" };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -2087,7 +2087,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111184";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942", seriesId: seriesId);
 
-        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1942", SeriesName = Optional<string>.Of(null) };
+        var entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1942", SeriesName = Optional<string>.Of(null) };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -2105,7 +2105,7 @@ public class ImportActionPlannerTests
         await SeedExplicitSourceAsync(conn, "e0111111-1111-4111-8111-111111111185", title: "Casablanca", date: null);
 
         // #180's enrichment shape: no explicit id.
-        var entry = new SourceEntry { Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1975" };
+        var entry = new SourceEntryDto { Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1975" };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -2125,7 +2125,7 @@ public class ImportActionPlannerTests
         // Not referenced by the entry below — a row found only by natural key (Title+Type).
         await SeedExplicitSourceAsync(conn, "e0111111-1111-4111-8111-111111111186", title: "Casablanca", seriesId: originalSeriesId);
 
-        var entry = new SourceEntry { Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, SeriesName = "New Series" };
+        var entry = new SourceEntryDto { Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, SeriesName = "New Series" };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.MergeOurs,
             sources: [entry]);
 
@@ -2142,7 +2142,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111187";
         await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27");
 
-        var entry = new PersonEntry { Id = id, Name = "Ada Lovelace", DateOfDeath = "1852-11-27" };
+        var entry = new PersonEntryDto { Id = id, Name = "Ada Lovelace", DateOfDeath = "1852-11-27" };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [entry]);
 
@@ -2156,7 +2156,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111188";
         await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27");
 
-        var entry = new PersonEntry { Id = id, Name = "Ada Lovelace", DateOfBirth = "1815-12-10", DateOfDeath = Optional<string>.Of(null) };
+        var entry = new PersonEntryDto { Id = id, Name = "Ada Lovelace", DateOfBirth = "1815-12-10", DateOfDeath = Optional<string>.Of(null) };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [entry]);
 
@@ -2173,7 +2173,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111189";
         await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.", imageUrl: "http://example.com/still.jpg");
 
-        var entry = new SourceStageDirection { Id = id, Text = "A shot rings out." };
+        var entry = new SourceStageDirectionDto { Id = id, Text = "A shot rings out." };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             stageDirections: [entry]);
 
@@ -2187,7 +2187,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111191";
         await SeedExplicitSoundCueAsync(conn, id, text: "Distant thunder.", soundFileUrl: "http://example.com/thunder.mp3", imageUrl: "http://example.com/img.jpg");
 
-        var entry = new SourceSoundCue { Id = id, Text = "Distant thunder.", ImageUrl = "http://example.com/img.jpg" };
+        var entry = new SourceSoundCueDto { Id = id, Text = "Distant thunder.", ImageUrl = "http://example.com/img.jpg" };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             soundCues: [entry]);
 
@@ -2201,7 +2201,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111192";
         await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.");
 
-        var entry = new SourceConversation { Id = id, Lines = [] };
+        var entry = new SourceConversationDto { Id = id, Lines = [] };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             conversations: [entry]);
 

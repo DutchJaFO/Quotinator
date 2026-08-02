@@ -182,7 +182,7 @@ public class QuoteImportServiceTests
         var service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, TestContext.CancellationToken);
 
-        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Skip } };
+        var settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Skip } };
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
         Assert.AreEqual(0, result.Summary.Imported);
@@ -197,7 +197,7 @@ public class QuoteImportServiceTests
         var service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, TestContext.CancellationToken);
 
-        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.NewestWins } };
+        var settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.NewestWins } };
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
         Assert.AreEqual(1, result.Summary.Updated);
@@ -211,7 +211,7 @@ public class QuoteImportServiceTests
         var service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, TestContext.CancellationToken);
 
-        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
+        var settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
         Assert.AreEqual(1, result.Summary.Updated);
@@ -224,7 +224,7 @@ public class QuoteImportServiceTests
         var service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, TestContext.CancellationToken);
 
-        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeTheirs } };
+        var settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeTheirs } };
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
         Assert.AreEqual(1, result.Summary.Updated);
@@ -278,7 +278,7 @@ public class QuoteImportServiceTests
                 new { id = SharedId });
         }
 
-        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = policy } };
+        var settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = policy } };
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
         Assert.AreEqual(0, result.Summary.Updated, "A Complete row's field change must be held, not silently applied, regardless of policy");
@@ -313,7 +313,7 @@ public class QuoteImportServiceTests
             await conn.ExecuteAsync("UPDATE Quotinator_Quote SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = SharedId });
         }
 
-        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
+        var settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
         Assert.IsEmpty(result.PendingActionIds, "MergeOurs keeps the existing value on every conflicting field, so there is nothing to hold");
@@ -385,7 +385,7 @@ public class QuoteImportServiceTests
         var service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, TestContext.CancellationToken);
 
-        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Review } };
+        var settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Review } };
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
         Assert.AreEqual(1, result.Summary.Skipped);
@@ -417,7 +417,7 @@ public class QuoteImportServiceTests
         var service = CreateService(changeLogWriter: changeLogWriter);
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, TestContext.CancellationToken);
 
-        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.NewestWins } };
+        var settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.NewestWins } };
         var result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
         var rows = (await _changeReader.GetHistoryAsync("quote", SharedId)).OrderBy(r => r.OccurredAt).ToList();
@@ -436,7 +436,7 @@ public class QuoteImportServiceTests
         var service = CreateService(changeLogWriter: changeLogWriter);
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, TestContext.CancellationToken);
 
-        var settings = new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Skip } };
+        var settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Skip } };
         await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, TestContext.CancellationToken);
 
         var actions = (await _changeReader.GetHistoryAsync("quote", SharedId)).Select(r => r.Action.Parsed).ToList();
@@ -515,7 +515,7 @@ public class QuoteImportServiceTests
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, TestContext.CancellationToken);
         var previewResult = await service.ImportAsync(
             JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json",
-            new ImportRequestSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Review } },
+            new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Review } },
             preview: true, TestContext.CancellationToken);
 
         var applyResult = await service.ApplyStagedBatchAsync(previewResult.BatchId!.Value, TestContext.CancellationToken);
@@ -579,7 +579,7 @@ public class QuoteImportServiceTests
     public async Task ImportAsync_UnknownConverterName_ThrowsUnknownConverterException()
     {
         var service = CreateService();
-        var settings = new ImportRequestSettingsDto { Converter = "does-not-exist" };
+        var settings = new ImportSettingsDto { Converter = "does-not-exist" };
 
         var ex = await Assert.ThrowsExactlyAsync<UnknownConverterException>(
             () => service.ImportAsync(JsonStream("irrelevant"), "test.json", settings, preview: false, TestContext.CancellationToken));
@@ -655,7 +655,7 @@ public class QuoteImportServiceTests
             ["passthrough"] = new PassthroughTestConverter()
         };
         var service = CreateService(converters: converters);
-        var settings = new ImportRequestSettingsDto { Converter = "passthrough" };
+        var settings = new ImportSettingsDto { Converter = "passthrough" };
 
         var result = await service.ImportAsync(
             JsonStream(OneQuoteJson("Converted quote.", "A Source")), "raw.txt", settings, preview: false, TestContext.CancellationToken);
@@ -674,7 +674,7 @@ public class QuoteImportServiceTests
         };
         var service = CreateService(converters: converters);
         var converterOptions = JsonSerializer.Deserialize<JsonElement>("""{"propertyMapping": {"source": "movie"}}""");
-        var settings = new ImportRequestSettingsDto { Converter = "passthrough", ConverterOptions = converterOptions };
+        var settings = new ImportSettingsDto { Converter = "passthrough", ConverterOptions = converterOptions };
 
         await service.ImportAsync(
             JsonStream(OneQuoteJson("Converted quote.", "A Source")), "raw.txt", settings, preview: false, TestContext.CancellationToken);

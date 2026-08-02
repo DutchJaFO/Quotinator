@@ -4,7 +4,7 @@ using Quotinator.Data.Import;
 namespace Quotinator.Core.Import;
 
 /// <summary>A reusable audio element entry deserialized from a Quotinator source file's <c>soundCues</c> section.</summary>
-public sealed class SourceSoundCue
+public sealed class SourceSoundCueDto
 {
     /// <summary>Unique identifier (UUID v4). Assigned at authoring time and never changes.</summary>
     [JsonPropertyName("id")]

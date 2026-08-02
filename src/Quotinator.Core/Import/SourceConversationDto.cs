@@ -4,7 +4,7 @@ using Quotinator.Data.Import;
 namespace Quotinator.Core.Import;
 
 /// <summary>An ordered grouping of quotes, stage directions, and sound cues deserialized from a Quotinator source file's <c>conversations</c> section.</summary>
-public sealed class SourceConversation
+public sealed class SourceConversationDto
 {
     /// <summary>Unique identifier (UUID v4). Assigned at authoring time and never changes.</summary>
     [JsonPropertyName("id")]
@@ -17,7 +17,7 @@ public sealed class SourceConversation
     [JsonPropertyName("description")]
     public Optional<string> Description { get; init; }
 
-    /// <summary>The conversation's lines, in <see cref="SourceConversationLine.Order"/> order.</summary>
+    /// <summary>The conversation's lines, in <see cref="SourceConversationLineDto.Order"/> order.</summary>
     [JsonPropertyName("lines")]
-    public required IReadOnlyList<SourceConversationLine> Lines { get; init; }
+    public required IReadOnlyList<SourceConversationLineDto> Lines { get; init; }
 }

@@ -7,7 +7,7 @@ namespace Quotinator.Core.Services;
 /// <summary>Loads <c>data/quotes.json</c> into memory at startup and serves read requests.</summary>
 public sealed class QuoteService : IQuoteService
 {
-    private readonly IReadOnlyList<SourceQuote> _quotes;
+    private readonly IReadOnlyList<SourceQuoteDto> _quotes;
 
     /// <summary>Initialises the service and loads quotes from <paramref name="dataPath"/> into memory.</summary>
     /// <param name="dataPath">Absolute or working-directory-relative path to <c>quotes.json</c>. Defaults to <c>data/quotes.json</c>.</param>
@@ -16,7 +16,7 @@ public sealed class QuoteService : IQuoteService
         _quotes = Load(dataPath);
     }
 
-    private static IReadOnlyList<SourceQuote> Load(string path)
+    private static IReadOnlyList<SourceQuoteDto> Load(string path)
     {
         if (!File.Exists(path))
             return [];
@@ -46,9 +46,9 @@ public sealed class QuoteService : IQuoteService
         Guid? seriesId = null,
         Guid? universeId = null)
     {
-        // Flat-file SourceQuote has no Series/Universe concept (#179 is SQLite-only) — these
+        // Flat-file SourceQuoteDto has no Series/Universe concept (#179 is SQLite-only) — these
         // parameters are accepted to satisfy IQuoteService but have no effect on this legacy path.
-        IEnumerable<SourceQuote> filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
+        IEnumerable<SourceQuoteDto> filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
 
         if (character is not null)
             filtered = filtered.Where(q => q.Character is not null && Contains(q.Character, character));
@@ -72,7 +72,7 @@ public sealed class QuoteService : IQuoteService
     /// <inheritdoc/>
     public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
-        // Flat-file SourceQuote has no Series/Universe concept (#179 is SQLite-only) — these
+        // Flat-file SourceQuoteDto has no Series/Universe concept (#179 is SQLite-only) — these
         // parameters are accepted to satisfy IQuoteService but have no effect on this legacy path.
         var filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
         var total = filtered.Count;
@@ -88,7 +88,7 @@ public sealed class QuoteService : IQuoteService
     /// <inheritdoc/>
     public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
-        // Flat-file SourceQuote has no Series/Universe concept (#179 is SQLite-only) — these
+        // Flat-file SourceQuoteDto has no Series/Universe concept (#179 is SQLite-only) — these
         // parameters are accepted to satisfy IQuoteService but have no effect on this legacy path.
         var filtered = Filter(_quotes, types, genres, yearFrom, yearTo);
         var items = filtered
@@ -116,12 +116,12 @@ public sealed class QuoteService : IQuoteService
     }
 
     /// <inheritdoc/>
-    /// <remarks>#69: this legacy v1 in-memory service only ever loads flat <see cref="SourceQuote"/> records — it has no conversation data to serve, so this always returns <c>null</c>. Nothing registers this service in the running app; the real implementation is <c>Quotinator.Core.Services.SqliteQuoteService</c>.</remarks>
+    /// <remarks>#69: this legacy v1 in-memory service only ever loads flat <see cref="SourceQuoteDto"/> records — it has no conversation data to serve, so this always returns <c>null</c>. Nothing registers this service in the running app; the real implementation is <c>Quotinator.Core.Services.SqliteQuoteService</c>.</remarks>
     public ConversationResponse? GetConversation(string id, string? lang = null) => null;
 
-    private static IReadOnlyList<SourceQuote> Filter(IReadOnlyList<SourceQuote> quotes, string[]? types, string[]? genres, int? yearFrom = null, int? yearTo = null)
+    private static IReadOnlyList<SourceQuoteDto> Filter(IReadOnlyList<SourceQuoteDto> quotes, string[]? types, string[]? genres, int? yearFrom = null, int? yearTo = null)
     {
-        IEnumerable<SourceQuote> result = quotes;
+        IEnumerable<SourceQuoteDto> result = quotes;
 
         if (types is { Length: > 0 })
             result = result.Where(q => types.Any(t => q.Type.ToString().Equals(t, StringComparison.OrdinalIgnoreCase)));
@@ -147,7 +147,7 @@ public sealed class QuoteService : IQuoteService
     private static bool Contains(string haystack, string needle) =>
         haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);
 
-    private static QuoteResponse Localise(SourceQuote q, string? lang)
+    private static QuoteResponse Localise(SourceQuoteDto q, string? lang)
     {
         if (lang is not null
             && !lang.Equals(q.OriginalLanguage, StringComparison.OrdinalIgnoreCase)

@@ -6,7 +6,7 @@ namespace Quotinator.Core.Import;
 
 /// <summary>
 /// Literal default values applied to a canonical quote field not sourced from the raw row at all.
-/// <see cref="SourceQuote.QuoteText"/>/<see cref="SourceQuote.Source"/>/<see cref="SourceQuote.Id"/>
+/// <see cref="SourceQuoteDto.QuoteText"/>/<see cref="SourceQuoteDto.Source"/>/<see cref="SourceQuoteDto.Id"/>
 /// are deliberately excluded — quote/source are required per row (a row missing either is skipped,
 /// never defaulted), and a single fixed id applied to every row would collide.
 /// </summary>

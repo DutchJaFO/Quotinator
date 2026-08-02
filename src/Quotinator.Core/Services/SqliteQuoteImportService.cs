@@ -53,7 +53,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
 
     /// <inheritdoc/>
     public async Task<ImportResultResponse> ImportAsync(
-        Stream file, string fileName, ImportRequestSettingsDto? settings, bool preview,
+        Stream file, string fileName, ImportSettingsDto? settings, bool preview,
         CancellationToken cancellationToken = default)
     {
         var parsed = await LoadSourceFileAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
@@ -231,9 +231,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         return entries;
     }
 
-    private static (List<SourceQuote> Valid, List<ImportRowError> Errors) ValidateRows(IReadOnlyList<SourceQuote> quotes)
+    private static (List<SourceQuoteDto> Valid, List<ImportRowError> Errors) ValidateRows(IReadOnlyList<SourceQuoteDto> quotes)
     {
-        var valid  = new List<SourceQuote>();
+        var valid  = new List<SourceQuoteDto>();
         var errors = new List<ImportRowError>();
         var row = 0;
         foreach (var q in quotes)
@@ -261,7 +261,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
     /// conditional needed; conversations are only ever present when the uploaded file is already in
     /// Quotinator's own extended format (e.g. re-uploading a curated source file with no converter).
     /// </summary>
-    private async Task<ParsedSourceFile> LoadSourceFileAsync(Stream file, string? converterName, JsonElement? converterOptions, CancellationToken cancellationToken)
+    private async Task<ParsedSourceFileDto> LoadSourceFileAsync(Stream file, string? converterName, JsonElement? converterOptions, CancellationToken cancellationToken)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "quotinator-import-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);

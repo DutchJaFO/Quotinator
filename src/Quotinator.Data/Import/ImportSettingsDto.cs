@@ -8,7 +8,7 @@ namespace Quotinator.Data.Import;
 /// <see cref="SourceImportSettingsDto"/> base — deliberately not added to that base itself, since
 /// <c>enrich</c> is a request-only concept with no meaning inside <c>manifest.json</c>.
 /// </summary>
-public sealed class ImportRequestSettingsDto : SourceImportSettingsDto
+public sealed class ImportSettingsDto : SourceImportSettingsDto
 {
     /// <summary>
     /// When <c>true</c>, requests an enrichment pass after import. Not yet implemented — the

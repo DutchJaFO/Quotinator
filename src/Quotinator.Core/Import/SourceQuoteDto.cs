@@ -5,7 +5,7 @@ using Quotinator.Core.Models;
 namespace Quotinator.Core.Import;
 
 /// <summary>Represents a single quote entry deserialized from a Quotinator source file (<c>data/sources/*.json</c>).</summary>
-public class SourceQuote
+public class SourceQuoteDto
 {
     /// <summary>Unique identifier (UUID v4). Assigned at seed time and never changes.</summary>
     [JsonPropertyName("id")]
@@ -54,6 +54,6 @@ public class SourceQuote
 
     /// <summary>Available translations of <see cref="QuoteText"/> and <see cref="Source"/>, keyed by ISO 639-1 language code.</summary>
     [JsonPropertyName("translations")]
-    public IReadOnlyDictionary<string, SourceQuoteTranslation> Translations { get; init; }
-        = new Dictionary<string, SourceQuoteTranslation>();
+    public IReadOnlyDictionary<string, SourceQuoteTranslationDto> Translations { get; init; }
+        = new Dictionary<string, SourceQuoteTranslationDto>();
 }

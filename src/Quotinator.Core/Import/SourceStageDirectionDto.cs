@@ -4,7 +4,7 @@ using Quotinator.Data.Import;
 namespace Quotinator.Core.Import;
 
 /// <summary>A reusable scene-setting or action description entry deserialized from a Quotinator source file's <c>stageDirections</c> section.</summary>
-public sealed class SourceStageDirection
+public sealed class SourceStageDirectionDto
 {
     /// <summary>Unique identifier (UUID v4). Assigned at authoring time and never changes.</summary>
     [JsonPropertyName("id")]

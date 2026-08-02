@@ -5,7 +5,7 @@ using Quotinator.Data.Import;
 namespace Quotinator.Core.Database;
 
 /// <summary>
-/// Converts a <see cref="SourceQuote"/> to and from the field-name → value representation that
+/// Converts a <see cref="SourceQuoteDto"/> to and from the field-name → value representation that
 /// <see cref="FieldMergeResolver"/> (in <c>Quotinator.Data</c>, which has no dependency on
 /// <c>Quotinator.Core</c>'s quote schema) operates over.
 /// </summary>
@@ -21,13 +21,13 @@ internal static class QuoteFieldMerge
     private const string GenresField           = "genres";
 
     /// <summary>
-    /// Maps the mergeable fields of a <see cref="SourceQuote"/> to a field-name → value dictionary.
+    /// Maps the mergeable fields of a <see cref="SourceQuoteDto"/> to a field-name → value dictionary.
     /// <c>Id</c> and <c>Translations</c> are deliberately excluded — <c>Id</c> is the join key (both
     /// sides always share it), and per-language translation merging is a distinct, unspecced feature;
     /// the merged quote always carries the incoming side's translations, unconditionally, same as
     /// the existing newest-wins path already does.
     /// </summary>
-    public static IReadOnlyDictionary<string, object?> ToFieldMap(SourceQuote q) => new Dictionary<string, object?>
+    public static IReadOnlyDictionary<string, object?> ToFieldMap(SourceQuoteDto q) => new Dictionary<string, object?>
     {
         [QuoteTextField]        = q.QuoteText,
         [OriginalLanguageField] = q.OriginalLanguage,
@@ -39,8 +39,8 @@ internal static class QuoteFieldMerge
         [GenresField]           = q.Genres.ToList(),
     };
 
-    /// <summary>Builds a merged <see cref="SourceQuote"/> from <paramref name="merged"/>'s resolved field values, keeping <paramref name="incoming"/>'s <c>Id</c> and <c>Translations</c>.</summary>
-    public static SourceQuote ApplyMergedFields(IReadOnlyDictionary<string, object?> merged, SourceQuote incoming) => new()
+    /// <summary>Builds a merged <see cref="SourceQuoteDto"/> from <paramref name="merged"/>'s resolved field values, keeping <paramref name="incoming"/>'s <c>Id</c> and <c>Translations</c>.</summary>
+    public static SourceQuoteDto ApplyMergedFields(IReadOnlyDictionary<string, object?> merged, SourceQuoteDto incoming) => new()
     {
         Id               = incoming.Id,
         QuoteText        = (string)merged[QuoteTextField]!,
@@ -54,8 +54,8 @@ internal static class QuoteFieldMerge
         Translations     = incoming.Translations,
     };
 
-    /// <summary>Maps the mergeable fields of a <see cref="SourceQuote"/> directly to a <see cref="QuoteConflictFieldsDto"/> (#154's staged-payload shape, unlike <see cref="ToFieldMap(SourceQuote)"/>'s generic dictionary).</summary>
-    public static QuoteConflictFieldsDto ToDto(SourceQuote q) => new()
+    /// <summary>Maps the mergeable fields of a <see cref="SourceQuoteDto"/> directly to a <see cref="QuoteConflictFieldsDto"/> (#154's staged-payload shape, unlike <see cref="ToFieldMap(SourceQuoteDto)"/>'s generic dictionary).</summary>
+    public static QuoteConflictFieldsDto ToDto(SourceQuoteDto q) => new()
     {
         QuoteText        = q.QuoteText,
         OriginalLanguage = q.OriginalLanguage,

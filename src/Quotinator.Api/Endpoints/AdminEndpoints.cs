@@ -39,7 +39,7 @@ internal static class AdminEndpoints
             var preview = await db.PreviewSeedAsync();
             return Results.Ok(new SeedPreviewResponse
             {
-                Files = preview.Files.Select(f => new SeedFilePreviewResponse
+                Files = preview.Files.Select(f => new Quotinator.Core.Models.SeedFilePreview
                 {
                     FileName           = f.FileName,
                     QuoteCount         = f.QuoteCount,

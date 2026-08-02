@@ -5,7 +5,7 @@ namespace Quotinator.Core.Models;
 
 /// <summary>
 /// Response envelope for the <c>/api/v1/import/rules/conflict</c> endpoints (#153) — the currently
-/// effective <see cref="ConflictResolutionRuleFile"/> for a source's <c>ruleFile</c>, plus metadata
+/// effective <see cref="ConflictResolutionRuleFileDto"/> for a source's <c>ruleFile</c>, plus metadata
 /// about where that content came from.
 /// </summary>
 public sealed class ConflictRuleFileResponse

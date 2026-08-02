@@ -18,7 +18,7 @@ namespace Quotinator.Core.Import;
 /// curated overlay file never has to author an id this project generates for itself.</item>
 /// </list>
 /// </summary>
-public sealed class SourceEntry
+public sealed class SourceEntryDto
 {
     /// <summary>
     /// Unique identifier (UUID v4). Assigned at authoring time and never changes. Omit it to match by
@@ -31,7 +31,7 @@ public sealed class SourceEntry
     [JsonPropertyName("title")]
     public required string Title { get; init; }
 
-    /// <summary>Media category. Same wire format (kebab-case, e.g. <c>movie</c>) as <see cref="SourceQuote.Type"/>.</summary>
+    /// <summary>Media category. Same wire format (kebab-case, e.g. <c>movie</c>) as <see cref="SourceQuoteDto.Type"/>.</summary>
     [JsonPropertyName("type")]
     [JsonConverter(typeof(QuoteTypeJsonConverter))]
     public QuoteType Type { get; init; } = QuoteType.Movie;

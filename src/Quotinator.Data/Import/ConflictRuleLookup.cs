@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace Quotinator.Data.Import;
 
 /// <summary>
-/// Fast lookup over a loaded <see cref="ConflictResolutionRuleFile"/>'s rules, keyed by entity id +
+/// Fast lookup over a loaded <see cref="ConflictResolutionRuleFileDto"/>'s rules, keyed by entity id +
 /// field name. Entity id matching is case-insensitive, per this project's id-comparison convention —
 /// a rule file is hand-authored independently of whatever casing an import file's own explicit id
 /// happens to use.

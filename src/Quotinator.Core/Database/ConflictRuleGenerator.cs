@@ -76,7 +76,7 @@ public static class ConflictRuleGenerator
     /// hand-authored field's resolution, and the entry's own recorded <c>ExistingRecord</c>/
     /// <c>IncomingRecord</c> snapshot, are left exactly as the file already has them.
     /// </summary>
-    public static ConflictResolutionRuleFile Merge(ConflictResolutionRuleFile? existing, IReadOnlyList<ConflictResolutionRule> generated)
+    public static ConflictResolutionRuleFileDto Merge(ConflictResolutionRuleFileDto? existing, IReadOnlyList<ConflictResolutionRule> generated)
     {
         var merged = existing?.Rules.ToList() ?? [];
         var byEntityId = merged.ToDictionary(r => r.EntityId, StringComparer.OrdinalIgnoreCase);
@@ -104,7 +104,7 @@ public static class ConflictRuleGenerator
             };
         }
 
-        return new ConflictResolutionRuleFile { Rules = merged };
+        return new ConflictResolutionRuleFileDto { Rules = merged };
     }
 
     private static object? DecodeFieldValue(string field, string? value) =>

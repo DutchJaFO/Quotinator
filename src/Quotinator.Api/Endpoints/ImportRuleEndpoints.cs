@@ -208,11 +208,11 @@ internal static class ImportRuleEndpoints
     private static readonly System.Text.Json.JsonSerializerOptions RuleFileWriteOptions = new() { WriteIndented = true };
     private static readonly System.Text.Json.JsonSerializerOptions RuleFileReadOptions  = new() { PropertyNameCaseInsensitive = true };
 
-    private static ConflictResolutionRuleFile ParseConflictRuleFile(string json)
-        => System.Text.Json.JsonSerializer.Deserialize<ConflictResolutionRuleFile>(json, RuleFileReadOptions) ?? new ConflictResolutionRuleFile();
+    private static ConflictResolutionRuleFileDto ParseConflictRuleFile(string json)
+        => System.Text.Json.JsonSerializer.Deserialize<ConflictResolutionRuleFileDto>(json, RuleFileReadOptions) ?? new ConflictResolutionRuleFileDto();
 
-    private static SourceAliasRuleFile ParseSourceAliasFile(string json)
-        => System.Text.Json.JsonSerializer.Deserialize<SourceAliasRuleFile>(json, RuleFileReadOptions) ?? new SourceAliasRuleFile();
+    private static SourceAliasRuleFileDto ParseSourceAliasFile(string json)
+        => System.Text.Json.JsonSerializer.Deserialize<SourceAliasRuleFileDto>(json, RuleFileReadOptions) ?? new SourceAliasRuleFileDto();
 
     private static bool TryValidate(
         string? fileName, string? origin, IApiLocalizer localizer,

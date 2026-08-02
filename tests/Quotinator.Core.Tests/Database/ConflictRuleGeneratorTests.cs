@@ -143,7 +143,7 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_NewEntityId_IsAppended()
     {
-        var existingFile = new ConflictResolutionRuleFile
+        var existingFile = new ConflictResolutionRuleFileDto
         {
             Rules = [BuildRule("e0000001-0000-4000-8000-000000000001", "date", FieldResolutionChoice.Keep)],
         };
@@ -157,7 +157,7 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_EntityAlreadyCoversField_ManualEditIsNeverOverwritten()
     {
-        var existingFile = new ConflictResolutionRuleFile
+        var existingFile = new ConflictResolutionRuleFileDto
         {
             Rules = [BuildRule(EntityId, "date", FieldResolutionChoice.Custom, "1942")],
         };
@@ -175,7 +175,7 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_EntityCoversDifferentField_NewFieldIsAdded()
     {
-        var existingFile = new ConflictResolutionRuleFile
+        var existingFile = new ConflictResolutionRuleFileDto
         {
             Rules = [BuildRule(EntityId, "date", FieldResolutionChoice.Keep)],
         };

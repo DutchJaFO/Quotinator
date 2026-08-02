@@ -42,7 +42,7 @@ internal sealed class ManifestFileEntryDto : SourceImportSettingsDto
 
     /// <summary>
     /// Filename (relative to this manifest's directory, same convention as <see cref="File"/>) of this
-    /// source's own per-source conflict-resolution rule file (#181) — a <see cref="ConflictResolutionRuleFile"/>.
+    /// source's own per-source conflict-resolution rule file (#181) — a <see cref="ConflictResolutionRuleFileDto"/>.
     /// Absent means no rules are loaded for this source (equivalent to an empty rule file).
     /// </summary>
     [JsonPropertyName("ruleFile")]
@@ -50,7 +50,7 @@ internal sealed class ManifestFileEntryDto : SourceImportSettingsDto
 
     /// <summary>
     /// Filename (relative to this manifest's directory, same convention as <see cref="File"/>) of this
-    /// source's own per-source title-alias file (#181) — a <see cref="SourceAliasRuleFile"/>. Absent
+    /// source's own per-source title-alias file (#181) — a <see cref="SourceAliasRuleFileDto"/>. Absent
     /// means no aliases are loaded for this source (equivalent to an empty alias file).
     /// </summary>
     [JsonPropertyName("sourceAliasFile")]

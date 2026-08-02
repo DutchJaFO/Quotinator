@@ -11,7 +11,7 @@ namespace Quotinator.Core.Services;
 /// </summary>
 /// <remarks>
 /// Lives in <c>Quotinator.Core</c> rather than <c>Quotinator.Core</c> (unlike <see cref="IQuoteService"/>)
-/// because its signature needs <see cref="ImportRequestSettingsDto"/>, a <c>Quotinator.Data</c> type —
+/// because its signature needs <see cref="ImportSettingsDto"/>, a <c>Quotinator.Data</c> type —
 /// Core and Data must never depend on each other, so an interface needing both must live where both
 /// are already legitimately referenced.
 /// </remarks>
@@ -32,7 +32,7 @@ public interface IQuoteImportService
     /// into at least one valid quote.
     /// </exception>
     Task<ImportResultResponse> ImportAsync(
-        Stream file, string fileName, ImportRequestSettingsDto? settings, bool preview, CancellationToken cancellationToken = default);
+        Stream file, string fileName, ImportSettingsDto? settings, bool preview, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Applies an already-staged batch — the <c>batchId</c>-mode alias <c>POST /api/v1/import</c>

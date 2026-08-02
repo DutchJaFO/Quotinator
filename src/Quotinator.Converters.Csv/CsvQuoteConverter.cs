@@ -68,7 +68,7 @@ public sealed class CsvQuoteConverter : IQuoteSourceConverter
             }
         }
 
-        var quotes = new List<SourceQuote>();
+        var quotes = new List<SourceQuoteDto>();
         foreach (var row in dataRows)
         {
             string? Get(string canonicalName, int? mappedIndex) => mapping is not null

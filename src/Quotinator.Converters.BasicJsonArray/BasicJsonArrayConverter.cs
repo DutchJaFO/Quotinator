@@ -45,7 +45,7 @@ public sealed class BasicJsonArrayConverter : IQuoteSourceConverter
         var mapping     = jsonOptions.PropertyMapping;
         var defaults    = jsonOptions.Defaults;
 
-        var quotes = new List<SourceQuote>();
+        var quotes = new List<SourceQuoteDto>();
         foreach (var entry in rawEntries)
         {
             string? Get(string canonicalName, string? mappedProperty)

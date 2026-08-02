@@ -826,7 +826,7 @@ public sealed class SqliteImportActionService : IImportActionService
         var existingFields  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
         // Only .Id and .Translations are actually taken from this template (see ApplyMergedFields'
         // own remarks) — QuoteText/Source are required properties but immediately overwritten below.
-        var resolved = QuoteFieldMerge.ApplyMergedFields(existingFields, new SourceQuote { Id = action.EntityId, QuoteText = string.Empty, Source = string.Empty });
+        var resolved = QuoteFieldMerge.ApplyMergedFields(existingFields, new SourceQuoteDto { Id = action.EntityId, QuoteText = string.Empty, Source = string.Empty });
 
         // #59 Risk 1: existingPayload.SourceId/CharacterId/PersonId are the *incoming* quote's
         // resolved ids at staging time (see ImportActionPlanner.PlanAsync), not the existing row's
@@ -1077,7 +1077,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 var json  = isAdd ? action.IncomingValue : action.MergedFields;
                 var payload = JsonSerializer.Deserialize<QuoteActionPayload>(json!)
                               ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload.");
-                var resolved = new SourceQuote
+                var resolved = new SourceQuoteDto
                 {
                     Id               = action.EntityId,
                     QuoteText        = payload.Fields.QuoteText!,
@@ -1092,7 +1092,7 @@ public sealed class SqliteImportActionService : IImportActionService
 
                 // Defensive: same ordering caveat as Character above — this Quote's Source/Character/
                 // Person actions may not have applied yet. resolved.Date is the quote-level "date
-                // associated with the source" field (SourceQuote.Date's own doc comment) — the same
+                // associated with the source" field (SourceQuoteDto.Date's own doc comment) — the same
                 // value a Source's own explicit sources[] entry would carry, for a Source that only
                 // this quote ever introduces.
                 await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, payload.SourceId, resolved.Source, resolved.Type.ToString(), batchId, now, changeLog, resolved.Date);

@@ -68,7 +68,7 @@ public class SourceQuoteFileReaderTests
     [TestMethod]
     public void TryParse_ArrayEntryMissingRequiredField_ReturnsFalse()
     {
-        // "quote" is required on SourceQuote; the raw upstream format this guards against
+        // "quote" is required on SourceQuoteDto; the raw upstream format this guards against
         // (e.g. a foreign, unconverted quote source) commonly lacks required canonical fields.
         var json = """
             [{"movie":"Gone with the Wind"}]

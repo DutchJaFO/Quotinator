@@ -11,7 +11,7 @@ namespace Quotinator.Data.Import;
 /// entirely (feature not wired up) — this is not the same as always accepting; see
 /// <see cref="SourceCacheUpdater"/> for exactly where this is invoked. Deliberately schema-agnostic at
 /// this layer (a plain <see cref="Func{T,TResult}"/> over file content) since real validation requires
-/// <c>Quotinator.Core</c>'s <c>SourceQuote</c>, and <c>Quotinator.Data</c> must not depend on
+/// <c>Quotinator.Core</c>'s <c>SourceQuoteDto</c>, and <c>Quotinator.Data</c> must not depend on
 /// <c>Quotinator.Core</c> — the composition root builds and injects this delegate instead.
 /// </param>
 public sealed record SourceCacheOptions(

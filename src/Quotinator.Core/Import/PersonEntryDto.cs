@@ -9,7 +9,7 @@ namespace Quotinator.Core.Import;
 /// <see cref="Name"/>/<see cref="DateOfBirth"/>/<see cref="DateOfDeath"/> corrected, unlike a Person
 /// only ever discovered implicitly through a quote's own author string, which is matched by natural key.
 /// </summary>
-public sealed class PersonEntry
+public sealed class PersonEntryDto
 {
     /// <summary>Unique identifier (UUID v4). Assigned at authoring time and never changes.</summary>
     [JsonPropertyName("id")]

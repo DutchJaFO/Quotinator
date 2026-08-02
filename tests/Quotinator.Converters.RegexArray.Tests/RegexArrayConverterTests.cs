@@ -192,7 +192,7 @@ public class RegexArrayConverterTests
         return quotes!.Single(q => q.QuoteText == quote && q.Source == source).Id;
     }
 
-    private static async Task<SourceQuote> ReadSingle(string outputPath)
+    private static async Task<SourceQuoteDto> ReadSingle(string outputPath)
     {
         var text = await File.ReadAllTextAsync(outputPath);
         Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));

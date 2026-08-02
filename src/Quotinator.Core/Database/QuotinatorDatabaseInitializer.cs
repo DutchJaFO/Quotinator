@@ -171,7 +171,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         var effectiveBatches = resolution.EffectiveBatches;
         var resultsByName    = resolution.Results.ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
 
-        var filePreviews = new List<SeedFilePreview>();
+        var filePreviews = new List<Quotinator.Data.Import.SeedFilePreview>();
         var reports      = new List<FileImportReport>();
 
         using var connection = CreateConnection();
@@ -186,7 +186,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 var quotes      = parsed.Quotes;
                 var refreshResult = resultsByName.GetValueOrDefault(fileName);
                 var filePolicy  = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
-                filePreviews.Add(new SeedFilePreview(fileName, quotes.Count, refreshResult?.Outcome, refreshResult?.LastRefreshedAtUtc, issue));
+                filePreviews.Add(new Quotinator.Data.Import.SeedFilePreview(fileName, quotes.Count, refreshResult?.Outcome, refreshResult?.LastRefreshedAtUtc, issue));
 
                 var conflictRules = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
                 var sourceAliases = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
@@ -416,7 +416,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             ? ImportBatchType.UserSeed
             : ImportBatchType.Seed;
 
-    private (List<SourceQuote> Quotes, SeedFileIssue? Issue) LoadQuotesFromFile(string filePath)
+    private (List<SourceQuoteDto> Quotes, SeedFileIssue? Issue) LoadQuotesFromFile(string filePath)
     {
         var (parsed, issue) = LoadSourceFileAsync(filePath);
         return (parsed.Quotes.ToList(), issue);
@@ -428,15 +428,15 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     /// <see cref="LoadQuotesFromFile"/> wraps this for the two call sites that only need the quotes —
     /// one parsing implementation, not two.
     /// </summary>
-    private (ParsedSourceFile Parsed, SeedFileIssue? Issue) LoadSourceFileAsync(string filePath)
+    private (ParsedSourceFileDto Parsed, SeedFileIssue? Issue) LoadSourceFileAsync(string filePath)
     {
-        if (!File.Exists(filePath)) return (new ParsedSourceFile { Quotes = [] }, SeedFileIssue.Missing);
+        if (!File.Exists(filePath)) return (new ParsedSourceFileDto { Quotes = [] }, SeedFileIssue.Missing);
 
         var json = File.ReadAllText(filePath);
         if (SourceQuoteFileReader.TryParseExtended(json, out var parsed)) return (parsed!, null);
 
         Logger.LogWarning("[Database - Seed] {File} is empty or not valid JSON — skipping", Path.GetFileName(filePath));
-        return (new ParsedSourceFile { Quotes = [] }, SeedFileIssue.InvalidJson);
+        return (new ParsedSourceFileDto { Quotes = [] }, SeedFileIssue.InvalidJson);
     }
 
     /// <summary>Single-line, grep-friendly rendering of a <see cref="FileImportReport"/> for the seed log (#221).</summary>
@@ -472,7 +472,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         try
         {
             var json     = await File.ReadAllTextAsync(effectivePath);
-            var ruleFile = JsonSerializer.Deserialize<ConflictResolutionRuleFile>(json, ConflictRuleReadOptions);
+            var ruleFile = JsonSerializer.Deserialize<ConflictResolutionRuleFileDto>(json, ConflictRuleReadOptions);
             return new ConflictRuleLookup(ruleFile?.Rules ?? []);
         }
         catch (JsonException ex)
@@ -507,7 +507,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         try
         {
             var json      = await File.ReadAllTextAsync(effectivePath);
-            var aliasFile = JsonSerializer.Deserialize<SourceAliasRuleFile>(json, ConflictRuleReadOptions);
+            var aliasFile = JsonSerializer.Deserialize<SourceAliasRuleFileDto>(json, ConflictRuleReadOptions);
             return new SourceAliasLookup(aliasFile?.Aliases ?? []);
         }
         catch (JsonException ex)

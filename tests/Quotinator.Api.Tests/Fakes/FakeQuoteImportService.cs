@@ -10,13 +10,13 @@ internal sealed class FakeQuoteImportService : IQuoteImportService
     public Exception? ThrowOnImport { get; set; }
     public Exception? ThrowOnApplyStagedBatch { get; set; }
     public ImportResultResponse? ReturnResult { get; set; }
-    public ImportRequestSettingsDto? LastSettings { get; private set; }
+    public ImportSettingsDto? LastSettings { get; private set; }
     public bool? LastPreview { get; private set; }
     public string? LastFileName { get; private set; }
     public Guid? LastAppliedBatchId { get; private set; }
 
     public Task<ImportResultResponse> ImportAsync(
-        Stream file, string fileName, ImportRequestSettingsDto? settings, bool preview,
+        Stream file, string fileName, ImportSettingsDto? settings, bool preview,
         CancellationToken cancellationToken = default)
     {
         LastSettings = settings;

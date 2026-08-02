@@ -19,7 +19,7 @@ namespace Quotinator.Core.Import;
 /// text.</item>
 /// </list>
 /// </summary>
-public sealed class CharacterEntry
+public sealed class CharacterEntryDto
 {
     /// <summary>
     /// Unique identifier (UUID v4). Assigned at authoring time and never changes. Omit it to match

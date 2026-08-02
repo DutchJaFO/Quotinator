@@ -1,7 +1,7 @@
 namespace Quotinator.Changelog.Models;
 
 /// <summary>Top-level structure of a per-language changelog file (e.g. <c>changelog.en.json</c>).</summary>
-public sealed class ChangelogRoot
+public sealed class ChangelogRootDto
 {
     /// <summary>ISO 639-1 language code of the content in this file (e.g. <c>en</c>, <c>nl</c>, <c>de</c>).</summary>
     public string? Language { get; init; }

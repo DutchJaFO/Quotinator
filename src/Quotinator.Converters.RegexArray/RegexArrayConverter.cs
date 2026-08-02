@@ -52,7 +52,7 @@ public sealed class RegexArrayConverter : IQuoteSourceConverter
         var mapping  = regexOptions.GroupMapping;
         var defaults = regexOptions.Defaults;
 
-        var quotes = new List<SourceQuote>();
+        var quotes = new List<SourceQuoteDto>();
         foreach (var raw in rawEntries)
         {
             var match = pattern.Match(raw);

@@ -6,14 +6,14 @@ namespace Quotinator.Core.Models;
 public sealed class SeedPreviewResponse
 {
     /// <summary>One entry per source file in import order.</summary>
-    public required IReadOnlyList<SeedFilePreviewResponse> Files { get; init; }
+    public required IReadOnlyList<SeedFilePreview> Files { get; init; }
 
     /// <summary>One per-file report, computed by running the real import action planner read-only against the current database state (issue #221).</summary>
     public required IReadOnlyList<FileImportReport> Reports { get; init; }
 }
 
 /// <summary>Per-file summary within a <see cref="SeedPreviewResponse"/>.</summary>
-public sealed class SeedFilePreviewResponse
+public sealed class SeedFilePreview
 {
     /// <summary>File name without directory path.</summary>
     public required string FileName { get; init; }

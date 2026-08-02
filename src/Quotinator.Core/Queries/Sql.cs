@@ -419,7 +419,7 @@ internal static class Sql
 
         /// <summary>
         /// #180's natural-key lookup for a <c>sources[]</c> entry that omits an explicit id (the
-        /// enrichment shape — see <see cref="Quotinator.Core.Import.SourceEntry"/>'s remarks). Returns
+        /// enrichment shape — see <see cref="Quotinator.Core.Import.SourceEntryDto"/>'s remarks). Returns
         /// the matched row's real id plus the two fields that path needs: <c>SeriesId</c> (the only
         /// field it diffs) and <c>Date</c> (carried through unchanged, so an entry that never mentions
         /// a date can't reset one). Title/Type are the lookup key here, so they are never re-read —

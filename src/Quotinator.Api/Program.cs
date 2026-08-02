@@ -369,7 +369,7 @@ var quoteSourceConverters = new IQuoteSourceConverter[]
     new CsvQuoteConverter(),
 }.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
 
-// Real canonical-schema validation needs Quotinator.Core's SourceQuote, but Quotinator.Data (home of
+// Real canonical-schema validation needs Quotinator.Core's SourceQuoteDto, but Quotinator.Data (home of
 // SourceCacheUpdater) must not depend on Quotinator.Core — so the validator is built here, at the
 // composition root, and injected as a plain delegate.
 Func<string, bool> validateCanonicalSchema = json => SourceQuoteFileReader.TryParse(json, out _);

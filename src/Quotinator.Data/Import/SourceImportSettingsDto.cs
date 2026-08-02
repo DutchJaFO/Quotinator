@@ -7,7 +7,7 @@ namespace Quotinator.Data.Import;
 /// Shared wire-model base for the two settings a single quote source needs: which converter (if
 /// any) transforms its raw format into Quotinator's canonical schema, and which duplicate-resolution
 /// policy governs it. Used both as a per-file override on <see cref="ManifestFileEntryDto"/> and,
-/// via <c>ImportRequestSettingsDto</c> in <c>Quotinator.Api</c>, as the settings blob for the
+/// via <c>ImportSettingsDto</c> in <c>Quotinator.Api</c>, as the settings blob for the
 /// <c>POST /api/v1/import</c> endpoint.
 /// </summary>
 public class SourceImportSettingsDto

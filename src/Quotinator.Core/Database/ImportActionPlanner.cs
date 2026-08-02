@@ -38,16 +38,16 @@ internal static class ImportActionPlanner
     /// Quote/Character do for Source. Read-only against the database — never writes.
     /// </summary>
     internal static async Task<IReadOnlyList<ImportActionEntity>> PlanAsync(
-        SqliteConnection connection, IReadOnlyList<SourceQuote> quotes, Guid batchId,
+        SqliteConnection connection, IReadOnlyList<SourceQuoteDto> quotes, Guid batchId,
         DuplicateResolutionPolicy policy, SqliteTransaction? transaction = null,
-        IReadOnlyList<SourceEntry>? sources = null,
-        IReadOnlyList<SourceStageDirection>? stageDirections = null,
-        IReadOnlyList<SourceSoundCue>? soundCues = null,
-        IReadOnlyList<SourceConversation>? conversations = null,
-        IReadOnlyList<PersonEntry>? people = null,
-        IReadOnlyList<SeriesEntry>? series = null,
-        IReadOnlyList<UniverseEntry>? universe = null,
-        IReadOnlyList<CharacterEntry>? characters = null,
+        IReadOnlyList<SourceEntryDto>? sources = null,
+        IReadOnlyList<SourceStageDirectionDto>? stageDirections = null,
+        IReadOnlyList<SourceSoundCueDto>? soundCues = null,
+        IReadOnlyList<SourceConversationDto>? conversations = null,
+        IReadOnlyList<PersonEntryDto>? people = null,
+        IReadOnlyList<SeriesEntryDto>? series = null,
+        IReadOnlyList<UniverseEntryDto>? universe = null,
+        IReadOnlyList<CharacterEntryDto>? characters = null,
         ConflictRuleLookup? conflictRules = null,
         SourceAliasLookup? sourceAliases = null)
     {
@@ -57,7 +57,7 @@ internal static class ImportActionPlanner
         var personIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var seriesIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var universeIndex  = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var seenQuotes     = new Dictionary<string, SourceQuote>(StringComparer.Ordinal);
+        var seenQuotes     = new Dictionary<string, SourceQuoteDto>(StringComparer.Ordinal);
         var seenQuoteStatus = new Dictionary<string, CompletenessStatus>(StringComparer.Ordinal);
 
         var batchIdStr = batchId.ToCanonicalId();
@@ -87,12 +87,12 @@ internal static class ImportActionPlanner
             // #210: canonicalize a file-authored Quotes.Id to lowercase at the single earliest point of
             // capture, matching this project's single canonical id convention (ADR 012, GuidHandler).
             // Every later reference to q.Id in this iteration (seenQuotes, EntityId, the resolved
-            // SourceQuote threaded through QuoteFieldMerge) is automatically canonical once this
-            // substitution is made. SourceQuote is a plain class with init-only properties, not a
+            // SourceQuoteDto threaded through QuoteFieldMerge) is automatically canonical once this
+            // substitution is made. SourceQuoteDto is a plain class with init-only properties, not a
             // record, so a corrected copy is built the same way ApplyMergedFields already does above,
             // not via a `with` expression.
             var q = EntityIdCanonicalizer.TryCanonicalizeLowercase(rawQuote.Id, out var canonicalQuoteId)
-                ? new SourceQuote
+                ? new SourceQuoteDto
                 {
                     Id               = canonicalQuoteId!,
                     QuoteText        = rawQuote.QuoteText,
@@ -154,7 +154,7 @@ internal static class ImportActionPlanner
 
                 if (canonicalSourceExists)
                 {
-                    q = new SourceQuote
+                    q = new SourceQuoteDto
                     {
                         Id               = q.Id,
                         QuoteText        = q.QuoteText,
@@ -398,7 +398,7 @@ internal static class ImportActionPlanner
     }
 
     private static async Task<string> ResolveSourceAsync(
-        SqliteConnection connection, SourceQuote q, Dictionary<string, string> index,
+        SqliteConnection connection, SourceQuoteDto q, Dictionary<string, string> index,
         string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         var typeStr = q.Type.ToString();
@@ -438,7 +438,7 @@ internal static class ImportActionPlanner
     }
 
     private static async Task<string?> ResolveCharacterAsync(
-        SqliteConnection connection, SourceQuote q, string sourceId, Dictionary<string, string> index,
+        SqliteConnection connection, SourceQuoteDto q, string sourceId, Dictionary<string, string> index,
         string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         var sourceTypeStr = q.Type.ToString();
@@ -481,7 +481,7 @@ internal static class ImportActionPlanner
     }
 
     private static async Task<string?> ResolvePersonAsync(
-        SqliteConnection connection, SourceQuote q, Dictionary<string, string> index,
+        SqliteConnection connection, SourceQuoteDto q, Dictionary<string, string> index,
         string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         if (string.IsNullOrWhiteSpace(q.Author)) return null;
@@ -533,7 +533,7 @@ internal static class ImportActionPlanner
     // adopted this model.
 
     private static async Task PlanSourcesAsync(
-        SqliteConnection connection, IReadOnlyList<SourceEntry> sources, string batchId,
+        SqliteConnection connection, IReadOnlyList<SourceEntryDto> sources, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> sourceIndex,
         Dictionary<string, string> seriesIndex, List<ImportActionEntity> actions, DateTime now,
         SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
@@ -885,14 +885,14 @@ internal static class ImportActionPlanner
     // test-7a-shaped threading risk).
 
     private static async Task PlanPeopleAsync(
-        SqliteConnection connection, IReadOnlyList<PersonEntry> people, string batchId,
+        SqliteConnection connection, IReadOnlyList<PersonEntryDto> people, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> personIndex,
         List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var p in people)
         {
             // #209: canonicalize once, at the single earliest point this entry's explicit id is
-            // captured — PersonEntry.Id is required, so there is no absent case to preserve.
+            // captured — PersonEntryDto.Id is required, so there is no absent case to preserve.
             var canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(p.Id, out var pIdCanonical) ? pIdCanonical! : p.Id;
 
             var existing = await connection.QuerySingleOrDefaultAsync<(string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
@@ -1034,7 +1034,7 @@ internal static class ImportActionPlanner
     }
 
     private static async Task PlanCharactersAsync(
-        SqliteConnection connection, IReadOnlyList<CharacterEntry> characters, string batchId,
+        SqliteConnection connection, IReadOnlyList<CharacterEntryDto> characters, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> sourceIndex,
         Dictionary<string, string> characterIndex, List<ImportActionEntity> actions, DateTime now,
         SqliteTransaction? transaction)
@@ -1184,7 +1184,7 @@ internal static class ImportActionPlanner
     // for the genuinely-new Add path — the same fix #175 found missing for Character.
 
     private static async Task PlanUniverseAsync(
-        SqliteConnection connection, IReadOnlyList<UniverseEntry> universes, string batchId,
+        SqliteConnection connection, IReadOnlyList<UniverseEntryDto> universes, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> universeIndex,
         List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction,
         ConflictRuleLookup? conflictRules = null)
@@ -1343,7 +1343,7 @@ internal static class ImportActionPlanner
     /// require validating a dangling reference; a future issue can add that if it becomes a real need.
     /// </summary>
     private static async Task PlanSeriesAsync(
-        SqliteConnection connection, IReadOnlyList<SeriesEntry> series, string batchId,
+        SqliteConnection connection, IReadOnlyList<SeriesEntryDto> series, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> universeIndex,
         Dictionary<string, string> seriesIndex, List<ImportActionEntity> actions, DateTime now,
         SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
@@ -1525,7 +1525,7 @@ internal static class ImportActionPlanner
     // just "does a row with this id already exist" — no Modify/merge semantics.
 
     private static async Task PlanStageDirectionsAsync(
-        SqliteConnection connection, IReadOnlyList<SourceStageDirection> stageDirections, string batchId,
+        SqliteConnection connection, IReadOnlyList<SourceStageDirectionDto> stageDirections, string batchId,
         DuplicateResolutionPolicy policy, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var sd in stageDirections)
@@ -1617,7 +1617,7 @@ internal static class ImportActionPlanner
     }
 
     private static async Task PlanSoundCuesAsync(
-        SqliteConnection connection, IReadOnlyList<SourceSoundCue> soundCues, string batchId,
+        SqliteConnection connection, IReadOnlyList<SourceSoundCueDto> soundCues, string batchId,
         DuplicateResolutionPolicy policy, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var sc in soundCues)
@@ -1720,7 +1720,7 @@ internal static class ImportActionPlanner
         new Dictionary<string, object?> { ["description"] = payload.Description };
 
     private static async Task PlanConversationsAsync(
-        SqliteConnection connection, IReadOnlyList<SourceConversation> conversations, string batchId,
+        SqliteConnection connection, IReadOnlyList<SourceConversationDto> conversations, string batchId,
         DuplicateResolutionPolicy policy, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var c in conversations)
@@ -1878,7 +1878,7 @@ internal sealed record StageDirectionActionPayload(
 internal sealed record SoundCueActionPayload(
     string Text, string? SoundFileUrl, string? ImageUrl, IReadOnlyDictionary<string, SourceSoundCueTranslation> Translations);
 
-/// <summary>One line of a <see cref="ConversationActionPayload"/> — mirrors <see cref="SourceConversationLine"/>.</summary>
+/// <summary>One line of a <see cref="ConversationActionPayload"/> — mirrors <see cref="SourceConversationLineDto"/>.</summary>
 internal sealed record ConversationLinePayload(
     int Order, ConversationLineType Type, string? QuoteId, string? StageDirectionId, string? SoundCueId);
 

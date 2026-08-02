@@ -17,7 +17,7 @@ using Quotinator.Core.Queries;
 namespace Quotinator.Core.Database;
 
 /// <summary>
-/// Shared insert/merge primitives for writing a <see cref="SourceQuote"/> (and its Source/Character/
+/// Shared insert/merge primitives for writing a <see cref="SourceQuoteDto"/> (and its Source/Character/
 /// Person/Translation/Genre rows) into the database, plus conflict logging and existing-row lookup.
 /// Used by both <see cref="QuotinatorDatabaseInitializer"/>'s startup seeding and the
 /// <c>POST /api/v1/import</c> endpoint's live import service — one copy of this logic, not two.
@@ -64,7 +64,7 @@ internal static class QuoteSeedWriter
     /// violate the unique constraint.
     /// </summary>
     internal static async Task<Guid> GetOrCreateSourceAsync(
-        SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId,
+        SqliteConnection connection, SourceQuoteDto q, Dictionary<string, Guid> index, Guid importBatchId,
         ChangeLogContext changeLog, SqliteTransaction? transaction = null)
     {
         var typeStr = q.Type.ToString();
@@ -102,7 +102,7 @@ internal static class QuoteSeedWriter
     /// miss — see <see cref="GetOrCreateSourceAsync"/> for why.
     /// </summary>
     internal static async Task<Guid?> GetOrCreatePersonAsync(
-        SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId,
+        SqliteConnection connection, SourceQuoteDto q, Dictionary<string, Guid> index, Guid importBatchId,
         ChangeLogContext changeLog, SqliteTransaction? transaction = null)
     {
         if (string.IsNullOrWhiteSpace(q.Author)) return null;
@@ -143,7 +143,7 @@ internal static class QuoteSeedWriter
     /// constraint on every insert (found live, not assumed — see ADR 012's Quotes.Id revision history).
     /// </summary>
     internal static async Task InsertTranslationsAsync(
-        SqliteConnection connection, SourceQuote q, Guid quoteId, Guid sourceId, string now,
+        SqliteConnection connection, SourceQuoteDto q, Guid quoteId, Guid sourceId, string now,
         SqliteTransaction? transaction = null)
     {
         foreach (var (lang, t) in q.Translations)
@@ -181,7 +181,7 @@ internal static class QuoteSeedWriter
     /// cref="InsertTranslationsAsync"/>'s remark for why this must match <c>Quotes.Id</c>'s canonical form.
     /// </summary>
     internal static async Task InsertGenresAsync(
-        SqliteConnection connection, SourceQuote q, Guid quoteId, string now, SqliteTransaction? transaction = null)
+        SqliteConnection connection, SourceQuoteDto q, Guid quoteId, string now, SqliteTransaction? transaction = null)
     {
         foreach (var genre in q.Genres)
         {

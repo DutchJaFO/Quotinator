@@ -66,10 +66,10 @@ public sealed class ChangelogService : IChangelogService
         foreach (var file in Directory.GetFiles(resourceDirectory, "changelog.*.json"))
         {
             var filename = Path.GetFileName(file);
-            ChangelogRoot? root;
+            ChangelogRootDto? root;
             try
             {
-                root = JsonSerializer.Deserialize<ChangelogRoot>(File.ReadAllText(file), JsonOptions);
+                root = JsonSerializer.Deserialize<ChangelogRootDto>(File.ReadAllText(file), JsonOptions);
             }
             catch (Exception ex)
             {

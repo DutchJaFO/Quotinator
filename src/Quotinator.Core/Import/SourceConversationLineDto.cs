@@ -5,12 +5,12 @@ using Quotinator.Core.Models;
 namespace Quotinator.Core.Import;
 
 /// <summary>
-/// One position in a <see cref="SourceConversation"/>'s ordered line list. Exactly one of
+/// One position in a <see cref="SourceConversationDto"/>'s ordered line list. Exactly one of
 /// <see cref="QuoteId"/>, <see cref="StageDirectionId"/>, <see cref="SoundCueId"/> is populated,
 /// matching <see cref="Type"/> — the same discriminated shape as
 /// <c>Quotinator.Core.Entities.ConversationLineEntity</c>.
 /// </summary>
-public sealed class SourceConversationLine
+public sealed class SourceConversationLineDto
 {
     /// <summary>1-based position of this line within the conversation.</summary>
     [JsonPropertyName("order")]

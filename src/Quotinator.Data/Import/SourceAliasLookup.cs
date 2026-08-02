@@ -1,7 +1,7 @@
 namespace Quotinator.Data.Import;
 
 /// <summary>
-/// Fast lookup over a loaded <see cref="SourceAliasRuleFile"/>'s aliases, keyed by raw
+/// Fast lookup over a loaded <see cref="SourceAliasRuleFileDto"/>'s aliases, keyed by raw
 /// <c>(title, type)</c> — case-insensitive on both, per this project's id/value-comparison convention.
 /// Consulted before Source resolution runs, so it applies uniformly whether the referencing quote is a
 /// brand-new Add or a re-imported Modify.
