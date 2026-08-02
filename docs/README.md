@@ -4,6 +4,7 @@
 
 | File | Contents |
 |---|---|
+| `api-endpoints.md` | Full REST API endpoint reference — every route, its query parameters, and behavior |
 | `ci-cd.md` | CI/CD workflows, release process, versioning |
 | `docker.md` | Docker image, local Docker run, environment variables, build notes |
 | `home-assistant.md` | HA add-on setup, ingress, ports, releasing |
