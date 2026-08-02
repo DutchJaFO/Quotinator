@@ -22,6 +22,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
         new SchemaMigration { Version = 4, Sql = Migration004_ConsolidatedSinceV172 },
         new SchemaMigration { Version = 5, Sql = Migration005_ImportBatchConflictPolicyCheckConstraint },
+        new SchemaMigration { Version = 6, Sql = Migration006_DomainPrefixRename },
     ];
 
     /// <summary>
@@ -575,7 +576,7 @@ public static class QuotinatorMigrations
     /// table under a temporary name — the same technique migration 4's own
     /// <c>ImportBatchTypeUserSeed</c> section already uses to widen <c>Type</c>'s <c>CHECK</c>.
     /// <para>
-    /// Every code path that constructs an <see cref="Quotinator.Data.Entities.ImportBatch"/> stamps
+    /// Every code path that constructs an <see cref="Quotinator.Data.Entities.ImportBatchEntity"/> stamps
     /// <c>ConflictPolicy</c> from <c>DuplicateResolutionPolicy.ToString()</c> (PascalCase, e.g.
     /// <c>"NewestWins"</c>) — the same raw-enum-name convention every other CHECK'd enum column in
     /// this project's own tables already uses (<c>Type</c>, <c>Status</c> on this very table). The
@@ -629,6 +630,382 @@ public static class QuotinatorMigrations
         ALTER TABLE ImportBatches_New RENAME TO ImportBatches;
         """;
 
+    /// <summary>
+    /// #253/#254/ADR 015 — migrates <c>ImportBatches</c>' data into <c>Import_Batch</c> (created empty
+    /// by <see cref="Quotinator.Data.Database.DomainPrefixRenameMigrations.RenameDataOwnedTables"/>,
+    /// which always runs first), drops <c>ImportBatches</c>, and rebuilds every one of
+    /// Quotinator.Core's own 17 domain tables under its final <c>Quotinator_</c>-prefixed name (#254),
+    /// with every <c>REFERENCES</c> clause — to <c>Import_Batch</c> and to each other — pointing at the
+    /// final name. A new migration, not a rewrite of migration 5 — found live during #254's own T1
+    /// pass (2026-08-02): migration 5 (#150's CHECK constraint) had already run against a real
+    /// database (this project's own local dev database, not necessarily a public release — this
+    /// project's "never edit an existing migration" policy applies to any database that may have
+    /// already run it, not only ones covered by a git tag) before this rename work was designed, so
+    /// rewriting its content in place — even though it had never shipped in a tagged release — left
+    /// that database's already-recorded version 5 silently out of sync with the new content. The Data
+    /// copy step below does not need migration 5's own <c>ConflictPolicy</c> casing normalisation
+    /// (<c>'skip'</c> → <c>'Skip'</c> etc.) repeated — migration 5 always runs before this one for
+    /// every database, whether freshly (upgrading straight from a release that never had migration 5
+    /// at all) or previously (a database that already ran it), so <c>ImportBatches.ConflictPolicy</c>
+    /// is guaranteed already PascalCase by the time this migration's own <c>SELECT</c> runs.
+    /// </summary>
+    /// <remarks>
+    /// <c>ImportBatches</c> → <c>Import_Batch</c> can't be a same-table rename here (the way every
+    /// other #253/#254 table rename is one) without breaking the ordering constraint documented on
+    /// <c>RenameDataOwnedTables</c> — so this migration instead copies the data across after Data's
+    /// migration has already created the empty destination table. That copy-then-drop means
+    /// <c>ImportBatches</c> is a genuinely different physical table from <c>Import_Batch</c>, not a
+    /// renamed one — and SQLite only auto-converts a <c>FOREIGN KEY</c> declaration in another table
+    /// when the table it references is renamed via <c>ALTER TABLE ... RENAME TO</c>, never when it's
+    /// dropped and a differently-named replacement created (confirmed against sqlite.org, 2026-08-01).
+    /// Left unaddressed, every one of Quotinator.Core's domain tables with a non-null
+    /// <c>ImportBatchId</c> column would keep its existing <c>REFERENCES ImportBatches(Id)</c>
+    /// declaration, and every future <c>INSERT</c>/<c>UPDATE</c> on it would throw
+    /// <c>no such table: ImportBatches</c> once migrations finish and <c>PRAGMA foreign_keys</c> is
+    /// back on — confirmed with a direct, throwaway repro against a real SQLite connection before
+    /// writing this fix. #254's own 17-table domain-prefix rename needs the identical
+    /// create-new/copy/drop/rename technique regardless (a plain <c>ALTER TABLE ... RENAME TO</c> only
+    /// auto-updates *inbound* FK references from other tables, never a renamed table's own *outbound*
+    /// ones — so e.g. <c>ConversationLines</c>' own <c>QuoteId REFERENCES Quotes(Id)</c> clause needs
+    /// rebuilding to say <c>Quotinator_Quote</c> even though nothing about <c>ConversationLines</c>
+    /// itself changed shape), so both fixes are folded into one rebuild pass per table rather than
+    /// rebuilding each table twice. Every table is rebuilt in FK dependency order — a table's own
+    /// <c>CREATE ..._New</c> can only reference another table's *final* name if that other table has
+    /// already been rebuilt earlier in this same script: <c>Universe</c> → <c>Series</c> →
+    /// <c>Sources</c> → <c>Characters</c>/<c>People</c> → <c>Quotes</c> → <c>Conversations</c>/
+    /// <c>StageDirections</c>/<c>SoundCues</c> → <c>SourceTranslations</c>/
+    /// <c>CharacterTranslations</c>/<c>CharacterSources</c> → <c>QuoteTranslations</c>/
+    /// <c>QuoteGenres</c> → <c>StageDirectionTranslations</c>/<c>SoundCueTranslations</c> →
+    /// <c>ConversationLines</c> (the last, since it FK-references four other renamed tables at once) —
+    /// even though <c>PRAGMA foreign_keys</c> is off for the duration of every migration, purely so
+    /// this text reads the same way the schema itself is structured.
+    /// </remarks>
+    internal const string Migration006_DomainPrefixRename = """
+        INSERT INTO Import_Batch (Id, Name, Type, Url, ImportedAt, ImportedById, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted, ConflictPolicy, Status, AppliedAt)
+        SELECT Id, Name, Type, Url, ImportedAt, ImportedById, RecordCount, DateCreated, DateModified, DateDeleted, IsDeleted, ConflictPolicy, Status, AppliedAt
+        FROM ImportBatches;
+
+        DROP TABLE ImportBatches;
+
+        CREATE TABLE IF NOT EXISTS Universe_New (
+            Id                 TEXT    PRIMARY KEY,
+            Name               TEXT    NOT NULL UNIQUE,
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO Universe_New (Id, Name, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Name, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted FROM Universe;
+        DROP TABLE Universe;
+        ALTER TABLE Universe_New RENAME TO Quotinator_Universe;
+
+        CREATE TABLE IF NOT EXISTS Series_New (
+            Id                 TEXT    PRIMARY KEY,
+            Name               TEXT    NOT NULL UNIQUE,
+            UniverseId         TEXT    REFERENCES Quotinator_Universe(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO Series_New (Id, Name, UniverseId, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Name, UniverseId, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted FROM Series;
+        DROP TABLE Series;
+        ALTER TABLE Series_New RENAME TO Quotinator_Series;
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_Series_UniverseId ON Quotinator_Series(UniverseId);
+
+        CREATE TABLE IF NOT EXISTS Sources_New (
+            Id           TEXT    PRIMARY KEY,
+            Title        TEXT    NOT NULL,
+            Type         TEXT    NOT NULL DEFAULT 'Movie'
+                         CHECK (Type IN ('Unknown','Movie','Tv','Anime','Book','Person')),
+            Date         TEXT,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+                         CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]',
+            SeriesId     TEXT    REFERENCES Quotinator_Series(Id),
+            UNIQUE (Title, Type)
+        );
+        INSERT INTO Sources_New (Id, Title, Type, Date, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown, SeriesId)
+        SELECT Id, Title, Type, Date, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown, SeriesId FROM Sources;
+        DROP TABLE Sources;
+        ALTER TABLE Sources_New RENAME TO Quotinator_Source;
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_Source_SeriesId ON Quotinator_Source(SeriesId);
+
+        CREATE TABLE IF NOT EXISTS Characters_New (
+            Id           TEXT    PRIMARY KEY,
+            Name         TEXT    NOT NULL,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+                         CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]',
+            SourceType   TEXT    NOT NULL DEFAULT 'Unknown'
+                         CHECK (SourceType IN ('Unknown','Movie','Tv','Anime','Book','Person'))
+        );
+        INSERT INTO Characters_New (Id, Name, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown, SourceType)
+        SELECT Id, Name, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown, SourceType FROM Characters;
+        DROP TABLE Characters;
+        ALTER TABLE Characters_New RENAME TO Quotinator_Character;
+
+        CREATE TABLE IF NOT EXISTS People_New (
+            Id           TEXT    PRIMARY KEY,
+            Name         TEXT    NOT NULL UNIQUE,
+            DateOfBirth  TEXT,
+            DateOfDeath  TEXT,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+                         CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]'
+        );
+        INSERT INTO People_New (Id, Name, DateOfBirth, DateOfDeath, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown)
+        SELECT Id, Name, DateOfBirth, DateOfDeath, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown FROM People;
+        DROP TABLE People;
+        ALTER TABLE People_New RENAME TO Quotinator_Person;
+
+        CREATE TABLE IF NOT EXISTS Quotes_New (
+            Id               TEXT    PRIMARY KEY,
+            QuoteText        TEXT    NOT NULL,
+            OriginalLanguage TEXT    NOT NULL DEFAULT 'en',
+            SourceId         TEXT    NOT NULL REFERENCES Quotinator_Source(Id),
+            CharacterId      TEXT    REFERENCES Quotinator_Character(Id),
+            PersonId         TEXT    REFERENCES Quotinator_Person(Id),
+            DateCreated      TEXT    NOT NULL,
+            DateModified     TEXT,
+            DateDeleted      TEXT,
+            IsDeleted        INTEGER NOT NULL DEFAULT 0,
+            ImportBatchId    TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT  NOT NULL DEFAULT 'Incomplete'
+                             CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown     TEXT    NOT NULL DEFAULT '[]'
+        );
+        INSERT INTO Quotes_New (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown)
+        SELECT Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown FROM Quotes;
+        DROP TABLE Quotes;
+        ALTER TABLE Quotes_New RENAME TO Quotinator_Quote;
+
+        CREATE TABLE IF NOT EXISTS Conversations_New (
+            Id                 TEXT    PRIMARY KEY,
+            Description        TEXT,
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO Conversations_New (Id, Description, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Description, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted FROM Conversations;
+        DROP TABLE Conversations;
+        ALTER TABLE Conversations_New RENAME TO Quotinator_Conversation;
+
+        CREATE TABLE IF NOT EXISTS StageDirections_New (
+            Id                 TEXT    PRIMARY KEY,
+            Text               TEXT    NOT NULL,
+            ImageUrl           TEXT,
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO StageDirections_New (Id, Text, ImageUrl, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Text, ImageUrl, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted FROM StageDirections;
+        DROP TABLE StageDirections;
+        ALTER TABLE StageDirections_New RENAME TO Quotinator_StageDirection;
+
+        CREATE TABLE IF NOT EXISTS SoundCues_New (
+            Id                 TEXT    PRIMARY KEY,
+            Text               TEXT    NOT NULL,
+            SoundFileUrl       TEXT,
+            ImageUrl           TEXT,
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO SoundCues_New (Id, Text, SoundFileUrl, ImageUrl, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, Text, SoundFileUrl, ImageUrl, ImportBatchId, CompletenessStatus, NoValueKnown, DateCreated, DateModified, DateDeleted, IsDeleted FROM SoundCues;
+        DROP TABLE SoundCues;
+        ALTER TABLE SoundCues_New RENAME TO Quotinator_SoundCue;
+
+        CREATE TABLE IF NOT EXISTS SourceTranslations_New (
+            Id           TEXT    PRIMARY KEY,
+            SourceId     TEXT    NOT NULL REFERENCES Quotinator_Source(Id),
+            Language     TEXT    NOT NULL,
+            Title        TEXT    NOT NULL,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (SourceId, Language)
+        );
+        INSERT INTO SourceTranslations_New (Id, SourceId, Language, Title, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, SourceId, Language, Title, DateCreated, DateModified, DateDeleted, IsDeleted FROM SourceTranslations;
+        DROP TABLE SourceTranslations;
+        ALTER TABLE SourceTranslations_New RENAME TO Quotinator_SourceTranslation;
+
+        CREATE TABLE IF NOT EXISTS CharacterTranslations_New (
+            Id           TEXT    PRIMARY KEY,
+            CharacterId  TEXT    NOT NULL REFERENCES Quotinator_Character(Id),
+            Language     TEXT    NOT NULL,
+            Name         TEXT    NOT NULL,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (CharacterId, Language)
+        );
+        INSERT INTO CharacterTranslations_New (Id, CharacterId, Language, Name, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, CharacterId, Language, Name, DateCreated, DateModified, DateDeleted, IsDeleted FROM CharacterTranslations;
+        DROP TABLE CharacterTranslations;
+        ALTER TABLE CharacterTranslations_New RENAME TO Quotinator_CharacterTranslation;
+
+        CREATE TABLE IF NOT EXISTS CharacterSources_New (
+            Id           TEXT    PRIMARY KEY,
+            CharacterId  TEXT    NOT NULL REFERENCES Quotinator_Character(Id),
+            SourceId     TEXT    NOT NULL REFERENCES Quotinator_Source(Id),
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (CharacterId, SourceId)
+        );
+        INSERT INTO CharacterSources_New (Id, CharacterId, SourceId, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, CharacterId, SourceId, DateCreated, DateModified, DateDeleted, IsDeleted FROM CharacterSources;
+        DROP TABLE CharacterSources;
+        ALTER TABLE CharacterSources_New RENAME TO Quotinator_CharacterSource;
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_CharacterSource_CharacterId ON Quotinator_CharacterSource(CharacterId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_CharacterSource_SourceId    ON Quotinator_CharacterSource(SourceId);
+
+        CREATE TABLE IF NOT EXISTS QuoteTranslations_New (
+            Id           TEXT    PRIMARY KEY,
+            QuoteId      TEXT    NOT NULL REFERENCES Quotinator_Quote(Id),
+            Language     TEXT    NOT NULL,
+            QuoteText    TEXT    NOT NULL,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (QuoteId, Language)
+        );
+        INSERT INTO QuoteTranslations_New (Id, QuoteId, Language, QuoteText, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, QuoteId, Language, QuoteText, DateCreated, DateModified, DateDeleted, IsDeleted FROM QuoteTranslations;
+        DROP TABLE QuoteTranslations;
+        ALTER TABLE QuoteTranslations_New RENAME TO Quotinator_QuoteTranslation;
+
+        CREATE TABLE IF NOT EXISTS QuoteGenres_New (
+            Id           TEXT    PRIMARY KEY,
+            QuoteId      TEXT    NOT NULL REFERENCES Quotinator_Quote(Id),
+            Genre        TEXT    NOT NULL
+                         CHECK (Genre IN ('Unknown','Action','Adventure','Animation','Comedy','Drama',
+                                          'Fantasy','Fiction','Horror','Mystery','NonFiction',
+                                          'Romance','SciFi','Thriller')),
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (QuoteId, Genre)
+        );
+        INSERT INTO QuoteGenres_New (Id, QuoteId, Genre, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, QuoteId, Genre, DateCreated, DateModified, DateDeleted, IsDeleted FROM QuoteGenres;
+        DROP TABLE QuoteGenres;
+        ALTER TABLE QuoteGenres_New RENAME TO Quotinator_QuoteGenre;
+
+        CREATE TABLE IF NOT EXISTS StageDirectionTranslations_New (
+            Id               TEXT    PRIMARY KEY,
+            StageDirectionId TEXT    NOT NULL REFERENCES Quotinator_StageDirection(Id),
+            Language         TEXT    NOT NULL,
+            Text             TEXT    NOT NULL,
+            DateCreated      TEXT    NOT NULL,
+            DateModified     TEXT,
+            DateDeleted      TEXT,
+            IsDeleted        INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (StageDirectionId, Language)
+        );
+        INSERT INTO StageDirectionTranslations_New (Id, StageDirectionId, Language, Text, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, StageDirectionId, Language, Text, DateCreated, DateModified, DateDeleted, IsDeleted FROM StageDirectionTranslations;
+        DROP TABLE StageDirectionTranslations;
+        ALTER TABLE StageDirectionTranslations_New RENAME TO Quotinator_StageDirectionTranslation;
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_StageDirectionTranslation_StageDirectionId ON Quotinator_StageDirectionTranslation(StageDirectionId);
+
+        CREATE TABLE IF NOT EXISTS SoundCueTranslations_New (
+            Id           TEXT    PRIMARY KEY,
+            SoundCueId   TEXT    NOT NULL REFERENCES Quotinator_SoundCue(Id),
+            Language     TEXT    NOT NULL,
+            Text         TEXT    NOT NULL,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (SoundCueId, Language)
+        );
+        INSERT INTO SoundCueTranslations_New (Id, SoundCueId, Language, Text, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, SoundCueId, Language, Text, DateCreated, DateModified, DateDeleted, IsDeleted FROM SoundCueTranslations;
+        DROP TABLE SoundCueTranslations;
+        ALTER TABLE SoundCueTranslations_New RENAME TO Quotinator_SoundCueTranslation;
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_SoundCueTranslation_SoundCueId ON Quotinator_SoundCueTranslation(SoundCueId);
+
+        CREATE TABLE IF NOT EXISTS ConversationLines_New (
+            Id                TEXT    PRIMARY KEY,
+            ConversationId    TEXT    NOT NULL REFERENCES Quotinator_Conversation(Id),
+            [Order]           INTEGER NOT NULL,
+            LineType          TEXT    NOT NULL
+                              CHECK (LineType IN ('Quote','StageDirection','SoundCue')),
+            QuoteId           TEXT    REFERENCES Quotinator_Quote(Id),
+            StageDirectionId  TEXT    REFERENCES Quotinator_StageDirection(Id),
+            SoundCueId        TEXT    REFERENCES Quotinator_SoundCue(Id),
+            DateCreated       TEXT    NOT NULL,
+            DateModified      TEXT,
+            DateDeleted       TEXT,
+            IsDeleted         INTEGER NOT NULL DEFAULT 0,
+            CHECK (
+                (LineType = 'Quote'          AND QuoteId          IS NOT NULL AND StageDirectionId IS NULL AND SoundCueId IS NULL) OR
+                (LineType = 'StageDirection' AND StageDirectionId IS NOT NULL AND QuoteId          IS NULL AND SoundCueId IS NULL) OR
+                (LineType = 'SoundCue'       AND SoundCueId       IS NOT NULL AND QuoteId          IS NULL AND StageDirectionId IS NULL)
+            ),
+            UNIQUE (ConversationId, [Order])
+        );
+        INSERT INTO ConversationLines_New (Id, ConversationId, [Order], LineType, QuoteId, StageDirectionId, SoundCueId, DateCreated, DateModified, DateDeleted, IsDeleted)
+        SELECT Id, ConversationId, [Order], LineType, QuoteId, StageDirectionId, SoundCueId, DateCreated, DateModified, DateDeleted, IsDeleted FROM ConversationLines;
+        DROP TABLE ConversationLines;
+        ALTER TABLE ConversationLines_New RENAME TO Quotinator_ConversationLine;
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_ConversationLine_ConversationId   ON Quotinator_ConversationLine(ConversationId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_ConversationLine_QuoteId          ON Quotinator_ConversationLine(QuoteId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_ConversationLine_StageDirectionId ON Quotinator_ConversationLine(StageDirectionId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_ConversationLine_SoundCueId       ON Quotinator_ConversationLine(SoundCueId);
+        """;
+
     // Consolidated schema for a genuinely fresh database — the union of migrations 1-8's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
@@ -663,32 +1040,20 @@ public static class QuotinatorMigrations
     // CharacterSources backfill INSERT (nothing to backfill on a fresh database — Characters is
     // always empty at baseline time), and migration011's own merge-consolidation UPDATEs (nothing to
     // consolidate on a fresh database — same reasoning). Kept in sync with migrations 1-11 (the
-    // pre-#155 historical narrative numbering) plus the real, current Migration005 by
-    // DatabaseInitializerTests' schema-drift comparison.
+    // pre-#155 historical narrative numbering) plus the real, current Migration005 and Migration006
+    // by DatabaseInitializerTests' schema-drift comparison.
+    // #253/#254/ADR 015 — Import_Batch (formerly ImportBatches) is created by Quotinator.Data's own
+    // DataBaselineSql, not here — Data's baseline always runs before this one in the same
+    // ApplyBaselineAsync call, so it already exists by the time any REFERENCES Import_Batch(Id) clause
+    // below is evaluated. Only the C# entity/repository types and the table's creation moved to Data
+    // (ADR 004/015); every table below still carries its own ImportBatchId FK column here, since these
+    // remain Quotinator.Core's own domain tables, now created directly under their final
+    // Quotinator_-prefixed name (#254) instead of the historical create-then-rename dance.
     private const string BaselineSchema = """
-        CREATE TABLE IF NOT EXISTS ImportBatches (
-            Id           TEXT    PRIMARY KEY,
-            Name         TEXT    NOT NULL,
-            Type         TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System', 'UserSeed')),
-            Url          TEXT,
-            ImportedAt   TEXT    NOT NULL,
-            ImportedById TEXT,
-            RecordCount  INTEGER NOT NULL DEFAULT 0,
-            DateCreated  TEXT    NOT NULL,
-            DateModified TEXT,
-            DateDeleted  TEXT,
-            IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ConflictPolicy TEXT  NOT NULL DEFAULT 'Skip'
-                           CHECK (ConflictPolicy IN ('Skip', 'NewestWins', 'MergeOurs', 'MergeTheirs', 'Review')),
-            Status       TEXT    NOT NULL DEFAULT 'Applied'
-                         CHECK (Status IN ('Staged', 'Applied', 'Discarded')),
-            AppliedAt    TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS Universe (
+        CREATE TABLE IF NOT EXISTS Quotinator_Universe (
             Id                 TEXT    PRIMARY KEY,
             Name               TEXT    NOT NULL UNIQUE,
-            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
                                CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
@@ -698,11 +1063,11 @@ public static class QuotinatorMigrations
             IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
-        CREATE TABLE IF NOT EXISTS Series (
+        CREATE TABLE IF NOT EXISTS Quotinator_Series (
             Id                 TEXT    PRIMARY KEY,
             Name               TEXT    NOT NULL UNIQUE,
-            UniverseId         TEXT    REFERENCES Universe(Id),
-            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            UniverseId         TEXT    REFERENCES Quotinator_Universe(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
                                CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
@@ -712,7 +1077,7 @@ public static class QuotinatorMigrations
             IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
-        CREATE TABLE IF NOT EXISTS Sources (
+        CREATE TABLE IF NOT EXISTS Quotinator_Source (
             Id           TEXT    PRIMARY KEY,
             Title        TEXT    NOT NULL,
             Type         TEXT    NOT NULL DEFAULT 'Movie'
@@ -722,17 +1087,17 @@ public static class QuotinatorMigrations
             DateModified TEXT,
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ImportBatchId TEXT   REFERENCES ImportBatches(Id),
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
                          CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]',
-            SeriesId     TEXT    REFERENCES Series(Id),
+            SeriesId     TEXT    REFERENCES Quotinator_Series(Id),
             UNIQUE (Title, Type)
         );
 
-        CREATE TABLE IF NOT EXISTS SourceTranslations (
+        CREATE TABLE IF NOT EXISTS Quotinator_SourceTranslation (
             Id           TEXT    PRIMARY KEY,
-            SourceId     TEXT    NOT NULL REFERENCES Sources(Id),
+            SourceId     TEXT    NOT NULL REFERENCES Quotinator_Source(Id),
             Language     TEXT    NOT NULL,
             Title        TEXT    NOT NULL,
             DateCreated  TEXT    NOT NULL,
@@ -742,14 +1107,14 @@ public static class QuotinatorMigrations
             UNIQUE (SourceId, Language)
         );
 
-        CREATE TABLE IF NOT EXISTS Characters (
+        CREATE TABLE IF NOT EXISTS Quotinator_Character (
             Id           TEXT    PRIMARY KEY,
             Name         TEXT    NOT NULL,
             DateCreated  TEXT    NOT NULL,
             DateModified TEXT,
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ImportBatchId TEXT   REFERENCES ImportBatches(Id),
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
                          CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]',
@@ -757,9 +1122,9 @@ public static class QuotinatorMigrations
                          CHECK (SourceType IN ('Unknown','Movie','Tv','Anime','Book','Person'))
         );
 
-        CREATE TABLE IF NOT EXISTS CharacterTranslations (
+        CREATE TABLE IF NOT EXISTS Quotinator_CharacterTranslation (
             Id           TEXT    PRIMARY KEY,
-            CharacterId  TEXT    NOT NULL REFERENCES Characters(Id),
+            CharacterId  TEXT    NOT NULL REFERENCES Quotinator_Character(Id),
             Language     TEXT    NOT NULL,
             Name         TEXT    NOT NULL,
             DateCreated  TEXT    NOT NULL,
@@ -769,10 +1134,10 @@ public static class QuotinatorMigrations
             UNIQUE (CharacterId, Language)
         );
 
-        CREATE TABLE IF NOT EXISTS CharacterSources (
+        CREATE TABLE IF NOT EXISTS Quotinator_CharacterSource (
             Id           TEXT    PRIMARY KEY,
-            CharacterId  TEXT    NOT NULL REFERENCES Characters(Id),
-            SourceId     TEXT    NOT NULL REFERENCES Sources(Id),
+            CharacterId  TEXT    NOT NULL REFERENCES Quotinator_Character(Id),
+            SourceId     TEXT    NOT NULL REFERENCES Quotinator_Source(Id),
             DateCreated  TEXT    NOT NULL,
             DateModified TEXT,
             DateDeleted  TEXT,
@@ -780,7 +1145,7 @@ public static class QuotinatorMigrations
             UNIQUE (CharacterId, SourceId)
         );
 
-        CREATE TABLE IF NOT EXISTS People (
+        CREATE TABLE IF NOT EXISTS Quotinator_Person (
             Id           TEXT    PRIMARY KEY,
             Name         TEXT    NOT NULL UNIQUE,
             DateOfBirth  TEXT,
@@ -789,32 +1154,32 @@ public static class QuotinatorMigrations
             DateModified TEXT,
             DateDeleted  TEXT,
             IsDeleted    INTEGER NOT NULL DEFAULT 0,
-            ImportBatchId TEXT   REFERENCES ImportBatches(Id),
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
                          CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]'
         );
 
-        CREATE TABLE IF NOT EXISTS Quotes (
+        CREATE TABLE IF NOT EXISTS Quotinator_Quote (
             Id               TEXT    PRIMARY KEY,
             QuoteText        TEXT    NOT NULL,
             OriginalLanguage TEXT    NOT NULL DEFAULT 'en',
-            SourceId         TEXT    NOT NULL REFERENCES Sources(Id),
-            CharacterId      TEXT    REFERENCES Characters(Id),
-            PersonId         TEXT    REFERENCES People(Id),
+            SourceId         TEXT    NOT NULL REFERENCES Quotinator_Source(Id),
+            CharacterId      TEXT    REFERENCES Quotinator_Character(Id),
+            PersonId         TEXT    REFERENCES Quotinator_Person(Id),
             DateCreated      TEXT    NOT NULL,
             DateModified     TEXT,
             DateDeleted      TEXT,
             IsDeleted        INTEGER NOT NULL DEFAULT 0,
-            ImportBatchId    TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId    TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT  NOT NULL DEFAULT 'Incomplete'
                              CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown     TEXT    NOT NULL DEFAULT '[]'
         );
 
-        CREATE TABLE IF NOT EXISTS QuoteTranslations (
+        CREATE TABLE IF NOT EXISTS Quotinator_QuoteTranslation (
             Id           TEXT    PRIMARY KEY,
-            QuoteId      TEXT    NOT NULL REFERENCES Quotes(Id),
+            QuoteId      TEXT    NOT NULL REFERENCES Quotinator_Quote(Id),
             Language     TEXT    NOT NULL,
             QuoteText    TEXT    NOT NULL,
             DateCreated  TEXT    NOT NULL,
@@ -824,9 +1189,9 @@ public static class QuotinatorMigrations
             UNIQUE (QuoteId, Language)
         );
 
-        CREATE TABLE IF NOT EXISTS QuoteGenres (
+        CREATE TABLE IF NOT EXISTS Quotinator_QuoteGenre (
             Id           TEXT    PRIMARY KEY,
-            QuoteId      TEXT    NOT NULL REFERENCES Quotes(Id),
+            QuoteId      TEXT    NOT NULL REFERENCES Quotinator_Quote(Id),
             Genre        TEXT    NOT NULL
                          CHECK (Genre IN ('Unknown','Action','Adventure','Animation','Comedy','Drama',
                                           'Fantasy','Fiction','Horror','Mystery','NonFiction',
@@ -838,10 +1203,10 @@ public static class QuotinatorMigrations
             UNIQUE (QuoteId, Genre)
         );
 
-        CREATE TABLE IF NOT EXISTS Conversations (
+        CREATE TABLE IF NOT EXISTS Quotinator_Conversation (
             Id                 TEXT    PRIMARY KEY,
             Description        TEXT,
-            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
                                CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
@@ -851,11 +1216,11 @@ public static class QuotinatorMigrations
             IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
-        CREATE TABLE IF NOT EXISTS StageDirections (
+        CREATE TABLE IF NOT EXISTS Quotinator_StageDirection (
             Id                 TEXT    PRIMARY KEY,
             Text               TEXT    NOT NULL,
             ImageUrl           TEXT,
-            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
                                CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
@@ -865,9 +1230,9 @@ public static class QuotinatorMigrations
             IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
-        CREATE TABLE IF NOT EXISTS StageDirectionTranslations (
+        CREATE TABLE IF NOT EXISTS Quotinator_StageDirectionTranslation (
             Id               TEXT    PRIMARY KEY,
-            StageDirectionId TEXT    NOT NULL REFERENCES StageDirections(Id),
+            StageDirectionId TEXT    NOT NULL REFERENCES Quotinator_StageDirection(Id),
             Language         TEXT    NOT NULL,
             Text             TEXT    NOT NULL,
             DateCreated      TEXT    NOT NULL,
@@ -877,12 +1242,12 @@ public static class QuotinatorMigrations
             UNIQUE (StageDirectionId, Language)
         );
 
-        CREATE TABLE IF NOT EXISTS SoundCues (
+        CREATE TABLE IF NOT EXISTS Quotinator_SoundCue (
             Id                 TEXT    PRIMARY KEY,
             Text               TEXT    NOT NULL,
             SoundFileUrl       TEXT,
             ImageUrl           TEXT,
-            ImportBatchId      TEXT    REFERENCES ImportBatches(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
             CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
                                CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
@@ -892,9 +1257,9 @@ public static class QuotinatorMigrations
             IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
-        CREATE TABLE IF NOT EXISTS SoundCueTranslations (
+        CREATE TABLE IF NOT EXISTS Quotinator_SoundCueTranslation (
             Id           TEXT    PRIMARY KEY,
-            SoundCueId   TEXT    NOT NULL REFERENCES SoundCues(Id),
+            SoundCueId   TEXT    NOT NULL REFERENCES Quotinator_SoundCue(Id),
             Language     TEXT    NOT NULL,
             Text         TEXT    NOT NULL,
             DateCreated  TEXT    NOT NULL,
@@ -904,15 +1269,15 @@ public static class QuotinatorMigrations
             UNIQUE (SoundCueId, Language)
         );
 
-        CREATE TABLE IF NOT EXISTS ConversationLines (
+        CREATE TABLE IF NOT EXISTS Quotinator_ConversationLine (
             Id                TEXT    PRIMARY KEY,
-            ConversationId    TEXT    NOT NULL REFERENCES Conversations(Id),
+            ConversationId    TEXT    NOT NULL REFERENCES Quotinator_Conversation(Id),
             [Order]           INTEGER NOT NULL,
             LineType          TEXT    NOT NULL
                               CHECK (LineType IN ('Quote','StageDirection','SoundCue')),
-            QuoteId           TEXT    REFERENCES Quotes(Id),
-            StageDirectionId  TEXT    REFERENCES StageDirections(Id),
-            SoundCueId        TEXT    REFERENCES SoundCues(Id),
+            QuoteId           TEXT    REFERENCES Quotinator_Quote(Id),
+            StageDirectionId  TEXT    REFERENCES Quotinator_StageDirection(Id),
+            SoundCueId        TEXT    REFERENCES Quotinator_SoundCue(Id),
             DateCreated       TEXT    NOT NULL,
             DateModified      TEXT,
             DateDeleted       TEXT,
@@ -925,15 +1290,15 @@ public static class QuotinatorMigrations
             UNIQUE (ConversationId, [Order])
         );
 
-        CREATE INDEX IF NOT EXISTS IX_ConversationLines_ConversationId           ON ConversationLines(ConversationId);
-        CREATE INDEX IF NOT EXISTS IX_ConversationLines_QuoteId                  ON ConversationLines(QuoteId);
-        CREATE INDEX IF NOT EXISTS IX_ConversationLines_StageDirectionId         ON ConversationLines(StageDirectionId);
-        CREATE INDEX IF NOT EXISTS IX_ConversationLines_SoundCueId               ON ConversationLines(SoundCueId);
-        CREATE INDEX IF NOT EXISTS IX_StageDirectionTranslations_StageDirectionId ON StageDirectionTranslations(StageDirectionId);
-        CREATE INDEX IF NOT EXISTS IX_SoundCueTranslations_SoundCueId            ON SoundCueTranslations(SoundCueId);
-        CREATE INDEX IF NOT EXISTS IX_CharacterSources_CharacterId ON CharacterSources(CharacterId);
-        CREATE INDEX IF NOT EXISTS IX_CharacterSources_SourceId    ON CharacterSources(SourceId);
-        CREATE INDEX IF NOT EXISTS IX_Series_UniverseId            ON Series(UniverseId);
-        CREATE INDEX IF NOT EXISTS IX_Sources_SeriesId              ON Sources(SeriesId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_ConversationLine_ConversationId   ON Quotinator_ConversationLine(ConversationId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_ConversationLine_QuoteId          ON Quotinator_ConversationLine(QuoteId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_ConversationLine_StageDirectionId ON Quotinator_ConversationLine(StageDirectionId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_ConversationLine_SoundCueId       ON Quotinator_ConversationLine(SoundCueId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_StageDirectionTranslation_StageDirectionId ON Quotinator_StageDirectionTranslation(StageDirectionId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_SoundCueTranslation_SoundCueId    ON Quotinator_SoundCueTranslation(SoundCueId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_CharacterSource_CharacterId ON Quotinator_CharacterSource(CharacterId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_CharacterSource_SourceId    ON Quotinator_CharacterSource(SourceId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_Series_UniverseId           ON Quotinator_Series(UniverseId);
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_Source_SeriesId             ON Quotinator_Source(SeriesId);
         """;
 }

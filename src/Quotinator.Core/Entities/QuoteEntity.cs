@@ -5,7 +5,7 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A single quote entry in the database.</summary>
-[Table("Quotes")]
+[Table("Quotinator_Quote")]
 public sealed class QuoteEntity : RecordBase
 {
     /// <summary>The verbatim quote text in its original language.</summary>

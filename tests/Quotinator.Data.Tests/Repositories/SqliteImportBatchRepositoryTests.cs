@@ -33,7 +33,7 @@ public class SqliteImportBatchRepositoryTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         conn.Execute("""
-            CREATE TABLE ImportBatches (
+            CREATE TABLE Import_Batch (
                 Id             TEXT    PRIMARY KEY,
                 Name           TEXT    NOT NULL,
                 Type           TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System', 'UserSeed')),
@@ -53,7 +53,7 @@ public class SqliteImportBatchRepositoryTests
             """);
 
         _repository = new SqliteImportBatchRepository(
-            new SqliteConnectionFactory(_dbPath), NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+            new SqliteConnectionFactory(_dbPath), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
     }
 
     [TestCleanup]
@@ -64,7 +64,7 @@ public class SqliteImportBatchRepositoryTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private static ImportBatch BuildBatch(ImportBatchType type, string name = "test-batch.json", string? importedAt = null) => new()
+    private static ImportBatchEntity BuildBatch(ImportBatchType type, string name = "test-batch.json", string? importedAt = null) => new()
     {
         Name           = name,
         Type           = new SafeValue<ImportBatchType?>(type.ToString(), type),
@@ -127,7 +127,7 @@ public class SqliteImportBatchRepositoryTests
     /// no capture-time canonicalization exists for this column, since nothing in <c>src/</c> writes it
     /// today per #213's own Background), renders lowercase through <see cref="SqliteImportBatchRepository.GetAllAsync"/>
     /// (<c>Sql.ImportBatches.SelectAll</c>, the query #212 rewrote away from <c>SELECT *</c>). Mirrors
-    /// <c>SystemImportActionWriterReaderTests.ExistingBatchId_RoundTripsCorrectly</c>'s pattern.
+    /// <c>ImportActionWriterReaderTests.ExistingBatchId_RoundTripsCorrectly</c>'s pattern.
     /// </summary>
     [TestMethod]
     public async Task GetAllAsync_MixedCaseImportedById_RendersLowercase()
@@ -138,7 +138,7 @@ public class SqliteImportBatchRepositoryTests
         {
             conn.Open();
             conn.Execute(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, ImportedById, DateCreated) " +
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, ImportedById, DateCreated) " +
                 "VALUES (@id, 'mixed-case.json', 'Import', @now, UPPER('aabbccdd-1234-4abc-8def-1234567890ab'), @now);",
                 new { id, now });
         }
@@ -165,7 +165,7 @@ public class SqliteImportBatchRepositoryTests
         {
             conn.Open();
             conn.Execute(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, ImportedById, DateCreated) " +
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, ImportedById, DateCreated) " +
                 "VALUES (@id, 'mixed-case.json', 'Import', @now, UPPER('aabbccdd-1234-4abc-8def-1234567890ab'), @now);",
                 new { id, now });
         }

@@ -8,7 +8,7 @@ namespace Quotinator.Data.Tests.Import;
 [TestClass]
 public class ImportActionReportBuilderTests
 {
-    private static SystemImportAction Action(string entityType, ImportActionKind kind, ImportActionStatus status) => new()
+    private static ImportActionEntity Action(string entityType, ImportActionKind kind, ImportActionStatus status) => new()
     {
         EntityType = entityType,
         ActionType = new SafeValue<ImportActionKind?>(kind.ToString(), kind),

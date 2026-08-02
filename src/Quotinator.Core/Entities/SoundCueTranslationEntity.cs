@@ -4,7 +4,7 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A translated version of a sound cue's text for a specific language.</summary>
-[Table("SoundCueTranslations")]
+[Table("Quotinator_SoundCueTranslation")]
 public sealed class SoundCueTranslationEntity : RecordBase
 {
     /// <summary>The sound cue this translation belongs to.</summary>

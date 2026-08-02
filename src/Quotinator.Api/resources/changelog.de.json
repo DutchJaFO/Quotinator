@@ -10,14 +10,26 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197],
+    "issues": [178, 148, 150, 197, 151, 232, 236, 222, 253, 254],
+    "highlights": [
+      "Falls die Datenbank jemals nicht korrekt starten kann, bleibt Quotinator jetzt erreichbar und meldet das Problem klar, anstatt abzustürzen oder eine technische Fehlerseite anzuzeigen — ein Admin-Datenbank-Reset kann dies beheben, ohne dass App oder Container neu gestartet werden müssen."
+    ],
     "added": [
       "Release-Einträge können jetzt ein optionales einzeiliges `quote`-Feld enthalten (stimmungsvoller Text für die Release-Notizen, mit optionaler `attribution`) — wird in `CHANGELOG.md` und der Blazor-Changelog-UI angezeigt, jedoch in den knapperen Dateien `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` weggelassen (Issue #178)",
-      "Die OpenAPI/Scalar-Dokumentation veröffentlicht jetzt echte, typisierte Antwortschemata für die Quote-Endpunkte (`/quotes/random`, `/search`, `/{id}`, `/quotes`) und die Admin-Endpunkte (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — zuvor zeigte jeder von ihnen nur ein nacktes `200 OK` ohne Schema (Issue #148)"
+      "Die OpenAPI/Scalar-Dokumentation veröffentlicht jetzt echte, typisierte Antwortschemata für die Quote-Endpunkte (`/quotes/random`, `/search`, `/{id}`, `/quotes`) und die Admin-Endpunkte (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — zuvor zeigte jeder von ihnen nur ein nacktes `200 OK` ohne Schema (Issue #148)",
+      "Die Quote-Suche sowie die Fuzzy-Filter für Figur/Autor/Quelle können jetzt optional auch auf akzentuierte und andere Nicht-ASCII-Zeichen unabhängig von Groß-/Kleinschreibung passen (z. B. é/É) — opt-in über die neue Add-on-Option `unicode_aware_search` (Umgebungsvariable `Quotinator__UnicodeAwareSearch`), standardmäßig deaktiviert, bis dies anhand realer Suchanfragen validiert wurde (Issue #222)",
+      "`GET /api/v1/health` liefert jetzt `503` mit einer diagnostischen Begründung, wenn die Datenbankinitialisierung beim Start fehlgeschlagen ist, statt immer `200` zu melden; jeder Endpunkt außer Health/Version/Admin liefert in diesem Zustand ein klares `503` statt einer technischen Ausnahme, und der Admin-Datenbank-Reset-Endpunkt bleibt erreichbar, damit das Problem ohne Neustart behoben werden kann (Issue #254)"
+    ],
+    "changed": [
+      "Dokumentiert, dass die internen Audit-Trail-Tabellen der Datenbank (Ereignis-/Audit-Verlauf) ihren Eintrag bewusst beibehalten, nachdem die beschriebene Entität später geändert oder ersetzt wurde — eine rein interne Dokumentationsklarstellung ohne Verhaltensänderung (Issue #151)",
+      "Die von Docker Scout gemeldeten Schwachstellen auf Betriebssystemebene im Basis-Image des Containers wurden untersucht; ein gewöhnlicher Rebuild behob fast alle davon, und der Rest wird als akzeptiertes Restrisiko geführt, da derzeit kein Upstream-Fix verfügbar ist — keine Änderung an der Anwendung (Issue #232)",
+      "Interne Datenbanktabellen und die zugehörigen C#-Entitätsklassen wurden gemäß einer einheitlichen, domänenbasierten Präfixkonvention umbenannt (z. B. `Sources` → `Quotinator_Source`, `ImportBatches` → `Import_Batch`) — keine funktionale Änderung, keine Änderung an der API (Issues #253, #254)"
     ],
     "fixed": [
       "Datenbankspalten, die die Konfliktlösungsrichtlinie speichern (`ImportBatches.ConflictPolicy` sowie die interne Spalte `AppliedPolicy` in zwei Herkunftstabellen), lehnen einen ungültigen Wert jetzt auf Datenbankebene über eine CHECK-Constraint ab, wie jede andere enum-basierte Spalte im Schema; eine dadurch aufgedeckte, bereits bestehende Dateninkonsistenz wird dabei ebenfalls automatisch normalisiert (Issue #150)",
-      "Die Testsuite zeigt veraltete MSTest-Assertionsmuster (z. B. `CollectionAssert`/`StringAssert` statt der modernen `Assert`-Äquivalente) jetzt als sichtbare Warnung an, statt sie stillschweigend anwachsen zu lassen; rund 2.700 bestehende Vorkommen in der Testsuite wurden im selben Zug ebenfalls modernisiert (Issue #197)"
+      "Die Testsuite zeigt veraltete MSTest-Assertionsmuster (z. B. `CollectionAssert`/`StringAssert` statt der modernen `Assert`-Äquivalente) jetzt als sichtbare Warnung an, statt sie stillschweigend anwachsen zu lassen; rund 2.700 bestehende Vorkommen in der Testsuite wurden im selben Zug ebenfalls modernisiert (Issue #197)",
+      "Der Release-Prozess veröffentlicht ein Home-Assistant-Add-on-Versionsupdate jetzt erst, wenn das zugehörige Docker-Image nachweislich verfügbar ist; dies schließt ein Zeitfenster, in dem die Installation oder Aktualisierung des Add-ons kurz nach Erscheinen einer neuen Version fehlschlagen konnte (Issue #236)",
+      "Ein fehlgeschlagener Datenbank-Seeding-Vorgang beim Start konnte zuvor eine teilweise beschriebene Datenbank ohne Backup hinterlassen; Seeding erstellt jetzt bei jedem Nicht-Baseline-Start zuerst ein Backup und stellt es bei einem Fehlschlag wieder her, analog zum bereits bestehenden Sicherheitsnetz für Migrationen (Issue #254)"
     ]
   },
   "releases": [

@@ -23,10 +23,10 @@ public class PersonEndpointsTests
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
-                services.AddSingleton<IListableRepository<Person>>(repository ?? new FakePersonRepository());
+                services.AddSingleton<IListableRepository<PersonEntity>>(repository ?? new FakePersonRepository());
             }));
 
-    private static Person NewPerson(
+    private static PersonEntity NewPerson(
         Guid? id = null, string name = "Humphrey Bogart",
         string? dateOfBirth = "1899-12-25", string? dateOfDeath = "1957-01-14",
         CompletenessStatus? completeness = CompletenessStatus.Incomplete) => new()
@@ -45,7 +45,7 @@ public class PersonEndpointsTests
     {
         var repo = new FakePersonRepository
         {
-            ReturnPage = new PagedItems<Person>([NewPerson(), NewPerson(name: "Ingrid Bergman")], 1, 20, 2)
+            ReturnPage = new PagedItems<PersonEntity>([NewPerson(), NewPerson(name: "Ingrid Bergman")], 1, 20, 2)
         };
         using var factory = CreateFactory(repo);
         var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people", TestContext.CancellationToken);
@@ -109,7 +109,7 @@ public class PersonEndpointsTests
     {
         var repo = new FakePersonRepository
         {
-            ReturnPage = new PagedItems<Person>([NewPerson(), NewPerson(name: "Ingrid Bergman"), NewPerson(name: "Claude Rains")], 1, 3, 3)
+            ReturnPage = new PagedItems<PersonEntity>([NewPerson(), NewPerson(name: "Ingrid Bergman"), NewPerson(name: "Claude Rains")], 1, 3, 3)
         };
         using var factory = CreateFactory(repo);
         var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?pageSize=0", TestContext.CancellationToken);
@@ -137,7 +137,7 @@ public class PersonEndpointsTests
     {
         var repo = new FakePersonRepository
         {
-            ReturnPage = new PagedItems<Person>([NewPerson()], 1, 20, 1)
+            ReturnPage = new PagedItems<PersonEntity>([NewPerson()], 1, 20, 1)
         };
         using var factory = CreateFactory(repo);
         var response = await factory.CreateClient().GetAsync("/api/v1/masterdata/people?page=5", TestContext.CancellationToken);

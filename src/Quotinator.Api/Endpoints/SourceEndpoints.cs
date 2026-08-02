@@ -43,7 +43,7 @@ internal static class SourceEndpoints
     private static async Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        IListableRepository<Source> repository,
+        IListableRepository<SourceEntity> repository,
         ISourceSeriesReferenceReader seriesReader,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
@@ -76,7 +76,7 @@ internal static class SourceEndpoints
         [Description("UUID of the source.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        IListableRepository<Source> repository,
+        IListableRepository<SourceEntity> repository,
         ISourceSeriesReferenceReader seriesReader)
     {
         logger.LogInformation("[Api - GetSourceById] id={Id}", id);
@@ -94,7 +94,7 @@ internal static class SourceEndpoints
         return NotFoundResult.OkOrNotFound(ToResponse(source, series), localizer, ApiMessages.SourceNotFound);
     }
 
-    private static SourceResponse ToResponse(Source source, MasterDataReference? series) => new()
+    private static SourceResponse ToResponse(SourceEntity source, MasterDataReference? series) => new()
     {
         Id                 = source.Id.ToCanonicalId(),
         Title              = source.Title,

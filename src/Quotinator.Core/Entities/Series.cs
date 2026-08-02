@@ -5,7 +5,7 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A direct continuity of Sources within a Universe (e.g. "The Lord of the Rings" trilogy).</summary>
-[Table("Series")]
+[Table("Quotinator_Series")]
 public sealed class SeriesEntity : RecordBase
 {
     /// <summary>The series' name. Unique.</summary>

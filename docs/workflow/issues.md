@@ -16,6 +16,28 @@ Three types are used in this project:
 
 Every issue must have exactly one of these labels.
 
+### Secondary labels
+
+A second, informational label may be applied **alongside** the required type label above — never
+instead of it. Only two are currently adopted:
+
+| Label | When to use |
+|---|---|
+| `.NET` | The issue is (or its work touches) a .NET/NuGet dependency-version concern — mirrors Dependabot's own PR labelling |
+| `code style` | The issue is about analyzer/tooling configuration, formatting, or code-style consistency rather than behaviour |
+
+**`documentation` and `question` exist as labels in the repo but are not adopted for issue
+labelling — decided 2026-07-31 (#208).** `documentation`'s only historical use (#41) was actually a
+mislabelling: it was applied *instead of* a type label, not alongside one — the exact gap this section
+exists to close, not a pattern worth keeping. `question` has never been applied to any issue. A
+docs-only issue still gets an ordinary type label (usually `enhancement` — see the type table above);
+revisit adopting `documentation` as a secondary label only if a real, consistently-alongside-a-type-
+label usage pattern emerges later.
+
+**Propose the type label (and any applicable secondary label) in the same draft as the issue's
+title/body — never as a separate follow-up question after the issue already exists.** See
+`checklist.md`'s "Filing a new issue" and `CLAUDE.md`'s draft-review rule.
+
 ---
 
 ## Required content by type

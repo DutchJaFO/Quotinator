@@ -35,3 +35,7 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 010 | [010-repository-is-csharp-only.md](010-repository-is-csharp-only.md) | Repository is C#-only; tooling scripts follow the same rule as application code |
 | 011 | [011-series-universe-hierarchy-and-character-source-identity.md](011-series-universe-hierarchy-and-character-source-identity.md) | Series/Universe hierarchy and Character↔Source many-to-many identity |
 | 012 | [012-canonicalize-entity-ids-at-capture.md](012-canonicalize-entity-ids-at-capture.md) | External entity ids are canonicalized once, at the point of capture |
+| 013 | [013-character-merge-algorithm.md](013-character-merge-algorithm.md) | Character merge algorithm: Type-anchored, Series-scoped global identity |
+| 014 | [014-audit-trail-tables-do-not-purge-dangling-references.md](014-audit-trail-tables-do-not-purge-dangling-references.md) | Audit-trail tables don't purge dangling references; a destructive Reset needs its own export step |
+| 015 | [015-domain-prefixed-table-naming.md](015-domain-prefixed-table-naming.md) | Domain-prefixed table naming: a namespace substitute for SQLite's lack of schema qualification |
+| 016 | [016-class-naming-suffixes-and-enum-placement.md](016-class-naming-suffixes-and-enum-placement.md) | Class-naming suffixes (Entity/Request/Response/Dto) and enum placement |

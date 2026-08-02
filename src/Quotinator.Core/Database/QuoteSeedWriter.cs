@@ -28,10 +28,10 @@ internal static class QuoteSeedWriter
         InputValidation.GenreApiToDb.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Bundles the change-log writer and initiator identity shared across every Source/Character/Person/Quote write within one seeding run or one import call (#56).</summary>
-    internal readonly record struct ChangeLogContext(ISystemChangeLogWriter Writer, InitiatorType InitiatedByType, string? InitiatedById);
+    internal readonly record struct ChangeLogContext(IChangeWriter Writer, InitiatorType InitiatedByType, string? InitiatedById);
 
     /// <summary>
-    /// Writes one <see cref="SystemChangeLog"/> for a Created/Modified operation on a domain entity.
+    /// Writes one <see cref="Quotinator.Data.Entities.ChangeEntity"/> for a Created/Modified operation on a domain entity.
     /// <paramref name="oldValue"/>/<paramref name="newValue"/> are serialised as whole-record JSON
     /// snapshots (per #56's Scope changes — one row per operation, not one per field); pass <c>null</c>
     /// for whichever side doesn't apply (e.g. <paramref name="oldValue"/> for a brand-new row).
@@ -40,7 +40,7 @@ internal static class QuoteSeedWriter
         ChangeLogContext changeLog, string entityType, string entityId, ChangeAction action,
         object? oldValue, object? newValue, SqliteConnection connection, SqliteTransaction? transaction = null)
     {
-        await changeLog.Writer.LogAsync(new SystemChangeLog
+        await changeLog.Writer.LogAsync(new ChangeEntity
         {
             EntityType      = entityType,
             EntityId        = entityId,
@@ -78,7 +78,7 @@ internal static class QuoteSeedWriter
         }
 
         var id = Guid.NewGuid();
-        await connection.InsertAsync(new Source
+        await connection.InsertAsync(new SourceEntity
         {
             Id            = id,
             Title         = q.Source,
@@ -116,7 +116,7 @@ internal static class QuoteSeedWriter
         }
 
         var id = Guid.NewGuid();
-        await connection.InsertAsync(new Person
+        await connection.InsertAsync(new PersonEntity
         {
             Id            = id,
             Name          = q.Author,
@@ -163,7 +163,7 @@ internal static class QuoteSeedWriter
                     Sql.SourceTranslations.CountForSource,
                     new { sid = sourceId, lang }, transaction);
                 if (exists == 0)
-                    await connection.InsertAsync(new SourceTranslation
+                    await connection.InsertAsync(new SourceTranslationEntity
                     {
                         SourceId = sourceId,
                         Language = lang,

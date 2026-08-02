@@ -46,6 +46,8 @@ The Scalar API reference is at `/scalar/v1` and the OpenAPI spec at `/openapi/v1
 
 **Draft, review, then act — for every `git commit` and every GitHub issue create/edit, no exceptions.** Write the full intended text (commit message, or issue title + body) to a file, **and paste that same full text directly into the chat response** — not a summary, not a diff-only excerpt, and not a `Read` tool call whose output happens to render the file, which is not the same thing as the assistant's own words containing the text. Only run the actual command after explicit approval. See `docs/workflow/process.md`'s "Commit message format and content" for the exact mechanics (`.claude/temp/commit-draft.md`, `git commit -F`). The `commit-msg` hook installed above enforces the commit side of this mechanically; `gh issue create`/`edit` have no equivalent hook, so that side relies on this rule being followed, not on tooling.
 
+**A new-issue draft must propose a label and a milestone in the same message as the title/body — never as a separate follow-up question after the issue already exists.** Found live (#207, #208): creating an issue with only title/body and asking about label/milestone afterward let #207 sit unlabeled and unassigned until manually corrected. The `gh issue create` command run after approval must include `--label` and `--milestone` from the start (see `docs/workflow/issues.md` for the label set and `docs/workflow/checklist.md`'s "Filing a new issue" for the milestone rule) — waiting for a second approval round on label/milestone is the exact gap this closes.
+
 ---
 
 ## What is Quotinator?
@@ -113,6 +115,10 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 
 **SQL injection policy (mandatory for v2):** All database access must use parameterised queries or a query builder that parameterises automatically. Never build SQL strings by concatenating user input. This applies to every parameter that originates from an HTTP request — `id`, `q`, `type`, `genre`, `lang`, `page`, `pageSize`. The same inputs that reach the in-memory service in v1 will reach the database in v2; the v1 input validation layer is the first defence, parameterised queries are the second.
 
+**Table naming (domain prefixes):** every table is named `[Domain]_[TableName]`, singular — see [ADR 015](docs/architecture-decisions/015-domain-prefixed-table-naming.md) and `docs/database-conventions.md`'s "Table naming" section for the full rule and the standard domains (`Import_`/`Audit_`/`System_` for `Quotinator.Data`, `Quotinator_` for this project's own tables).
+
+**Class naming and enum placement:** every class carries exactly one of `Entity`/`Request`/`Response`/`Dto`, chosen by which boundary it crosses — `Request`/`Response` apply only to the top-level type bound directly to an endpoint, never to a member of that type. Every enum lives in its own `Enums/` folder per project, never mixed into `Entities`/`Models`/`Import`. See [ADR 016](docs/architecture-decisions/016-class-naming-suffixes-and-enum-placement.md) and `docs/database-conventions.md`'s "Class naming and enum placement" section for the full rule.
+
 **Schema migration policy:** Migrations are numbered, append-only sequences in `DatabaseInitializer.Migrations`. Rules that must be followed for every migration:
 
 - **Never reorder or edit an existing migration** — once applied to a real database, a migration is frozen. Changing it silently corrupts installations that already ran it.
@@ -134,6 +140,8 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 
 - **Fix the root cause instead of adding a check.** `Reset` (`DropAndRebuildAsync`) never wipes or replays `Quotinator.Data`'s own migration history (`System_SchemaVersion`), regardless of `preserveSchemaVersion` — because Data's migrations only ever concern `System_`-prefixed tables, which a Reset never drops in the first place (see `Sql.Schema.GetUserTables`). Only the consumer's own domain tables and `System_ConsumerSchemaVersion` are actually dropped and replayed. This is what makes the previously-unavoidable rename collision on every Reset simply never happen, with no check of any kind. Structural metadata checks (`sqlite_master`, `pragma_table_info`) are reserved for the single existing whole-database-empty check (`Sql.Schema.AnyTableExists`) — do not add a new one anywhere else as a substitute for catching an exception.
 - **A database whose recorded schema version doesn't match its actual on-disk schema is a hard failure, not a self-heal.** If a migration throws for any reason, it is never inspected or interpreted — `ApplyMigrationsAsync` and `DropAndRebuildAsync` back up the database before any destructive step, and on any exception restore that backup and rethrow, leaving the database exactly as it was before the attempt. The operator must run an explicit Reset to resolve a genuine mismatch. `ApplyMigrationPhaseAsync` itself has no `try`/`catch` at all — a failing migration's own transaction rolls back automatically via `using`, and the exception propagates untouched.
+
+**Audit-trail tables never purge dangling references, and a future destructive Reset needs its own export step first.** `System_AuditEntries`, `System_ImportConflicts`, `System_ImportActions`, and `System_ChangeLog` each record an event via an `EntityId`/`RecordId` column pointing at a domain row. Every domain entity id in this project (`QuoteIdentity.StableId`, `EntityIdentity.SourceId`/`CharacterId`/`PersonId`/`SeriesId`/`UniverseId`) is a deterministic hash of normalised content, not a random UUID — reimporting unchanged source content after a wipe reproduces the same id, so a Reset/Reseed does not, by itself, orphan every audit-trail row the way a random-UUID scheme would. A row only goes dangling when the entity's content actually changes or is removed across a reimport. Per [ADR 014](docs/architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md), that dangling state is permanent and intentional — no purge/flag mechanism exists or will be built. Separately, once #156 ships (Reset rebuilding from the fresh-database baseline instead of selectively preserving tables), these four tables will stop surviving Reset at all — ADR 014 makes #249 (an export-to-audit-history-folder step) a hard prerequisite for #156's destructive-Reset behaviour, not an optional follow-up.
 
 ### Project structure
 ```
@@ -198,6 +206,31 @@ Routes/        → Quotinator.Constants.Routes     (ApiRoutes, RouteExtensions)
 **The only permitted exception:** `new` may be used when the DI container itself cannot supply a required parameter at registration time (e.g. a computed path, a runtime config value, or a factory-constructed primitive). In that case, use the service-provider factory overload (`builder.Services.AddSingleton<T>(sp => new T(sp.GetRequiredService<IDep>(), computedValue))`) rather than a bare `new` call at the call site.
 
 Any use of bare `new` for a type that could reasonably be registered must have a comment explaining why DI was not used.
+
+### Endpoint side-effect policy (Single Responsibility)
+
+**An endpoint must not bundle an automatic side effect that silently makes a data-retention or
+data-content decision on the caller's behalf.** Per the Single Responsibility Principle, an endpoint
+has exactly one job. A second, independent decision bolted onto that same call — "and also reimport
+this optional content" — means the endpoint is now doing two things, and a caller who wants only the
+first is forced to accept the second every time. The fix is never to add a request parameter that lets
+the caller opt in or out of the bundled side effect — a flag that changes *what data survives the
+call* is the same problem in a different shape, just made explicit instead of implicit. The fix is to
+not bundle the second decision into the endpoint at all: split it into its own explicit action, or
+remove it entirely if nothing actually depends on it.
+
+This does not forbid an endpoint from populating content it structurally requires to function (e.g. a
+true system/reference table with fixed, non-optional rows) — that content is not the caller's decision
+to make, so seeding it is part of the endpoint's one job, not a second one. It only forbids
+automatically reimporting *optional* domain content the caller might reasonably want to discard.
+
+**Found live in #156:** `POST /admin/database/reset` unconditionally reimported bundled quote content
+immediately after rebuilding the schema (`OnResetAsync` calling `SeedIfEmptyInternalAsync`). Bundled
+quotes are optional, discardable domain content, not fixed reference data — a user resetting the
+database to start fresh with their own content should never be forced to re-accept the bundled dataset
+every time they reset. Reset's one job is rebuilding the schema; any table needing guaranteed content
+gets it from the fresh-database baseline script itself (see "Baseline schema for fresh databases"
+above), never from a reseed step bolted onto Reset afterward.
 
 ### JSON parsing policy
 
@@ -558,7 +591,7 @@ Any GUID, enum, other identifier, or **Name/Title-valued natural-key** compariso
 
 Found and fixed piecemeal across `status`/`entityType`/`batchId` (#154), a conversation `{id}` route (#69), Sources'/People's own id-first lookup used by an explicit `sources[]`/`people[]` entry (#180), and Series/Universe/People's own `SelectIdByName` natural-key lookups plus three further recurrences of the same class found in a systematic full-codebase audit — `?lang=` (reachable on nearly every read endpoint, and additionally normalized at the API boundary via `InputValidation.TryNormalizeLang`, the single choke point every `?lang=`-accepting endpoint calls before the value ever reaches a SQL comparison or an echoed `EffectiveLanguage`), `admin/audit`'s `?table=` (previously a silent no-op on `DELETE`, not just an empty `GET`), and `SystemChangeLog.EntityType` (#216) — before being recognised as a general rule that applies to every id- or natural-key-matching comparison in the codebase, not just route/query parameters. When adding any new GUID/enum/id/Name/Title-valued parameter or SQL comparison of this kind, apply case-insensitive matching from the start rather than waiting for it to be reported as a bug on that specific one — and when fixing an instance of this bug, grep the same file/module for sibling comparisons of the same kind and fix them together, since this class of bug has repeatedly turned out to affect more than the one reported case.
 
-**Explicit, deliberate exception: `LIKE`-based free-text search (`/quotes/search`'s `q`, and the `character`/`author`/`source` fuzzy filters).** SQLite's `LIKE` only case-folds ASCII by default — accented Latin, Cyrillic, CJK, etc. remain case-sensitive unless the ICU extension is loaded (verified against [sqlite.org/lang_expr.html](https://www.sqlite.org/lang_expr.html) during #216). This is narrower than the blanket rule above and was deliberately left unfixed by #216 — accepted as a known limitation since no bundled translation currently exercises non-ASCII partial-match search — with the actual fix (native ICU extension vs. a managed `SqliteConnection.CreateCollation`/`CreateFunction` alternative) tracked separately as [#222](https://github.com/DutchJaFO/Quotinator/issues/222) in the v1.8.0 maintenance milestone. Do not silently "fix" this by wrapping a `LIKE` clause in `LOWER()` on both sides — that only helps ASCII and masks the real Unicode gap #222 exists to resolve properly.
+**Explicit, deliberate exception: `LIKE`-based free-text search (`/quotes/search`'s `q`, and the `character`/`author`/`source` fuzzy filters) is ASCII-only case-insensitive by default; full Unicode support is opt-in.** SQLite's `LIKE` only case-folds ASCII by default — accented Latin, Cyrillic, CJK, etc. remain case-sensitive unless the ICU extension is loaded (verified against [sqlite.org/lang_expr.html](https://www.sqlite.org/lang_expr.html) during #216). `LIKE` does not consult `COLLATE` at all — confirmed against the same SQLite docs during #222 — so a custom collation cannot fix this; only the ICU extension or a custom SQL function can. #222 resolved this by adding `UNICODE_CONTAINS(column, @param)`, a `SqliteConnection.CreateFunction`-registered function using `string.Contains(..., StringComparison.InvariantCultureIgnoreCase)`, as an **opt-in alternative** to `LIKE` — gated behind `Quotinator:UnicodeAwareSearch` (default `false`, also exposed as the HA add-on's `unicode_aware_search` option), off until validated against real-world search traffic. `Sql.SearchField`'s methods (`Quote`/`Source`/`Character`/`Author`/`All`/`CharacterFilter`/`AuthorFilter`/`SourceFilter`) each take a `bool unicodeAware` and build one or the other. Do not silently "fix" this by wrapping a `LIKE` clause in `LOWER()` on both sides — that only helps ASCII; use `UNICODE_CONTAINS` (behind the flag) instead.
 
 **Comparison case-insensitivity is not the same guarantee as canonical presentation — a third mechanism, applied uniformly to every selected id column, is required.** A `SELECT` that isn't filtering or joining on a column runs neither write-side canonicalization nor `IdClauses`' comparison-side `LOWER()` wrapping. Every `*Id`-suffixed column in a SELECT list — primary key or foreign key — must go through `Quotinator.Data.Queries.IdClauses.SelectColumn(column, alias)`, which emits `LOWER(column) AS alias`. This applies unconditionally, not only to columns known to be `string`-typed on their C# side: a `Guid`-typed property happens to render lowercase for free today via `System.Text.Json`'s default formatting, but that's an accident of the serializer, not a guarantee — a column's downstream C# type can change without the query being touched (`Quotinator.Core.Models.MasterDataReference.Id` is `string`-typed for exactly this reason, despite backing what was originally a `Guid`-typed column). Wrap every selected id column the same way `IdClauses.Join` already wraps every JOIN condition unconditionally, regardless of whether it looks safe today.
 
@@ -945,14 +978,20 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
    ```
    Commit the regenerated files alongside the JSON change.
-4. **Versions in sync** — when tagging a release, all three must match the tag (without the `v` prefix):
+4. **Versions in sync** — two of these must match the tag (without the `v` prefix) **at the moment the
+   tag is pushed**:
    - `Directory.Build.props` → `<Version>` (shared across all projects — **this is the only file to update**)
-   - `addon/config.yaml` → `version`
-   - `changelog.en.json` → new version entry at the top; regenerate `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md`
+   - `changelog.en.json` → new version entry at the top; regenerate `CHANGELOG.md` (only — see below)
 
-   `addon-beta/config.yaml`'s own `version` is **not** part of this final-tag trio — it only moves at
-   a beta tag (see `docs/workflow/checklist.md`'s "Beta tag" section) and is expected to sit behind
-   the stable version between releases, tracking whatever prerelease was most recently pushed.
+   **`addon/config.yaml`'s `version` (final tag) / `addon-beta/config.yaml`'s `version` (beta tag), and
+   the matching `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md`, do *not* go in the same PR or match the
+   tag at push time.** Per [#236](docs/milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md),
+   bumping the HA-facing `config.yaml` before the matching Docker image is confirmed pullable creates a
+   window where a Home Assistant supervisor sees a version with no image to install. They're bumped in
+   a **second, separate PR merged only after the release workflow for that tag has completed green** —
+   see `CLAUDE.md`'s "Tagging a release" workflow steps 12–14 and `docs/workflow/checklist.md`'s Beta
+   tag / Final tag sections for the exact sequencing. `addon-beta/config.yaml` is never touched by a
+   final tag's follow-up PR, and `addon/config.yaml` is never touched by a beta tag's.
 
    `AssemblyVersion` and `FileVersion` are derived automatically as `$(Version).0` (e.g. `1.4.1` → `1.4.1.0`). Do not set them manually.
 5. **Docker build succeeds** — run a local build to catch publish/container issues before they hit CI:
@@ -984,20 +1023,62 @@ and wait for checks to re-run green (`gh pr checks <N> --watch`) before retrying
 
 Workflow:
 1. **At the start of a session** — check for open Dependabot PRs (`gh pr list --state open`) and merge any that are green before starting feature work. This avoids Dependabot reacting to your push mid-session.
-2. Push all feature/fix commits to `main`
+2. Push all feature/fix commits to `main` (via their own milestone/hotfix branch and PR — never a direct push; see `docs/workflow/process.md`'s "Step 2 — Create the feature branch")
 3. Wait for any remaining Dependabot PRs to finish CI
 4. Review and merge passing Dependabot PRs
-5. `git pull` to bring dependency bumps onto your local branch
-6. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate all three markdown files with `scripts/changelog.csx` (`--max-releases 3`)
-7. Bump versions (`Directory.Build.props` → `<Version>`, `addon/config.yaml`, `changelog.en.json` version entry) and commit
-8. Run the full pre-push checklist above (including Docker build)
-9. Push the version bump commit, then push the tag:
-   ```bash
-   git tag v1.0.x
-   git push origin v1.0.x
-   ```
+5. **Create a release-prep branch** (e.g. `chore/v1.0.x-release-prep`) — the version bump and changelog
+   regeneration below are code changes like any other and go through this one branch/PR, not two
+   separate ones and never a direct commit to `main` (per `docs/workflow/process.md`'s "Branches
+   outside a milestone" — release preparation is its own standing exception, distinct from whatever
+   milestone branch produced the code being released)
+6. `git pull` to bring dependency bumps onto this branch
+7. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate
+   `CHANGELOG.md` with `scripts/changelog.csx` (`--max-releases 3`). **Do not regenerate
+   `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` yet — see step 11.**
+8. Bump `Directory.Build.props` → `<Version>` and `changelog.en.json`'s version entry, and commit —
+   same branch. **Do not bump `addon/config.yaml`/`addon-beta/config.yaml` yet — see step 11.**
+9. Run the full pre-push checklist above (including Docker build)
+10. Push the release-prep branch, open a PR, and merge it to `main`
+11. From `main`, push the tag:
+    ```bash
+    git tag v1.0.x
+    git push origin v1.0.x
+    ```
 
 > **Tag push environment note.** Claude Code Desktop can push tags directly. Claude Code cloud and mobile environments receive a `403` on tag pushes — if running in those environments, the tag must be pushed from a local terminal instead.
+
+**After the tag — wait, then a second, separate PR for the HA-facing files.** Per
+[#236's plan doc](docs/milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md):
+`addon/config.yaml`/`addon-beta/config.yaml`'s `version` field is read by the Home Assistant supervisor
+directly from `main` via git — independent of GitHub Actions and the Docker image entirely. Bumping it
+in the same PR as the tagged code (the order used before this fix) means a supervisor refreshing its
+add-on store during the release workflow's ~13–16 minute run sees a version with no matching image on
+GHCR yet, and any install/update attempt during that window fails. Neither `addon/config.yaml`/
+`addon-beta/config.yaml` nor `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` are read by the Docker
+image or by the release workflow itself (which reads only the root `CHANGELOG.md`), so they are the
+only files safe to defer:
+
+12. Wait for the release workflow triggered by the tag to complete **green** —
+    `gh run list --workflow=release.yml` or watch it in the Actions UI. Its own "Verify image is
+    pullable (amd64 + arm64)" step is the authoritative signal that the image actually exists on GHCR
+    for both platforms — do not proceed on the basis of the push step alone.
+13. Bump the version field of whichever `config.yaml` matches this tag — `addon-beta/config.yaml` for
+    a beta tag, `addon/config.yaml` for a final tag (never both in the same cycle) — and regenerate
+    the matching `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` from the already-merged
+    `changelog.en.json` (no content changes, just re-running the generator and committing the output).
+14. Open and merge this as its own PR to `main`. Only after this merge has HA's add-on store actually
+    finished catching up with an image that exists.
+
+**Steps 12–14 are deliberately manual, not CI-automated — considered and rejected when #236 was
+implemented (2026-08-01).** The branch ruleset (`bypass_actors: []`) blocks even a workflow with
+`contents: write` from pushing directly to `main` — automation would still need to open a PR. This
+repo also has `allow_auto_merge: false`, so that PR would still need a human to merge it manually
+either way, meaning automation would only save writing the PR by hand, not the wait itself. It would
+also require installing `dotnet-script` in `build-and-push` (currently a pure Docker job with no .NET
+SDK) just to regenerate the addon changelog, and — like the manual process itself — could only be
+proven correct by actually watching it run on a real tag, no dry run possible. Revisit only if the
+manual process itself starts failing in practice (a step consistently skipped or forgotten), not
+pre-emptively.
 
 ---
 

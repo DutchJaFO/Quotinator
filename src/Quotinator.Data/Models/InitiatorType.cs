@@ -1,6 +1,6 @@
 namespace Quotinator.Data.Models;
 
-/// <summary>The mechanism that initiated a <see cref="Quotinator.Data.Entities.SystemChangeLog"/> row — the specific identifying detail (which batch, which route, which provider) lives in <see cref="Quotinator.Data.Repositories.IInitiatorContext.InitiatedById"/>, not here.</summary>
+/// <summary>The mechanism that initiated a <see cref="Quotinator.Data.Entities.ChangeEntity"/> row — the specific identifying detail (which batch, which route, which provider) lives in <see cref="Quotinator.Data.Repositories.IInitiatorContext"/>'s own <c>InitiatedById</c> property, not here.</summary>
 public enum InitiatorType
 {
     /// <summary>Startup seeding from bundled or user-supplied source files.</summary>

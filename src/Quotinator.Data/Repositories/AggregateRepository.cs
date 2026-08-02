@@ -13,7 +13,7 @@ namespace Quotinator.Data.Repositories;
 /// <typeparam name="TChild">Child entity type.</typeparam>
 public abstract class AggregateRepository<TParent, TChild>(
     IDbConnectionFactory factory,
-    ISystemAuditWriter auditWriter,
+    IAuditEntryWriter auditWriter,
     ICallerContext callerContext)
     : SqliteRepository<TParent>(factory, auditWriter, callerContext)
     where TParent : RecordBase

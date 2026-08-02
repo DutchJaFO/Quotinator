@@ -35,21 +35,21 @@ public class ImportActionPlannerTests
         _factory = new SqliteConnectionFactory(_dbPath);
 
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
-        var actionReader  = new SystemImportActionReader(_factory);
-        var actionWriter  = new SystemImportActionWriter(_factory);
+        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader  = new ImportActionReader(_factory);
+        var actionWriter  = new ImportActionWriter(_factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory);
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
-            coordinator, actionService, NoOpSystemAuditWriter.Instance,
+            coordinator, actionService, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
@@ -129,15 +129,15 @@ public class ImportActionPlannerTests
         var realSourceId    = Guid.NewGuid();
         var realCharacterId = Guid.NewGuid();
         var realPersonId    = Guid.NewGuid();
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
             new { Id = realSourceId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
         // #174: Characters.SourceType is NOT NULL as of Migration011 (ADR 013).
-        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, SourceType, DateCreated) VALUES (@Id, 'Rick Blaine', 'Movie', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Character (Id, Name, SourceType, DateCreated) VALUES (@Id, 'Rick Blaine', 'Movie', @now)",
             new { Id = realCharacterId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
         // #179: Character<->Source is many-to-many via CharacterSources, not a Characters.SourceId column.
-        await conn.ExecuteAsync("INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_CharacterSource (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
             new { Id = Guid.NewGuid(), CharacterId = realCharacterId, SourceId = realSourceId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
-        await conn.ExecuteAsync("INSERT INTO People (Id, Name, DateCreated) VALUES (@Id, 'Someone', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Person (Id, Name, DateCreated) VALUES (@Id, 'Someone', @now)",
             new { Id = realPersonId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
 
         var quote = BuildQuote("31111111-1111-4111-8111-111111111111", author: "Someone");
@@ -161,9 +161,9 @@ public class ImportActionPlannerTests
     {
         var characterId = Guid.NewGuid();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, SourceType, DateCreated) VALUES (@Id, @Name, @SourceType, @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Character (Id, Name, SourceType, DateCreated) VALUES (@Id, @Name, @SourceType, @now)",
             new { Id = characterId, Name = name, SourceType = sourceType, now });
-        await conn.ExecuteAsync("INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_CharacterSource (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
             new { Id = Guid.NewGuid(), CharacterId = characterId, SourceId = sourceId, now });
         return characterId.ToString("D");
     }
@@ -172,7 +172,7 @@ public class ImportActionPlannerTests
     {
         var sourceId = Guid.NewGuid();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, SeriesId, DateCreated) VALUES (@Id, @Title, @Type, @SeriesId, @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, SeriesId, DateCreated) VALUES (@Id, @Title, @Type, @SeriesId, @now)",
             new { Id = sourceId, Title = title, Type = type, SeriesId = seriesId, now });
         return sourceId.ToString("D");
     }
@@ -429,7 +429,7 @@ public class ImportActionPlannerTests
     }
 
     [TestMethod]
-    public async Task PlanAsync_BrandNewQuote_MatchingCustomRule_CharacterEntityResolvesAgainstCorrectedValue()
+    public async Task PlanAsync_BrandNewQuote_MatchingCustomRule_CharacterResolvesAgainstCorrectedValue()
     {
         using var conn = await OpenConnectionAsync();
         var id = "d2111111-1111-4111-8111-111111111111";
@@ -494,10 +494,10 @@ public class ImportActionPlannerTests
     private static async Task SeedExistingQuoteWithSourceAsync(SqliteConnection conn, string quoteId, string sourceId, string sourceTitle, string sourceType, string quoteText)
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, @sourceTitle, @sourceType, @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, @sourceTitle, @sourceType, @now)",
             new { Id = sourceId, sourceTitle, sourceType, now });
         await conn.ExecuteAsync(
-            "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, DateCreated) VALUES (@Id, @quoteText, 'en', @SourceId, @now)",
+            "INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, DateCreated) VALUES (@Id, @quoteText, 'en', @SourceId, @now)",
             new { Id = quoteId, quoteText, SourceId = sourceId, now });
     }
 
@@ -515,7 +515,7 @@ public class ImportActionPlannerTests
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
 
-        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must resolve to the already-existing canonical Source — no new Source Add should be staged");
+        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must resolve to the already-existing canonical Source — no new SourceEntity Add should be staged");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         var payload     = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(canonicalSourceId, payload.SourceId, "The quote must link to the existing canonical Source, not a spurious alias-derived one");
@@ -639,7 +639,7 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "No Source has ever existed under this canonical name yet — this is a legitimate first-time creation, not staleness");
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
-        Assert.AreEqual("The Avengers", payload.Title, "The new Source must be created under the alias's canonical title, not the raw incoming one");
+        Assert.AreEqual("The Avengers", payload.Title, "The new SourceEntity must be created under the alias's canonical title, not the raw incoming one");
     }
 
     [TestMethod]
@@ -666,13 +666,13 @@ public class ImportActionPlannerTests
         var sourceId     = Guid.NewGuid();
         var characterId  = Guid.NewGuid();
         var characterSourceId = Guid.NewGuid();
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
-        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, DateCreated) VALUES (@Id, @characterName, @now)", new { Id = characterId, characterName, now });
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Character (Id, Name, DateCreated) VALUES (@Id, @characterName, @now)", new { Id = characterId, characterName, now });
         await conn.ExecuteAsync(
-            "INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+            "INSERT INTO Quotinator_CharacterSource (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
             new { Id = characterSourceId, CharacterId = characterId, SourceId = sourceId, now });
         await conn.ExecuteAsync(
-            "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, DateCreated) VALUES (@Id, @quoteText, 'en', @SourceId, @CharacterId, @now)",
+            "INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, DateCreated) VALUES (@Id, @quoteText, 'en', @SourceId, @CharacterId, @now)",
             new { Id = id, quoteText, SourceId = sourceId, CharacterId = characterId, now });
     }
 
@@ -723,10 +723,10 @@ public class ImportActionPlannerTests
 
         await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes"));
-        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources"));
-        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Characters"));
-        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM People"));
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote"));
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Source"));
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Character"));
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Person"));
     }
 
     [TestMethod]
@@ -747,9 +747,9 @@ public class ImportActionPlannerTests
     {
         var now      = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         var sourceId = Guid.NewGuid();
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
         await conn.ExecuteAsync(
-            "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, CompletenessStatus, DateCreated) VALUES (@Id, 'Original text', 'en', @SourceId, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, CompletenessStatus, DateCreated) VALUES (@Id, 'Original text', 'en', @SourceId, @CompletenessStatus, @now)",
             new { Id = id, SourceId = sourceId, CompletenessStatus = completenessStatus, now });
     }
 
@@ -776,7 +776,7 @@ public class ImportActionPlannerTests
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Sources (Id, Title, Type, Date, SeriesId, CompletenessStatus, DateCreated) VALUES (@Id, @Title, @Type, @Date, @SeriesId, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_Source (Id, Title, Type, Date, SeriesId, CompletenessStatus, DateCreated) VALUES (@Id, @Title, @Type, @Date, @SeriesId, @CompletenessStatus, @now)",
             new { Id = id, Title = title, Type = type, Date = date, SeriesId = seriesId, CompletenessStatus = completenessStatus, now });
     }
 
@@ -795,7 +795,7 @@ public class ImportActionPlannerTests
         var id  = Guid.NewGuid().ToString("D");
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Series (Id, Name, UniverseId, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @UniverseId, 'Incomplete', @now)",
+            "INSERT INTO Quotinator_Series (Id, Name, UniverseId, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @UniverseId, 'Incomplete', @now)",
             new { Id = id, Name = name, UniverseId = universeId, now });
         return id;
     }
@@ -805,7 +805,7 @@ public class ImportActionPlannerTests
         var id  = Guid.NewGuid().ToString("D");
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
+            "INSERT INTO Quotinator_Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
             new { Id = id, Name = name, now });
         return id;
     }
@@ -829,7 +829,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, 'Middle Earth', 'Incomplete', @now)",
+            "INSERT INTO Quotinator_Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, 'Middle Earth', 'Incomplete', @now)",
             new { Id = Guid.NewGuid().ToString("D").ToUpperInvariant(), now });
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
@@ -1322,7 +1322,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         // A pre-existing row found only by natural key (Title+Type) — never declared an explicit id before.
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
             new { Id = Guid.NewGuid(), now });
 
         var newFileId = "c3111111-1111-4111-8111-111111111111";
@@ -1411,7 +1411,7 @@ public class ImportActionPlannerTests
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO StageDirections (Id, Text, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @ImageUrl, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_StageDirection (Id, Text, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @ImageUrl, @CompletenessStatus, @now)",
             new { Id = id, Text = text, ImageUrl = imageUrl, CompletenessStatus = completenessStatus, now });
     }
 
@@ -1487,7 +1487,7 @@ public class ImportActionPlannerTests
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO SoundCues (Id, Text, SoundFileUrl, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @SoundFileUrl, @ImageUrl, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_SoundCue (Id, Text, SoundFileUrl, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @SoundFileUrl, @ImageUrl, @CompletenessStatus, @now)",
             new { Id = id, Text = text, SoundFileUrl = soundFileUrl, ImageUrl = imageUrl, CompletenessStatus = completenessStatus, now });
     }
 
@@ -1563,7 +1563,7 @@ public class ImportActionPlannerTests
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO People (Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @DateOfBirth, @DateOfDeath, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_Person (Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @DateOfBirth, @DateOfDeath, @CompletenessStatus, @now)",
             new { Id = id, Name = name, DateOfBirth = dateOfBirth, DateOfDeath = dateOfDeath, CompletenessStatus = completenessStatus, now });
     }
 
@@ -1602,7 +1602,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         // A pre-existing row found only by natural key (Name) — never declared an explicit id before.
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO People (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Person (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
             new { Id = Guid.NewGuid(), now });
 
         var newFileId = "e3111111-1111-4111-8111-111111111173";
@@ -1622,7 +1622,7 @@ public class ImportActionPlannerTests
     {
         using var conn = await OpenConnectionAsync();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO People (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Person (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
             new { Id = Guid.NewGuid(), now });
 
         var newFileId = "e3211111-1111-4111-8111-111111111173";
@@ -1762,7 +1762,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         var sourceId = await SeedSourceAsync(conn, "Existing Film");
         var characterId = await SeedGlobalCharacterAsync(conn, "Gandalf", sourceId, "Movie");
-        await conn.ExecuteAsync("UPDATE Characters SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = characterId });
+        await conn.ExecuteAsync("UPDATE Quotinator_Character SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = characterId });
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             characters: [BuildCharacterEntry(characterId, name: "A completely different name")]);
@@ -1778,7 +1778,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         var sourceId = await SeedSourceAsync(conn, "Existing Film");
         var characterId = await SeedGlobalCharacterAsync(conn, "Gandalf", sourceId, "Movie");
-        await conn.ExecuteAsync("UPDATE Characters SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = characterId });
+        await conn.ExecuteAsync("UPDATE Quotinator_Character SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = characterId });
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Skip,
             characters: [BuildCharacterEntry(characterId, name: "A completely different name")]);
@@ -1800,7 +1800,7 @@ public class ImportActionPlannerTests
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Conversations (Id, Description, CompletenessStatus, DateCreated) VALUES (@Id, @Description, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_Conversation (Id, Description, CompletenessStatus, DateCreated) VALUES (@Id, @Description, @CompletenessStatus, @now)",
             new { Id = id, Description = description, CompletenessStatus = completenessStatus, now });
     }
 

@@ -5,6 +5,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
@@ -45,26 +46,26 @@ public class ConflictResolutionTests
     }
 
     private QuotinatorDatabaseInitializer CreateInitializer(
-        IReadOnlyList<SeedBatch> batches, ISystemChangeLogWriter? changeLogWriter = null)
+        IReadOnlyList<SeedBatch> batches, IChangeWriter? changeLogWriter = null)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
-        var actionReader  = new SystemImportActionReader(factory);
-        var actionWriter  = new SystemImportActionWriter(factory);
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader  = new ImportActionReader(factory);
+        var actionWriter  = new ImportActionWriter(factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, changeLogWriter ?? NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService = new SqliteImportActionService(actionReader, coordinator, changeLogWriter ?? NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
             coordinator, actionService,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
     }
@@ -93,11 +94,11 @@ public class ConflictResolutionTests
         conn.Open();
 
         var row = await conn.QuerySingleAsync<(string QuoteText, string? Character)>(
-            "SELECT q.QuoteText, c.Name AS Character FROM Quotes q " +
-            "LEFT JOIN Characters c ON c.Id = q.CharacterId " +
+            "SELECT q.QuoteText, c.Name AS Character FROM Quotinator_Quote q " +
+            "LEFT JOIN Quotinator_Character c ON c.Id = q.CharacterId " +
             "WHERE q.Id = @id", new { id = SharedId });
         var genres = (await conn.QueryAsync<string>(
-            "SELECT Genre FROM QuoteGenres WHERE QuoteId = @id", new { id = SharedId })).ToList();
+            "SELECT Genre FROM Quotinator_QuoteGenre WHERE QuoteId = @id", new { id = SharedId })).ToList();
 
         return (row.QuoteText, row.Character, genres);
     }
@@ -173,7 +174,7 @@ public class ConflictResolutionTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var (completenessStatus, noValueKnown) = await conn.QuerySingleAsync<(string CompletenessStatus, string NoValueKnown)>(
-            "SELECT CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+            "SELECT CompletenessStatus, NoValueKnown FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
 
         // #165: see QuoteImportServiceTests's sibling test for why NeedsReview, not Incomplete, is
         // the correct expectation here — nothing populates NoValueKnown with real markers yet, so an
@@ -198,10 +199,10 @@ public class ConflictResolutionTests
         conn.Open();
 
         await conn.ExecuteAsync(
-            "UPDATE Quotes SET CompletenessStatus = 'Complete', NoValueKnown = '[\"date\"]' WHERE Id = @id",
+            "UPDATE Quotinator_Quote SET CompletenessStatus = 'Complete', NoValueKnown = '[\"date\"]' WHERE Id = @id",
             new { id = SharedId });
 
-        var sourceId = await conn.ExecuteScalarAsync<string>("SELECT SourceId FROM Quotes WHERE Id = @id", new { id = SharedId });
+        var sourceId = await conn.ExecuteScalarAsync<string>("SELECT SourceId FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
 
         await conn.ExecuteAsync(Sql.Quotes.UpdateOnNewestWins, new
         {
@@ -216,7 +217,7 @@ public class ConflictResolutionTests
         });
 
         var (quoteText, completenessStatus, noValueKnown) = await conn.QuerySingleAsync<(string QuoteText, string CompletenessStatus, string NoValueKnown)>(
-            "SELECT QuoteText, CompletenessStatus, NoValueKnown FROM Quotes WHERE Id = @id", new { id = SharedId });
+            "SELECT QuoteText, CompletenessStatus, NoValueKnown FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
 
         Assert.AreEqual("Rewritten by a later reseed", quoteText, "The statement must still update the fields it's meant to");
         Assert.AreEqual("Complete", completenessStatus, "CompletenessStatus must survive an UpdateOnNewestWins rewrite unchanged");
@@ -242,20 +243,20 @@ public class ConflictResolutionTests
     // System_ImportConflicts table's migration/baseline history is untouched (squashing it is #155's
     // call), but no C# code reads or writes it any more.
 
-    // ── #56: System_ChangeLog ────────────────────────────────────────────────
+    // ── #56: Audit_Change ────────────────────────────────────────────────
 
     [TestMethod]
     public async Task Seed_FreshQuote_WritesCreatedChangeLogRowsWithSeedInitiator()
     {
         var factory    = new SqliteConnectionFactory(_dbPath);
-        var writer     = new SystemChangeLogWriter(factory);
+        var writer     = new ChangeWriter(factory);
         var batch      = new SeedBatch([new SeedFile(WriteFirstFile(), null)], new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
         await CreateInitializer([batch], changeLogWriter: writer).InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var rows = (await conn.QueryAsync<(string EntityType, string EntityId, string InitiatedByType, string Action)>(
-            "SELECT EntityType, EntityId, InitiatedByType, Action FROM System_ChangeLog")).ToList();
+            "SELECT EntityType, EntityId, InitiatedByType, Action FROM Audit_Change")).ToList();
 
         var quoteRow = rows.Single(r => r.EntityType == "quote");
         Assert.AreEqual(SharedId, quoteRow.EntityId);
@@ -271,19 +272,16 @@ public class ConflictResolutionTests
     public async Task NewestWins_CrossFileDuplicate_WritesModifiedChangeLogRowForQuote()
     {
         var factory = new SqliteConnectionFactory(_dbPath);
-        var writer  = new SystemChangeLogWriter(factory);
+        var writer  = new ChangeWriter(factory);
         var batch   = new SeedBatch(
             [new SeedFile(WriteFirstFile(), null), new SeedFile(WriteSecondFile(), null)],
             new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
         await CreateInitializer([batch], changeLogWriter: writer).InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var quoteActions = (await conn.QueryAsync<string>(
-            "SELECT Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id ORDER BY OccurredAt",
-            new { id = SharedId })).ToList();
+        var quoteActions = (await new ChangeReader(factory).GetHistoryAsync("quote", SharedId))
+            .OrderBy(r => r.OccurredAt).Select(r => r.Action.Parsed).ToList();
 
-        Assert.AreSequenceEqual(new[] { "Created", "Modified" }, quoteActions, "The first file's insert logs Created; the second file's newest-wins rewrite logs Modified");
+        Assert.AreSequenceEqual(new ChangeAction?[] { ChangeAction.Created, ChangeAction.Modified }, quoteActions, "The first file's insert logs Created; the second file's newest-wins rewrite logs Modified");
     }
 
     [TestMethod]
@@ -292,27 +290,24 @@ public class ConflictResolutionTests
     public async Task SkipOrReview_CrossFileDuplicate_WritesNoModifiedChangeLogRow(DuplicateResolutionPolicy policy)
     {
         var factory = new SqliteConnectionFactory(_dbPath);
-        var writer  = new SystemChangeLogWriter(factory);
+        var writer  = new ChangeWriter(factory);
         var batch   = new SeedBatch(
             [new SeedFile(WriteFirstFile(), null), new SeedFile(WriteSecondFile(), null)],
             new ManifestPolicy(policy), "test");
         await CreateInitializer([batch], changeLogWriter: writer).InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var quoteActions = (await conn.QueryAsync<string>(
-            "SELECT Action FROM System_ChangeLog WHERE EntityType = 'quote' AND EntityId = @id",
-            new { id = SharedId })).ToList();
+        var quoteActions = (await new ChangeReader(factory).GetHistoryAsync("quote", SharedId))
+            .Select(r => r.Action.Parsed).ToList();
 
-        Assert.AreSequenceEqual(new[] { "Created" }, quoteActions, $"{policy} never executes the UPDATE, so no Modified row should exist — only the first file's Created row");
+        Assert.AreSequenceEqual(new ChangeAction?[] { ChangeAction.Created }, quoteActions, $"{policy} never executes the UPDATE, so no Modified row should exist — only the first file's Created row");
     }
 
-    /// <summary>System_ChangeLog is System_-prefixed protected infrastructure — a Reset must never drop or replay it, same as System_AuditEntries/System_ImportConflicts.</summary>
+    /// <summary>Audit_Change is System_-prefixed protected infrastructure — a Reset must never drop or replay it, same as System_AuditEntries/System_ImportConflicts.</summary>
     [TestMethod]
     public async Task ResetAsync_PreservesExistingChangeLogRows()
     {
         var factory = new SqliteConnectionFactory(_dbPath);
-        var writer  = new SystemChangeLogWriter(factory);
+        var writer  = new ChangeWriter(factory);
         var batch   = new SeedBatch([new SeedFile(WriteFirstFile(), null)], new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), "test");
         var db      = CreateInitializer([batch], changeLogWriter: writer);
         await db.InitialiseAsync();
@@ -321,14 +316,14 @@ public class ConflictResolutionTests
         using (var preConn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             preConn.Open();
-            countBeforeReset = await preConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ChangeLog;");
+            countBeforeReset = await preConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Audit_Change;");
         }
 
         await db.ResetAsync();
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var countAfterReset = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ChangeLog;");
+        var countAfterReset = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Audit_Change;");
 
         Assert.IsGreaterThanOrEqualTo(countBeforeReset * 2, countAfterReset,
             "The pre-Reset rows must survive Reset, plus at least as many new rows from the re-seed pass");

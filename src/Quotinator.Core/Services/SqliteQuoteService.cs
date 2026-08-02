@@ -17,6 +17,7 @@ namespace Quotinator.Core.Services;
 public sealed class SqliteQuoteService : IQuoteService
 {
     private readonly IDbConnectionFactory _factory;
+    private readonly bool _unicodeAwareSearch;
 
     // Maps DB enum name back to the API genre tag for response serialisation.
     private static readonly IReadOnlyDictionary<string, string> GenreDbToApi =
@@ -39,9 +40,15 @@ public sealed class SqliteQuoteService : IQuoteService
 
     /// <summary>Initialises the service with the connection factory used for all database queries.</summary>
     /// <param name="factory">Factory used to open SQLite connections.</param>
-    public SqliteQuoteService(IDbConnectionFactory factory)
+    /// <param name="unicodeAwareSearch">
+    /// Whether <c>LIKE</c>-based fuzzy matching (quote search, character/author/source filters) uses
+    /// the Unicode-aware <c>UNICODE_CONTAINS</c> function instead of SQLite's own ASCII-only
+    /// <c>LIKE</c>. Opt-in, off by default — see issue #222.
+    /// </param>
+    public SqliteQuoteService(IDbConnectionFactory factory, bool unicodeAwareSearch = false)
     {
         _factory = factory;
+        _unicodeAwareSearch = unicodeAwareSearch;
     }
 
     // -------------------------------------------------------------------------
@@ -88,7 +95,7 @@ public sealed class SqliteQuoteService : IQuoteService
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var (whereClause, filterParams) = BuildFilterWhere(types, genres, lang, character, author, source, seriesId, universeId, yearFrom, yearTo);
+        var (whereClause, filterParams) = BuildFilterWhere(types, genres, lang, _unicodeAwareSearch, character, author, source, seriesId, universeId, yearFrom, yearTo);
 
         var totalMatching = connection.ExecuteScalar<int>(
             Sql.Quotes.CountRandom(whereClause),
@@ -156,7 +163,7 @@ public sealed class SqliteQuoteService : IQuoteService
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var (whereClause, parameters) = BuildFilterWhere(types, genres, lang, seriesId, universeId, yearFrom, yearTo);
+        var (whereClause, parameters) = BuildFilterWhere(types, genres, lang, _unicodeAwareSearch, seriesId, universeId, yearFrom, yearTo);
 
         var total = connection.ExecuteScalar<int>(
             Sql.Quotes.CountGetAll(whereClause),
@@ -181,18 +188,18 @@ public sealed class SqliteQuoteService : IQuoteService
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var like = $"%{query}%";
+        var like = _unicodeAwareSearch ? query : $"%{query}%";
 
         var fieldFilter = field switch
         {
-            "quote"     => Sql.SearchField.Quote,
-            "source"    => Sql.SearchField.Source,
-            "character" => Sql.SearchField.Character,
-            "author"    => Sql.SearchField.Author,
-            _           => Sql.SearchField.All
+            "quote"     => Sql.SearchField.Quote(_unicodeAwareSearch),
+            "source"    => Sql.SearchField.Source(_unicodeAwareSearch),
+            "character" => Sql.SearchField.Character(_unicodeAwareSearch),
+            "author"    => Sql.SearchField.Author(_unicodeAwareSearch),
+            _           => Sql.SearchField.All(_unicodeAwareSearch)
         };
 
-        var (typeGenreWhere, filterParams) = BuildFilterWhere(types, genres, lang, seriesId, universeId, yearFrom, yearTo);
+        var (typeGenreWhere, filterParams) = BuildFilterWhere(types, genres, lang, _unicodeAwareSearch, seriesId, universeId, yearFrom, yearTo);
 
         var sql = Sql.Quotes.SelectSearch(typeGenreWhere, fieldFilter);
 
@@ -366,12 +373,12 @@ public sealed class SqliteQuoteService : IQuoteService
 
     // Overload without text filters — used by GetAll.
     internal static (string Sql, object Parameters) BuildFilterWhere(
-        string[]? types, string[]? genres, string? lang, Guid? seriesId, Guid? universeId,
+        string[]? types, string[]? genres, string? lang, bool unicodeAwareSearch, Guid? seriesId, Guid? universeId,
         int? yearFrom = null, int? yearTo = null)
-        => BuildFilterWhere(types, genres, lang, null, null, null, seriesId, universeId, yearFrom, yearTo);
+        => BuildFilterWhere(types, genres, lang, unicodeAwareSearch, null, null, null, seriesId, universeId, yearFrom, yearTo);
 
     internal static (string Sql, DynamicParameters Parameters) BuildFilterWhere(
-        string[]? types, string[]? genres, string? lang,
+        string[]? types, string[]? genres, string? lang, bool unicodeAwareSearch,
         string? character, string? author, string? source,
         Guid? seriesId, Guid? universeId,
         int? yearFrom = null, int? yearTo = null)
@@ -381,14 +388,14 @@ public sealed class SqliteQuoteService : IQuoteService
 
         var clauses = new List<string> { "q.IsDeleted = 0", "s.IsDeleted = 0" };
         if (dbTypes  is not null) clauses.Add("s.Type IN @dbTypes");
-        if (dbGenres is not null) clauses.Add($"EXISTS (SELECT 1 FROM QuoteGenres qg WHERE {IdClauses.Join("qg.QuoteId", "q.Id")} AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)");
-        if (character is not null) clauses.Add("c.Name LIKE @characterLike");
-        if (author    is not null) clauses.Add("p.Name LIKE @authorLike");
-        if (source    is not null) clauses.Add("s.Title LIKE @sourceLike");
+        if (dbGenres is not null) clauses.Add($"EXISTS (SELECT 1 FROM Quotinator_QuoteGenre qg WHERE {IdClauses.Join("qg.QuoteId", "q.Id")} AND qg.Genre IN @dbGenres AND qg.IsDeleted = 0)");
+        if (character is not null) clauses.Add(Sql.SearchField.CharacterFilter(unicodeAwareSearch));
+        if (author    is not null) clauses.Add(Sql.SearchField.AuthorFilter(unicodeAwareSearch));
+        if (source    is not null) clauses.Add(Sql.SearchField.SourceFilter(unicodeAwareSearch));
         // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
         if (seriesId  is not null) clauses.Add(IdClauses.Equals("s.SeriesId", "seriesId"));
         if (universeId is not null) clauses.Add(
-            $"LOWER(s.SeriesId) IN (SELECT LOWER(Id) FROM Series WHERE {IdClauses.Equals("UniverseId", "universeId")} AND IsDeleted = 0)");
+            $"LOWER(s.SeriesId) IN (SELECT LOWER(Id) FROM Quotinator_Series WHERE {IdClauses.Equals("UniverseId", "universeId")} AND IsDeleted = 0)");
         if (yearFrom  is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom");
         if (yearTo    is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo");
 
@@ -396,9 +403,9 @@ public sealed class SqliteQuoteService : IQuoteService
         p.Add("lang", (string?)null);
         if (dbTypes  is not null) p.Add("dbTypes",  dbTypes);
         if (dbGenres is not null) p.Add("dbGenres", dbGenres);
-        if (character is not null) p.Add("characterLike", $"%{character}%");
-        if (author    is not null) p.Add("authorLike",    $"%{author}%");
-        if (source    is not null) p.Add("sourceLike",    $"%{source}%");
+        if (character is not null) p.Add("characterLike", unicodeAwareSearch ? character : $"%{character}%");
+        if (author    is not null) p.Add("authorLike",    unicodeAwareSearch ? author    : $"%{author}%");
+        if (source    is not null) p.Add("sourceLike",    unicodeAwareSearch ? source    : $"%{source}%");
         if (seriesId  is not null) p.Add("seriesId",   seriesId);
         if (universeId is not null) p.Add("universeId", universeId);
         if (yearFrom  is not null) p.Add("yearFrom", yearFrom);

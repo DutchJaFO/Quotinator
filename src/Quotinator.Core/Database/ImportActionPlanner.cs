@@ -14,7 +14,7 @@ namespace Quotinator.Core.Database;
 
 /// <summary>
 /// Side-effect-free classifier (#154) — computes exactly what an import/seed run would do, as a
-/// list of <see cref="SystemImportAction"/> rows, without writing to any domain table. Used
+/// list of <see cref="ImportActionEntity"/> rows, without writing to any domain table. Used
 /// identically by <c>/import/preview</c>, <c>/import</c>'s staging phase, and the seed flow's own
 /// staging step. Existence-checking for Source/Character/Person is always a natural-key DB lookup
 /// (never a stable-id-based check — see <see cref="EntityIdentity"/>); a not-yet-existing entity's
@@ -26,7 +26,7 @@ namespace Quotinator.Core.Database;
 internal static class ImportActionPlanner
 {
     /// <summary>
-    /// Classifies every row in <paramref name="quotes"/> into <see cref="SystemImportAction"/>
+    /// Classifies every row in <paramref name="quotes"/> into <see cref="ImportActionEntity"/>
     /// rows for the Quote itself and any not-yet-existing Source/Character/Person it references,
     /// then (#68) every not-yet-existing <paramref name="stageDirections"/>/<paramref name="soundCues"/>/
     /// <paramref name="conversations"/> row, in that order — a Conversation's lines reference the
@@ -35,7 +35,7 @@ internal static class ImportActionPlanner
     /// Conversation's own action applies, without needing to defensively re-create them the way
     /// Quote/Character do for Source. Read-only against the database — never writes.
     /// </summary>
-    internal static async Task<IReadOnlyList<SystemImportAction>> PlanAsync(
+    internal static async Task<IReadOnlyList<ImportActionEntity>> PlanAsync(
         SqliteConnection connection, IReadOnlyList<SourceQuote> quotes, Guid batchId,
         DuplicateResolutionPolicy policy, SqliteTransaction? transaction = null,
         IReadOnlyList<SourceEntry>? sources = null,
@@ -49,7 +49,7 @@ internal static class ImportActionPlanner
         ConflictRuleLookup? conflictRules = null,
         SourceAliasLookup? sourceAliases = null)
     {
-        var actions        = new List<SystemImportAction>();
+        var actions        = new List<ImportActionEntity>();
         var sourceIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var characterIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var personIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -230,7 +230,7 @@ internal static class ImportActionPlanner
                 };
                 var addStatus = sourceAliasStale ? ImportActionStatus.Stale : ImportActionStatus.Decided;
 
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchIdStr,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -271,7 +271,7 @@ internal static class ImportActionPlanner
 
             if (CompletenessGuard.ShouldBlock(existing.Value.CompletenessStatus, effectiveChanged))
             {
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId         = batchIdStr,
                     ExistingBatchId = existingBatchId,
@@ -320,7 +320,7 @@ internal static class ImportActionPlanner
                 // of the action's other fields.
                 if (hasStaleRule)
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId         = batchIdStr,
                         ExistingBatchId = existingBatchId,
@@ -366,7 +366,7 @@ internal static class ImportActionPlanner
             var status    = sourceAliasStale ? ImportActionStatus.Stale : isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
             var isUnresolved = isPending || sourceAliasStale;
 
-            actions.Add(new SystemImportAction
+            actions.Add(new ImportActionEntity
             {
                 BatchId         = batchIdStr,
                 ExistingBatchId = existingBatchId,
@@ -397,7 +397,7 @@ internal static class ImportActionPlanner
 
     private static async Task<string> ResolveSourceAsync(
         SqliteConnection connection, SourceQuote q, Dictionary<string, string> index,
-        string batchId, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         var typeStr = q.Type.ToString();
         var key     = $"{q.Source}|{typeStr}";
@@ -421,7 +421,7 @@ internal static class ImportActionPlanner
         var stableId = EntityIdentity.SourceId(q.Source, typeStr);
         index[key] = stableId;
 
-        actions.Add(new SystemImportAction
+        actions.Add(new ImportActionEntity
         {
             BatchId       = batchId,
             ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -437,7 +437,7 @@ internal static class ImportActionPlanner
 
     private static async Task<string?> ResolveCharacterAsync(
         SqliteConnection connection, SourceQuote q, string sourceId, Dictionary<string, string> index,
-        string batchId, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         var sourceTypeStr = q.Type.ToString();
         if (string.IsNullOrWhiteSpace(q.Character)) return null;
@@ -464,7 +464,7 @@ internal static class ImportActionPlanner
         var stableId = EntityIdentity.CharacterId(sourceId, q.Character, sourceTypeStr);
         index[key] = stableId;
 
-        actions.Add(new SystemImportAction
+        actions.Add(new ImportActionEntity
         {
             BatchId       = batchId,
             ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -480,7 +480,7 @@ internal static class ImportActionPlanner
 
     private static async Task<string?> ResolvePersonAsync(
         SqliteConnection connection, SourceQuote q, Dictionary<string, string> index,
-        string batchId, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         if (string.IsNullOrWhiteSpace(q.Author)) return null;
 
@@ -498,7 +498,7 @@ internal static class ImportActionPlanner
         var stableId = EntityIdentity.PersonId(q.Author);
         index[q.Author] = stableId;
 
-        actions.Add(new SystemImportAction
+        actions.Add(new ImportActionEntity
         {
             BatchId       = batchId,
             ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -533,7 +533,7 @@ internal static class ImportActionPlanner
     private static async Task PlanSourcesAsync(
         SqliteConnection connection, IReadOnlyList<SourceEntry> sources, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> sourceIndex,
-        Dictionary<string, string> seriesIndex, List<SystemImportAction> actions, DateTime now,
+        Dictionary<string, string> seriesIndex, List<ImportActionEntity> actions, DateTime now,
         SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
     {
         foreach (var s in sources)
@@ -634,7 +634,7 @@ internal static class ImportActionPlanner
                 var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -652,7 +652,7 @@ internal static class ImportActionPlanner
                 // checked only once we know this action isn't already Blocked.
                 if (hasStaleRule)
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -680,7 +680,7 @@ internal static class ImportActionPlanner
                 var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -767,7 +767,7 @@ internal static class ImportActionPlanner
                 var keyCurrentStatus = keyRow.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(keyCurrentStatus, effectiveChangedFields))
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -784,7 +784,7 @@ internal static class ImportActionPlanner
                 // #153: a stale rule holds the whole action for review, same as Blocked above.
                 if (keyHasStaleRule)
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -812,7 +812,7 @@ internal static class ImportActionPlanner
                 var keyIsPending = policy == DuplicateResolutionPolicy.Review && keyRuleResolved is null;
                 var keyStatus    = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -841,7 +841,7 @@ internal static class ImportActionPlanner
 
             // #190: no existing row to preserve, so ResolveAgainst(null) — an absent property simply
             // resolves to null, matching this project's existing Add-path behaviour exactly.
-            actions.Add(new SystemImportAction
+            actions.Add(new ImportActionEntity
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -885,7 +885,7 @@ internal static class ImportActionPlanner
     private static async Task PlanPeopleAsync(
         SqliteConnection connection, IReadOnlyList<PersonEntry> people, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> personIndex,
-        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var p in people)
         {
@@ -932,7 +932,7 @@ internal static class ImportActionPlanner
                 var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -949,7 +949,7 @@ internal static class ImportActionPlanner
                 var isPending = policy == DuplicateResolutionPolicy.Review;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -977,7 +977,7 @@ internal static class ImportActionPlanner
 
             personIndex[p.Name] = canonicalId;
 
-            actions.Add(new SystemImportAction
+            actions.Add(new ImportActionEntity
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -1001,7 +1001,7 @@ internal static class ImportActionPlanner
 
     private static async Task<string> ResolveOrStageSourceIdAsync(
         SqliteConnection connection, string title, string typeStr, Dictionary<string, string> sourceIndex,
-        string batchId, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         var key = $"{title}|{typeStr}";
         if (sourceIndex.TryGetValue(key, out var indexed)) return indexed;
@@ -1017,7 +1017,7 @@ internal static class ImportActionPlanner
         var stableId = EntityIdentity.SourceId(title, typeStr);
         sourceIndex[key] = stableId;
 
-        actions.Add(new SystemImportAction
+        actions.Add(new ImportActionEntity
         {
             BatchId       = batchId,
             ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -1034,7 +1034,7 @@ internal static class ImportActionPlanner
     private static async Task PlanCharactersAsync(
         SqliteConnection connection, IReadOnlyList<CharacterEntry> characters, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> sourceIndex,
-        Dictionary<string, string> characterIndex, List<SystemImportAction> actions, DateTime now,
+        Dictionary<string, string> characterIndex, List<ImportActionEntity> actions, DateTime now,
         SqliteTransaction? transaction)
     {
         foreach (var c in characters)
@@ -1089,7 +1089,7 @@ internal static class ImportActionPlanner
                 var stableId = canonicalId ?? EntityIdentity.CharacterId(resolvedSourceId, c.Name, sourceTypeStr);
                 characterIndex[$"{resolvedSourceId}|{c.Name}"] = stableId;
 
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -1136,7 +1136,7 @@ internal static class ImportActionPlanner
             var currentStatus = row2.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
             if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
             {
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1153,7 +1153,7 @@ internal static class ImportActionPlanner
             var isPending = policy == DuplicateResolutionPolicy.Review;
             var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
-            actions.Add(new SystemImportAction
+            actions.Add(new ImportActionEntity
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1184,7 +1184,7 @@ internal static class ImportActionPlanner
     private static async Task PlanUniverseAsync(
         SqliteConnection connection, IReadOnlyList<UniverseEntry> universes, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> universeIndex,
-        List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction,
+        List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction,
         ConflictRuleLookup? conflictRules = null)
     {
         foreach (var u in universes)
@@ -1247,7 +1247,7 @@ internal static class ImportActionPlanner
                 var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1264,7 +1264,7 @@ internal static class ImportActionPlanner
                 // #153: a stale rule holds the whole action for review, same as Blocked above.
                 if (hasStaleRule)
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1292,7 +1292,7 @@ internal static class ImportActionPlanner
                 var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1320,7 +1320,7 @@ internal static class ImportActionPlanner
             var stableId = canonicalId ?? EntityIdentity.UniverseId(u.Name);
             universeIndex[u.Name] = stableId;
 
-            actions.Add(new SystemImportAction
+            actions.Add(new ImportActionEntity
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -1343,7 +1343,7 @@ internal static class ImportActionPlanner
     private static async Task PlanSeriesAsync(
         SqliteConnection connection, IReadOnlyList<SeriesEntry> series, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> universeIndex,
-        Dictionary<string, string> seriesIndex, List<SystemImportAction> actions, DateTime now,
+        Dictionary<string, string> seriesIndex, List<ImportActionEntity> actions, DateTime now,
         SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
     {
         foreach (var s in series)
@@ -1424,7 +1424,7 @@ internal static class ImportActionPlanner
                 var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1441,7 +1441,7 @@ internal static class ImportActionPlanner
                 // #153: a stale rule holds the whole action for review, same as Blocked above.
                 if (hasStaleRule)
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1475,7 +1475,7 @@ internal static class ImportActionPlanner
                 var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1504,7 +1504,7 @@ internal static class ImportActionPlanner
             var stableId   = canonicalId ?? EntityIdentity.SeriesId(s.Name);
             seriesIndex[s.Name] = stableId;
 
-            actions.Add(new SystemImportAction
+            actions.Add(new ImportActionEntity
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -1524,7 +1524,7 @@ internal static class ImportActionPlanner
 
     private static async Task PlanStageDirectionsAsync(
         SqliteConnection connection, IReadOnlyList<SourceStageDirection> stageDirections, string batchId,
-        DuplicateResolutionPolicy policy, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        DuplicateResolutionPolicy policy, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var sd in stageDirections)
         {
@@ -1568,7 +1568,7 @@ internal static class ImportActionPlanner
                 var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1585,7 +1585,7 @@ internal static class ImportActionPlanner
                 var isPending = policy == DuplicateResolutionPolicy.Review;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1601,7 +1601,7 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            actions.Add(new SystemImportAction
+            actions.Add(new ImportActionEntity
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -1616,7 +1616,7 @@ internal static class ImportActionPlanner
 
     private static async Task PlanSoundCuesAsync(
         SqliteConnection connection, IReadOnlyList<SourceSoundCue> soundCues, string batchId,
-        DuplicateResolutionPolicy policy, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        DuplicateResolutionPolicy policy, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var sc in soundCues)
         {
@@ -1661,7 +1661,7 @@ internal static class ImportActionPlanner
                 var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1678,7 +1678,7 @@ internal static class ImportActionPlanner
                 var isPending = policy == DuplicateResolutionPolicy.Review;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1694,7 +1694,7 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            actions.Add(new SystemImportAction
+            actions.Add(new ImportActionEntity
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -1719,7 +1719,7 @@ internal static class ImportActionPlanner
 
     private static async Task PlanConversationsAsync(
         SqliteConnection connection, IReadOnlyList<SourceConversation> conversations, string batchId,
-        DuplicateResolutionPolicy policy, List<SystemImportAction> actions, DateTime now, SqliteTransaction? transaction)
+        DuplicateResolutionPolicy policy, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         foreach (var c in conversations)
         {
@@ -1764,7 +1764,7 @@ internal static class ImportActionPlanner
                 var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
-                    actions.Add(new SystemImportAction
+                    actions.Add(new ImportActionEntity
                     {
                         BatchId       = batchId,
                         ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1781,7 +1781,7 @@ internal static class ImportActionPlanner
                 var isPending = policy == DuplicateResolutionPolicy.Review;
                 var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
-                actions.Add(new SystemImportAction
+                actions.Add(new ImportActionEntity
                 {
                     BatchId       = batchId,
                     ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
@@ -1812,7 +1812,7 @@ internal static class ImportActionPlanner
                     l.SoundCueId is { } scRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(scRaw, out var scCanonical) ? scCanonical : l.SoundCueId))
                 .ToList();
 
-            actions.Add(new SystemImportAction
+            actions.Add(new ImportActionEntity
             {
                 BatchId       = batchId,
                 ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
@@ -1826,7 +1826,7 @@ internal static class ImportActionPlanner
     }
 }
 
-/// <summary>Staged payload for a Quote Add/Modify <see cref="SystemImportAction"/> — the 8 mergeable fields plus the resolved Source/Character/Person ids the applier needs, so it never depends on those actions having run first.</summary>
+/// <summary>Staged payload for a Quote Add/Modify <see cref="ImportActionEntity"/> — the 8 mergeable fields plus the resolved Source/Character/Person ids the applier needs, so it never depends on those actions having run first.</summary>
 internal sealed class QuoteActionPayload
 {
     /// <summary>The quote's mergeable field values.</summary>
@@ -1842,17 +1842,17 @@ internal sealed class QuoteActionPayload
     public string? PersonId { get; init; }
 }
 
-/// <summary>Staged payload for a Source Add/Modify <see cref="SystemImportAction"/> (#162 adds <see cref="Date"/>; #180 adds <see cref="SeriesId"/> — a resolved id, not the file's own <c>seriesName</c> text).</summary>
+/// <summary>Staged payload for a Source Add/Modify <see cref="ImportActionEntity"/> (#162 adds <see cref="Date"/>; #180 adds <see cref="SeriesId"/> — a resolved id, not the file's own <c>seriesName</c> text).</summary>
 internal sealed record SourceActionPayload(string Title, string Type, string? Date = null, string? SeriesId = null);
 
-/// <summary>Staged payload for a Series Add <see cref="SystemImportAction"/> (#180). <see cref="UniverseId"/> is a resolved id, not the file's own <c>universeName</c> text.</summary>
+/// <summary>Staged payload for a Series Add <see cref="ImportActionEntity"/> (#180). <see cref="UniverseId"/> is a resolved id, not the file's own <c>universeName</c> text.</summary>
 internal sealed record SeriesActionPayload(string Name, string? UniverseId = null, string? UniverseName = null);
 
-/// <summary>Staged payload for a Universe Add <see cref="SystemImportAction"/> (#180).</summary>
+/// <summary>Staged payload for a Universe Add <see cref="ImportActionEntity"/> (#180).</summary>
 internal sealed record UniverseActionPayload(string Name);
 
 /// <summary>
-/// Staged payload for a Character Add <see cref="SystemImportAction"/>. Carries the owning Source's
+/// Staged payload for a Character Add <see cref="ImportActionEntity"/>. Carries the owning Source's
 /// own title/type (denormalized, not just its id) so the applier can defensively ensure the Source
 /// row exists before inserting the Character — <c>System_ImportActions</c> rows apply in whatever
 /// order the coordinator returns them (no cross-entity-type ordering guarantee), and
@@ -1865,14 +1865,14 @@ internal sealed record UniverseActionPayload(string Name);
 /// </summary>
 internal sealed record CharacterActionPayload(string SourceId, string Name, string SourceTitle, string SourceType);
 
-/// <summary>Staged payload for a Person Add <see cref="SystemImportAction"/>.</summary>
+/// <summary>Staged payload for a Person Add <see cref="ImportActionEntity"/>.</summary>
 internal sealed record PersonActionPayload(string Name, string? DateOfBirth = null, string? DateOfDeath = null);
 
-/// <summary>Staged payload for a StageDirection Add <see cref="SystemImportAction"/> (#68).</summary>
+/// <summary>Staged payload for a StageDirection Add <see cref="ImportActionEntity"/> (#68).</summary>
 internal sealed record StageDirectionActionPayload(
     string Text, string? ImageUrl, IReadOnlyDictionary<string, SourceStageDirectionTranslation> Translations);
 
-/// <summary>Staged payload for a SoundCue Add <see cref="SystemImportAction"/> (#68).</summary>
+/// <summary>Staged payload for a SoundCue Add <see cref="ImportActionEntity"/> (#68).</summary>
 internal sealed record SoundCueActionPayload(
     string Text, string? SoundFileUrl, string? ImageUrl, IReadOnlyDictionary<string, SourceSoundCueTranslation> Translations);
 
@@ -1880,5 +1880,5 @@ internal sealed record SoundCueActionPayload(
 internal sealed record ConversationLinePayload(
     int Order, ConversationLineType Type, string? QuoteId, string? StageDirectionId, string? SoundCueId);
 
-/// <summary>Staged payload for a Conversation Add <see cref="SystemImportAction"/> (#68) — carries its full ordered line list, not staged as separate actions (see <see cref="ImportActionPlanner.PlanAsync"/>'s remark).</summary>
+/// <summary>Staged payload for a Conversation Add <see cref="ImportActionEntity"/> (#68) — carries its full ordered line list, not staged as separate actions (see <see cref="ImportActionPlanner.PlanAsync"/>'s remark).</summary>
 internal sealed record ConversationActionPayload(string? Description, IReadOnlyList<ConversationLinePayload> Lines);

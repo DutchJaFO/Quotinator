@@ -34,7 +34,7 @@ public class SqliteRestorableRepositoryTests
             );
             """);
 
-        _repository = new SqliteRestorableRepository<Widget>(new SqliteConnectionFactory(_dbPath), NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        _repository = new SqliteRestorableRepository<Widget>(new SqliteConnectionFactory(_dbPath), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
     }
 
     [TestCleanup]

@@ -81,15 +81,23 @@ internal static class Sql
         // dynamically so that new tables added in future migrations are dropped without requiring
         // a manual update here. FK checks must be off before dropping the results
         // (PRAGMA foreign_keys = OFF).
-        // A "system table" is any table whose name starts with a literal System_ prefix — this
-        // query never needs to know specific names, so a consuming project can add its own
-        // protected tables (e.g. a DB-backed enum-like lookup) with zero changes here. The
-        // underscore must be escaped: SQL LIKE treats '_' as a single-character wildcard, so an
-        // unescaped 'System_%' would also match an unrelated table like SystemInventory. The
-        // ESCAPE clause makes '\_' match a literal underscore only, so SystemInventory (no
-        // underscore) is correctly NOT treated as protected.
+        // A "system table" is any table whose name starts with a literal Import_/Audit_/System_
+        // prefix (ADR 015) — this query never needs to know specific names, so a consuming project
+        // can add its own protected tables (e.g. a DB-backed enum-like lookup) with zero changes
+        // here. Import_Batch belongs in this protected set too: ADR 014 already distinguishes
+        // "provenance" (where a row's content came from — Import_Batch) from "domain content" as two
+        // separate concepts, and a Reset dropping it — while never replaying Quotinator.Data's own
+        // migrations that create it (see DropAndRebuildAsync's own remarks) — would leave it
+        // permanently missing, not recreated on the next InitialiseAsync call. Its own dangling
+        // references after a Reset are tolerated exactly like the four ADR-014 audit-trail tables'.
+        // Each underscore must be escaped: SQL LIKE treats '_' as a single-character wildcard, so an
+        // unescaped 'System_%' would also match an unrelated table like SystemInventory. The ESCAPE
+        // clause makes '\_' match a literal underscore only, so SystemInventory (no underscore) is
+        // correctly NOT treated as protected.
         internal const string GetUserTables =
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' " +
+            "AND name NOT LIKE 'Import\\_%' ESCAPE '\\' " +
+            "AND name NOT LIKE 'Audit\\_%' ESCAPE '\\' " +
             "AND name NOT LIKE 'System\\_%' ESCAPE '\\';";
     }
 
@@ -123,10 +131,11 @@ internal static class Sql
     }
 
     /// <summary>
-    /// ImportBatches table. Never interacts with a consumer-defined entity — pure import/seed
-    /// bookkeeping (which batch, when, by what policy, how many records, current lifecycle status),
-    /// the same category as <c>SeedBatch</c>/<c>ManifestPolicy</c> (see ADR 004's
-    /// consumer-entity-interaction test, issue #158).
+    /// Import_Batch table (formerly ImportBatches — #253/ADR 015). Never interacts with a
+    /// consumer-defined entity — pure import/seed bookkeeping (which batch, when, by what policy,
+    /// how many records, current lifecycle status), the same category as
+    /// <c>SeedBatch</c>/<c>ManifestPolicy</c> (see ADR 004's consumer-entity-interaction test, issue
+    /// #158).
     /// </summary>
     internal static class ImportBatches
     {
@@ -137,7 +146,7 @@ internal static class Sql
         // IdClauses.SelectColumn. Not a const because this involves reflection + method calls, evaluated
         // once per process (ReflectedColumnMetadata caches per-Type internally).
         private static readonly string SelectColumns =
-            Repositories.RepositorySql.BuildSelectColumns(Repositories.ReflectedColumnMetadata.For(typeof(Entities.ImportBatch)));
+            Repositories.RepositorySql.BuildSelectColumns(Repositories.ReflectedColumnMetadata.For(typeof(Entities.ImportBatchEntity)));
 
         // ImportedAt has only whole-second precision, so two batches created within the same second
         // (routine in tests, and possible in fast-successive real API calls) tie under ORDER BY
@@ -145,32 +154,32 @@ internal static class Sql
         // the tie deterministically in insertion order (a consumer's own strict batch-undo stack may
         // rely on this ordering being exact, not just "usually right" — found via a genuinely red test).
         internal static readonly string SelectAll =
-            $"SELECT {SelectColumns} FROM ImportBatches WHERE IsDeleted = 0 ORDER BY ImportedAt DESC, ROWID DESC;";
+            $"SELECT {SelectColumns} FROM Import_Batch WHERE IsDeleted = 0 ORDER BY ImportedAt DESC, ROWID DESC;";
 
         internal static readonly string SelectByType =
-            $"SELECT {SelectColumns} FROM ImportBatches WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC, ROWID DESC;";
+            $"SELECT {SelectColumns} FROM Import_Batch WHERE IsDeleted = 0 AND Type = @type ORDER BY ImportedAt DESC, ROWID DESC;";
 
         // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
         internal static readonly string UpdateRecordCount =
-            $"UPDATE ImportBatches SET RecordCount = @count, DateModified = @now WHERE {IdClauses.Equals("Id", "id")};";
+            $"UPDATE Import_Batch SET RecordCount = @count, DateModified = @now WHERE {IdClauses.Equals("Id", "id")};";
 
-        internal const string DeleteAll = "DELETE FROM ImportBatches;";
+        internal const string DeleteAll = "DELETE FROM Import_Batch;";
     }
 
-    /// <summary>System_AuditEntries table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.SystemAuditWriter"/>.</summary>
+    /// <summary>Audit_Entry table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.AuditEntryWriter"/>.</summary>
     internal static class SystemAudit
     {
         /// <summary>Removes all audit entries.</summary>
-        internal const string DeleteAll     = "DELETE FROM System_AuditEntries;";
+        internal const string DeleteAll     = "DELETE FROM Audit_Entry;";
 
         /// <summary>Removes audit entries for a specific table name. Case-insensitive (#216) — a
         /// lowercase <c>?table=</c> (the natural spelling given this endpoint's own JSON casing
         /// conventions) previously matched nothing and silently deleted zero rows, looking like
         /// success while doing nothing.</summary>
-        internal static readonly string DeleteByTable = $"DELETE FROM System_AuditEntries WHERE {TextClauses.Equals("TableName", "table")};";
+        internal static readonly string DeleteByTable = $"DELETE FROM Audit_Entry WHERE {TextClauses.Equals("TableName", "table")};";
 
         // COUNT base — shared by CountPaged factory method below.
-        private const string CountPagedBase = "SELECT COUNT(*) FROM System_AuditEntries";
+        private const string CountPagedBase = "SELECT COUNT(*) FROM Audit_Entry";
 
         /// <summary>
         /// Paginated audit entry listing, newest first, with optional filters. Every id column
@@ -179,7 +188,7 @@ internal static class Sql
         /// still renders consistently, without needing a data migration to re-case already-stored rows.
         /// </summary>
         internal static string SelectPaged(bool filterTable, bool filterRecordId)
-            => $"SELECT {IdClauses.SelectColumn("Id")}, TableName, {IdClauses.SelectColumn("RecordId")}, Operation, Agent, PerformedAt FROM System_AuditEntries" +
+            => $"SELECT {IdClauses.SelectColumn("Id")}, TableName, {IdClauses.SelectColumn("RecordId")}, Operation, Agent, PerformedAt FROM Audit_Entry" +
                BuildWhere(filterTable, filterRecordId) +
                " ORDER BY PerformedAt DESC LIMIT @pageSize OFFSET @offset;";
 
@@ -201,14 +210,14 @@ internal static class Sql
         }
     }
 
-    /// <summary>System_ImportActions table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.SystemImportActionWriter"/>.</summary>
+    /// <summary>Import_Action table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.ImportActionWriter"/>.</summary>
     internal static class SystemImportActions
     {
         /// <summary>Removes all import-action rows.</summary>
-        internal const string DeleteAll = "DELETE FROM System_ImportActions;";
+        internal const string DeleteAll = "DELETE FROM Import_Action;";
 
         // COUNT base — shared by CountPaged factory method below.
-        private const string CountPagedBase = "SELECT COUNT(*) FROM System_ImportActions";
+        private const string CountPagedBase = "SELECT COUNT(*) FROM Import_Action";
 
         // Column list shared by every SELECT below. Every id column (Id/BatchId/EntityId/
         // ExistingBatchId) is read through LOWER(...) — PK and FK alike, regardless of what C# type
@@ -220,7 +229,7 @@ internal static class Sql
 
         /// <summary>Paginated action listing, newest first, with optional filters.</summary>
         internal static string SelectPaged(bool filterBatchId, bool filterStatus, bool filterEntityType = false)
-            => $"SELECT {SelectColumns} FROM System_ImportActions" +
+            => $"SELECT {SelectColumns} FROM Import_Action" +
                BuildWhere(filterBatchId, filterStatus, filterEntityType) +
                " ORDER BY DetectedAt DESC LIMIT @pageSize OFFSET @offset;";
 
@@ -233,11 +242,11 @@ internal static class Sql
         /// (#210) — found live during the IdClauses refactor: this was declared as a property, not a
         /// field, which meant it silently evaded every guard test's reflection-based enumeration
         /// (both scanned only <c>GetFields</c>) despite being a real, reachable comparison via
-        /// <see cref="Repositories.SystemImportActionReader.GetByIdAsync"/>. Fixed here, and the
+        /// <see cref="Repositories.ImportActionReader"/>'s own <c>GetByIdAsync</c>. Fixed here, and the
         /// guard tests' reflection was widened to scan properties too so this class of gap can't
         /// recur — see <c>EnumerateSqlConstants</c> in both <c>SqlQueryGuardTests</c> files.
         /// </summary>
-        internal static string SelectById => $"SELECT {SelectColumns} FROM System_ImportActions WHERE {IdClauses.Equals("Id", "id")};";
+        internal static string SelectById => $"SELECT {SelectColumns} FROM Import_Action WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>
         /// Every action sharing a BatchId, any status — #154's apply-batch readiness check needs the
@@ -246,14 +255,14 @@ internal static class Sql
         /// (ADR 012, <see cref="Helpers.GuidExtensions.ToCanonicalId"/>) — a caller round-tripping the
         /// batch id straight from a response should still match regardless of casing.
         /// <c>ORDER BY rowid</c> makes the result deterministic and matches insertion order — the
-        /// same reasoning as <see cref="Repositories.SystemImportActionWriter"/>'s sequential writes,
+        /// same reasoning as <see cref="Repositories.ImportActionWriter"/>'s sequential writes,
         /// and load-bearing for a consumer whose <c>applyResolvedAction</c> callback (called once per
         /// action, in whatever order this query returns) may need one action's row to already exist
         /// when a later action in the same batch defensively references it. Relying on insertion order
         /// here is only safe because <c>WriteManyAsync</c> inserts sequentially, in the exact order a
         /// consumer's planner produced — never reordered, never bulk/set-based.
         /// </summary>
-        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM System_ImportActions WHERE {IdClauses.Equals("BatchId", "batchId")} ORDER BY rowid ASC;";
+        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM Import_Action WHERE {IdClauses.Equals("BatchId", "batchId")} ORDER BY rowid ASC;";
 
         /// <summary>
         /// Stages a per-field decision (#154) — Status→Decided, MergedFields holds the decision
@@ -267,19 +276,19 @@ internal static class Sql
         /// </summary>
         // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
         internal static readonly string MarkDecided =
-            $"UPDATE System_ImportActions SET Status = @status, MergedFields = @mergedFields, MarkCompletenessAs = @markCompletenessAs, OriginalDecision = @originalDecision, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+            $"UPDATE Import_Action SET Status = @status, MergedFields = @mergedFields, MarkCompletenessAs = @markCompletenessAs, OriginalDecision = @originalDecision, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>Reverts a staged decision back to Pending (#154's undo-before-apply) — clears MergedFields. Case-insensitive — see <see cref="MarkDecided"/>.</summary>
         internal static readonly string ClearDecision =
-            $"UPDATE System_ImportActions SET Status = @status, MergedFields = NULL, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+            $"UPDATE Import_Action SET Status = @status, MergedFields = NULL, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>Marks an action applied once its batch has been applied (#154) — AppliedAt set. Case-insensitive — see <see cref="MarkDecided"/>.</summary>
         internal static readonly string MarkApplied =
-            $"UPDATE System_ImportActions SET Status = @status, AppliedAt = @appliedAt, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+            $"UPDATE Import_Action SET Status = @status, AppliedAt = @appliedAt, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>Marks every action sharing a BatchId discarded in one statement (#154) — DiscardedAt set. Case-insensitive — see <see cref="SelectAllForBatch"/>.</summary>
         internal static readonly string MarkBatchDiscarded =
-            $"UPDATE System_ImportActions SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE {IdClauses.Equals("BatchId", "batchId")};";
+            $"UPDATE Import_Action SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE {IdClauses.Equals("BatchId", "batchId")};";
 
         /// <summary>
         /// Case-insensitive on every filter — see <see cref="SelectAllForBatch"/>'s remark for why
@@ -297,11 +306,11 @@ internal static class Sql
         }
     }
 
-    /// <summary>System_ChangeLog table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.SystemChangeLogWriter"/>.</summary>
+    /// <summary>Audit_Change table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.ChangeWriter"/>.</summary>
     internal static class SystemChangeLog
     {
         /// <summary>Removes all change-log rows.</summary>
-        internal const string DeleteAll = "DELETE FROM System_ChangeLog;";
+        internal const string DeleteAll = "DELETE FROM Audit_Change;";
 
         /// <summary>
         /// Every change-log entry for a single entity, newest first. <c>EntityId</c> comparison is
@@ -312,18 +321,18 @@ internal static class Sql
         /// mechanism as <c>Sql.SystemAudit.SelectPaged</c>/<c>Sql.SystemImportActions.SelectColumns</c>
         /// (ADR 012). <c>InitiatedById</c> is deliberately NOT wrapped: unlike <c>EntityId</c>, which is
         /// always an id, <c>InitiatedById</c> is polymorphic (an import batch UUID, an HTTP route, or an
-        /// enrichment provider name — see <see cref="Entities.SystemChangeLog.InitiatedById"/>), and
+        /// enrichment provider name — see <see cref="Entities.ChangeEntity.InitiatedById"/>), and
         /// forcing it lowercase would corrupt meaningful casing in the non-id cases. <c>EntityType</c>
         /// is case-insensitive too (#216) — same class of gap as <c>EntityId</c> on this very query,
         /// found during a comprehensive audit before any endpoint ever exposed this reader.
         /// </summary>
         internal static readonly string SelectByEntity =
             $"SELECT {IdClauses.SelectColumn("Id")}, EntityType, {IdClauses.SelectColumn("EntityId")}, InitiatedByType, InitiatedById, Action, Field, OldValue, NewValue, OccurredAt " +
-            $"FROM System_ChangeLog WHERE {TextClauses.Equals("EntityType", "entityType")} AND {IdClauses.Equals("EntityId", "entityId")} ORDER BY OccurredAt DESC;";
+            $"FROM Audit_Change WHERE {TextClauses.Equals("EntityType", "entityType")} AND {IdClauses.Equals("EntityId", "entityId")} ORDER BY OccurredAt DESC;";
     }
 
     /// <summary>
-    /// System_SourceFileOverrides table (#153). INSERT/UPDATE are handled by Dapper.Contrib via
+    /// Import_SourceFileOverride table (#153). INSERT/UPDATE are handled by Dapper.Contrib via
     /// <see cref="Repositories.SourceFileOverrideRegistry"/>; only the lookup needs hand-written SQL.
     /// </summary>
     internal static class SystemSourceFileOverrides
@@ -335,6 +344,6 @@ internal static class Sql
         /// </summary>
         internal static readonly string SelectByFileNameAndOrigin =
             $"SELECT {IdClauses.SelectColumn("Id")}, FileName, Origin, ContentHash, {IdClauses.SelectColumn("SourceBatchId")}, DateCreated, DateModified, DateDeleted, IsDeleted " +
-            $"FROM System_SourceFileOverrides WHERE {TextClauses.Equals("FileName", "fileName")} AND {TextClauses.Equals("Origin", "origin")} AND IsDeleted = 0;";
+            $"FROM Import_SourceFileOverride WHERE {TextClauses.Equals("FileName", "fileName")} AND {TextClauses.Equals("Origin", "origin")} AND IsDeleted = 0;";
     }
 }

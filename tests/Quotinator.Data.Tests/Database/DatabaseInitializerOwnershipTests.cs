@@ -28,7 +28,7 @@ public class DatabaseInitializerOwnershipTests
             BackupsPath = Path.Combine(Path.GetDirectoryName(dbPath)!, "backups"),
         };
         return new DatabaseInitializer(factory, options, consumerMigrations,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance,
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
             NullLogger<DatabaseInitializer>.Instance, baseline);
     }
 
@@ -58,7 +58,7 @@ public class DatabaseInitializerOwnershipTests
 
     /// <summary>
     /// Quotinator.Data's own baseline fragment (<c>DataBaselineSql</c>) must produce the exact same
-    /// <c>System_AuditEntries</c> schema as replaying Quotinator.Data's own numbered migrations
+    /// <c>Audit_Entry</c> schema as replaying Quotinator.Data's own numbered migrations
     /// (<c>DataOwnedMigrations</c>) incrementally. This is what actually enforces "Data's own
     /// scripts stay in sync with each other," independent of whatever consumer exists — exercised
     /// here with zero consumer migrations and a no-op consumer baseline.
@@ -79,16 +79,16 @@ public class DatabaseInitializerOwnershipTests
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "System_AuditEntries");
-        var schemaB = await DumpTableSchemaAsync(connB, "System_AuditEntries");
+        var schemaA = await DumpTableSchemaAsync(connA, "Audit_Entry");
+        var schemaB = await DumpTableSchemaAsync(connB, "Audit_Entry");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "System_AuditEntries schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "Audit_Entry schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
     /// <summary>
     /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
-    /// for <c>System_ImportConflicts</c> (added by #64's Data-owned migration 3, retrofitted onto
+    /// for <c>Import_Conflict</c> (added by #64's Data-owned migration 3, retrofitted onto
     /// <c>RecordBase</c> by migration 6, and given <c>ExistingBatchId</c> by migration 7 for #149).
     /// </summary>
     [TestMethod]
@@ -107,16 +107,16 @@ public class DatabaseInitializerOwnershipTests
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "System_ImportConflicts");
-        var schemaB = await DumpTableSchemaAsync(connB, "System_ImportConflicts");
+        var schemaA = await DumpTableSchemaAsync(connA, "Import_Conflict");
+        var schemaB = await DumpTableSchemaAsync(connB, "Import_Conflict");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "System_ImportConflicts schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "Import_Conflict schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
     /// <summary>
     /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
-    /// for <c>System_ChangeLog</c> (added by #56's Data-owned migration 4).
+    /// for <c>Audit_Change</c> (added by #56's Data-owned migration 4).
     /// </summary>
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemChangeLogSchema()
@@ -134,16 +134,16 @@ public class DatabaseInitializerOwnershipTests
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "System_ChangeLog");
-        var schemaB = await DumpTableSchemaAsync(connB, "System_ChangeLog");
+        var schemaA = await DumpTableSchemaAsync(connA, "Audit_Change");
+        var schemaB = await DumpTableSchemaAsync(connB, "Audit_Change");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "System_ChangeLog schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "Audit_Change schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
     /// <summary>
     /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
-    /// for <c>System_ImportActions</c> (added by #154's Data-owned migration 8, widened by #165's
+    /// for <c>Import_Action</c> (added by #154's Data-owned migration 8, widened by #165's
     /// migration 10 to add <c>Blocked</c>/<c>MarkCompletenessAs</c>).
     /// </summary>
     [TestMethod]
@@ -162,14 +162,14 @@ public class DatabaseInitializerOwnershipTests
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "System_ImportActions");
-        var schemaB = await DumpTableSchemaAsync(connB, "System_ImportActions");
+        var schemaA = await DumpTableSchemaAsync(connA, "Import_Action");
+        var schemaB = await DumpTableSchemaAsync(connB, "Import_Action");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "System_ImportActions schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "Import_Action schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
-    /// <summary>Same drift check as above, for <c>System_SourceFileOverrides</c> (#153).</summary>
+    /// <summary>Same drift check as above, for <c>Import_SourceFileOverride</c> (#153).</summary>
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemSourceFileOverridesSchema()
     {
@@ -186,16 +186,16 @@ public class DatabaseInitializerOwnershipTests
         using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "System_SourceFileOverrides");
-        var schemaB = await DumpTableSchemaAsync(connB, "System_SourceFileOverrides");
+        var schemaA = await DumpTableSchemaAsync(connA, "Import_SourceFileOverride");
+        var schemaB = await DumpTableSchemaAsync(connB, "Import_SourceFileOverride");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "System_SourceFileOverrides schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "Import_SourceFileOverride schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
     /// <summary>
     /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural round-trip
-    /// closes that gap for <c>System_SourceFileOverrides.Origin</c>'s enum values.
+    /// closes that gap for <c>Import_SourceFileOverride.Origin</c>'s enum values.
     /// </summary>
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameSourceFileOverridesCheckConstraintValues()
@@ -218,12 +218,12 @@ public class DatabaseInitializerOwnershipTests
             var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
-                "INSERT INTO System_SourceFileOverrides (Id, FileName, Origin, ContentHash, DateCreated) " +
+                "INSERT INTO Import_SourceFileOverride (Id, FileName, Origin, ContentHash, DateCreated) " +
                 "VALUES (@id, 'vilaboim-conflict-rules.json', 'Bundled', 'abc123', @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO System_SourceFileOverrides (Id, FileName, Origin, ContentHash, DateCreated) " +
+                "INSERT INTO Import_SourceFileOverride (Id, FileName, Origin, ContentHash, DateCreated) " +
                 "VALUES (@id, 'x.json', 'NotARealOrigin', 'abc123', @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
         }
@@ -231,7 +231,7 @@ public class DatabaseInitializerOwnershipTests
 
     /// <summary>
     /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural
-    /// round-trip closes that gap for <c>System_ImportActions.Status</c>'s <c>Blocked</c> value,
+    /// round-trip closes that gap for <c>Import_Action.Status</c>'s <c>Blocked</c> value,
     /// <c>MarkCompletenessAs</c>'s constraint, and (#150, ADR 008) <c>AppliedPolicy</c>'s constraint,
     /// for both the baseline and incremental paths.
     /// </summary>
@@ -257,35 +257,35 @@ public class DatabaseInitializerOwnershipTests
             var id  = Guid.NewGuid().ToString();
 
             await conn.ExecuteAsync(
-                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, AppliedPolicy, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
+                "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, AppliedPolicy, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'NewestWins', 'Blocked', 'Complete', @now, @now);",
                 new { id, now });
 
             // #153: Stale must be accepted identically by both paths too — migration 12 widened the
             // CHECK constraint the same way migration 10 widened it for Blocked.
             await conn.ExecuteAsync(
-                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
+                "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Stale', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             // AppliedPolicy is nullable — a Pending/Blocked action has no policy decided yet.
             await conn.ExecuteAsync(
-                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
+                "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Pending', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
+                "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'NotARealStatus', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
+                "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Pending', 'NotARealCompletenessValue', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO System_ImportActions (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, AppliedPolicy, Status, DetectedAt, DateCreated) " +
+                "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, AppliedPolicy, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'NotARealPolicy', 'Pending', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
         }
@@ -293,7 +293,7 @@ public class DatabaseInitializerOwnershipTests
 
     /// <summary>
     /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural
-    /// round-trip closes that gap for <c>System_ImportConflicts.AppliedPolicy</c>'s constraint
+    /// round-trip closes that gap for <c>Import_Conflict.AppliedPolicy</c>'s constraint
     /// (#150, ADR 008), for both the baseline and incremental paths.
     /// </summary>
     [TestMethod]
@@ -317,18 +317,18 @@ public class DatabaseInitializerOwnershipTests
             var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
-                "INSERT INTO System_ImportConflicts (Id, BatchId, EntityType, AppliedPolicy, Status, DetectedAt, DateCreated) " +
+                "INSERT INTO Import_Conflict (Id, BatchId, EntityType, AppliedPolicy, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Quote', 'MergeTheirs', 'Resolved', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             // AppliedPolicy is nullable — a still-Pending conflict has no policy applied yet.
             await conn.ExecuteAsync(
-                "INSERT INTO System_ImportConflicts (Id, BatchId, EntityType, Status, DetectedAt, DateCreated) " +
+                "INSERT INTO Import_Conflict (Id, BatchId, EntityType, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Quote', 'Pending', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO System_ImportConflicts (Id, BatchId, EntityType, AppliedPolicy, Status, DetectedAt, DateCreated) " +
+                "INSERT INTO Import_Conflict (Id, BatchId, EntityType, AppliedPolicy, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Quote', 'NotARealPolicy', 'Resolved', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
         }
@@ -361,17 +361,17 @@ public class DatabaseInitializerOwnershipTests
             var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
-                "INSERT INTO System_ChangeLog (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
+                "INSERT INTO Audit_Change (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
                 "VALUES (@id, 'quote', @id, 'Seed', 'Created', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO System_ChangeLog (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
+                "INSERT INTO Audit_Change (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
                 "VALUES (@id, 'quote', @id, 'NotARealInitiator', 'Created', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO System_ChangeLog (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
+                "INSERT INTO Audit_Change (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
                 "VALUES (@id, 'quote', @id, 'Seed', 'NotARealAction', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
         }
@@ -390,9 +390,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync(TestContext.CancellationToken);
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(4, dataRows,
+        Assert.AreEqual(5, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(4, db.DataSchemaVersion);
+        Assert.AreEqual(5, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────
@@ -400,7 +400,7 @@ public class DatabaseInitializerOwnershipTests
     /// <summary>
     /// Direct proof that Quotinator.Data's own migrations always apply before any consumer-supplied
     /// migration: a custom single-entry "consumer" migration list whose SQL would fail with "no such
-    /// table" if it ran before Data's own migration 1 (which creates <c>System_AuditEntries</c>) had
+    /// table" if it ran before Data's own migration 1 (which creates <c>Audit_Entry</c>) had
     /// a chance to run.
     /// </summary>
     [TestMethod]
@@ -412,23 +412,23 @@ public class DatabaseInitializerOwnershipTests
             new SchemaMigration
             {
                 Version = 1,
-                Sql = "INSERT INTO System_AuditEntries (Id, TableName, Operation, PerformedAt, DateCreated) " +
+                Sql = "INSERT INTO Audit_Entry (Id, TableName, Operation, PerformedAt, DateCreated) " +
                       "VALUES (lower(hex(randomblob(16))), 'Probe', 'Inserted', '2026-01-01 00:00:00', '2026-01-01 00:00:00');",
             },
         ];
         var db = CreateBareInitializer(temp.DbPath, consumerMigrations);
 
-        // No exception means the consumer migration's INSERT succeeded — proving System_AuditEntries
+        // No exception means the consumer migration's INSERT succeeded — proving Audit_Entry
         // (created by Data's own migration 1) already existed by the time the consumer migration ran.
         await db.InitialiseAsync();
 
         using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         var probeCount = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM System_AuditEntries WHERE TableName = 'Probe';");
+            "SELECT COUNT(*) FROM Audit_Entry WHERE TableName = 'Probe';");
 
         Assert.AreEqual(1, probeCount,
-            "Consumer migration's INSERT into System_AuditEntries must have succeeded, proving Data's own migrations ran first");
+            "Consumer migration's INSERT into Audit_Entry must have succeeded, proving Data's own migrations ran first");
     }
 
     // ── Reset backup/restore safety net ─────────────────────────────────────────
@@ -440,7 +440,7 @@ public class DatabaseInitializerOwnershipTests
     {
         public ResettableTestInitializer(
             IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations,
-            ISystemAuditWriter auditWriter, ICallerContext callerContext, ILogger<DatabaseInitializer> logger)
+            IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<DatabaseInitializer> logger)
             : base(factory, options, migrations, auditWriter, callerContext, logger)
         {
         }
@@ -458,7 +458,7 @@ public class DatabaseInitializerOwnershipTests
             BackupsPath = Path.Combine(Path.GetDirectoryName(dbPath)!, "backups"),
         };
         return new ResettableTestInitializer(factory, options, consumerMigrations,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance);
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance);
     }
 
     /// <summary>

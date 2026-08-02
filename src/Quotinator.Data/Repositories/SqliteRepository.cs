@@ -9,19 +9,19 @@ namespace Quotinator.Data.Repositories;
 
 /// <summary>
 /// SQLite implementation of <see cref="IRepository{T}"/> using Dapper and Dapper.Contrib.
-/// Extends <see cref="SqliteRepositoryBase{T}"/> and writes a <see cref="SystemAuditEntry"/> in the
+/// Extends <see cref="SqliteRepositoryBase{T}"/> and writes a <see cref="AuditEntryEntity"/> in the
 /// same connection and transaction on every write operation.
 /// Derive from <see cref="SqliteRepositoryBase{T}"/> directly — not from this class — when audit
-/// recursion must be avoided (e.g. <see cref="SystemAuditWriter"/>).
+/// recursion must be avoided (e.g. <see cref="AuditEntryWriter"/>).
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
 public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, IListableRepository<T> where T : RecordBase
 {
-    private readonly ISystemAuditWriter _auditWriter;
+    private readonly IAuditEntryWriter _auditWriter;
     private readonly ICallerContext     _callerContext;
 
     /// <summary>Initialises the repository with the factory, audit writer, and caller context.</summary>
-    public SqliteRepository(IDbConnectionFactory factory, ISystemAuditWriter auditWriter, ICallerContext callerContext)
+    public SqliteRepository(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext)
         : base(factory)
     {
         _auditWriter   = auditWriter;
@@ -157,7 +157,7 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
         System.Data.IDbConnection connection, System.Data.IDbTransaction? transaction = null)
         => _auditWriter.WriteAsync(BuildEntry(operation, id), connection, transaction);
 
-    private SystemAuditEntry BuildEntry(string operation, Guid? id) => new()
+    private AuditEntryEntity BuildEntry(string operation, Guid? id) => new()
     {
         TableName   = TableName,
         RecordId    = id.HasValue ? id.Value.ToCanonicalId() : null,

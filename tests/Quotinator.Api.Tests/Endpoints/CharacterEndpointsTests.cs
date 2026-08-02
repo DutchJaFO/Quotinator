@@ -27,11 +27,11 @@ public class CharacterEndpointsTests
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
-                services.AddSingleton<IListableRepository<Character>>(repository ?? new FakeCharacterRepository());
+                services.AddSingleton<IListableRepository<CharacterEntity>>(repository ?? new FakeCharacterRepository());
                 services.AddSingleton<ICharacterSourceLinkReader>(linkReader ?? new StubCharacterSourceLinkReader());
             }));
 
-    private static Character NewCharacter(
+    private static CharacterEntity NewCharacter(
         Guid? id = null, string name = "Rick Blaine",
         CompletenessStatus completeness = CompletenessStatus.Incomplete,
         DateTime? dateCreated = null) => new()

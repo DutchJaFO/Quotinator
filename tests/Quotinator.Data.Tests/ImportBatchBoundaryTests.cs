@@ -19,8 +19,9 @@ public class ImportBatchBoundaryTests
     {
         var dataAssembly = typeof(RecordBase).Assembly;
 
-        foreach (var typeName in new[] { "ImportBatch", "ImportBatchType", "ImportBatchStatus", "IImportBatchRepository" })
+        foreach (var typeName in new[] { "ImportBatchEntity", "ImportBatchType", "ImportBatchStatus", "IImportBatchRepository" })
         {
+            var d = dataAssembly.GetTypes().Select(v => v.Name).Where(o => o.StartsWith("IImport"));
             var found = dataAssembly.GetTypes().Any(t => t.Name == typeName);
             Assert.IsTrue(found, $"'{typeName}' was not found in the Quotinator.Data assembly. " +
                 "ADR 004 (see the consumer-entity-interaction test) requires ImportBatch bookkeeping " +

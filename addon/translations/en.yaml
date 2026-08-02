@@ -45,5 +45,11 @@ configuration:
     description: >-
       How long a downloaded source file is considered fresh before it is checked again.
       Individual sources may override this in their own manifest entry.
+  unicode_aware_search:
+    name: Unicode-aware search
+    description: >-
+      Makes quote, character, author, and source search match accented and other non-ASCII
+      characters regardless of case (e.g. é/É). Off by default — not yet validated against
+      real-world search traffic.
 network:
   8080/tcp: Direct web access — HTTP (ssl disabled) or HTTPS (ssl enabled)

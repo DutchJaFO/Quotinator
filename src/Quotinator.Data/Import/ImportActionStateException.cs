@@ -2,7 +2,7 @@ namespace Quotinator.Data.Import;
 
 /// <summary>
 /// Thrown by <see cref="IImportActionCoordinator"/> when an operation isn't valid for an action's
-/// current <see cref="Entities.SystemImportAction.Status"/> — e.g. deciding an already-applied
+/// current <see cref="Entities.ImportActionEntity.Status"/> — e.g. deciding an already-applied
 /// action, or undoing one that was never decided.
 /// </summary>
 public sealed class ImportActionStateException : Exception

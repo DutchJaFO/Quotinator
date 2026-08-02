@@ -52,23 +52,23 @@ public class ImportBatchesTests
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
-        var actionReader  = new SystemImportActionReader(factory);
-        var actionWriter  = new SystemImportActionWriter(factory);
+        var actionReader  = new ImportActionReader(factory);
+        var actionWriter  = new ImportActionWriter(factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
             coordinator, actionService,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             useBaseline ? QuotinatorMigrations.Baseline : null);
@@ -86,16 +86,36 @@ public class ImportBatchesTests
         await conn.ExecuteAsync("CREATE TABLE System_ConsumerSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL)");
         await conn.ExecuteAsync("INSERT INTO System_ConsumerSchemaVersion VALUES (1, '2025-01-01 00:00:00')");
         await conn.ExecuteAsync("INSERT INTO System_ConsumerSchemaVersion VALUES (2, '2025-01-01 00:00:00')");
-        await conn.ExecuteAsync("CREATE TABLE Quotes (Id TEXT PRIMARY KEY, QuoteText TEXT NOT NULL, IsDeleted INTEGER NOT NULL DEFAULT 0)");
-        await conn.ExecuteAsync("CREATE TABLE Sources (Id TEXT PRIMARY KEY, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        // This fixture simulates the state BEFORE migration 6 (the domain-prefix rename) runs, so
+        // every stub below is deliberately created under its pre-#254 name (Sources/Characters/
+        // People/Quotes/QuoteGenres) — migration 6 is what rebuilds these into their final
+        // Quotinator_-prefixed names (and repoints ImportBatchId at Import_Batch instead of
+        // ImportBatches), so replaying it from here is exactly what these tests exercise. Migration 5
+        // (#150's CHECK constraint, frozen/already-shipped — never edit its content, only add new
+        // migrations after it) also replays for real from this v2 state, but it only touches
+        // ImportBatches.ConflictPolicy and needs no stub tables of its own. Every one of these stubs
+        // must carry the same base columns Migration001 actually created, or migration replay from
+        // this simulated v2 state fails with "no such column" once it reaches migration 6.
+        await conn.ExecuteAsync("CREATE TABLE Sources (Id TEXT PRIMARY KEY, Title TEXT NOT NULL DEFAULT '', Type TEXT NOT NULL DEFAULT 'Movie', Date TEXT, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        // Migration006's rebuild pass touches every one of Migration001's original tables, not just
+        // Sources/Characters/People/Quotes/QuoteGenres — SourceTranslations/CharacterTranslations/
+        // QuoteTranslations must exist too (even empty) or its "INSERT ... SELECT ... FROM
+        // SourceTranslations" step fails with "no such table" once replay reaches migration 6.
+        await conn.ExecuteAsync("CREATE TABLE SourceTranslations (Id TEXT PRIMARY KEY, SourceId TEXT NOT NULL, Language TEXT NOT NULL, Title TEXT NOT NULL, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
         // #179's Migration009 reads Characters.SourceId/DateCreated (before dropping the column) and
         // Characters.Name/DateModified/DateDeleted/IsDeleted (rebuilding the table) — this stub must
         // carry the same base columns Migration001 actually created, or migration replay from this
         // simulated v2 state fails with "no such column" once it reaches Migration009.
         await conn.ExecuteAsync("CREATE TABLE Characters (Id TEXT PRIMARY KEY, SourceId TEXT, Name TEXT NOT NULL DEFAULT '', DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
-        await conn.ExecuteAsync("CREATE TABLE People (Id TEXT PRIMARY KEY, IsDeleted INTEGER NOT NULL DEFAULT 0)");
-        await conn.ExecuteAsync("CREATE TABLE QuoteGenres (Id TEXT PRIMARY KEY, QuoteId TEXT NOT NULL, Genre TEXT NOT NULL)");
-        await conn.ExecuteAsync("INSERT INTO Quotes (Id, QuoteText) VALUES ('TEST-QUOTE-ID', 'Existing test quote')");
+        await conn.ExecuteAsync("CREATE TABLE CharacterTranslations (Id TEXT PRIMARY KEY, CharacterId TEXT NOT NULL, Language TEXT NOT NULL, Name TEXT NOT NULL, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        await conn.ExecuteAsync("CREATE TABLE People (Id TEXT PRIMARY KEY, Name TEXT NOT NULL DEFAULT '', DateOfBirth TEXT, DateOfDeath TEXT, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        await conn.ExecuteAsync("CREATE TABLE Quotes (Id TEXT PRIMARY KEY, QuoteText TEXT NOT NULL, OriginalLanguage TEXT NOT NULL DEFAULT 'en', SourceId TEXT NOT NULL REFERENCES Sources(Id), CharacterId TEXT, PersonId TEXT, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        await conn.ExecuteAsync("CREATE TABLE QuoteTranslations (Id TEXT PRIMARY KEY, QuoteId TEXT NOT NULL, Language TEXT NOT NULL, QuoteText TEXT NOT NULL, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        await conn.ExecuteAsync("CREATE TABLE QuoteGenres (Id TEXT PRIMARY KEY, QuoteId TEXT NOT NULL, Genre TEXT NOT NULL, DateCreated TEXT NOT NULL DEFAULT '2025-01-01 00:00:00', DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0)");
+        await conn.ExecuteAsync(
+            "INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES ('TEST-SOURCE-ID', 'Existing test source', 'Movie', '2025-01-01 00:00:00');");
+        await conn.ExecuteAsync(
+            "INSERT INTO Quotes (Id, QuoteText, SourceId) VALUES ('TEST-QUOTE-ID', 'Existing test quote', 'TEST-SOURCE-ID');");
     }
 
     // ── Schema ────────────────────────────────────────────────────────────────
@@ -110,12 +130,12 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var columns = (await conn.QueryAsync<string>(
-            "SELECT name FROM pragma_table_info('ImportBatches')")).ToHashSet();
+            "SELECT name FROM pragma_table_info('Import_Batch')")).ToHashSet();
 
         var expected = new[] { "Id", "Name", "Type", "Url", "ImportedAt", "ImportedById", "RecordCount",
                                 "DateCreated", "DateModified", "DateDeleted", "IsDeleted", "ConflictPolicy" };
         foreach (var col in expected)
-            Assert.Contains(col, columns, $"Column '{col}' missing from ImportBatches");
+            Assert.Contains(col, columns, $"Column '{col}' missing from Import_Batch");
     }
 
     /// <summary>The batch's actual applied conflict-resolution policy (for quotes) is persisted, not just backfilled for pre-existing rows.</summary>
@@ -129,7 +149,7 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var conflictPolicy = await conn.ExecuteScalarAsync<string>(
-            "SELECT ConflictPolicy FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
+            "SELECT ConflictPolicy FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
 
         Assert.AreEqual(nameof(DuplicateResolutionPolicy.MergeTheirs), conflictPolicy);
     }
@@ -144,7 +164,7 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
 
-        foreach (var table in new[] { "Quotes", "Sources", "Characters", "People" })
+        foreach (var table in new[] { "Quotinator_Quote", "Quotinator_Source", "Quotinator_Character", "Quotinator_Person" })
         {
             var col = await conn.QuerySingleOrDefaultAsync<(string name, int notNull)>(
                 $"SELECT name, [notnull] FROM pragma_table_info('{table}') WHERE name = 'ImportBatchId'");
@@ -153,14 +173,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>App schema migration version is bumped to 5 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>App schema migration version is bumped to 6 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(5, db.SchemaVersion, "SchemaVersion should be 5: #155's consolidation of migrations 4-11 into one (4), plus #150's ImportBatches.ConflictPolicy CHECK constraint migration (5)");
+        Assert.AreEqual(6, db.SchemaVersion, "SchemaVersion should be 6: #155's consolidation of migrations 4-11 into one (4), #150's ImportBatches.ConflictPolicy CHECK constraint migration (5), plus #254's domain-prefix rename (6)");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────
@@ -178,7 +198,7 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var rows = (await conn.QueryAsync<(string Name, string Type, string? Url)>(
-            "SELECT Name, Type, Url FROM ImportBatches WHERE IsDeleted = 0")).ToList();
+            "SELECT Name, Type, Url FROM Import_Batch WHERE IsDeleted = 0")).ToList();
 
         Assert.HasCount(2, rows, "One ImportBatch row per source file");
         Assert.HasCount(rows.Count, rows.DistinctBy(r => r.Name), "All batch names are distinct");
@@ -206,11 +226,11 @@ public class ImportBatchesTests
         conn.Open();
 
         var batches = (await conn.QueryAsync<(string Id, string Name, int RecordCount)>(
-            "SELECT Id, Name, RecordCount FROM ImportBatches WHERE IsDeleted = 0")).ToList();
+            "SELECT Id, Name, RecordCount FROM Import_Batch WHERE IsDeleted = 0")).ToList();
         var curatedBatch  = batches.Single(b => b.Name == Path.GetFileName(CuratedFile));
         var vilaboimBatch = batches.Single(b => b.Name == Path.GetFileName(VilaboimFile));
 
-        var quoteBatchIds = (await conn.QueryAsync<string?>("SELECT ImportBatchId FROM Quotes")).ToList();
+        var quoteBatchIds = (await conn.QueryAsync<string?>("SELECT ImportBatchId FROM Quotinator_Quote")).ToList();
 
         Assert.IsTrue(quoteBatchIds.All(id => id is not null), "Every seeded quote must have a non-null ImportBatchId");
         Assert.IsTrue(quoteBatchIds.All(id => id == curatedBatch.Id || id == vilaboimBatch.Id),
@@ -242,11 +262,11 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
 
-        var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes");
+        var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote");
         Assert.IsGreaterThan(0, quoteCount, "Quotes from the valid curated file should still be seeded");
 
         var emptyBatch = await conn.QuerySingleAsync<(string Id, int RecordCount)>(
-            "SELECT Id, RecordCount FROM ImportBatches WHERE Name = @name", new { name = "empty.json" });
+            "SELECT Id, RecordCount FROM Import_Batch WHERE Name = @name", new { name = "empty.json" });
         Assert.AreEqual(0, emptyBatch.RecordCount, "The empty/invalid file's batch should record zero quotes, not crash");
     }
 
@@ -262,7 +282,7 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var type = await conn.ExecuteScalarAsync<string>(
-            "SELECT Type FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
+            "SELECT Type FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
 
         Assert.AreEqual("UserSeed", type, "A file scanned from the user imports folder must be UserSeed regardless of URL absence");
     }
@@ -279,7 +299,7 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var type = await conn.ExecuteScalarAsync<string>(
-            "SELECT Type FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
+            "SELECT Type FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
 
         Assert.AreEqual("UserSeed", type, "A user-imports-folder file must stay UserSeed even when it declares its own URL — origin, not URL presence, decides the type");
     }
@@ -298,18 +318,18 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var existingRow = await conn.QuerySingleAsync<(string Id, string Type)>(
-            "SELECT Id, Type FROM ImportBatches WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
+            "SELECT Id, Type FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
 
         Assert.AreEqual("Seed", existingRow.Type, "Pre-existing row must retain its original Type");
 
         var newId = Guid.NewGuid().ToString();
         var now   = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) VALUES (@id, 'manual-user-seed.json', 'UserSeed', @now, 0, @now, 0)",
+            "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) VALUES (@id, 'manual-user-seed.json', 'UserSeed', @now, 0, @now, 0)",
             new { id = newId, now });
 
         var insertedType = await conn.ExecuteScalarAsync<string>(
-            "SELECT Type FROM ImportBatches WHERE Id = @id", new { id = newId });
+            "SELECT Type FROM Import_Batch WHERE Id = @id", new { id = newId });
         Assert.AreEqual("UserSeed", insertedType, "The widened CHECK constraint must accept 'UserSeed'");
     }
 
@@ -325,7 +345,7 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var seedBatches = (await conn.QueryAsync<string>(
-            "SELECT Name FROM ImportBatches WHERE Type = 'Seed' AND IsDeleted = 0")).ToList();
+            "SELECT Name FROM Import_Batch WHERE Type = 'Seed' AND IsDeleted = 0")).ToList();
 
         Assert.HasCount(2, seedBatches, "Two pre-seed batch rows expected after migration");
         Assert.Contains(n => n.Contains("vilaboim"), seedBatches, "vilaboim batch row missing");
@@ -344,7 +364,7 @@ public class ImportBatchesTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         var importBatchId = await conn.ExecuteScalarAsync<string?>(
-            "SELECT ImportBatchId FROM Quotes WHERE Id = 'TEST-QUOTE-ID'");
+            "SELECT ImportBatchId FROM Quotinator_Quote WHERE Id = 'TEST-QUOTE-ID'");
 
         Assert.IsNull(importBatchId, "Pre-migration records must have NULL ImportBatchId");
     }
@@ -395,12 +415,12 @@ public class ImportBatchesTests
         await verifyConn.OpenAsync(TestContext.CancellationToken);
 
         var columns = (await verifyConn.QueryAsync<string>(
-            "SELECT name FROM pragma_table_info('ImportBatches')")).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            "SELECT name FROM pragma_table_info('Import_Batch')")).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Assert.Contains("ImportedById", columns, "ImportedById column must exist after Migration010");
         Assert.DoesNotContain("ImportedBy", columns, "ImportedBy must no longer exist after the rename");
 
         var preservedValue = await verifyConn.ExecuteScalarAsync<string>(
-            "SELECT ImportedById FROM ImportBatches WHERE Id = @id;", new { id = batchId });
+            "SELECT ImportedById FROM Import_Batch WHERE Id = @id;", new { id = batchId });
         Assert.AreEqual("22222222-2222-4222-8222-222222222222", preservedValue,
             "The pre-existing value must survive the rename unchanged");
     }
@@ -448,12 +468,12 @@ public class ImportBatchesTests
         await verifyConn.OpenAsync(TestContext.CancellationToken);
 
         var normalisedValue = await verifyConn.ExecuteScalarAsync<string>(
-            "SELECT ConflictPolicy FROM ImportBatches WHERE Id = @id;", new { id = batchId });
+            "SELECT ConflictPolicy FROM Import_Batch WHERE Id = @id;", new { id = batchId });
         Assert.AreEqual("Skip", normalisedValue,
             "The legacy lowercase 'skip' default must be normalised to 'Skip' to satisfy the new CHECK constraint");
 
         await Assert.ThrowsExactlyAsync<SqliteException>(() => verifyConn.ExecuteAsync(
-            "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, ConflictPolicy) " +
+            "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted, ConflictPolicy) " +
             "VALUES (@id, 'post-check-constraint.json', 'Import', @now, 0, @now, 0, 'skip');",
             new { id = Guid.NewGuid().ToString(), now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") }),
             "The new CHECK constraint must reject the old lowercase form going forward");

@@ -1,7 +1,7 @@
 namespace Quotinator.Data.Import;
 
 /// <summary>
-/// Per-entity-type breakdown of how many <see cref="Entities.SystemImportAction"/> rows for one
+/// Per-entity-type breakdown of how many <see cref="Entities.ImportActionEntity"/> rows for one
 /// imported/seeded file fell into each of the 6 possible outcomes (#221) — replaces the flat
 /// "duplicates" count that gave no indication of which file it came from or what actually happened.
 /// Every action from a single planning pass falls into exactly one bucket:

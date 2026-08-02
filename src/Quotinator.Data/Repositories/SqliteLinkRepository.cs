@@ -31,7 +31,7 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
     private readonly SqliteRestorableRepository<TJunction> _junctionRepo;
 
     /// <summary>Initialises with the three standard infrastructure dependencies.</summary>
-    protected SqliteLinkRepository(IDbConnectionFactory factory, ISystemAuditWriter auditWriter, ICallerContext callerContext)
+    protected SqliteLinkRepository(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext)
     {
         _factory      = factory;
         _leftRepo     = new SqliteRepository<TLeft>(factory, auditWriter, callerContext);
