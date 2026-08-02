@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 232, 236, 222, 253, 254],
+    "issues": [178, 148, 150, 197, 151, 232, 236, 222, 253, 254, 255],
     "highlights": [
       "Falls die Datenbank jemals nicht korrekt starten kann, bleibt Quotinator jetzt erreichbar und meldet das Problem klar, anstatt abzustürzen oder eine technische Fehlerseite anzuzeigen — ein Admin-Datenbank-Reset kann dies beheben, ohne dass App oder Container neu gestartet werden müssen."
     ],
@@ -23,7 +23,8 @@
     "changed": [
       "Dokumentiert, dass die internen Audit-Trail-Tabellen der Datenbank (Ereignis-/Audit-Verlauf) ihren Eintrag bewusst beibehalten, nachdem die beschriebene Entität später geändert oder ersetzt wurde — eine rein interne Dokumentationsklarstellung ohne Verhaltensänderung (Issue #151)",
       "Die von Docker Scout gemeldeten Schwachstellen auf Betriebssystemebene im Basis-Image des Containers wurden untersucht; ein gewöhnlicher Rebuild behob fast alle davon, und der Rest wird als akzeptiertes Restrisiko geführt, da derzeit kein Upstream-Fix verfügbar ist — keine Änderung an der Anwendung (Issue #232)",
-      "Interne Datenbanktabellen und die zugehörigen C#-Entitätsklassen wurden gemäß einer einheitlichen, domänenbasierten Präfixkonvention umbenannt (z. B. `Sources` → `Quotinator_Source`, `ImportBatches` → `Import_Batch`) — keine funktionale Änderung, keine Änderung an der API (Issues #253, #254)"
+      "Interne Datenbanktabellen und die zugehörigen C#-Entitätsklassen wurden gemäß einer einheitlichen, domänenbasierten Präfixkonvention umbenannt (z. B. `Sources` → `Quotinator_Source`, `ImportBatches` → `Import_Batch`) — keine funktionale Änderung, keine Änderung an der API (Issues #253, #254)",
+      "Interne C#-Enum-Typen wurden in einen dedizierten `Enums`-Ordner pro Projekt umorganisiert, gemäß den bestehenden Namens-/Platzierungskonventionen des Projekts — keine funktionale Änderung, keine Änderung an der API (Issue #255)"
     ],
     "fixed": [
       "Datenbankspalten, die die Konfliktlösungsrichtlinie speichern (`ImportBatches.ConflictPolicy` sowie die interne Spalte `AppliedPolicy` in zwei Herkunftstabellen), lehnen einen ungültigen Wert jetzt auf Datenbankebene über eine CHECK-Constraint ab, wie jede andere enum-basierte Spalte im Schema; eine dadurch aufgedeckte, bereits bestehende Dateninkonsistenz wird dabei ebenfalls automatisch normalisiert (Issue #150)",

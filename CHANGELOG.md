@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-02 10:09 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-02 14:24 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Documented that the database's internal audit-trail tables (event/audit history) intentionally retain their record after the entity they describe is later changed or replaced — a purely internal documentation clarification with no behaviour change (issue #151)
 - Investigated the OS-level vulnerabilities Docker Scout reports in the container's base image; a routine rebuild resolved nearly all of them, and the remainder are tracked as accepted residual risk with no fix currently available upstream — no application change (issue #232)
 - Internal database tables and their backing C# entity classes were renamed to follow a consistent domain-prefixed naming convention (e.g. `Sources` → `Quotinator_Source`, `ImportBatches` → `Import_Batch`) — no functional change, no API surface change (issues #253, #254)
+- Internal C# enum types were reorganised into a dedicated `Enums` folder per project, following the project's own naming/placement conventions — no functional change, no API surface change (issue #255)
 
 ### Fixed
 - Database columns backed by the duplicate-resolution-policy setting (`ImportBatches.ConflictPolicy`, and the internal `AppliedPolicy` column on two provenance tables) now reject an invalid value at the database level via a CHECK constraint, matching every other enum-backed column in the schema; a pre-existing data inconsistency this closed is also normalised automatically (issue #150)

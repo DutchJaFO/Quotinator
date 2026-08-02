@@ -1,6 +1,6 @@
 # #255 — Move enums to dedicated Enums/ folders
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #255
 **Tiers required:** N/A
 **Depends on:** Nothing
@@ -70,37 +70,37 @@ attributed to the correct project.
 
 ### 1. Move Quotinator.Data enums
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-Create `src/Quotinator.Data/Enums/`, move the 12 files from the table above, update each file's
-`namespace` line from `Quotinator.Data.Models`/`Quotinator.Data.Entities`/`Quotinator.Data.Import` to
-`Quotinator.Data.Enums`. Add the corresponding `using Quotinator.Data.Enums;` (or update existing
-`using Quotinator.Data.Models;`/`.Entities;`/`.Import;`) at every call site — the compiler finds every
-miss (CS0246 unresolved type), this is a pure rename/move with no logic change.
+Created `src/Quotinator.Data/Enums/`, moved the 12 files from the table above via `git mv`, updated each
+file's `namespace` line from `Quotinator.Data.Models`/`Quotinator.Data.Entities`/`Quotinator.Data.Import`
+to `Quotinator.Data.Enums`. Added the corresponding `using Quotinator.Data.Enums;` (or updated an existing
+`using Quotinator.Data.Models;`/`.Entities;`/`.Import;`) at every call site the compiler flagged.
 
 ### 2. Move Quotinator.Core enums
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-Create `src/Quotinator.Core/Enums/`, move the 6 files from the table above, same namespace-and-using
+Created `src/Quotinator.Core/Enums/`, moved the 6 files from the table above, same namespace-and-using
 update as step 1.
 
 ### 3. Update Quotinator.slnx
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-No solution-folder change needed — these files live inside their project (`Quotinator.Data`/
-`Quotinator.Core`), visible in Solution Explorer through the project node per CLAUDE.md's "Do not add
-solution folders for files that are already part of a project" rule. Confirm this remains true after
-the move (i.e. no stray `<Folder>` entry was pointing at the old paths).
+No solution-folder change was needed — confirmed via `grep` that no `<Folder>`/`<File>` entry in
+`Quotinator.slnx` referenced any of the old paths (these files live inside their project, visible in
+Solution Explorer through the project node per CLAUDE.md's "Do not add solution folders for files that
+are already part of a project" rule).
 
 ### 4. Full solution build and test sweep
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-`dotnet build --configuration Release -nodeReuse:false` — 0 warnings, 0 errors. Run the grep sweep from
-the Definition of Done (`enum ` outside any `Enums/` folder) to confirm nothing was missed. Full test
-suite green.
+`dotnet build --configuration Release -nodeReuse:false` (after a full `bin`/`obj` clean, to rule out
+incremental-build masking) — 0 warnings, 0 errors. The grep sweep for `enum ` outside any `Enums/`
+folder returned nothing. Full test suite green: 2,854 tests passed, 0 failed (identical count to the
+pre-move baseline — a pure rename produced no new/removed tests).
 
 ---
 
@@ -108,12 +108,27 @@ suite green.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Every enum listed above relocated to its project's `Enums/` folder, namespace updated | Live | `dotnet build --configuration Release -nodeReuse:false` reports 0 warnings, 0 errors |
-| 2 | ❌ | A grep sweep for `enum ` outside `Enums/` folders in `Quotinator.Data`/`Quotinator.Core` returns nothing | Live | `rg "^public (sealed )?enum " src/Quotinator.Data src/Quotinator.Core --files-without-match` lists no file outside an `Enums/` path — or equivalently, every match's path contains `\Enums\` |
-| 3 | ❌ | No behavioural regression from the move | Unit test | Full existing test suite (`dotnet test --configuration Release -nodeReuse:false`) passes unchanged — this is a rename, no new test is needed to prove new behaviour because there is none |
+| 1 | ✅ | Every enum listed above relocated to its project's `Enums/` folder, namespace updated | Live | `dotnet build --configuration Release -nodeReuse:false` (after a clean `bin`/`obj`) reports 0 warnings, 0 errors |
+| 2 | ✅ | A grep sweep for `enum ` outside `Enums/` folders in `Quotinator.Data`/`Quotinator.Core` returns nothing | Live | `grep -rn "^public (sealed )?enum " src/Quotinator.Data src/Quotinator.Core --include="*.cs"` — every match's path contains `\Enums\` |
+| 3 | ✅ | No behavioural regression from the move | Unit test | Full existing test suite (`dotnet test --configuration Release -nodeReuse:false`) passes unchanged: 2,854 passed, 0 failed |
 
 ---
 
 ## Scope changes
 
-None.
+**Three additional enums found live during Step 4's grep sweep, not in the original inventory (2026-08-02).**
+The plan doc's inventory was confirmed against the codebase on 2026-08-01, but `Quotinator.Data` had
+since gained three more `public enum` declarations not living in a dedicated file the original grep
+pass would have caught the same way:
+- `ImportActionStatus` and `ImportActionKind` — both declared inline inside
+  `src/Quotinator.Data/Entities/ImportActionEntity.cs`, alongside the `ImportActionEntity` class itself,
+  rather than in their own file.
+- `InsertStrategy` — in `src/Quotinator.Data/Repositories/InsertStrategy.cs`, its own file but in
+  `Repositories/`, not `Entities`/`Models`/`Import`.
+
+All three are genuine ADR 016 violations (an enum outside a project's `Enums/` folder), not a documentation
+gap — extracted into their own files under `src/Quotinator.Data/Enums/` (`ImportActionStatus.cs`,
+`ImportActionKind.cs`, `InsertStrategy.cs` via `git mv`) and fixed the same way as the other 18. Brings the
+total to 21 files moved (15 Data, 6 Core), all covered by the same build/grep/test verification in Step 4.
+This is exactly why Step 4's grep sweep exists as a distinct, mandatory step rather than trusting the
+Step 1/2 inventory alone.
