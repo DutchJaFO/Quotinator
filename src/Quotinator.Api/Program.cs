@@ -286,6 +286,7 @@ builder.Services.AddSingleton<IChangeReader, ChangeReader>();
 builder.Services.AddSingleton<IImportActionWriter, ImportActionWriter>();
 builder.Services.AddSingleton<IImportActionReader, ImportActionReader>();
 builder.Services.AddSingleton<ISourceFileOverrideRegistry, SourceFileOverrideRegistry>();
+builder.Services.AddSingleton<IFileResourceRepository, SqliteFileResourceRepository>();
 builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
 builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
 
@@ -407,6 +408,7 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         autoUpdateSources,
         sp.GetRequiredService<IRuleFileOverridePathResolver>(),
         sp.GetRequiredService<ISourceFileOverrideRegistry>(),
+        sp.GetRequiredService<IFileResourceRepository>(),
         QuotinatorMigrations.Baseline);
 });
 builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Core.Services.SqliteQuoteService(connectionFactory, unicodeAwareSearch));
@@ -417,7 +419,8 @@ builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp =
     sp.GetRequiredService<IImportActionService>(),
     sp.GetRequiredService<IImportActionReader>(),
     quoteSourceConverters,
-    configPolicy));
+    configPolicy,
+    sp.GetRequiredService<IFileResourceRepository>()));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.DatabaseHealthState>();
 builder.Services.AddSingleton<DatabaseHealthGateMiddleware>();
@@ -633,6 +636,8 @@ app.MapQuoteEndpoints();
 app.MapAdminEndpoints();
 app.MapImportEndpoints();
 app.MapImportRuleEndpoints();
+app.MapImportFileResourceEndpoints();
+app.MapImportBatchEndpoints();
 app.MapConversationEndpoints();
 app.MapSourceEndpoints();
 app.MapCharacterEndpoints();

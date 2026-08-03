@@ -106,6 +106,20 @@ internal sealed class NumericParameterSchemaTransformer : IOpenApiOperationTrans
                 ["page"]     = QueryParamDefaults.Page,
                 ["pageSize"] = QueryParamDefaults.PageSize,
             },
+            ["api/v1/import/file-resources/prune"] = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["keepPerFile"] = QueryParamDefaults.KeepPerFile,
+            },
+            ["api/v1/import/file-resources"] = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["page"]     = QueryParamDefaults.Page,
+                ["pageSize"] = QueryParamDefaults.PageSize,
+            },
+            ["api/v1/import/batches"] = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["page"]     = QueryParamDefaults.Page,
+                ["pageSize"] = QueryParamDefaults.PageSize,
+            },
         };
 
     /// <inheritdoc/>

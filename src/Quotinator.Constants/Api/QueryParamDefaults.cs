@@ -17,4 +17,7 @@ public static class QueryParamDefaults
 
     /// <summary>Default quote count for <c>GET /api/v1/quotes/random</c>.</summary>
     public const int RandomCount = 1;
+
+    /// <summary>Default number of most-recently-seen rows kept per distinct FileName by <c>POST /api/v1/import/file-resources/prune</c>.</summary>
+    public const int KeepPerFile = 5;
 }
