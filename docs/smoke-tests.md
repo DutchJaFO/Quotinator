@@ -41,6 +41,7 @@ verification command here in the same commit that fixes it — the list only gro
 27. [Per-file, per-entity-type import/seed report](#27-per-file-per-entity-type-importseed-report-221) (#221)
 28. [Unicode-aware search toggle](#28-unicode-aware-search-toggle-222) (#222)
 29. [Seeding-stage backup/restore safety net, degraded startup, and Reset recovery](#29-seeding-stage-backuprestore-safety-net-degraded-startup-and-reset-recovery-254) (#254)
+30. [FileResource capture, byte-exact reconstruction, and pruning](#30-fileresource-capture-byte-exact-reconstruction-and-pruning-251) (#251)
 
 ---
 
@@ -1128,4 +1129,68 @@ curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
   degraded state rather than requiring a process restart to recover.
 
 Clean up: `docker rm -f smoke254 && rm -rf .claude/temp/smoke-254-data`.
+
+## 30. FileResource capture, byte-exact reconstruction, and pruning (#251)
+
+Proves the write path captures a bundled source file's real content on startup, the download endpoint
+reconstructs it byte-for-byte (or normalizes to a different line ending on request), and the prune
+endpoint enforces admin auth and input validation. `Quotinator.Tools.DbInspector` (read-only) is used
+to find a captured file's id, since there is no list endpoint for `Import_FileResource`.
+
+**Start a container and let it seed normally:**
+```bash
+docker run -d --name smoke251 -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 15
+docker logs smoke251 2>&1 | tail -5
+```
+
+**Find a captured file's id and confirm all four bundled files were captured with correct provenance:**
+```bash
+MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/quotinatordata.db .claude/temp/smoke251.db
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db \
+  --sql "SELECT Id, FileName, Origin, LineEnding, EndsWithTrailingNewline, Converter, ConverterOptions FROM Import_FileResource WHERE IsDeleted = 0 ORDER BY FileName"
+```
+Must list **five** rows: the four bundled source files (`NikhilNamal17_popular-movie-quotes.json`,
+`quotinator-curated.json`, `quotinator-series-universe.json`, `vilaboim_movie-quotes.json`) plus
+`manifest.json` itself, each with `Origin = Bundled`. `NikhilNamal17_popular-movie-quotes.json` must
+show `Converter = basic-json-array` with its full `ConverterOptions` JSON; `vilaboim_movie-quotes.json`
+must show `Converter = regex-array` with its own options; the other three (including `manifest.json`
+itself) must show `NULL` for both — they have no `converter` entry in `manifest.json`.
+
+**Confirm `manifest.json` is linked to all four batches it drove, not just the two whose files were
+never redirected to the download cache (the #251 follow-up bug — `SeedBatch.SourceDirectory`):**
+```bash
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db \
+  --sql "SELECT fr.FileName, COUNT(frb.Id) AS BatchLinks FROM Import_FileResource fr LEFT JOIN Import_FileResourceBatch frb ON frb.FileResourceId = fr.Id WHERE fr.IsDeleted = 0 GROUP BY fr.Id ORDER BY fr.FileName"
+```
+`manifest.json` must show `BatchLinks = 4`; every other row must show `BatchLinks = 1`.
+
+**Download must reconstruct the file byte-for-byte identical to the original on disk (substitute a real id from the previous step):**
+```bash
+curl -s "http://localhost:18099/api/v1/import/file-resources/<id>/download" -o .claude/temp/downloaded.json
+MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/sources/quotinator-curated.json .claude/temp/original.json
+diff .claude/temp/downloaded.json .claude/temp/original.json && echo IDENTICAL
+```
+Must print `IDENTICAL` — no `X-Api-Key` required (read-only endpoint).
+
+**`lineEnding` override normalizes the output (confirm via a hex dump, not just word count):**
+```bash
+curl -s "http://localhost:18099/api/v1/import/file-resources/<id>/download?lineEnding=crlf" -o .claude/temp/crlf.json
+xxd .claude/temp/crlf.json | head -3
+```
+Must show `0d0a` (`\r\n`) sequences even though the file was originally captured as bare `LF`.
+
+**Error cases and prune auth/validation:**
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/file-resources/00000000-0000-0000-0000-000000000000/download"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/file-resources/<id>/download?lineEnding=bogus"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:18099/api/v1/import/file-resources/prune"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18099/api/v1/import/file-resources/prune?keepPerFile=abc"
+curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18099/api/v1/import/file-resources/prune"
+```
+Must return, in order: `404` (unknown id), `422` (invalid `lineEnding`), `401` (no key), `422`
+(malformed `keepPerFile`), then `200` with `{"prunedCount":0}` (nothing to prune — each bundled file
+has only one captured version after a single startup).
+
+Clean up: `docker rm -f smoke251 && rm -f .claude/temp/smoke251.db .claude/temp/downloaded.json .claude/temp/original.json .claude/temp/crlf.json`.
 

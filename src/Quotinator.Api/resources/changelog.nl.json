@@ -10,15 +10,18 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 232, 236, 222, 253, 254, 255, 256],
+    "issues": [178, 148, 150, 197, 151, 232, 236, 222, 253, 254, 255, 256, 251],
     "highlights": [
-      "Als de database ooit niet correct kan opstarten, blijft Quotinator nu bereikbaar en meldt het probleem duidelijk in plaats van vast te lopen of een technische foutpagina te tonen — een admin-databasereset kan dit oplossen zonder dat de app of container opnieuw gestart hoeft te worden."
+      "Als de database ooit niet correct kan opstarten, blijft Quotinator nu bereikbaar en meldt het probleem duidelijk in plaats van vast te lopen of een technische foutpagina te tonen — een admin-databasereset kan dit oplossen zonder dat de app of container opnieuw gestart hoeft te worden.",
+      "Quotinator bewaart nu een kopie van elk import-/seedbestand dat het verwerkt — inclusief welke conversie-instellingen zijn gebruikt — zodat de originele inhoud later opnieuw kan worden opgevraagd, bekeken of gedownload, en oude versies kunnen worden opgeruimd om ruimte terug te winnen."
     ],
     "added": [
       "Release-items kunnen nu een optioneel eenregelig `quote`-veld bevatten (sfeervolle tekst voor de release-notities, met optionele `attribution`) — weergegeven in `CHANGELOG.md` en de Blazor-changelog-UI, weggelaten uit de beknoptere `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)",
       "OpenAPI/Scalar-documentatie publiceert nu echte, getypeerde responsschema's voor de quote-endpoints (`/quotes/random`, `/search`, `/{id}`, `/quotes`) en de admin-endpoints (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — voorheen toonde elk van deze alleen een kale `200 OK` zonder schema (issue #148)",
       "Quote-zoekopdrachten en de fuzzy filters voor personage/auteur/bron kunnen nu optioneel ook overeenkomen met geaccentueerde en andere niet-ASCII-tekens, ongeacht hoofd-/kleine letters (bijv. é/É) — opt-in via de nieuwe add-on-optie `unicode_aware_search` (omgevingsvariabele `Quotinator__UnicodeAwareSearch`), standaard uitgeschakeld totdat dit is gevalideerd tegen echt zoekverkeer (issue #222)",
-      "`GET /api/v1/health` geeft nu `503` terug met een diagnostische reden wanneer de database-initialisatie bij het opstarten is mislukt, in plaats van altijd `200` te melden; elk endpoint behalve health/version/admin geeft in die toestand een duidelijke `503` terug in plaats van een technische fout, en het admin-databasereset-endpoint blijft bereikbaar zodat het probleem zonder herstart kan worden opgelost (issue #254)"
+      "`GET /api/v1/health` geeft nu `503` terug met een diagnostische reden wanneer de database-initialisatie bij het opstarten is mislukt, in plaats van altijd `200` te melden; elk endpoint behalve health/version/admin geeft in die toestand een duidelijke `503` terug in plaats van een technische fout, en het admin-databasereset-endpoint blijft bereikbaar zodat het probleem zonder herstart kan worden opgelost (issue #254)",
+      "Nieuw: `GET /api/v1/import/file-resources` (gepagineerde lijst, filterbaar op `fileName`/`origin`), `GET /api/v1/import/file-resources/{id}` (detail, inclusief gekoppelde batch-id's), `GET /api/v1/import/file-resources/{id}/download` (originele bestandsinhoud reconstrueren, optioneel regeleindes normaliseren), en `POST /api/v1/import/file-resources/prune` (admin, verwijdert oude vastgelegde versies definitief) — de inhoud van elk seed-/reseed- en geüpload importbestand, en de conversie-instellingen waarmee het is geïnterpreteerd, worden nu vastgelegd en zijn opvraagbaar (issue #251)",
+      "Nieuw: `GET /api/v1/import/batches` (gepagineerde lijst, filterbaar op `type`/`status`) en `GET /api/v1/import/batches/{id}` — de bestaande importbatch-geschiedenis is nu ook via HTTP bereikbaar, niet meer alleen intern (issue #251)"
     ],
     "changed": [
       "Gedocumenteerd dat de interne audit-trailtabellen van de database (gebeurtenis-/audit-geschiedenis) hun vastlegging bewust behouden nadat de entiteit die ze beschrijven later is gewijzigd of vervangen — een zuiver interne documentatieverduidelijking zonder gedragswijziging (issue #151)",

@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-02 15:38 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-02 23:10 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -12,12 +12,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Highlights
 - If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page — an admin database Reset can fix it without needing to restart the app or container.
+- Quotinator now keeps a copy of every import/seed file it processes — including which conversion settings were used — so the original content can be listed, reviewed, or downloaded again later, and old versions can be pruned to reclaim space.
 
 ### Added
 - Release entries can now carry an optional one-line `quote` (release-note flavour text, with optional `attribution`) — rendered in `CHANGELOG.md` and the Blazor changelog UI, omitted from the more concise `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)
 - OpenAPI/Scalar documentation now publishes real typed response schemas for the quote endpoints (`/quotes/random`, `/search`, `/{id}`, `/quotes`) and the admin endpoints (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — previously every one of these showed only a bare `200 OK` with no schema (issue #148)
 - Quote search and the character/author/source fuzzy filters can now optionally match accented and other non-ASCII characters regardless of case (e.g. é/É) — opt-in via the new `unicode_aware_search` add-on option (env var `Quotinator__UnicodeAwareSearch`), off by default until validated against real-world search traffic (issue #222)
 - `GET /api/v1/health` now returns `503` with a diagnostic reason when startup database initialisation failed, instead of always reporting `200`; every endpoint except health/version/admin returns a clear `503` in that state instead of a raw exception, and the admin database Reset endpoint stays reachable so the problem can be resolved without a restart (issue #254)
+- New `GET /api/v1/import/file-resources` (paginated list, filterable by `fileName`/`origin`), `GET /api/v1/import/file-resources/{id}` (detail, including linked batch ids), `GET /api/v1/import/file-resources/{id}/download` (reconstruct the original file content, optionally normalizing line endings), and `POST /api/v1/import/file-resources/prune` (admin, hard-deletes old captured versions) — every seed/reseed and uploaded import file's content, and the converter settings used to interpret it, are now captured and queryable (issue #251)
+- New `GET /api/v1/import/batches` (paginated list, filterable by `type`/`status`) and `GET /api/v1/import/batches/{id}` — the existing import batch history is now reachable over HTTP, not just internally (issue #251)
 
 ### Changed
 - Documented that the database's internal audit-trail tables (event/audit history) intentionally retain their record after the entity they describe is later changed or replaced — a purely internal documentation clarification with no behaviour change (issue #151)
