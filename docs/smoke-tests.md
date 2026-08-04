@@ -367,9 +367,19 @@ reproduction steps:
 ```bash
 docker stop -t 15 <container>
 docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-191.db
+docker cp <container>:/app/data/quotinatordata.db-wal .claude/temp/inspect-191.db-wal
+docker cp <container>:/app/data/quotinatordata.db-shm .claude/temp/inspect-191.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
   --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Quotinator_Source WHERE IsDeleted = 0"
 ```
+The `-wal`/`-shm` sidecar files must always be copied alongside `quotinatordata.db`, here and at every
+other `docker cp .../quotinatordata.db` step in this file — `DatabaseInitializer` runs in WAL mode, and
+SQLite doesn't auto-checkpoint recent writes back into the main `.db` file until the WAL grows past its
+own size threshold or every connection to it closes; the always-open app connection means a copy of just
+the main file can silently omit real, already-committed data (confirmed live 2026-08-04: a batch-links
+count read `3` instead of the correct `4` from a bare `.db`-only copy, matching once the sidecars were
+included too). `sqlite3` isn't present in the image, so a `PRAGMA wal_checkpoint` via `docker exec` isn't
+an option — copying the sidecars is the only fix that doesn't need a Dockerfile change.
 `have_date` must be nonzero and a large majority of `sources` (roughly 400+ of 479 on the current
 bundled dataset) — before the fix this was always `0`. Cross-check one title with no `sources[]`
 entry at all (implicit-discovery path, the case #191 actually fixes):
@@ -788,8 +798,12 @@ must return `200` with an **empty** `items` array — no file should be left "st
 If any are, `docker logs` will show `"<file>" left staged awaiting review — batch "<id>", N action(s)
 pending a decision`; inspect via `GET /import/actions?batchId=<id>` to see which entity/field lacks a
 rule or alias. Cross-check for duplicate Sources directly, using `Quotinator.Tools.DbInspector`
-against a copy of the running container's database (`docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db`):
+against a copy of the running container's database (copy the `-wal`/`-shm` sidecars alongside the `.db`
+file too — see §11's own note on why):
 ```bash
+docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db
+docker cp <container>:/app/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
+docker cp <container>:/app/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
   --sql "SELECT Title, Type, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
 ```
@@ -816,9 +830,12 @@ seed, not a cached decision from an earlier run. Restore the rule, then change i
 Source-derived, read via JOIN from `Quotinator_Source.Date`, and the Source was already fixed at the film's
 correct year by whichever occurrence was seen first — a per-quote rule only ever affects that Quote's
 own `MergedFields` audit trail, never a Source-owned field's real stored value, the same limitation
-#181's own Step 10 addendum documents). Check via `Quotinator.Tools.DbInspector` instead:
+#181's own Step 10 addendum documents). Check via `Quotinator.Tools.DbInspector` instead (again with the
+`-wal`/`-shm` sidecars):
 ```bash
 docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db
+docker cp <container>:/app/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
+docker cp <container>:/app/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
   --sql "SELECT MergedFields FROM Import_Action WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
 ```
@@ -1130,12 +1147,14 @@ curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
 
 Clean up: `docker rm -f smoke254 && rm -rf .claude/temp/smoke-254-data`.
 
-## 30. FileResource capture, byte-exact reconstruction, and pruning (#251)
+## 30. FileResource capture, listing, byte-exact reconstruction, and pruning (#251, #252)
 
-Proves the write path captures a bundled source file's real content on startup, the download endpoint
-reconstructs it byte-for-byte (or normalizes to a different line ending on request), and the prune
-endpoint enforces admin auth and input validation. `Quotinator.Tools.DbInspector` (read-only) is used
-to find a captured file's id, since there is no list endpoint for `Import_FileResource`.
+Proves the write path captures a bundled source file's real content on startup, the paginated
+list/detail endpoints (#251's later round) return it correctly including `homeDirectoryKey` and
+`linkedBatchCount`/`linkedBatchIds` (#252's generalized `system`/`user`/`upload` origin values), the
+download endpoint reconstructs it byte-for-byte (or normalizes to a different line ending on request),
+and the prune endpoint enforces admin auth and input validation. `Quotinator.Tools.DbInspector`
+(read-only) is used for the provenance checks that need a raw SQL join.
 
 **Start a container and let it seed normally:**
 ```bash
@@ -1144,15 +1163,18 @@ sleep 15
 docker logs smoke251 2>&1 | tail -5
 ```
 
-**Find a captured file's id and confirm all four bundled files were captured with correct provenance:**
+**Find a captured file's id and confirm all four bundled files were captured with correct provenance**
+(copy the `-wal`/`-shm` sidecars alongside the `.db` file too — see §11's own note on why):
 ```bash
 MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/quotinatordata.db .claude/temp/smoke251.db
+MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/quotinatordata.db-wal .claude/temp/smoke251.db-wal
+MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/quotinatordata.db-shm .claude/temp/smoke251.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db \
-  --sql "SELECT Id, FileName, Origin, LineEnding, EndsWithTrailingNewline, Converter, ConverterOptions FROM Import_FileResource WHERE IsDeleted = 0 ORDER BY FileName"
+  --sql "SELECT Id, FileName, Origin, HomeDirectoryKey, LineEnding, EndsWithTrailingNewline, Converter, ConverterOptions FROM Import_FileResource WHERE IsDeleted = 0 ORDER BY FileName"
 ```
 Must list **five** rows: the four bundled source files (`NikhilNamal17_popular-movie-quotes.json`,
 `quotinator-curated.json`, `quotinator-series-universe.json`, `vilaboim_movie-quotes.json`) plus
-`manifest.json` itself, each with `Origin = Bundled`. `NikhilNamal17_popular-movie-quotes.json` must
+`manifest.json` itself, each with `Origin = System`, `HomeDirectoryKey = sources`. `NikhilNamal17_popular-movie-quotes.json` must
 show `Converter = basic-json-array` with its full `ConverterOptions` JSON; `vilaboim_movie-quotes.json`
 must show `Converter = regex-array` with its own options; the other three (including `manifest.json`
 itself) must show `NULL` for both — they have no `converter` entry in `manifest.json`.
@@ -1164,6 +1186,33 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
   --sql "SELECT fr.FileName, COUNT(frb.Id) AS BatchLinks FROM Import_FileResource fr LEFT JOIN Import_FileResourceBatch frb ON frb.FileResourceId = fr.Id WHERE fr.IsDeleted = 0 GROUP BY fr.Id ORDER BY fr.FileName"
 ```
 `manifest.json` must show `BatchLinks = 4`; every other row must show `BatchLinks = 1`.
+
+**List endpoint returns the paginated shape, filterable by `origin` (`system`, `user`, `upload` — #252's generalized values):**
+```bash
+curl -s "http://localhost:18099/api/v1/import/file-resources"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/file-resources?origin=bogus"
+curl -s "http://localhost:18099/api/v1/import/file-resources?origin=system"
+```
+First command's `items` must each include `homeDirectoryKey` (`"sources"` for the bundled rows) and
+`linkedBatchCount`, but no `linkedBatchIds` key. Second must return `422`. Third's `totalCount` must be
+`5` (all five bundled/manifest rows — none are `user`/`upload` origin on a fresh container).
+
+**Detail endpoint returns the full `linkedBatchIds` list, consistent with the list row's `linkedBatchCount` (substitute the `manifest.json` id from the first provenance check above):**
+```bash
+curl -s "http://localhost:18099/api/v1/import/file-resources/<manifest-id>"
+```
+Must show `linkedBatchCount: 4` and `linkedBatchIds` containing exactly 4 ids — matching the
+`BatchLinks = 4` confirmed above via the raw SQL join.
+
+**Batches list/detail — every batch id from the FileResource detail above must actually exist here:**
+```bash
+curl -s "http://localhost:18099/api/v1/import/batches?type=seed"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/batches?status=bogus"
+curl -s "http://localhost:18099/api/v1/import/batches/<one-of-the-linkedBatchIds-above>"
+```
+First's `totalCount` must be `4` (one `seed`-type batch per bundled file). Second must return `422`.
+Third must return `200` with that batch's own detail — proving the FileResource detail's
+`linkedBatchIds` and the batches endpoint agree on what exists.
 
 **Download must reconstruct the file byte-for-byte identical to the original on disk (substitute a real id from the previous step):**
 ```bash
@@ -1192,5 +1241,5 @@ Must return, in order: `404` (unknown id), `422` (invalid `lineEnding`), `401` (
 (malformed `keepPerFile`), then `200` with `{"prunedCount":0}` (nothing to prune — each bundled file
 has only one captured version after a single startup).
 
-Clean up: `docker rm -f smoke251 && rm -f .claude/temp/smoke251.db .claude/temp/downloaded.json .claude/temp/original.json .claude/temp/crlf.json`.
+Clean up: `docker rm -f smoke251 && rm -f .claude/temp/smoke251.db .claude/temp/smoke251.db-wal .claude/temp/smoke251.db-shm .claude/temp/downloaded.json .claude/temp/original.json .claude/temp/crlf.json`.
 

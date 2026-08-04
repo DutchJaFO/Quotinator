@@ -502,7 +502,7 @@ and the pre-decision Expected tests table.
 | 15 | ✅ | Paginated import-batches list, filterable by `type`/`status`, follows the standard pagination contract | Endpoint test | `ImportBatchEndpointsTests.GetImportBatches_Returns200WithPageShape` and the full 8-case pagination matrix (`...PageZero_Returns422` through `...PageBeyondLast_Returns422DistinctDetail`) |
 | 16 | ✅ | Import-batch detail endpoint, case-insensitive id match, 404 for unknown/malformed id | Endpoint test | `ImportBatchEndpointsTests.GetImportBatchById_ExistingId_ReturnsBatch`, `...UppercaseId_MatchesCaseInsensitively`, `...UnknownId_Returns404`, `...MalformedId_Returns404NotBadRequest` |
 | 17 | ✅ | T1 verified for the new GET endpoints | Live | Developer started app in Visual Studio 2026-08-04 (post-commit): reset reimported all bundled sources, `GET /api/v1/import/file-resources` and `GET /api/v1/import/batches` both returned `200` |
-| 18 | ✅ | T2 verified for the new GET endpoints | Live | `docs/smoke-tests.md` §30 — origin/type filtering and `linkedBatchCount`/`linkedBatchIds` cross-check, confirmed against a live Docker container |
+| 18 | ✅ | T2 verified for the new GET endpoints | Live | **Correction (2026-08-04):** this row previously claimed T2 coverage that didn't actually exist — `docs/smoke-tests.md` §30 had no curl content for the list/detail endpoints at all at the time this row was first marked ✅. Actually added and run against a live Docker container while implementing #252 (which touches the same section) — see #252's own plan doc Step 5 |
 
 ---
 

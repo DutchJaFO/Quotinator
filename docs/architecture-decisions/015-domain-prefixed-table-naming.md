@@ -118,3 +118,35 @@ exact migration sequence.
 matches only `System\_%` — once `Import_`/`Audit_` exist as separate prefixes for tables that must
 keep the same Reset-exclusion behaviour `System_` tables have today (pre-#156), the pattern (or the
 underlying mechanism) needs to recognise all three, not just `System_`.
+
+## Revision — issue #254: the squash reasoning above was wrong
+
+**Found live during #254's own T1 pass (2026-08-02).** An earlier version of #253 acted on the "safe to
+rewrite/squash" guidance above and squashed two already-implemented, not-yet-tagged migrations (versions
+3 and 4, each adding an `AppliedPolicy` CHECK constraint) into the domain-prefix rename itself, reasoning
+exactly as this ADR originally stated: neither had shipped in a tagged release yet, so editing them was
+"safe." That reasoning silently broke this project's own local development database, which had already
+applied both migrations in an earlier session — the squash left that database's already-recorded version
+4 reading as "up to date" under the new, smaller migration count, so the entire rename never ran on it,
+and `Import_Batch` was never created. See `DatabaseInitializer.cs`'s own `DataOwnedMigrations` remarks for
+the full incident writeup and the restored, unedited versions 3/4.
+
+**Corrected policy: "never edit an already-applied migration" protects any database that has actually run
+a migration, not only databases represented by a tagged release.** A developer's own local/dev database is
+exactly such a database — it can (and, in an active milestone, routinely does) run an unreleased migration
+long before that migration ever reaches a tag. This applies with extra force to **Data-owned** migrations
+specifically: unlike a consumer's own domain migrations, Data's migration history
+(`System_SchemaVersion`) is never wiped or replayed by a Reset (see `DatabaseInitializer.DropAndRebuildAsync`),
+so a developer hitting this on a Data-owned migration has no "just Reset it" recovery path at all — editing
+one in place can permanently strand a local database with no supported fix. Confirmed again during #252
+(FileResourceOrigin generalization, 2026-08-04): the fix there is a genuine new migration (version 7), not
+an edit to #251's version-6 migration, even though version 6 had also never shipped in a tagged release.
+
+**"Unreleased" is not the right test for whether a migration is safe to edit.** The only question that
+matters is whether *any* database — including this project's own local development ones — may already
+have applied it. In practice, once a migration has been implemented and run even once locally (which
+routinely happens well before a release, and often within the same session it was written), treat it as
+frozen. The "collapse into the smallest number of new migrations" guidance above remains correct advice
+for migrations that are still purely theoretical — written in a plan doc but never yet executed against
+any real database, including a developer's own — but that window closes the first time the migration
+actually runs, not at the next tag.

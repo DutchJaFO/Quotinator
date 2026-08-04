@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 232, 236, 222, 253, 254, 255, 256, 251],
+    "issues": [178, 148, 150, 197, 151, 232, 236, 222, 253, 254, 255, 256, 251, 252],
     "highlights": [
       "If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page — an admin database Reset can fix it without needing to restart the app or container.",
       "Quotinator now keeps a copy of every import/seed file it processes — including which conversion settings were used — so the original content can be listed, reviewed, or downloaded again later, and old versions can be pruned to reclaim space."
