@@ -423,6 +423,37 @@ four places in `ImportActionPlanner.cs` as normal "fall through to Pending stagi
 unrelated to #251, code untouched by this issue) popped a Visual Studio "break on this exception type"
 dialog repeatedly; not a bug, just a noisy debugger setting.
 
+### 9. GET list/detail endpoints for file resources and import batches (2026-08-03, after T1 review)
+
+**Status:** ✅ Done
+
+Requested by the developer during the same T1 review as the route reorganization below: `GET
+/api/v1/import/file-resources` (paginated list, filterable by `fileName`/`origin`, each row including
+`linkedBatchCount`), `GET /api/v1/import/file-resources/{id}` (detail, including the full
+`linkedBatchIds` list), `GET /api/v1/import/batches` (paginated list, filterable by `type`/`status`),
+and `GET /api/v1/import/batches/{id}`. Follows the standard pagination contract (`page`/`pageSize`
+string?-bound, `PaginationParsing.TryParse`, `pageSize=0` = all rows, max 500, page-beyond-last = 422)
+already used by `/quotes` and `/admin/audit`.
+
+`Sql.FileResources.SelectPage`'s `LinkedBatchCount` uses a correlated scalar subquery
+(`(SELECT COUNT(*) FROM Import_FileResourceBatch frb WHERE ... ) AS LinkedBatchCount`) rather than a
+`LEFT JOIN ... GROUP BY`, specifically to stay outside the CVE-2025-6965 aggregate-guard's
+aggregate-function-plus-row-grouping-clause pattern while still avoiding N+1 queries (one query for the
+whole page, not one per row), per #195's N+1-avoidance rule.
+
+New response DTOs (`FileResourceResponse`, `ImportBatchResponse`) and 46 new tests: the full 8-case
+pagination matrix plus filter/detail cases for both endpoints (`ImportFileResourceEndpointsTests.cs`,
+`ImportBatchEndpointsTests.cs`).
+
+**T1 confirmed 2026-08-04** — developer ran the app in Visual Studio after the three #251 commits: clean
+startup at schema v6, `POST /admin/database/reset` reimported all 4 bundled sources successfully, then
+`GET /api/v1/import/file-resources` and `GET /api/v1/import/batches` both returned `200` against the
+live database.
+
+**T2 confirmed** — `docs/smoke-tests.md` §30's list/detail block: origin/type filter validation and a
+`linkedBatchCount`/`linkedBatchIds` cross-check against `GET /import/batches`, against a live Docker
+container.
+
 ## Route reorganization (2026-08-03, after T1 review)
 
 **Both endpoints moved out of `AdminEndpoints.cs`/`/api/v1/admin/*` into a new
@@ -466,6 +497,12 @@ and the pre-decision Expected tests table.
 | 10 | ✅ | Full solution builds and tests pass | Live | `dotnet build --configuration Release -nodeReuse:false` and `dotnet test --configuration Release -nodeReuse:false` both 0 warnings, 0 errors, all green |
 | 11 | ✅ | T1 verified | Live | Developer started app in Visual Studio 2026-08-03 — clean v5→v6 migration, seeding completed, app served requests correctly |
 | 12 | ✅ | T2 verified | Live | `docs/smoke-tests.md` §30 — byte-exact download reconstruction, `lineEnding` override, error cases, and prune auth/validation, all confirmed against a live Docker container |
+| 13 | ✅ | Paginated file-resources list, filterable by `fileName`/`origin`, follows the standard pagination contract | Endpoint test | `ImportFileResourceEndpointsTests.GetFileResources_Returns200WithPageShape` and the full 8-case pagination matrix (`...PageZero_Returns422` through `...PageBeyondLast_Returns422DistinctDetail`) |
+| 14 | ✅ | File-resource detail endpoint returns the full `linkedBatchIds` list | Endpoint test | `ImportFileResourceEndpointsTests.GetFileResourceById_ExistingId_ReturnsFullDetailIncludingLinkedBatchIds` |
+| 15 | ✅ | Paginated import-batches list, filterable by `type`/`status`, follows the standard pagination contract | Endpoint test | `ImportBatchEndpointsTests.GetImportBatches_Returns200WithPageShape` and the full 8-case pagination matrix (`...PageZero_Returns422` through `...PageBeyondLast_Returns422DistinctDetail`) |
+| 16 | ✅ | Import-batch detail endpoint, case-insensitive id match, 404 for unknown/malformed id | Endpoint test | `ImportBatchEndpointsTests.GetImportBatchById_ExistingId_ReturnsBatch`, `...UppercaseId_MatchesCaseInsensitively`, `...UnknownId_Returns404`, `...MalformedId_Returns404NotBadRequest` |
+| 17 | ✅ | T1 verified for the new GET endpoints | Live | Developer started app in Visual Studio 2026-08-04 (post-commit): reset reimported all bundled sources, `GET /api/v1/import/file-resources` and `GET /api/v1/import/batches` both returned `200` |
+| 18 | ✅ | T2 verified for the new GET endpoints | Live | `docs/smoke-tests.md` §30 — origin/type filtering and `linkedBatchCount`/`linkedBatchIds` cross-check, confirmed against a live Docker container |
 
 ---
 
