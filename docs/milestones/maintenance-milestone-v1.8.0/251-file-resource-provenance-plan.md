@@ -1,6 +1,6 @@
 # #251 — FileResource/FileResourceLine: general import-file content provenance
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #251
 **Tiers required:** T1, T2
 **Depends on:** Nothing
