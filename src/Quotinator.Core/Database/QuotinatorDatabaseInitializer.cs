@@ -412,16 +412,19 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         // already wraps this whole hook in, the same as any other seeding failure.
         if (File.Exists(seedFile.FilePath))
         {
-            var fileResourceOrigin = seedBatch.Origin == SeedBatchOrigin.UserImports
-                ? FileResourceOrigin.UserImports
-                : FileResourceOrigin.Bundled;
+            var isUserImports = seedBatch.Origin == SeedBatchOrigin.UserImports;
+            var fileResourceOrigin   = isUserImports ? FileResourceOrigin.User : FileResourceOrigin.System;
+            // "sources"/"imports" per #252 — the only two local directories any write path has ever
+            // captured from; a future consumer of System/User origin unrelated to quote sources
+            // registers its own key without stretching what these two mean.
+            var homeDirectoryKey     = isUserImports ? "imports" : "sources";
             var content = await File.ReadAllTextAsync(seedFile.FilePath);
             // OriginalFolderPath is null here — today's directory scan is flat (no subfolders under
             // data/sources/ or {dataDir}/imports/), confirmed via ManifestSeedPlanner's own
             // non-recursive Directory.GetFiles call, so there is no folder segment to record yet.
             await _fileResources.WriteAsync(
                 Path.GetFileName(seedFile.FilePath), originalFolderPath: null, fileResourceOrigin, content, batch.Id,
-                seedFile.Converter, seedFile.ConverterOptions?.GetRawText());
+                seedFile.Converter, seedFile.ConverterOptions?.GetRawText(), homeDirectoryKey);
 
             // Also capture the manifest.json that drove this seed pass, linked to this same batch —
             // content-hash dedup means only a new Import_FileResourceBatch link row is added for every
@@ -436,7 +439,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             {
                 var manifestContent = await File.ReadAllTextAsync(manifestPath);
                 await _fileResources.WriteAsync(
-                    ManifestSeedPlanner.ManifestFileName, originalFolderPath: null, fileResourceOrigin, manifestContent, batch.Id);
+                    ManifestSeedPlanner.ManifestFileName, originalFolderPath: null, fileResourceOrigin, manifestContent, batch.Id,
+                    homeDirectoryKey: homeDirectoryKey);
             }
         }
 

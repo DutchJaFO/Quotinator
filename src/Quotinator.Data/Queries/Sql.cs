@@ -380,13 +380,13 @@ internal static class Sql
     {
         /// <summary>The one row for a given content hash, if this exact content has been captured before.</summary>
         internal static readonly string SelectByContentHash =
-            $"SELECT {IdClauses.SelectColumn("Id")}, FileName, OriginalFolderPath, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, " +
+            $"SELECT {IdClauses.SelectColumn("Id")}, FileName, OriginalFolderPath, Origin, HomeDirectoryKey, ContentHash, LineEnding, EndsWithTrailingNewline, " +
             "Converter, ConverterOptions, FirstSeenAtUtc, LastSeenAtUtc, DateCreated, DateModified, DateDeleted, IsDeleted " +
             "FROM Import_FileResource WHERE ContentHash = @contentHash AND IsDeleted = 0;";
 
         /// <summary>A single file resource by id, for the download endpoint. Case-insensitive per this project's id-comparison convention.</summary>
         internal static readonly string SelectById =
-            $"SELECT {IdClauses.SelectColumn("Id")}, FileName, OriginalFolderPath, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, " +
+            $"SELECT {IdClauses.SelectColumn("Id")}, FileName, OriginalFolderPath, Origin, HomeDirectoryKey, ContentHash, LineEnding, EndsWithTrailingNewline, " +
             $"Converter, ConverterOptions, FirstSeenAtUtc, LastSeenAtUtc, DateCreated, DateModified, DateDeleted, IsDeleted " +
             $"FROM Import_FileResource WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
 
@@ -451,7 +451,7 @@ internal static class Sql
         /// dedicated download endpoint.
         /// </summary>
         internal static string SelectPage(bool filterFileName, bool filterOrigin)
-            => $"SELECT {IdClauses.SelectColumn("fr.Id")}, fr.FileName, fr.OriginalFolderPath, fr.Origin, fr.ContentHash, " +
+            => $"SELECT {IdClauses.SelectColumn("fr.Id")}, fr.FileName, fr.OriginalFolderPath, fr.Origin, fr.HomeDirectoryKey, fr.ContentHash, " +
                "fr.LineEnding, fr.EndsWithTrailingNewline, fr.Converter, fr.ConverterOptions, " +
                "fr.FirstSeenAtUtc, fr.LastSeenAtUtc, " +
                "(SELECT COUNT(*) FROM Import_FileResourceBatch frb " +

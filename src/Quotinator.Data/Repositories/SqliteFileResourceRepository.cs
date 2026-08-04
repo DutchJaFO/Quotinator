@@ -22,7 +22,7 @@ public sealed class SqliteFileResourceRepository : IFileResourceRepository
     public async Task<Guid> WriteAsync(
         string fileName, string? originalFolderPath, FileResourceOrigin origin, string content,
         Guid importBatchId, string? converter = null, string? converterOptions = null,
-        CancellationToken cancellationToken = default)
+        string? homeDirectoryKey = null, CancellationToken cancellationToken = default)
     {
         var contentHash = EffectiveRuleFileResolver.ComputeContentHash(content);
 
@@ -52,6 +52,7 @@ public sealed class SqliteFileResourceRepository : IFileResourceRepository
                 FileName                = fileName,
                 OriginalFolderPath      = originalFolderPath,
                 Origin                  = new SafeValue<FileResourceOrigin?>(origin.ToString(), origin),
+                HomeDirectoryKey        = homeDirectoryKey,
                 ContentHash             = contentHash,
                 LineEnding              = new SafeValue<LineEndingStyle?>(lineEnding.ToString(), lineEnding),
                 EndsWithTrailingNewline = endsWithTrailingNewline,

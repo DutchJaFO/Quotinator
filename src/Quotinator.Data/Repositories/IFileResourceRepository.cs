@@ -16,14 +16,16 @@ public interface IFileResourceRepository
     /// <paramref name="converter"/> is the name of the <c>IQuoteSourceConverter</c> plugin used to
     /// interpret this content, or <see langword="null"/> when none was needed; <paramref name="converterOptions"/>
     /// is its options as raw JSON text, always <see langword="null"/> when <paramref name="converter"/>
-    /// is. Always inserts a new <see cref="Entities.FileResourceBatchEntity"/> link row, since a re-seen
-    /// file can legitimately be linked to many batches over time.
+    /// is. <paramref name="homeDirectoryKey"/> is the symbolic root key <paramref name="originalFolderPath"/>
+    /// is relative to — see <see cref="Entities.FileResourceEntity.HomeDirectoryKey"/>. Always inserts a
+    /// new <see cref="Entities.FileResourceBatchEntity"/> link row, since a re-seen file can legitimately
+    /// be linked to many batches over time.
     /// </summary>
     /// <returns>The id of the (possibly pre-existing) <see cref="FileResourceEntity"/> row.</returns>
     Task<Guid> WriteAsync(
         string fileName, string? originalFolderPath, FileResourceOrigin origin, string content,
         Guid importBatchId, string? converter = null, string? converterOptions = null,
-        CancellationToken cancellationToken = default);
+        string? homeDirectoryKey = null, CancellationToken cancellationToken = default);
 
     /// <summary>The file resource row itself, or <c>null</c> if it doesn't exist or is soft-deleted.</summary>
     Task<FileResourceEntity?> FindAsync(Guid id, CancellationToken cancellationToken = default);

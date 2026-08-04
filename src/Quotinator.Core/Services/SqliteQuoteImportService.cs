@@ -77,12 +77,14 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         await _importBatches.InsertAsync(batch);
         var batchIdStr = batch.Id.ToCanonicalId();
 
-        // #251 — a multipart upload carries no folder information, only a bare filename. Converter/
-        // ConverterOptions come from the request's own settings, not the raw content itself, since the
-        // same bytes could be uploaded again later under different settings.
+        // #251 — a multipart upload carries no folder information, only a bare filename, so
+        // homeDirectoryKey is also always null (#252) — there is no root for it to be relative to.
+        // Converter/ConverterOptions come from the request's own settings, not the raw content itself,
+        // since the same bytes could be uploaded again later under different settings.
         await _fileResources.WriteAsync(
-            fileName, originalFolderPath: null, FileResourceOrigin.Uploaded, rawContent, batch.Id,
-            settings?.Converter, settings?.ConverterOptions?.GetRawText(), cancellationToken);
+            fileName, originalFolderPath: null, FileResourceOrigin.Upload, rawContent, batch.Id,
+            settings?.Converter, settings?.ConverterOptions?.GetRawText(), homeDirectoryKey: null,
+            cancellationToken: cancellationToken);
 
         IReadOnlyList<ImportActionEntity> actions;
         using (var conn = (SqliteConnection)_factory.CreateConnection())

@@ -17,11 +17,14 @@ public sealed class FileResourceListItem
     /// <summary>Plain filename (no path segments).</summary>
     public string FileName { get; init; } = string.Empty;
 
-    /// <summary>Where the file lived within its own source root. See <see cref="Entities.FileResourceEntity.OriginalFolderPath"/>.</summary>
+    /// <summary>Where the file lived, relative to <see cref="HomeDirectoryKey"/>. See <see cref="Entities.FileResourceEntity.OriginalFolderPath"/>.</summary>
     public string? OriginalFolderPath { get; init; }
 
-    /// <summary>Which of the three file sources this project accepts content from.</summary>
+    /// <summary>Which write-path mechanism captured this content. See <see cref="Entities.FileResourceEntity.Origin"/>.</summary>
     public SafeValue<FileResourceOrigin?> Origin { get; init; } = SafeValue<FileResourceOrigin?>.Empty;
+
+    /// <summary>Symbolic key identifying which named root <see cref="OriginalFolderPath"/> is relative to. See <see cref="Entities.FileResourceEntity.HomeDirectoryKey"/>.</summary>
+    public string? HomeDirectoryKey { get; init; }
 
     /// <summary>SHA-256 hash (lowercase hex) of the file's raw content.</summary>
     public string ContentHash { get; init; } = string.Empty;

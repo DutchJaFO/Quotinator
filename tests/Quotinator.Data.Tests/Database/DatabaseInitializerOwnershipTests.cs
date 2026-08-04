@@ -250,13 +250,13 @@ public class DatabaseInitializerOwnershipTests
             var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
-                "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
-                "VALUES (@id, 'quotinator-curated.json', 'Bundled', 'abc123', 'LF', 1, @now, @now, @now);",
+                "INSERT INTO Import_FileResource (Id, FileName, Origin, HomeDirectoryKey, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
+                "VALUES (@id, 'quotinator-curated.json', 'System', 'sources', 'abc123', 'LF', 1, @now, @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await conn.ExecuteAsync(
-                "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
-                "VALUES (@id, 'upload.json', 'Uploaded', 'def456', 'CRLF', 0, @now, @now, @now);",
+                "INSERT INTO Import_FileResource (Id, FileName, Origin, HomeDirectoryKey, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
+                "VALUES (@id, 'upload.json', 'Upload', NULL, 'def456', 'CRLF', 0, @now, @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
@@ -266,9 +266,81 @@ public class DatabaseInitializerOwnershipTests
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
                 "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
-                "VALUES (@id, 'x.json', 'Bundled', 'abc123', 'NotARealLineEnding', 1, @now, @now, @now);",
+                "VALUES (@id, 'x.json', 'Bundled', 'abc123', 'LF', 1, @now, @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now }), "'Bundled' is the pre-#252 origin value — must be rejected now that the CHECK constraint only accepts 'System'/'User'/'Upload'.");
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
+                "VALUES (@id, 'x.json', 'System', 'abc123', 'NotARealLineEnding', 1, @now, @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
         }
+    }
+
+    /// <summary>
+    /// #252's version-7 migration remaps existing pre-generalization rows — proved directly against
+    /// version 6's own migration SQL (not the full <see cref="DatabaseInitializer"/> orchestration,
+    /// which has no "stop after migration N" test hook) so this exercises exactly the scenario version
+    /// 6 edited in place would have silently gotten wrong: a database that already ran version 6 before
+    /// version 7 exists. Also proves the migration doesn't break the FK relationship
+    /// <c>Import_FileResourceLine</c>/<c>Import_FileResourceBatch</c> hold to <c>Import_FileResource</c>
+    /// — the table is dropped and recreated under the same name during the rebuild, which a naive
+    /// reading of SQLite's rename-only FK auto-fixup behaviour could raise doubt about (see ADR 015's
+    /// own remarks on <c>DomainPrefixRenameMigrations</c> for the *different* scenario where that
+    /// fixup genuinely does not apply — a name change, not this migration's same-name rebuild).
+    /// </summary>
+    [TestMethod]
+    public async Task Migration007_RemapsPreGeneralizationOriginValuesAndPreservesChildRowLinks()
+    {
+        using var temp = new TempDatabase([]);
+        using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS Import_Batch (Id TEXT NOT NULL PRIMARY KEY, Name TEXT, Type TEXT, ImportedAt TEXT, DateCreated TEXT);");
+        await conn.ExecuteAsync(FileResourceMigrations.CreateFileResourceTables);
+
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        var fileResourceId = Guid.NewGuid();
+        var batchId = Guid.NewGuid();
+
+        await conn.ExecuteAsync(
+            "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, DateCreated) VALUES (@id, 'test', 'Seed', @now, @now);",
+            new { id = batchId.ToString(), now });
+
+        await conn.ExecuteAsync(
+            "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
+            "VALUES (@id, 'quotinator-curated.json', 'Bundled', 'abc123', 'LF', 1, @now, @now, @now);",
+            new { id = fileResourceId.ToString(), now });
+
+        await conn.ExecuteAsync(
+            "INSERT INTO Import_FileResourceLine (Id, FileResourceId, LineNumber, Text, DateCreated) VALUES (@id, @fileResourceId, 1, 'line one', @now);",
+            new { id = Guid.NewGuid().ToString(), fileResourceId = fileResourceId.ToString(), now });
+
+        await conn.ExecuteAsync(
+            "INSERT INTO Import_FileResourceBatch (Id, FileResourceId, ImportBatchId, ImportedAt, DateCreated) VALUES (@id, @fileResourceId, @batchId, @now, @now);",
+            new { id = Guid.NewGuid().ToString(), fileResourceId = fileResourceId.ToString(), batchId = batchId.ToString(), now });
+
+        // Advance to version 7. Foreign key enforcement must be off for the rebuild, matching
+        // ApplyMigrationsAsync's own PRAGMA foreign_keys toggling around the real migration phase —
+        // without this, SQLite treats DROP TABLE Import_FileResource as cascading the DELETE to
+        // Import_FileResourceLine/Import_FileResourceBatch (ON DELETE CASCADE), silently losing the
+        // rows this test exists to prove survive. Found live by this test's own first run.
+        await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+        await conn.ExecuteAsync(FileResourceOriginGeneralizationMigrations.GeneralizeOrigin);
+        await conn.ExecuteAsync("PRAGMA foreign_keys = ON;");
+
+        var (origin, homeDirectoryKey) = await conn.QuerySingleAsync<(string, string?)>(
+            "SELECT Origin, HomeDirectoryKey FROM Import_FileResource WHERE Id = @id;",
+            new { id = fileResourceId.ToString() });
+        Assert.AreEqual("System", origin, "Pre-#252 'Bundled' rows must be remapped to 'System', not just accepted by a widened CHECK.");
+        Assert.AreEqual("sources", homeDirectoryKey, "A remapped System-origin row must backfill HomeDirectoryKey to 'sources' — the only directory 'Bundled' content was ever captured from.");
+
+        var lineCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Import_FileResourceLine WHERE FileResourceId = @id;", new { id = fileResourceId.ToString() });
+        Assert.AreEqual(1, lineCount, "Import_FileResourceLine's FK link to the rebuilt Import_FileResource must survive the rebuild.");
+
+        var batchLinkCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Import_FileResourceBatch WHERE FileResourceId = @id;", new { id = fileResourceId.ToString() });
+        Assert.AreEqual(1, batchLinkCount, "Import_FileResourceBatch's FK link to the rebuilt Import_FileResource must survive the rebuild.");
     }
 
     /// <summary>
@@ -468,9 +540,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync(TestContext.CancellationToken);
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(6, dataRows,
+        Assert.AreEqual(7, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(6, db.DataSchemaVersion);
+        Assert.AreEqual(7, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

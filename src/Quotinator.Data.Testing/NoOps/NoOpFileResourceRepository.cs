@@ -15,7 +15,7 @@ public sealed class NoOpFileResourceRepository : IFileResourceRepository
     public Task<Guid> WriteAsync(
         string fileName, string? originalFolderPath, FileResourceOrigin origin, string content,
         Guid importBatchId, string? converter = null, string? converterOptions = null,
-        CancellationToken cancellationToken = default)
+        string? homeDirectoryKey = null, CancellationToken cancellationToken = default)
         => Task.FromResult(Guid.Empty);
 
     /// <inheritdoc/>

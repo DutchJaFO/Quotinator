@@ -43,6 +43,12 @@ public class DatabaseInitializer : IDatabaseInitializer
     // migration phase which always runs immediately after this one within the same FK-enforcement-off
     // window — see ApplyMigrationsAsync/ApplyBaselineAsync's own PRAGMA foreign_keys toggling) — safe
     // as a forward reference despite Import_Batch not existing yet at the moment this migration runs.
+    // Version 7 (#252) generalizes Import_FileResource.Origin (Bundled/UserImports/Uploaded ->
+    // System/User/Upload) and adds HomeDirectoryKey — a new migration, not an edit to version 6,
+    // even though version 6 had not yet shipped in a tagged release: this project's own local
+    // development database had already applied version 6 (during #251's T1 pass) by the time this
+    // generalization was decided. See ADR 015's own "Revision — issue #254" section for why
+    // "unreleased" is not the right test for whether a migration is safe to edit.
     private static readonly IReadOnlyList<SchemaMigration> DataOwnedMigrations =
     [
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
@@ -51,6 +57,7 @@ public class DatabaseInitializer : IDatabaseInitializer
         new SchemaMigration { Version = 4, Sql = ImportActionMigrations.AddAppliedPolicyCheckConstraint },
         new SchemaMigration { Version = 5, Sql = DomainPrefixRenameMigrations.RenameDataOwnedTables },
         new SchemaMigration { Version = 6, Sql = FileResourceMigrations.CreateFileResourceTables },
+        new SchemaMigration { Version = 7, Sql = FileResourceOriginGeneralizationMigrations.GeneralizeOrigin },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -165,7 +172,8 @@ public class DatabaseInitializer : IDatabaseInitializer
             FileName                TEXT    NOT NULL,
             OriginalFolderPath      TEXT,
             Origin                  TEXT    NOT NULL
-                                    CHECK (Origin IN ('Bundled', 'UserImports', 'Uploaded')),
+                                    CHECK (Origin IN ('System', 'User', 'Upload')),
+            HomeDirectoryKey        TEXT,
             ContentHash             TEXT    NOT NULL,
             LineEnding              TEXT    NOT NULL
                                     CHECK (LineEnding IN ('LF', 'CRLF', 'CR')),

@@ -18,18 +18,29 @@ public sealed class FileResourceEntity : RecordBase
     public string FileName { get; init; } = string.Empty;
 
     /// <summary>
-    /// Where the file lived within its own source root — relative to <c>data/sources/</c> for
-    /// <see cref="Enums.FileResourceOrigin.Bundled"/>, relative to <c>{dataDir}/imports/</c> for
-    /// <see cref="Enums.FileResourceOrigin.UserImports"/>. Deliberately never the expanded,
-    /// <c>{dataDir}</c>-inclusive absolute path, so a later change to the deployment's configured data
-    /// directory never invalidates a historical row. Always <c>null</c> for
-    /// <see cref="Enums.FileResourceOrigin.Uploaded"/> — a multipart upload carries no folder
-    /// information.
+    /// Where the file lived, relative to whichever root <see cref="HomeDirectoryKey"/> names.
+    /// Deliberately never the expanded, <c>{dataDir}</c>-inclusive absolute path, so a later change to
+    /// the deployment's configured data directory never invalidates a historical row. Always
+    /// <see langword="null"/> for <see cref="Enums.FileResourceOrigin.Upload"/> — a REST upload carries
+    /// no folder information.
     /// </summary>
     public string? OriginalFolderPath { get; init; }
 
-    /// <summary>Which of the three file sources this project accepts content from.</summary>
+    /// <summary>Which write-path mechanism captured this content — see <see cref="Enums.FileResourceOrigin"/>'s own remarks for why this is deliberately not import-specific.</summary>
     public SafeValue<FileResourceOrigin?> Origin { get; init; } = SafeValue<FileResourceOrigin?>.Empty;
+
+    /// <summary>
+    /// Short symbolic key identifying which named root <see cref="OriginalFolderPath"/> is relative to
+    /// (e.g. <c>"sources"</c> for the bundled sources folder, <c>"imports"</c> for the user-imports
+    /// folder) — deliberately decoupled from <see cref="Origin"/> itself (#252), so a future
+    /// <see cref="Enums.FileResourceOrigin.System"/>/<see cref="Enums.FileResourceOrigin.User"/>
+    /// consumer unrelated to quote sources can register its own key without stretching what
+    /// <see cref="Origin"/> means. Resolving a key to an actual filesystem path is external to this
+    /// table (config/a resolver) — never hardcoded per-<see cref="Origin"/>-value. Always
+    /// <see langword="null"/> for <see cref="Enums.FileResourceOrigin.Upload"/>, matching
+    /// <see cref="OriginalFolderPath"/>'s own null-ness there.
+    /// </summary>
+    public string? HomeDirectoryKey { get; init; }
 
     /// <summary>SHA-256 hash (lowercase hex) of the file's raw content. Unique — enforces the dedup-by-content invariant.</summary>
     public string ContentHash { get; init; } = string.Empty;

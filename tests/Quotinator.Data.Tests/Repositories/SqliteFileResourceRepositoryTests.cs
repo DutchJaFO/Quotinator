@@ -31,7 +31,8 @@ public class SqliteFileResourceRepositoryTests
                 FileName                TEXT    NOT NULL,
                 OriginalFolderPath      TEXT,
                 Origin                  TEXT    NOT NULL
-                                        CHECK (Origin IN ('Bundled', 'UserImports', 'Uploaded')),
+                                        CHECK (Origin IN ('System', 'User', 'Upload')),
+                HomeDirectoryKey        TEXT,
                 ContentHash             TEXT    NOT NULL,
                 LineEnding              TEXT    NOT NULL
                                         CHECK (LineEnding IN ('LF', 'CRLF', 'CR')),
@@ -100,11 +101,11 @@ public class SqliteFileResourceRepositoryTests
     public async Task WriteAsync_UnchangedFileContent_DoesNotDuplicateRow()
     {
         var firstId = await _repository.WriteAsync(
-            "quotinator-curated.json", "sources", FileResourceOrigin.Bundled, "[\"a\",\"b\"]",
+            "quotinator-curated.json", "sources", FileResourceOrigin.System, "[\"a\",\"b\"]",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var secondId = await _repository.WriteAsync(
-            "quotinator-curated.json", "sources", FileResourceOrigin.Bundled, "[\"a\",\"b\"]",
+            "quotinator-curated.json", "sources", FileResourceOrigin.System, "[\"a\",\"b\"]",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(firstId, secondId, "Re-capturing unchanged content must reuse the same FileResource row, not insert a new one");
@@ -114,11 +115,11 @@ public class SqliteFileResourceRepositoryTests
     public async Task WriteAsync_ChangedFileContent_CreatesNewRow()
     {
         var firstId = await _repository.WriteAsync(
-            "quotinator-curated.json", "sources", FileResourceOrigin.Bundled, "[\"a\",\"b\"]",
+            "quotinator-curated.json", "sources", FileResourceOrigin.System, "[\"a\",\"b\"]",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var secondId = await _repository.WriteAsync(
-            "quotinator-curated.json", "sources", FileResourceOrigin.Bundled, "[\"a\",\"b\",\"c\"]",
+            "quotinator-curated.json", "sources", FileResourceOrigin.System, "[\"a\",\"b\",\"c\"]",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         Assert.AreNotEqual(firstId, secondId, "Changed content must produce a new FileResource row");
@@ -132,7 +133,7 @@ public class SqliteFileResourceRepositoryTests
         var batchId = await InsertImportBatchAsync();
 
         var fileResourceId = await _repository.WriteAsync(
-            "quotinator-curated.json", "sources", FileResourceOrigin.Bundled, "content",
+            "quotinator-curated.json", "sources", FileResourceOrigin.System, "content",
             batchId, cancellationToken: TestContext.CancellationToken);
 
         using var checkConn = new SqliteConnection($"Data Source={_dbPath}");
@@ -150,7 +151,7 @@ public class SqliteFileResourceRepositoryTests
     public async Task WriteAsync_SplitsContentIntoOrderedFileResourceLineRows()
     {
         var fileResourceId = await _repository.WriteAsync(
-            "three-lines.txt", null, FileResourceOrigin.Uploaded, "one\ntwo\nthree",
+            "three-lines.txt", null, FileResourceOrigin.Upload, "one\ntwo\nthree",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var lines = await _repository.GetLinesAsync(fileResourceId, TestContext.CancellationToken);
@@ -168,7 +169,7 @@ public class SqliteFileResourceRepositoryTests
     public async Task WriteAsync_DetectsCrlfLineEndingAndTrailingNewline()
     {
         var fileResourceId = await _repository.WriteAsync(
-            "windows-file.txt", null, FileResourceOrigin.Uploaded, "one\r\ntwo\r\n",
+            "windows-file.txt", null, FileResourceOrigin.Upload, "one\r\ntwo\r\n",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var found = await _repository.FindAsync(fileResourceId, TestContext.CancellationToken);
@@ -182,7 +183,7 @@ public class SqliteFileResourceRepositoryTests
     public async Task WriteAsync_DetectsLfLineEndingNoTrailingNewline()
     {
         var fileResourceId = await _repository.WriteAsync(
-            "unix-file.txt", null, FileResourceOrigin.Uploaded, "one\ntwo",
+            "unix-file.txt", null, FileResourceOrigin.Upload, "one\ntwo",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var found = await _repository.FindAsync(fileResourceId, TestContext.CancellationToken);
@@ -195,17 +196,43 @@ public class SqliteFileResourceRepositoryTests
     // ── WriteAsync — origin/folder ────────────────────────────────────────────
 
     [TestMethod]
-    public async Task WriteAsync_UploadedOrigin_StoresNullOriginalFolderPath()
+    public async Task WriteAsync_UploadOrigin_StoresNullOriginalFolderPath()
     {
         var fileResourceId = await _repository.WriteAsync(
-            "uploaded.json", null, FileResourceOrigin.Uploaded, "content",
+            "uploaded.json", null, FileResourceOrigin.Upload, "content",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var found = await _repository.FindAsync(fileResourceId, TestContext.CancellationToken);
 
         Assert.IsNotNull(found);
-        Assert.AreEqual(FileResourceOrigin.Uploaded, found!.Origin.Parsed);
+        Assert.AreEqual(FileResourceOrigin.Upload, found!.Origin.Parsed);
         Assert.IsNull(found.OriginalFolderPath);
+    }
+
+    [TestMethod]
+    public async Task WriteAsync_UploadOrigin_StoresNullHomeDirectoryKey()
+    {
+        var fileResourceId = await _repository.WriteAsync(
+            "uploaded2.json", null, FileResourceOrigin.Upload, "content2",
+            await InsertImportBatchAsync(), homeDirectoryKey: null, cancellationToken: TestContext.CancellationToken);
+
+        var found = await _repository.FindAsync(fileResourceId, TestContext.CancellationToken);
+
+        Assert.IsNotNull(found);
+        Assert.IsNull(found!.HomeDirectoryKey);
+    }
+
+    [TestMethod]
+    public async Task WriteAsync_SystemOrigin_StoresSuppliedHomeDirectoryKey()
+    {
+        var fileResourceId = await _repository.WriteAsync(
+            "quotinator-curated.json", "sources", FileResourceOrigin.System, "content3",
+            await InsertImportBatchAsync(), homeDirectoryKey: "sources", cancellationToken: TestContext.CancellationToken);
+
+        var found = await _repository.FindAsync(fileResourceId, TestContext.CancellationToken);
+
+        Assert.IsNotNull(found);
+        Assert.AreEqual("sources", found!.HomeDirectoryKey);
     }
 
     // ── WriteAsync — converter/converterOptions ──────────────────────────────
@@ -214,7 +241,7 @@ public class SqliteFileResourceRepositoryTests
     public async Task WriteAsync_ConverterAndConverterOptionsSupplied_AreStoredOnTheRow()
     {
         var fileResourceId = await _repository.WriteAsync(
-            "raw-upstream.csv", null, FileResourceOrigin.Uploaded, "a,b,c",
+            "raw-upstream.csv", null, FileResourceOrigin.Upload, "a,b,c",
             await InsertImportBatchAsync(), converter: "csv", converterOptions: "{\"delimiter\":\",\"}",
             cancellationToken: TestContext.CancellationToken);
 
@@ -229,7 +256,7 @@ public class SqliteFileResourceRepositoryTests
     public async Task WriteAsync_NoConverterSupplied_LeavesConverterColumnsNull()
     {
         var fileResourceId = await _repository.WriteAsync(
-            "already-canonical.json", null, FileResourceOrigin.Bundled, "[]",
+            "already-canonical.json", null, FileResourceOrigin.System, "[]",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var found = await _repository.FindAsync(fileResourceId, TestContext.CancellationToken);
@@ -243,12 +270,12 @@ public class SqliteFileResourceRepositoryTests
     public async Task WriteAsync_DedupHitWithDifferentConverter_OverwritesWithTheLatestValues()
     {
         var firstId = await _repository.WriteAsync(
-            "same-content.csv", null, FileResourceOrigin.Uploaded, "a,b,c",
+            "same-content.csv", null, FileResourceOrigin.Upload, "a,b,c",
             await InsertImportBatchAsync(), converter: "csv", converterOptions: "{\"delimiter\":\",\"}",
             cancellationToken: TestContext.CancellationToken);
 
         var secondId = await _repository.WriteAsync(
-            "same-content.csv", null, FileResourceOrigin.Uploaded, "a,b,c",
+            "same-content.csv", null, FileResourceOrigin.Upload, "a,b,c",
             await InsertImportBatchAsync(), converter: "csv", converterOptions: "{\"delimiter\":\";\"}",
             cancellationToken: TestContext.CancellationToken);
 
@@ -265,8 +292,8 @@ public class SqliteFileResourceRepositoryTests
     [TestMethod]
     public async Task GetPageAsync_NoFilters_ReturnsAllRows()
     {
-        await _repository.WriteAsync("a.json", null, FileResourceOrigin.Bundled, "a", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
-        await _repository.WriteAsync("b.json", null, FileResourceOrigin.Uploaded, "b", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+        await _repository.WriteAsync("a.json", null, FileResourceOrigin.System, "a", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+        await _repository.WriteAsync("b.json", null, FileResourceOrigin.Upload, "b", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var result = await _repository.GetPageAsync(fileName: null, origin: null, page: 1, pageSize: 20, TestContext.CancellationToken);
 
@@ -277,8 +304,8 @@ public class SqliteFileResourceRepositoryTests
     [TestMethod]
     public async Task GetPageAsync_FilterByFileName_ReturnsOnlyMatchingFile()
     {
-        await _repository.WriteAsync("target.json", null, FileResourceOrigin.Bundled, "a", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
-        await _repository.WriteAsync("other.json", null, FileResourceOrigin.Bundled, "b", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+        await _repository.WriteAsync("target.json", null, FileResourceOrigin.System, "a", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+        await _repository.WriteAsync("other.json", null, FileResourceOrigin.System, "b", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var result = await _repository.GetPageAsync("target.json", origin: null, page: 1, pageSize: 20, TestContext.CancellationToken);
 
@@ -289,7 +316,7 @@ public class SqliteFileResourceRepositoryTests
     [TestMethod]
     public async Task GetPageAsync_FilterByFileNameDifferentCase_StillMatches()
     {
-        await _repository.WriteAsync("Target.json", null, FileResourceOrigin.Bundled, "a", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+        await _repository.WriteAsync("Target.json", null, FileResourceOrigin.System, "a", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var result = await _repository.GetPageAsync("target.JSON", origin: null, page: 1, pageSize: 20, TestContext.CancellationToken);
 
@@ -299,10 +326,10 @@ public class SqliteFileResourceRepositoryTests
     [TestMethod]
     public async Task GetPageAsync_FilterByOrigin_ReturnsOnlyMatchingOrigin()
     {
-        await _repository.WriteAsync("a.json", null, FileResourceOrigin.Bundled, "a", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
-        await _repository.WriteAsync("b.json", null, FileResourceOrigin.Uploaded, "b", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+        await _repository.WriteAsync("a.json", null, FileResourceOrigin.System, "a", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+        await _repository.WriteAsync("b.json", null, FileResourceOrigin.Upload, "b", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
-        var result = await _repository.GetPageAsync(fileName: null, FileResourceOrigin.Uploaded, page: 1, pageSize: 20, TestContext.CancellationToken);
+        var result = await _repository.GetPageAsync(fileName: null, FileResourceOrigin.Upload, page: 1, pageSize: 20, TestContext.CancellationToken);
 
         Assert.AreEqual(1, result.TotalCount);
         Assert.AreEqual("b.json", result.Items.Single().FileName);
@@ -312,7 +339,7 @@ public class SqliteFileResourceRepositoryTests
     public async Task GetPageAsync_PageSizeZero_ReturnsAllRowsAsOnePage()
     {
         for (var i = 0; i < 3; i++)
-            await _repository.WriteAsync($"file-{i}.json", null, FileResourceOrigin.Bundled, $"content-{i}", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+            await _repository.WriteAsync($"file-{i}.json", null, FileResourceOrigin.System, $"content-{i}", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var result = await _repository.GetPageAsync(fileName: null, origin: null, page: 1, pageSize: 0, TestContext.CancellationToken);
 
@@ -324,9 +351,9 @@ public class SqliteFileResourceRepositoryTests
     [TestMethod]
     public async Task GetPageAsync_FileLinkedToMultipleBatches_ReportsCorrectLinkedBatchCount()
     {
-        await _repository.WriteAsync("shared.json", null, FileResourceOrigin.Bundled, "content", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
-        await _repository.WriteAsync("shared.json", null, FileResourceOrigin.Bundled, "content", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
-        await _repository.WriteAsync("shared.json", null, FileResourceOrigin.Bundled, "content", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+        await _repository.WriteAsync("shared.json", null, FileResourceOrigin.System, "content", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+        await _repository.WriteAsync("shared.json", null, FileResourceOrigin.System, "content", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
+        await _repository.WriteAsync("shared.json", null, FileResourceOrigin.System, "content", await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         var result = await _repository.GetPageAsync("shared.json", origin: null, page: 1, pageSize: 20, TestContext.CancellationToken);
 
@@ -342,9 +369,9 @@ public class SqliteFileResourceRepositoryTests
         var firstBatch  = await InsertImportBatchAsync();
         var secondBatch = await InsertImportBatchAsync();
         var fileResourceId = await _repository.WriteAsync(
-            "shared.json", null, FileResourceOrigin.Bundled, "content", firstBatch, cancellationToken: TestContext.CancellationToken);
+            "shared.json", null, FileResourceOrigin.System, "content", firstBatch, cancellationToken: TestContext.CancellationToken);
         await _repository.WriteAsync(
-            "shared.json", null, FileResourceOrigin.Bundled, "content", secondBatch, cancellationToken: TestContext.CancellationToken);
+            "shared.json", null, FileResourceOrigin.System, "content", secondBatch, cancellationToken: TestContext.CancellationToken);
 
         var batchIds = await _repository.GetBatchIdsAsync(fileResourceId, TestContext.CancellationToken);
 
@@ -369,7 +396,7 @@ public class SqliteFileResourceRepositoryTests
         for (var i = 0; i < 5; i++)
         {
             await _repository.WriteAsync(
-                "same-name.json", null, FileResourceOrigin.Bundled, $"content-v{i}",
+                "same-name.json", null, FileResourceOrigin.System, $"content-v{i}",
                 await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
         }
 
@@ -388,10 +415,10 @@ public class SqliteFileResourceRepositoryTests
     public async Task PruneAsync_CascadesDeleteToFileResourceLineAndBatchLinks()
     {
         var fileResourceId = await _repository.WriteAsync(
-            "solo.json", null, FileResourceOrigin.Bundled, "one\ntwo",
+            "solo.json", null, FileResourceOrigin.System, "one\ntwo",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
         await _repository.WriteAsync(
-            "solo.json", null, FileResourceOrigin.Bundled, "changed content, keeps most recent",
+            "solo.json", null, FileResourceOrigin.System, "changed content, keeps most recent",
             await InsertImportBatchAsync(), cancellationToken: TestContext.CancellationToken);
 
         await _repository.PruneAsync(keepPerFile: 1, TestContext.CancellationToken);
