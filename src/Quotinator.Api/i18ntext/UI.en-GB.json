@@ -88,7 +88,7 @@
   "ErrorFileResourceNotFound": "No captured import file exists with that ID.",
   "ErrorLineEndingInvalid": "'lineEnding' must be one of 'lf', 'crlf', or 'cr'.",
   "ErrorKeepPerFileInvalid": "'keepPerFile' must be a non-negative whole number.",
-  "ErrorFileResourceOriginInvalid": "'origin' must be one of 'Bundled', 'UserImports', or 'Uploaded'.",
+  "ErrorFileResourceOriginInvalid": "'origin' must be one of 'System', 'User', or 'Upload'.",
   "ErrorImportBatchTypeInvalid": "'type' must be one of 'Seed', 'UserSeed', 'Import', or 'System'.",
   "ErrorImportBatchStatusInvalid": "'status' must be one of 'Staged', 'Applied', or 'Discarded'.",
   "AdminEndpointsHeading": "Admin endpoints",

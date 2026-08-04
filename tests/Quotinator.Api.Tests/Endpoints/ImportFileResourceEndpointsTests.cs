@@ -53,7 +53,7 @@ public class ImportFileResourceEndpointsTests
         return client;
     }
 
-    private static FileResourceEntity BuildResource(string fileName = "file.json", FileResourceOrigin origin = FileResourceOrigin.Bundled) => new()
+    private static FileResourceEntity BuildResource(string fileName = "file.json", FileResourceOrigin origin = FileResourceOrigin.System) => new()
     {
         FileName                = fileName,
         Origin                  = new SafeValue<FileResourceOrigin?>(origin.ToString(), origin),
@@ -82,11 +82,11 @@ public class ImportFileResourceEndpointsTests
     public async Task GetFileResources_FilterByOrigin_ReturnsOnlyMatching()
     {
         var fileResources = new FakeFileResourceRepository();
-        fileResources.Seed(BuildResource("bundled.json", FileResourceOrigin.Bundled), ["x"]);
-        fileResources.Seed(BuildResource("uploaded.json", FileResourceOrigin.Uploaded), ["x"]);
+        fileResources.Seed(BuildResource("system.json", FileResourceOrigin.System), ["x"]);
+        fileResources.Seed(BuildResource("uploaded.json", FileResourceOrigin.Upload), ["x"]);
 
         using var factory = CreateFactory(fileResources: fileResources);
-        var response = await factory.CreateClient().GetAsync("/api/v1/import/file-resources?origin=uploaded", TestContext.CancellationToken);
+        var response = await factory.CreateClient().GetAsync("/api/v1/import/file-resources?origin=upload", TestContext.CancellationToken);
         var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
@@ -234,7 +234,7 @@ public class ImportFileResourceEndpointsTests
         var resource = new FileResourceEntity
         {
             FileName                = "quotinator-curated.json",
-            Origin                  = new SafeValue<FileResourceOrigin?>(nameof(FileResourceOrigin.Bundled), FileResourceOrigin.Bundled),
+            Origin                  = new SafeValue<FileResourceOrigin?>(nameof(FileResourceOrigin.System), FileResourceOrigin.System),
             ContentHash             = "irrelevant-for-this-test",
             LineEnding              = new SafeValue<LineEndingStyle?>(nameof(LineEndingStyle.CRLF), LineEndingStyle.CRLF),
             EndsWithTrailingNewline = true,
@@ -258,7 +258,7 @@ public class ImportFileResourceEndpointsTests
         var resource = new FileResourceEntity
         {
             FileName                = "quotinator-curated.json",
-            Origin                  = new SafeValue<FileResourceOrigin?>(nameof(FileResourceOrigin.Bundled), FileResourceOrigin.Bundled),
+            Origin                  = new SafeValue<FileResourceOrigin?>(nameof(FileResourceOrigin.System), FileResourceOrigin.System),
             ContentHash             = "irrelevant-for-this-test",
             LineEnding              = new SafeValue<LineEndingStyle?>(nameof(LineEndingStyle.LF), LineEndingStyle.LF),
             EndsWithTrailingNewline = false,

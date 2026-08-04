@@ -85,7 +85,7 @@
   "ErrorFileResourceNotFound": "Er bestaat geen vastgelegd importbestand met dat ID.",
   "ErrorLineEndingInvalid": "'lineEnding' moet 'lf', 'crlf' of 'cr' zijn.",
   "ErrorKeepPerFileInvalid": "'keepPerFile' moet een niet-negatief geheel getal zijn.",
-  "ErrorFileResourceOriginInvalid": "'origin' moet 'Bundled', 'UserImports' of 'Uploaded' zijn.",
+  "ErrorFileResourceOriginInvalid": "'origin' moet 'System', 'User' of 'Upload' zijn.",
   "ErrorImportBatchTypeInvalid": "'type' moet 'Seed', 'UserSeed', 'Import' of 'System' zijn.",
   "ErrorImportBatchStatusInvalid": "'status' moet 'Staged', 'Applied' of 'Discarded' zijn.",
   "ErrorMutuallyExclusiveEntityFilter": "Geef ofwel {0} ofwel {1} op, niet beide.",

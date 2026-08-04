@@ -85,7 +85,7 @@
   "ErrorFileResourceNotFound": "Es existiert keine erfasste Importdatei mit dieser ID.",
   "ErrorLineEndingInvalid": "'lineEnding' muss 'lf', 'crlf' oder 'cr' sein.",
   "ErrorKeepPerFileInvalid": "'keepPerFile' muss eine nicht-negative ganze Zahl sein.",
-  "ErrorFileResourceOriginInvalid": "'origin' muss 'Bundled', 'UserImports' oder 'Uploaded' sein.",
+  "ErrorFileResourceOriginInvalid": "'origin' muss 'System', 'User' oder 'Upload' sein.",
   "ErrorImportBatchTypeInvalid": "'type' muss 'Seed', 'UserSeed', 'Import' oder 'System' sein.",
   "ErrorImportBatchStatusInvalid": "'status' muss 'Staged', 'Applied' oder 'Discarded' sein.",
   "ErrorMutuallyExclusiveEntityFilter": "Geben Sie entweder {0} oder {1} an, nicht beides.",

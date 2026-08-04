@@ -13,11 +13,14 @@ public sealed class FileResourceResponse
     /// <summary>Plain filename (no path segments).</summary>
     public required string FileName { get; init; }
 
-    /// <summary>Where the file lived within its own source root. <see langword="null"/> for uploads.</summary>
+    /// <summary>Where the file lived, relative to <see cref="HomeDirectoryKey"/>. <see langword="null"/> for uploads.</summary>
     public string? OriginalFolderPath { get; init; }
 
-    /// <summary>Which of the three file sources this project accepts content from: <c>bundled</c>, <c>userimports</c>, or <c>uploaded</c>.</summary>
+    /// <summary>Which write-path mechanism captured this content: <c>system</c>, <c>user</c>, or <c>upload</c>.</summary>
     public required string Origin { get; init; }
+
+    /// <summary>Symbolic key identifying which named root <see cref="OriginalFolderPath"/> is relative to (e.g. <c>sources</c>, <c>imports</c>). <see langword="null"/> for uploads.</summary>
+    public string? HomeDirectoryKey { get; init; }
 
     /// <summary>SHA-256 hash (lowercase hex) of the file's raw content.</summary>
     public required string ContentHash { get; init; }

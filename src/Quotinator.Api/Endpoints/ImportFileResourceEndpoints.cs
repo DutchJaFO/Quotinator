@@ -72,7 +72,7 @@ internal static class ImportFileResourceEndpoints
         .WithDescription(
             "Returns a paginated list of captured import/seed file content (#251), each distinct " +
             "`fileName` ordered by most-recently-seen first. Filter by `fileName` (exact match, " +
-            "case-insensitive) and/or `origin` (`bundled`, `userimports`, `uploaded`). Each row includes " +
+            "case-insensitive) and/or `origin` (`system`, `user`, `upload`). Each row includes " +
             "`linkedBatchCount` — the number of `Import_Batch` rows this content is linked to — but not " +
             "the individual batch ids (see `GET .../{id}` for those) or line content (see " +
             "`GET .../{id}/download`). Maximum `pageSize` is 500.");
@@ -172,6 +172,7 @@ internal static class ImportFileResourceEndpoints
         FileName                = item.FileName,
         OriginalFolderPath      = item.OriginalFolderPath,
         Origin                  = item.Origin.Parsed?.ToString().ToLowerInvariant() ?? item.Origin.Raw,
+        HomeDirectoryKey        = item.HomeDirectoryKey,
         ContentHash             = item.ContentHash,
         LineEnding              = item.LineEnding.Parsed?.ToString().ToLowerInvariant() ?? item.LineEnding.Raw,
         EndsWithTrailingNewline = item.EndsWithTrailingNewline,
@@ -189,6 +190,7 @@ internal static class ImportFileResourceEndpoints
         FileName                = entity.FileName,
         OriginalFolderPath      = entity.OriginalFolderPath,
         Origin                  = entity.Origin.Parsed?.ToString().ToLowerInvariant() ?? entity.Origin.Raw,
+        HomeDirectoryKey        = entity.HomeDirectoryKey,
         ContentHash             = entity.ContentHash,
         LineEnding              = entity.LineEnding.Parsed?.ToString().ToLowerInvariant() ?? entity.LineEnding.Raw,
         EndsWithTrailingNewline = entity.EndsWithTrailingNewline,

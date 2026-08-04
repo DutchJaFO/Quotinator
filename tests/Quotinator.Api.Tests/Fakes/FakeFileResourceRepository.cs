@@ -29,7 +29,7 @@ internal sealed class FakeFileResourceRepository : IFileResourceRepository
     public Task<Guid> WriteAsync(
         string fileName, string? originalFolderPath, FileResourceOrigin origin, string content,
         Guid importBatchId, string? converter = null, string? converterOptions = null,
-        CancellationToken cancellationToken = default)
+        string? homeDirectoryKey = null, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("Not exercised by ImportFileResourceEndpointsTests.");
 
     public Task<FileResourceEntity?> FindAsync(Guid id, CancellationToken cancellationToken = default)
@@ -60,6 +60,7 @@ internal sealed class FakeFileResourceRepository : IFileResourceRepository
             FileName                = r.FileName,
             OriginalFolderPath      = r.OriginalFolderPath,
             Origin                  = r.Origin,
+            HomeDirectoryKey        = r.HomeDirectoryKey,
             ContentHash             = r.ContentHash,
             LineEnding              = r.LineEnding,
             EndsWithTrailingNewline = r.EndsWithTrailingNewline,
