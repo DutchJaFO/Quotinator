@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-05 18:47 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-05 21:04 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -28,7 +28,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Changed
 - Documented that the database's internal audit-trail tables (event/audit history) intentionally retain their record after the entity they describe is later changed or replaced — a purely internal documentation clarification with no behaviour change (issue #151)
+- Migrated several project conventions that previously existed only as informal internal working notes into the project's own documentation (`CLAUDE.md`/`docs/`) — a purely internal documentation change with no behaviour change (issue #146)
+- Documented that a new GitHub issue's label and milestone must now be proposed together with its title and body, in the same draft, rather than as a separate follow-up step — a purely internal process documentation change with no behaviour change (issue #208)
 - Investigated the OS-level vulnerabilities Docker Scout reports in the container's base image; a routine rebuild resolved nearly all of them, and the remainder are tracked as accepted residual risk with no fix currently available upstream — no application change (issue #232)
+- Established the project's domain-prefixed table/entity naming convention, and its class-naming-suffix/enum-placement conventions, as formal architecture decision records (ADR 015, ADR 016) — the decision that the renames below (issues #253, #254, #255, #256) implement; a purely internal documentation decision with no behaviour change of its own (issue #227)
 - Internal database tables and their backing C# entity classes were renamed to follow a consistent domain-prefixed naming convention (e.g. `Sources` → `Quotinator_Source`, `ImportBatches` → `Import_Batch`) — no functional change, no API surface change (issues #253, #254)
 - Internal C# enum types were reorganised into a dedicated `Enums` folder per project, following the project's own naming/placement conventions — no functional change, no API surface change (issue #255)
 - Several internal C# class names were corrected to consistently reflect what boundary they cross (an HTTP response, or an on-disk JSON file) — no functional change, no API surface change (issue #256)

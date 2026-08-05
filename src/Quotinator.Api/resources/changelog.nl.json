@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 232, 236, 222, 253, 254, 255, 256, 251, 252, 249],
+    "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249],
     "highlights": [
       "Als de database ooit niet correct kan opstarten, blijft Quotinator nu bereikbaar en meldt het probleem duidelijk in plaats van vast te lopen of een technische foutpagina te tonen — een admin-databasereset kan dit oplossen zonder dat de app of container opnieuw gestart hoeft te worden.",
       "Quotinator bewaart nu een kopie van elk import-/seedbestand dat het verwerkt — inclusief welke conversie-instellingen zijn gebruikt — zodat de originele inhoud later opnieuw kan worden opgevraagd, bekeken of gedownload, en oude versies kunnen worden opgeruimd om ruimte terug te winnen.",
@@ -29,7 +29,10 @@
     ],
     "changed": [
       "Gedocumenteerd dat de interne audit-trailtabellen van de database (gebeurtenis-/audit-geschiedenis) hun vastlegging bewust behouden nadat de entiteit die ze beschrijven later is gewijzigd of vervangen — een zuiver interne documentatieverduidelijking zonder gedragswijziging (issue #151)",
+      "Verschillende projectconventies die voorheen alleen bestonden als informele interne werknotities zijn gemigreerd naar de eigen documentatie van het project (`CLAUDE.md`/`docs/`) — een zuiver interne documentatiewijziging zonder gedragswijziging (issue #146)",
+      "Gedocumenteerd dat het label en de milestone van een nieuwe GitHub-issue voortaan samen met de titel en inhoud in hetzelfde concept moeten worden voorgesteld, in plaats van als aparte vervolgstap — een zuiver interne procesdocumentatiewijziging zonder gedragswijziging (issue #208)",
       "De OS-niveau kwetsbaarheden die Docker Scout meldt in de basisimage van de container zijn onderzocht; een gewone rebuild loste vrijwel alles op, en de rest wordt bijgehouden als geaccepteerd restrisico zonder dat er momenteel een upstream-fix beschikbaar is — geen wijziging aan de applicatie (issue #232)",
+      "De domein-voorvoegselconventie voor tabellen/entiteiten van het project, en de conventies voor klassenaam-achtervoegsels/enum-plaatsing, zijn vastgelegd als formele architectuurbeslissingen (ADR 015, ADR 016) — de beslissing die de hernoemingen hieronder (issues #253, #254, #255, #256) uitvoeren; een zuiver interne documentatiebeslissing zonder eigen gedragswijziging (issue #227)",
       "Interne databasetabellen en de bijbehorende C#-entiteitsklassen zijn hernoemd volgens een consistente domein-voorvoegselconventie (bijv. `Sources` → `Quotinator_Source`, `ImportBatches` → `Import_Batch`) — geen functionele wijziging, geen wijziging aan de API (issues #253, #254)",
       "Interne C#-enum-types zijn gereorganiseerd naar een dedicated `Enums`-map per project, volgens de bestaande naamgevings-/plaatsingsconventies van het project — geen functionele wijziging, geen wijziging aan de API (issue #255)",
       "Verschillende interne C#-klassenamen zijn gecorrigeerd zodat ze consistent aangeven welke grens ze overschrijden (een HTTP-response, of een JSON-bestand op schijf) — geen functionele wijziging, geen wijziging aan de API (issue #256)",

@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 232, 236, 222, 253, 254, 255, 256, 251, 252, 249],
+    "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249],
     "highlights": [
       "Falls die Datenbank jemals nicht korrekt starten kann, bleibt Quotinator jetzt erreichbar und meldet das Problem klar, anstatt abzustürzen oder eine technische Fehlerseite anzuzeigen — ein Admin-Datenbank-Reset kann dies beheben, ohne dass App oder Container neu gestartet werden müssen.",
       "Quotinator speichert jetzt eine Kopie jeder Import-/Seed-Datei, die es verarbeitet — einschließlich der verwendeten Konvertierungseinstellungen — sodass der ursprüngliche Inhalt später aufgelistet, angesehen oder erneut heruntergeladen werden kann, und alte Versionen können bereinigt werden, um Speicherplatz freizugeben.",
@@ -29,7 +29,10 @@
     ],
     "changed": [
       "Dokumentiert, dass die internen Audit-Trail-Tabellen der Datenbank (Ereignis-/Audit-Verlauf) ihren Eintrag bewusst beibehalten, nachdem die beschriebene Entität später geändert oder ersetzt wurde — eine rein interne Dokumentationsklarstellung ohne Verhaltensänderung (Issue #151)",
+      "Mehrere Projektkonventionen, die zuvor nur als informelle interne Arbeitsnotizen existierten, wurden in die eigene Dokumentation des Projekts (`CLAUDE.md`/`docs/`) migriert — eine rein interne Dokumentationsänderung ohne Verhaltensänderung (Issue #146)",
+      "Dokumentiert, dass Label und Milestone eines neuen GitHub-Issues jetzt zusammen mit Titel und Beschreibung im selben Entwurf vorgeschlagen werden müssen, statt als separater Folgeschritt — eine rein interne Prozessdokumentationsänderung ohne Verhaltensänderung (Issue #208)",
       "Die von Docker Scout gemeldeten Schwachstellen auf Betriebssystemebene im Basis-Image des Containers wurden untersucht; ein gewöhnlicher Rebuild behob fast alle davon, und der Rest wird als akzeptiertes Restrisiko geführt, da derzeit kein Upstream-Fix verfügbar ist — keine Änderung an der Anwendung (Issue #232)",
+      "Die domänenbasierte Präfixkonvention für Tabellen/Entitäten des Projekts sowie die Konventionen für Klassennamen-Suffixe/Enum-Platzierung wurden als formale Architekturentscheidungen (ADR 015, ADR 016) festgehalten — die Entscheidung, die die unten genannten Umbenennungen (Issues #253, #254, #255, #256) umsetzen; eine rein interne Dokumentationsentscheidung ohne eigene Verhaltensänderung (Issue #227)",
       "Interne Datenbanktabellen und die zugehörigen C#-Entitätsklassen wurden gemäß einer einheitlichen, domänenbasierten Präfixkonvention umbenannt (z. B. `Sources` → `Quotinator_Source`, `ImportBatches` → `Import_Batch`) — keine funktionale Änderung, keine Änderung an der API (Issues #253, #254)",
       "Interne C#-Enum-Typen wurden in einen dedizierten `Enums`-Ordner pro Projekt umorganisiert, gemäß den bestehenden Namens-/Platzierungskonventionen des Projekts — keine funktionale Änderung, keine Änderung an der API (Issue #255)",
       "Mehrere interne C#-Klassennamen wurden korrigiert, damit sie konsistent widerspiegeln, welche Grenze sie überschreiten (eine HTTP-Antwort oder eine JSON-Datei auf der Festplatte) — keine funktionale Änderung, keine Änderung an der API (Issue #256)",
