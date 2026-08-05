@@ -13,4 +13,16 @@ public sealed class NoOpAuditEntryReader : IAuditEntryReader
     /// <inheritdoc/>
     public Task<PagedItems<AuditEntryEntity>> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
         => Task.FromResult(new PagedItems<AuditEntryEntity>([], page, pageSize, 0));
+
+    /// <inheritdoc/>
+    public Task<IReadOnlyList<AuditEntryEntity>> GetAllInRangeAsync(DateTime? startDate, DateTime? endDate)
+        => Task.FromResult<IReadOnlyList<AuditEntryEntity>>([]);
+
+    /// <inheritdoc/>
+    public Task<int> CountInRangeAsync(DateTime? startDate, DateTime? endDate)
+        => Task.FromResult(0);
+
+    /// <inheritdoc/>
+    public Task<(DateTime? Earliest, DateTime? Latest)> GetDateRangeAsync()
+        => Task.FromResult<(DateTime?, DateTime?)>((null, null));
 }

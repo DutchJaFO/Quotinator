@@ -30,8 +30,11 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     private readonly IImportBatchRepository         _importBatches;
     private readonly IImportActionCoordinator       _actionCoordinator;
     private readonly IImportActionService           _actionService;
+    private readonly IImportActionWriter            _actionWriter;
     private readonly ISourceCacheUpdater            _sourceCacheUpdater;
     private readonly bool                           _autoUpdateSources;
+    private readonly bool                           _autoPurgeBundledImportActions;
+    private readonly bool                           _autoPurgeUserImportActions;
     private readonly IRuleFileOverridePathResolver  _ruleFileOverridePathResolver;
     private readonly ISourceFileOverrideRegistry    _sourceFileOverrideRegistry;
     private readonly IFileResourceRepository        _fileResources;
@@ -45,11 +48,14 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         IImportBatchRepository         importBatches,
         IImportActionCoordinator       actionCoordinator,
         IImportActionService           actionService,
+        IImportActionWriter            actionWriter,
         IAuditEntryWriter             auditWriter,
         ICallerContext                 callerContext,
         ILogger<DatabaseInitializer>   logger,
         ISourceCacheUpdater            sourceCacheUpdater,
         bool                           autoUpdateSources,
+        bool                           autoPurgeBundledImportActions,
+        bool                           autoPurgeUserImportActions,
         IRuleFileOverridePathResolver  ruleFileOverridePathResolver,
         ISourceFileOverrideRegistry    sourceFileOverrideRegistry,
         IFileResourceRepository        fileResources,
@@ -60,8 +66,11 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         _importBatches      = importBatches;
         _actionCoordinator  = actionCoordinator;
         _actionService      = actionService;
+        _actionWriter       = actionWriter;
         _sourceCacheUpdater = sourceCacheUpdater;
         _autoUpdateSources  = autoUpdateSources;
+        _autoPurgeBundledImportActions = autoPurgeBundledImportActions;
+        _autoPurgeUserImportActions    = autoPurgeUserImportActions;
         _ruleFileOverridePathResolver = ruleFileOverridePathResolver;
         _sourceFileOverrideRegistry   = sourceFileOverrideRegistry;
         _fileResources                = fileResources;
@@ -307,6 +316,26 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                         Agent       = CallerContext.Agent,
                         PerformedAt = DateTime.UtcNow,
                     }, connection);
+
+                    // #249: the batch reached zero pending actions — its Import_Action rows have
+                    // served their purpose (resolving this import). Purge them when the relevant
+                    // per-origin setting allows it; a temporary developer investigation of a specific
+                    // source flips that one setting off first, so this stays a no-op for it.
+                    var autoPurge = batch.Origin == SeedBatchOrigin.UserImports
+                        ? _autoPurgeUserImportActions
+                        : _autoPurgeBundledImportActions;
+                    if (autoPurge)
+                    {
+                        await _actionWriter.DeleteForBatchAsync(batchIdStr, connection);
+                        await AuditWriter.WriteAsync(new AuditEntryEntity
+                        {
+                            TableName   = "Import_Action",
+                            RecordId    = batchIdStr,
+                            Operation   = AuditOperation.Purge,
+                            Agent       = CallerContext.Agent,
+                            PerformedAt = DateTime.UtcNow,
+                        }, connection);
+                    }
                 }
                 else
                 {

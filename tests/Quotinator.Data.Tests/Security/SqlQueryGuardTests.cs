@@ -153,6 +153,9 @@ public class SqlQueryGuardTests
             "SystemImportActions.CountPagedBase", // COUNT(*) — private base for CountPaged factory
             "ImportBatches.CountPagedBase",       // COUNT(*) — private base for CountPaged factory (#251)
             "FileResources.CountPageBase",        // COUNT(*) — private base for CountPage factory (#251)
+            "SystemChangeLog.CountInRangeBase",   // COUNT(*) — private base for CountInRange factory (#249)
+            "SystemAudit.SelectDateRange",        // MIN(...)/MAX(...) — #249's date-range discovery endpoint
+            "SystemChangeLog.SelectDateRange",    // MIN(...)/MAX(...) — #249's date-range discovery endpoint
         };
 
         var actual = EnumerateSqlConstants()
@@ -215,6 +218,20 @@ public class SqlQueryGuardTests
         {
             yield return [$"FileResources.SelectPage({filterFileName},{filterOrigin})", Sql.FileResources.SelectPage(filterFileName, filterOrigin)];
             yield return [$"FileResources.CountPage({filterFileName},{filterOrigin})", Sql.FileResources.CountPage(filterFileName, filterOrigin)];
+        }
+
+        // SystemAudit.SelectInRange/CountInRange (#249) — one case per filter-flag combination.
+        foreach (var (filterStart, filterEnd) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        {
+            yield return [$"SystemAudit.SelectInRange({filterStart},{filterEnd})", Sql.SystemAudit.SelectInRange(filterStart, filterEnd)];
+            yield return [$"SystemAudit.CountInRange({filterStart},{filterEnd})", Sql.SystemAudit.CountInRange(filterStart, filterEnd)];
+        }
+
+        // SystemChangeLog.SelectInRange/CountInRange (#249) — one case per filter-flag combination.
+        foreach (var (filterStart, filterEnd) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        {
+            yield return [$"SystemChangeLog.SelectInRange({filterStart},{filterEnd})", Sql.SystemChangeLog.SelectInRange(filterStart, filterEnd)];
+            yield return [$"SystemChangeLog.CountInRange({filterStart},{filterEnd})", Sql.SystemChangeLog.CountInRange(filterStart, filterEnd)];
         }
     }
 
@@ -384,6 +401,12 @@ public class SqlQueryGuardTests
             "SystemAudit.SelectPaged",
             "SystemAudit.CountPaged",
             "SystemAudit.BuildWhere",
+            "SystemAudit.SelectInRange",
+            "SystemAudit.CountInRange",
+            "SystemAudit.BuildRangeWhere",
+            "SystemChangeLog.SelectInRange",
+            "SystemChangeLog.CountInRange",
+            "SystemChangeLog.BuildRangeWhere",
             "SystemImportActions.SelectPaged",
             "SystemImportActions.CountPaged",
             "SystemImportActions.BuildWhere",

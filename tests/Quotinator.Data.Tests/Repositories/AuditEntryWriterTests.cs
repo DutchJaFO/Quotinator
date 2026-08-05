@@ -38,6 +38,23 @@ public class AuditEntryWriterTests
                 DateDeleted  TEXT,
                 IsDeleted    INTEGER NOT NULL DEFAULT 0
             );
+
+            CREATE TABLE Audit_Change (
+                Id               TEXT NOT NULL PRIMARY KEY,
+                EntityType       TEXT NOT NULL,
+                EntityId         TEXT NOT NULL,
+                InitiatedByType  TEXT NOT NULL,
+                InitiatedById    TEXT,
+                Action           TEXT NOT NULL,
+                Field            TEXT,
+                OldValue         TEXT,
+                NewValue         TEXT,
+                OccurredAt       TEXT NOT NULL,
+                DateCreated      TEXT NOT NULL,
+                DateModified     TEXT,
+                DateDeleted      TEXT,
+                IsDeleted        INTEGER NOT NULL DEFAULT 0
+            );
             """);
 
         _factory = new SqliteConnectionFactory(_dbPath);
@@ -193,6 +210,48 @@ public class AuditEntryWriterTests
         var widgetsEntry = remaining.Single(r => r.TableName == "Widgets");
         Assert.AreEqual(AuditOperation.Insert, sourcesEntry.Operation, "Sources entry must be untouched");
         Assert.AreEqual(AuditOperation.Purge, widgetsEntry.Operation, "Purge entry TableName must be the cleared table");
+    }
+
+    /// <summary>#249: an unscoped clear treats Audit_Entry and Audit_Change as one combined audit-trail concern.</summary>
+    [TestMethod]
+    public async Task ClearAsync_NoFilter_AlsoDeletesAuditChangeRows()
+    {
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            conn.Open();
+            conn.Execute(
+                "INSERT INTO Audit_Change (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
+                "VALUES (@id, 'quote', @entityId, 'Seed', 'Created', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), entityId = Guid.NewGuid().ToString(), now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
+        }
+
+        await _writer.ClearAsync();
+
+        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        verifyConn.Open();
+        var remaining = verifyConn.ExecuteScalar<int>("SELECT COUNT(*) FROM Audit_Change;");
+        Assert.AreEqual(0, remaining, "an unscoped clear must also empty Audit_Change");
+    }
+
+    /// <summary>A scoped clear (`?table=`) has no equivalent concept for Audit_Change, so it must leave it untouched.</summary>
+    [TestMethod]
+    public async Task ClearAsync_WithTable_LeavesAuditChangeRowsUntouched()
+    {
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            conn.Open();
+            conn.Execute(
+                "INSERT INTO Audit_Change (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
+                "VALUES (@id, 'quote', @entityId, 'Seed', 'Created', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), entityId = Guid.NewGuid().ToString(), now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
+        }
+
+        await _writer.ClearAsync("Widgets");
+
+        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        verifyConn.Open();
+        var remaining = verifyConn.ExecuteScalar<int>("SELECT COUNT(*) FROM Audit_Change;");
+        Assert.AreEqual(1, remaining, "a table-scoped clear must never touch Audit_Change");
     }
 
     /// <summary>

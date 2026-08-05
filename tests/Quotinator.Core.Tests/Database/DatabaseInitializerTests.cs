@@ -53,12 +53,17 @@ public class DatabaseInitializerTests
 
     private QuotinatorDatabaseInitializer CreateInitializer(
         IReadOnlyList<SeedBatch> batches, bool useBaseline = true,
-        IRuleFileOverridePathResolver? ruleFileOverridePathResolver = null, ISourceFileOverrideRegistry? sourceFileOverrideRegistry = null)
-        => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline, ruleFileOverridePathResolver, sourceFileOverrideRegistry);
+        IRuleFileOverridePathResolver? ruleFileOverridePathResolver = null, ISourceFileOverrideRegistry? sourceFileOverrideRegistry = null,
+        bool autoPurgeBundledImportActions = false, bool autoPurgeUserImportActions = false,
+        IAuditEntryWriter? auditWriter = null)
+        => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline, ruleFileOverridePathResolver, sourceFileOverrideRegistry,
+            autoPurgeBundledImportActions, autoPurgeUserImportActions, auditWriter);
 
     private QuotinatorDatabaseInitializer CreateInitializer(
         IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline,
-        IRuleFileOverridePathResolver? ruleFileOverridePathResolver = null, ISourceFileOverrideRegistry? sourceFileOverrideRegistry = null)
+        IRuleFileOverridePathResolver? ruleFileOverridePathResolver = null, ISourceFileOverrideRegistry? sourceFileOverrideRegistry = null,
+        bool autoPurgeBundledImportActions = false, bool autoPurgeUserImportActions = false,
+        IAuditEntryWriter? auditWriter = null)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
@@ -67,7 +72,7 @@ public class DatabaseInitializerTests
         var actionReader   = new ImportActionReader(factory);
         var actionWriter   = new ImportActionWriter(factory);
         var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService  = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+        var actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -77,9 +82,10 @@ public class DatabaseInitializerTests
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
-            coordinator, actionService,
-            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
+            coordinator, actionService, actionWriter,
+            auditWriter ?? NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
+            autoPurgeBundledImportActions, autoPurgeUserImportActions,
             ruleFileOverridePathResolver ?? NoOpRuleFileOverridePathResolver.Instance,
             sourceFileOverrideRegistry ?? NoOpSourceFileOverrideRegistry.Instance,
             NoOpFileResourceRepository.Instance,
@@ -237,6 +243,93 @@ public class DatabaseInitializerTests
         var newCount = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.New ?? 0);
         Assert.AreEqual(844, modified, "799 unique quotes + 45 cross-file duplicate occurrences (AllFilesBatch's own vilaboim/NikhilNamal17 overlap) — every quote line across every file matches an already-existing row, since the database was already fully seeded");
         Assert.AreEqual(0, newCount, "Nothing is genuinely new — the database was already fully seeded from the same files");
+    }
+
+    // ── #249: conflict-resolution data auto-purge ───────────────────────────
+
+    [TestMethod]
+    public async Task InitialiseAsync_AutoPurgeBundledTrue_FullyAppliedBundledBatch_PurgesImportActionRows()
+    {
+        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
+        var db    = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false);
+        await db.InitialiseAsync();
+
+        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        var remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+
+        Assert.AreEqual(0, remaining, "a fully-applied bundled batch's Import_Action rows must be purged when AutoPurgeBundledImportActions is true");
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_AutoPurgeBundledFalse_FullyAppliedBundledBatch_RetainsImportActionRows()
+    {
+        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
+        var db    = CreateInitializer([batch], autoPurgeBundledImportActions: false, autoPurgeUserImportActions: true);
+        await db.InitialiseAsync();
+
+        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        var remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+
+        Assert.IsGreaterThan(0, remaining, "a bundled batch's Import_Action rows must be retained when AutoPurgeBundledImportActions is false, regardless of the user-imports setting");
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_AutoPurgeUserImportsTrue_FullyAppliedUserOriginBatch_PurgesImportActionRows()
+    {
+        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "user", SeedBatchOrigin.UserImports);
+        var db    = CreateInitializer([batch], autoPurgeBundledImportActions: false, autoPurgeUserImportActions: true);
+        await db.InitialiseAsync();
+
+        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        var remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+
+        Assert.AreEqual(0, remaining, "a fully-applied user-imports batch's Import_Action rows must be purged when AutoPurgeUserImportActions is true, independent of the bundled setting");
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_AutoPurgeUserImportsFalse_UserOriginBatch_RetainsImportActionRowsEvenWhenBundledTrue()
+    {
+        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "user", SeedBatchOrigin.UserImports);
+        var db    = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false);
+        await db.InitialiseAsync();
+
+        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        var remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+
+        Assert.IsGreaterThan(0, remaining, "a user-imports batch must not be purged by the bundled setting — the two per-origin settings are independent");
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_AutoPurgeEnabled_WritesAuditEntryRecordingThePurge()
+    {
+        var batch            = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
+        var capturedEntries  = new List<AuditEntryEntity>();
+        var capturingWriter  = new CapturingAuditEntryWriter(capturedEntries);
+        var db = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false, auditWriter: capturingWriter);
+        await db.InitialiseAsync();
+
+        Assert.Contains(e => e.TableName == "Import_Action" && e.Operation == AuditOperation.Purge, capturedEntries,
+            "a purge must leave a permanent trace in the audit trail, even though the underlying resolution data itself is gone");
+    }
+
+    private sealed class CapturingAuditEntryWriter(List<AuditEntryEntity> entries) : IAuditEntryWriter
+    {
+        public Task WriteAsync(AuditEntryEntity entry, System.Data.IDbConnection connection, System.Data.IDbTransaction? transaction = null)
+        {
+            entries.Add(entry);
+            return Task.CompletedTask;
+        }
+        public Task WriteAsync(IReadOnlyList<AuditEntryEntity> entries2, System.Data.IDbConnection connection, System.Data.IDbTransaction? transaction = null)
+        {
+            entries.AddRange(entries2);
+            return Task.CompletedTask;
+        }
+        public Task WriteAsync(AuditEntryEntity entry)
+        {
+            entries.Add(entry);
+            return Task.CompletedTask;
+        }
+        public Task ClearAsync(string? table = null) => Task.CompletedTask;
     }
 
     /// <summary>Seeding only the curated file correctly wires up the FK chain: Source → Character → Quote.</summary>
@@ -1095,7 +1188,7 @@ public class DatabaseInitializerTests
         var actionReader  = new ImportActionReader(factory);
         var actionWriter  = new ImportActionWriter(factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -1105,9 +1198,10 @@ public class DatabaseInitializerTests
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
-            coordinator, actionService,
+            coordinator, actionService, actionWriter,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
+            autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             NoOpFileResourceRepository.Instance,
             QuotinatorMigrations.Baseline);

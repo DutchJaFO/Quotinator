@@ -50,7 +50,7 @@ public class SqliteImportActionServiceTests
         _actionReader = new ImportActionReader(_factory);
         _actionWriter = new ImportActionWriter(_factory);
         _coordinator  = new ImportActionResolutionCoordinator(_actionReader, _actionWriter, _factory);
-        _service      = new SqliteImportActionService(_actionReader, _coordinator, new ChangeWriter(_factory),
+        _service      = new SqliteImportActionService(_actionReader, _coordinator, _actionWriter, NoOpAuditEntryWriter.Instance, new ChangeWriter(_factory),
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -61,9 +61,10 @@ public class SqliteImportActionServiceTests
             importBatches, _factory);
 
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
-            _coordinator, _service, NoOpAuditEntryWriter.Instance,
+            _coordinator, _service, _actionWriter, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
+            autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
     }
@@ -316,6 +317,95 @@ public class SqliteImportActionServiceTests
         var appliedAt = await conn.ExecuteScalarAsync<string?>("SELECT AppliedAt FROM Import_Batch WHERE UPPER(Id) = UPPER(@id)", new { id = batchId });
         Assert.AreEqual("Applied", status);
         Assert.IsNotNull(appliedAt);
+    }
+
+    // ── #249: purgeOnSuccess ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_PurgeOnSuccessTrue_FullyApplied_PurgesImportActionRows()
+    {
+        var id = "d1111111-1111-4111-8111-111111111111";
+        var actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+        var batchId = actions[0].BatchId;
+
+        var result = await _service.ApplyBatchAsync(batchId, purgeOnSuccess: true, cancellationToken: TestContext.CancellationToken);
+
+        Assert.IsNull(result, "a single unambiguous Add applies fully — nothing should remain pending");
+        var remaining = await _actionReader.GetAllForBatchAsync(batchId);
+        Assert.IsEmpty(remaining, "purgeOnSuccess=true on a fully-applied batch must purge its Import_Action rows");
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_PurgeOnSuccessFalse_FullyApplied_RetainsImportActionRows()
+    {
+        var id = "d2111111-1111-4111-8111-111111111111";
+        var actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+        var batchId = actions[0].BatchId;
+
+        var result = await _service.ApplyBatchAsync(batchId, cancellationToken: TestContext.CancellationToken);
+
+        Assert.IsNull(result);
+        var remaining = await _actionReader.GetAllForBatchAsync(batchId);
+        Assert.IsNotEmpty(remaining, "the default (purgeOnSuccess=false) must never purge — this is the pre-#249 behaviour every existing caller relies on");
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_PurgeOnSuccessTrue_BatchStillPending_NeverPurges()
+    {
+        var id = "d3111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+        var actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+        var batchId = actions[0].BatchId;
+
+        var result = await _service.ApplyBatchAsync(batchId, purgeOnSuccess: true, cancellationToken: TestContext.CancellationToken);
+
+        Assert.IsNotNull(result, "an undecided Review-policy Modify must still be pending");
+        var remaining = await _actionReader.GetAllForBatchAsync(batchId);
+        Assert.IsNotEmpty(remaining, "purgeOnSuccess must have no effect when the batch didn't fully apply");
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_PurgeOnSuccessTrue_WritesAuditEntryRecordingThePurge()
+    {
+        var id = "d4111111-1111-4111-8111-111111111111";
+        var actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+        var batchId = actions[0].BatchId;
+
+        var auditWriter = new AuditEntryWriter(_factory, NoOpCallerContext.Instance);
+        var serviceWithRealAudit = new SqliteImportActionService(_actionReader, _coordinator, _actionWriter, auditWriter, new ChangeWriter(_factory),
+            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance), _factory);
+
+        var result = await serviceWithRealAudit.ApplyBatchAsync(batchId, purgeOnSuccess: true, cancellationToken: TestContext.CancellationToken);
+        Assert.IsNull(result);
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        var purgeCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Audit_Entry WHERE TableName = 'Import_Action' AND Operation = 'Purged' AND UPPER(RecordId) = UPPER(@batchId)",
+            new { batchId });
+        Assert.AreEqual(1, purgeCount, "a purge must leave a permanent trace in the audit trail, even though the resolution data itself is gone");
+    }
+
+    [TestMethod]
+    public async Task ApplyBatchAsync_PurgeOnSuccessTrue_ThenReverseBatchAsync_ThrowsHasNoActionsException()
+    {
+        var id = "d5111111-1111-4111-8111-111111111111";
+        var actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+        var batchId = actions[0].BatchId;
+
+        var result = await _service.ApplyBatchAsync(batchId, purgeOnSuccess: true, cancellationToken: TestContext.CancellationToken);
+        Assert.IsNull(result);
+
+        var ex = await Assert.ThrowsExactlyAsync<ImportBatchStateException>(
+            () => _service.ReverseBatchAsync(batchId, cancellationToken: TestContext.CancellationToken));
+        Assert.Contains("has no actions and cannot be reversed", ex.Message);
     }
 
     [TestMethod]

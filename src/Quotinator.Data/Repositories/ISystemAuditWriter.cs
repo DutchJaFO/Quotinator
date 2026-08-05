@@ -42,6 +42,10 @@ public interface IAuditEntryWriter
 
     /// <summary>
     /// Deletes all audit entries, or only those for a specific table when <paramref name="table"/> is supplied.
+    /// An unscoped clear (<paramref name="table"/> omitted) also clears <c>Audit_Change</c> — #249 treats
+    /// both tables as one combined "audit trail" concern, matching the export/date-range endpoints. A
+    /// scoped clear leaves <c>Audit_Change</c> untouched: its <c>EntityType</c> vocabulary has no
+    /// equivalent to <paramref name="table"/>'s <c>TableName</c> scoping.
     /// Writes a single audit entry recording the clear operation so there is always a record that a purge occurred.
     /// </summary>
     Task ClearAsync(string? table = null);

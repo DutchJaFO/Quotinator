@@ -59,7 +59,7 @@ public class SourceCacheWiringTests
         var actionReader  = new ImportActionReader(factory);
         var actionWriter  = new ImportActionWriter(factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -70,9 +70,10 @@ public class SourceCacheWiringTests
             importBatches, factory);
 
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
-            coordinator, actionService,
+            coordinator, actionService, actionWriter,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
             spy, autoUpdateSources,
+            autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance, QuotinatorMigrations.Baseline);
     }
 
@@ -157,7 +158,7 @@ public class SourceCacheWiringTests
         var actionReader  = new ImportActionReader(factory);
         var actionWriter  = new ImportActionWriter(factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -167,9 +168,10 @@ public class SourceCacheWiringTests
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
-            coordinator, actionService,
+            coordinator, actionService, actionWriter,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             new SpySourceCacheUpdater(), autoUpdateSources: false,
+            autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
@@ -191,7 +193,7 @@ public class SourceCacheWiringTests
         var actionReader2  = new ImportActionReader(factory);
         var actionWriter2  = new ImportActionWriter(factory);
         var coordinator2   = new ImportActionResolutionCoordinator(actionReader2, actionWriter2, factory);
-        var actionService2 = new SqliteImportActionService(actionReader2, coordinator2, NoOpChangeWriter.Instance,
+        var actionService2 = new SqliteImportActionService(actionReader2, coordinator2, actionWriter2, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -201,9 +203,10 @@ public class SourceCacheWiringTests
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
-            coordinator2, actionService2,
+            coordinator2, actionService2, actionWriter2,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             new SpySourceCacheUpdater(), autoUpdateSources: false,
+            autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 

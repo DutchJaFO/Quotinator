@@ -97,4 +97,8 @@ public sealed class ImportActionWriter : SqliteRepositoryBase<ImportActionEntity
             },
             transaction);
     }
+
+    /// <inheritdoc/>
+    public async Task DeleteForBatchAsync(string batchId, IDbConnection connection, IDbTransaction? transaction = null)
+        => await connection.ExecuteAsync(Sql.SystemImportActions.DeleteByBatchId, new { batchId }, transaction);
 }

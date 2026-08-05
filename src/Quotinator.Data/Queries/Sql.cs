@@ -231,6 +231,30 @@ internal static class Sql
             if (filterRecordId) parts.Add(IdClauses.Equals("RecordId", "recordId"));
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
+
+        /// <summary>
+        /// Every audit entry within an optional date range, newest first, unpaginated (#249's bulk
+        /// export endpoint — a caller already decided it wants the full set, not a page of it).
+        /// </summary>
+        internal static string SelectInRange(bool filterStart, bool filterEnd)
+            => $"SELECT {IdClauses.SelectColumn("Id")}, TableName, {IdClauses.SelectColumn("RecordId")}, Operation, Agent, PerformedAt FROM Audit_Entry" +
+               BuildRangeWhere(filterStart, filterEnd) +
+               " ORDER BY PerformedAt DESC;";
+
+        /// <summary>Matching row count for <see cref="SelectInRange"/> — checked against the export row-count cap before assembling the response.</summary>
+        internal static string CountInRange(bool filterStart, bool filterEnd)
+            => CountPagedBase + BuildRangeWhere(filterStart, filterEnd) + ";";
+
+        /// <summary>Earliest/latest <c>PerformedAt</c> across every audit entry — half of #249's date-range discovery endpoint (paired with <see cref="SystemChangeLog.SelectDateRange"/>).</summary>
+        internal const string SelectDateRange = "SELECT MIN(PerformedAt) AS Earliest, MAX(PerformedAt) AS Latest FROM Audit_Entry;";
+
+        private static string BuildRangeWhere(bool filterStart, bool filterEnd)
+        {
+            var parts = new List<string>(2);
+            if (filterStart) parts.Add("PerformedAt >= @startDate");
+            if (filterEnd)   parts.Add("PerformedAt <= @endDate");
+            return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
+        }
     }
 
     /// <summary>Import_Action table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.ImportActionWriter"/>.</summary>
@@ -314,6 +338,15 @@ internal static class Sql
             $"UPDATE Import_Action SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE {IdClauses.Equals("BatchId", "batchId")};";
 
         /// <summary>
+        /// Hard-deletes every action sharing a BatchId (#249) — the conflict-resolution-data purge,
+        /// once a batch's resolution-tracking rows have served their purpose (zero pending actions).
+        /// Unlike <see cref="MarkBatchDiscarded"/>, this genuinely removes the rows; there is no
+        /// soft-delete concept for <c>Import_Action</c>. Case-insensitive — see <see cref="SelectAllForBatch"/>.
+        /// </summary>
+        internal static readonly string DeleteByBatchId =
+            $"DELETE FROM Import_Action WHERE {IdClauses.Equals("BatchId", "batchId")};";
+
+        /// <summary>
         /// Case-insensitive on every filter — see <see cref="SelectAllForBatch"/>'s remark for why
         /// <c>BatchId</c> needs it; <c>Status</c>/<c>EntityType</c> need the same treatment because
         /// they arrive as raw query-string values (e.g. <c>?status=pending</c>), and a caller's
@@ -352,6 +385,34 @@ internal static class Sql
         internal static readonly string SelectByEntity =
             $"SELECT {IdClauses.SelectColumn("Id")}, EntityType, {IdClauses.SelectColumn("EntityId")}, InitiatedByType, InitiatedById, Action, Field, OldValue, NewValue, OccurredAt " +
             $"FROM Audit_Change WHERE {TextClauses.Equals("EntityType", "entityType")} AND {IdClauses.Equals("EntityId", "entityId")} ORDER BY OccurredAt DESC;";
+
+        // COUNT base — shared by CountInRange factory method below.
+        private const string CountInRangeBase = "SELECT COUNT(*) FROM Audit_Change";
+
+        /// <summary>
+        /// Every change-log row within an optional date range, newest first, unpaginated (#249's bulk
+        /// export endpoint — paired with <see cref="SystemAudit.SelectInRange"/>). <c>InitiatedById</c>
+        /// is deliberately not wrapped, same reasoning as <see cref="SelectByEntity"/>.
+        /// </summary>
+        internal static string SelectInRange(bool filterStart, bool filterEnd)
+            => $"SELECT {IdClauses.SelectColumn("Id")}, EntityType, {IdClauses.SelectColumn("EntityId")}, InitiatedByType, InitiatedById, Action, Field, OldValue, NewValue, OccurredAt FROM Audit_Change" +
+               BuildRangeWhere(filterStart, filterEnd) +
+               " ORDER BY OccurredAt DESC;";
+
+        /// <summary>Matching row count for <see cref="SelectInRange"/> — checked against the export row-count cap before assembling the response.</summary>
+        internal static string CountInRange(bool filterStart, bool filterEnd)
+            => CountInRangeBase + BuildRangeWhere(filterStart, filterEnd) + ";";
+
+        /// <summary>Earliest/latest <c>OccurredAt</c> across every change-log row — half of #249's date-range discovery endpoint (paired with <see cref="SystemAudit.SelectDateRange"/>).</summary>
+        internal const string SelectDateRange = "SELECT MIN(OccurredAt) AS Earliest, MAX(OccurredAt) AS Latest FROM Audit_Change;";
+
+        private static string BuildRangeWhere(bool filterStart, bool filterEnd)
+        {
+            var parts = new List<string>(2);
+            if (filterStart) parts.Add("OccurredAt >= @startDate");
+            if (filterEnd)   parts.Add("OccurredAt <= @endDate");
+            return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
+        }
     }
 
     /// <summary>

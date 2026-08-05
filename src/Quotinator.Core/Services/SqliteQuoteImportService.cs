@@ -56,7 +56,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
 
     /// <inheritdoc/>
     public async Task<ImportResultResponse> ImportAsync(
-        Stream file, string fileName, ImportSettingsDto? settings, bool preview,
+        Stream file, string fileName, ImportSettingsDto? settings, bool preview, bool purgeOnSuccess = false,
         CancellationToken cancellationToken = default)
     {
         var (parsed, rawContent) = await LoadSourceFileAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
@@ -118,7 +118,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
 
         if (!preview)
         {
-            var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, cancellationToken);
+            var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken);
             if (applyResult is null)
             {
                 // #177: Status/AppliedAt are now set by ApplyBatchAsync itself, the shared choke point
@@ -152,7 +152,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
     }
 
     /// <inheritdoc/>
-    public async Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, CancellationToken cancellationToken = default)
+    public async Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, bool purgeOnSuccess = false, CancellationToken cancellationToken = default)
     {
         var batch = await _importBatches.GetByIdAsync(batchId) ?? throw new ImportBatchNotFoundException(batchId);
         var batchIdStr = batchId.ToCanonicalId();
@@ -171,7 +171,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
         var totalQuotes = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote);
 
-        var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, cancellationToken);
+        var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken);
         IReadOnlyList<Guid> pendingActionIds = [];
         if (applyResult is null)
         {

@@ -24,6 +24,8 @@ public sealed class SqliteImportActionService : IImportActionService
 {
     private readonly IImportActionReader _actionReader;
     private readonly IImportActionCoordinator _coordinator;
+    private readonly IImportActionWriter _actionWriter;
+    private readonly IAuditEntryWriter _auditWriter;
     private readonly IChangeWriter _changeLogWriter;
     private readonly IRestorableRepository<QuoteEntity> _quoteRepository;
     private readonly IRestorableRepository<SourceEntity> _sourceRepository;
@@ -39,6 +41,8 @@ public sealed class SqliteImportActionService : IImportActionService
     public SqliteImportActionService(
         IImportActionReader actionReader,
         IImportActionCoordinator coordinator,
+        IImportActionWriter actionWriter,
+        IAuditEntryWriter auditWriter,
         IChangeWriter changeLogWriter,
         IRestorableRepository<QuoteEntity> quoteRepository,
         IRestorableRepository<SourceEntity> sourceRepository,
@@ -52,6 +56,8 @@ public sealed class SqliteImportActionService : IImportActionService
     {
         _actionReader             = actionReader;
         _coordinator              = coordinator;
+        _actionWriter             = actionWriter;
+        _auditWriter              = auditWriter;
         _changeLogWriter          = changeLogWriter;
         _quoteRepository          = quoteRepository;
         _sourceRepository         = sourceRepository;
@@ -378,7 +384,7 @@ public sealed class SqliteImportActionService : IImportActionService
         => await _coordinator.UndoDecisionAsync(actionId);
 
     /// <inheritdoc/>
-    public async Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, CancellationToken cancellationToken = default)
+    public async Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, CancellationToken cancellationToken = default)
     {
         await ClearStaleAddTargetsAsync(batchId);
 
@@ -386,7 +392,26 @@ public sealed class SqliteImportActionService : IImportActionService
             batchId, (action, conn, tx) => ApplyResolvedActionAsync(action, conn, tx, initiatedByType), cancellationToken);
 
         if (pending is null)
+        {
             await MarkImportBatchAppliedAsync(batchId);
+
+            // #249: the caller opted in to purging this batch's conflict-resolution data the moment
+            // it's no longer needed — mirrors QuotinatorDatabaseInitializer's seeding-path auto-purge,
+            // including the Audit_Entry trace, but decided per-call here rather than via config.
+            if (purgeOnSuccess)
+            {
+                using var conn = _factory.CreateConnection();
+                conn.Open();
+                await _actionWriter.DeleteForBatchAsync(batchId, conn);
+                await _auditWriter.WriteAsync(new AuditEntryEntity
+                {
+                    TableName   = "Import_Action",
+                    RecordId    = batchId,
+                    Operation   = AuditOperation.Purge,
+                    PerformedAt = DateTime.UtcNow,
+                }, conn);
+            }
+        }
 
         return pending is null
             ? null

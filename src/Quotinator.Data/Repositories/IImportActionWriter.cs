@@ -54,4 +54,13 @@ public interface IImportActionWriter
     /// <c>DiscardedAt</c>. The whole-batch discard operation has no per-row decision to make.
     /// </summary>
     Task MarkBatchDiscardedAsync(string batchId, IDbConnection connection, IDbTransaction? transaction = null);
+
+    /// <summary>
+    /// Hard-deletes every action sharing <paramref name="batchId"/> (#249's conflict-resolution-data
+    /// purge) — genuinely removes the rows, not a soft-delete/status transition. Called once a batch's
+    /// resolution-tracking rows have served their purpose (the batch reached zero pending actions) and
+    /// either the relevant per-origin auto-purge setting is enabled, or a caller opted in via
+    /// <c>purgeOnSuccess</c>. Forfeits <c>POST /import/actions/reverse</c> for that batch.
+    /// </summary>
+    Task DeleteForBatchAsync(string batchId, IDbConnection connection, IDbTransaction? transaction = null);
 }

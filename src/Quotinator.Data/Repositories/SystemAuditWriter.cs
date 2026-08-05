@@ -48,9 +48,19 @@ public sealed class AuditEntryWriter : SqliteRepositoryBase<AuditEntryEntity>, I
         conn.Open();
 
         if (table is not null)
+        {
+            // Scoped to one domain table's own audit entries — Audit_Change has no comparable
+            // per-table scoping concept (its EntityType vocabulary doesn't map onto TableName), so a
+            // scoped clear only ever clears what it explicitly names.
             await conn.ExecuteAsync(Sql.SystemAudit.DeleteByTable, new { table });
+        }
         else
+        {
+            // #249: an unscoped clear empties the whole audit trail as one concern — both Audit_Entry
+            // and Audit_Change — matching the export/date-range endpoints' own combined-tables model.
             await conn.ExecuteAsync(Sql.SystemAudit.DeleteAll);
+            await conn.ExecuteAsync(Sql.SystemChangeLog.DeleteAll);
+        }
 
         // Record the clear so there is always a trace that a purge occurred.
         await conn.InsertAsync(new AuditEntryEntity

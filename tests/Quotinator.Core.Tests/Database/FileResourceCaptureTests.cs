@@ -69,7 +69,7 @@ public class FileResourceCaptureTests
         var actionReader    = new ImportActionReader(factory);
         var actionWriter    = new ImportActionWriter(factory);
         var coordinator     = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService   = new SqliteImportActionService(actionReader, coordinator, NoOpChangeWriter.Instance,
+        var actionService   = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -80,8 +80,9 @@ public class FileResourceCaptureTests
             importBatches, factory);
 
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, batches, importBatches,
-            coordinator, actionService, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
+            coordinator, actionService, actionWriter, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
             NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
+            autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             fileResources, QuotinatorMigrations.Baseline);
 

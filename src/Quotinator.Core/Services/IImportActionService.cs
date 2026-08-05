@@ -65,7 +65,17 @@ public interface IImportActionService
     /// records who's applying it (the live import endpoint, startup seeding, or a manual apply of an
     /// already-decided batch) in every <c>System_ChangeLog</c> row this produces.
     /// </summary>
-    Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, CancellationToken cancellationToken = default);
+    /// <param name="batchId">The batch to apply.</param>
+    /// <param name="initiatedByType">Recorded in every <c>System_ChangeLog</c> row this produces.</param>
+    /// <param name="purgeOnSuccess">
+    /// #249: when <c>true</c> and the batch applies fully (return value is <c>null</c>), that batch's
+    /// <c>Import_Action</c> rows are hard-deleted immediately as part of this same call, with an
+    /// <c>Audit_Entry</c> row recording the purge. Has no effect when the batch still has pending
+    /// actions. Forfeits <c>ReverseBatchAsync</c> for this batch — its resolution-tracking rows are
+    /// gone, and <see cref="ReverseBatchAsync"/> requires them to exist.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, CancellationToken cancellationToken = default);
 
     /// <summary>Discards every action sharing <paramref name="batchId"/>. Never touches any domain table.</summary>
     Task DiscardBatchAsync(string batchId, CancellationToken cancellationToken = default);

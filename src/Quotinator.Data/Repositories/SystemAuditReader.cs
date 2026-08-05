@@ -37,4 +37,38 @@ public sealed class AuditEntryReader : SqliteRepositoryBase<AuditEntryEntity>, I
         var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
         return new PagedItems<AuditEntryEntity>(items, page, effectivePageSize, total);
     }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<AuditEntryEntity>> GetAllInRangeAsync(DateTime? startDate, DateTime? endDate)
+    {
+        using var conn = Factory.CreateConnection();
+        conn.Open();
+
+        var rows = await conn.QueryAsync<AuditEntryEntity>(
+            Sql.SystemAudit.SelectInRange(startDate is not null, endDate is not null),
+            new { startDate, endDate });
+
+        return rows.ToList();
+    }
+
+    /// <inheritdoc/>
+    public async Task<int> CountInRangeAsync(DateTime? startDate, DateTime? endDate)
+    {
+        using var conn = Factory.CreateConnection();
+        conn.Open();
+
+        return await conn.ExecuteScalarAsync<int>(
+            Sql.SystemAudit.CountInRange(startDate is not null, endDate is not null),
+            new { startDate, endDate });
+    }
+
+    /// <inheritdoc/>
+    public async Task<(DateTime? Earliest, DateTime? Latest)> GetDateRangeAsync()
+    {
+        using var conn = Factory.CreateConnection();
+        conn.Open();
+
+        var row = await conn.QueryFirstOrDefaultAsync<DateRangeRow>(Sql.SystemAudit.SelectDateRange);
+        return (row?.Earliest, row?.Latest);
+    }
 }
