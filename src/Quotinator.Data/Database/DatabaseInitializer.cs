@@ -417,6 +417,19 @@ public class DatabaseInitializer : IDatabaseInitializer
     /// </summary>
     protected virtual Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh) => Task.CompletedTask;
 
+    /// <summary>
+    /// Called unconditionally after a genuinely fresh database is created via the baseline path
+    /// (<see cref="ApplyBaselineAsync"/>) and after every <see cref="DropAndRebuildAsync"/> call —
+    /// i.e. after both "first ever install" and "any reset," the two moments a database can be
+    /// missing content it structurally needs to function. Override to populate designated system
+    /// tables (vital, non-optional reference/configuration content) from whatever source the
+    /// subclass chooses. This is deliberately separate from <see cref="OnReseedAsync"/>/
+    /// <see cref="OnResetAsync"/>'s own bundled/user content reseeding, which is optional domain
+    /// data and — per #156 — is never triggered automatically by a Reset. Base implementation does
+    /// nothing; there is no system content to seed until a subclass defines some (#156).
+    /// </summary>
+    protected virtual Task SeedSystemContentAsync(SqliteConnection connection) => Task.CompletedTask;
+
     /// <inheritdoc/>
     public virtual Task<SeedPreviewResult> PreviewSeedAsync()
         => Task.FromResult(new SeedPreviewResult([], []));
@@ -456,11 +469,14 @@ public class DatabaseInitializer : IDatabaseInitializer
             await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
             await ApplyMigrationsAsync(connection, skipOwnBackup: true);
 
-            if (!preserveSchemaVersion) return;
+            if (preserveSchemaVersion)
+            {
+                await connection.ExecuteAsync(Sql.Schema.DeleteAllConsumerVersions);
+                foreach (var row in savedConsumerVersions)
+                    await connection.ExecuteAsync(Sql.Schema.InsertConsumerVersion, new { v = row.Version, at = row.AppliedAt });
+            }
 
-            await connection.ExecuteAsync(Sql.Schema.DeleteAllConsumerVersions);
-            foreach (var row in savedConsumerVersions)
-                await connection.ExecuteAsync(Sql.Schema.InsertConsumerVersion, new { v = row.Version, at = row.AppliedAt });
+            await SeedSystemContentAsync(connection);
         }
         catch (Exception ex)
         {
@@ -662,6 +678,8 @@ public class DatabaseInitializer : IDatabaseInitializer
         Logger.LogInformation(
             "[Database - Init] schema created at baseline (data v{DataVersion}, app v{AppVersion})",
             DataSchemaVersion, SchemaVersion);
+
+        await SeedSystemContentAsync(connection);
     }
 
     /// <summary>

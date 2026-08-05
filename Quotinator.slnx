@@ -72,6 +72,9 @@
     <File Path="data/sources/nikhilnamal17-conflict-rules.json" />
     <File Path="data/sources/nikhilnamal17-source-aliases.json" />
   </Folder>
+  <Folder Name="/data/system/">
+    <File Path="data/system/README.md" />
+  </Folder>
   <Folder Name="/docker/">
     <File Path="docker/Dockerfile" />
     <File Path="docker/docker-compose.yml" />
@@ -242,6 +245,7 @@
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/222-unicode-like-matching-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/227-domain-prefixed-naming-implementation-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/249-audit-trail-export-and-conflict-data-purge-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/156-reset-baseline-and-system-reseed-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/251-file-resource-provenance-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/252-source-file-override-supersession-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/253-data-owned-rename-plan.md" />
