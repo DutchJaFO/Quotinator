@@ -32,7 +32,7 @@ and #255/#256 do not carry that urgency.
 | [#208](https://github.com/DutchJaFO/Quotinator/issues/208) | Issue-creation process: always propose label + milestone in the same draft-review pass | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — pure content fix, no implementation decisions required |
 | [#150](https://github.com/DutchJaFO/Quotinator/issues/150) | Audit: ensure all enum-valued POCO properties have matching DB CHECK constraints | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
 | [#151](https://github.com/DutchJaFO/Quotinator/issues/151) | Should System_-prefixed audit-trail tables purge rows referencing Reset-wiped entities? | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — decision recorded in [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) |
-| [#249](https://github.com/DutchJaFO/Quotinator/issues/249) | Export audit-trail tables to a dedicated folder before a destructive Reset | Planning | Not yet determined | No plan doc yet |
+| [#249](https://github.com/DutchJaFO/Quotinator/issues/249) | Audit-trail bulk export + conflict-resolution data auto-purge (redesigned from the original "export to folder" framing) | Waiting for release | T1, T2 (both ✅) | [249-audit-trail-export-and-conflict-data-purge-plan.md](249-audit-trail-export-and-conflict-data-purge-plan.md) |
 | [#156](https://github.com/DutchJaFO/Quotinator/issues/156) | Reset: use the fresh-database baseline script instead of drop-all-user-tables + replay | Planning | Not yet determined | No plan doc yet |
 | [#222](https://github.com/DutchJaFO/Quotinator/issues/222) | Unicode-aware case-insensitive LIKE matching (accented/non-ASCII characters) | Waiting for release | T1 ✅ T2 ✅ | [222-unicode-like-matching-plan.md](222-unicode-like-matching-plan.md) |
 | [#148](https://github.com/DutchJaFO/Quotinator/issues/148) | OpenAPI: document response models for existing quote/admin endpoints | Waiting for release | T1 ✅ T2 ✅ | No plan doc yet |
@@ -131,8 +131,10 @@ same release. None of the remaining issues block each other beyond these relatio
 13. **#251** — Design + implement `FileResource`/`FileResourceLine` — independent of the rename
     entirely (split out as unrelated undesigned functionality), no urgency
 14. **#252** — Confirm whether #153's `SourceFileOverride` should be superseded — depends on #251
-15. **#249** — Export audit-trail tables to a dedicated folder before a destructive Reset (must ship in
-    the same release as #156, not necessarily built before it; filed while planning #151; targets the
+15. **#249** — Audit-trail bulk export + date-range endpoints, plus config-driven auto-purge of
+    conflict-resolution data (`Import_Action`) once a batch has nothing pending — redesigned 2026-08-05
+    from the original "export to a dedicated folder before Reset" framing (must ship in the same
+    release as #156, not necessarily built before it; filed while planning #151; targets the
     post-#253/#254 table names)
 16. **#156** — Reset: baseline script instead of drop-all-user-tables + replay (also targets the
     post-#253/#254 table names, and its own `GetUserTables` exclusion-pattern question per ADR 015's

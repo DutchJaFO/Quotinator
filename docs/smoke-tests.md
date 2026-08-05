@@ -1243,3 +1243,106 @@ has only one captured version after a single startup).
 
 Clean up: `docker rm -f smoke251 && rm -f .claude/temp/smoke251.db .claude/temp/smoke251.db-wal .claude/temp/smoke251.db-shm .claude/temp/downloaded.json .claude/temp/original.json .claude/temp/crlf.json`.
 
+## 31. Audit-trail bulk export, date-range discovery, and conflict-resolution data auto-purge (#249)
+
+Proves the two new `/admin/audit` endpoints (bulk export, date-range discovery) return correct data and
+respect the row-count cap, that a fresh bundled seed auto-purges its own `Import_Action` rows by
+default, that the per-origin config settings can disable that, and that `purgeOnSuccess` on the live
+import endpoints purges on request and forfeits `POST /import/actions/reverse` afterward.
+`Quotinator.Tools.DbInspector` (read-only) is used for the raw-table checks.
+
+**Start a container with defaults (both auto-purge settings on) and let it seed normally:**
+```bash
+docker run -d --name smoke249 -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 15
+docker logs smoke249 2>&1 | tail -5
+```
+
+**Date-range discovery reflects the seeding-time audit activity:**
+```bash
+curl -s "http://localhost:18099/api/v1/admin/audit/date-range"
+```
+Must return `200` with non-null `earliestDate`/`latestDate` — the bundled seed's own `BulkInserted`
+audit entries (no `X-Api-Key` required, matching `GET /admin/audit`'s precedent).
+
+**Bulk export returns both tables, as a downloaded file:**
+```bash
+curl -s -D - "http://localhost:18099/api/v1/admin/audit/export" -o .claude/temp/audit-export.json | grep -i content-disposition
+cat .claude/temp/audit-export.json | head -c 300
+```
+Response headers must include `Content-Disposition: attachment; filename="quotinator-audit-export-...json"`.
+The body must have top-level `entries` and `changes` arrays, both non-empty after a fresh seed.
+
+**Row-count cap returns 422, never a silently truncated file (restart with a tiny cap):**
+```bash
+docker rm -f smoke249
+docker run -d --name smoke249cap -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__AdminAuditExportMaxRows=1 quotinator:local
+sleep 15
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/admin/audit/export"
+docker rm -f smoke249cap
+```
+Must return `422` — a fresh seed produces far more than 1 combined row.
+
+**Auto-purge defaults to on — a fresh bundled seed leaves (near-)zero `Import_Action` rows for its own
+fully-applied batches, with an `Audit_Entry` trace recorded for each purge:**
+```bash
+docker run -d --name smoke249 -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 15
+MSYS_NO_PATHCONV=1 docker cp smoke249:/app/data/quotinatordata.db .claude/temp/smoke249.db
+MSYS_NO_PATHCONV=1 docker cp smoke249:/app/data/quotinatordata.db-wal .claude/temp/smoke249.db-wal
+MSYS_NO_PATHCONV=1 docker cp smoke249:/app/data/quotinatordata.db-shm .claude/temp/smoke249.db-shm
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db \
+  --sql "SELECT COUNT(*) AS RemainingActions FROM Import_Action"
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db \
+  --sql "SELECT COUNT(*) AS PurgeTraces FROM Audit_Entry WHERE TableName = 'Import_Action' AND Operation = 'Purged'"
+```
+`RemainingActions` must be `0` (every bundled batch applies cleanly with no pending actions, so all four
+get auto-purged). `PurgeTraces` must be `4` — one per bundled batch, even though the `Import_Action` rows
+themselves are gone.
+
+**Disabling the bundled setting retains the rows instead (fresh container, no prior data):**
+```bash
+docker rm -f smoke249
+docker run -d --name smoke249noautopurge -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
+sleep 15
+MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/app/data/quotinatordata.db .claude/temp/smoke249b.db
+MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/app/data/quotinatordata.db-wal .claude/temp/smoke249b.db-wal
+MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/app/data/quotinatordata.db-shm .claude/temp/smoke249b.db-shm
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249b.db \
+  --sql "SELECT COUNT(*) AS RemainingActions FROM Import_Action"
+docker rm -f smoke249noautopurge
+```
+`RemainingActions` must be greater than `0` — with the bundled setting off, the seeding path never
+purges, matching pre-#249 behaviour.
+
+**`purgeOnSuccess` on a live import purges immediately and forfeits reverse (using `smoke249` from the
+auto-purge check above, still running):**
+```bash
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@data/sources/quotinator-curated.json" \
+  "http://localhost:18099/api/v1/import?purgeOnSuccess=true"
+```
+Note the response's `batchId`, then:
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:18099/api/v1/import/actions/reverse?batchId=<batchId-from-above>"
+```
+The import call must return `200` (curated file re-imports as all-Modify against the already-seeded
+data, no pending decisions). The reverse call must return `422` — the batch's own `Import_Action` rows
+were purged immediately by `purgeOnSuccess=true`, so `ReverseBatchAsync` has nothing to reverse.
+
+**`DELETE /admin/audit` (unscoped) clears both `Audit_Entry` and `Audit_Change` — found live during
+T1: date-range/export kept showing data after a clear because the endpoint had only ever cleared
+`Audit_Entry`, even though #249 treats both tables as one combined concern everywhere else:**
+```bash
+curl -s -X DELETE -H "X-Api-Key: <your admin key>" "http://localhost:18099/api/v1/admin/audit"
+curl -s "http://localhost:18099/api/v1/admin/audit/date-range"
+```
+The DELETE must return `204`. The date-range call afterward must show `earliestDate`/`latestDate`
+matching *only* the clear's own self-recorded `Purged` trace (a single, just-now timestamp) — not any
+earlier `Audit_Change` activity, which is now also gone. A table-scoped clear
+(`DELETE .../admin/audit?table=Quotinator_Quote`) must leave `Audit_Change` untouched instead — verify
+via `Quotinator.Tools.DbInspector` (`SELECT COUNT(*) FROM Audit_Change`) that the row count is
+unaffected by a scoped clear.
+
+Clean up: `docker rm -f smoke249 && rm -f .claude/temp/smoke249.db .claude/temp/smoke249.db-wal .claude/temp/smoke249.db-shm .claude/temp/smoke249b.db .claude/temp/smoke249b.db-wal .claude/temp/smoke249b.db-shm .claude/temp/audit-export.json`.
+

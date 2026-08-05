@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-04 21:39 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-05 18:47 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Highlights
 - If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page — an admin database Reset can fix it without needing to restart the app or container.
 - Quotinator now keeps a copy of every import/seed file it processes — including which conversion settings were used — so the original content can be listed, reviewed, or downloaded again later, and old versions can be pruned to reclaim space.
+- Old conflict-resolution history from completed imports is now cleaned up automatically, and the full audit trail (what changed and when) can be exported in bulk for record-keeping.
 
 ### Added
 - Release entries can now carry an optional one-line `quote` (release-note flavour text, with optional `attribution`) — rendered in `CHANGELOG.md` and the Blazor changelog UI, omitted from the more concise `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)
@@ -21,6 +22,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `GET /api/v1/health` now returns `503` with a diagnostic reason when startup database initialisation failed, instead of always reporting `200`; every endpoint except health/version/admin returns a clear `503` in that state instead of a raw exception, and the admin database Reset endpoint stays reachable so the problem can be resolved without a restart (issue #254)
 - New `GET /api/v1/import/file-resources` (paginated list, filterable by `fileName`/`origin`), `GET /api/v1/import/file-resources/{id}` (detail, including linked batch ids), `GET /api/v1/import/file-resources/{id}/download` (reconstruct the original file content, optionally normalizing line endings), and `POST /api/v1/import/file-resources/prune` (admin, hard-deletes old captured versions) — every seed/reseed and uploaded import file's content, and the converter settings used to interpret it, are now captured and queryable (issue #251)
 - New `GET /api/v1/import/batches` (paginated list, filterable by `type`/`status`) and `GET /api/v1/import/batches/{id}` — the existing import batch history is now reachable over HTTP, not just internally (issue #251)
+- New `GET /api/v1/admin/audit/export` (bulk-export the full audit trail — every audit entry and change-log row — for an optional date range, as a single downloaded JSON file) and `GET /api/v1/admin/audit/date-range` (the earliest/latest date that actually has data, so a caller can check before exporting) (issue #249)
+- Conflict-resolution history from a completed import (the temporary record of how each row's conflicts were resolved) is now purged automatically once nothing is left pending, controlled separately for bundled sources and user imports via new `auto_purge_bundled_import_actions`/`auto_purge_user_import_actions` add-on options (both on by default, so a specific source's history can be kept temporarily while investigating it) (issue #249)
+- `POST /import` and `POST /import/actions/apply` gained an opt-in `purgeOnSuccess` parameter to purge a batch's conflict-resolution history immediately once it applies fully — note this also gives up the ability to undo (`POST /import/actions/reverse`) that batch afterward, since undo depends on that same history (issue #249)
 
 ### Changed
 - Documented that the database's internal audit-trail tables (event/audit history) intentionally retain their record after the entity they describe is later changed or replaced — a purely internal documentation clarification with no behaviour change (issue #151)
@@ -28,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Internal database tables and their backing C# entity classes were renamed to follow a consistent domain-prefixed naming convention (e.g. `Sources` → `Quotinator_Source`, `ImportBatches` → `Import_Batch`) — no functional change, no API surface change (issues #253, #254)
 - Internal C# enum types were reorganised into a dedicated `Enums` folder per project, following the project's own naming/placement conventions — no functional change, no API surface change (issue #255)
 - Several internal C# class names were corrected to consistently reflect what boundary they cross (an HTTP response, or an on-disk JSON file) — no functional change, no API surface change (issue #256)
+- Clearing the entire audit trail (`DELETE /admin/audit` with no `table` filter) now also clears the change log, matching the new bulk-export/date-range endpoints' treatment of both as one combined audit trail; clearing a specific table's entries leaves the change log untouched, since it has no equivalent per-table scope (issue #249)
 
 ### Fixed
 - Database columns backed by the duplicate-resolution-policy setting (`ImportBatches.ConflictPolicy`, and the internal `AppliedPolicy` column on two provenance tables) now reject an invalid value at the database level via a CHECK constraint, matching every other enum-backed column in the schema; a pre-existing data inconsistency this closed is also normalised automatically (issue #150)

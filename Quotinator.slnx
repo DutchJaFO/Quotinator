@@ -241,6 +241,7 @@
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/222-unicode-like-matching-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/227-domain-prefixed-naming-implementation-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/249-audit-trail-export-and-conflict-data-purge-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/251-file-resource-provenance-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/252-source-file-override-supersession-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/253-data-owned-rename-plan.md" />
