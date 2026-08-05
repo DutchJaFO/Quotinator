@@ -162,6 +162,33 @@ public class ImportEndpointTests
         Assert.AreEqual(0, doc.RootElement.GetProperty("conflicts").GetArrayLength(), "A zero-conflict import (the FakeQuoteImportService default) must report an empty conflicts array");
     }
 
+    // ── purgeOnSuccess (#249) — file mode ────────────────────────────────────
+
+    [TestMethod]
+    public async Task Import_PurgeOnSuccessTrue_ForwardsTrueToService()
+    {
+        var service = new FakeQuoteImportService();
+        using var factory = CreateFactory(TestKey, service);
+
+        var response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/import?purgeOnSuccess=true", BuildForm(), TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(service.LastImportPurgeOnSuccess);
+    }
+
+    [TestMethod]
+    public async Task Import_PurgeOnSuccessOmitted_ForwardsFalseToService()
+    {
+        var service = new FakeQuoteImportService();
+        using var factory = CreateFactory(TestKey, service);
+
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm(), TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsFalse(service.LastImportPurgeOnSuccess, "must default to false, not purge unless the caller explicitly opts in");
+    }
+
     [TestMethod]
     [DataRow("/api/v1/import")]
     [DataRow("/api/v1/import/preview")]
@@ -291,6 +318,34 @@ public class ImportEndpointTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(batchId, service.LastAppliedBatchId);
         Assert.IsNull(service.LastFileName, "batchId mode must never call the file-upload path");
+    }
+
+    [TestMethod]
+    public async Task Import_WithBatchIdAndPurgeOnSuccessTrue_ForwardsTrueToService()
+    {
+        var service = new FakeQuoteImportService();
+        using var factory = CreateFactory(TestKey, service);
+        var batchId = Guid.NewGuid();
+
+        var response = await CreateClientWithKey(factory)
+            .PostAsync($"/api/v1/import?batchId={batchId}&purgeOnSuccess=true", BuildForm(includeFile: false), TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(service.LastApplyPurgeOnSuccess);
+    }
+
+    [TestMethod]
+    public async Task Import_WithBatchIdPurgeOnSuccessOmitted_ForwardsFalseToService()
+    {
+        var service = new FakeQuoteImportService();
+        using var factory = CreateFactory(TestKey, service);
+        var batchId = Guid.NewGuid();
+
+        var response = await CreateClientWithKey(factory)
+            .PostAsync($"/api/v1/import?batchId={batchId}", BuildForm(includeFile: false), TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsFalse(service.LastApplyPurgeOnSuccess, "must default to false, not purge unless the caller explicitly opts in");
     }
 
     [TestMethod]

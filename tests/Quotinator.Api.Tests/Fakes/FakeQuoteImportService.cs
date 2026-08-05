@@ -14,14 +14,17 @@ internal sealed class FakeQuoteImportService : IQuoteImportService
     public bool? LastPreview { get; private set; }
     public string? LastFileName { get; private set; }
     public Guid? LastAppliedBatchId { get; private set; }
+    public bool? LastImportPurgeOnSuccess { get; private set; }
+    public bool? LastApplyPurgeOnSuccess { get; private set; }
 
     public Task<ImportResultResponse> ImportAsync(
-        Stream file, string fileName, ImportSettingsDto? settings, bool preview,
+        Stream file, string fileName, ImportSettingsDto? settings, bool preview, bool purgeOnSuccess = false,
         CancellationToken cancellationToken = default)
     {
         LastSettings = settings;
         LastPreview  = preview;
         LastFileName = fileName;
+        LastImportPurgeOnSuccess = purgeOnSuccess;
 
         if (ThrowOnImport is not null) throw ThrowOnImport;
 
@@ -35,9 +38,10 @@ internal sealed class FakeQuoteImportService : IQuoteImportService
         });
     }
 
-    public Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, CancellationToken cancellationToken = default)
+    public Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, bool purgeOnSuccess = false, CancellationToken cancellationToken = default)
     {
         LastAppliedBatchId = batchId;
+        LastApplyPurgeOnSuccess = purgeOnSuccess;
 
         if (ThrowOnApplyStagedBatch is not null) throw ThrowOnApplyStagedBatch;
 

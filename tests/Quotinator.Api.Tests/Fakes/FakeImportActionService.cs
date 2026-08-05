@@ -20,6 +20,7 @@ internal sealed class FakeImportActionService : IImportActionService
     public ConflictDecisionRequest? LastDecisionRequest { get; private set; }
     public Guid? LastUndoneActionId { get; private set; }
     public string? LastAppliedBatchId { get; private set; }
+    public bool? LastApplyPurgeOnSuccess { get; private set; }
     public string? LastDiscardedBatchId { get; private set; }
     public string? LastReversedBatchId { get; private set; }
     public string? LastExportedBatchId { get; private set; }
@@ -58,9 +59,10 @@ internal sealed class FakeImportActionService : IImportActionService
         return Task.CompletedTask;
     }
 
-    public Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, CancellationToken cancellationToken = default)
+    public Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, CancellationToken cancellationToken = default)
     {
-        LastAppliedBatchId = batchId;
+        LastAppliedBatchId     = batchId;
+        LastApplyPurgeOnSuccess = purgeOnSuccess;
         return Task.FromResult(ReturnApplyResult);
     }
 

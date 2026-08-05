@@ -63,4 +63,7 @@ public static class ApiMessages
     public const string FileResourceOriginInvalid        = "ErrorFileResourceOriginInvalid";
     public const string ImportBatchTypeInvalid           = "ErrorImportBatchTypeInvalid";
     public const string ImportBatchStatusInvalid         = "ErrorImportBatchStatusInvalid";
+    public const string AuditExportDateInvalid           = "ErrorAuditExportDateInvalid";
+    public const string AuditExportDateRangeInvalid      = "ErrorAuditExportDateRangeInvalid";
+    public const string AuditExportRowCapExceeded        = "ErrorAuditExportRowCapExceeded";
 }

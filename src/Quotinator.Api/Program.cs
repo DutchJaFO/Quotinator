@@ -184,6 +184,13 @@ var includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeD
 var autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoUpdateSources", true);
 var sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
 
+// #249: once a seeded batch reaches zero pending actions, its Import_Action (conflict-resolution)
+// rows have served their purpose and are purged automatically — separate settings per origin so a
+// developer investigating one specific source (bundled or user-imports) can temporarily retain that
+// origin's resolution history without affecting the other.
+var autoPurgeBundledImportActions = builder.Configuration.GetValue("Quotinator:AutoPurgeBundledImportActions", true);
+var autoPurgeUserImportActions    = builder.Configuration.GetValue("Quotinator:AutoPurgeUserImportActions", true);
+
 // Unicode-aware LIKE-style matching (issue #222) — opt-in, off by default until validated against
 // real-world non-ASCII search traffic. See docs/milestones/maintenance-milestone-v1.8.0/
 // 222-unicode-like-matching-plan.md for why this isn't unconditional.
@@ -401,11 +408,14 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<IImportBatchRepository>(),
         sp.GetRequiredService<IImportActionCoordinator>(),
         sp.GetRequiredService<IImportActionService>(),
+        sp.GetRequiredService<IImportActionWriter>(),
         sp.GetRequiredService<IAuditEntryWriter>(),
         sp.GetRequiredService<ICallerContext>(),
         sp.GetRequiredService<ILogger<DatabaseInitializer>>(),
         sp.GetRequiredService<ISourceCacheUpdater>(),
         autoUpdateSources,
+        autoPurgeBundledImportActions,
+        autoPurgeUserImportActions,
         sp.GetRequiredService<IRuleFileOverridePathResolver>(),
         sp.GetRequiredService<ISourceFileOverrideRegistry>(),
         sp.GetRequiredService<IFileResourceRepository>(),

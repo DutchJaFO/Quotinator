@@ -20,4 +20,12 @@ public static class QueryParamDefaults
 
     /// <summary>Default number of most-recently-seen rows kept per distinct FileName by <c>POST /api/v1/import/file-resources/prune</c>.</summary>
     public const int KeepPerFile = 5;
+
+    /// <summary>
+    /// Default maximum combined <c>Audit_Entry</c> + <c>Audit_Change</c> row count for
+    /// <c>GET /api/v1/admin/audit/export</c> (#249) — overridable via <c>Quotinator:AdminAuditExportMaxRows</c>.
+    /// A homelab-scale install producing a few hundred audit rows a day stays well under this for years;
+    /// a caller who genuinely needs more narrows the date range or raises the config value.
+    /// </summary>
+    public const int AdminAuditExportMaxRows = 50_000;
 }

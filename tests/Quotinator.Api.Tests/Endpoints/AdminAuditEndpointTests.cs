@@ -22,10 +22,13 @@ public class AdminAuditEndpointTests
     private static WebApplicationFactory<Program> CreateFactory(
         IAuditEntryReader?  auditReader  = null,
         IAuditEntryWriter?  auditWriter  = null,
-        string?        adminApiKey  = TestKey)
+        IChangeReader?      changeReader = null,
+        string?        adminApiKey  = TestKey,
+        int?           maxExportRows = null)
     {
-        var reader = auditReader ?? new NoOpAuditEntryReader();
-        var writer = auditWriter ?? new NoOpAuditEntryWriter();
+        var reader   = auditReader  ?? new NoOpAuditEntryReader();
+        var writer   = auditWriter  ?? new NoOpAuditEntryWriter();
+        var changes  = changeReader ?? NoOpChangeReader.Instance;
 
         return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -35,13 +38,15 @@ public class AdminAuditEndpointTests
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
                 services.AddSingleton<IAuditEntryWriter>(writer);
                 services.AddSingleton<IAuditEntryReader>(reader);
+                services.AddSingleton<IChangeReader>(changes);
                 services.AddSingleton<ICallerContext>(new NoOpCallerContext());
             });
             builder.ConfigureAppConfiguration((_, config) =>
             {
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Quotinator:AdminApiKey"] = adminApiKey
+                    ["Quotinator:AdminApiKey"] = adminApiKey,
+                    ["Quotinator:AdminAuditExportMaxRows"] = maxExportRows?.ToString(),
                 });
             });
         });
@@ -300,12 +305,218 @@ public class AdminAuditEndpointTests
         Assert.IsNull(capturedTable, "null must be forwarded to ClearAsync when no table param is supplied");
     }
 
+    // ── GET audit/date-range ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task GetAuditDateRange_BothTablesEmpty_ReturnsNulls()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/date-range", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        // Null properties are omitted app-wide (DefaultIgnoreCondition.WhenWritingNull) — absent means null here.
+        Assert.IsFalse(doc.RootElement.TryGetProperty("earliestDate", out _), "earliestDate must be absent (null) when neither table has data");
+        Assert.IsFalse(doc.RootElement.TryGetProperty("latestDate", out _), "latestDate must be absent (null) when neither table has data");
+    }
+
+    [TestMethod]
+    public async Task GetAuditDateRange_CombinesBothTables_ReturnsOverallEarliestAndLatest()
+    {
+        var stubAuditReader = new StubAuditReader(new PagedItems<AuditEntryEntity>([], 1, 20, 0))
+        {
+            DateRange = (new DateTime(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)),
+        };
+        var stubChangeReader = new StubChangeReader
+        {
+            DateRange = (new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc)),
+        };
+
+        using var factory = CreateFactory(stubAuditReader, changeReader: stubChangeReader);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/date-range", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), doc.RootElement.GetProperty("earliestDate").GetDateTime(), "earliest must be the overall minimum across both tables, not just Audit_Entry's own");
+        Assert.AreEqual(new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc), doc.RootElement.GetProperty("latestDate").GetDateTime(), "latest must be the overall maximum across both tables, not just Audit_Change's own");
+    }
+
+    [TestMethod]
+    public async Task GetAuditDateRange_OnlyOneTableHasData_ReturnsThatTablesRange()
+    {
+        var stubAuditReader = new StubAuditReader(new PagedItems<AuditEntryEntity>([], 1, 20, 0))
+        {
+            DateRange = (new DateTime(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc)),
+        };
+        var stubChangeReader = new StubChangeReader { DateRange = (null, null) };
+
+        using var factory = CreateFactory(stubAuditReader, changeReader: stubChangeReader);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/date-range", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+
+        Assert.AreEqual(new DateTime(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc), doc.RootElement.GetProperty("earliestDate").GetDateTime());
+        Assert.AreEqual(new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc), doc.RootElement.GetProperty("latestDate").GetDateTime());
+    }
+
+    // ── GET audit/export ─────────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task ExportAudit_ReturnsBothTablesData()
+    {
+        var entry = new AuditEntryEntity
+        {
+            TableName   = "Quotes",
+            Operation   = AuditOperation.Insert,
+            PerformedAt = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+        };
+        var change = new ChangeEntity
+        {
+            EntityType = "quote",
+            EntityId   = Guid.NewGuid().ToString(),
+            OccurredAt = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+        };
+        var stubAuditReader  = new StubAuditReader(new PagedItems<AuditEntryEntity>([entry], 1, 20, 1));
+        var stubChangeReader = new StubChangeReader { Items = [change] };
+
+        using var factory = CreateFactory(stubAuditReader, changeReader: stubChangeReader);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/export", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(1, doc.RootElement.GetProperty("entries").GetArrayLength());
+        Assert.AreEqual(1, doc.RootElement.GetProperty("changes").GetArrayLength());
+        Assert.IsNotNull(response.Content.Headers.ContentDisposition, "must be a downloaded file, not an inline response");
+        Assert.AreEqual("attachment", response.Content.Headers.ContentDisposition!.DispositionType);
+    }
+
+    [TestMethod]
+    public async Task ExportAudit_NoData_ReturnsEmptyArraysNot422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/export", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(0, doc.RootElement.GetProperty("entries").GetArrayLength());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("changes").GetArrayLength());
+    }
+
+    [TestMethod]
+    public async Task ExportAudit_MalformedStartDate_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/export?startDate=not-a-date", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ExportAudit_MalformedEndDate_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/export?endDate=not-a-date", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ExportAudit_StartDateAfterEndDate_Returns422()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync(
+            "/api/v1/admin/audit/export?startDate=2026-03-01&endDate=2026-01-01", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ExportAudit_CombinedRowCountExceedsCap_Returns422NotTruncatedFile()
+    {
+        var stubAuditReader  = new StubAuditReader(new PagedItems<AuditEntryEntity>([], 1, 20, 0)) { CountOverride = 3 };
+        var stubChangeReader = new StubChangeReader { CountOverride = 3 };
+
+        using var factory = CreateFactory(stubAuditReader, changeReader: stubChangeReader, maxExportRows: 5);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/export", TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "combined 3+3=6 rows exceeds the 5-row cap");
+        Assert.Contains("6", body);
+        Assert.Contains("5", body);
+    }
+
+    [TestMethod]
+    public async Task ExportAudit_CombinedRowCountAtCap_Succeeds()
+    {
+        var stubAuditReader  = new StubAuditReader(new PagedItems<AuditEntryEntity>([], 1, 20, 0)) { CountOverride = 2 };
+        var stubChangeReader = new StubChangeReader { CountOverride = 3 };
+
+        using var factory = CreateFactory(stubAuditReader, changeReader: stubChangeReader, maxExportRows: 5);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/export", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "combined 2+3=5 rows is exactly at the cap, must not be rejected");
+    }
+
+    [TestMethod]
+    public async Task ExportAudit_NoApiKey_Returns200()
+    {
+        using var factory = CreateFactory();
+        using var client  = factory.CreateClient();
+        // No X-Api-Key header — export is public, matching GET /admin/audit's precedent.
+        var response = await client.GetAsync("/api/v1/admin/audit/export", TestContext.CancellationToken);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private sealed class StubAuditReader(PagedItems<AuditEntryEntity> result) : IAuditEntryReader
     {
+        public (DateTime?, DateTime?) DateRange { get; init; } = (null, null);
+        public int? CountOverride { get; init; }
+
         public Task<PagedItems<AuditEntryEntity>> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
             => Task.FromResult(result);
+        public Task<IReadOnlyList<AuditEntryEntity>> GetAllInRangeAsync(DateTime? startDate, DateTime? endDate)
+            => Task.FromResult<IReadOnlyList<AuditEntryEntity>>(result.Items.ToList());
+        public Task<int> CountInRangeAsync(DateTime? startDate, DateTime? endDate)
+            => Task.FromResult(CountOverride ?? result.Items.Count);
+        public Task<(DateTime? Earliest, DateTime? Latest)> GetDateRangeAsync()
+            => Task.FromResult(DateRange);
+    }
+
+    private sealed class StubChangeReader : IChangeReader
+    {
+        public IReadOnlyList<ChangeEntity> Items { get; init; } = [];
+        public (DateTime?, DateTime?) DateRange { get; init; } = (null, null);
+        public int? CountOverride { get; init; }
+
+        public Task<IReadOnlyList<ChangeEntity>> GetHistoryAsync(string entityType, string entityId)
+            => Task.FromResult(Items);
+        public Task<IReadOnlyList<ChangeEntity>> GetAllInRangeAsync(DateTime? startDate, DateTime? endDate)
+            => Task.FromResult(Items);
+        public Task<int> CountInRangeAsync(DateTime? startDate, DateTime? endDate)
+            => Task.FromResult(CountOverride ?? Items.Count);
+        public Task<(DateTime? Earliest, DateTime? Latest)> GetDateRangeAsync()
+            => Task.FromResult(DateRange);
     }
 
     private sealed class CapturingAuditReader(Action<int> onCall) : IAuditEntryReader
@@ -315,6 +526,12 @@ public class AdminAuditEndpointTests
             onCall(pageSize);
             return Task.FromResult(new PagedItems<AuditEntryEntity>([], page, pageSize, 0));
         }
+        public Task<IReadOnlyList<AuditEntryEntity>> GetAllInRangeAsync(DateTime? startDate, DateTime? endDate)
+            => Task.FromResult<IReadOnlyList<AuditEntryEntity>>([]);
+        public Task<int> CountInRangeAsync(DateTime? startDate, DateTime? endDate)
+            => Task.FromResult(0);
+        public Task<(DateTime? Earliest, DateTime? Latest)> GetDateRangeAsync()
+            => Task.FromResult<(DateTime?, DateTime?)>((null, null));
     }
 
     private sealed class CapturingAuditWriter(Action<string?> onClear) : IAuditEntryWriter

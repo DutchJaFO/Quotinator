@@ -1,6 +1,8 @@
 using Quotinator.Data.Enums;
 using System.ComponentModel;
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
@@ -97,6 +99,75 @@ internal static class AdminEndpoints
             "Returns a paginated list of audit entries, newest first. " +
             "Filter by `table` (e.g. `Quotes`, `Database`) and/or `recordId` (Guid). " +
             "Maximum `pageSize` is 500.");
+
+        publicGroup.MapGet("/audit/date-range", async (
+            IAuditEntryReader auditReader,
+            IChangeReader changeReader) =>
+        {
+            var (entryEarliest, entryLatest)   = await auditReader.GetDateRangeAsync();
+            var (changeEarliest, changeLatest) = await changeReader.GetDateRangeAsync();
+
+            return Results.Ok(new AuditDateRangeResponse
+            {
+                EarliestDate = Earlier(entryEarliest, changeEarliest),
+                LatestDate   = Later(entryLatest, changeLatest),
+            });
+        })
+        .WithName("GetAuditDateRange")
+        .WithSummary("Get the audit trail's available date range")
+        .Produces<AuditDateRangeResponse>(StatusCodes.Status200OK)
+        .WithDescription(
+            "Returns the earliest and latest timestamp across both `Audit_Entry` and `Audit_Change` " +
+            "combined — so a caller knows what range actually has data before requesting " +
+            "`GET /api/v1/admin/audit/export`. Both fields are `null` when neither table has any rows.");
+
+        publicGroup.MapGet("/audit/export", async (
+            string? startDate,
+            string? endDate,
+            IAuditEntryReader auditReader,
+            IChangeReader changeReader,
+            IApiLocalizer localizer,
+            IConfiguration configuration,
+            HttpContext httpContext) =>
+        {
+            if (!TryParseUtcDate(startDate, out var start))
+                return Results.Problem(detail: localizer[ApiMessages.AuditExportDateInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
+            if (!TryParseUtcDate(endDate, out var end))
+                return Results.Problem(detail: localizer[ApiMessages.AuditExportDateInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
+            if (start is not null && end is not null && start > end)
+                return Results.Problem(detail: localizer[ApiMessages.AuditExportDateRangeInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
+
+            var entryCount  = await auditReader.CountInRangeAsync(start, end);
+            var changeCount = await changeReader.CountInRangeAsync(start, end);
+            var totalCount  = entryCount + changeCount;
+            var maxRows     = configuration.GetValue<int?>("Quotinator:AdminAuditExportMaxRows") ?? QueryParamDefaults.AdminAuditExportMaxRows;
+
+            if (totalCount > maxRows)
+                return Results.Problem(
+                    detail: localizer.Format(ApiMessages.AuditExportRowCapExceeded, totalCount, maxRows),
+                    statusCode: StatusCodes.Status422UnprocessableEntity);
+
+            var entries = await auditReader.GetAllInRangeAsync(start, end);
+            var changes = await changeReader.GetAllInRangeAsync(start, end);
+
+            httpContext.Response.Headers.Append("Content-Disposition",
+                $"attachment; filename=\"quotinator-audit-export-{DateTime.UtcNow:yyyyMMddHHmmss}.json\"");
+
+            return Results.Ok(new AuditExportResponse { Entries = entries, Changes = changes });
+        })
+        .WithName("ExportAuditTrail")
+        .WithSummary("Bulk-export the audit trail")
+        .Produces<AuditExportResponse>(StatusCodes.Status200OK)
+        .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
+        .WithDescription(
+            "Returns every `Audit_Entry` and `Audit_Change` row within an optional date range, in one " +
+            "call — a downloaded JSON file (`Content-Disposition: attachment`), not a paginated response; " +
+            "the caller already decided it wants the full set. `startDate`/`endDate` are optional and " +
+            "unbounded on whichever side is omitted; use `GET /api/v1/admin/audit/date-range` first to " +
+            "learn the range that actually has data. Returns `422` if either date fails to parse, if " +
+            "`startDate` is after `endDate`, or if the combined row count would exceed " +
+            "`Quotinator:AdminAuditExportMaxRows` (default 50,000) — narrow the range and retry rather " +
+            "than receiving a silently truncated file. No `X-Api-Key` required, matching `GET /admin/audit`'s precedent.");
 
         // ── Admin-only ────────────────────────────────────────────────────────
 
@@ -203,7 +274,35 @@ internal static class AdminEndpoints
         .WithSummary("Clear audit log")
         .WithDescription(
             "Deletes all audit entries, or only entries for a specific table when `table` is supplied. " +
+            "An unscoped clear (`table` omitted) also clears the change log (`Audit_Change`) — #249 treats " +
+            "both as one combined audit-trail concern, matching `GET .../audit/export`/`.../date-range`. " +
+            "A scoped clear leaves `Audit_Change` untouched, since it has no equivalent per-table scoping. " +
             "A single audit entry recording the purge is written after the delete so there is always a trace that a clear occurred. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
     }
+
+    // Parses an optional startDate/endDate query value as UTC — DateTimeStyles.AssumeUniversal treats
+    // an offset-less value (e.g. "2026-01-01") as already UTC rather than local server time, matching
+    // how PerformedAt/OccurredAt are always stored; AdjustToUniversal converts an explicit-offset value
+    // (e.g. with "Z" or "+02:00") to UTC instead of rejecting it.
+    private static bool TryParseUtcDate(string? value, out DateTime? result)
+    {
+        if (value is null) { result = null; return true; }
+
+        if (!DateTime.TryParse(value, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+        {
+            result = null;
+            return false;
+        }
+
+        result = parsed;
+        return true;
+    }
+
+    private static DateTime? Earlier(DateTime? a, DateTime? b) =>
+        a is null ? b : b is null ? a : a < b ? a : b;
+
+    private static DateTime? Later(DateTime? a, DateTime? b) =>
+        a is null ? b : b is null ? a : a > b ? a : b;
 }
