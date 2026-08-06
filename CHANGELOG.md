@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-05 21:04 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-06 20:50 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page — an admin database Reset can fix it without needing to restart the app or container.
 - Quotinator now keeps a copy of every import/seed file it processes — including which conversion settings were used — so the original content can be listed, reviewed, or downloaded again later, and old versions can be pruned to reclaim space.
 - Old conflict-resolution history from completed imports is now cleaned up automatically, and the full audit trail (what changed and when) can be exported in bulk for record-keeping.
+- Resetting the database is now a complete, unconditional wipe — it always rebuilds from scratch and no longer automatically re-imports the bundled quote content afterward. Nothing survives a reset any more, including the audit trail, so export it first (see above) if you want to keep it.
 
 ### Added
 - Release entries can now carry an optional one-line `quote` (release-note flavour text, with optional `attribution`) — rendered in `CHANGELOG.md` and the Blazor changelog UI, omitted from the more concise `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)
@@ -36,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Internal C# enum types were reorganised into a dedicated `Enums` folder per project, following the project's own naming/placement conventions — no functional change, no API surface change (issue #255)
 - Several internal C# class names were corrected to consistently reflect what boundary they cross (an HTTP response, or an on-disk JSON file) — no functional change, no API surface change (issue #256)
 - Clearing the entire audit trail (`DELETE /admin/audit` with no `table` filter) now also clears the change log, matching the new bulk-export/date-range endpoints' treatment of both as one combined audit trail; clearing a specific table's entries leaves the change log untouched, since it has no equivalent per-table scope (issue #249)
+- `POST /api/v1/admin/database/reset` now drops the entire database unconditionally and rebuilds it from the baseline schema, instead of preserving certain internal tables and always re-importing bundled quote content afterward — an operator who wants old data back exports the audit trail first (`GET /admin/audit/export`) or reseeds explicitly; `preserveSchemaVersion=true` now preserves both internal migration-history counters symmetrically instead of only one (issue #156)
 
 ### Fixed
 - Database columns backed by the duplicate-resolution-policy setting (`ImportBatches.ConflictPolicy`, and the internal `AppliedPolicy` column on two provenance tables) now reject an invalid value at the database level via a CHECK constraint, matching every other enum-backed column in the schema; a pre-existing data inconsistency this closed is also normalised automatically (issue #150)

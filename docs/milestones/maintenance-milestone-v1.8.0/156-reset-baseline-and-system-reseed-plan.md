@@ -1,6 +1,6 @@
 # #156 — Reset: baseline script instead of drop-all-user-tables + replay, plus a system-reseed extension point
 
-**Status:** In progress (step 6)
+**Status:** Waiting for release
 **GitHub issue:** #156
 **Tiers required:** T1, T2 (from the step that changes observable Reset/Reseed behaviour onward — see per-step notes)
 **Depends on:** #253/#254 (done — targets post-rename table names). Release gate (not an implementation-order
@@ -203,17 +203,27 @@ action per this project's standing convention — not run here.
 | 7 | ✅ | Reset drops the entire database and rebuilds via baseline | Unit test + Live | `ResetAsync_AfterInitialise_WipesExistingAuditEntries`, `ResetAsync_WipesExistingChangeLogRowsAndDoesNotReseed`, `GetAllTables_ReturnsEveryTableRegardlessOfPrefix`; live Docker: audit `totalCount` 32→1 (self-trace only), quotes 799→0 |
 | 8 | ✅ | Reset no longer reseeds standard (bundled/user) content | Unit test + Live | `ResetAsync_AfterInitialise_RebuildsSchemaAndDoesNotReseed`; live Docker: `POST /admin/database/reset` returns all-zero counts, `reports:[]`, `/quotes/random` → `200 NoResults` |
 | 9 | ✅ | `ResetAsync_AfterInitialise_PreservesExistingAuditEntries` rewritten to assert the opposite | Unit test | `ResetAsync_AfterInitialise_WipesExistingAuditEntries` |
-| 10 | ⬜ | T1 (Visual Studio, developer) | Live | Not yet run — developer's own action |
+| 10 | ✅ | T1 (Visual Studio, developer) | Live | Developer's own VS run, 2026-08-06: reset requested → rebuilding schema from baseline → stats all zero → reset complete, `200` |
 | 11 | ✅ | T2 (Docker) | Live | Full smoke-test §32 sequence run against `quotinator:local`; found and fixed the `LastSeedReport` staleness bug live |
 
 ---
 
 ## Relationship to existing issues
 
-- **#141** ("Reseed/reset must preserve System-classified data") established the preserve-on-reset
-  behaviour Step 5 has now reversed. Not closed or commented on here — GitHub issue actions require
-  explicit developer permission (standing project convention); the developer should decide how to
-  dispose of #141 (close as superseded, or otherwise) once this issue itself is ready to close.
+- **#141** ("Reseed/reset must preserve System-classified data") is **not** fully superseded by this
+  issue — corrected 2026-08-06 after developer feedback. Three separate concerns, not one:
+  1. **Audit trail surviving Reset** — genuinely reversed by Step 5. Resolved.
+  2. **Content vital for the app to function** (the deeper concern #141 was really pointing at) —
+     unresolved, not superseded. `SeedSystemContentAsync` (this issue) provides the *mechanism*, but
+     nothing real exercises it yet — only the `SystemContent_`/`UserContent_` test-only dummies do.
+     [#268](https://github.com/DutchJaFO/Quotinator/issues/268) (Data Enrichment milestone,
+     genre-as-data) is the first real candidate to actually prove this in production.
+  3. **Optional pure data** (quotes) — never really #141's concern; Reset correctly drops this and
+     does not restore it, unaffected by this correction.
+
+  Not closed or commented on here — GitHub issue actions require explicit developer permission
+  (standing project convention); the developer should decide how to dispose of #141 once #268 (or an
+  equivalent real vital-content table) actually exists and is verified, not before.
 - **#151** / [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md)
   — dangling references within a surviving audit-trail table are permanent by design; ADR 014 also
   confirms this issue's Step 5 makes the audit trail stop surviving Reset entirely, which is what makes
