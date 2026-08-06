@@ -25,9 +25,12 @@ no fix available anywhere (Docker Scout: "Fixed version: not fixed") as of the s
 is actionable until Ubuntu/Microsoft ships a patched package — re-checked periodically on rebuild
 (#232's own follow-up tracks adding this to the T2 smoke-test checklist).
 
-**Last scanned:** 2026-08-01, `quotinator:local` built fresh with `docker build --no-cache` (see #232).
-All 8 originate in the base image itself, confirmed by scanning `mcr.microsoft.com/dotnet/aspnet:10.0`
-directly and getting an identical result — Quotinator's own application layer contributes none.
+**Last scanned:** 2026-08-06, `quotinator:local` built fresh with `docker build --no-cache`, via
+[`docs/release-verification.md`'s T4 tier](../release-verification.md#t4--docker-image-freshness-milestone-close)
+(#250) — identical result to the 2026-08-01 scan below, same 8 CVEs, same severities, all still
+`Fixed version: not fixed`. All 8 originate in the base image itself, confirmed by scanning
+`mcr.microsoft.com/dotnet/aspnet:10.0` directly and getting an identical result — Quotinator's own
+application layer contributes none.
 
 | CVE | Package | Severity | Fixable |
 |---|---|---|---|

@@ -153,13 +153,18 @@ CI enforces build and test pass. The additional check before opening a PR:
 
 ## Milestone close
 
-Releases follow a two-stage model. See `docs/release-verification.md` for tier definitions (T1/T2/T3) and the full stage table.
+Releases follow a two-stage model. See `docs/release-verification.md` for tier definitions (T1/T2/T3, plus the milestone-scoped T4) and the full stage table.
 
 - [ ] All issues verified: `gh issue list --milestone "<Name>" --state open` returns empty
 - [ ] **Process gap check** — across the whole milestone, did anything about the workflow itself repeatedly feel undefined or get skipped? A pattern visible only at milestone scope (not from any single issue) still needs the same investigate-and-decide treatment — see `process.md` → "Process gap discovery"
 - [ ] If the milestone added any migrations: full incremental migration path verified against a
       database matching the *last published release's* schema, not the accumulated dev database —
       see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md)
+- [ ] **T4 — Docker image freshness**: `docker build --no-cache -f docker/Dockerfile -t quotinator:local .`
+      then `docker scout cves quotinator:local`; compare against `docs/security/README.md`'s "Docker
+      base image (OS packages)" table and update it (at minimum the "Last scanned" date) in the same
+      commit — see `docs/release-verification.md`'s T4 section. Never skipped, never substituted by a
+      T2 pass's own (cache-permitted) `docker build`.
 - [ ] Build clean: `dotnet build --configuration Release` — 0 warnings, 0 errors
 - [ ] Tests pass: `dotnet test --configuration Release` — all tests pass, 0 warnings
 - [ ] Changelogs updated (`CHANGELOG.md`, `addon/CHANGELOG.md`, `addon-beta/CHANGELOG.md`) — optionally

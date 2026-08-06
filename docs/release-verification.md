@@ -1,6 +1,9 @@
 # Release Verification Tiers
 
-This document defines the three verification tiers used in the Quotinator release process. Every issue plan doc must declare which tiers apply. Every required tier must be confirmed before the issue can close or a release tag can be pushed.
+This document defines the verification tiers used in the Quotinator release process. T1/T2/T3 are
+**per-issue** tiers — every issue plan doc must declare which apply, and every required tier must be
+confirmed before that issue can close. T4 is a **per-milestone** tier — it has no per-issue declaration
+of its own; it runs once, at milestone close, regardless of which issues the milestone contained.
 
 ---
 
@@ -81,6 +84,48 @@ When the change touches schema/reset logic, also exercise the affected admin end
 
 ---
 
+### T4 — Docker image freshness (milestone close)
+
+**Environment:** local Docker build (`docker build --no-cache`) + the Docker Scout CLI (`docker scout cves`).
+
+**What it catches:** OS-layer vulnerabilities in the base image that drift over time independent of any
+code change in this repository. An upstream base-image maintainer can republish a patched layer between
+milestones, and nothing else in this project's verification tiers ever re-checks that — T1/T2 build
+against whatever's cached locally, and no per-issue smoke test exercises the base image itself. Found
+live during #232 (2026-08-01): the issue's own premise (23 reported vulnerabilities) was already stale
+by the time the research ran — a plain `--no-cache` rebuild alone (no Dockerfile change) dropped the
+count to 8, purely because Microsoft had republished a patched base layer since the image was last
+built. Nothing caught the drift until someone happened to re-run the scan by hand (#250).
+
+**Unlike T1/T2/T3, this is a standing per-milestone gate, not something an individual issue declares.**
+No issue's `**Tiers required:**` line ever lists T4 — it runs once per milestone, at close, regardless
+of which issues the milestone touched, the same way [ADR 009](architecture-decisions/009-verify-migrations-against-last-released-schema.md)'s
+last-published-release migration check does. See `docs/workflow/checklist.md → Milestone close` for
+where it sits in the close sequence.
+
+**When required:** once per milestone, before the milestone is closed — never skipped, never
+substituted by a T2 pass's own `docker build` (which permits a cached build and is not a freshness
+check). Always uses `--no-cache`: a cached build can silently reuse a stale base layer and miss an
+upstream update, which is the entire failure mode this tier exists to catch.
+
+**Gate:**
+```bash
+docker build --no-cache -f docker/Dockerfile -t quotinator:local .
+docker scout cves quotinator:local
+```
+Compare the result against `docs/security/README.md`'s "Docker base image (OS packages)" table:
+- **Result matches exactly** — update only the "Last scanned" date/note in the same commit as the
+  milestone-close docs.
+- **Result differs** (a CVE resolved, a new one appeared, severity changed) — update the table and the
+  "Last scanned" note in the same commit. Escalate beyond a documentation update only if a listed CVE
+  now shows an actual `Fixed version` (a real upstream fix became available) rather than `not fixed`.
+
+No pass/fail severity threshold — these are OS-layer CVEs tracked as accepted residual risk (see
+`docs/security/README.md`), not a release-blocking gate on their own; deciding a future threshold policy
+is explicitly out of scope for this tier's own definition (see #250's own filing).
+
+---
+
 ## Never verify against an ad-hoc or shared database
 
 Neither T1 nor T2 may substitute a developer's own accumulated Visual Studio dev database, or a stale
@@ -132,6 +177,9 @@ If an issue requires T3, it must go through a beta release before the final tag 
 T1 and T2 are always required (see each tier's own "When required" above) — `**Tiers required:** T2` alone
 or `**Tiers required:** T1` alone are not valid declarations for any issue that touches code; the minimum
 is `**Tiers required:** T1, T2`.
+
+**T4 is never listed on a `**Tiers required:**` line.** It is not an issue-level tier — see its own
+"When required" above.
 
 ---
 
