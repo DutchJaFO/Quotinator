@@ -42,6 +42,8 @@ verification command here in the same commit that fixes it — the list only gro
 28. [Unicode-aware search toggle](#28-unicode-aware-search-toggle-222) (#222)
 29. [Seeding-stage backup/restore safety net, degraded startup, and Reset recovery](#29-seeding-stage-backuprestore-safety-net-degraded-startup-and-reset-recovery-254) (#254)
 30. [FileResource capture, byte-exact reconstruction, and pruning](#30-fileresource-capture-byte-exact-reconstruction-and-pruning-251) (#251)
+31. [Audit-trail bulk export, date-range discovery, and conflict-resolution data auto-purge](#31-audit-trail-bulk-export-date-range-discovery-and-conflict-resolution-data-auto-purge-249) (#249)
+32. [Reset is a full wipe with no reseed](#32-reset-is-a-full-wipe-with-no-reseed-156) (#156)
 
 ---
 
@@ -981,7 +983,8 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 Must return `200` with `quotes`/`sources`/`characters`/`people`/`series`/`universes`/
 `stageDirections`/`soundCues`/`conversations` (all nine entity-type row counts) plus `reports`
 (same per-file shape as the preview above). Repeat against `POST /admin/database/reset` — same
-shape.
+shape, but expect every count `0` and `reports` reflecting no activity: Reset no longer reimports
+bundled/user content after rebuilding the schema (#156), so there is nothing to report.
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
@@ -1139,11 +1142,14 @@ curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
   exception. A Reset call made with a wrong/missing `X-Api-Key` must return `401` (not `503`) even
   while degraded — confirming the health gate exempts `/api/v1/admin/*` from the 503 gate entirely,
   rather than blocking the route outright and only letting a correctly-authenticated call through.
-- The Reset call must return `200` with a real row-count summary (799 quotes, etc.) — it does its
-  own independent schema rebuild, unaffected by the degraded state.
-- After Reset, `/health` must return `200` with `{"status":"healthy"}` and `/quotes/random` must
-  return `200` with real data — proving `DatabaseHealthState.MarkHealthy()` actually clears the
-  degraded state rather than requiring a process restart to recover.
+- The Reset call must return `200` with a row-count summary of **all zeros** — it does its own
+  independent schema rebuild, unaffected by the degraded state, but no longer reimports bundled/user
+  quote content afterward (#156), so every count is `0` immediately after.
+- After Reset, `/health` must return `200` with `{"status":"healthy"}` — proving
+  `DatabaseHealthState.MarkHealthy()` actually clears the degraded state rather than requiring a
+  process restart to recover — and `/quotes/random` must return `200` with `{"status":"NoResults", ...}`
+  and an empty `items` array (not `503`, and not real quote data — the database is genuinely empty
+  after a Reset now).
 
 Clean up: `docker rm -f smoke254 && rm -rf .claude/temp/smoke-254-data`.
 
@@ -1345,4 +1351,52 @@ via `Quotinator.Tools.DbInspector` (`SELECT COUNT(*) FROM Audit_Change`) that th
 unaffected by a scoped clear.
 
 Clean up: `docker rm -f smoke249 && rm -f .claude/temp/smoke249.db .claude/temp/smoke249.db-wal .claude/temp/smoke249.db-shm .claude/temp/smoke249b.db .claude/temp/smoke249b.db-wal .claude/temp/smoke249b.db-shm .claude/temp/audit-export.json`.
+
+## 32. Reset is a full wipe with no reseed (#156)
+
+Proves Reset now drops the *entire* database (no `System_`/`Import_`/`Audit_` protected-table
+concept) and rebuilds via the baseline path, and no longer reimports bundled/user quote content
+afterward — reversing #141's preserve-on-reset behaviour. There is no live check for the
+`SeedSystemContentAsync` extension point itself: no real system/reference table exists in
+production yet (proven only via test-only fixtures — see the #156 plan doc), so nothing observable
+changes in a running container for that part.
+
+**Start a container, let it seed normally, write an audit-trail marker, then Reset:**
+```bash
+docker rm -f smoke156
+MSYS_NO_PATHCONV=1 docker run -d --name smoke156 -p 8080:8080 \
+  -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 8
+curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+curl -s "http://localhost:8080/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/admin/database/reset"
+curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+curl -s "http://localhost:8080/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
+curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/quotes/random"
+```
+- Before Reset, `quotes` and the audit `totalCount` must both be non-zero (a normal seeded install).
+- The Reset call must return `200` with every row count `0` (see the endpoint's own updated
+  description) — no reimport happens.
+- After Reset, `/version`'s `quotes` count must be `0` — the audit trail is wiped along with
+  everything else, no longer surviving Reset the way it did before #156. The audit `totalCount` must
+  be exactly `1`, not `0` — Reset writes its own self-trace row (`Operation: Reset`) into the
+  freshly-rebuilt `Audit_Entry` table immediately after wiping it, the same pattern
+  `DELETE /admin/audit` already uses for its own `Purged` trace.
+- `/quotes/random` must return `200` with `{"status":"NoResults", ...}` and an empty `items` array —
+  not `503`, and not real quote data.
+
+**`preserveSchemaVersion=true` still restores the pre-reset migration-history rows — now for both
+counters, not just the consumer's own (#156 made this symmetric since Data's own `System_SchemaVersion`
+is wiped by the full drop too, where previously it was never touched):**
+```bash
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/admin/database/reset?preserveSchemaVersion=true"
+```
+Must return `200`. Verify via `Quotinator.Tools.DbInspector` that both `System_SchemaVersion` and
+`System_ConsumerSchemaVersion` report the same row *count* as before this call (their granular
+per-version history, not collapsed to a single baseline row) — `SELECT COUNT(*) FROM
+System_SchemaVersion;` / `SELECT COUNT(*) FROM System_ConsumerSchemaVersion;`.
+
+Clean up: `docker rm -f smoke156`.
 

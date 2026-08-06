@@ -1,6 +1,6 @@
 # #156 — Reset: baseline script instead of drop-all-user-tables + replay, plus a system-reseed extension point
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 6)
 **GitHub issue:** #156
 **Tiers required:** T1, T2 (from the step that changes observable Reset/Reseed behaviour onward — see per-step notes)
 **Depends on:** #253/#254 (done — targets post-rename table names). Release gate (not an implementation-order
@@ -139,22 +139,54 @@ same `SeedSystemContentAsync` override pattern. Three real-SQLite integration te
 - `ReseedEquivalentCall_DoesNotInvokeSeedSystemContentAsync`
 
 ### Step 5 — Reset behaviour rewrite (the original issue's own two proposed changes)
-**Status:** ⬜ Not started — deferred until Steps 1–4 are verified
-1. `DropAndRebuildAsync` (or its replacement) drops the *entire* database and recreates via
-   `ApplyBaselineAsync`'s baseline path unconditionally, rather than `GetUserTables`-exclusion +
-   incremental replay. `System_`/`Import_`/`Audit_`-prefixed tables (including the audit trail) no
-   longer survive Reset — the deliberate tradeoff ADR 014/#249 already accounts for.
-2. Remove the `SeedIfEmptyInternalAsync` call from `QuotinatorDatabaseInitializer.OnResetAsync`.
-3. Rewrite `ResetAsync_AfterInitialise_PreservesExistingAuditEntries` (and any sibling test asserting
-   Reset leaves a populated database) to assert the opposite, in the same commit.
-4. Revisit #141's outcome, which this step directly supersedes.
+**Status:** ✅ Done
+1. `DropAndRebuildAsync` now drops the *entire* database (`Sql.Schema.GetAllTables`, no exclusion of
+   any kind — `Sql.Schema.GetUserTables` is retired) and recreates it via `ApplyMigrationsAsync`,
+   which — once the DB reads as genuinely empty — takes the same baseline path a fresh install uses
+   whenever a baseline is configured (Quotinator always configures one). `System_`/`Import_`/`Audit_`-
+   prefixed tables, including the audit trail, no longer survive Reset — the deliberate tradeoff
+   ADR 014/#249 already accounts for. `preserveSchemaVersion=true` now snapshots and restores **both**
+   `System_SchemaVersion`'s and `System_ConsumerSchemaVersion`'s granular per-version rows (previously
+   only the consumer's — Data's own was never touched pre-#156, so there was nothing to preserve).
+   `SeedSystemContentAsync` fires exactly once per Reset: `ApplyBaselineAsync` already calls it
+   internally once the DB is empty and a baseline is configured, so `DropAndRebuildAsync` only calls it
+   directly when `ApplyMigrationsAsync` reports it did *not* take the baseline path (`tookBaselinePath`),
+   avoiding a double-invocation for the real Quotinator scenario.
+2. Removed the `SeedIfEmptyInternalAsync` call from `QuotinatorDatabaseInitializer.OnResetAsync`.
+   `ResolveEffectiveBatchesAsync(forceSourceRefresh)` is still called for its on-disk source-cache-
+   refresh side effect (a disk-level concern independent of database content, outside the Single
+   Responsibility policy's scope) — its returned batches are now discarded, never imported. Also fixed
+   a related staleness bug found live during T2: `LastSeedReport` was never cleared by Reset, so the
+   response kept echoing whatever the *previous* real seed/reseed had reported, misleadingly implying
+   the Reset call itself had imported something — now explicitly reset to `[]`.
+3. Rewrote `ResetAsync_AfterInitialise_PreservesExistingAuditEntries` →
+   `ResetAsync_AfterInitialise_WipesExistingAuditEntries` (asserts the opposite),
+   `ResetAsync_AfterInitialise_RebuildsSchemaAndReseeds` → `...AndDoesNotReseed`, replaced
+   `ResetAsync_AnyParameter_NeverTouchesDataSchemaVersion` with symmetric
+   `ResetAsync_DefaultParameter_AlsoReplaysDataSchemaVersion`/
+   `ResetAsync_PreserveSchemaVersionTrue_AlsoKeepsExistingDataVersionRows`, retired the two
+   `GetUserTables_*` tests in favour of `GetAllTables_ReturnsEveryTableRegardlessOfPrefix`, and rewrote
+   `ConflictResolutionTests.ResetAsync_PreservesExistingChangeLogRows` →
+   `ResetAsync_WipesExistingChangeLogRowsAndDoesNotReseed`.
+4. #141's outcome ("Reseed/reset must preserve System-classified data") is directly superseded by this
+   step — needs a developer decision on whether/how to close it (not done here; GitHub issue actions
+   require explicit permission).
 
 ### Step 6 — Docs sync + full verification
-**Status:** ⬜ Not started
-Update CLAUDE.md's "No exception-based migration recovery" section (currently documents the pre-#156
-"System_ tables always survive Reset" behaviour this issue reverses), `docs/database-conventions.md`,
-and `docs/smoke-tests.md`. Full `dotnet build`/`dotnet test`, T1 (developer's own Visual Studio run), T2
-(Docker live verification) once Step 5 lands.
+**Status:** ✅ Done
+Updated CLAUDE.md's "No exception-based migration recovery" and "Audit-trail tables never purge
+dangling references" sections (both described the pre-#156 preserve-on-reset behaviour as current
+fact — now describe the full-wipe baseline rebuild, and the stale `System_AuditEntries`/
+`System_ImportConflicts`/`System_ImportActions`/`System_ChangeLog` names were corrected to their
+actual post-#253/#254 names in the same edit). Updated the `POST /admin/database/reset` endpoint's own
+`[Description]` and `docs/api-endpoints.md`'s matching row (per the "Keeping API documentation in
+sync" rule). Updated `docs/smoke-tests.md`: fixed two now-wrong expectations in existing sections
+(#221's report-shape check, #254's degraded-state-recovery check both assumed Reset reseeds), and
+added a new §32 dedicated to #156. Full `dotnet build`/`dotnet test` — 0 warnings, 0 errors, 0 test
+failures. T2 (Docker) run end-to-end against §32's own checklist, including a real discrepancy found
+and fixed live (the `LastSeedReport` staleness bug above, and the audit `totalCount` being `1` not
+`0` after Reset — its own self-trace row, not a bug). T1 (Visual Studio) is the developer's own
+action per this project's standing convention — not run here.
 
 ---
 
@@ -168,18 +200,20 @@ and `docs/smoke-tests.md`. Full `dotnet build`/`dotnet test`, T1 (developer's ow
 | 4 | ✅ | System content is (re)populated after `ResetAsync` | Unit test | `SystemReseedConceptTests.SeedSystemContentAsync_AfterReset_RepopulatesSystemContentTable` |
 | 5 | ✅ | Standard-reseed-equivalent call does not touch system content | Unit test | `SystemReseedConceptTests.ReseedEquivalentCall_DoesNotInvokeSeedSystemContentAsync` |
 | 6 | ✅ | A downstream consumer (not just Quotinator.Data itself) can register system content via the same extension point | Unit test | `UserSystemReseedConceptTests.SeedSystemContentAsync_AfterFreshInitialise_PopulatesUserContentTable` + siblings |
-| 7 | ⬜ | Reset drops the entire database and rebuilds via baseline | Unit test + Live | Step 5 |
-| 8 | ⬜ | Reset no longer reseeds standard (bundled/user) content | Unit test + Live | Step 5 |
-| 9 | ⬜ | `ResetAsync_AfterInitialise_PreservesExistingAuditEntries` rewritten to assert the opposite | Unit test | Step 5 |
-| 10 | ⬜ | T1 (Visual Studio, developer) | Live | Step 6 |
-| 11 | ⬜ | T2 (Docker) | Live | Step 6 |
+| 7 | ✅ | Reset drops the entire database and rebuilds via baseline | Unit test + Live | `ResetAsync_AfterInitialise_WipesExistingAuditEntries`, `ResetAsync_WipesExistingChangeLogRowsAndDoesNotReseed`, `GetAllTables_ReturnsEveryTableRegardlessOfPrefix`; live Docker: audit `totalCount` 32→1 (self-trace only), quotes 799→0 |
+| 8 | ✅ | Reset no longer reseeds standard (bundled/user) content | Unit test + Live | `ResetAsync_AfterInitialise_RebuildsSchemaAndDoesNotReseed`; live Docker: `POST /admin/database/reset` returns all-zero counts, `reports:[]`, `/quotes/random` → `200 NoResults` |
+| 9 | ✅ | `ResetAsync_AfterInitialise_PreservesExistingAuditEntries` rewritten to assert the opposite | Unit test | `ResetAsync_AfterInitialise_WipesExistingAuditEntries` |
+| 10 | ⬜ | T1 (Visual Studio, developer) | Live | Not yet run — developer's own action |
+| 11 | ✅ | T2 (Docker) | Live | Full smoke-test §32 sequence run against `quotinator:local`; found and fixed the `LastSeedReport` staleness bug live |
 
 ---
 
 ## Relationship to existing issues
 
-- **#141** ("Reseed/reset must preserve System-classified data") established the current preserve-on-reset
-  behaviour Step 5 reverses. Needs to be revisited/superseded when Step 5 lands, not silently ignored.
+- **#141** ("Reseed/reset must preserve System-classified data") established the preserve-on-reset
+  behaviour Step 5 has now reversed. Not closed or commented on here — GitHub issue actions require
+  explicit developer permission (standing project convention); the developer should decide how to
+  dispose of #141 (close as superseded, or otherwise) once this issue itself is ready to close.
 - **#151** / [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md)
   — dangling references within a surviving audit-trail table are permanent by design; ADR 014 also
   confirms this issue's Step 5 makes the audit trail stop surviving Reset entirely, which is what makes
