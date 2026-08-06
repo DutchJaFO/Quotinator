@@ -225,15 +225,17 @@ internal static class AdminEndpoints
         .Produces<DatabaseSeedSummaryResponse>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
         .WithDescription(
-            "Clears all data, reapplies all migrations from scratch, " +
-            "then reimports every quote from the configured source files. " +
-            "Equivalent to deleting the database file and restarting. " +
-            "The audit log (`System_AuditEntries`) always survives a reset — clear it separately via `DELETE /api/v1/admin/audit` if needed. " +
-            "By default, schema migration history is also cleared and replayed; pass `preserveSchemaVersion=true` to keep the existing migration history instead. " +
-            "Auto-updated sources are refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
-            "unless `Quotinator:AutoUpdateSources` is `false`, in which case `forceSourceRefresh` has no effect. " +
-            "Returns the row counts and a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) " +
-            "after the operation completes (issue #221). " +
+            "Drops the entire database and rebuilds it from scratch via the baseline schema — equivalent to " +
+            "deleting the database file and restarting, except it does **not** reimport any bundled or user " +
+            "quote content afterward (issue #156). Every table is dropped, including the audit log — no table " +
+            "is protected from this reset; export the audit trail first via `GET /api/v1/admin/audit/export` " +
+            "if you need to keep it (issue #249). " +
+            "By default, schema migration history is also cleared and rebuilt to the latest version; pass `preserveSchemaVersion=true` to keep the existing migration history's per-version rows instead. " +
+            "Auto-updated sources are still refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
+            "unless `Quotinator:AutoUpdateSources` is `false` — this only refreshes the on-disk source cache, " +
+            "independent of the database, since nothing gets imported by this call. " +
+            "Returns the row counts (all zero immediately after a reset) and a per-file, per-entity-type report (issue #221); " +
+            "the report reflects no activity since Reset does not seed. " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 

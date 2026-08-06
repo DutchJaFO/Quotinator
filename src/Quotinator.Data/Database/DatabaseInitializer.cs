@@ -442,19 +442,29 @@ public class DatabaseInitializer : IDatabaseInitializer
     #region Protected utilities for subclasses
 
     /// <summary>
-    /// Drops and recreates the consumer's own domain tables by reapplying its migrations.
-    /// Subclasses call this during reset. <c>Audit_Entry</c> is never dropped (see
-    /// <see cref="Sql.Schema.GetUserTables"/>), and — because Quotinator.Data's own migrations
-    /// concern only <c>Import_</c>/<c>Audit_</c>/<c>System_</c>-prefixed tables that a Reset never
-    /// touches — Quotinator.Data's own migration history (<c>System_SchemaVersion</c>) is never wiped or replayed here either,
-    /// regardless of <paramref name="preserveSchemaVersion"/>. Only <c>System_ConsumerSchemaVersion</c>
-    /// is cleared and replayed; when <paramref name="preserveSchemaVersion"/> is <c>true</c>, its
-    /// rows are snapshotted first and restored afterward. A full backup is always taken before any
-    /// destructive step; any failure anywhere in the rebuild restores it and rethrows, without
-    /// attempting to interpret what went wrong.
+    /// Drops the entire database — every table, with no protected/excluded set of any kind — and
+    /// recreates it from scratch via the same baseline path a fresh install uses (#156). Reset is a
+    /// full wipe: <c>Audit_Entry</c> and every other <c>Import_</c>/<c>Audit_</c>/<c>System_</c>-prefixed
+    /// table Quotinator.Data itself owns is dropped along with the consumer's own tables and does
+    /// not survive — a deliberate tradeoff (see ADR 014); an operator who wants to keep audit-trail
+    /// data retrieves it beforehand via the admin audit export endpoint (#249). When
+    /// <paramref name="preserveSchemaVersion"/> is <c>true</c>, both <c>System_SchemaVersion</c>'s
+    /// and <c>System_ConsumerSchemaVersion</c>'s granular per-version rows are snapshotted first and
+    /// restored afterward, in place of the single collapsed row the baseline path would otherwise
+    /// leave — preserving history granularity symmetrically for both counters now that both are
+    /// wiped, not just the consumer's. <see cref="SeedSystemContentAsync"/> is invoked exactly once
+    /// regardless of which path <see cref="ApplyMigrationsAsync"/> takes — once truly empty (which a
+    /// full wipe always leaves it), that call already invokes it internally when a baseline is
+    /// configured, so this method only calls it directly for the (rare) case where no baseline is
+    /// configured and the incremental-replay-from-zero path runs instead. A full backup is always
+    /// taken before any destructive step; any failure anywhere in the rebuild restores it and
+    /// rethrows, without attempting to interpret what went wrong.
     /// </summary>
     protected async Task DropAndRebuildAsync(SqliteConnection connection, bool preserveSchemaVersion = false)
     {
+        var savedDataVersions = preserveSchemaVersion
+            ? (await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllDataVersions)).ToList()
+            : [];
         var savedConsumerVersions = preserveSchemaVersion
             ? (await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllConsumerVersions)).ToList()
             : [];
@@ -464,19 +474,23 @@ public class DatabaseInitializer : IDatabaseInitializer
         try
         {
             await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
-            await connection.ExecuteAsync(Sql.Schema.DeleteAllConsumerVersions);
             await DropAllTablesAsync(connection);
             await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
-            await ApplyMigrationsAsync(connection, skipOwnBackup: true);
+            var tookBaselinePath = await ApplyMigrationsAsync(connection, skipOwnBackup: true);
 
             if (preserveSchemaVersion)
             {
+                await connection.ExecuteAsync(Sql.Schema.DeleteAllDataVersions);
+                foreach (var row in savedDataVersions)
+                    await connection.ExecuteAsync(Sql.Schema.InsertDataVersion, new { v = row.Version, at = row.AppliedAt });
+
                 await connection.ExecuteAsync(Sql.Schema.DeleteAllConsumerVersions);
                 foreach (var row in savedConsumerVersions)
                     await connection.ExecuteAsync(Sql.Schema.InsertConsumerVersion, new { v = row.Version, at = row.AppliedAt });
             }
 
-            await SeedSystemContentAsync(connection);
+            if (!tookBaselinePath)
+                await SeedSystemContentAsync(connection);
         }
         catch (Exception ex)
         {
@@ -731,7 +745,7 @@ public class DatabaseInitializer : IDatabaseInitializer
     // Table names come from sqlite_master (system metadata) — string interpolation is safe.
     private static async Task DropAllTablesAsync(SqliteConnection connection)
     {
-        var tables = (await connection.QueryAsync<string>(Sql.Schema.GetUserTables)).ToList();
+        var tables = (await connection.QueryAsync<string>(Sql.Schema.GetAllTables)).ToList();
         foreach (var table in tables)
             await connection.ExecuteAsync($"DROP TABLE IF EXISTS [{table}];");
     }

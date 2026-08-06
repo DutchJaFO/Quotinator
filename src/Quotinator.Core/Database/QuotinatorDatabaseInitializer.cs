@@ -115,22 +115,34 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// #156: Reset's one job is rebuilding the schema to an empty baseline (plus system content via
+    /// <see cref="DatabaseInitializer.SeedSystemContentAsync"/>) — it no longer reimports bundled or
+    /// user quote content, matching the Single Responsibility endpoint-side-effect policy (a caller
+    /// resetting to start fresh must not be forced to re-accept optional bundled content every time).
+    /// <see cref="ResolveEffectiveBatchesAsync"/> is still called so <paramref name="forceSourceRefresh"/>
+    /// keeps its existing effect of refreshing the on-disk source cache — a disk-level concern
+    /// independent of database content, outside that policy's scope — but its returned batches are
+    /// discarded here, never imported.
+    /// </remarks>
     protected override async Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
     {
-        var effectiveBatches = (await ResolveEffectiveBatchesAsync(forceSourceRefresh)).EffectiveBatches;
-        var totalFiles = effectiveBatches.Sum(b => b.Files.Count);
-        Logger.LogInformation("[Database - Init] reset requested — rebuilding schema and reimporting from {Count} source file(s)...", totalFiles);
+        await ResolveEffectiveBatchesAsync(forceSourceRefresh);
+        Logger.LogInformation("[Database - Init] reset requested — rebuilding schema from baseline...");
 
         await SharedSeedLock.WaitAsync();
         try
         {
             await DropAndRebuildAsync(connection, preserveSchemaVersion);
-            await SeedIfEmptyInternalAsync(connection, effectiveBatches);
         }
         finally
         {
             SharedSeedLock.Release();
         }
+
+        // Reset performs no seeding — LastSeedReport must not keep echoing whatever the last real
+        // seed/reseed reported, which would misleadingly suggest this Reset call imported something.
+        LastSeedReport = [];
 
         await LogDatabaseStatsAsync(connection);
         await AuditWriter.WriteAsync(new AuditEntryEntity

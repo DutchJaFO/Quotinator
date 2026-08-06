@@ -65,10 +65,8 @@ internal static class Sql
         internal const string CreateDataVersionTable = "CREATE TABLE IF NOT EXISTS System_SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);";
         internal const string GetDataCurrentVersion  = "SELECT COALESCE(MAX(Version), 0) FROM System_SchemaVersion;";
         internal const string InsertDataVersion      = "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
-
-        // No DeleteAllDataVersions/GetAllDataVersions — Quotinator.Data's own migration history is
-        // never wiped or replayed by a Reset (see DropAndRebuildAsync), so nothing ever needs to
-        // snapshot or clear this table's rows.
+        internal const string DeleteAllDataVersions  = "DELETE FROM System_SchemaVersion;";
+        internal const string GetAllDataVersions     = "SELECT Version, AppliedAt FROM System_SchemaVersion;";
 
         internal const string CreateConsumerVersionTable = "CREATE TABLE IF NOT EXISTS System_ConsumerSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);";
         internal const string GetConsumerCurrentVersion  = "SELECT COALESCE(MAX(Version), 0) FROM System_ConsumerSchemaVersion;";
@@ -76,29 +74,15 @@ internal static class Sql
         internal const string DeleteAllConsumerVersions  = "DELETE FROM System_ConsumerSchemaVersion;";
         internal const string GetAllConsumerVersions     = "SELECT Version, AppliedAt FROM System_ConsumerSchemaVersion;";
 
-        // Returns all user-created table names, excluding SQLite internals and any table
-        // designated as protected system infrastructure. Used by ResetAsync to discover tables
-        // dynamically so that new tables added in future migrations are dropped without requiring
-        // a manual update here. FK checks must be off before dropping the results
-        // (PRAGMA foreign_keys = OFF).
-        // A "system table" is any table whose name starts with a literal Import_/Audit_/System_
-        // prefix (ADR 015) — this query never needs to know specific names, so a consuming project
-        // can add its own protected tables (e.g. a DB-backed enum-like lookup) with zero changes
-        // here. Import_Batch belongs in this protected set too: ADR 014 already distinguishes
-        // "provenance" (where a row's content came from — Import_Batch) from "domain content" as two
-        // separate concepts, and a Reset dropping it — while never replaying Quotinator.Data's own
-        // migrations that create it (see DropAndRebuildAsync's own remarks) — would leave it
-        // permanently missing, not recreated on the next InitialiseAsync call. Its own dangling
-        // references after a Reset are tolerated exactly like the four ADR-014 audit-trail tables'.
-        // Each underscore must be escaped: SQL LIKE treats '_' as a single-character wildcard, so an
-        // unescaped 'System_%' would also match an unrelated table like SystemInventory. The ESCAPE
-        // clause makes '\_' match a literal underscore only, so SystemInventory (no underscore) is
-        // correctly NOT treated as protected.
-        internal const string GetUserTables =
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' " +
-            "AND name NOT LIKE 'Import\\_%' ESCAPE '\\' " +
-            "AND name NOT LIKE 'Audit\\_%' ESCAPE '\\' " +
-            "AND name NOT LIKE 'System\\_%' ESCAPE '\\';";
+        // Returns literally every real table in the database, with no exclusion of any kind. Used
+        // by ResetAsync to discover tables dynamically so that new tables added in future migrations
+        // are dropped without requiring a manual update here. FK checks must be off before dropping
+        // the results (PRAGMA foreign_keys = OFF). Per #156, Reset is a full, unconditional wipe —
+        // there is no "protected system table" concept any more (that was GetUserTables, retired by
+        // #156: previously it excluded Import_/Audit_/System_-prefixed tables from being dropped,
+        // which is exactly the selective-preservation behaviour #156 reverses).
+        internal const string GetAllTables =
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
     }
 
     /// <summary>JOIN fragment helpers — assembles INNER JOIN and LEFT JOIN clauses with bracket-quoted identifiers.</summary>

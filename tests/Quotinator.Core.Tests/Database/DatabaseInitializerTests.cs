@@ -702,23 +702,21 @@ public class DatabaseInitializerTests
         Assert.AreEqual(countAfterFirst, db.QuoteCount);
     }
 
-    // ── Reset ─────────────────────────────────────────────────────────────────
+    // ── Reset (#156: full wipe + baseline rebuild, no reseed, supersedes #141) ─────────────────
 
-    /// <summary>ResetAsync on an already-seeded database drops and recreates all tables and reseeds correctly.</summary>
+    /// <summary>ResetAsync on an already-seeded database drops and recreates all tables at the empty baseline — it no longer reimports bundled/user content.</summary>
     [TestMethod]
-    public async Task ResetAsync_AfterInitialise_RebuildsSchemaAndReseeds()
+    public async Task ResetAsync_AfterInitialise_RebuildsSchemaAndDoesNotReseed()
     {
         var db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        var countAfterInit = db.QuoteCount;
+        Assert.IsGreaterThan(0, db.QuoteCount, "Sanity check — initial seed must have produced quotes");
 
         await db.ResetAsync();
 
-        Assert.AreEqual(countAfterInit, db.QuoteCount, "Quote count after reset should match initial seed");
+        Assert.AreEqual(0, db.QuoteCount, "Reset's one job is rebuilding the schema to empty — it must not reimport bundled/user content (#156)");
     }
-
-    // ── System table preservation (#141) ────────────────────────────────────────
 
     private const string MarkerValue = "manual-test-marker";
 
@@ -730,9 +728,9 @@ public class DatabaseInitializerTests
     private const string LegacyV3Marker = "legacy-v3-import-batches";
     private const string LegacyV4Marker = "legacy-v4-create-audit-entries-table";
 
-    /// <summary>A full Reset must not destroy the audit trail — Audit_Entry is excluded from the table wipe.</summary>
+    /// <summary>A full Reset is a full wipe — Audit_Entry no longer survives, reversing #141's preserve-on-reset behaviour per #156/ADR 014 (an operator who wants to keep it exports it first via the admin audit export endpoint, #249).</summary>
     [TestMethod]
-    public async Task ResetAsync_AfterInitialise_PreservesExistingAuditEntries()
+    public async Task ResetAsync_AfterInitialise_WipesExistingAuditEntries()
     {
         var db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
@@ -741,29 +739,37 @@ public class DatabaseInitializerTests
 
         await db.ResetAsync();
 
-        Assert.AreEqual(1, await CountAuditMarkerRowsAsync(), "Full Reset must preserve existing Audit_Entry rows");
+        Assert.AreEqual(0, await CountAuditMarkerRowsAsync(), "Full Reset must wipe existing Audit_Entry rows — no protected-table concept remains (#156)");
     }
 
-    /// <summary>
-    /// Quotinator.Data's own migrations concern only System_-prefixed tables (Audit_Entry),
-    /// which a Reset never drops — so System_SchemaVersion must never be wiped or replayed by a
-    /// Reset, regardless of preserveSchemaVersion. This is stronger than "preserved": it's simply
-    /// never touched.
-    /// </summary>
+    /// <summary>With the default parameter, Reset now also clears and replays System_SchemaVersion — Quotinator.Data's own tables are no longer excluded from the wipe (#156).</summary>
     [TestMethod]
-    public async Task ResetAsync_AnyParameter_NeverTouchesDataSchemaVersion()
+    public async Task ResetAsync_DefaultParameter_AlsoReplaysDataSchemaVersion()
     {
         var db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
+
         await InsertSchemaVersionMarkerAsync();
 
         await db.ResetAsync(preserveSchemaVersion: false);
-        Assert.AreEqual(1, await CountSchemaVersionMarkerRowsAsync(),
-            "System_SchemaVersion must survive a default Reset — it was never wiped in the first place");
+
+        Assert.AreEqual(0, await CountSchemaVersionMarkerRowsAsync(),
+            "Default Reset should clear and replay System_SchemaVersion too now, removing the pre-existing marker row");
+    }
+
+    /// <summary>With preserveSchemaVersion:true, Reset now also leaves existing System_SchemaVersion rows untouched — symmetric with the consumer's own counter, since both are wiped by the full-database drop.</summary>
+    [TestMethod]
+    public async Task ResetAsync_PreserveSchemaVersionTrue_AlsoKeepsExistingDataVersionRows()
+    {
+        var db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        await InsertSchemaVersionMarkerAsync();
 
         await db.ResetAsync(preserveSchemaVersion: true);
+
         Assert.AreEqual(1, await CountSchemaVersionMarkerRowsAsync(),
-            "System_SchemaVersion must survive a preserveSchemaVersion:true Reset too — same reason");
+            "preserveSchemaVersion:true should leave existing System_SchemaVersion rows untouched too");
     }
 
     /// <summary>With the default parameter, Reset still clears and replays System_ConsumerSchemaVersion — unchanged historical behaviour for the consumer's own migrations.</summary>
@@ -860,44 +866,29 @@ public class DatabaseInitializerTests
             "SELECT COUNT(*) FROM System_ConsumerSchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
     }
 
-    // ── System-prefix naming convention (#141 amendment) ───────────────────────
+    // ── Full-wipe table discovery (#156, supersedes #141's protected-table concept) ────────────
 
     /// <summary>
-    /// GetUserTables excludes any table whose name literally starts with "System_", proving
-    /// Quotinator.Data needs no knowledge of specific system table names — a consuming project
-    /// can define its own protected table (here, System_FooBar) with zero changes to Sql.cs.
+    /// GetAllTables returns literally every real table, with no exclusion of any kind — #156
+    /// retired the System_/Import_/Audit_ protected-table concept GetUserTables used to implement,
+    /// since Reset is now a full, unconditional wipe.
     /// </summary>
     [TestMethod]
-    public async Task GetUserTables_SystemPrefixedTable_IsExcluded()
+    public async Task GetAllTables_ReturnsEveryTableRegardlessOfPrefix()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("CREATE TABLE System_FooBar (Id INTEGER);");
+        await conn.ExecuteAsync("CREATE TABLE Import_FooBar (Id INTEGER);");
+        await conn.ExecuteAsync("CREATE TABLE Audit_FooBar (Id INTEGER);");
         await conn.ExecuteAsync("CREATE TABLE FooBar (Id INTEGER);");
 
-        var tables = (await conn.QueryAsync<string>(Sql.Schema.GetUserTables)).ToList();
+        var tables = (await conn.QueryAsync<string>(Sql.Schema.GetAllTables)).ToList();
 
-        Assert.DoesNotContain("System_FooBar", tables, "System_-prefixed tables must be excluded");
+        Assert.Contains("System_FooBar", tables, "System_-prefixed tables must no longer be excluded");
+        Assert.Contains("Import_FooBar", tables, "Import_-prefixed tables must no longer be excluded");
+        Assert.Contains("Audit_FooBar", tables, "Audit_-prefixed tables must no longer be excluded");
         Assert.Contains("FooBar", tables, "Non-prefixed tables must still be included");
-    }
-
-    /// <summary>
-    /// A table that merely starts with "System" without the underscore (e.g. SystemInventory) is
-    /// NOT treated as protected — proves the ESCAPE clause in GetUserTables is doing real work,
-    /// since SQL LIKE treats '_' as a single-character wildcard and an unescaped 'System_%' would
-    /// wrongly match this table too.
-    /// </summary>
-    [TestMethod]
-    public async Task GetUserTables_SystemPrefixWithoutUnderscore_IsNotExcluded()
-    {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync(TestContext.CancellationToken);
-        await conn.ExecuteAsync("CREATE TABLE SystemInventory (Id INTEGER);");
-
-        var tables = (await conn.QueryAsync<string>(Sql.Schema.GetUserTables)).ToList();
-
-        Assert.Contains("SystemInventory", tables,
-            "A table starting with 'System' but no underscore must NOT be treated as protected");
     }
 
     /// <summary>A fresh database creates System_SchemaVersion directly — it is never created under the legacy name and then renamed.</summary>

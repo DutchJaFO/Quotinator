@@ -304,9 +304,9 @@ public class ConflictResolutionTests
         Assert.AreSequenceEqual(new ChangeAction?[] { ChangeAction.Created }, quoteActions, $"{policy} never executes the UPDATE, so no Modified row should exist — only the first file's Created row");
     }
 
-    /// <summary>Audit_Change is System_-prefixed protected infrastructure — a Reset must never drop or replay it, same as System_AuditEntries/System_ImportConflicts.</summary>
+    /// <summary>Reset is now a full, unconditional wipe (#156) — Audit_Change no longer survives, and Reset no longer reseeds, so it ends up empty rather than doubled.</summary>
     [TestMethod]
-    public async Task ResetAsync_PreservesExistingChangeLogRows()
+    public async Task ResetAsync_WipesExistingChangeLogRowsAndDoesNotReseed()
     {
         var factory = new SqliteConnectionFactory(_dbPath);
         var writer  = new ChangeWriter(factory);
@@ -320,6 +320,7 @@ public class ConflictResolutionTests
             preConn.Open();
             countBeforeReset = await preConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Audit_Change;");
         }
+        Assert.IsGreaterThan(0, countBeforeReset, "Sanity check — initial seed must have produced change-log rows");
 
         await db.ResetAsync();
 
@@ -327,7 +328,7 @@ public class ConflictResolutionTests
         conn.Open();
         var countAfterReset = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Audit_Change;");
 
-        Assert.IsGreaterThanOrEqualTo(countBeforeReset * 2, countAfterReset,
-            "The pre-Reset rows must survive Reset, plus at least as many new rows from the re-seed pass");
+        Assert.AreEqual(0, countAfterReset,
+            "Full Reset must wipe Audit_Change and must not reseed — no rows should exist afterward (#156)");
     }
 }
