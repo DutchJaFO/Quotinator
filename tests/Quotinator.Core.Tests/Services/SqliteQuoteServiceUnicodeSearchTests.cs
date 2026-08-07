@@ -12,7 +12,7 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 
-namespace Quotinator.Core.Tests.Data;
+namespace Quotinator.Core.Tests.Services;
 
 /// <summary>
 /// Proves issue #222's Unicode-aware search feature — the exact effect with and without

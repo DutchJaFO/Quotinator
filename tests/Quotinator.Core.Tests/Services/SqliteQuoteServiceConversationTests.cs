@@ -10,7 +10,7 @@ using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Services;
 
-namespace Quotinator.Core.Tests.Data;
+namespace Quotinator.Core.Tests.Services;
 
 /// <summary>
 /// SQLite integration tests for #69's conversation-aware API surface —

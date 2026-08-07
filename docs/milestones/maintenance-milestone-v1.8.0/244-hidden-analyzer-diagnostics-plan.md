@@ -1,6 +1,6 @@
 # #244 — Hidden Roslyn code-style and .NET analyzer diagnostics (IDE0xxx, CAxxxx)
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 **GitHub issue:** #244
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -188,7 +188,21 @@ final part of this step; full build (0 warnings, 0 errors) and full test suite (
 verified after escalation.
 
 ### Step 4 — IDE0130 (namespace/folder mismatch) — investigate the 4 real cases
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+All 4 hits were `Quotinator.Core.Tests` files declared under `namespace Quotinator.Core.Tests.Data`
+while living outside the `Data/` folder — a genuine violation of CLAUDE.md's file placement rule
+(the `Data/` namespace already legitimately exists elsewhere in the project, for files that actually
+live in `Data/`, e.g. `SourceDataIntegrityTests.cs`), not a bulk-rename target. Confirmed each of the
+4 offending classes has no cross-file reference (no `using Quotinator.Core.Tests.Data;`, no other file
+naming the class) before renaming, so each was a same-file, no-risk fix:
+- `Database/QuotinatorMigrationsTests.cs` → `Quotinator.Core.Tests.Database`
+- `Services/SqliteQuoteServiceConversationTests.cs` → `Quotinator.Core.Tests.Services`
+- `Services/SqliteQuoteServiceSearchTests.cs` → `Quotinator.Core.Tests.Services`
+- `Services/SqliteQuoteServiceUnicodeSearchTests.cs` → `Quotinator.Core.Tests.Services`
+
+All 49 tests across the 4 affected files, and the full 609-test suite, pass after the rename. Build
+0 warnings/0 errors after escalating `IDE0130` to `warning`.
 
 ### Step 5 — IDE0060 (unused parameter) — review each of the 3
 **Status:** ⬜ Not started
@@ -236,7 +250,7 @@ mirroring #197's own "no user-facing changes").
 | 1 | ⬜ | `EnforceCodeStyleInBuild=true` added, 0 new warnings | Build | Step 1 |
 | 2 | ⬜ | Mechanical `IDE0xxx` rules escalated to warning and fixed | Build | Step 2 |
 | 3 | ✅ | IDE0290 decision made and applied consistently | Manual | Step 3 |
-| 4 | ⬜ | IDE0130's 4 real namespace/folder mismatches resolved | Manual | Step 4 |
+| 4 | ✅ | IDE0130's 4 real namespace/folder mismatches resolved | Manual | Step 4 |
 | 5 | ⬜ | IDE0060's 3 unused parameters reviewed and resolved | Manual | Step 5 |
 | 6 | ⬜ | Mechanical `CAxxxx`/`SYSLIB` rules escalated and fixed | Build | Step 6 |
 | 7 | ⬜ | CA1806's 12 ignored results reviewed, any real bugs fixed | Manual | Step 7 |

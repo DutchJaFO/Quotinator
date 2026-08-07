@@ -34,3 +34,9 @@ dotnet_diagnostic.IDE0044.severity = warning
 # checks that *a* doc comment exists on a public member, not that every parameter has its own
 # <param> tag, so a clean build alone could not have caught missing parameter documentation here.
 dotnet_diagnostic.IDE0290.severity = warning
+
+# Step 4: namespace/folder mismatch. All 4 hits were Quotinator.Core.Tests files declared under
+# `namespace Quotinator.Core.Tests.Data` while living in Database/ or Services/ — a real violation of
+# CLAUDE.md's file placement rule, not a style nit. Confirmed no cross-file references to the affected
+# classes before renaming each file's namespace to match its actual folder.
+dotnet_diagnostic.IDE0130.severity = warning

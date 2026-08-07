@@ -1,6 +1,6 @@
 using Quotinator.Core.Database;
 
-namespace Quotinator.Core.Tests.Data;
+namespace Quotinator.Core.Tests.Database;
 
 [TestClass]
 public class QuotinatorMigrationsTests
