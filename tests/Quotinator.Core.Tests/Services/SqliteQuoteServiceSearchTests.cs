@@ -1,8 +1,10 @@
 using Quotinator.Core.Enums;
 using System.Text.Json;
+using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Models;
+using Quotinator.Core.Queries;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
@@ -115,6 +117,20 @@ public class SqliteQuoteServiceSearchTests
     }
 
     private SqliteQuoteService CreateService() => new(_factory);
+
+    private async Task InsertQuoteTranslationAsync(string quoteId, string language, string quoteText)
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync();
+        await conn.ExecuteAsync(Sql.QuoteTranslations.Insert, new
+        {
+            Id          = Guid.NewGuid().ToString(),
+            QuoteId     = quoteId,
+            Language    = language,
+            QuoteText   = quoteText,
+            DateCreated = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+        });
+    }
 
     // ── field=quote ───────────────────────────────────────────────────────
 
@@ -275,5 +291,28 @@ public class SqliteQuoteServiceSearchTests
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(2, result.TotalMatching);
         Assert.HasCount(2, result.Items);
+    }
+
+    // ── ?lang= ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// #244: found live via an IDE0060 "unused parameter" review — <c>BuildFilterWhere</c> always
+    /// bound its <c>@lang</c> SQL parameter to <c>null</c> regardless of the caller-supplied
+    /// <c>lang</c> value, so <c>Search</c>'s translation JOIN could never match. Search has no
+    /// per-row translation fallback the way <see cref="SqliteQuoteService.GetRandom"/> does — this
+    /// was a silent, unconditional no-op for every <c>?lang=</c> caller.
+    /// </summary>
+    [TestMethod]
+    public async Task Search_LangRequested_ReturnsTranslatedContent()
+    {
+        await InsertQuoteTranslationAsync(
+            "ffffffff-0000-0000-0000-000000000001", "nl", "Natuurlijk kun je niet serieus zijn.");
+
+        var result = CreateService().Search("Airplane", 10, lang: "nl");
+
+        Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
+        Assert.AreEqual("Natuurlijk kun je niet serieus zijn.", result.Items[0].Quote);
+        Assert.AreEqual("nl", result.Items[0].Language);
+        Assert.IsTrue(result.Items[0].IsTranslated);
     }
 }

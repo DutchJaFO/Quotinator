@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-06 21:03 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-07 21:56 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -45,6 +45,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The test suite's build now surfaces outdated MSTest assertion patterns (e.g. `CollectionAssert`/`StringAssert` instead of the modern `Assert` equivalents) as visible warnings instead of silently allowing them to accumulate; around 2,700 existing occurrences across the test suite were also modernised in the same change (issue #197)
 - The release process no longer publishes a Home Assistant add-on version update until its matching Docker image is confirmed available, closing a window where installing or updating the add-on right after a new version appeared could fail (issue #236)
 - A database seeding failure during startup could previously leave the database partially written with no backup taken; seeding now always backs up first (on every non-baseline startup) and restores that backup if seeding fails, matching the safety net migrations already had (issue #254)
+- `GET /api/v1/quotes` and `GET /api/v1/quotes/search` now correctly return translated content when `?lang=` is requested — a bug meant both endpoints always ignored the requested language and returned only the original-language text; single-quote lookup (`GET /api/v1/quotes/{id}`) and the random endpoint were unaffected (issue #244)
 
 ---
 

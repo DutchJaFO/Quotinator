@@ -626,7 +626,7 @@ public sealed class SqliteImportActionService(
             switch (action.EntityType)
             {
                 case ImportActionEntityTypes.Quote:
-                    await ReverseQuoteActionAsync(action, sqliteConnection, sqliteTransaction, uow, now, changeLog);
+                    await ReverseQuoteActionAsync(action, sqliteConnection, sqliteTransaction, now, changeLog);
                     break;
                 case ImportActionEntityTypes.Character:
                     if (action.ActionType.Parsed == ImportActionKind.Modify)
@@ -825,7 +825,7 @@ public sealed class SqliteImportActionService(
     }
 
     /// <summary>Reverses one Quote action: soft-delete for an Add, field-restore for a genuine Modify, no-op write for a Skip-policy Modify.</summary>
-    private async Task ReverseQuoteActionAsync(ImportActionEntity action, SqliteConnection connection, SqliteTransaction transaction, IUnitOfWork uow, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+    private async Task ReverseQuoteActionAsync(ImportActionEntity action, SqliteConnection connection, SqliteTransaction transaction, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
         var isAdd = action.ActionType.Parsed == ImportActionKind.Add;
 

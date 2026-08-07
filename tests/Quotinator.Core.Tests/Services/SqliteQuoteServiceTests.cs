@@ -334,6 +334,30 @@ public class SqliteQuoteServiceTests
         Assert.Contains(quoteB.Id.ToString("D"), ids);
     }
 
+    /// <summary>
+    /// #244: found live via an IDE0060 "unused parameter" review — <c>BuildFilterWhere</c> always
+    /// bound its <c>@lang</c> SQL parameter to <c>null</c> regardless of the caller-supplied <c>lang</c>
+    /// value, so <c>GetAll</c>'s translation JOIN could never match. Unlike
+    /// <see cref="SqliteQuoteService.GetById"/> (binds <c>lang</c> directly) or
+    /// <see cref="SqliteQuoteService.GetRandom"/> (does its own per-row translation lookup after the
+    /// bulk fetch), <c>GetAll</c> has no other path to translated content — this was a silent,
+    /// unconditional no-op for every <c>?lang=</c> caller.
+    /// </summary>
+    [TestMethod]
+    public async Task GetAll_LangRequested_ReturnsTranslatedContent()
+    {
+        var source = await InsertSourceAsync("A Film With A Dutch Translation");
+        var quote  = await InsertQuoteAsync(source.Id, "Original English text.");
+        await InsertQuoteTranslationAsync(quote.Id, "nl", "Nederlandse tekst.");
+
+        var result = _service.GetAll(1, 10, lang: "nl");
+
+        var item = result.Items.Single(i => i.Id == quote.Id.ToString("D"));
+        Assert.AreEqual("Nederlandse tekst.", item.Quote);
+        Assert.AreEqual("nl", item.Language);
+        Assert.IsTrue(item.IsTranslated);
+    }
+
     [TestMethod]
     public async Task GetRandom_SeriesFilter_ReturnsOnlyThatSeriesQuotes()
     {

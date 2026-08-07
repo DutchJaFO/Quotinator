@@ -1,6 +1,6 @@
 # #244 — Hidden Roslyn code-style and .NET analyzer diagnostics (IDE0xxx, CAxxxx)
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 6)
 **GitHub issue:** #244
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -205,7 +205,40 @@ All 49 tests across the 4 affected files, and the full 609-test suite, pass afte
 0 warnings/0 errors after escalating `IDE0130` to `warning`.
 
 ### Step 5 — IDE0060 (unused parameter) — review each of the 3
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Two of the three hits were genuinely dead parameters, safely removed (private methods, no interface
+contract, all call sites updated):
+- `SqliteQuoteService.ToResponse`'s `requestedLang` — never read in the method body; `Language`,
+  `OriginalLanguage`, and the computed `IsTranslated` are all sourced from the already-resolved `row`.
+- `SqliteImportActionService.ReverseQuoteActionAsync`'s `uow` — the only per-entity-type reverse
+  handler extracted into its own method; every sibling entity type is handled inline in the
+  enclosing switch where `uow` is already in scope directly, so this one just carried it through
+  unused.
+
+**The third — `BuildFilterWhere`'s `lang` — was not dead code, it was a real, live correctness bug**,
+present since 2026-06-15 (`51c5ec3d`), unrelated to this issue's own work, found purely as a side
+effect of investigating why IDE0060 flagged it. `BuildFilterWhere` hardcoded
+`p.Add("lang", (string?)null)` regardless of the caller-supplied `lang` value. Since `Sql.Quotes.
+SelectBase` (the shared projection behind `SelectPaged`/`SelectRandom`/`SelectSearch`) needs the real
+`@lang` value bound to find and JOIN a translation row, this meant **`GetAll(...,lang:"nl")` and
+`Search(...,lang:"nl")` silently ignored every `?lang=` request and always returned the original-
+language content** — a direct contradiction of CLAUDE.md's own "API response language" contract.
+`GetById` was unaffected (binds `lang` directly, already covered by
+`GetById_UppercaseLang_StillMatchesLowercaseStoredTranslation`); `GetRandom` was unaffected in
+practice (does its own correct per-row translation lookup after the bulk fetch, so the bulk fetch's
+untranslated content was silently discarded and refetched anyway) — but `GetAll`/`Search` have no
+such second path, so this was a complete, unconditional no-op for both.
+
+Per explicit developer decision (2026-08-07, asked directly given the scope): **fixed inline as part
+of this step**, following the standing red-green requirement — `GetAll_LangRequested_
+ReturnsTranslatedContent` (`SqliteQuoteServiceTests.cs`) and `Search_LangRequested_
+ReturnsTranslatedContent` (`SqliteQuoteServiceSearchTests.cs`) were added and confirmed to fail
+against the pre-fix code (red), then `p.Add("lang", lang)` replaced the hardcoded `null` and both
+tests were confirmed to pass (green). No other read path was found to depend on the previous
+(incorrect) always-null behaviour. Full build (0 warnings/0 errors) and full test suite (1433 tests
+across the whole solution, 0 failures) verified after the fix and after escalating `IDE0060` to
+`warning`.
 
 ### Step 6 — Escalate + bulk-fix the mechanical `CAxxxx`/`SYSLIB` rules
 **Status:** ⬜ Not started
@@ -251,7 +284,7 @@ mirroring #197's own "no user-facing changes").
 | 2 | ⬜ | Mechanical `IDE0xxx` rules escalated to warning and fixed | Build | Step 2 |
 | 3 | ✅ | IDE0290 decision made and applied consistently | Manual | Step 3 |
 | 4 | ✅ | IDE0130's 4 real namespace/folder mismatches resolved | Manual | Step 4 |
-| 5 | ⬜ | IDE0060's 3 unused parameters reviewed and resolved | Manual | Step 5 |
+| 5 | ✅ | IDE0060's 3 unused parameters reviewed and resolved | Manual | Step 5 |
 | 6 | ⬜ | Mechanical `CAxxxx`/`SYSLIB` rules escalated and fixed | Build | Step 6 |
 | 7 | ⬜ | CA1806's 12 ignored results reviewed, any real bugs fixed | Manual | Step 7 |
 | 8 | ⬜ | CA2254's 3 logging template issues fixed | Manual | Step 8 |

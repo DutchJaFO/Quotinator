@@ -61,7 +61,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         if (row is null) return null;
 
         var genres = LoadGenres(connection, id);
-        return ToResponse(row, genres, lang, LoadConversationMemberships(connection, id));
+        return ToResponse(row, genres, LoadConversationMemberships(connection, id));
     }
 
     /// <inheritdoc/>
@@ -138,7 +138,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
                     embedded = BuildConversationResponse(connection, chosen.ConversationId, lang);
                 }
 
-                items.Add(ToResponse(r, LoadGenres(connection, r.Id), lang, memberships, embedded));
+                items.Add(ToResponse(r, LoadGenres(connection, r.Id), memberships, embedded));
             }
         }
 
@@ -172,7 +172,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         var rows = connection.Query<QuoteRow>(
             Sql.Quotes.SelectPaged(whereClause), p).ToList();
 
-        var items = rows.Select(r => ToResponse(r, LoadGenres(connection, r.Id), lang, LoadConversationMemberships(connection, r.Id))).ToList();
+        var items = rows.Select(r => ToResponse(r, LoadGenres(connection, r.Id), LoadConversationMemberships(connection, r.Id))).ToList();
         var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
         return new PagedResult<QuoteResponse>(items, page, effectivePageSize, total);
     }
@@ -203,7 +203,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         p.Add("limit", limit);
 
         var rows = connection.Query<QuoteRow>(sql, p).ToList();
-        var items = rows.Select(r => ToResponse(r, LoadGenres(connection, r.Id), lang, LoadConversationMemberships(connection, r.Id))).ToList();
+        var items = rows.Select(r => ToResponse(r, LoadGenres(connection, r.Id), LoadConversationMemberships(connection, r.Id))).ToList();
 
         return new FilteredQuoteResult<QuoteResponse>
         {
@@ -242,7 +242,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
             new { id = quoteId })];
 
     private static QuoteResponse ToResponse(
-        QuoteRow row, IReadOnlyList<SafeValue<Genre?>> genres, string? requestedLang,
+        QuoteRow row, IReadOnlyList<SafeValue<Genre?>> genres,
         IReadOnlyList<QuoteConversationMembership>? conversations = null,
         ConversationResponse? embeddedConversation = null)
     {
@@ -327,7 +327,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
                         if (translated is not null) effectiveRow = translated;
                     }
                 }
-                var quote = effectiveRow is null ? null : ToResponse(effectiveRow, LoadGenres(connection, effectiveRow.Id), lang);
+                var quote = effectiveRow is null ? null : ToResponse(effectiveRow, LoadGenres(connection, effectiveRow.Id));
                 return new ConversationLineResponse { Order = lineRow.Order, Type = wireType, Quote = quote };
             }
             case "stage_direction":
@@ -394,7 +394,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         if (yearTo    is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo");
 
         var p = new DynamicParameters();
-        p.Add("lang", (string?)null);
+        p.Add("lang", lang);
         if (dbTypes  is not null) p.Add("dbTypes",  dbTypes);
         if (dbGenres is not null) p.Add("dbGenres", dbGenres);
         if (character is not null) p.Add("characterLike", unicodeAwareSearch ? character : $"%{character}%");

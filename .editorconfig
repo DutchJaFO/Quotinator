@@ -40,3 +40,11 @@ dotnet_diagnostic.IDE0290.severity = warning
 # CLAUDE.md's file placement rule, not a style nit. Confirmed no cross-file references to the affected
 # classes before renaming each file's namespace to match its actual folder.
 dotnet_diagnostic.IDE0130.severity = warning
+
+# Step 5: unused parameter. Two of the three hits were genuinely dead (ToResponse's requestedLang,
+# ReverseQuoteActionAsync's uow) and removed. The third — BuildFilterWhere's lang — was a real
+# correctness bug, not dead code: the method hardcoded its @lang SQL parameter to null regardless of
+# the caller-supplied value, so GetAll/Search silently ignored every ?lang= request since 2026-06-15.
+# Fixed by actually binding lang; red tests added first (GetAll_LangRequested_ReturnsTranslatedContent,
+# Search_LangRequested_ReturnsTranslatedContent) to prove the bug before the fix.
+dotnet_diagnostic.IDE0060.severity = warning

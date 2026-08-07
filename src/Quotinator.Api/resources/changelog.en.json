@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250],
+    "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244],
     "highlights": [
       "If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page — an admin database Reset can fix it without needing to restart the app or container.",
       "Quotinator now keeps a copy of every import/seed file it processes — including which conversion settings were used — so the original content can be listed, reviewed, or downloaded again later, and old versions can be pruned to reclaim space.",
@@ -38,7 +38,8 @@
       "Database columns backed by the duplicate-resolution-policy setting (`ImportBatches.ConflictPolicy`, and the internal `AppliedPolicy` column on two provenance tables) now reject an invalid value at the database level via a CHECK constraint, matching every other enum-backed column in the schema; a pre-existing data inconsistency this closed is also normalised automatically (issue #150)",
       "The test suite's build now surfaces outdated MSTest assertion patterns (e.g. `CollectionAssert`/`StringAssert` instead of the modern `Assert` equivalents) as visible warnings instead of silently allowing them to accumulate; around 2,700 existing occurrences across the test suite were also modernised in the same change (issue #197)",
       "The release process no longer publishes a Home Assistant add-on version update until its matching Docker image is confirmed available, closing a window where installing or updating the add-on right after a new version appeared could fail (issue #236)",
-      "A database seeding failure during startup could previously leave the database partially written with no backup taken; seeding now always backs up first (on every non-baseline startup) and restores that backup if seeding fails, matching the safety net migrations already had (issue #254)"
+      "A database seeding failure during startup could previously leave the database partially written with no backup taken; seeding now always backs up first (on every non-baseline startup) and restores that backup if seeding fails, matching the safety net migrations already had (issue #254)",
+      "`GET /api/v1/quotes` and `GET /api/v1/quotes/search` now correctly return translated content when `?lang=` is requested — a bug meant both endpoints always ignored the requested language and returned only the original-language text; single-quote lookup (`GET /api/v1/quotes/{id}`) and the random endpoint were unaffected (issue #244)"
     ]
   },
   "releases": [
