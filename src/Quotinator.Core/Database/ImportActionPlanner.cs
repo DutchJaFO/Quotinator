@@ -515,15 +515,15 @@ internal static class ImportActionPlanner
     }
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync, both feed the same decide-time <c>FieldMergeResolver</c> field-name vocabulary. <c>seriesId</c> added by #180.</summary>
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
         new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId };
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#171).</summary>
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(StageDirectionActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(StageDirectionActionPayload payload) =>
         new Dictionary<string, object?> { ["text"] = payload.Text, ["imageUrl"] = payload.ImageUrl };
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#172).</summary>
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(SoundCueActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(SoundCueActionPayload payload) =>
         new Dictionary<string, object?> { ["text"] = payload.Text, ["soundFileUrl"] = payload.SoundFileUrl, ["imageUrl"] = payload.ImageUrl };
 
     // ── #162: explicit Source planning ───────────────────────────────────────
@@ -857,7 +857,7 @@ internal static class ImportActionPlanner
     }
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#173).</summary>
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["dateOfBirth"] = payload.DateOfBirth, ["dateOfDeath"] = payload.DateOfDeath };
 
     /// <summary>
@@ -867,15 +867,15 @@ internal static class ImportActionPlanner
     /// for audit/informational purposes. Same key name as <see cref="Quotinator.Core.Services.
     /// SqliteImportActionService"/>'s own private overload — must stay in sync (#175).
     /// </summary>
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name };
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#163).</summary>
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(SeriesActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(SeriesActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["universeId"] = payload.UniverseId };
 
     /// <summary>Same key name as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#163).</summary>
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(UniverseActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(UniverseActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name };
 
     // ── #173: explicit Person planning ───────────────────────────────────────
@@ -1716,7 +1716,7 @@ internal static class ImportActionPlanner
     /// referenced rows are staged earlier in the same batch and — per <see cref="PlanAsync"/>'s own
     /// remark — will therefore apply first too.
     /// </summary>
-    private static IReadOnlyDictionary<string, object?> ToConversationFieldMap(ConversationActionPayload payload) =>
+    private static Dictionary<string, object?> ToConversationFieldMap(ConversationActionPayload payload) =>
         new Dictionary<string, object?> { ["description"] = payload.Description };
 
     private static async Task PlanConversationsAsync(

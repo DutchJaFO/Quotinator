@@ -103,7 +103,7 @@ public class QuoteImportServiceTests
             NoOpFileResourceRepository.Instance);
     }
 
-    private static Stream JsonStream(string json) => new MemoryStream(Encoding.UTF8.GetBytes(json));
+    private static MemoryStream JsonStream(string json) => new(Encoding.UTF8.GetBytes(json));
 
     private static string OneQuoteJson(string quote, string source, string? character = null, string[]? genres = null) =>
         JsonSerializer.Serialize(new[]

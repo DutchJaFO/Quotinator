@@ -6,7 +6,7 @@ namespace Quotinator.Changelog.Tests;
 [TestClass]
 public sealed class ChangelogServiceTests
 {
-    private static IChangelogService Build(string dir) =>
+    private static ChangelogService Build(string dir) =>
         new ChangelogService(dir, NullLogger<ChangelogService>.Instance);
 
     private static string TempDir()

@@ -15,7 +15,7 @@ public partial class SqlSourceScanTests
     private static readonly string RepoRoot =
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
-    private static IEnumerable<string> CSharpSourceFiles()
+    private static string[] CSharpSourceFiles()
     {
         var srcDir = Path.Combine(RepoRoot, "src");
         Assert.IsTrue(Directory.Exists(srcDir), $"src/ directory not found at: {srcDir}");

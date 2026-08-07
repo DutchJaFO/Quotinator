@@ -28,7 +28,7 @@ public class SeedBatchesBuilderTests
             Directory.Delete(root, recursive: true);
     }
 
-    private static IManifestSeedPlanner FakePlanner() => new StubManifestSeedPlanner();
+    private static StubManifestSeedPlanner FakePlanner() => new();
 
     [TestMethod]
     public void Build_IncludeDefaultSourcesTrue_BundledBatchIncluded()

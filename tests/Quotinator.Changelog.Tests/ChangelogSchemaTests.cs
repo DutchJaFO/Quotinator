@@ -242,7 +242,7 @@ public sealed partial class ChangelogSchemaTests
                 yield return (filename, release);
     }
 
-    private static IEnumerable<string> FindChangelogFiles()
+    private static string[] FindChangelogFiles()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)

@@ -104,7 +104,7 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
         People:       dto.People,
         Translations: dto.Translations);
 
-    private void TryWriteAutoManifest(string manifestPath, IReadOnlyList<SeedFile> files)
+    private void TryWriteAutoManifest(string manifestPath, List<SeedFile> files)
     {
         try
         {

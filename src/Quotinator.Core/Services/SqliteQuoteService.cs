@@ -28,7 +28,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
     private readonly bool _unicodeAwareSearch = unicodeAwareSearch;
 
     // Maps DB enum name back to the API genre tag for response serialisation.
-    private static readonly IReadOnlyDictionary<string, string> GenreDbToApi =
+    private static readonly Dictionary<string, string> GenreDbToApi =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["Action"]     = "action",

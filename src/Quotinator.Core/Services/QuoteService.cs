@@ -11,7 +11,7 @@ public sealed class QuoteService(string dataPath = "data/quotes.json") : IQuoteS
 {
     private readonly IReadOnlyList<SourceQuoteDto> _quotes = Load(dataPath);
 
-    private static IReadOnlyList<SourceQuoteDto> Load(string path)
+    private static List<SourceQuoteDto> Load(string path)
     {
         if (!File.Exists(path))
             return [];

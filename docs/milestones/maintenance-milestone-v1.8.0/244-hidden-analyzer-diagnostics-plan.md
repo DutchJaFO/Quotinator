@@ -1,6 +1,6 @@
 # #244 — Hidden Roslyn code-style and .NET analyzer diagnostics (IDE0xxx, CAxxxx)
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 7)
 **GitHub issue:** #244
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -241,7 +241,7 @@ across the whole solution, 0 failures) verified after the fix and after escalati
 `warning`.
 
 ### Step 6 — Escalate + bulk-fix the mechanical `CAxxxx`/`SYSLIB` rules
-**Status:** In progress (6a done, 6b in progress)
+**Status:** ✅ Done
 
 **`dotnet format analyzers` does not reliably discover the SDK's built-in CA analyzers** the way
 `dotnet format style` discovers `IDE0xxx` rules — confirmed live: running it against this repo (with
@@ -263,13 +263,48 @@ CA1806/CA2254/CA1068/CA1873, each reserved for its own step): ✅ Done.**
 - Full build (0 warnings, 0 errors) and full solution test suite (1433 tests, 0 failures) verified after 6a's escalation.
 
 **6b — CA1859 (prefer concrete types for perf), 32 occurrences: individual review, per explicit
-developer decision (2026-08-08) — not bulk-escalated, not bulk-suppressed.** Every occurrence
-suggests narrowing an interface- or abstract-typed field/parameter/return type
+developer decision (2026-08-08) — not bulk-escalated, not bulk-suppressed: ✅ Done.** Every
+occurrence suggests narrowing an interface- or abstract-typed field/parameter/return type
 (`IReadOnlyDictionary`/`IReadOnlyList`/`IReadOnlySet`/`IEnumerable`, or a DI-registered interface
 like `IImportActionReader`/`IImportActionWriter`/`IImportActionCoordinator`/`IDbConnectionFactory`/
 `IChangelogService`/`IManifestSeedPlanner`) to a concrete class — the exact abstraction this
-project's own DI policy and test-double conventions rely on for substitutability. In progress —
-see the per-occurrence verdicts below as they're completed.
+project's own DI policy and test-double conventions rely on for substitutability, which is why this
+one wasn't treated as mechanical. **Verdict: all 32 were safe to narrow** — none turned out to be an
+interface-typed field genuinely swapped for a different (fake/mock) implementation anywhere in the
+codebase, only two shapes recurred:
+- **Private, non-interface implementation detail (27 occurrences)** — a `private static` method or
+  field with no interface contract at all, so narrowing changes nothing observable from outside the
+  declaring class: 16× `ToFieldMap`/`ToConversationFieldMap` (`ImportActionPlanner.cs` ×8,
+  `SqliteImportActionService.cs` ×8) returning `Dictionary<string, object?>` instead of
+  `IReadOnlyDictionary<...>` — confirmed safe by checking `FieldMergeResolver.Resolve`'s own
+  parameter type (`IReadOnlyDictionary<string, object?>`, which `Dictionary` still satisfies); 2×
+  `GenreDbToApi` lookup-table fields (`SqliteQuoteService.cs`, `QuoteSeedWriter.cs`); `QuoteService.
+  Load` and `SqliteQuoteImportService.BuildConflictEntries` (both feed a field/property whose own
+  declared type stays the wider interface, so the narrower producer type still satisfies it);
+  `ManifestSeedPlanner.TryWriteAutoManifest`'s `files` parameter (its one call site already passes
+  an actual `List<SeedFile>`); 4 private test-helper methods (`LoadKeys`, `LoadSlnxFilePaths`,
+  `FindChangelogFiles`, `CSharpSourceFiles`) narrowed to `HashSet<string>`/`string[]` — this
+  incidentally re-triggered `IDE0037`(already-warning)'s sibling `IDE0305` on two now-concretely-
+  typed `.ToHashSet()` call sites, fixed by converting those two to collection expressions in the
+  same pass; `QuoteImportServiceTests.JsonStream` (`Stream` → `MemoryStream`).
+- **Test field/factory always assigned the same concrete real type, never a fake (5 occurrences)**
+  — checked each field's actual assignment(s) across its whole file before narrowing, since this is
+  exactly the shape that would be unsafe if a mock were ever substituted: `SqliteImportActionServiceTests
+  .cs`'s `_actionReader`/`_actionWriter`/`_coordinator` (always `new ImportActionReader(...)`/
+  `new ImportActionWriter(...)`/`new ImportActionResolutionCoordinator(...)` — matching the
+  file's own pre-existing, already-concrete `_factory: SqliteConnectionFactory` field, i.e. this
+  narrowing brings them in line with an existing precedent in the same file, not against it);
+  `SqliteQuoteServiceUnicodeSearchTests.cs`'s `_factory` (same pattern); `SeedBatchesBuilderTests.
+  FakePlanner()` (its `StubManifestSeedPlanner` result is passed directly as an argument to
+  `SeedBatchesBuilder.Build(...)`, whose own parameter stays `IManifestSeedPlanner` — narrowing the
+  factory method's own declared return type has no effect on that call). `ChangelogServiceTests.
+  Build` was reviewed the same way but landed in the private-detail bucket above once checked: it's
+  never DI-registered or swapped, always constructs `new ChangelogService(...)` directly, and every
+  caller only ever invokes members (`GetForCulture`, `AvailableLanguages`) that the concrete type
+  exposes identically to the interface.
+
+Full build (0 warnings, 0 errors) and full solution test suite (1433 tests, 0 failures) verified
+after escalating `CA1859` to `warning`.
 
 ### Step 7 — CA1806 (ignored method result) — review each of the 12
 **Status:** ⬜ Not started
@@ -309,7 +344,7 @@ mirroring #197's own "no user-facing changes").
 | 3 | ✅ | IDE0290 decision made and applied consistently | Manual | Step 3 |
 | 4 | ✅ | IDE0130's 4 real namespace/folder mismatches resolved | Manual | Step 4 |
 | 5 | ✅ | IDE0060's 3 unused parameters reviewed and resolved | Manual | Step 5 |
-| 6 | ⬜ | Mechanical `CAxxxx`/`SYSLIB` rules escalated and fixed | Build | Step 6 |
+| 6 | ✅ | Mechanical `CAxxxx`/`SYSLIB` rules escalated and fixed | Build | Step 6 |
 | 7 | ⬜ | CA1806's 12 ignored results reviewed, any real bugs fixed | Manual | Step 7 |
 | 8 | ⬜ | CA2254's 3 logging template issues fixed | Manual | Step 8 |
 | 9 | ⬜ | CA1068's 2 parameter-order issues reviewed | Manual | Step 9 |

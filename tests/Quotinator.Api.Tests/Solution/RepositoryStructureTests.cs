@@ -32,14 +32,13 @@ public class RepositoryStructureTests
         throw new InvalidOperationException("Could not find repo root containing Quotinator.slnx.");
     }
 
-    private static IReadOnlySet<string> LoadSlnxFilePaths()
+    private static HashSet<string> LoadSlnxFilePaths()
     {
         var doc = XDocument.Load(SlnxPath);
-        return doc.Descendants("File")
+        return [.. doc.Descendants("File")
             .Select(e => e.Attribute("Path")?.Value)
             .Where(p => p is not null)
-            .Select(p => p!.Replace('\\', '/'))
-            .ToHashSet();
+            .Select(p => p!.Replace('\\', '/'))];
     }
 
     /// <summary>src/Quotinator.Api/resources/changelog.en.json must exist on disk as the English source file.</summary>

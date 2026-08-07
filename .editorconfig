@@ -63,12 +63,10 @@ dotnet_diagnostic.CA1869.severity = warning
 dotnet_diagnostic.CA1507.severity = warning
 dotnet_diagnostic.CA1826.severity = warning
 
-# CA1859 (prefer concrete types for perf) deliberately NOT escalated in Step 6a. Every one of its 32
-# live occurrences suggests narrowing an interface- or abstract-typed field/parameter/return type
-# (IReadOnlyDictionary/IReadOnlyList/IReadOnlySet/IEnumerable, or a DI-registered interface like
-# IImportActionReader/IImportActionWriter/IImportActionCoordinator/IDbConnectionFactory/
-# IChangelogService/IManifestSeedPlanner) to a concrete class — exactly the abstraction this
-# project's own DI policy (CLAUDE.md's "Dependency injection policy") and test-double conventions
-# rely on for substitutability. Per developer decision (2026-08-08), reviewed individually in Step 6b
-# instead of bulk-escalated or bulk-suppressed — see the plan doc's Step 6b for the per-occurrence
-# verdicts.
+# Step 6b: CA1859 (prefer concrete types for perf), reviewed individually per developer decision
+# (2026-08-08) rather than bulk-escalated or bulk-suppressed in 6a. Every one of the 32 occurrences
+# turned out to be safe to narrow — none were an interface-typed field/parameter genuinely swapped
+# for a different (fake/mock) implementation anywhere in the codebase; each was either a private,
+# non-interface implementation detail, or a test field/factory always assigned the same concrete
+# real type. See the plan doc's Step 6b for the full per-occurrence reasoning.
+dotnet_diagnostic.CA1859.severity = warning

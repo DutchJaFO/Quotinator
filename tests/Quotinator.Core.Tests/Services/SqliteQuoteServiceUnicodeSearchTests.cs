@@ -30,7 +30,7 @@ public class SqliteQuoteServiceUnicodeSearchTests
     private string _backups = null!;
     private string _fixture = null!;
 
-    private IDbConnectionFactory _factory = null!;
+    private SqliteConnectionFactory _factory = null!;
 
     [TestInitialize]
     public async Task TestInitialize()

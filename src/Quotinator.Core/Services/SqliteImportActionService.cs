@@ -1456,30 +1456,30 @@ public sealed class SqliteImportActionService(
         };
     }
 
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
         new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId };
 
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["sourceId"] = payload.SourceId };
 
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["dateOfBirth"] = payload.DateOfBirth, ["dateOfDeath"] = payload.DateOfDeath };
 
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(StageDirectionActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(StageDirectionActionPayload payload) =>
         new Dictionary<string, object?> { ["text"] = payload.Text, ["imageUrl"] = payload.ImageUrl };
 
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(SoundCueActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(SoundCueActionPayload payload) =>
         new Dictionary<string, object?> { ["text"] = payload.Text, ["soundFileUrl"] = payload.SoundFileUrl, ["imageUrl"] = payload.ImageUrl };
 
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(ConversationActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(ConversationActionPayload payload) =>
         new Dictionary<string, object?> { ["description"] = payload.Description, ["lineCount"] = payload.Lines.Count };
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload — must stay in sync (#163).</summary>
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(SeriesActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(SeriesActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["universeId"] = payload.UniverseId };
 
     /// <summary>Same key name as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload — must stay in sync (#163).</summary>
-    private static IReadOnlyDictionary<string, object?> ToFieldMap(UniverseActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(UniverseActionPayload payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name };
 
     private static IReadOnlyList<string> ComputeAmbiguousFields(ImportActionEntity action)

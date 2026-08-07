@@ -32,9 +32,9 @@ public class SqliteImportActionServiceTests
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private SqliteConnectionFactory _factory = null!;
-    private IImportActionReader _actionReader = null!;
-    private IImportActionWriter _actionWriter = null!;
-    private IImportActionCoordinator _coordinator = null!;
+    private ImportActionReader _actionReader = null!;
+    private ImportActionWriter _actionWriter = null!;
+    private ImportActionResolutionCoordinator _coordinator = null!;
     private SqliteImportActionService _service = null!;
 
     [TestInitialize]

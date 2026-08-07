@@ -201,7 +201,7 @@ public sealed class SqliteQuoteImportService(
 
     // ── Response shaping (temporary — Task 33 replaces this with the /import/actions response shape) ──
 
-    private static IReadOnlyList<ImportConflictEntry> BuildConflictEntries(IReadOnlyList<ImportActionEntity> actions)
+    private static List<ImportConflictEntry> BuildConflictEntries(IReadOnlyList<ImportActionEntity> actions)
     {
         var entries = new List<ImportConflictEntry>();
         foreach (var action in actions)

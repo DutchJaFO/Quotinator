@@ -26,7 +26,7 @@ internal static class QuoteSeedWriter
 {
     // Reverse of InputValidation.GenreApiToDb — DB enum name (e.g. "SciFi") back to the wire-format
     // tag (e.g. "sci-fi"), needed to rebuild a QuoteFieldMerge-compatible field map from stored rows.
-    private static readonly IReadOnlyDictionary<string, string> GenreDbToApi =
+    private static readonly Dictionary<string, string> GenreDbToApi =
         InputValidation.GenreApiToDb.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Bundles the change-log writer and initiator identity shared across every Source/Character/Person/Quote write within one seeding run or one import call (#56).</summary>
