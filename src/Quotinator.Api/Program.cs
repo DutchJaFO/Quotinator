@@ -447,10 +447,9 @@ builder.Services.AddI18nText(options =>
 
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
-    var supported = new[] { "en-GB", "de", "nl" };
     options.DefaultRequestCulture = new RequestCulture("en-GB");
-    options.AddSupportedCultures(supported);
-    options.AddSupportedUICultures(supported);
+    options.AddSupportedCultures(SupportedCultures);
+    options.AddSupportedUICultures(SupportedCultures);
 });
 
 builder.Services.AddRazorComponents()
@@ -681,4 +680,7 @@ app.MapGet(ApiRoutes.CultureSet, (string? culture, string redirectUri, HttpConte
 app.Run();
 
 // Exposes Program to WebApplicationFactory<Program> in the test project.
-public partial class Program { }
+public partial class Program
+{
+    private static readonly string[] SupportedCultures = ["en-GB", "de", "nl"];
+}

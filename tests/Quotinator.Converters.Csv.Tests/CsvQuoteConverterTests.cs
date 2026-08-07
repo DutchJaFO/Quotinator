@@ -10,6 +10,8 @@ namespace Quotinator.Converters.Csv.Tests;
 [TestClass]
 public class CsvQuoteConverterTests
 {
+    private static readonly string[] DramaSciFiGenres = ["drama", "sci-fi"];
+
     private string _tempDir = null!;
 
     [TestInitialize]
@@ -85,7 +87,7 @@ public class CsvQuoteConverterTests
         Assert.AreEqual("A Character", quote.Character);
         Assert.AreEqual("An Author", quote.Author);
         Assert.AreEqual(QuoteType.Book, quote.Type);
-        CollectionAssert.AreEqual(new[] { "drama", "sci-fi" }, quote.Genres.ToList());
+        CollectionAssert.AreEqual(DramaSciFiGenres, quote.Genres.ToList());
     }
 
     [TestMethod]

@@ -160,7 +160,7 @@ public class ImportActionPlannerTests
 
     // ── #174/ADR 013: Character global identity, Series-scoped cross-Source resolution ──────────
 
-    private async Task<string> SeedGlobalCharacterAsync(SqliteConnection conn, string name, string sourceId, string sourceType)
+    private static async Task<string> SeedGlobalCharacterAsync(SqliteConnection conn, string name, string sourceId, string sourceType)
     {
         var characterId = Guid.NewGuid();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
@@ -171,7 +171,7 @@ public class ImportActionPlannerTests
         return characterId.ToString("D");
     }
 
-    private async Task<string> SeedSourceAsync(SqliteConnection conn, string title, string type = "Movie", string? seriesId = null)
+    private static async Task<string> SeedSourceAsync(SqliteConnection conn, string title, string type = "Movie", string? seriesId = null)
     {
         var sourceId = Guid.NewGuid();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");

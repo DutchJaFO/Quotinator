@@ -39,11 +39,17 @@ public partial class ChangelogEntry
 
     private bool HasReferences => Release.Issues.Count > 0 || Release.Cves.Count > 0;
 
+    [GeneratedRegex(@"\[([^\]]+)\]\(([^)]+)\)")]
+    private static partial Regex MarkdownLinkPattern();
+
+    [GeneratedRegex(@"`([^`]+)`")]
+    private static partial Regex BacktickCodePattern();
+
     internal static MarkupString FormatInline(string text)
     {
         var encoded = WebUtility.HtmlEncode(text);
-        var result  = Regex.Replace(encoded, @"\[([^\]]+)\]\(([^)]+)\)", "<a href=\"$2\">$1</a>");
-        result      = Regex.Replace(result,  @"`([^`]+)`",               "<code>$1</code>");
+        var result  = MarkdownLinkPattern().Replace(encoded, "<a href=\"$2\">$1</a>");
+        result      = BacktickCodePattern().Replace(result,  "<code>$1</code>");
         return new MarkupString(result);
     }
 

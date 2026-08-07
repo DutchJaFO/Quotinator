@@ -16,6 +16,9 @@ public class BasicJsonArrayConverterTests
     private static string BaselineFile =>
         Path.Combine(RepoRoot, "data", "sources", "NikhilNamal17_popular-movie-quotes.json");
 
+    private static readonly string[] DramaSciFiGenres = ["drama", "sci-fi"];
+    private static readonly string[] DramaGenre        = ["drama"];
+
     private string _tempDir = null!;
 
     [TestInitialize]
@@ -97,7 +100,7 @@ public class BasicJsonArrayConverterTests
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
-        CollectionAssert.AreEqual(new[] { "drama", "sci-fi" }, quote.Genres.ToList());
+        CollectionAssert.AreEqual(DramaSciFiGenres, quote.Genres.ToList());
     }
 
     [TestMethod]
@@ -109,7 +112,7 @@ public class BasicJsonArrayConverterTests
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
-        CollectionAssert.AreEqual(new[] { "drama" }, quote.Genres.ToList());
+        CollectionAssert.AreEqual(DramaGenre, quote.Genres.ToList());
     }
 
     [TestMethod]

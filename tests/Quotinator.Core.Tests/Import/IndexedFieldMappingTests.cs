@@ -6,11 +6,12 @@ namespace Quotinator.Core.Tests.Import;
 [TestClass]
 public class IndexedFieldMappingTests
 {
+    private static readonly JsonSerializerOptions CaseInsensitive = new() { PropertyNameCaseInsensitive = true };
+
     [TestMethod]
     public void Deserialize_PartialMapping_UnmappedSlotsAreNull()
     {
-        var mapping = JsonSerializer.Deserialize<IndexedFieldMapping>("""{"quote": 1, "source": 2}""",
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        var mapping = JsonSerializer.Deserialize<IndexedFieldMapping>("""{"quote": 1, "source": 2}""", CaseInsensitive);
 
         Assert.IsNotNull(mapping);
         Assert.AreEqual(1, mapping!.Quote);

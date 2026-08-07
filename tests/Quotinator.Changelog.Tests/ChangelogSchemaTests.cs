@@ -5,9 +5,10 @@ using Json.Schema;
 namespace Quotinator.Changelog.Tests;
 
 [TestClass]
-public sealed class ChangelogSchemaTests
+public sealed partial class ChangelogSchemaTests
 {
-    private static readonly Regex CvePattern = new(@"^CVE-\d{4}-\d{4,}$", RegexOptions.Compiled);
+    [GeneratedRegex(@"^CVE-\d{4}-\d{4,}$")]
+    private static partial Regex CvePattern();
 
     private static readonly JsonSchema DocumentSchema = JsonSchema.FromFile(FindSchemaFile());
 
@@ -102,7 +103,7 @@ public sealed class ChangelogSchemaTests
             foreach (var cve in cves.EnumerateArray())
             {
                 var id = cve.GetString();
-                Assert.IsTrue(CvePattern.IsMatch(id ?? string.Empty),
+                Assert.IsTrue(CvePattern().IsMatch(id ?? string.Empty),
                     $"{filename}: CVE ID '{id}' in version {version} does not match CVE-YYYY-NNNNN+ format");
             }
         }

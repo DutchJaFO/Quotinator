@@ -72,7 +72,7 @@ public abstract class DatabaseConfiguration
     /// Registers a <see cref="SafeEnumHandler{TEnum}"/> for <typeparamref name="TEnum"/> with Dapper.
     /// Call from <see cref="RegisterDomainHandlers"/> in subclasses.
     /// </summary>
-    protected void RegisterEnumHandler<TEnum>() where TEnum : struct, Enum
+    protected static void RegisterEnumHandler<TEnum>() where TEnum : struct, Enum
         => SqlMapper.AddTypeHandler(new SafeEnumHandler<TEnum>());
 
     /// <summary>

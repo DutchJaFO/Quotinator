@@ -48,3 +48,27 @@ dotnet_diagnostic.IDE0130.severity = warning
 # Fixed by actually binding lang; red tests added first (GetAll_LangRequested_ReturnsTranslatedContent,
 # Search_LangRequested_ReturnsTranslatedContent) to prove the bug before the fix.
 dotnet_diagnostic.IDE0060.severity = warning
+
+# Step 6: mechanical CAxxxx/SYSLIB rules — targeted per-rule severities rather than a blanket
+# <AnalysisMode>Recommended</AnalysisMode>, to keep this step scoped to exactly these 7 (Recommended
+# would also pull in CA1806/CA2254/CA1068/CA1873, each reserved for its own later step needing
+# individual review, not a bulk escalation). `dotnet format analyzers` does not reliably discover the
+# SDK's built-in CA analyzers the way it discovers IDE0xxx style rules — `dotnet build` after this
+# escalation is the actual diagnostic source; fixes applied by hand per the same "verify by reading,
+# don't trust blindly" standing instruction as every other step.
+dotnet_diagnostic.CA1861.severity = warning
+dotnet_diagnostic.CA1822.severity = warning
+dotnet_diagnostic.SYSLIB1045.severity = warning
+dotnet_diagnostic.CA1869.severity = warning
+dotnet_diagnostic.CA1507.severity = warning
+dotnet_diagnostic.CA1826.severity = warning
+
+# CA1859 (prefer concrete types for perf) deliberately NOT escalated in Step 6a. Every one of its 32
+# live occurrences suggests narrowing an interface- or abstract-typed field/parameter/return type
+# (IReadOnlyDictionary/IReadOnlyList/IReadOnlySet/IEnumerable, or a DI-registered interface like
+# IImportActionReader/IImportActionWriter/IImportActionCoordinator/IDbConnectionFactory/
+# IChangelogService/IManifestSeedPlanner) to a concrete class — exactly the abstraction this
+# project's own DI policy (CLAUDE.md's "Dependency injection policy") and test-double conventions
+# rely on for substitutability. Per developer decision (2026-08-08), reviewed individually in Step 6b
+# instead of bulk-escalated or bulk-suppressed — see the plan doc's Step 6b for the per-occurrence
+# verdicts.

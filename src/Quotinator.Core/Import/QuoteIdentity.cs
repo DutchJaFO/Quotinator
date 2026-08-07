@@ -11,11 +11,14 @@ namespace Quotinator.Core.Import;
 /// produce the same id across every re-conversion, or existing database rows would be silently
 /// duplicated or orphaned on the next refresh.
 /// </summary>
-public static class QuoteIdentity
+public static partial class QuoteIdentity
 {
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex WhitespaceRun();
+
     /// <summary>Trims, lowercases, and collapses runs of whitespace to a single space.</summary>
     public static string Normalise(string s) =>
-        Regex.Replace(s.Trim().ToLowerInvariant(), @"\s+", " ");
+        WhitespaceRun().Replace(s.Trim().ToLowerInvariant(), " ");
 
     /// <summary>
     /// Derives a stable UUID v4 string from the normalised <paramref name="quote"/> and

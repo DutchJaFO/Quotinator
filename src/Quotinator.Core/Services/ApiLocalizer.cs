@@ -32,13 +32,14 @@ public interface IApiLocalizer
 /// implementation (including test fakes) calls this from its own <c>Format</c> method rather than
 /// reimplementing the substitution logic.
 /// </summary>
-public static class ApiLocalizerFormatting
+public static partial class ApiLocalizerFormatting
 {
-    private static readonly Regex PlaceholderPattern = new(@"\{(\d+)\}", RegexOptions.Compiled);
+    [GeneratedRegex(@"\{(\d+)\}")]
+    private static partial Regex PlaceholderPattern();
 
     /// <summary>Substitutes <c>{0}</c>/<c>{1}</c>-style placeholders in <paramref name="template"/> from <paramref name="args"/>, by position.</summary>
     public static string Substitute(string template, params object[] args)
-        => PlaceholderPattern.Replace(template, m =>
+        => PlaceholderPattern().Replace(template, m =>
         {
             var index = int.Parse(m.Groups[1].Value);
             return index < args.Length ? args[index]?.ToString() ?? string.Empty : m.Value;

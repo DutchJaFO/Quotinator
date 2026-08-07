@@ -825,7 +825,7 @@ public sealed class SqliteImportActionService(
     }
 
     /// <summary>Reverses one Quote action: soft-delete for an Add, field-restore for a genuine Modify, no-op write for a Skip-policy Modify.</summary>
-    private async Task ReverseQuoteActionAsync(ImportActionEntity action, SqliteConnection connection, SqliteTransaction transaction, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+    private static async Task ReverseQuoteActionAsync(ImportActionEntity action, SqliteConnection connection, SqliteTransaction transaction, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
         var isAdd = action.ActionType.Parsed == ImportActionKind.Add;
 
@@ -1293,7 +1293,7 @@ public sealed class SqliteImportActionService(
     // than once (from a dependent entity's own defensive check, or a concurrently-applied batch
     // that staged an Add for the same not-yet-existing row) is always safe.
 
-    private async Task EnsureSourceExistsAsync(
+    private static async Task EnsureSourceExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, string title, string type,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog, string? date = null, string? seriesId = null)
     {
@@ -1308,7 +1308,7 @@ public sealed class SqliteImportActionService(
                 oldValue: null, newValue: new { title, type, date, seriesId }, connection, transaction);
     }
 
-    private async Task EnsureSeriesExistsAsync(
+    private static async Task EnsureSeriesExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, string name, string? universeId,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
@@ -1319,7 +1319,7 @@ public sealed class SqliteImportActionService(
                 oldValue: null, newValue: new { name, universeId }, connection, transaction);
     }
 
-    private async Task EnsureUniverseExistsAsync(
+    private static async Task EnsureUniverseExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, string? name,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
@@ -1330,7 +1330,7 @@ public sealed class SqliteImportActionService(
                 oldValue: null, newValue: new { name }, connection, transaction);
     }
 
-    private async Task EnsureCharacterExistsAsync(
+    private static async Task EnsureCharacterExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, string sourceId, string name, string sourceType,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
@@ -1350,7 +1350,7 @@ public sealed class SqliteImportActionService(
             new { Id = Guid.NewGuid().ToString(), CharacterId = id, SourceId = sourceId, DateCreated = now }, transaction);
     }
 
-    private async Task EnsurePersonExistsAsync(
+    private static async Task EnsurePersonExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, string name,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog,
         string? dateOfBirth = null, string? dateOfDeath = null)
@@ -1364,7 +1364,7 @@ public sealed class SqliteImportActionService(
     }
 
     /// <summary>#68: id-keyed like Quote (see <see cref="ImportActionEntityTypes.Conversation"/>'s remark), not natural-key-keyed like the three helpers above — <paramref name="id"/> is the file's own explicit id, used as-is.</summary>
-    private async Task EnsureStageDirectionExistsAsync(
+    private static async Task EnsureStageDirectionExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, StageDirectionActionPayload payload,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
@@ -1390,7 +1390,7 @@ public sealed class SqliteImportActionService(
     }
 
     /// <summary>#68: id-keyed like <see cref="EnsureStageDirectionExistsAsync"/> — see its remark.</summary>
-    private async Task EnsureSoundCueExistsAsync(
+    private static async Task EnsureSoundCueExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, SoundCueActionPayload payload,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {

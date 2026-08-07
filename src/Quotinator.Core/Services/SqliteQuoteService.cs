@@ -387,9 +387,9 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         if (author    is not null) clauses.Add(Sql.SearchField.AuthorFilter(unicodeAwareSearch));
         if (source    is not null) clauses.Add(Sql.SearchField.SourceFilter(unicodeAwareSearch));
         // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
-        if (seriesId  is not null) clauses.Add(IdClauses.Equals("s.SeriesId", "seriesId"));
+        if (seriesId  is not null) clauses.Add(IdClauses.Equals("s.SeriesId", nameof(seriesId)));
         if (universeId is not null) clauses.Add(
-            $"LOWER(s.SeriesId) IN (SELECT LOWER(Id) FROM Quotinator_Series WHERE {IdClauses.Equals("UniverseId", "universeId")} AND IsDeleted = 0)");
+            $"LOWER(s.SeriesId) IN (SELECT LOWER(Id) FROM Quotinator_Series WHERE {IdClauses.Equals("UniverseId", nameof(universeId))} AND IsDeleted = 0)");
         if (yearFrom  is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) >= @yearFrom");
         if (yearTo    is not null) clauses.Add("CAST(SUBSTR(s.Date, 1, 4) AS INTEGER) <= @yearTo");
 

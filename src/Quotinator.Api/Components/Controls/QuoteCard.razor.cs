@@ -28,8 +28,11 @@ public partial class QuoteCard
     private QuoteResponse? _quote;
     private Quotinator.Api.I18nText.UI Text = new();
 
-    private void LoadQuote() =>
-        _quote = QuoteService.GetRandom(1).Items.FirstOrDefault();
+    private void LoadQuote()
+    {
+        var items = QuoteService.GetRandom(1).Items;
+        _quote = items.Count > 0 ? items[0] : null;
+    }
 
     private string Attribution =>
         _quote?.Character ?? _quote?.Author ?? string.Empty;

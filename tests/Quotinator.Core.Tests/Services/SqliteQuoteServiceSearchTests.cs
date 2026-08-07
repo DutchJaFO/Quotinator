@@ -24,6 +24,10 @@ namespace Quotinator.Core.Tests.Services;
 [TestClass]
 public class SqliteQuoteServiceSearchTests
 {
+    private static readonly string[] ComedyGenre     = ["comedy"];
+    private static readonly string[] NonFictionGenre = ["non-fiction"];
+    private static readonly string[] MysteryGenre    = ["mystery"];
+
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private string _backups = null!;
@@ -51,7 +55,7 @@ public class SqliteQuoteServiceSearchTests
                 character        = (string?)"Ted Striker",
                 author           = (string?)null,
                 type             = "movie",
-                genres           = new[] { "comedy" },
+                genres           = ComedyGenre,
                 translations     = new { }
             },
             new
@@ -64,7 +68,7 @@ public class SqliteQuoteServiceSearchTests
                 character        = (string?)null,
                 author           = (string?)"Winston Churchill",
                 type             = "person",
-                genres           = new[] { "non-fiction" },
+                genres           = NonFictionGenre,
                 translations     = new { }
             },
             new
@@ -77,7 +81,7 @@ public class SqliteQuoteServiceSearchTests
                 character        = (string?)null,
                 author           = (string?)null,
                 type             = "book",
-                genres           = new[] { "mystery" },
+                genres           = MysteryGenre,
                 translations     = new { }
             },
         }));

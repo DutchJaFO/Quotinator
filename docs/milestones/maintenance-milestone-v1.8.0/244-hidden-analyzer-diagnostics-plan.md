@@ -241,11 +241,35 @@ across the whole solution, 0 failures) verified after the fix and after escalati
 `warning`.
 
 ### Step 6 — Escalate + bulk-fix the mechanical `CAxxxx`/`SYSLIB` rules
-**Status:** ⬜ Not started
-`<AnalysisMode>Recommended</AnalysisMode>` (or targeted per-rule severities if `Recommended` pulls in
-more than intended) for CA1861/CA1859/CA1822/SYSLIB1045/CA1869/CA1507/CA1826. Auto-fix where
-`dotnet format analyzers --fix` supports it; spot-check CA1859/CA1822/CA1869 manually. Build/test
-green, commit.
+**Status:** In progress (6a done, 6b in progress)
+
+**`dotnet format analyzers` does not reliably discover the SDK's built-in CA analyzers** the way
+`dotnet format style` discovers `IDE0xxx` rules — confirmed live: running it against this repo (with
+severities escalated in `.editorconfig`) loaded only 1 analyzer per non-test project and made zero
+fixes, even for the purely mechanical rules below. `dotnet build` after escalating each rule's
+severity is the actual diagnostic source for this whole step; every fix in 6a/6b was applied by hand,
+verified against the rebuilt warning list, per the same standing "verify by reading, don't trust
+blindly" instruction as every other step.
+
+**6a — Escalate + fix CA1861/CA1822/SYSLIB1045/CA1869/CA1507/CA1826 (targeted per-rule severities,
+not a blanket `<AnalysisMode>Recommended</AnalysisMode>` — that would also pull in
+CA1806/CA2254/CA1068/CA1873, each reserved for its own step): ✅ Done.**
+- **CA1507 (nameof, 2 occurrences)** — `SqliteQuoteService.BuildFilterWhere`'s two `IdClauses.Equals("...", "seriesId"/"universeId")` calls now use `nameof(seriesId)`/`nameof(universeId)`.
+- **CA1826 (Enumerable method on indexable collection, 1 occurrence)** — `QuoteCard.razor.cs`'s `Items.FirstOrDefault()` (an `IReadOnlyList<T>`) replaced with a direct `Count`/index check.
+- **CA1869 (JsonSerializerOptions caching, 3 occurrences)** — `IndexedFieldMappingTests.cs`/`QuoteFieldDefaultsTests.cs` (2 call sites) now share one `private static readonly JsonSerializerOptions CaseInsensitive` field per class instead of allocating a new instance per call.
+- **CA1822 (mark static, 12 occurrences)** — all 12 were private helper methods (8 in `SqliteImportActionService.cs`'s `Ensure*ExistsAsync`/`ReverseQuoteActionAsync`, 2 test helpers in `ImportActionPlannerTests.cs`) or a protected non-virtual helper (`DatabaseConfiguration.RegisterEnumHandler<TEnum>`) or a Blazor component property never reading instance state (`App.razor.cs`'s `HtmlLang`) — none implement an interface member, so marking `static` needed no call-site changes and carries no mocking-substitution risk (unlike CA1859 below).
+- **SYSLIB1045 (`GeneratedRegexAttribute`, 9 occurrences)** — 8 converted to `[GeneratedRegex(...)]` partial methods (making the containing class `partial` where it wasn't already: `RepositorySql`, `ApiLocalizerFormatting`, `QuoteIdentity`, `ChangelogSchemaTests`, `ChangelogEntryTests`, `SqlSourceScanTests`; `ChangelogEntry.razor.cs` was already `partial`). The 9th (`GeneratedFileHeaderTests.TimestampPattern`) turned out to be genuinely dead code — declared but never referenced anywhere in the file — so it was deleted outright instead of converted, along with the now-unused `using System.Text.RegularExpressions;` and the class's now-unnecessary `partial` modifier.
+- **CA1861 (`static readonly` over constant array arguments, 9 occurrences)** — `Program.cs`'s locally-scoped `supported` array hoisted to a `private static readonly string[] SupportedCultures` field on the existing `public partial class Program { }` block (top-level statements compile into that same partial class, so it's reachable unqualified from the top-level code); 8 test-fixture array literals (genre arrays passed into anonymous-object JSON fixtures or `CollectionAssert.AreEqual`) hoisted to named `private static readonly string[]` fields per class.
+- Full build (0 warnings, 0 errors) and full solution test suite (1433 tests, 0 failures) verified after 6a's escalation.
+
+**6b — CA1859 (prefer concrete types for perf), 32 occurrences: individual review, per explicit
+developer decision (2026-08-08) — not bulk-escalated, not bulk-suppressed.** Every occurrence
+suggests narrowing an interface- or abstract-typed field/parameter/return type
+(`IReadOnlyDictionary`/`IReadOnlyList`/`IReadOnlySet`/`IEnumerable`, or a DI-registered interface
+like `IImportActionReader`/`IImportActionWriter`/`IImportActionCoordinator`/`IDbConnectionFactory`/
+`IChangelogService`/`IManifestSeedPlanner`) to a concrete class — the exact abstraction this
+project's own DI policy and test-double conventions rely on for substitutability. In progress —
+see the per-occurrence verdicts below as they're completed.
 
 ### Step 7 — CA1806 (ignored method result) — review each of the 12
 **Status:** ⬜ Not started

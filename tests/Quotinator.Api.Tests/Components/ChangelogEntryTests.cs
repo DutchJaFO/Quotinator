@@ -1,11 +1,16 @@
+using System.Text.RegularExpressions;
 using Quotinator.Api.Components.Controls;
 using Quotinator.Changelog.Models;
 
 namespace Quotinator.Api.Tests.Components;
 
 [TestClass]
-public sealed class ChangelogEntryTests
+public sealed partial class ChangelogEntryTests
 {
+    [GeneratedRegex("<script>")]
+    private static partial Regex ScriptTagPattern();
+
+
     // ── FormatInline — markdown link conversion ───────────────────────────────
 
     [TestMethod]
@@ -27,7 +32,7 @@ public sealed class ChangelogEntryTests
     {
         var result = ChangelogEntry.FormatInline("<script>alert('xss')</script>").Value;
         Assert.Contains("&lt;script&gt;", result);
-        Assert.DoesNotMatchRegex(new System.Text.RegularExpressions.Regex("<script>"), result);
+        Assert.DoesNotMatchRegex(ScriptTagPattern(), result);
     }
 
     [TestMethod]
