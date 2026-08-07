@@ -24,7 +24,7 @@ internal sealed class FakeSeriesRepository : IListableRepository<SeriesEntity>
 
         var items = pageSize == 0
             ? active
-            : active.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            : [.. active.Skip((page - 1) * pageSize).Take(pageSize)];
 
         var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
         return Task.FromResult(new PagedItems<SeriesEntity>(items, page, effectivePageSize, active.Count));

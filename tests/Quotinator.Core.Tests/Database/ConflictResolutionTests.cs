@@ -117,7 +117,7 @@ public class ConflictResolutionTests
 
         Assert.AreEqual("Updated quote text", quoteText, "NewestWins replaces the whole record with the incoming one");
         Assert.AreEqual("Neo", character);
-        Assert.AreSequenceEqual(new[] { "Comedy" }, genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["Comedy"], genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -132,7 +132,7 @@ public class ConflictResolutionTests
 
         Assert.AreEqual("Original quote text", quoteText, "True conflict on quote text — MergeOurs keeps the existing value");
         Assert.AreEqual("Neo", character, "Existing character was blank — auto-filled from the incoming side regardless of policy direction");
-        Assert.AreSequenceEqual(new[] { "Drama" }, genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "True conflict on genres (array field) — MergeOurs keeps the existing array wholesale, no union with the incoming array");
+        Assert.AreSequenceEqual(["Drama"], genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "True conflict on genres (array field) — MergeOurs keeps the existing array wholesale, no union with the incoming array");
     }
 
     [TestMethod]
@@ -147,7 +147,7 @@ public class ConflictResolutionTests
 
         Assert.AreEqual("Updated quote text", quoteText, "True conflict on quote text — MergeTheirs takes the incoming value");
         Assert.AreEqual("Neo", character, "Existing character was blank — auto-filled from the incoming side regardless of policy direction");
-        Assert.AreSequenceEqual(new[] { "Comedy" }, genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "True conflict on genres (array field) — MergeTheirs takes the incoming array wholesale, no union with the existing array");
+        Assert.AreSequenceEqual(["Comedy"], genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "True conflict on genres (array field) — MergeTheirs takes the incoming array wholesale, no union with the existing array");
     }
 
     [TestMethod]
@@ -162,7 +162,7 @@ public class ConflictResolutionTests
 
         Assert.AreEqual("Original quote text", quoteText, "Review does not auto-resolve — behaves exactly like Skip today");
         Assert.IsNull(character);
-        Assert.AreSequenceEqual(new[] { "Drama" }, genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["Drama"], genres, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     // ── #55/#165: CompletenessStatus / NoValueKnown ──────────────────────────
@@ -283,7 +283,7 @@ public class ConflictResolutionTests
         var quoteActions = (await new ChangeReader(factory).GetHistoryAsync("quote", SharedId))
             .OrderBy(r => r.OccurredAt).Select(r => r.Action.Parsed).ToList();
 
-        Assert.AreSequenceEqual(new ChangeAction?[] { ChangeAction.Created, ChangeAction.Modified }, quoteActions, "The first file's insert logs Created; the second file's newest-wins rewrite logs Modified");
+        Assert.AreSequenceEqual([ChangeAction.Created, ChangeAction.Modified], quoteActions, "The first file's insert logs Created; the second file's newest-wins rewrite logs Modified");
     }
 
     [TestMethod]
@@ -301,7 +301,7 @@ public class ConflictResolutionTests
         var quoteActions = (await new ChangeReader(factory).GetHistoryAsync("quote", SharedId))
             .Select(r => r.Action.Parsed).ToList();
 
-        Assert.AreSequenceEqual(new ChangeAction?[] { ChangeAction.Created }, quoteActions, $"{policy} never executes the UPDATE, so no Modified row should exist — only the first file's Created row");
+        Assert.AreSequenceEqual([ChangeAction.Created], quoteActions, $"{policy} never executes the UPDATE, so no Modified row should exist — only the first file's Created row");
     }
 
     /// <summary>Reset is now a full, unconditional wipe (#156) — Audit_Change no longer survives, and Reset no longer reseeds, so it ends up empty rather than doubled.</summary>

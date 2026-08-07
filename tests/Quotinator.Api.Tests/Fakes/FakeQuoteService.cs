@@ -156,7 +156,7 @@ internal sealed class FakeQuoteService : IQuoteService
 
         var items = pageSize == 0
             ? filtered
-            : filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            : [.. filtered.Skip((page - 1) * pageSize).Take(pageSize)];
 
         var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
         return new PagedResult<QuoteResponse>(items, page, effectivePageSize, All.Count);

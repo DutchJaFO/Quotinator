@@ -64,7 +64,7 @@ internal static class QuoteFieldMerge
         Character        = q.Character,
         Author           = q.Author,
         Type             = q.Type,
-        Genres           = q.Genres.ToList(),
+        Genres           = [.. q.Genres],
     };
 
     /// <summary>Rebuilds a <see cref="QuoteConflictFieldsDto"/> from a field-name → value map (the reverse of <see cref="ToFieldMap(QuoteConflictFieldsDto)"/>).</summary>

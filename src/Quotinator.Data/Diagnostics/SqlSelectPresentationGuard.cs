@@ -89,10 +89,9 @@ public static partial class SqlSelectPresentationGuard
 
         var scanned = ProtectedColumnPattern().Replace(selectClauseMatch.Value, " ");
 
-        return UnwrappedIdColumnPattern().Matches(scanned)
+        return [.. UnwrappedIdColumnPattern().Matches(scanned)
             .Select(m => m.Groups["col"].Value)
-            .Where(col => !ExemptColumnNames.Contains(col, StringComparer.OrdinalIgnoreCase))
-            .ToList();
+            .Where(col => !ExemptColumnNames.Contains(col, StringComparer.OrdinalIgnoreCase))];
     }
 
     /// <summary>

@@ -509,7 +509,7 @@ public class SqliteImportActionServiceTests
         var sourceItem    = page.Items.Single(i => i.EntityType == "Source");
         var characterItem = page.Items.Single(i => i.EntityType == "Character");
 
-        Assert.AreSequenceEqual(new[] { sourceItem.Id, characterItem.Id }, quoteItem.RelatedActionIds.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual([sourceItem.Id, characterItem.Id], [.. quoteItem.RelatedActionIds], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
         Assert.IsEmpty(sourceItem.RelatedActionIds, "Source actions never relate to other actions");
     }
 
@@ -526,7 +526,7 @@ public class SqliteImportActionServiceTests
         var quoteItem = page.Items.Single(i => i.EntityType == "Quote");
 
         Assert.AreEqual("Pending", quoteItem.Status);
-        Assert.Contains("quoteText", quoteItem.AmbiguousFields.ToList());
+        Assert.Contains("quoteText", [.. quoteItem.AmbiguousFields]);
     }
 
     [TestMethod]

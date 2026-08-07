@@ -31,9 +31,7 @@ internal sealed class ImportModelSchemaTransformer : IOpenApiSchemaTransformer
 {
     // Derived from DuplicateResolutionPolicy itself (not hand-duplicated) so this can never drift out
     // of sync with the enum — same kebab-case conversion ToWireString/DuplicateResolutionPolicyJsonConverter use.
-    private static readonly string[] PolicyValues = Enum.GetValues<DuplicateResolutionPolicy>()
-        .Select(p => JsonNamingPolicy.KebabCaseLower.ConvertName(p.ToString()))
-        .ToArray();
+    private static readonly string[] PolicyValues = [.. Enum.GetValues<DuplicateResolutionPolicy>().Select(p => JsonNamingPolicy.KebabCaseLower.ConvertName(p.ToString()))];
 
     // Not derived from an enum: ImportConflictEntry.Status is a distinct, smaller vocabulary than
     // ImportConflictStatus (#149) — only ever "pending"/"resolved" for this legacy synchronous
@@ -76,6 +74,6 @@ internal sealed class ImportModelSchemaTransformer : IOpenApiSchemaTransformer
         if (!schema.Properties.TryGetValue(propertyName, out var propertySchemaRef) || propertySchemaRef is not OpenApiSchema propertySchema)
             return;
 
-        propertySchema.Enum = values.Select(v => (System.Text.Json.Nodes.JsonNode)v).ToList();
+        propertySchema.Enum = [.. values.Select(v => (System.Text.Json.Nodes.JsonNode)v)];
     }
 }

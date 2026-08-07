@@ -106,7 +106,7 @@ public class MappedSourceQuoteBuilderTests
     public void Build_GenresSupplied_ReturnedVerbatim()
     {
         var quote = MappedSourceQuoteBuilder.Build(null, "A quote.", null, "A Source", null, null, null, null, ["drama", "sci-fi"]);
-        Assert.AreSequenceEqual(new[] { "drama", "sci-fi" }, quote!.Genres.ToList());
+        Assert.AreSequenceEqual(["drama", "sci-fi"], [.. quote!.Genres]);
     }
 
     #endregion

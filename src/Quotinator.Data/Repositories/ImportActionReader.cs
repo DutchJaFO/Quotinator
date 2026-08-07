@@ -55,6 +55,6 @@ public sealed class ImportActionReader : SqliteRepositoryBase<ImportActionEntity
         conn.Open();
 
         var items = await conn.QueryAsync<ImportActionEntity>(Sql.SystemImportActions.SelectAllForBatch, new { batchId });
-        return items.ToList();
+        return [.. items];
     }
 }

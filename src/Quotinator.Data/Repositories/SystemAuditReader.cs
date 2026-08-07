@@ -48,7 +48,7 @@ public sealed class AuditEntryReader : SqliteRepositoryBase<AuditEntryEntity>, I
             Sql.SystemAudit.SelectInRange(startDate is not null, endDate is not null),
             new { startDate, endDate });
 
-        return rows.ToList();
+        return [.. rows];
     }
 
     /// <inheritdoc/>

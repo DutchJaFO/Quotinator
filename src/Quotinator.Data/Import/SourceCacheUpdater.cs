@@ -75,11 +75,10 @@ public sealed class SourceCacheUpdater(
         var effectiveBatches = candidateBatches
             .Select((batch, batchIndex) => batch with
             {
-                Files = batch.Files
+                Files = [.. batch.Files
                     .Select((file, fileIndex) => effectivePaths.TryGetValue((batchIndex, fileIndex), out var effectivePath)
                         ? file with { FilePath = effectivePath }
-                        : file)
-                    .ToList()
+                        : file)]
             })
             .ToList();
 

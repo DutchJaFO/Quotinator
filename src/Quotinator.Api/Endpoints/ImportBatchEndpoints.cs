@@ -59,7 +59,7 @@ internal static class ImportBatchEndpoints
             if (beyondLastError is not null) return beyondLastError;
 
             var mapped = new PagedItems<ImportBatchResponse>(
-                result.Items.Select(ToResponse).ToList(), result.Page, result.PageSize, result.TotalCount);
+                [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
             return Results.Ok(mapped);
         })
         .WithName("GetImportBatches")

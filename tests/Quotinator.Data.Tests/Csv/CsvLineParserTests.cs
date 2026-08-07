@@ -11,8 +11,8 @@ public class CsvLineParserTests
         var rows = CsvLineParser.Parse("a,b,c\r\n1,2,3\r\n");
 
         Assert.HasCount(2, rows);
-        Assert.AreSequenceEqual(new[] { "a", "b", "c" }, rows[0]);
-        Assert.AreSequenceEqual(new[] { "1", "2", "3" }, rows[1]);
+        Assert.AreSequenceEqual(["a", "b", "c"], rows[0]);
+        Assert.AreSequenceEqual(["1", "2", "3"], rows[1]);
     }
 
     [TestMethod]
@@ -20,7 +20,7 @@ public class CsvLineParserTests
     {
         var rows = CsvLineParser.Parse("\"hello, world\",b\r\n");
 
-        Assert.AreSequenceEqual(new[] { "hello, world", "b" }, rows[0]);
+        Assert.AreSequenceEqual(["hello, world", "b"], rows[0]);
     }
 
     [TestMethod]
@@ -46,7 +46,7 @@ public class CsvLineParserTests
         var rows = CsvLineParser.Parse("a,b");
 
         Assert.HasCount(1, rows);
-        Assert.AreSequenceEqual(new[] { "a", "b" }, rows[0]);
+        Assert.AreSequenceEqual(["a", "b"], rows[0]);
     }
 
     [TestMethod]

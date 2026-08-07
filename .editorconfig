@@ -1,0 +1,15 @@
+root = true
+
+[*.cs]
+
+# #244 Step 2: escalated one rule family at a time, each landing at 0 warnings before the next is
+# added — see docs/milestones/maintenance-milestone-v1.8.0/244-hidden-analyzer-diagnostics-plan.md.
+# These four are the collection-expression-simplification family (all four flag exactly the same
+# transformation — `new[] { ... }`/`new List<T> { ... }`/`.ToList()`/`.ToArray()`/`.ToHashSet()` at
+# the end of a chain, or `new()` on a field initializer — becoming `[...]`/`[.. ...]` syntax): purely
+# syntactic, verified by hand against the full diff before landing, no behaviour change possible for
+# any of the 202 occurrences fixed in the same commit as this entry.
+dotnet_diagnostic.IDE0305.severity = warning
+dotnet_diagnostic.IDE0300.severity = warning
+dotnet_diagnostic.IDE0301.severity = warning
+dotnet_diagnostic.IDE0028.severity = warning

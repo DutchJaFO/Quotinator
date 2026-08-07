@@ -443,7 +443,7 @@ public class QuoteImportServiceTests
 
         var actions = (await _changeReader.GetHistoryAsync("quote", SharedId)).Select(r => r.Action.Parsed).ToList();
 
-        Assert.AreSequenceEqual(new ChangeAction?[] { ChangeAction.Created }, actions, "Skip never executes the UPDATE, so no Modified row should exist");
+        Assert.AreSequenceEqual([ChangeAction.Created], actions, "Skip never executes the UPDATE, so no Modified row should exist");
     }
 
     [TestMethod]
@@ -626,7 +626,7 @@ public class QuoteImportServiceTests
             .Where(t => t is "Conversation" or "StageDirection")
             .Distinct()
             .ToList();
-        Assert.AreSequenceEqual(new[] { "Conversation", "StageDirection" }, actionTypes, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["Conversation", "StageDirection"], actionTypes, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]

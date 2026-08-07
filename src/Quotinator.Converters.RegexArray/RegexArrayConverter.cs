@@ -65,7 +65,7 @@ public sealed class RegexArrayConverter : IQuoteSourceConverter
             var genresRaw = Get(mapping.Genres);
             var genres    = string.IsNullOrWhiteSpace(genresRaw)
                 ? defaults?.Genres?.ToList()
-                : genresRaw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                : [.. genresRaw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
             var quote = MappedSourceQuoteBuilder.Build(
                 id:               Get(mapping.Id),

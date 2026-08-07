@@ -9,7 +9,7 @@ namespace Quotinator.Api.Tests.Fakes;
 /// <summary>In-memory test double for <see cref="ISourceFileOverrideRegistry"/> — avoids requiring a real database in endpoint tests.</summary>
 internal sealed class FakeSourceFileOverrideRegistry : ISourceFileOverrideRegistry
 {
-    private readonly Dictionary<(string FileName, SeedBatchOrigin Origin), SourceFileOverrideEntity> _entries = new();
+    private readonly Dictionary<(string FileName, SeedBatchOrigin Origin), SourceFileOverrideEntity> _entries = [];
 
     public string? LastRegisteredContentHash { get; private set; }
     public string? LastRegisteredSourceBatchId { get; private set; }

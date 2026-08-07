@@ -8,7 +8,7 @@ namespace Quotinator.Api.Tests.Fakes;
 /// <summary>In-memory test double for <see cref="IImportBatchRepository"/> — avoids requiring a real database in endpoint tests.</summary>
 internal sealed class FakeImportBatchRepository : IImportBatchRepository
 {
-    private readonly Dictionary<Guid, ImportBatchEntity> _batches = new();
+    private readonly Dictionary<Guid, ImportBatchEntity> _batches = [];
 
     /// <summary>Registers a fixed batch for a test to look up.</summary>
     public void Seed(ImportBatchEntity batch) => _batches[batch.Id] = batch;
@@ -17,10 +17,10 @@ internal sealed class FakeImportBatchRepository : IImportBatchRepository
         => Task.FromResult(_batches.GetValueOrDefault(id));
 
     public Task<IReadOnlyList<ImportBatchEntity>> GetAllAsync(IUnitOfWork? unitOfWork = null)
-        => Task.FromResult<IReadOnlyList<ImportBatchEntity>>(_batches.Values.ToList());
+        => Task.FromResult<IReadOnlyList<ImportBatchEntity>>([.. _batches.Values]);
 
     public Task<IReadOnlyList<ImportBatchEntity>> GetByTypeAsync(ImportBatchType type, IUnitOfWork? unitOfWork = null)
-        => Task.FromResult<IReadOnlyList<ImportBatchEntity>>(_batches.Values.Where(b => b.Type.Parsed == type).ToList());
+        => Task.FromResult<IReadOnlyList<ImportBatchEntity>>([.. _batches.Values.Where(b => b.Type.Parsed == type)]);
 
     public Task<PagedItems<ImportBatchEntity>> GetPagedAsync(ImportBatchType? type, ImportBatchStatus? status, int page, int pageSize)
     {
@@ -32,7 +32,7 @@ internal sealed class FakeImportBatchRepository : IImportBatchRepository
 
         var total             = ordered.Count;
         var effectivePageSize = pageSize == 0 ? total : pageSize;
-        var items             = pageSize == 0 ? ordered : ordered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var items             = pageSize == 0 ? ordered : [.. ordered.Skip((page - 1) * pageSize).Take(pageSize)];
 
         return Task.FromResult(new PagedItems<ImportBatchEntity>(items, page, effectivePageSize, total));
     }

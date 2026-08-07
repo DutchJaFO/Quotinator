@@ -58,7 +58,7 @@ internal static class SoundCueEndpoints
             return beyondLastError;
 
         var mapped = new PagedItems<SoundCueResponse>(
-            result.Items.Select(ToResponse).ToList(),
+            [.. result.Items.Select(ToResponse)],
             result.Page, result.PageSize, result.TotalCount);
 
         return Results.Ok(mapped);

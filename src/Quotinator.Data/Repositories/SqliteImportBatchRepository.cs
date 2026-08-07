@@ -22,12 +22,12 @@ public sealed class SqliteImportBatchRepository : SqliteRepository<ImportBatchEn
         {
             var rows = await uow.Connection.QueryAsync<ImportBatchEntity>(
                 Sql.ImportBatches.SelectAll, transaction: uow.Transaction);
-            return rows.ToList();
+            return [.. rows];
         }
         using var conn = Factory.CreateConnection();
         conn.Open();
         var results = await conn.QueryAsync<ImportBatchEntity>(Sql.ImportBatches.SelectAll);
-        return results.ToList();
+        return [.. results];
     }
 
     /// <inheritdoc/>
@@ -38,12 +38,12 @@ public sealed class SqliteImportBatchRepository : SqliteRepository<ImportBatchEn
         {
             var rows = await uow.Connection.QueryAsync<ImportBatchEntity>(
                 Sql.ImportBatches.SelectByType, param, uow.Transaction);
-            return rows.ToList();
+            return [.. rows];
         }
         using var conn = Factory.CreateConnection();
         conn.Open();
         var results = await conn.QueryAsync<ImportBatchEntity>(Sql.ImportBatches.SelectByType, param);
-        return results.ToList();
+        return [.. results];
     }
 
     /// <inheritdoc/>

@@ -62,7 +62,7 @@ internal static class ImportFileResourceEndpoints
             if (beyondLastError is not null) return beyondLastError;
 
             var mapped = new PagedItems<FileResourceResponse>(
-                result.Items.Select(ToResponse).ToList(), result.Page, result.PageSize, result.TotalCount);
+                [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
             return Results.Ok(mapped);
         })
         .WithName("GetFileResources")
@@ -90,7 +90,7 @@ internal static class ImportFileResourceEndpoints
                 return Results.Problem(detail: localizer[ApiMessages.FileResourceNotFound], statusCode: StatusCodes.Status404NotFound);
 
             var batchIds = await fileResources.GetBatchIdsAsync(fileResourceId);
-            return Results.Ok(ToResponse(fileResource, batchIds.Select(b => b.ToCanonicalId()).ToList()));
+            return Results.Ok(ToResponse(fileResource, [.. batchIds.Select(b => b.ToCanonicalId())]));
         })
         .WithName("GetFileResourceById")
         .WithSummary("Captured import file by id")
@@ -124,7 +124,7 @@ internal static class ImportFileResourceEndpoints
 
             var lines = await fileResources.GetLinesAsync(fileResourceId);
             var content = FileContentSplitter.Join(
-                lines.Select(l => l.Text).ToList(), effectiveLineEnding, fileResource.EndsWithTrailingNewline);
+                [.. lines.Select(l => l.Text)], effectiveLineEnding, fileResource.EndsWithTrailingNewline);
 
             return Results.Text(content, "text/plain");
         })

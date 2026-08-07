@@ -63,11 +63,11 @@ public class DapperSetupTests
 
         await conn.ExecuteAsync("CREATE TABLE T (NoValueKnown TEXT NOT NULL DEFAULT '[]')");
         await conn.ExecuteAsync("INSERT INTO T (NoValueKnown) VALUES (@v)",
-            new { v = (IReadOnlyList<string>)new List<string> { "date", "character" } });
+            new { v = (IReadOnlyList<string>)["date", "character"] });
 
         var result = await conn.QuerySingleAsync<IReadOnlyList<string>>("SELECT NoValueKnown FROM T");
 
-        Assert.AreSequenceEqual(new[] { "date", "character" }, result.ToList());
+        Assert.AreSequenceEqual(["date", "character"], [.. result]);
     }
 
     /// <summary>An empty list must round-trip as the column's <c>'[]'</c> default, not as <c>NULL</c> or an error.</summary>

@@ -16,7 +16,7 @@ internal sealed class CaptureSink : ILogEventSink
     public IReadOnlyList<(LogEventLevel Level, string Message)> Events => _events;
 
     /// <summary>Rendered messages only — convenience accessor for single-level assertions.</summary>
-    public IReadOnlyList<string> Lines => _events.Select(e => e.Message).ToList();
+    public IReadOnlyList<string> Lines => [.. _events.Select(e => e.Message)];
 
     /// <inheritdoc/>
     public void Emit(LogEvent logEvent)

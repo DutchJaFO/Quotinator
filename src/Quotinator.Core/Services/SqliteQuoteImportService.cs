@@ -111,10 +111,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         var skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
 
-        IReadOnlyList<Guid> pendingActionIds = actions
+        IReadOnlyList<Guid> pendingActionIds = [.. actions
             .Where(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale)
-            .Select(a => a.Id)
-            .ToList();
+            .Select(a => a.Id)];
 
         if (!preview)
         {

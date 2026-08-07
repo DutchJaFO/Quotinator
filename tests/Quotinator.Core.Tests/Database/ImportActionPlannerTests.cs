@@ -121,7 +121,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
         Assert.HasCount(2, actions);
-        Assert.AreSequenceEqual(new[] { "Quote", "Source" }, actions.Select(a => a.EntityType).ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["Quote", "Source"], [.. actions.Select(a => a.EntityType)], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]

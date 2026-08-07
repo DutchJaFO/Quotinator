@@ -30,6 +30,6 @@ public class QuoteFieldDefaultsTests
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         Assert.IsNotNull(defaults);
-        Assert.AreSequenceEqual(new[] { "drama", "sci-fi" }, defaults!.Genres!.ToList());
+        Assert.AreSequenceEqual(["drama", "sci-fi"], [.. defaults!.Genres!]);
     }
 }

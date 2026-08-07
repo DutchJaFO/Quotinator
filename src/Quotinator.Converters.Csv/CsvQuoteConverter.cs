@@ -51,7 +51,7 @@ public sealed class CsvQuoteConverter : IQuoteSourceConverter
             if (!header.ContainsKey("quote") || !header.ContainsKey("source"))
                 throw new SourceConversionException($"csv: input at {inputPath} is missing a required 'quote' or 'source' column");
 
-            dataRows = rows.Skip(1).ToList();
+            dataRows = [.. rows.Skip(1)];
         }
         else
         {
@@ -60,7 +60,7 @@ public sealed class CsvQuoteConverter : IQuoteSourceConverter
             {
                 if (rows.Count < 2)
                     throw new SourceConversionException($"csv: input at {inputPath} has no header row or no data rows");
-                dataRows = rows.Skip(1).ToList();
+                dataRows = [.. rows.Skip(1)];
             }
             else
             {
@@ -78,7 +78,7 @@ public sealed class CsvQuoteConverter : IQuoteSourceConverter
             var genresRaw = Get("genres", mapping?.Genres);
             var genres    = string.IsNullOrWhiteSpace(genresRaw)
                 ? defaults?.Genres?.ToList()
-                : genresRaw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                : [.. genresRaw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
             var quote = MappedSourceQuoteBuilder.Build(
                 id:               Get("id", mapping?.Id),

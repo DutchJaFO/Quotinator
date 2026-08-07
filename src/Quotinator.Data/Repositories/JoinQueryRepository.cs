@@ -15,6 +15,6 @@ public class JoinQueryRepository<TResult>(
     {
         using var conn = factory.CreateConnection();
         conn.Open();
-        return (await conn.QueryAsync<TResult>(strategy.BuildSql(), parameters)).ToList();
+        return [.. (await conn.QueryAsync<TResult>(strategy.BuildSql(), parameters))];
     }
 }

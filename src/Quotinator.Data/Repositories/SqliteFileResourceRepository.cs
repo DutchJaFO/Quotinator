@@ -102,7 +102,7 @@ public sealed class SqliteFileResourceRepository : IFileResourceRepository
         conn.Open();
         var lines = await conn.QueryAsync<FileResourceLineEntity>(
             new CommandDefinition(Sql.FileResources.SelectLinesByFileResourceId, new { fileResourceId = fileResourceId.ToCanonicalId() }, cancellationToken: cancellationToken));
-        return lines.ToList();
+        return [.. lines];
     }
 
     /// <inheritdoc/>
@@ -135,7 +135,7 @@ public sealed class SqliteFileResourceRepository : IFileResourceRepository
         conn.Open();
         var ids = await conn.QueryAsync<Guid>(new CommandDefinition(
             Sql.FileResources.SelectBatchIdsForFileResource, new { fileResourceId = fileResourceId.ToCanonicalId() }, cancellationToken: cancellationToken));
-        return ids.ToList();
+        return [.. ids];
     }
 
     /// <inheritdoc/>

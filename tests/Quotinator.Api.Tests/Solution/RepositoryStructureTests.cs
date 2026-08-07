@@ -188,9 +188,7 @@ public class RepositoryStructureTests
 
                 // ID set must exactly match baseline
                 static HashSet<string> LoadIds(JsonElement root) =>
-                    root.EnumerateArray()
-                        .Select(e => e.GetProperty("id").GetString()!)
-                        .ToHashSet();
+                    [.. root.EnumerateArray().Select(e => e.GetProperty("id").GetString()!)];
 
                 var outputIds   = LoadIds(outputDoc.RootElement);
                 using var baselineDoc = JsonDocument.Parse(File.ReadAllText(baselinePath));

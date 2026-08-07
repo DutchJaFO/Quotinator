@@ -30,7 +30,7 @@ public class FieldMergeResolverTests
         var result = FieldMergeResolver.Resolve(existing, incoming, policy);
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
-        Assert.Contains("date", result.FieldsFromIncoming.ToList());
+        Assert.Contains("date", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]
@@ -44,7 +44,7 @@ public class FieldMergeResolverTests
         var result = FieldMergeResolver.Resolve(existing, incoming, policy);
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
-        Assert.DoesNotContain("date", result.FieldsFromIncoming.ToList());
+        Assert.DoesNotContain("date", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]
@@ -56,7 +56,7 @@ public class FieldMergeResolverTests
         var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeOurs);
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
-        Assert.DoesNotContain("date", result.FieldsFromIncoming.ToList());
+        Assert.DoesNotContain("date", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]
@@ -68,7 +68,7 @@ public class FieldMergeResolverTests
         var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
 
         Assert.AreEqual("1995", result.MergedFields["date"]);
-        Assert.Contains("date", result.FieldsFromIncoming.ToList());
+        Assert.Contains("date", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]
@@ -79,7 +79,7 @@ public class FieldMergeResolverTests
 
         var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeOurs);
 
-        Assert.AreSequenceEqual(new[] { "drama" }, ((List<string>)result.MergedFields["genres"]!));
+        Assert.AreSequenceEqual(["drama"], ((List<string>)result.MergedFields["genres"]!));
     }
 
     [TestMethod]
@@ -90,7 +90,7 @@ public class FieldMergeResolverTests
 
         var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
 
-        Assert.AreSequenceEqual(new[] { "drama", "thriller" }, ((List<string>)result.MergedFields["genres"]!));
+        Assert.AreSequenceEqual(["drama", "thriller"], ((List<string>)result.MergedFields["genres"]!));
     }
 
     [TestMethod]
@@ -101,8 +101,8 @@ public class FieldMergeResolverTests
 
         var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeOurs);
 
-        Assert.AreSequenceEqual(new[] { "drama" }, ((List<string>)result.MergedFields["genres"]!));
-        Assert.Contains("genres", result.FieldsFromIncoming.ToList());
+        Assert.AreSequenceEqual(["drama"], ((List<string>)result.MergedFields["genres"]!));
+        Assert.Contains("genres", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]
@@ -113,7 +113,7 @@ public class FieldMergeResolverTests
 
         var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
 
-        Assert.DoesNotContain("genres", result.FieldsFromIncoming.ToList());
+        Assert.DoesNotContain("genres", [.. result.FieldsFromIncoming]);
     }
 
     // ── Case-insensitive value comparison ────────────────────────────────────
@@ -142,7 +142,7 @@ public class FieldMergeResolverTests
         var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
 
         Assert.AreEqual("The Simpsons Movie", result.MergedFields["source"], "A casing-only difference is not a true conflict — the existing side's casing is kept, not silently replaced");
-        Assert.DoesNotContain("source", result.FieldsFromIncoming.ToList());
+        Assert.DoesNotContain("source", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]
@@ -167,7 +167,7 @@ public class FieldMergeResolverTests
         var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
-        Assert.Contains("date", result.FieldsFromIncoming.ToList());
+        Assert.Contains("date", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]
@@ -179,7 +179,7 @@ public class FieldMergeResolverTests
         var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
-        Assert.DoesNotContain("date", result.FieldsFromIncoming.ToList());
+        Assert.DoesNotContain("date", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]
@@ -191,7 +191,7 @@ public class FieldMergeResolverTests
         var ex = Assert.ThrowsExactly<UnresolvedFieldConflictException>(
             () => FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>()));
 
-        Assert.AreSequenceEqual(new[] { "date" }, ex.FieldNames.ToList());
+        Assert.AreSequenceEqual(["date"], [.. ex.FieldNames]);
     }
 
     [TestMethod]
@@ -203,7 +203,7 @@ public class FieldMergeResolverTests
         var ex = Assert.ThrowsExactly<UnresolvedFieldConflictException>(
             () => FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>()));
 
-        Assert.AreSequenceEqual(new[] { "date", "character" }, ex.FieldNames.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["date", "character"], [.. ex.FieldNames], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -216,7 +216,7 @@ public class FieldMergeResolverTests
         var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
-        Assert.DoesNotContain("date", result.FieldsFromIncoming.ToList());
+        Assert.DoesNotContain("date", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]
@@ -229,7 +229,7 @@ public class FieldMergeResolverTests
         var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
 
         Assert.AreEqual("1995", result.MergedFields["date"]);
-        Assert.Contains("date", result.FieldsFromIncoming.ToList());
+        Assert.Contains("date", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]
@@ -243,7 +243,7 @@ public class FieldMergeResolverTests
         var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
 
         Assert.AreSequenceEqual(custom, (List<string>)result.MergedFields["genres"]!);
-        Assert.Contains("genres", result.FieldsFromIncoming.ToList());
+        Assert.Contains("genres", [.. result.FieldsFromIncoming]);
     }
 
     [TestMethod]

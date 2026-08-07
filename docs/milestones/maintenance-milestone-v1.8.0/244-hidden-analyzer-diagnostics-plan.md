@@ -130,10 +130,23 @@ Added to `Directory.Build.props`. Build confirmed 0 new warnings, as expected �
 at build time but stay at their default `suggestion` severity until Step 2 escalates them.
 
 ### Step 2 — Escalate + bulk-fix the mechanical `IDE0xxx` rules
-**Status:** ⬜ Not started
+**Status:** ⬜ In progress — one rule family per commit, not one combined pass
 `.editorconfig` entries scoped to exactly the mechanical rule IDs listed above (not the whole Style
 category yet, since IDE0290/IDE0130/IDE0060 aren't ready) → `warning`. Run `dotnet format style --fix`
-restricted to those rule IDs, or fix + hand-verify. Build/test green, commit.
+restricted to those rule IDs; `dotnet format` does not always converge in one pass (a second occurrence
+on the same line, e.g. a second `.ToArray()` argument to `Assert.AreSequenceEqual`, needs a second run
+to catch) — re-run until `dotnet build` reports 0 new warnings. **The entire resulting diff is read by
+hand before committing, not just trusted** — per explicit developer instruction (2026-08-06): mechanical
+rewrite tools apply the fix, but verifying it's actually safe is a manual step, never skipped.
+
+- **2a — Collection-expression family (IDE0305/IDE0300/IDE0301/IDE0028), 202 occurrences: ✅ Done.**
+  All four rules flag the exact same transformation (`new[] {...}`/`new List<T> {...}`/`.ToList()`/
+  `.ToArray()`/`.ToHashSet()`/`new()` → `[...]`/`[.. ...]`). Full diff (72 files, two `dotnet format`
+  passes) read by hand — checked specifically for target-typing changes (none: return-type-annotated
+  `HashSet<string>` locals still target `HashSet<string>`, `IReadOnlyList<string>`-cast values are
+  read-only in every case, `Dictionary<K,V>` field initializers compile to the same constructor call).
+  Full test suite green (0 failures) both before and after escalating severity to `warning`.
+- **2b — IDE0037/IDE0042/IDE0270/IDE0059/IDE0039/IDE0063/IDE0044, 40 occurrences: ⬜ Not started.**
 
 ### Step 3 — IDE0290 (primary constructors) — developer decision required
 **Status:** ⬜ Not started — blocked on developer decision (adopt vs. suppress)

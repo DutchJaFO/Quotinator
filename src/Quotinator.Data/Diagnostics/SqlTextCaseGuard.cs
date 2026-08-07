@@ -107,10 +107,9 @@ public static partial class SqlTextCaseGuard
         var scanned = StripUpdateSetClause(sql);
         scanned = ProtectedEqualityPattern().Replace(scanned, " ");
 
-        return EqualityComparisonPattern().Matches(scanned)
+        return [.. EqualityComparisonPattern().Matches(scanned)
             .Where(m => columnSet.Contains(m.Groups[1].Value))
-            .Select(m => m.Value)
-            .ToList();
+            .Select(m => m.Value)];
     }
 
     private static string StripUpdateSetClause(string sql)

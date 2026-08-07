@@ -177,7 +177,7 @@ public sealed class SqliteImportActionService : IImportActionService
         if (customValue is not JsonElement element || element.ValueKind == JsonValueKind.Null) return customValue?.ToString();
 
         if (field == "genres")
-            return ImportActionFieldRowMapper.EncodeGenres(element.EnumerateArray().Select(e => e.GetString() ?? string.Empty).ToList());
+            return ImportActionFieldRowMapper.EncodeGenres([.. element.EnumerateArray().Select(e => e.GetString() ?? string.Empty)]);
 
         return element.ValueKind == JsonValueKind.String ? element.GetString() : element.GetRawText();
     }

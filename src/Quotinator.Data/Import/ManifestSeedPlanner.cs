@@ -110,13 +110,12 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
         {
             var manifest = new ManifestDto
             {
-                Files = files
+                Files = [.. files
                     .Select(f => new ManifestFileEntryDto
                     {
                         File = Path.GetFileName(f.FilePath),
                         Name = Path.GetFileName(f.FilePath)
-                    })
-                    .ToList()
+                    })]
             };
 
             File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, WriteOptions));

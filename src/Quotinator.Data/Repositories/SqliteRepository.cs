@@ -112,14 +112,14 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             totalCount = await uow.Connection.ExecuteScalarAsync<int>(RepositorySql.CountActive(TableName), transaction: uow.Transaction);
-            items      = (await uow.Connection.QueryAsync<T>(sql, param, uow.Transaction)).ToList();
+            items      = [.. (await uow.Connection.QueryAsync<T>(sql, param, uow.Transaction))];
         }
         else
         {
             using var conn = Factory.CreateConnection();
             conn.Open();
             totalCount = await conn.ExecuteScalarAsync<int>(RepositorySql.CountActive(TableName));
-            items      = (await conn.QueryAsync<T>(sql, param)).ToList();
+            items      = [.. (await conn.QueryAsync<T>(sql, param))];
         }
 
         var effectivePageSize = pageSize == 0 ? items.Count : pageSize;

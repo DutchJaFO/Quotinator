@@ -429,7 +429,7 @@ public class DatabaseInitializerTests
             if ((await actionReader.GetPagedAsync(null, null, entityType, 1, 0)).TotalCount > 0)
                 actionEntityTypes.Add(entityType);
         }
-        Assert.AreSequenceEqual(new[] { "Conversation", "StageDirection", "SoundCue" }, actionEntityTypes, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "Conversation/StageDirection/SoundCue Add actions must be staged through Import_Action like every other entity type");
+        Assert.AreSequenceEqual(["Conversation", "StageDirection", "SoundCue"], actionEntityTypes, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "Conversation/StageDirection/SoundCue Add actions must be staged through Import_Action like every other entity type");
     }
 
     /// <summary>

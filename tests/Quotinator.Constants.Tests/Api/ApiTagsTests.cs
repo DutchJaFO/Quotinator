@@ -13,11 +13,10 @@ public class ApiTagsTests
     /// added tag is automatically checked with no further maintenance here.
     /// </summary>
     private static List<string> AllTagValues() =>
-        typeof(ApiTags)
+        [.. typeof(ApiTags)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
             .Where(f => f.IsLiteral && f.FieldType == typeof(string))
-            .Select(f => (string)f.GetValue(null)!)
-            .ToList();
+            .Select(f => (string)f.GetValue(null)!)];
 
     [TestMethod]
     public void ApiTags_ReflectionFindsDeclaredConstants()

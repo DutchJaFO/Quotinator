@@ -43,6 +43,6 @@ public class CsvLineWriterTests
 
         Assert.HasCount(original.Count, parsed);
         for (var i = 0; i < original.Count; i++)
-            Assert.AreSequenceEqual(original[i].Select(f => f ?? "").ToList(), parsed[i]);
+            Assert.AreSequenceEqual([.. original[i].Select(f => f ?? "")], parsed[i]);
     }
 }

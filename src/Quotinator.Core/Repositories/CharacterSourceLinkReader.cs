@@ -36,7 +36,7 @@ public sealed class CharacterSourceLinkReader : ICharacterSourceLinkReader
         var canonicalIds = characterIds.Select(id => id.ToCanonicalId());
         var rows = await conn.QueryAsync<LinkRow>(Sql.CharacterSources.SelectSourceReferencesForCharacters, new { characterIds = canonicalIds });
         return rows.GroupBy(r => r.CharacterId)
-                    .ToDictionary(g => g.Key, g => (IReadOnlyList<(Guid Id, string Name)>)g.Select(r => (r.SourceId, r.SourceTitle)).ToList());
+                    .ToDictionary(g => g.Key, g => (IReadOnlyList<(Guid Id, string Name)>)[.. g.Select(r => (r.SourceId, r.SourceTitle))]);
     }
 
     private sealed record SourceRow(Guid Id, string Title);

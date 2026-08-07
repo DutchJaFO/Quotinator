@@ -41,11 +41,11 @@ public class ImportActionFieldRowMapperTests
 
         var fields = ImportActionFieldRowMapper.ToCsvRow(row).ToList();
 
-        Assert.AreSequenceEqual(new[]
-        {
+        Assert.AreSequenceEqual(
+        [
             actionId.ToString(), "e0000001-0000-4000-8000-000000000001", "Person", "name",
             "Old Name", "New Name", "Custom", "Custom Name", "Complete",
-        }, fields);
+        ], fields);
     }
 
     [TestMethod]
@@ -149,13 +149,13 @@ public class ImportActionFieldRowMapperTests
 
     [TestMethod]
     public void DecodeGenres_EmptyString_ReturnsEmptyList() =>
-        Assert.AreSequenceEqual(Array.Empty<string>(), ImportActionFieldRowMapper.DecodeGenres(""));
+        Assert.AreSequenceEqual([], ImportActionFieldRowMapper.DecodeGenres(""));
 
     [TestMethod]
     public void DecodeGenres_DelimitedString_RoundTripsFromEncode()
     {
         var encoded = ImportActionFieldRowMapper.EncodeGenres(["drama", "comedy", "sci-fi"]);
-        Assert.AreSequenceEqual(new[] { "drama", "comedy", "sci-fi" }, ImportActionFieldRowMapper.DecodeGenres(encoded));
+        Assert.AreSequenceEqual(["drama", "comedy", "sci-fi"], ImportActionFieldRowMapper.DecodeGenres(encoded));
     }
 
     [TestMethod]
@@ -226,7 +226,7 @@ public class ImportActionFieldRowMapperTests
         Assert.AreEqual(FieldResolutionChoice.Keep, request.Author!.Choice);
         Assert.AreEqual(FieldResolutionChoice.Replace, request.Type!.Choice);
         Assert.AreEqual(FieldResolutionChoice.Custom, request.Genres!.Choice);
-        Assert.AreSequenceEqual(new[] { "drama", "comedy" }, request.Genres.Value);
+        Assert.AreSequenceEqual(["drama", "comedy"], request.Genres.Value);
     }
 
     [TestMethod]

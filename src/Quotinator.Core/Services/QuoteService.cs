@@ -135,7 +135,7 @@ public sealed class QuoteService : IQuoteService
         if (yearTo is not null)
             result = result.Where(q => ExtractYear(q.Date) is int y && y <= yearTo);
 
-        return result.ToList();
+        return [.. result];
     }
 
     private static int? ExtractYear(string? date)

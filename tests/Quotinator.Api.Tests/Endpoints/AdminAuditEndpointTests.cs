@@ -496,7 +496,7 @@ public class AdminAuditEndpointTests
         public Task<PagedItems<AuditEntryEntity>> GetPagedAsync(string? table, string? recordId, int page, int pageSize)
             => Task.FromResult(result);
         public Task<IReadOnlyList<AuditEntryEntity>> GetAllInRangeAsync(DateTime? startDate, DateTime? endDate)
-            => Task.FromResult<IReadOnlyList<AuditEntryEntity>>(result.Items.ToList());
+            => Task.FromResult<IReadOnlyList<AuditEntryEntity>>([.. result.Items]);
         public Task<int> CountInRangeAsync(DateTime? startDate, DateTime? endDate)
             => Task.FromResult(CountOverride ?? result.Items.Count);
         public Task<(DateTime? Earliest, DateTime? Latest)> GetDateRangeAsync()

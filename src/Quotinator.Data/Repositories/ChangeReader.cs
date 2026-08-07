@@ -24,7 +24,7 @@ public sealed class ChangeReader : SqliteRepositoryBase<ChangeEntity>, IChangeRe
         var rows = await conn.QueryAsync<ChangeEntity>(
             Sql.SystemChangeLog.SelectByEntity, new { entityType, entityId });
 
-        return rows.ToList();
+        return [.. rows];
     }
 
     /// <inheritdoc/>
@@ -37,7 +37,7 @@ public sealed class ChangeReader : SqliteRepositoryBase<ChangeEntity>, IChangeRe
             Sql.SystemChangeLog.SelectInRange(startDate is not null, endDate is not null),
             new { startDate, endDate });
 
-        return rows.ToList();
+        return [.. rows];
     }
 
     /// <inheritdoc/>

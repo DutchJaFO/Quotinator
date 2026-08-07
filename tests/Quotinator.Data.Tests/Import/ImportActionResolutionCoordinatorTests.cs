@@ -209,7 +209,7 @@ public class ImportActionResolutionCoordinatorTests
         }, TestContext.CancellationToken);
 
         Assert.IsNotNull(result);
-        Assert.AreSequenceEqual(new[] { pending.Id }, result!.ToList());
+        Assert.AreSequenceEqual([pending.Id], [.. result!]);
         Assert.AreEqual(0, callbackInvocations, "Nothing should be applied while any action in the batch is still pending.");
 
         var stillDecided = await _reader.GetByIdAsync(decided.Id);
@@ -235,7 +235,7 @@ public class ImportActionResolutionCoordinatorTests
         }, TestContext.CancellationToken);
 
         Assert.IsNull(result, "A fully-decided batch must apply successfully (null return).");
-        Assert.AreSequenceEqual(new[] { first.Id, second.Id }, appliedIds, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual([first.Id, second.Id], appliedIds, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
 
         var firstAfter  = await _reader.GetByIdAsync(first.Id);
         var secondAfter = await _reader.GetByIdAsync(second.Id);
@@ -273,7 +273,7 @@ public class ImportActionResolutionCoordinatorTests
         }, TestContext.CancellationToken);
 
         Assert.IsNotNull(result);
-        Assert.AreSequenceEqual(new[] { blocked.Id }, result!.ToList());
+        Assert.AreSequenceEqual([blocked.Id], [.. result!]);
         Assert.AreEqual(0, callbackInvocations, "A Blocked action must hold the whole batch, including otherwise-ready actions.");
 
         var stillDecided = await _reader.GetByIdAsync(decided.Id);
@@ -297,7 +297,7 @@ public class ImportActionResolutionCoordinatorTests
         }, TestContext.CancellationToken);
 
         Assert.IsNull(result, "Once the Blocked action is decided, the rest of the batch must apply normally.");
-        Assert.AreSequenceEqual(new[] { decided.Id, blocked.Id }, appliedIds, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual([decided.Id, blocked.Id], appliedIds, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -417,7 +417,7 @@ public class ImportActionResolutionCoordinatorTests
 
         Assert.IsNull(result, "A fully-Applied batch must reverse successfully (null return).");
         Assert.AreEqual(1, invocationCount, "The callback must receive the whole batch in one call, not once per action.");
-        Assert.AreSequenceEqual(new[] { a1.Id, a2.Id }, seenBatch!.Select(a => a.Id).ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual([a1.Id, a2.Id], [.. seenBatch!.Select(a => a.Id)], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -438,7 +438,7 @@ public class ImportActionResolutionCoordinatorTests
         }, TestContext.CancellationToken);
 
         Assert.IsNotNull(result);
-        Assert.AreSequenceEqual(new[] { decided.Id }, result!.ToList());
+        Assert.AreSequenceEqual([decided.Id], [.. result!]);
         Assert.IsFalse(callbackInvoked, "Nothing should be reversed while any action in the batch isn't Applied.");
     }
 

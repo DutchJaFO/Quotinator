@@ -40,7 +40,7 @@ internal static class AdminEndpoints
             var preview = await db.PreviewSeedAsync();
             return Results.Ok(new SeedPreviewResponse
             {
-                Files = preview.Files.Select(f => new Quotinator.Core.Models.SeedFilePreview
+                Files = [.. preview.Files.Select(f => new Quotinator.Core.Models.SeedFilePreview
                 {
                     FileName           = f.FileName,
                     QuoteCount         = f.QuoteCount,
@@ -53,7 +53,7 @@ internal static class AdminEndpoints
                         SeedFileIssue.InvalidJson => localizer[ApiMessages.SeedFileInvalidJson],
                         _                         => null
                     }
-                }).ToList(),
+                })],
                 Reports = preview.Reports
             });
         })
@@ -244,14 +244,14 @@ internal static class AdminEndpoints
             var resolution = await db.RefreshSourcesAsync(force);
             return Results.Ok(new SourceRefreshResponse
             {
-                Results = resolution.Results.Select(r => new SourceRefreshResultResponse
+                Results = [.. resolution.Results.Select(r => new SourceRefreshResultResponse
                 {
                     Name               = r.Name,
                     Url                = r.Url,
                     Outcome            = r.Outcome.ToString().ToLowerInvariant(),
                     Detail             = r.Detail,
                     LastRefreshedAtUtc = r.LastRefreshedAtUtc
-                }).ToList()
+                })]
             });
         })
         .WithName("RefreshSources")

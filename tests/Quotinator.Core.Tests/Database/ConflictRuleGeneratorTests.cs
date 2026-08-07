@@ -111,7 +111,7 @@ public class ConflictRuleGeneratorTests
         var rule = ConflictRuleGenerator.Generate(rows).Single();
 
         var genres = rule.ExistingRecord.GetProperty("genres").EnumerateArray().Select(e => e.GetString()).ToArray();
-        Assert.AreSequenceEqual(new[] { "drama", "sci-fi" }, genres);
+        Assert.AreSequenceEqual(["drama", "sci-fi"], genres);
     }
 
     [TestMethod]

@@ -77,7 +77,7 @@ public class InsertManyAsyncTests
         => (await _auditReader.GetPagedAsync(null, null, 1, 0)).TotalCount;
 
     private static List<Widget> MakeWidgets(int count)
-        => Enumerable.Range(1, count).Select(i => new Widget { Label = $"Widget {i}" }).ToList();
+        => [.. Enumerable.Range(1, count).Select(i => new Widget { Label = $"Widget {i}" })];
 
     // ── IRepository contract ──────────────────────────────────────────────────
 

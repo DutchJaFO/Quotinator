@@ -243,9 +243,9 @@ public sealed class SqliteQuoteService : IQuoteService
     }
 
     private static IReadOnlyList<SafeValue<Genre?>> LoadGenres(System.Data.IDbConnection connection, string quoteId)
-        => connection.Query<SafeValue<Genre?>>(
+        => [.. connection.Query<SafeValue<Genre?>>(
             Sql.QuoteGenres.LoadForQuote,
-            new { id = quoteId }).ToList();
+            new { id = quoteId })];
 
     private static QuoteResponse ToResponse(
         QuoteRow row, IReadOnlyList<SafeValue<Genre?>> genres, string? requestedLang,
@@ -269,14 +269,13 @@ public sealed class SqliteQuoteService : IQuoteService
             Type             = row.SourceType?.Parsed?.ToString().ToLowerInvariant()
                                ?? row.SourceType?.Raw.ToLowerInvariant()
                                ?? string.Empty,
-            Genres           = genres
+            Genres           = [.. genres
                 .Select(g =>
                 {
                     var enumName = g.Parsed?.ToString() ?? g.Raw;
                     return GenreDbToApi.TryGetValue(enumName, out var api) ? api : enumName.ToLowerInvariant();
                 })
-                .Where(g => !string.IsNullOrEmpty(g))
-                .ToList(),
+                .Where(g => !string.IsNullOrEmpty(g))],
             Series           = row.SeriesId   is { } sid ? new MasterDataReference(sid, row.SeriesName!)   : null,
             Universe         = row.UniverseId is { } uid ? new MasterDataReference(uid, row.UniverseName!) : null,
             Conversations        = conversations is { Count: > 0 } ? conversations : null,
@@ -286,9 +285,9 @@ public sealed class SqliteQuoteService : IQuoteService
 
     /// <summary>Every conversation <paramref name="quoteId"/> appears in — backs <see cref="QuoteResponse.Conversations"/> on every read call, and <c>/random</c>'s conversation-selection step.</summary>
     private static IReadOnlyList<QuoteConversationMembership> LoadConversationMemberships(System.Data.IDbConnection connection, string quoteId)
-        => connection.Query<QuoteConversationMembership>(
+        => [.. connection.Query<QuoteConversationMembership>(
             Sql.ConversationLines.SelectMembershipForQuote,
-            new { quoteId }).ToList();
+            new { quoteId })];
 
     /// <summary>
     /// Builds the full ordered line list for a conversation — shared by <see cref="GetConversation"/>

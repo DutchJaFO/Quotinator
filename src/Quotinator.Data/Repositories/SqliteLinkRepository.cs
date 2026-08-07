@@ -139,12 +139,12 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var rows = await uow.Connection.QueryAsync<TJunction>(sql, param, uow.Transaction);
-            return rows.ToList();
+            return [.. rows];
         }
         using var conn = _factory.CreateConnection();
         conn.Open();
         var result = await conn.QueryAsync<TJunction>(sql, param);
-        return result.ToList();
+        return [.. result];
     }
 
     private async Task<IReadOnlyList<TEntity>> QueryByIdsAsync<TEntity>(
@@ -157,12 +157,12 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var rows = await uow.Connection.QueryAsync<TEntity>(sql, param, uow.Transaction);
-            return rows.ToList();
+            return [.. rows];
         }
         using var conn = _factory.CreateConnection();
         conn.Open();
         var result = await conn.QueryAsync<TEntity>(sql, param);
-        return result.ToList();
+        return [.. result];
     }
 
     private static IEnumerable<string> ExtractIds(IReadOnlyList<TJunction> rows, string propertyName)

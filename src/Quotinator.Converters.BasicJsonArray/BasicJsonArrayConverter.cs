@@ -86,11 +86,10 @@ public sealed class BasicJsonArrayConverter : IQuoteSourceConverter
     /// <summary>A genres value may be a JSON array of strings (each element becomes one genre) or a single JSON string (becomes one genre) — no delimiter splitting needed, unlike CSV, since JSON expresses arrays natively.</summary>
     private static List<string>? ParseGenres(JsonElement element) => element.ValueKind switch
     {
-        JsonValueKind.Array => element.EnumerateArray()
+        JsonValueKind.Array => [.. element.EnumerateArray()
             .Select(e => e.ValueKind == JsonValueKind.String ? e.GetString() : null)
             .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => s!)
-            .ToList(),
+            .Select(s => s!)],
         JsonValueKind.String when element.GetString() is { Length: > 0 } s => [s],
         _ => null,
     };

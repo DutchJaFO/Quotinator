@@ -169,7 +169,7 @@ public class ImportActionWriterReaderTests
 
         var batch = await _reader.GetAllForBatchAsync("BATCH-1");
         Assert.HasCount(2, batch);
-        Assert.AreSequenceEqual(new[] { a1.Id, a2.Id }, batch.Select(a => a.Id).ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual([a1.Id, a2.Id], [.. batch.Select(a => a.Id)], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -191,7 +191,7 @@ public class ImportActionWriterReaderTests
         var batchA = await _reader.GetAllForBatchAsync("BATCH-A");
 
         Assert.HasCount(2, batchA);
-        Assert.AreSequenceEqual(new[] { a1.Id, a2.Id }, batchA.Select(a => a.Id).ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual([a1.Id, a2.Id], [.. batchA.Select(a => a.Id)], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]

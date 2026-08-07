@@ -108,7 +108,7 @@ public class InputValidationTests
         var expected = Enum.GetValues<QuoteType>()
             .Where(t => t != QuoteType.Unknown)
             .Select(t => t.ToString().ToLowerInvariant());
-        Assert.AreSequenceEqual(expected.ToList(), InputValidation.ValidTypes.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual([.. expected], [.. InputValidation.ValidTypes], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     #endregion
@@ -161,7 +161,7 @@ public class InputValidationTests
         var expected = Enum.GetValues<Genre>()
             .Where(g => g != Genre.Unknown)
             .Select(g => JsonNamingPolicy.KebabCaseLower.ConvertName(g.ToString()));
-        Assert.AreSequenceEqual(expected.ToList(), InputValidation.ValidGenres.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual([.. expected], [.. InputValidation.ValidGenres], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     #endregion

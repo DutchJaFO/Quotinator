@@ -179,7 +179,7 @@ public class SqlQueryGuardTests
             .ToHashSet();
 
         Assert.AreSequenceEqual(
-            documented.ToList(), actual.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of SQL constants containing aggregate functions has changed. " +
+            [.. documented], [.. actual], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of SQL constants containing aggregate functions has changed. " +
             "Review any new or removed aggregate queries against docs/sql-safety.md " +
             "and update the documented list in this test.");
     }
@@ -322,7 +322,7 @@ public class SqlQueryGuardTests
         var actual = EnumerateParameterizedSqlFactoryMethodNames().ToHashSet();
 
         Assert.AreSequenceEqual(
-            documented.ToList(), actual.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of static SQL factory methods requiring at least one parameter has changed. " +
+            [.. documented], [.. actual], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of static SQL factory methods requiring at least one parameter has changed. " +
             "Add the new method to AssembledQueryCases with a case for every meaningfully distinct " +
             "call shape, then update this documented list. See #214.");
     }
@@ -363,5 +363,5 @@ public class SqlQueryGuardTests
                         && m.GetParameters().All(p => p.IsOptional))
                     .Select(m => (
                         $"{t.Name}.{m.Name}()",
-                        (string)m.Invoke(null, m.GetParameters().Select(p => p.DefaultValue).ToArray())!))));
+                        (string)m.Invoke(null, [.. m.GetParameters().Select(p => p.DefaultValue)])!))));
 }

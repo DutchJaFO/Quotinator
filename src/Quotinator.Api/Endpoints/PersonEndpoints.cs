@@ -52,7 +52,7 @@ internal static class PersonEndpoints
 
         var result = await repository.GetPageAsync(pageValue, pageSizeValue);
         var response = new PagedItems<PersonResponse>(
-            result.Items.Select(ToResponse).ToList(), result.Page, result.PageSize, result.TotalCount);
+            [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
 
         return PaginationParsing.ValidatePageBeyondLast(pageValue, response.TotalPages, localizer)
             ?? Results.Ok(response);

@@ -24,7 +24,7 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
     /// <inheritdoc/>
     public async Task StageAsync(IEnumerable<ImportActionEntity> actions, IDbConnection? connection = null, IDbTransaction? transaction = null)
     {
-        var list = actions as IReadOnlyCollection<ImportActionEntity> ?? actions.ToList();
+        var list = actions as IReadOnlyCollection<ImportActionEntity> ?? [.. actions];
         if (list.Count == 0) return;
 
         if (connection is not null)

@@ -25,7 +25,7 @@ internal sealed class FakeConversationRepository : IListableRepository<Conversat
 
         var items = pageSize == 0
             ? active
-            : active.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            : [.. active.Skip((page - 1) * pageSize).Take(pageSize)];
 
         var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
         return Task.FromResult(new PagedItems<ConversationEntity>(items, page, effectivePageSize, active.Count));

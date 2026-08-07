@@ -96,6 +96,6 @@ internal static class CharacterEndpoints
         Id                 = character.Id.ToCanonicalId(),
         Name               = character.Name,
         CompletenessStatus = character.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,
-        Sources            = sources.Select(s => new MasterDataReference(s.Id.ToCanonicalId(), s.Name)).ToList(),
+        Sources            = [.. sources.Select(s => new MasterDataReference(s.Id.ToCanonicalId(), s.Name))],
     };
 }

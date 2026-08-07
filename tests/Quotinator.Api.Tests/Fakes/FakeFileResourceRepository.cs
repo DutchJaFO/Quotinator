@@ -9,9 +9,9 @@ namespace Quotinator.Api.Tests.Fakes;
 /// <summary>In-memory test double for <see cref="IFileResourceRepository"/> — avoids requiring a real database in endpoint tests.</summary>
 internal sealed class FakeFileResourceRepository : IFileResourceRepository
 {
-    private readonly Dictionary<Guid, FileResourceEntity> _resources = new();
-    private readonly Dictionary<Guid, List<FileResourceLineEntity>> _lines = new();
-    private readonly Dictionary<Guid, List<Guid>> _batchLinks = new();
+    private readonly Dictionary<Guid, FileResourceEntity> _resources = [];
+    private readonly Dictionary<Guid, List<FileResourceLineEntity>> _lines = [];
+    private readonly Dictionary<Guid, List<Guid>> _batchLinks = [];
 
     public int? LastPruneKeepPerFile { get; private set; }
     public int PruneResult { get; set; }
@@ -20,9 +20,7 @@ internal sealed class FakeFileResourceRepository : IFileResourceRepository
     public void Seed(FileResourceEntity resource, IReadOnlyList<string> lines, IReadOnlyList<Guid>? linkedBatchIds = null)
     {
         _resources[resource.Id] = resource;
-        _lines[resource.Id] = lines
-            .Select((text, index) => new FileResourceLineEntity { FileResourceId = resource.Id, LineNumber = index + 1, Text = text })
-            .ToList();
+        _lines[resource.Id] = [.. lines.Select((text, index) => new FileResourceLineEntity { FileResourceId = resource.Id, LineNumber = index + 1, Text = text })];
         _batchLinks[resource.Id] = linkedBatchIds?.ToList() ?? [];
     }
 
@@ -52,7 +50,7 @@ internal sealed class FakeFileResourceRepository : IFileResourceRepository
 
         var total             = ordered.Count;
         var effectivePageSize = pageSize == 0 ? total : pageSize;
-        var pageItems         = pageSize == 0 ? ordered : ordered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageItems         = pageSize == 0 ? ordered : [.. ordered.Skip((page - 1) * pageSize).Take(pageSize)];
 
         var items = pageItems.Select(r => new FileResourceListItem
         {
