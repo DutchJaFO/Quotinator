@@ -11,10 +11,10 @@ using Quotinator.Data.Queries;
 namespace Quotinator.Data.Repositories;
 
 /// <summary>SQLite implementation of <see cref="ISourceFileOverrideRegistry"/>.</summary>
-public sealed class SourceFileOverrideRegistry : SqliteRepositoryBase<SourceFileOverrideEntity>, ISourceFileOverrideRegistry
+/// <remarks>Initialises the registry with the connection factory.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class SourceFileOverrideRegistry(IDbConnectionFactory factory) : SqliteRepositoryBase<SourceFileOverrideEntity>(factory), ISourceFileOverrideRegistry
 {
-    /// <summary>Initialises the registry with the connection factory.</summary>
-    public SourceFileOverrideRegistry(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
     public async Task<SourceFileOverrideEntity?> FindAsync(string fileName, SeedBatchOrigin origin, CancellationToken cancellationToken = default)

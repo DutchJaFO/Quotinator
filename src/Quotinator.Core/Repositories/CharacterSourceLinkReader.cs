@@ -6,12 +6,11 @@ using Quotinator.Core.Queries;
 namespace Quotinator.Core.Repositories;
 
 /// <inheritdoc cref="ICharacterSourceLinkReader"/>
-public sealed class CharacterSourceLinkReader : ICharacterSourceLinkReader
+/// <summary>Initialises the reader with the connection factory.</summary>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class CharacterSourceLinkReader(IDbConnectionFactory factory) : ICharacterSourceLinkReader
 {
-    private readonly IDbConnectionFactory _factory;
-
-    /// <summary>Initialises the reader with the connection factory.</summary>
-    public CharacterSourceLinkReader(IDbConnectionFactory factory) => _factory = factory;
+    private readonly IDbConnectionFactory _factory = factory;
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<(Guid Id, string Name)>> GetSourceReferencesAsync(Guid characterId)

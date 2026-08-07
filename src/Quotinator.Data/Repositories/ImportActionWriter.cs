@@ -18,10 +18,10 @@ namespace Quotinator.Data.Repositories;
 /// The status-transition methods (#154) use the raw <see cref="Sql.SystemImportActions"/> factory
 /// methods instead, since Dapper.Contrib's <c>UpdateAsync</c> always rewrites every column.
 /// </summary>
-public sealed class ImportActionWriter : SqliteRepositoryBase<ImportActionEntity>, IImportActionWriter
+/// <remarks>Initialises the writer with the connection factory.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class ImportActionWriter(IDbConnectionFactory factory) : SqliteRepositoryBase<ImportActionEntity>(factory), IImportActionWriter
 {
-    /// <summary>Initialises the writer with the connection factory.</summary>
-    public ImportActionWriter(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
     public async Task WriteAsync(ImportActionEntity entry, IDbConnection connection, IDbTransaction? transaction = null)

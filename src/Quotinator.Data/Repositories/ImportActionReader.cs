@@ -10,10 +10,10 @@ namespace Quotinator.Data.Repositories;
 /// SQLite implementation of <see cref="IImportActionReader"/>.
 /// Extends <see cref="SqliteRepositoryBase{T}"/> directly — no audit writes are triggered by reads.
 /// </summary>
-public sealed class ImportActionReader : SqliteRepositoryBase<ImportActionEntity>, IImportActionReader
+/// <remarks>Initialises the reader with the connection factory.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class ImportActionReader(IDbConnectionFactory factory) : SqliteRepositoryBase<ImportActionEntity>(factory), IImportActionReader
 {
-    /// <summary>Initialises the reader with the connection factory.</summary>
-    public ImportActionReader(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
     public async Task<PagedItems<ImportActionEntity>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize)

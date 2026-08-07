@@ -22,37 +22,33 @@ namespace Quotinator.Core.Services;
 /// (a second, separate commit; a crash between the two leaves the batch <c>Staged</c>, an already-safe
 /// state by this design). Replaces the old single-pass detect-and-write loop entirely.
 /// </remarks>
-public sealed class SqliteQuoteImportService : IQuoteImportService
+/// <summary>Initialises the service with all dependencies required to import a single file.</summary>
+/// <param name="factory">Factory used to open the connection and transaction each stage/apply operation runs in.</param>
+/// <param name="importBatches">Repository used to record each import run as an <c>Import_Batch</c> row.</param>
+/// <param name="actionCoordinator">Coordinator used to stage and, unless previewing, apply the import actions produced from the file.</param>
+/// <param name="actionService">Service used to apply a batch's decided/auto-resolved import actions to their target entities.</param>
+/// <param name="actionReader">Reader used to look up the staged actions produced for a batch.</param>
+/// <param name="converters">Registered <see cref="IQuoteSourceConverter"/> plugins, keyed by converter name, used to convert raw file content into the canonical schema.</param>
+/// <param name="configPolicy">Policy governing default conflict-resolution and completeness behaviour for staged actions.</param>
+/// <param name="fileResources">Repository used to record the imported file as a <c>FileResource</c> row.</param>
+public sealed class SqliteQuoteImportService(
+    IDbConnectionFactory factory,
+    IImportBatchRepository importBatches,
+    IImportActionCoordinator actionCoordinator,
+    IImportActionService actionService,
+    IImportActionReader actionReader,
+    IReadOnlyDictionary<string, IQuoteSourceConverter> converters,
+    ManifestPolicy configPolicy,
+    IFileResourceRepository fileResources) : IQuoteImportService
 {
-    private readonly IDbConnectionFactory _factory;
-    private readonly IImportBatchRepository _importBatches;
-    private readonly IImportActionCoordinator _actionCoordinator;
-    private readonly IImportActionService _actionService;
-    private readonly IImportActionReader _actionReader;
-    private readonly IReadOnlyDictionary<string, IQuoteSourceConverter> _converters;
-    private readonly ManifestPolicy _configPolicy;
-    private readonly IFileResourceRepository _fileResources;
-
-    /// <summary>Initialises the service with all dependencies required to import a single file.</summary>
-    public SqliteQuoteImportService(
-        IDbConnectionFactory factory,
-        IImportBatchRepository importBatches,
-        IImportActionCoordinator actionCoordinator,
-        IImportActionService actionService,
-        IImportActionReader actionReader,
-        IReadOnlyDictionary<string, IQuoteSourceConverter> converters,
-        ManifestPolicy configPolicy,
-        IFileResourceRepository fileResources)
-    {
-        _factory           = factory;
-        _importBatches     = importBatches;
-        _actionCoordinator = actionCoordinator;
-        _actionService     = actionService;
-        _actionReader      = actionReader;
-        _converters        = converters;
-        _configPolicy      = configPolicy;
-        _fileResources     = fileResources;
-    }
+    private readonly IDbConnectionFactory _factory = factory;
+    private readonly IImportBatchRepository _importBatches = importBatches;
+    private readonly IImportActionCoordinator _actionCoordinator = actionCoordinator;
+    private readonly IImportActionService _actionService = actionService;
+    private readonly IImportActionReader _actionReader = actionReader;
+    private readonly IReadOnlyDictionary<string, IQuoteSourceConverter> _converters = converters;
+    private readonly ManifestPolicy _configPolicy = configPolicy;
+    private readonly IFileResourceRepository _fileResources = fileResources;
 
     /// <inheritdoc/>
     public async Task<ImportResultResponse> ImportAsync(

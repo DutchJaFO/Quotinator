@@ -16,18 +16,14 @@ namespace Quotinator.Data.Repositories;
 /// recursion must be avoided (e.g. <see cref="AuditEntryWriter"/>).
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
-public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, IListableRepository<T> where T : RecordBase
+/// <remarks>Initialises the repository with the factory, audit writer, and caller context.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+/// <param name="auditWriter">Writer used to record an <see cref="AuditEntryEntity"/> for every write operation.</param>
+/// <param name="callerContext">Identifies the caller attributed to each audit entry.</param>
+public class SqliteRepository<T>(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext) : SqliteRepositoryBase<T>(factory), IRepository<T>, IListableRepository<T> where T : RecordBase
 {
-    private readonly IAuditEntryWriter _auditWriter;
-    private readonly ICallerContext     _callerContext;
-
-    /// <summary>Initialises the repository with the factory, audit writer, and caller context.</summary>
-    public SqliteRepository(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext)
-        : base(factory)
-    {
-        _auditWriter   = auditWriter;
-        _callerContext = callerContext;
-    }
+    private readonly IAuditEntryWriter _auditWriter = auditWriter;
+    private readonly ICallerContext _callerContext = callerContext;
 
     /// <inheritdoc/>
     public async Task<T?> GetByIdAsync(Guid id, IUnitOfWork? unitOfWork = null)

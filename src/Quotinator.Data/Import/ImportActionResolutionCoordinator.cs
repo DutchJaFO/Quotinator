@@ -7,19 +7,15 @@ using Quotinator.Data.Repositories;
 namespace Quotinator.Data.Import;
 
 /// <summary>SQLite-backed implementation of <see cref="IImportActionCoordinator"/>.</summary>
-public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
+/// <remarks>Initialises the coordinator with the reader/writer it orchestrates and a connection factory for its own transactions.</remarks>
+/// <param name="reader">Reader used to look up staged import actions and their current state.</param>
+/// <param name="writer">Writer used to stage, decide, and apply/discard import actions.</param>
+/// <param name="factory">Factory used to open connections and transactions for operations with no caller-supplied connection.</param>
+public sealed class ImportActionResolutionCoordinator(IImportActionReader reader, IImportActionWriter writer, IDbConnectionFactory factory) : IImportActionCoordinator
 {
-    private readonly IImportActionReader _reader;
-    private readonly IImportActionWriter _writer;
-    private readonly IDbConnectionFactory _factory;
-
-    /// <summary>Initialises the coordinator with the reader/writer it orchestrates and a connection factory for its own transactions.</summary>
-    public ImportActionResolutionCoordinator(IImportActionReader reader, IImportActionWriter writer, IDbConnectionFactory factory)
-    {
-        _reader  = reader;
-        _writer  = writer;
-        _factory = factory;
-    }
+    private readonly IImportActionReader _reader = reader;
+    private readonly IImportActionWriter _writer = writer;
+    private readonly IDbConnectionFactory _factory = factory;
 
     /// <inheritdoc/>
     public async Task StageAsync(IEnumerable<ImportActionEntity> actions, IDbConnection? connection = null, IDbTransaction? transaction = null)

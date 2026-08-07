@@ -15,7 +15,22 @@ namespace Quotinator.Data.Database;
 /// protected virtual hooks <see cref="OnInitialisedAsync"/>, <see cref="OnReseedAsync"/>, and
 /// <see cref="OnResetAsync"/>. The base implementations of those hooks are no-ops.
 /// </summary>
-public class DatabaseInitializer : IDatabaseInitializer
+/// <remarks>Initialises the instance with connection factory, options, and ordered schema migrations.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+/// <param name="options">Database file paths and settings.</param>
+/// <param name="migrations">Ordered, append-only list of the consuming project's own schema migrations to apply. Always applied after Quotinator.Data's own migrations.</param>
+/// <param name="auditWriter">Writes audit entries for reseed and reset operations.</param>
+/// <param name="callerContext">Provides the agent identifier for audit entries.</param>
+/// <param name="logger">Logger for startup diagnostics.</param>
+/// <param name="baseline">Optional consolidated DDL for the consuming project's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
+public class DatabaseInitializer(
+    IDbConnectionFactory factory,
+    DatabaseOptions options,
+    IReadOnlyList<SchemaMigration> migrations,
+    IAuditEntryWriter auditWriter,
+    ICallerContext callerContext,
+    ILogger<DatabaseInitializer> logger,
+    SchemaBaseline? baseline = null) : IDatabaseInitializer
 {
     // Quotinator.Data's own migrations, for its own tables (Audit_Entry/Audit_Change/Import_Conflict/
     // Import_Action/Import_SourceFileOverride currently; any future Import_/Audit_/System_-prefixed
@@ -235,19 +250,19 @@ public class DatabaseInitializer : IDatabaseInitializer
         CREATE INDEX IF NOT EXISTS IX_Audit_Change_Entity ON Audit_Change (EntityType, EntityId, OccurredAt DESC);
         """;
 
-    private readonly IDbConnectionFactory           _factory;
-    private readonly DatabaseOptions                _options;
-    private readonly IReadOnlyList<SchemaMigration> _consumerMigrations;
-    private readonly SchemaBaseline?                _consumerBaseline;
+    private readonly IDbConnectionFactory _factory = factory;
+    private readonly DatabaseOptions _options = options;
+    private readonly IReadOnlyList<SchemaMigration> _consumerMigrations = migrations;
+    private readonly SchemaBaseline? _consumerBaseline = baseline;
 
     /// <summary>Logger available to this class and subclasses.</summary>
-    protected readonly ILogger Logger;
+    protected readonly ILogger Logger = logger;
 
     /// <summary>Audit writer available to subclasses for recording reseed and reset operations.</summary>
-    protected readonly IAuditEntryWriter AuditWriter;
+    protected readonly IAuditEntryWriter AuditWriter = auditWriter;
 
     /// <summary>Caller context available to subclasses for populating audit entries.</summary>
-    protected readonly ICallerContext CallerContext;
+    protected readonly ICallerContext CallerContext = callerContext;
 
     /// <inheritdoc/>
     public int SchemaVersion { get; protected set; }
@@ -295,32 +310,6 @@ public class DatabaseInitializer : IDatabaseInitializer
 
     /// <summary>A semaphore that subclasses must acquire before performing seeding operations, to prevent concurrent seed runs.</summary>
     protected static SemaphoreSlim SharedSeedLock => SeedLock;
-
-    /// <summary>Initialises the instance with connection factory, options, and ordered schema migrations.</summary>
-    /// <param name="factory">Factory used to open SQLite connections.</param>
-    /// <param name="options">Database file paths and settings.</param>
-    /// <param name="migrations">Ordered, append-only list of the consuming project's own schema migrations to apply. Always applied after Quotinator.Data's own migrations.</param>
-    /// <param name="auditWriter">Writes audit entries for reseed and reset operations.</param>
-    /// <param name="callerContext">Provides the agent identifier for audit entries.</param>
-    /// <param name="logger">Logger for startup diagnostics.</param>
-    /// <param name="baseline">Optional consolidated DDL for the consuming project's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
-    public DatabaseInitializer(
-        IDbConnectionFactory           factory,
-        DatabaseOptions                options,
-        IReadOnlyList<SchemaMigration> migrations,
-        IAuditEntryWriter             auditWriter,
-        ICallerContext                 callerContext,
-        ILogger<DatabaseInitializer>   logger,
-        SchemaBaseline?                baseline = null)
-    {
-        _factory            = factory;
-        _options            = options;
-        _consumerMigrations = migrations;
-        _consumerBaseline   = baseline;
-        AuditWriter         = auditWriter;
-        CallerContext       = callerContext;
-        Logger              = logger;
-    }
 
     /// <inheritdoc/>
     public async Task InitialiseAsync()

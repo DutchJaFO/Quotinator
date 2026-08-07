@@ -6,12 +6,11 @@ using Quotinator.Core.Queries;
 namespace Quotinator.Core.Repositories;
 
 /// <inheritdoc cref="IConversationLineCountReader"/>
-public sealed class ConversationLineCountReader : IConversationLineCountReader
+/// <summary>Initialises the reader with the connection factory.</summary>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class ConversationLineCountReader(IDbConnectionFactory factory) : IConversationLineCountReader
 {
-    private readonly IDbConnectionFactory _factory;
-
-    /// <summary>Initialises the reader with the connection factory.</summary>
-    public ConversationLineCountReader(IDbConnectionFactory factory) => _factory = factory;
+    private readonly IDbConnectionFactory _factory = factory;
 
     /// <inheritdoc/>
     public async Task<IReadOnlyDictionary<Guid, int>> GetLineCountsForManyAsync(IReadOnlyList<Guid> conversationIds)

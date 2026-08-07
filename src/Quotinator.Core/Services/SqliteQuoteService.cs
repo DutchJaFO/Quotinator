@@ -15,10 +15,17 @@ namespace Quotinator.Core.Services;
 /// <see cref="IQuoteService"/> implementation backed by SQLite + Dapper.
 /// All queries use parameterised SQL — never string-concatenated user input.
 /// </summary>
-public sealed class SqliteQuoteService : IQuoteService
+/// <remarks>Initialises the service with the connection factory used for all database queries.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+/// <param name="unicodeAwareSearch">
+/// Whether <c>LIKE</c>-based fuzzy matching (quote search, character/author/source filters) uses
+/// the Unicode-aware <c>UNICODE_CONTAINS</c> function instead of SQLite's own ASCII-only
+/// <c>LIKE</c>. Opt-in, off by default — see issue #222.
+/// </param>
+public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicodeAwareSearch = false) : IQuoteService
 {
-    private readonly IDbConnectionFactory _factory;
-    private readonly bool _unicodeAwareSearch;
+    private readonly IDbConnectionFactory _factory = factory;
+    private readonly bool _unicodeAwareSearch = unicodeAwareSearch;
 
     // Maps DB enum name back to the API genre tag for response serialisation.
     private static readonly IReadOnlyDictionary<string, string> GenreDbToApi =
@@ -38,19 +45,6 @@ public sealed class SqliteQuoteService : IQuoteService
             ["SciFi"]      = "sci-fi",
             ["Thriller"]   = "thriller",
         };
-
-    /// <summary>Initialises the service with the connection factory used for all database queries.</summary>
-    /// <param name="factory">Factory used to open SQLite connections.</param>
-    /// <param name="unicodeAwareSearch">
-    /// Whether <c>LIKE</c>-based fuzzy matching (quote search, character/author/source filters) uses
-    /// the Unicode-aware <c>UNICODE_CONTAINS</c> function instead of SQLite's own ASCII-only
-    /// <c>LIKE</c>. Opt-in, off by default — see issue #222.
-    /// </param>
-    public SqliteQuoteService(IDbConnectionFactory factory, bool unicodeAwareSearch = false)
-    {
-        _factory = factory;
-        _unicodeAwareSearch = unicodeAwareSearch;
-    }
 
     // -------------------------------------------------------------------------
     #region IQuoteService

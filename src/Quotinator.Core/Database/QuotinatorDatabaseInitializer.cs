@@ -24,57 +24,59 @@ namespace Quotinator.Core.Database;
 /// Quotinator-specific database initialiser. Extends <see cref="DatabaseInitializer"/> with
 /// seeding logic for Quotinator domain tables (Quotes, Sources, Characters, People, Genres).
 /// </summary>
-public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
+/// <remarks>Initialises the instance with all dependencies required for Quotinator seeding.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+/// <param name="options">Database file paths and settings.</param>
+/// <param name="migrations">Ordered, append-only list of Quotinator.Core's own schema migrations to apply. Always applied after Quotinator.Data's own migrations.</param>
+/// <param name="batches">Bundled and user seed batches applied when the database is empty.</param>
+/// <param name="importBatches">Repository used to record each seed/import run as an <c>Import_Batch</c> row.</param>
+/// <param name="actionCoordinator">Coordinator used to stage and apply the import actions produced by seeding.</param>
+/// <param name="actionService">Service used to convert raw seed/import file content into staged import actions.</param>
+/// <param name="actionWriter">Writer used to persist staged import actions directly, outside the coordinator's own stage/apply flow.</param>
+/// <param name="auditWriter">Writes audit entries for reseed and reset operations.</param>
+/// <param name="callerContext">Provides the agent identifier for audit entries.</param>
+/// <param name="logger">Logger for startup diagnostics.</param>
+/// <param name="sourceCacheUpdater">Downloads and converts live-updated source files before seeding, when auto-update is enabled.</param>
+/// <param name="autoUpdateSources">Whether live source auto-update runs before seeding.</param>
+/// <param name="autoPurgeBundledImportActions">Whether import actions produced from bundled/system content are automatically purged on successful apply.</param>
+/// <param name="autoPurgeUserImportActions">Whether import actions produced from user-supplied content are automatically purged on successful apply.</param>
+/// <param name="ruleFileOverridePathResolver">Resolves the on-disk path of a conflict-resolution-rule or source-alias override file for a given seed batch.</param>
+/// <param name="sourceFileOverrideRegistry">Tracks which seed source files have a curator-authored override applied, so an override is not silently reapplied or skipped.</param>
+/// <param name="fileResources">Repository used to record each seeded/imported file as a <c>FileResource</c> row.</param>
+/// <param name="baseline">Optional consolidated DDL for Quotinator.Core's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
+public sealed class QuotinatorDatabaseInitializer(
+    IDbConnectionFactory factory,
+    DatabaseOptions options,
+    IReadOnlyList<SchemaMigration> migrations,
+    IReadOnlyList<SeedBatch> batches,
+    IImportBatchRepository importBatches,
+    IImportActionCoordinator actionCoordinator,
+    IImportActionService actionService,
+    IImportActionWriter actionWriter,
+    IAuditEntryWriter auditWriter,
+    ICallerContext callerContext,
+    ILogger<DatabaseInitializer> logger,
+    ISourceCacheUpdater sourceCacheUpdater,
+    bool autoUpdateSources,
+    bool autoPurgeBundledImportActions,
+    bool autoPurgeUserImportActions,
+    IRuleFileOverridePathResolver ruleFileOverridePathResolver,
+    ISourceFileOverrideRegistry sourceFileOverrideRegistry,
+    IFileResourceRepository fileResources,
+    SchemaBaseline? baseline = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, baseline)
 {
-    private readonly IReadOnlyList<SeedBatch>       _batches;
-    private readonly IImportBatchRepository         _importBatches;
-    private readonly IImportActionCoordinator       _actionCoordinator;
-    private readonly IImportActionService           _actionService;
-    private readonly IImportActionWriter            _actionWriter;
-    private readonly ISourceCacheUpdater            _sourceCacheUpdater;
-    private readonly bool                           _autoUpdateSources;
-    private readonly bool                           _autoPurgeBundledImportActions;
-    private readonly bool                           _autoPurgeUserImportActions;
-    private readonly IRuleFileOverridePathResolver  _ruleFileOverridePathResolver;
-    private readonly ISourceFileOverrideRegistry    _sourceFileOverrideRegistry;
-    private readonly IFileResourceRepository        _fileResources;
-
-    /// <summary>Initialises the instance with all dependencies required for Quotinator seeding.</summary>
-    public QuotinatorDatabaseInitializer(
-        IDbConnectionFactory           factory,
-        DatabaseOptions                options,
-        IReadOnlyList<SchemaMigration> migrations,
-        IReadOnlyList<SeedBatch>       batches,
-        IImportBatchRepository         importBatches,
-        IImportActionCoordinator       actionCoordinator,
-        IImportActionService           actionService,
-        IImportActionWriter            actionWriter,
-        IAuditEntryWriter             auditWriter,
-        ICallerContext                 callerContext,
-        ILogger<DatabaseInitializer>   logger,
-        ISourceCacheUpdater            sourceCacheUpdater,
-        bool                           autoUpdateSources,
-        bool                           autoPurgeBundledImportActions,
-        bool                           autoPurgeUserImportActions,
-        IRuleFileOverridePathResolver  ruleFileOverridePathResolver,
-        ISourceFileOverrideRegistry    sourceFileOverrideRegistry,
-        IFileResourceRepository        fileResources,
-        SchemaBaseline?                baseline = null)
-        : base(factory, options, migrations, auditWriter, callerContext, logger, baseline)
-    {
-        _batches            = batches;
-        _importBatches      = importBatches;
-        _actionCoordinator  = actionCoordinator;
-        _actionService      = actionService;
-        _actionWriter       = actionWriter;
-        _sourceCacheUpdater = sourceCacheUpdater;
-        _autoUpdateSources  = autoUpdateSources;
-        _autoPurgeBundledImportActions = autoPurgeBundledImportActions;
-        _autoPurgeUserImportActions    = autoPurgeUserImportActions;
-        _ruleFileOverridePathResolver = ruleFileOverridePathResolver;
-        _sourceFileOverrideRegistry   = sourceFileOverrideRegistry;
-        _fileResources                = fileResources;
-    }
+    private readonly IReadOnlyList<SeedBatch> _batches = batches;
+    private readonly IImportBatchRepository _importBatches = importBatches;
+    private readonly IImportActionCoordinator _actionCoordinator = actionCoordinator;
+    private readonly IImportActionService _actionService = actionService;
+    private readonly IImportActionWriter _actionWriter = actionWriter;
+    private readonly ISourceCacheUpdater _sourceCacheUpdater = sourceCacheUpdater;
+    private readonly bool _autoUpdateSources = autoUpdateSources;
+    private readonly bool _autoPurgeBundledImportActions = autoPurgeBundledImportActions;
+    private readonly bool _autoPurgeUserImportActions = autoPurgeUserImportActions;
+    private readonly IRuleFileOverridePathResolver _ruleFileOverridePathResolver = ruleFileOverridePathResolver;
+    private readonly ISourceFileOverrideRegistry _sourceFileOverrideRegistry = sourceFileOverrideRegistry;
+    private readonly IFileResourceRepository _fileResources = fileResources;
 
     /// <inheritdoc/>
     protected override async Task OnInitialisedAsync(SqliteConnection connection)

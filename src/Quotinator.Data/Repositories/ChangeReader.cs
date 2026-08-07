@@ -10,10 +10,10 @@ namespace Quotinator.Data.Repositories;
 /// SQLite implementation of <see cref="IChangeReader"/>.
 /// Extends <see cref="SqliteRepositoryBase{T}"/> directly — no audit writes are triggered by reads.
 /// </summary>
-public sealed class ChangeReader : SqliteRepositoryBase<ChangeEntity>, IChangeReader
+/// <remarks>Initialises the reader with the connection factory.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class ChangeReader(IDbConnectionFactory factory) : SqliteRepositoryBase<ChangeEntity>(factory), IChangeReader
 {
-    /// <summary>Initialises the reader with the connection factory.</summary>
-    public ChangeReader(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<ChangeEntity>> GetHistoryAsync(string entityType, string entityId)

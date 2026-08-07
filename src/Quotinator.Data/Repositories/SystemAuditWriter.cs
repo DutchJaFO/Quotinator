@@ -15,15 +15,12 @@ namespace Quotinator.Data.Repositories;
 /// <see cref="AuditEntryEntity"/> and the <c>[ExplicitKey]</c> it inherits from
 /// <see cref="Models.RecordBase"/>; no SQL string is required for writes.
 /// </summary>
-public sealed class AuditEntryWriter : SqliteRepositoryBase<AuditEntryEntity>, IAuditEntryWriter
+/// <remarks>Initialises the writer with the connection factory and caller context.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+/// <param name="callerContext">Identifies the caller attributed to each audit entry.</param>
+public sealed class AuditEntryWriter(IDbConnectionFactory factory, ICallerContext callerContext) : SqliteRepositoryBase<AuditEntryEntity>(factory), IAuditEntryWriter
 {
-    private readonly ICallerContext _callerContext;
-
-    /// <summary>Initialises the writer with the connection factory and caller context.</summary>
-    public AuditEntryWriter(IDbConnectionFactory factory, ICallerContext callerContext) : base(factory)
-    {
-        _callerContext = callerContext;
-    }
+    private readonly ICallerContext _callerContext = callerContext;
 
     /// <inheritdoc/>
     public async Task WriteAsync(AuditEntryEntity entry, IDbConnection connection, IDbTransaction? transaction = null)

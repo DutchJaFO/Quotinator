@@ -11,12 +11,11 @@ using Quotinator.Data.Queries;
 namespace Quotinator.Data.Repositories;
 
 /// <summary>SQLite implementation of <see cref="IFileResourceRepository"/>.</summary>
-public sealed class SqliteFileResourceRepository : IFileResourceRepository
+/// <remarks>Initialises the repository with the connection factory.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class SqliteFileResourceRepository(IDbConnectionFactory factory) : IFileResourceRepository
 {
-    private readonly IDbConnectionFactory _factory;
-
-    /// <summary>Initialises the repository with the connection factory.</summary>
-    public SqliteFileResourceRepository(IDbConnectionFactory factory) => _factory = factory;
+    private readonly IDbConnectionFactory _factory = factory;
 
     /// <inheritdoc/>
     public async Task<Guid> WriteAsync(

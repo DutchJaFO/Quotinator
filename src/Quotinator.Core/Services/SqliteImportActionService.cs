@@ -20,55 +20,51 @@ using Quotinator.Core.Queries;
 namespace Quotinator.Core.Services;
 
 /// <inheritdoc/>
-public sealed class SqliteImportActionService : IImportActionService
+/// <summary>Initialises the service with the generic Data-layer pieces it wraps.</summary>
+/// <param name="actionReader">Reader used to look up staged import actions and their current state.</param>
+/// <param name="coordinator">Coordinator used to stage, decide, and apply/discard import actions.</param>
+/// <param name="actionWriter">Writer used to persist staged import actions directly, outside the coordinator's own stage/apply flow.</param>
+/// <param name="auditWriter">Writer used to record an <see cref="Data.Entities.AuditEntryEntity"/> for each applied action's underlying entity write.</param>
+/// <param name="changeLogWriter">Writer used to record a field-level change-log entry for each applied action.</param>
+/// <param name="quoteRepository">Repository used to apply a decided action's resolved fields to a Quote entity.</param>
+/// <param name="sourceRepository">Repository used to apply a decided action's resolved fields to a Source entity.</param>
+/// <param name="characterRepository">Repository used to apply a decided action's resolved fields to a Character entity.</param>
+/// <param name="personRepository">Repository used to apply a decided action's resolved fields to a Person entity.</param>
+/// <param name="conversationRepository">Repository used to apply a decided action's resolved fields to a Conversation entity.</param>
+/// <param name="stageDirectionRepository">Repository used to apply a decided action's resolved fields to a StageDirection entity.</param>
+/// <param name="soundCueRepository">Repository used to apply a decided action's resolved fields to a SoundCue entity.</param>
+/// <param name="importBatchRepository">Repository used to look up and update the batch an action belongs to.</param>
+/// <param name="factory">Factory used to open the connection and transaction each apply/discard operation runs in.</param>
+public sealed class SqliteImportActionService(
+    IImportActionReader actionReader,
+    IImportActionCoordinator coordinator,
+    IImportActionWriter actionWriter,
+    IAuditEntryWriter auditWriter,
+    IChangeWriter changeLogWriter,
+    IRestorableRepository<QuoteEntity> quoteRepository,
+    IRestorableRepository<SourceEntity> sourceRepository,
+    IRestorableRepository<CharacterEntity> characterRepository,
+    IRestorableRepository<PersonEntity> personRepository,
+    IRestorableRepository<ConversationEntity> conversationRepository,
+    IRestorableRepository<StageDirectionEntity> stageDirectionRepository,
+    IRestorableRepository<SoundCueEntity> soundCueRepository,
+    IImportBatchRepository importBatchRepository,
+    IDbConnectionFactory factory) : IImportActionService
 {
-    private readonly IImportActionReader _actionReader;
-    private readonly IImportActionCoordinator _coordinator;
-    private readonly IImportActionWriter _actionWriter;
-    private readonly IAuditEntryWriter _auditWriter;
-    private readonly IChangeWriter _changeLogWriter;
-    private readonly IRestorableRepository<QuoteEntity> _quoteRepository;
-    private readonly IRestorableRepository<SourceEntity> _sourceRepository;
-    private readonly IRestorableRepository<CharacterEntity> _characterRepository;
-    private readonly IRestorableRepository<PersonEntity> _personRepository;
-    private readonly IRestorableRepository<ConversationEntity> _conversationRepository;
-    private readonly IRestorableRepository<StageDirectionEntity> _stageDirectionRepository;
-    private readonly IRestorableRepository<SoundCueEntity> _soundCueRepository;
-    private readonly IImportBatchRepository _importBatchRepository;
-    private readonly IDbConnectionFactory _factory;
-
-    /// <summary>Initialises the service with the generic Data-layer pieces it wraps.</summary>
-    public SqliteImportActionService(
-        IImportActionReader actionReader,
-        IImportActionCoordinator coordinator,
-        IImportActionWriter actionWriter,
-        IAuditEntryWriter auditWriter,
-        IChangeWriter changeLogWriter,
-        IRestorableRepository<QuoteEntity> quoteRepository,
-        IRestorableRepository<SourceEntity> sourceRepository,
-        IRestorableRepository<CharacterEntity> characterRepository,
-        IRestorableRepository<PersonEntity> personRepository,
-        IRestorableRepository<ConversationEntity> conversationRepository,
-        IRestorableRepository<StageDirectionEntity> stageDirectionRepository,
-        IRestorableRepository<SoundCueEntity> soundCueRepository,
-        IImportBatchRepository importBatchRepository,
-        IDbConnectionFactory factory)
-    {
-        _actionReader             = actionReader;
-        _coordinator              = coordinator;
-        _actionWriter             = actionWriter;
-        _auditWriter              = auditWriter;
-        _changeLogWriter          = changeLogWriter;
-        _quoteRepository          = quoteRepository;
-        _sourceRepository         = sourceRepository;
-        _characterRepository      = characterRepository;
-        _personRepository         = personRepository;
-        _conversationRepository   = conversationRepository;
-        _stageDirectionRepository = stageDirectionRepository;
-        _soundCueRepository       = soundCueRepository;
-        _importBatchRepository    = importBatchRepository;
-        _factory                  = factory;
-    }
+    private readonly IImportActionReader _actionReader = actionReader;
+    private readonly IImportActionCoordinator _coordinator = coordinator;
+    private readonly IImportActionWriter _actionWriter = actionWriter;
+    private readonly IAuditEntryWriter _auditWriter = auditWriter;
+    private readonly IChangeWriter _changeLogWriter = changeLogWriter;
+    private readonly IRestorableRepository<QuoteEntity> _quoteRepository = quoteRepository;
+    private readonly IRestorableRepository<SourceEntity> _sourceRepository = sourceRepository;
+    private readonly IRestorableRepository<CharacterEntity> _characterRepository = characterRepository;
+    private readonly IRestorableRepository<PersonEntity> _personRepository = personRepository;
+    private readonly IRestorableRepository<ConversationEntity> _conversationRepository = conversationRepository;
+    private readonly IRestorableRepository<StageDirectionEntity> _stageDirectionRepository = stageDirectionRepository;
+    private readonly IRestorableRepository<SoundCueEntity> _soundCueRepository = soundCueRepository;
+    private readonly IImportBatchRepository _importBatchRepository = importBatchRepository;
+    private readonly IDbConnectionFactory _factory = factory;
 
     /// <inheritdoc/>
     public async Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)

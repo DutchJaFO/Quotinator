@@ -9,11 +9,12 @@ using Quotinator.Data.Queries;
 namespace Quotinator.Data.Repositories;
 
 /// <summary>SQLite implementation of <see cref="IImportBatchRepository"/>.</summary>
-public sealed class SqliteImportBatchRepository : SqliteRepository<ImportBatchEntity>, IImportBatchRepository
+/// <remarks>Initialises the repository with the factory, audit writer, and caller context.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+/// <param name="auditWriter">Writer used to record an <see cref="AuditEntryEntity"/> for every write operation.</param>
+/// <param name="callerContext">Identifies the caller attributed to each audit entry.</param>
+public sealed class SqliteImportBatchRepository(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext) : SqliteRepository<ImportBatchEntity>(factory, auditWriter, callerContext), IImportBatchRepository
 {
-    /// <inheritdoc/>
-    public SqliteImportBatchRepository(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext)
-        : base(factory, auditWriter, callerContext) { }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<ImportBatchEntity>> GetAllAsync(IUnitOfWork? unitOfWork = null)

@@ -13,15 +13,13 @@ namespace Quotinator.Data.Repositories;
 /// All write methods write a <see cref="AuditEntryEntity"/> in the same connection and transaction.
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
-public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRepository<T>
+/// <remarks>Initialises the repository with the factory, audit writer, and caller context.</remarks>
+/// <param name="factory">Opens connections to the SQLite database.</param>
+/// <param name="auditWriter">Writes an audit entry alongside every write operation.</param>
+/// <param name="callerContext">Provides the current caller's identity for audit entries.</param>
+public class SqliteRestorableRepository<T>(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext) : SqliteRepository<T>(factory, auditWriter, callerContext), IRestorableRepository<T>
     where T : RecordBase
 {
-    /// <summary>Initialises the repository with the factory, audit writer, and caller context.</summary>
-    /// <param name="factory">Opens connections to the SQLite database.</param>
-    /// <param name="auditWriter">Writes an audit entry alongside every write operation.</param>
-    /// <param name="callerContext">Provides the current caller's identity for audit entries.</param>
-    public SqliteRestorableRepository(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext)
-        : base(factory, auditWriter, callerContext) { }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<T>> GetDeletedAsync(IUnitOfWork? unitOfWork = null)

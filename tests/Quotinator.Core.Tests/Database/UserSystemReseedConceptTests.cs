@@ -24,15 +24,10 @@ public class UserSystemReseedConceptTests
 
     private const string ExampleWidgetId = "22222222-2222-2222-2222-222222222222";
 
-    private sealed class UserContentTestInitializer : DatabaseInitializer
+    private sealed class UserContentTestInitializer(
+        IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations, SchemaBaseline baseline) : DatabaseInitializer(factory, options, migrations, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, baseline)
     {
         public int SeedSystemContentCallCount { get; private set; }
-
-        public UserContentTestInitializer(
-            IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations, SchemaBaseline baseline)
-            : base(factory, options, migrations, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, baseline)
-        {
-        }
 
         protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
             => DropAndRebuildAsync(connection, preserveSchemaVersion);

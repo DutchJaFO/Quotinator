@@ -13,7 +13,9 @@ namespace Quotinator.Api.Middleware;
 /// a degraded request never reaches a handler that would otherwise throw the same raw exception
 /// DatabaseHealthState was populated from, request after request.
 /// </summary>
-internal class DatabaseHealthGateMiddleware : IMiddleware
+/// <remarks>Initializes a new instance of <see cref="DatabaseHealthGateMiddleware"/>.</remarks>
+/// <param name="health">Shared startup database-health state consulted on every request.</param>
+internal class DatabaseHealthGateMiddleware(DatabaseHealthState health) : IMiddleware
 {
     private static readonly string[] ExemptPrefixes =
     [
@@ -22,11 +24,7 @@ internal class DatabaseHealthGateMiddleware : IMiddleware
         "/_framework/", "/_content/", "/lib/",
     ];
 
-    private readonly DatabaseHealthState _health;
-
-    /// <summary>Initializes a new instance of <see cref="DatabaseHealthGateMiddleware"/>.</summary>
-    public DatabaseHealthGateMiddleware(DatabaseHealthState health)
-        => _health = health;
+    private readonly DatabaseHealthState _health = health;
 
     /// <inheritdoc/>
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)

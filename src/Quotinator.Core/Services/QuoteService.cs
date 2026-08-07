@@ -5,16 +5,11 @@ using Quotinator.Core.Import;
 namespace Quotinator.Core.Services;
 
 /// <summary>Loads <c>data/quotes.json</c> into memory at startup and serves read requests.</summary>
-public sealed class QuoteService : IQuoteService
+/// <remarks>Initialises the service and loads quotes from <paramref name="dataPath"/> into memory.</remarks>
+/// <param name="dataPath">Absolute or working-directory-relative path to <c>quotes.json</c>. Defaults to <c>data/quotes.json</c>.</param>
+public sealed class QuoteService(string dataPath = "data/quotes.json") : IQuoteService
 {
-    private readonly IReadOnlyList<SourceQuoteDto> _quotes;
-
-    /// <summary>Initialises the service and loads quotes from <paramref name="dataPath"/> into memory.</summary>
-    /// <param name="dataPath">Absolute or working-directory-relative path to <c>quotes.json</c>. Defaults to <c>data/quotes.json</c>.</param>
-    public QuoteService(string dataPath = "data/quotes.json")
-    {
-        _quotes = Load(dataPath);
-    }
+    private readonly IReadOnlyList<SourceQuoteDto> _quotes = Load(dataPath);
 
     private static IReadOnlyList<SourceQuoteDto> Load(string path)
     {

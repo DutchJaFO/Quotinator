@@ -1,6 +1,6 @@
 # #244 — Hidden Roslyn code-style and .NET analyzer diagnostics (IDE0xxx, CAxxxx)
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 3)
 **GitHub issue:** #244
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -130,7 +130,7 @@ Added to `Directory.Build.props`. Build confirmed 0 new warnings, as expected �
 at build time but stay at their default `suggestion` severity until Step 2 escalates them.
 
 ### Step 2 — Escalate + bulk-fix the mechanical `IDE0xxx` rules
-**Status:** ⬜ In progress — one rule family per commit, not one combined pass
+**Status:** ✅ Done — landed as two commits (2a, 2b), one rule family per commit, not one combined pass
 `.editorconfig` entries scoped to exactly the mechanical rule IDs listed above (not the whole Style
 category yet, since IDE0290/IDE0130/IDE0060 aren't ready) → `warning`. Run `dotnet format style --fix`
 restricted to those rule IDs; `dotnet format` does not always converge in one pass (a second occurrence
@@ -158,7 +158,34 @@ rewrite tools apply the fix, but verifying it's actually safe is a manual step, 
   before and after severity escalation.
 
 ### Step 3 — IDE0290 (primary constructors) — developer decision required
-**Status:** ⬜ Not started — blocked on developer decision (adopt vs. suppress)
+**Status:** ✅ Done
+
+**Decision (2026-08-06):** primary constructors adopted with **no exceptions** — every one of the 40
+occurrences (~33 classes) converts. Two candidate exceptions were investigated and evaluated first
+(a class with individually-`<param>`-documented constructor parameters — `DatabaseInitializer`; a
+class chaining to a base constructor with a large combined parameter count —
+`QuotinatorDatabaseInitializer`, 18 own + 7 base = 25) and both rejected by the developer: "all
+parameters of a constructor should be xml-documented. I see no reason to exclude either of them.
+There appears to be no syntactical reason." This sets a **new, stricter standing requirement**:
+every constructor parameter — primary or classic, on every class touched by this conversion — gets
+its own `<param name="...">` XML doc tag on the class-level summary, not just a generic one-line
+class summary. `dotnet format --fix` only performs the mechanical syntax conversion; it does not
+write `<param>` docs, so each of the ~33 classes needs its documentation added/verified by hand as
+part of this step. **Confirmed CS1591 cannot be relied on as the forcing function for this** — it
+only requires *a* doc comment to exist on a public member, not that every parameter has its own
+`<param>` tag, so a clean build alone does not prove per-parameter documentation is complete; the
+full 1275-line mechanical-conversion diff was read by hand instead to catalogue exactly which
+classes already retained adequate documentation (6, via `<inheritdoc/>`-adjacent or pre-existing
+per-param docs) versus which needed it added (the remaining ~31, plus 3 private test-only nested
+classes correctly exempt under CLAUDE.md's "non-private types only" XML-doc rule). Long combined
+parameter lists (`QuotinatorDatabaseInitializer`, `StartupSummaryLogger`, `SqliteImportActionService`)
+format one parameter per line, exactly as the existing classic constructor already does — no
+readability loss, this was a misplaced concern. One real mistake caught by the build during this
+step: a `<see cref="AuditEntryEntity"/>` added to `SqliteLinkRepository.cs`'s new param doc didn't
+resolve (CS1574) because that file has no `using Quotinator.Data.Entities;` — fixed by qualifying
+the cref as `Entities.AuditEntryEntity`. `.editorconfig` escalates `IDE0290` to `warning` as the
+final part of this step; full build (0 warnings, 0 errors) and full test suite (609/609 passed)
+verified after escalation.
 
 ### Step 4 — IDE0130 (namespace/folder mismatch) — investigate the 4 real cases
 **Status:** ⬜ Not started
@@ -208,7 +235,7 @@ mirroring #197's own "no user-facing changes").
 |---|--------|-------------|--------|--------------|
 | 1 | ⬜ | `EnforceCodeStyleInBuild=true` added, 0 new warnings | Build | Step 1 |
 | 2 | ⬜ | Mechanical `IDE0xxx` rules escalated to warning and fixed | Build | Step 2 |
-| 3 | ⬜ | IDE0290 decision made and applied consistently | Manual | Step 3 |
+| 3 | ✅ | IDE0290 decision made and applied consistently | Manual | Step 3 |
 | 4 | ⬜ | IDE0130's 4 real namespace/folder mismatches resolved | Manual | Step 4 |
 | 5 | ⬜ | IDE0060's 3 unused parameters reviewed and resolved | Manual | Step 5 |
 | 6 | ⬜ | Mechanical `CAxxxx`/`SYSLIB` rules escalated and fixed | Build | Step 6 |

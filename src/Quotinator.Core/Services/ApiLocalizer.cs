@@ -49,18 +49,13 @@ public static class ApiLocalizerFormatting
 /// Reads all <c>UI.*.json</c> localisation files at startup and resolves strings
 /// against <see cref="CultureInfo.CurrentUICulture"/> at call time.
 /// </summary>
-public sealed class ApiLocalizer : IApiLocalizer
+/// <remarks>Initialises the localizer by loading all <c>UI.*.json</c> files from <paramref name="i18nTextDir"/>.</remarks>
+/// <param name="i18nTextDir">Directory that contains the <c>UI.*.json</c> translation files.</param>
+public sealed class ApiLocalizer(string i18nTextDir) : IApiLocalizer
 {
-    private readonly Dictionary<string, IReadOnlyDictionary<string, string>> _tables;
-
-    /// <summary>Initialises the localizer by loading all <c>UI.*.json</c> files from <paramref name="i18nTextDir"/>.</summary>
-    /// <param name="i18nTextDir">Directory that contains the <c>UI.*.json</c> translation files.</param>
-    public ApiLocalizer(string i18nTextDir)
-    {
-        _tables = Directory
+    private readonly Dictionary<string, IReadOnlyDictionary<string, string>> _tables = Directory
             .GetFiles(i18nTextDir, "UI.*.json")
             .ToDictionary(ExtractLang, LoadTable);
-    }
 
     /// <inheritdoc/>
     public string this[string key] => Resolve(key);

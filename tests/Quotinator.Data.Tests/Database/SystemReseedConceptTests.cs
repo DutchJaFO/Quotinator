@@ -23,15 +23,10 @@ public class SystemReseedConceptTests
 
     private const string ExampleSettingId = "11111111-1111-1111-1111-111111111111";
 
-    private sealed class SystemContentTestInitializer : DatabaseInitializer
+    private sealed class SystemContentTestInitializer(
+        IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations, SchemaBaseline baseline) : DatabaseInitializer(factory, options, migrations, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, baseline)
     {
         public int SeedSystemContentCallCount { get; private set; }
-
-        public SystemContentTestInitializer(
-            IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations, SchemaBaseline baseline)
-            : base(factory, options, migrations, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, baseline)
-        {
-        }
 
         protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
             => DropAndRebuildAsync(connection, preserveSchemaVersion);

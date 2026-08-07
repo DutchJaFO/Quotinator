@@ -6,15 +6,11 @@ using Quotinator.Core.Queries;
 namespace Quotinator.Core.Repositories;
 
 /// <summary>SQLite implementation of <see cref="ISeriesUniverseReferenceReader"/>.</summary>
-public sealed class SeriesUniverseReferenceReader : ISeriesUniverseReferenceReader
+/// <remarks>Initialises the reader with the connection factory.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class SeriesUniverseReferenceReader(IDbConnectionFactory factory) : ISeriesUniverseReferenceReader
 {
-    private readonly IDbConnectionFactory _factory;
-
-    /// <summary>Initialises the reader with the connection factory.</summary>
-    public SeriesUniverseReferenceReader(IDbConnectionFactory factory)
-    {
-        _factory = factory;
-    }
+    private readonly IDbConnectionFactory _factory = factory;
 
     /// <inheritdoc/>
     public async Task<(Guid Id, string Name)?> GetUniverseReferenceAsync(Guid seriesId)

@@ -18,18 +18,16 @@ namespace Quotinator.Api.Middleware;
 /// String properties use the Serilog {l} literal specifier to suppress quoting in rendered output.
 /// Never logs header values — X-Api-Key, Authorization, Cookie must not appear in logs.
 /// </remarks>
-public class RequestLoggingMiddleware : IMiddleware
+/// <remarks>Initializes a new instance of <see cref="RequestLoggingMiddleware"/>.</remarks>
+/// <param name="logger">Logger the middleware writes request/response lines to.</param>
+public class RequestLoggingMiddleware(ILogger<RequestLoggingMiddleware> logger) : IMiddleware
 {
-    private readonly ILogger<RequestLoggingMiddleware> _logger;
+    private readonly ILogger<RequestLoggingMiddleware> _logger = logger;
 
     private static readonly string[] AssetPrefixes = ["/_framework/", "/_content/", "/lib/"];
 
     private static readonly string[] AssetExtensions =
         [".js", ".css", ".svg", ".png", ".ico", ".woff", ".woff2", ".ttf", ".map", ".webp", ".gif", ".jpg", ".jpeg"];
-
-    /// <summary>Initializes a new instance of <see cref="RequestLoggingMiddleware"/>.</summary>
-    public RequestLoggingMiddleware(ILogger<RequestLoggingMiddleware> logger)
-        => _logger = logger;
 
     /// <inheritdoc/>
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)

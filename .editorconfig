@@ -27,3 +27,10 @@ dotnet_diagnostic.IDE0059.severity = warning
 dotnet_diagnostic.IDE0039.severity = warning
 dotnet_diagnostic.IDE0063.severity = warning
 dotnet_diagnostic.IDE0044.severity = warning
+
+# Step 3: primary constructors. `dotnet format` only performs the mechanical syntax conversion — it
+# does not write per-parameter XML docs, so every constructor parameter across all ~33 converted
+# classes was documented by hand (no exceptions) before this severity was escalated. CS1591 only
+# checks that *a* doc comment exists on a public member, not that every parameter has its own
+# <param> tag, so a clean build alone could not have caught missing parameter documentation here.
+dotnet_diagnostic.IDE0290.severity = warning

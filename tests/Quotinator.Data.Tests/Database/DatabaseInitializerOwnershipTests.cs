@@ -586,15 +586,10 @@ public class DatabaseInitializerOwnershipTests
     // The base DatabaseInitializer's OnResetAsync is a no-op — only a subclass that overrides it
     // (in production, QuotinatorDatabaseInitializer) actually calls DropAndRebuildAsync. This
     // minimal test-only subclass exists purely to exercise that method directly.
-    private sealed class ResettableTestInitializer : DatabaseInitializer
+    private sealed class ResettableTestInitializer(
+        IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations,
+        IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<DatabaseInitializer> logger) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger)
     {
-        public ResettableTestInitializer(
-            IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations,
-            IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<DatabaseInitializer> logger)
-            : base(factory, options, migrations, auditWriter, callerContext, logger)
-        {
-        }
-
         protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
             => DropAndRebuildAsync(connection, preserveSchemaVersion);
     }

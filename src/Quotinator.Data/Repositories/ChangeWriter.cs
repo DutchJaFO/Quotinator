@@ -13,10 +13,10 @@ namespace Quotinator.Data.Repositories;
 /// (inherited from <see cref="Models.RecordBase"/>) attributes on <see cref="ChangeEntity"/>; no
 /// SQL string is required for writes.
 /// </summary>
-public sealed class ChangeWriter : SqliteRepositoryBase<ChangeEntity>, IChangeWriter
+/// <remarks>Initialises the writer with the connection factory.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class ChangeWriter(IDbConnectionFactory factory) : SqliteRepositoryBase<ChangeEntity>(factory), IChangeWriter
 {
-    /// <summary>Initialises the writer with the connection factory.</summary>
-    public ChangeWriter(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
     public async Task LogAsync(ChangeEntity entry, IDbConnection connection, IDbTransaction? transaction = null)
