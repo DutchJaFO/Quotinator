@@ -95,14 +95,14 @@ public class ConflictResolutionTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
 
-        var row = await conn.QuerySingleAsync<(string QuoteText, string? Character)>(
+        var (QuoteText, Character) = await conn.QuerySingleAsync<(string QuoteText, string? Character)>(
             "SELECT q.QuoteText, c.Name AS Character FROM Quotinator_Quote q " +
             "LEFT JOIN Quotinator_Character c ON c.Id = q.CharacterId " +
             "WHERE q.Id = @id", new { id = SharedId });
         var genres = (await conn.QueryAsync<string>(
             "SELECT Genre FROM Quotinator_QuoteGenre WHERE QuoteId = @id", new { id = SharedId })).ToList();
 
-        return (row.QuoteText, row.Character, genres);
+        return (QuoteText, Character, genres);
     }
 
     [TestMethod]

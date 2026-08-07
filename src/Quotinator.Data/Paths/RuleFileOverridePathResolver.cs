@@ -17,10 +17,7 @@ public sealed class RuleFileOverridePathResolver(
     /// <inheritdoc/>
     public string ResolveBundledPath(string fileName, SeedBatchOrigin origin)
     {
-        var baseDir = origin == SeedBatchOrigin.Bundled ? bundledSourcesDir : importsDir;
-        if (baseDir is null)
-            throw new InvalidOperationException($"No bundled directory was configured for origin '{origin}'.");
-
+        var baseDir = (origin == SeedBatchOrigin.Bundled ? bundledSourcesDir : importsDir) ?? throw new InvalidOperationException($"No bundled directory was configured for origin '{origin}'.");
         return ResolveUnder(fileName, baseDir, fileName);
     }
 

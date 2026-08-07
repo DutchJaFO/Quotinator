@@ -38,17 +38,17 @@ public class DatabaseInitializerOwnershipTests
 
         var columns = await conn.QueryAsync<(int cid, string name, string type, int notnull, string? dflt_value, int pk)>(
             $"SELECT cid, name, type, [notnull], dflt_value, pk FROM pragma_table_info('{table}');");
-        foreach (var c in columns.OrderBy(c => c.cid))
-            lines.Add($"COL {c.cid} {c.name} {c.type} notnull={c.notnull} default={c.dflt_value} pk={c.pk}");
+        foreach (var (cid, name, type, notnull, dflt_value, pk) in columns.OrderBy(c => c.cid))
+            lines.Add($"COL {cid} {name} {type} notnull={notnull} default={dflt_value} pk={pk}");
 
         var indexes = await conn.QueryAsync<(string name, int unique)>(
             $"SELECT name, [unique] FROM pragma_index_list('{table}');");
-        foreach (var idx in indexes.OrderBy(i => i.name))
+        foreach (var (name, unique) in indexes.OrderBy(i => i.name))
         {
             var idxCols = await conn.QueryAsync<(int seqno, string? name)>(
-                $"SELECT seqno, name FROM pragma_index_info('{idx.name}');");
+                $"SELECT seqno, name FROM pragma_index_info('{name}');");
             var colList = string.Join(",", idxCols.OrderBy(c => c.seqno).Select(c => c.name));
-            lines.Add($"IDX {idx.name} unique={idx.unique} cols=({colList})");
+            lines.Add($"IDX {name} unique={unique} cols=({colList})");
         }
 
         return lines;

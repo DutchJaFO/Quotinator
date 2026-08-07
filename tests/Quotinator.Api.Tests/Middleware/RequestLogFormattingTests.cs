@@ -372,7 +372,7 @@ public class RequestLogFormattingTests
         var (middleware, sink) = Build();
         var ctx = MakeContext("GET", "/api/v1/quotes/random", "?yearFrom=abc");
 
-        RequestDelegate throws = _ => throw new BadHttpRequestException("bind failure");
+        static Task throws(HttpContext _) => throw new BadHttpRequestException("bind failure");
 
         try { await middleware.InvokeAsync(ctx, throws); }
         catch (BadHttpRequestException) { /* expected — handler is not in this test */ }

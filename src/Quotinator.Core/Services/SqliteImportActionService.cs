@@ -859,31 +859,24 @@ public sealed class SqliteImportActionService : IImportActionService
         // moment it did. Re-resolve from the restored text via the same natural-key lookups the
         // planner itself uses; never trust the stored ids directly.
         var sourceId = await connection.ExecuteScalarAsync<Guid?>(Sql.Sources.SelectIdByTitleAndType,
-            new { title = resolved.Source, type = resolved.Type.ToString() }, transaction);
-        if (sourceId is null)
-            throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Source '{resolved.Source}' ({resolved.Type}) no longer exists.");
-
+            new { title = resolved.Source, type = resolved.Type.ToString() }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Source '{resolved.Source}' ({resolved.Type}) no longer exists.");
         Guid? characterId = null;
         if (!string.IsNullOrWhiteSpace(resolved.Character))
         {
             // #174/ADR 013: re-resolve via the same Series-scoped candidate lookup ResolveCharacterAsync
             // itself uses — sourceId is already a real, existing row at this point (checked above), so
             // its own SeriesId (if any) is the correct Series-relatedness signal here too.
-            var resolvedSourceId = sourceId.Value.ToCanonicalId();
+            var resolvedSourceId = sourceId.ToCanonicalId();
             var seriesId = await connection.ExecuteScalarAsync<string?>(
                 Sql.Sources.SelectSeriesIdById, new { id = resolvedSourceId }, transaction);
             characterId = await connection.ExecuteScalarAsync<Guid?>(Sql.Characters.SelectGlobalCandidateId,
-                new { sourceId = resolvedSourceId, name = resolved.Character, sourceType = resolved.Type.ToString(), seriesId }, transaction);
-            if (characterId is null)
-                throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Character '{resolved.Character}' no longer exists.");
+                new { sourceId = resolvedSourceId, name = resolved.Character, sourceType = resolved.Type.ToString(), seriesId }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Character '{resolved.Character}' no longer exists.");
         }
 
         Guid? personId = null;
         if (!string.IsNullOrWhiteSpace(resolved.Author))
         {
-            personId = await connection.ExecuteScalarAsync<Guid?>(Sql.People.SelectIdByName, new { name = resolved.Author }, transaction);
-            if (personId is null)
-                throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Person '{resolved.Author}' no longer exists.");
+            personId = await connection.ExecuteScalarAsync<Guid?>(Sql.People.SelectIdByName, new { name = resolved.Author }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Person '{resolved.Author}' no longer exists.");
         }
 
         await connection.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote, new { id = resolved.Id }, transaction);
@@ -897,7 +890,7 @@ public sealed class SqliteImportActionService : IImportActionService
         {
             text    = resolved.QuoteText,
             lang    = resolved.OriginalLanguage,
-            sid     = sourceId.Value,
+            sid     = sourceId,
             cid     = characterId,
             pid     = personId,
             batchId = action.ExistingBatchId is null ? (Guid?)null : Guid.Parse(action.ExistingBatchId),
@@ -1133,12 +1126,12 @@ public sealed class SqliteImportActionService : IImportActionService
                     // why it can't be done per-action, in insert order, here.
                     await sqliteConnection.ExecuteAsync(Sql.Quotes.Insert, new
                     {
-                        Id               = resolved.Id,
-                        QuoteText        = resolved.QuoteText,
-                        OriginalLanguage = resolved.OriginalLanguage,
-                        SourceId         = payload.SourceId,
-                        CharacterId      = payload.CharacterId,
-                        PersonId         = payload.PersonId,
+                        resolved.Id,
+                        resolved.QuoteText,
+                        resolved.OriginalLanguage,
+                        payload.SourceId,
+                        payload.CharacterId,
+                        payload.PersonId,
                         ImportBatchId    = batchId,
                         DateCreated      = now
                     }, sqliteTransaction);
@@ -1246,7 +1239,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 // Character/Quote's defensive re-ensure.
                 var payload = JsonSerializer.Deserialize<ConversationActionPayload>(action.IncomingValue!)!;
                 var inserted = await sqliteConnection.ExecuteAsync(Sql.Conversations.InsertIfNotExists,
-                    new { Id = action.EntityId, Description = payload.Description, ImportBatchId = batchId, DateCreated = now }, sqliteTransaction);
+                    new { Id = action.EntityId, payload.Description, ImportBatchId = batchId, DateCreated = now }, sqliteTransaction);
 
                 if (inserted > 0)
                 {
@@ -1256,11 +1249,11 @@ public sealed class SqliteImportActionService : IImportActionService
                         {
                             Id               = Guid.NewGuid().ToString(),
                             ConversationId   = action.EntityId,
-                            Order            = line.Order,
+                            line.Order,
                             LineType         = line.Type.ToString(),
-                            QuoteId          = line.QuoteId,
-                            StageDirectionId = line.StageDirectionId,
-                            SoundCueId       = line.SoundCueId,
+                            line.QuoteId,
+                            line.StageDirectionId,
+                            line.SoundCueId,
                             DateCreated      = now,
                         }, sqliteTransaction);
                     }
@@ -1381,7 +1374,7 @@ public sealed class SqliteImportActionService : IImportActionService
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
         var inserted = await connection.ExecuteAsync(Sql.StageDirections.InsertIfNotExists,
-            new { Id = id, Text = payload.Text, ImageUrl = payload.ImageUrl, ImportBatchId = batchId, DateCreated = now }, transaction);
+            new { Id = id, payload.Text, payload.ImageUrl, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted == 0) return;
 
         foreach (var (language, translation) in payload.Translations)
@@ -1391,7 +1384,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 Id               = Guid.NewGuid().ToString(),
                 StageDirectionId = id,
                 Language         = language,
-                Text             = translation.Text,
+                translation.Text,
                 DateCreated      = now,
             }, transaction);
         }
@@ -1407,7 +1400,7 @@ public sealed class SqliteImportActionService : IImportActionService
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
         var inserted = await connection.ExecuteAsync(Sql.SoundCues.InsertIfNotExists,
-            new { Id = id, Text = payload.Text, SoundFileUrl = payload.SoundFileUrl, ImageUrl = payload.ImageUrl, ImportBatchId = batchId, DateCreated = now }, transaction);
+            new { Id = id, payload.Text, payload.SoundFileUrl, payload.ImageUrl, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted == 0) return;
 
         foreach (var (language, translation) in payload.Translations)
@@ -1417,7 +1410,7 @@ public sealed class SqliteImportActionService : IImportActionService
                 Id          = Guid.NewGuid().ToString(),
                 SoundCueId  = id,
                 Language    = language,
-                Text        = translation.Text,
+                translation.Text,
                 DateCreated = now,
             }, transaction);
         }

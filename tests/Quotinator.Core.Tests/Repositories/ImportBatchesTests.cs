@@ -169,10 +169,10 @@ public class ImportBatchesTests
 
         foreach (var table in new[] { "Quotinator_Quote", "Quotinator_Source", "Quotinator_Character", "Quotinator_Person" })
         {
-            var col = await conn.QuerySingleOrDefaultAsync<(string name, int notNull)>(
+            var (name, notNull) = await conn.QuerySingleOrDefaultAsync<(string name, int notNull)>(
                 $"SELECT name, [notnull] FROM pragma_table_info('{table}') WHERE name = 'ImportBatchId'");
-            Assert.IsNotNull(col.name, $"ImportBatchId missing from {table}");
-            Assert.AreEqual(0, col.notNull, $"ImportBatchId on {table} must be nullable");
+            Assert.IsNotNull(name, $"ImportBatchId missing from {table}");
+            Assert.AreEqual(0, notNull, $"ImportBatchId on {table} must be nullable");
         }
     }
 
@@ -230,21 +230,21 @@ public class ImportBatchesTests
 
         var batches = (await conn.QueryAsync<(string Id, string Name, int RecordCount)>(
             "SELECT Id, Name, RecordCount FROM Import_Batch WHERE IsDeleted = 0")).ToList();
-        var curatedBatch  = batches.Single(b => b.Name == Path.GetFileName(CuratedFile));
+        var (Id, Name, RecordCount) = batches.Single(b => b.Name == Path.GetFileName(CuratedFile));
         var vilaboimBatch = batches.Single(b => b.Name == Path.GetFileName(VilaboimFile));
 
         var quoteBatchIds = (await conn.QueryAsync<string?>("SELECT ImportBatchId FROM Quotinator_Quote")).ToList();
 
         Assert.IsTrue(quoteBatchIds.All(id => id is not null), "Every seeded quote must have a non-null ImportBatchId");
-        Assert.IsTrue(quoteBatchIds.All(id => id == curatedBatch.Id || id == vilaboimBatch.Id),
+        Assert.IsTrue(quoteBatchIds.All(id => id == Id || id == vilaboimBatch.Id),
             "Every seeded quote must be linked to one of the two batches created for this seed run — not a third/unrelated batch");
 
-        var curatedQuoteCount  = quoteBatchIds.Count(id => id == curatedBatch.Id);
+        var curatedQuoteCount  = quoteBatchIds.Count(id => id == Id);
         var vilaboimQuoteCount = quoteBatchIds.Count(id => id == vilaboimBatch.Id);
 
         Assert.IsGreaterThan(0, curatedQuoteCount, "Curated batch should own at least one quote");
         Assert.IsGreaterThan(0, vilaboimQuoteCount, "Vilaboim batch should own at least one quote");
-        Assert.AreEqual(curatedBatch.RecordCount,  curatedQuoteCount,  "ImportBatches.RecordCount must match the actual number of Quotes rows linked to the curated batch");
+        Assert.AreEqual(RecordCount,  curatedQuoteCount,  "ImportBatches.RecordCount must match the actual number of Quotes rows linked to the curated batch");
         Assert.AreEqual(vilaboimBatch.RecordCount, vilaboimQuoteCount, "ImportBatches.RecordCount must match the actual number of Quotes rows linked to the vilaboim batch");
     }
 
@@ -268,9 +268,9 @@ public class ImportBatchesTests
         var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote");
         Assert.IsGreaterThan(0, quoteCount, "Quotes from the valid curated file should still be seeded");
 
-        var emptyBatch = await conn.QuerySingleAsync<(string Id, int RecordCount)>(
+        var (Id, RecordCount) = await conn.QuerySingleAsync<(string Id, int RecordCount)>(
             "SELECT Id, RecordCount FROM Import_Batch WHERE Name = @name", new { name = "empty.json" });
-        Assert.AreEqual(0, emptyBatch.RecordCount, "The empty/invalid file's batch should record zero quotes, not crash");
+        Assert.AreEqual(0, RecordCount, "The empty/invalid file's batch should record zero quotes, not crash");
     }
 
     /// <summary>A file scanned from the user imports folder (Origin=UserImports) with no URL gets Type=UserSeed, not Seed.</summary>

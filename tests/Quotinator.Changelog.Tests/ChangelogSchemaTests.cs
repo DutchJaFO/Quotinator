@@ -13,7 +13,7 @@ public sealed class ChangelogSchemaTests
 
     private static readonly EvaluationOptions StrictOptions = new() { OutputFormat = OutputFormat.List };
 
-    private static List<(string Filename, JsonDocument Doc)> _docs = [];
+    private static readonly List<(string Filename, JsonDocument Doc)> _docs = [];
 
     [ClassInitialize]
     public static void LoadFiles(TestContext _)

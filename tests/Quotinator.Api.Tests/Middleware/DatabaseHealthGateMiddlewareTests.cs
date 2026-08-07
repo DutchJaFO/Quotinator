@@ -23,12 +23,12 @@ public class DatabaseHealthGateMiddlewareTests
     private static (RequestDelegate Next, Func<bool> WasCalled) SpyNext()
     {
         var called = false;
-        RequestDelegate next = ctx =>
+        Task next(HttpContext ctx)
         {
             called = true;
             ctx.Response.StatusCode = 200;
             return Task.CompletedTask;
-        };
+        }
         return (next, () => called);
     }
 

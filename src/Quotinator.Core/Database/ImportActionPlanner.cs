@@ -143,7 +143,7 @@ internal static class ImportActionPlanner
                     ? (Title: canonical.CanonicalTitle, Type: canonical.CanonicalType, Found: true, IndexedId: (string?)indexedId)
                     : await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                         Sql.Sources.SelectExistingById, new { id = canonicalId }, transaction) is { } row
-                        ? (Title: row.Title, Type: row.Type, Found: true, IndexedId: canonicalId)
+                        ? (row.Title, row.Type, Found: true, IndexedId: canonicalId)
                         : (Title: canonical.CanonicalTitle, Type: canonical.CanonicalType, Found: false, IndexedId: (string?)null);
 
                 // Not found at all → first-time creation, not stale. Found (by id) → stale only if the

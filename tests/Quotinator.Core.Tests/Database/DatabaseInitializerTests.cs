@@ -1205,17 +1205,17 @@ public class DatabaseInitializerTests
 
         var columns = await conn.QueryAsync<(int cid, string name, string type, int notnull, string? dflt_value, int pk)>(
             $"SELECT cid, name, type, [notnull], dflt_value, pk FROM pragma_table_info('{table}');");
-        foreach (var c in columns.OrderBy(c => c.cid))
-            lines.Add($"COL {c.cid} {c.name} {c.type} notnull={c.notnull} default={c.dflt_value} pk={c.pk}");
+        foreach (var (cid, name, type, notnull, dflt_value, pk) in columns.OrderBy(c => c.cid))
+            lines.Add($"COL {cid} {name} {type} notnull={notnull} default={dflt_value} pk={pk}");
 
         var indexes = await conn.QueryAsync<(string name, int unique)>(
             $"SELECT name, [unique] FROM pragma_index_list('{table}');");
-        foreach (var idx in indexes.OrderBy(i => i.name))
+        foreach (var (name, unique) in indexes.OrderBy(i => i.name))
         {
             var idxCols = await conn.QueryAsync<(int seqno, string? name)>(
-                $"SELECT seqno, name FROM pragma_index_info('{idx.name}');");
+                $"SELECT seqno, name FROM pragma_index_info('{name}');");
             var colList = string.Join(",", idxCols.OrderBy(c => c.seqno).Select(c => c.name));
-            lines.Add($"IDX {idx.name} unique={idx.unique} cols=({colList})");
+            lines.Add($"IDX {name} unique={unique} cols=({colList})");
         }
 
         return lines;
@@ -1679,7 +1679,7 @@ public class DatabaseInitializerTests
     public async Task Migration_CharacterGlobalIdentity_ConsolidatesSameNameRowsWithinKnownSeries()
     {
         var seriesId = Guid.NewGuid().ToString();
-        var (source1Id, source2Id, character1Id, character2Id) =
+        var (_, _, character1Id, character2Id) =
             await SeedPreMergeCharactersAsync(seriesId1: seriesId, seriesId2: seriesId);
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1950,15 +1950,13 @@ public class DatabaseInitializerTests
         Assert.IsNotNull(seriesId, "Sanity check — NewestWins applies immediately, so SeriesId must already be set before the second pass");
 
         var reapplyBatchId = Guid.NewGuid();
-        using (var reapplyConn = new SqliteConnection($"Data Source={_dbPath}"))
-        {
-            await reapplyConn.OpenAsync(TestContext.CancellationToken);
-            var actions = await Quotinator.Core.Database.ImportActionPlanner.PlanAsync(
-                (SqliteConnection)reapplyConn, [], reapplyBatchId, DuplicateResolutionPolicy.Review,
-                sources: [new Quotinator.Core.Import.SourceEntryDto { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Enums.QuoteType.Movie, SeriesName = "Test Series" }]);
+        using var reapplyConn = new SqliteConnection($"Data Source={_dbPath}");
+        await reapplyConn.OpenAsync(TestContext.CancellationToken);
+        var actions = await Quotinator.Core.Database.ImportActionPlanner.PlanAsync(
+            (SqliteConnection)reapplyConn, [], reapplyBatchId, DuplicateResolutionPolicy.Review,
+            sources: [new Quotinator.Core.Import.SourceEntryDto { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Enums.QuoteType.Movie, SeriesName = "Test Series" }]);
 
-            Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Identical content — no change, no action staged at all");
-        }
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Identical content — no change, no action staged at all");
     }
 
     public TestContext TestContext { get; set; }

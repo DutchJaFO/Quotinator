@@ -146,7 +146,16 @@ rewrite tools apply the fix, but verifying it's actually safe is a manual step, 
   `HashSet<string>` locals still target `HashSet<string>`, `IReadOnlyList<string>`-cast values are
   read-only in every case, `Dictionary<K,V>` field initializers compile to the same constructor call).
   Full test suite green (0 failures) both before and after escalating severity to `warning`.
-- **2b — IDE0037/IDE0042/IDE0270/IDE0059/IDE0039/IDE0063/IDE0044, 40 occurrences: ⬜ Not started.**
+- **2b — IDE0037/IDE0042/IDE0270/IDE0059/IDE0039/IDE0063/IDE0044, 40 occurrences: ✅ Done.**
+  Full diff (11 files) read by hand. **Found a real bug via manual review, exactly the kind
+  `dotnet format --fix` cannot catch on its own**: the IDE0270 fix on
+  `SqliteImportActionService.cs` correctly rewrote `if (sourceId is null) throw ...;` into
+  `sourceId ?? throw ...`, which narrows `sourceId`'s static type from `Guid?` to `Guid` — but two
+  downstream `sourceId.Value` accesses were left in place by the tool and no longer compiled
+  (`.Value` doesn't exist on non-nullable `Guid`). Fixed by hand (`sourceId.Value` → `sourceId` at
+  both sites). Every other file in the batch checked individually for the same
+  "does a later line depend on the pre-fix type/shape" question — none did. Full test suite green
+  before and after severity escalation.
 
 ### Step 3 — IDE0290 (primary constructors) — developer decision required
 **Status:** ⬜ Not started — blocked on developer decision (adopt vs. suppress)

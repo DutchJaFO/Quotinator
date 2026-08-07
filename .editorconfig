@@ -13,3 +13,17 @@ dotnet_diagnostic.IDE0305.severity = warning
 dotnet_diagnostic.IDE0300.severity = warning
 dotnet_diagnostic.IDE0301.severity = warning
 dotnet_diagnostic.IDE0028.severity = warning
+
+# Step 2b: member-name simplification, deconstruction, null-check simplification, unnecessary
+# assignment, local function vs lambda, simple using statement, readonly field. Found live: the
+# IDE0270 (null-check simplification) fix on SqliteImportActionService.cs correctly narrowed a
+# `Guid?` local to `Guid` via `?? throw`, but two downstream `.Value` accesses weren't updated by
+# the tool and had to be fixed by hand — dotnet format applies a diagnostic-correct fix without
+# checking whether it invalidates code elsewhere in the same file.
+dotnet_diagnostic.IDE0037.severity = warning
+dotnet_diagnostic.IDE0042.severity = warning
+dotnet_diagnostic.IDE0270.severity = warning
+dotnet_diagnostic.IDE0059.severity = warning
+dotnet_diagnostic.IDE0039.severity = warning
+dotnet_diagnostic.IDE0063.severity = warning
+dotnet_diagnostic.IDE0044.severity = warning

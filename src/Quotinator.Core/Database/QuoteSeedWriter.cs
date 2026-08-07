@@ -155,7 +155,7 @@ internal static class QuoteSeedWriter
                     Id        = Guid.NewGuid().ToString(),
                     QuoteId   = quoteId.ToString("D"),
                     Language  = lang,
-                    QuoteText = t.QuoteText,
+                    t.QuoteText,
                     DateCreated = now
                 }, transaction);
 
