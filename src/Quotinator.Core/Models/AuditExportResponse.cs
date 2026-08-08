@@ -1,5 +1,3 @@
-using Quotinator.Data.Entities;
-
 namespace Quotinator.Core.Models;
 
 /// <summary>
@@ -9,8 +7,8 @@ namespace Quotinator.Core.Models;
 public sealed class AuditExportResponse
 {
     /// <summary>Every matching <c>Audit_Entry</c> row, newest first.</summary>
-    public required IReadOnlyList<AuditEntryEntity> Entries { get; init; }
+    public required IReadOnlyList<AuditEntryResponse> Entries { get; init; }
 
     /// <summary>Every matching <c>Audit_Change</c> row, newest first.</summary>
-    public required IReadOnlyList<ChangeEntity> Changes { get; init; }
+    public required IReadOnlyList<AuditChangeResponse> Changes { get; init; }
 }

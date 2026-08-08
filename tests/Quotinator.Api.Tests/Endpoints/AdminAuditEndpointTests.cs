@@ -9,6 +9,7 @@ using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
@@ -112,6 +113,54 @@ public class AdminAuditEndpointTests
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
+    }
+
+    [TestMethod]
+    public async Task GetAuditLog_ResponseShape_NoSafeValueWrapperInJson()
+    {
+        var entry = new AuditEntryEntity
+        {
+            TableName   = "Quotes",
+            RecordId    = Guid.Empty.ToString("D").ToUpperInvariant(),
+            Operation   = AuditOperation.Insert,
+            Agent       = "TestRunner/1.0",
+            PerformedAt = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+        };
+        var stubReader = new StubAuditReader(new PagedItems<AuditEntryEntity>([entry], 1, 50, 1));
+        using var factory = CreateFactory(stubReader);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.GetAsync("/api/v1/admin/audit", TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.DoesNotContain("\"raw\":", body, "SafeValue<T>'s internal wrapper must not leak into the response JSON");
+        Assert.DoesNotContain("\"isValid\":", body, "SafeValue<T>'s internal wrapper must not leak into the response JSON");
+    }
+
+    [TestMethod]
+    public async Task GetAuditLog_ResponseShape_PreservesDateModifiedWhenSet()
+    {
+        var modifiedAt = new DateTime(2026, 2, 2, 8, 0, 0, DateTimeKind.Utc);
+        var entry = new AuditEntryEntity
+        {
+            TableName    = "Quotes",
+            RecordId     = Guid.Empty.ToString("D").ToUpperInvariant(),
+            Operation    = AuditOperation.Update,
+            PerformedAt  = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+            DateModified = SafeDateValue.From(modifiedAt),
+        };
+        var stubReader = new StubAuditReader(new PagedItems<AuditEntryEntity>([entry], 1, 50, 1));
+        using var factory = CreateFactory(stubReader);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.GetAsync("/api/v1/admin/audit", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        var item     = doc.RootElement.GetProperty("items")[0];
+
+        Assert.AreEqual(modifiedAt, item.GetProperty("dateModified").GetDateTime(),
+            "a genuinely modified row's dateModified must survive the SafeValue unwrap, not be dropped");
     }
 
     // ── Pagination contract (#195) ────────────────────────────────────────────
@@ -395,6 +444,61 @@ public class AdminAuditEndpointTests
         Assert.AreEqual(1, doc.RootElement.GetProperty("changes").GetArrayLength());
         Assert.IsNotNull(response.Content.Headers.ContentDisposition, "must be a downloaded file, not an inline response");
         Assert.AreEqual("attachment", response.Content.Headers.ContentDisposition!.DispositionType);
+    }
+
+    [TestMethod]
+    public async Task ExportAuditTrail_ResponseShape_NoSafeValueWrapperInJson()
+    {
+        var entry = new AuditEntryEntity
+        {
+            TableName   = "Quotes",
+            Operation   = AuditOperation.Insert,
+            PerformedAt = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+        };
+        var change = new ChangeEntity
+        {
+            EntityType = "quote",
+            EntityId   = Guid.NewGuid().ToString(),
+            OccurredAt = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+        };
+        var stubAuditReader  = new StubAuditReader(new PagedItems<AuditEntryEntity>([entry], 1, 20, 1));
+        var stubChangeReader = new StubChangeReader { Items = [change] };
+
+        using var factory = CreateFactory(stubAuditReader, changeReader: stubChangeReader);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/export", TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.DoesNotContain("\"raw\":", body, "SafeValue<T>'s internal wrapper must not leak into either entries or changes");
+        Assert.DoesNotContain("\"isValid\":", body, "SafeValue<T>'s internal wrapper must not leak into either entries or changes");
+    }
+
+    [TestMethod]
+    public async Task ExportAuditTrail_ChangeResponseShape_ActionIsEnumNotString()
+    {
+        var change = new ChangeEntity
+        {
+            EntityType      = "quote",
+            EntityId        = Guid.NewGuid().ToString(),
+            OccurredAt      = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+            Action          = new SafeValue<ChangeAction?>(ChangeAction.Modified.ToString(), ChangeAction.Modified),
+            InitiatedByType = new SafeValue<InitiatorType?>(InitiatorType.WriteEndpoint.ToString(), InitiatorType.WriteEndpoint),
+        };
+        var stubAuditReader  = new StubAuditReader(new PagedItems<AuditEntryEntity>([], 1, 20, 0));
+        var stubChangeReader = new StubChangeReader { Items = [change] };
+
+        using var factory = CreateFactory(stubAuditReader, changeReader: stubChangeReader);
+        using var client  = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/admin/audit/export", TestContext.CancellationToken);
+        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        var changeEl = doc.RootElement.GetProperty("changes")[0];
+
+        Assert.AreEqual(JsonValueKind.String, changeEl.GetProperty("action").ValueKind, "action must serialize as a plain enum-name string, not a SafeValue wrapper object");
+        Assert.AreEqual("Modified", changeEl.GetProperty("action").GetString());
+        Assert.AreEqual(JsonValueKind.String, changeEl.GetProperty("initiatedByType").ValueKind);
+        Assert.AreEqual("WriteEndpoint", changeEl.GetProperty("initiatedByType").GetString());
     }
 
     [TestMethod]

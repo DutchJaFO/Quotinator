@@ -11,6 +11,7 @@ using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
@@ -87,13 +88,15 @@ internal static class AdminEndpoints
                 return pageError!;
 
             var result = await auditReader.GetPagedAsync(table, recordId, pageValue, pageSizeValue);
+            var mapped = new PagedItems<AuditEntryResponse>(
+                [.. result.Items.Select(ToAuditEntryResponse)], result.Page, result.PageSize, result.TotalCount);
 
             return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
-                ?? Results.Ok(result);
+                ?? Results.Ok(mapped);
         })
         .WithName("GetAuditLog")
         .WithSummary("Get audit log")
-        .Produces<PagedItems<AuditEntryEntity>>(StatusCodes.Status200OK)
+        .Produces<PagedItems<AuditEntryResponse>>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
         .WithDescription(
             "Returns a paginated list of audit entries, newest first. " +
@@ -153,7 +156,11 @@ internal static class AdminEndpoints
             httpContext.Response.Headers.Append("Content-Disposition",
                 $"attachment; filename=\"quotinator-audit-export-{DateTime.UtcNow:yyyyMMddHHmmss}.json\"");
 
-            return Results.Ok(new AuditExportResponse { Entries = entries, Changes = changes });
+            return Results.Ok(new AuditExportResponse
+            {
+                Entries = [.. entries.Select(ToAuditEntryResponse)],
+                Changes = [.. changes.Select(ToAuditChangeResponse)],
+            });
         })
         .WithName("ExportAuditTrail")
         .WithSummary("Bulk-export the audit trail")
@@ -307,4 +314,36 @@ internal static class AdminEndpoints
 
     private static DateTime? Later(DateTime? a, DateTime? b) =>
         a is null ? b : b is null ? a : a > b ? a : b;
+
+    private static AuditEntryResponse ToAuditEntryResponse(AuditEntryEntity entity) => new()
+    {
+        Id           = entity.Id.ToCanonicalId(),
+        TableName    = entity.TableName,
+        RecordId     = entity.RecordId,
+        Operation    = entity.Operation,
+        Agent        = entity.Agent,
+        PerformedAt  = entity.PerformedAt,
+        DateCreated  = entity.DateCreated.Parsed,
+        DateModified = entity.DateModified.Parsed,
+        DateDeleted  = entity.DateDeleted.Parsed,
+        IsDeleted    = entity.IsDeleted,
+    };
+
+    private static AuditChangeResponse ToAuditChangeResponse(ChangeEntity entity) => new()
+    {
+        Id              = entity.Id.ToCanonicalId(),
+        EntityType      = entity.EntityType,
+        EntityId        = entity.EntityId,
+        InitiatedByType = entity.InitiatedByType.Parsed,
+        InitiatedById   = entity.InitiatedById,
+        Action          = entity.Action.Parsed,
+        Field           = entity.Field,
+        OldValue        = entity.OldValue,
+        NewValue        = entity.NewValue,
+        OccurredAt      = entity.OccurredAt,
+        DateCreated     = entity.DateCreated.Parsed,
+        DateModified    = entity.DateModified.Parsed,
+        DateDeleted     = entity.DateDeleted.Parsed,
+        IsDeleted       = entity.IsDeleted,
+    };
 }

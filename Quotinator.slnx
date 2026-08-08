@@ -256,6 +256,7 @@
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/255-enum-folder-moves-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/256-response-dto-suffix-fixes-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/271-actionpayload-converteroptions-rename-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/272-audit-response-dto-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
