@@ -70,3 +70,11 @@ dotnet_diagnostic.CA1826.severity = warning
 # non-interface implementation detail, or a test field/factory always assigned the same concrete
 # real type. See the plan doc's Step 6b for the full per-occurrence reasoning.
 dotnet_diagnostic.CA1859.severity = warning
+
+# Step 7: CA1806 (ignored TryParse/TryParseExtended result), all 12 occurrences in test files. Each
+# already relied on the out parameter alone (a null-forgiving `!` with no check, or an `Assert.IsNotNull`
+# afterward) instead of asserting the bool return directly — weaker than the codebase's own established
+# pattern (`Assert.IsTrue(TryParse(...))`, already used elsewhere in the same files) since a genuine
+# parse failure would surface as a confusing NullReferenceException instead of a clear assertion
+# message. Tightened all 12 to that established pattern; no case exercised a real production bug.
+dotnet_diagnostic.CA1806.severity = warning

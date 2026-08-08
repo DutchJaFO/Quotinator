@@ -123,10 +123,9 @@ public class CsvQuoteConverterTests
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
-        SourceQuoteFileReader.TryParse(text, out var quotes);
-        Assert.IsNotNull(quotes);
-        Assert.HasCount(1, quotes);
-        Assert.AreEqual("A real quote.", quotes[0].QuoteText);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        Assert.HasCount(1, quotes!);
+        Assert.AreEqual("A real quote.", quotes![0].QuoteText);
     }
 
     [TestMethod]

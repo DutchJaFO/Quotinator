@@ -228,8 +228,8 @@ public class SourceQuoteFileReaderTests
             {"quotes":[],"sources":[{"title":"World","type":"movie","date":null}]}
             """;
 
-        SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult);
-        SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult);
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult));
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult));
 
         Assert.IsFalse(absentResult!.Sources[0].Date.HasValue, "Omitted 'date' must be Absent, not Of(null)");
         Assert.IsTrue(explicitNullResult!.Sources[0].Date.HasValue, "Explicit 'date: null' must be Of(null), not Absent");
@@ -246,8 +246,8 @@ public class SourceQuoteFileReaderTests
             {"quotes":[],"sources":[{"title":"World","type":"movie","seriesName":null}]}
             """;
 
-        SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult);
-        SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult);
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult));
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult));
 
         Assert.IsFalse(absentResult!.Sources[0].SeriesName.HasValue, "Omitted 'seriesName' must be Absent, not Of(null)");
         Assert.IsTrue(explicitNullResult!.Sources[0].SeriesName.HasValue, "Explicit 'seriesName: null' must be Of(null), not Absent");
@@ -264,8 +264,8 @@ public class SourceQuoteFileReaderTests
             {"quotes":[],"people":[{"id":"66666666-6666-6666-6666-666666666666","name":"Ada Lovelace","dateOfBirth":null}]}
             """;
 
-        SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult);
-        SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult);
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult));
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult));
 
         Assert.IsFalse(absentResult!.People[0].DateOfBirth.HasValue, "Omitted 'dateOfBirth' must be Absent, not Of(null)");
         Assert.IsTrue(explicitNullResult!.People[0].DateOfBirth.HasValue, "Explicit 'dateOfBirth: null' must be Of(null), not Absent");

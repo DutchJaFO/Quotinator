@@ -58,9 +58,8 @@ public class RegexArrayConverterTests
         await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken);
 
         var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
-        SourceQuoteFileReader.TryParse(text, out var quotes);
-        Assert.IsNotNull(quotes);
-        Assert.HasCount(2, quotes);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        Assert.HasCount(2, quotes!);
     }
 
     [TestMethod]
@@ -122,10 +121,9 @@ public class RegexArrayConverterTests
         await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken);
 
         var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
-        SourceQuoteFileReader.TryParse(text, out var quotes);
-        Assert.IsNotNull(quotes);
-        Assert.HasCount(1, quotes);
-        Assert.AreEqual("A real quote.", quotes[0].QuoteText);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        Assert.HasCount(1, quotes!);
+        Assert.AreEqual("A real quote.", quotes![0].QuoteText);
     }
 
     [TestMethod]
@@ -188,7 +186,7 @@ public class RegexArrayConverterTests
     private static string FindBaselineId(string quote, string source)
     {
         var text = File.ReadAllText(VilaboimBaselineFile);
-        SourceQuoteFileReader.TryParse(text, out var quotes);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
         return quotes!.Single(q => q.QuoteText == quote && q.Source == source).Id;
     }
 

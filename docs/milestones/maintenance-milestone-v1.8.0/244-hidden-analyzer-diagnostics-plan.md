@@ -1,6 +1,6 @@
 # #244 — Hidden Roslyn code-style and .NET analyzer diagnostics (IDE0xxx, CAxxxx)
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 8)
 **GitHub issue:** #244
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -307,7 +307,30 @@ Full build (0 warnings, 0 errors) and full solution test suite (1433 tests, 0 fa
 after escalating `CA1859` to `warning`.
 
 ### Step 7 — CA1806 (ignored method result) — review each of the 12
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+All 12 hits were `SourceQuoteFileReader.TryParse`/`TryParseExtended` calls in test files, none in
+production code. Each already relied on the `out` parameter alone instead of the `bool` return value:
+- 4 occurrences (`BasicJsonArrayConverterTests.cs`, `CsvQuoteConverterTests.cs`,
+  `RegexArrayConverterTests.cs` ×2) followed the call with `Assert.IsNotNull(quotes)` — this does
+  catch a parse failure (the `out` contract sets the value to `null` on failure), so it wasn't a
+  live bug, but it doesn't match the stronger pattern the same files already use elsewhere
+  (`Assert.IsTrue(TryParse(...))`, e.g. `RegexArrayConverterTests.ReadSingle`).
+- 2 occurrences (`BasicJsonArrayConverterTests.FindBaselineId`, `RegexArrayConverterTests.
+  FindBaselineId`) used the `!` null-forgiving operator with **no check at all** — a genuine parse
+  failure here would have surfaced as an unhelpful `NullReferenceException` instead of a clear
+  assertion message, though (like the above) not a live bug, since these baseline files are always
+  well-formed.
+- 6 occurrences (`SourceQuoteFileReaderTests.cs`, 3 test methods × 2 calls each) used the same
+  unchecked `!` pattern as above.
+
+All 12 tightened to `Assert.IsTrue(TryParse[...](...))`, matching the codebase's own established
+strongest pattern. Fixing the resulting `Assert.IsTrue`-doesn't-narrow-nullability gap (MSTest's
+`Assert.IsTrue` carries no `[MemberNotNullWhen]`-style attribute, so the compiler still sees the
+`out` variable as nullable after the assert) needed 4 explicit `!` null-forgiving operators added at
+the point of use — confirmed via a full rebuild surfacing exactly those 4 `CS8604` warnings, fixed,
+then reverified at 0 warnings. No genuine production bug found this step — full build (0 warnings,
+0 errors) and full solution test suite (1433 tests, 0 failures) verified.
 
 ### Step 8 — CA2254 (inconsistent logging template) — fix each of the 3
 **Status:** ⬜ Not started
@@ -345,7 +368,7 @@ mirroring #197's own "no user-facing changes").
 | 4 | ✅ | IDE0130's 4 real namespace/folder mismatches resolved | Manual | Step 4 |
 | 5 | ✅ | IDE0060's 3 unused parameters reviewed and resolved | Manual | Step 5 |
 | 6 | ✅ | Mechanical `CAxxxx`/`SYSLIB` rules escalated and fixed | Build | Step 6 |
-| 7 | ⬜ | CA1806's 12 ignored results reviewed, any real bugs fixed | Manual | Step 7 |
+| 7 | ✅ | CA1806's 12 ignored results reviewed, any real bugs fixed | Manual | Step 7 |
 | 8 | ⬜ | CA2254's 3 logging template issues fixed | Manual | Step 8 |
 | 9 | ⬜ | CA1068's 2 parameter-order issues reviewed | Manual | Step 9 |
 | 10 | ⬜ | CA1873 scope decision made (split vs. inline) | Manual | Step 10 |
