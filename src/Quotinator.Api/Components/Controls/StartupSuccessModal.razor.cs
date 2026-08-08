@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using Quotinator.Api.Startup;
+using Quotinator.Core.Services;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
 namespace Quotinator.Api.Components.Controls;
@@ -26,8 +27,11 @@ public partial class StartupSuccessModal
 
     [Inject] private I18nTextService I18nText { get; set; } = default!;
     [Inject] private StartupUxState StartupUx { get; set; } = default!;
+    [Inject] private IVersionService VersionService { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
+
+    private string Version => VersionService.Version;
 
     private void Dismiss() => StartupUx.Dismiss();
 
