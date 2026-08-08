@@ -689,6 +689,24 @@ all ~13,298 existing occurrences as build warnings immediately, which would brea
 policy long before the boyscout rule could work through them. Do not escalate it without first
 reducing the outstanding count to something the build can realistically stay green against.
 
+### Primary constructors
+
+**Primary constructors (C# 12) are adopted with no exceptions** (developer decision, 2026-08-06, #244)
+— `IDE0290` is escalated to `warning` in `.editorconfig` and every constructor in the codebase (~33
+classes at the time of the decision) has been converted. Two candidate exceptions were considered and
+both rejected: a class with individually-`<param>`-documented constructor parameters, and a class
+chaining to a base constructor with a large combined parameter count (25). Neither is a valid reason to
+keep a classic constructor — "all parameters of a constructor should be xml-documented... There appears
+to be no syntactical reason" to exclude either shape.
+
+**Every constructor parameter — primary or classic, on every class — gets its own `<param
+name="...">` XML doc tag on the class-level `<summary>`**, not just a generic one-line class summary.
+This is a stricter requirement than CS1591 enforces: CS1591 only requires *a* doc comment to exist on a
+public member, not that every parameter has its own `<param>` tag, so a clean 0-warnings build does not
+by itself prove per-parameter documentation is complete — check by reading, not by trusting the build.
+Long combined parameter lists format one parameter per line, exactly as a classic constructor already
+would (no readability loss from adopting primary constructors).
+
 ### Blazor code style
 
 These rules apply to all Blazor components and pages:

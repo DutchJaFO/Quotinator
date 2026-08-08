@@ -1,6 +1,6 @@
 # #244 — Hidden Roslyn code-style and .NET analyzer diagnostics (IDE0xxx, CAxxxx)
 
-**Status:** In progress (step 11)
+**Status:** Waiting for release
 **GitHub issue:** #244
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -408,7 +408,7 @@ milestone v1.8.0. `CA1873` is **not** escalated in `.editorconfig` — that's #2
 requirement, once the pattern is decided. #244 itself does not touch the 52 occurrences.
 
 ### Step 11 — Full verification
-**Status:** ⬜ T2 done, T1 not yet started (developer's own action)
+**Status:** ✅ Done — T2 (full 32-section pass) and T1 (developer's own Visual Studio run) both confirmed
 
 `dotnet build --configuration Release`: 0 warnings, 0 errors. `dotnet test --configuration Release`:
 9 test projects, 3169 tests, 0 failures.
@@ -448,12 +448,33 @@ No other regression found. The `?lang=` fix from Step 5 and the `→ 422` real-s
 (#229, pre-existing) were both re-confirmed live as part of this pass (section 19), directly proving
 Step 8's request-logging redesign didn't regress either.
 
-**T1 — not yet performed.** Per this project's own standing rule, live Visual Studio verification is
-exclusively the developer's own action; the assistant does not replicate it locally. Awaiting the
-developer's own T1 pass before this step and #244 as a whole can be marked done.
+**T1 — confirmed by the developer.** Per this project's own standing rule, live Visual Studio
+verification is exclusively the developer's own action; the assistant does not replicate it locally.
+One question surfaced during the developer's own run: `GET /api/v1/masterdata/sources` appeared to
+return rows in an arbitrary/shuffled order. Investigated and explained — not a #244 regression, and
+not caused by any code this issue touched: `RepositorySql.SelectPage`'s default order is `ORDER BY
+DateCreated, Id`, and every row created in one seed/import batch shares the exact same `DateCreated`
+(`ImportActionPlanner.PlanAsync` captures `DateTime.UtcNow` once per batch and reuses it for every
+row), so `DateCreated` contributes nothing to the sort within a batch and the `Id` tiebreaker — a
+deterministic content hash, not a sequential value — becomes the effective sort key. The order is
+fully stable and identical across repeated calls; it just doesn't look alphabetical to a human reading
+a hash. Developer accepted this as expected behaviour, not a bug. Separately, the developer noticed
+`/masterdata/sources` has no `type` filter and that the underlying `person` source type doesn't
+accurately describe non-fiction occasions like speeches — filed as
+[#270](https://github.com/DutchJaFO/Quotinator/issues/270) (research issue, Data Enrichment
+milestone), out of scope for #244 itself.
 
 ### Step 12 — Docs sync
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+`CLAUDE.md` gained a "Primary constructors" section (mirroring the existing "Variable declarations"
+section's format) documenting Step 3's decision: primary constructors adopted with no exceptions, and
+every constructor parameter — primary or classic — requires its own `<param>` XML doc tag, stricter
+than what CS1591 alone enforces. `changelog.en.json`'s `unreleased.changed` array gained one entry
+covering the bulk of #244's own work (analyzer/style escalation across ~470 occurrences, no behaviour
+change beyond the `?lang=` fix already recorded there from Step 5) — `nl.json`/`de.json` updated in
+lockstep in the same commit. `CHANGELOG.md` regenerated. `ChangelogSchemaTests` (11/11) and a full
+build/test pass (0 warnings/0 errors, 3169 tests) verified after the edit.
 `CLAUDE.md` — document the primary-constructor decision from Step 3 as a house-style convention (either
 direction) so it doesn't need re-deciding per file going forward. Changelog entry (internal-only,
 mirroring #197's own "no user-facing changes").
@@ -474,8 +495,8 @@ mirroring #197's own "no user-facing changes").
 | 8 | ✅ | CA2254's 3 logging template issues fixed | Manual | Step 8 |
 | 9 | ✅ | CA1068's 2 parameter-order issues reviewed | Manual | Step 9 |
 | 10 | ✅ | CA1873 scope decision made (split vs. inline) | Manual | Step 10 |
-| 11 | ⬜ | Full build/test 0 warnings 0 errors; T1; T2 | Build + Live | Step 11 (T2 ✅, T1 outstanding) |
-| 12 | ⬜ | CLAUDE.md updated with the primary-constructor convention | Manual | Step 12 |
+| 11 | ✅ | Full build/test 0 warnings 0 errors; T1; T2 | Build + Live | Step 11 |
+| 12 | ✅ | CLAUDE.md updated with the primary-constructor convention | Manual | Step 12 |
 
 ---
 

@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-07 21:56 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-08 12:33 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Clearing the entire audit trail (`DELETE /admin/audit` with no `table` filter) now also clears the change log, matching the new bulk-export/date-range endpoints' treatment of both as one combined audit trail; clearing a specific table's entries leaves the change log untouched, since it has no equivalent per-table scope (issue #249)
 - `POST /api/v1/admin/database/reset` now drops the entire database unconditionally and rebuilds it from the baseline schema, instead of preserving certain internal tables and always re-importing bundled quote content afterward — an operator who wants old data back exports the audit trail first (`GET /admin/audit/export`) or reseeds explicitly; `preserveSchemaVersion=true` now preserves both internal migration-history counters symmetrically instead of only one (issue #156)
 - Added a periodic Docker base-image vulnerability re-scan to the project's own release verification checklist, so a stale vulnerability count (found live during the investigation above) doesn't go unnoticed again — a fresh scan confirmed no change since that investigation's own findings; no application change (issue #250)
+- Roslyn code-style and .NET analyzer diagnostics (previously invisible to the build, since neither `EnforceCodeStyleInBuild` nor `AnalysisMode` was configured) are now escalated to build-time warnings and resolved across the whole solution — around 470 occurrences, including adopting primary constructors project-wide and requiring per-parameter XML documentation on every constructor — a purely internal code-quality change with no behaviour change beyond the `?lang=` fix noted above (issue #244)
 
 ### Fixed
 - Database columns backed by the duplicate-resolution-policy setting (`ImportBatches.ConflictPolicy`, and the internal `AppliedPolicy` column on two provenance tables) now reject an invalid value at the database level via a CHECK constraint, matching every other enum-backed column in the schema; a pre-existing data inconsistency this closed is also normalised automatically (issue #150)
