@@ -52,6 +52,7 @@ and #255/#256 do not carry that urgency.
 | [#263](https://github.com/DutchJaFO/Quotinator/issues/263) | Make recovering from critical startup/database errors easier (Blazor UI, HA add-on experience) | Planning | Not yet determined | No plan doc yet |
 | [#264](https://github.com/DutchJaFO/Quotinator/issues/264) | Clarify ADR 016's Dto boundary for DB-stored JSON and dual-boundary classes | Planning | N/A (research) | No plan doc yet |
 | [#265](https://github.com/DutchJaFO/Quotinator/issues/265) | Admin audit endpoint returns AuditEntryEntity directly with no Response DTO layer | Planning | N/A (research) | No plan doc yet |
+| [#267](https://github.com/DutchJaFO/Quotinator/issues/267) | Investigate using FileResource/ImportBatch history to avoid unconditional backup-before-seed on every startup | Planning | N/A (research) | No plan doc yet |
 | [#269](https://github.com/DutchJaFO/Quotinator/issues/269) | Adopt a project-wide pattern for expensive logging arguments (CA1873) | Planning | Not yet determined | No plan doc yet |
 
 ---
@@ -88,6 +89,11 @@ different set of files.
 image research) and #236 (release-workflow process/CI change) touch neither the database schema nor
 any renamed class, and both were confirmed independent and completed/planned out of order from the
 original blanket claim here. Corrected 2026-08-01 after actually working both.
+
+**#267 depends on #251 (done) for the data it investigates using** — it explicitly proposes using
+`Import_FileResource`/`Import_FileResourceBatch` (#251's own tables) to build a real "is there actually
+work to do" signal for the pre-seed backup. Not a hard implementation-order block (#251 already shipped,
+so #267 is unblocked and workable now), just the reason it couldn't have been filed before #251 existed.
 
 Separately, a release-level gate: **#249 must ship in the same release as #156**, per
 [ADR 014](../architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md) — not
@@ -163,7 +169,10 @@ same release. None of the remaining issues block each other beyond these relatio
     dependency on the others)
 24. **#250** — Periodic Docker Scout re-scan added to the T2 smoke-test checklist (filed while closing
     #232, 2026-08-01; appended here rather than reordered in since it has no dependency on the others)
-25. **#269** — Adopt a project-wide pattern for expensive logging arguments, CA1873 (split out of
+25. **#267** — Investigate using FileResource/ImportBatch history to reduce the unconditional pre-seed
+    backup (filed 2026-08-04 during a T1 pass, once #251's own history tables existed to investigate
+    using; appended here rather than reordered in since it has no hard dependency on the others)
+26. **#269** — Adopt a project-wide pattern for expensive logging arguments, CA1873 (split out of
     #244's own Step 10, 2026-08-08; appended here rather than reordered in since it has no dependency
     on the others)
 
