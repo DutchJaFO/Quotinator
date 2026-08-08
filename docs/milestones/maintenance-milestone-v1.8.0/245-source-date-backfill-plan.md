@@ -148,7 +148,7 @@ tests) both green. T2 found and required a real, unanticipated fix — see Notes
 | 3 | ✅ | A Complete, NULL-dated Source resolved via a dated quote stages Blocked, not a silent backfill | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_ExistingCompleteNullDatedSource_QuoteWithDate_StagesBlockedNotBackfill` |
 | 4 | ✅ | A real startup seed backfills a dateless sources[]-entry Source once a later file's quote supplies a date | Unit test | `DatabaseInitializerTests.InitialiseAsync_DatelessSourcesEntryThenDatedQuoteInLaterFile_BackfillsSourceDate` |
 | 5 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3173/3173 |
-| 6 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer's own pass |
+| 6 | ✅ | T1 — app starts in Visual Studio | Live (T1) | Developer confirmed (2026-08-08): clean Reset → fresh reseed cycle, `799 quotes / 461 sources`, zero pending/stale actions, matching T2 exactly |
 | 7 | ✅ | T2 — a fresh seeded container backfills real bundled Sources | Live (T2) | `Frozen` → `2013`, `Jurassic Park` → `1993` via `Quotinator.Tools.DbInspector`; `null_dates` dropped `98` → `38`; fresh-seed `status=pending`/`status=stale` both `totalCount: 0` |
 
 ---
