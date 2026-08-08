@@ -26,7 +26,7 @@
     },
     {
       "entityId": "293bdf5c-58c7-3f4c-8833-49ab4b0ce578",
-      "existingRecord": { "quoteText": "May the Force be with you.", "source": "Star Wars", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "existingRecord": { "quoteText": "May the Force be with you.", "source": "Star Wars", "date": "1977", "character": null, "author": null, "type": "movie", "genres": [] },
       "incomingRecord": { "quoteText": "May the Force be with you.", "source": "Star Wars", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
       "fields": [ { "field": "date", "resolution": "Keep" } ]
     },
@@ -80,7 +80,7 @@
     },
     {
       "entityId": "99346a07-8912-e84d-9971-234ea8c0c1b1",
-      "existingRecord": { "quoteText": "I'll be back.", "source": "The Terminator", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "existingRecord": { "quoteText": "I'll be back.", "source": "The Terminator", "date": "1984", "character": null, "author": null, "type": "movie", "genres": [] },
       "incomingRecord": { "quoteText": "I'll be back.", "source": "The Terminator", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
       "fields": [ { "field": "date", "resolution": "Keep" } ]
     },
@@ -164,7 +164,7 @@
     },
     {
       "entityId": "d29cabf3-5758-5449-a6fe-fd1f3d57a874",
-      "existingRecord": { "quoteText": "Hasta la vista, baby.", "source": "Terminator 2: Judgment Day", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
+      "existingRecord": { "quoteText": "Hasta la vista, baby.", "source": "Terminator 2: Judgment Day", "date": "1991", "character": null, "author": null, "type": "movie", "genres": [] },
       "incomingRecord": { "quoteText": "Hasta la vista, baby.", "source": "Terminator 2: Judgment Day", "date": null, "character": null, "author": null, "type": "movie", "genres": [] },
       "fields": [ { "field": "date", "resolution": "Keep" } ]
     },

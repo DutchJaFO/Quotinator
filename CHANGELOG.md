@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-08 12:33 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-08 13:27 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The release process no longer publishes a Home Assistant add-on version update until its matching Docker image is confirmed available, closing a window where installing or updating the add-on right after a new version appeared could fail (issue #236)
 - A database seeding failure during startup could previously leave the database partially written with no backup taken; seeding now always backs up first (on every non-baseline startup) and restores that backup if seeding fails, matching the safety net migrations already had (issue #254)
 - `GET /api/v1/quotes` and `GET /api/v1/quotes/search` now correctly return translated content when `?lang=` is requested — a bug meant both endpoints always ignored the requested language and returned only the original-language text; single-quote lookup (`GET /api/v1/quotes/{id}`) and the random endpoint were unaffected (issue #244)
+- A Source's `date` field now populates correctly even when that Source was first created by a date-less `sources[]` entry (e.g. one that only links it to a Series) and only ever gains a date from a quote in a later-seeded file — previously it stayed permanently empty in that specific case, even though the more common case (a Source discovered purely from a quote) was already fixed (issue #245)
 
 ---
 

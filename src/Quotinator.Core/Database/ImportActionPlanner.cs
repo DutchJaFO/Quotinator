@@ -412,12 +412,52 @@ internal static class ImportActionPlanner
         // round-tripping through Guid? and re-casing would silently produce a string that no longer
         // matches the real row's id if that row predates a casing-convention change (this project has
         // been through two: see ADR 012's revision history).
-        var existingId = await connection.ExecuteScalarAsync<string?>(
-            Sql.Sources.SelectIdByTitleAndType, new { title = q.Source, type = typeStr }, transaction);
-        if (existingId is { } foundId)
+        //
+        // #245: SelectExistingByTitleAndType (not the narrower id-only SelectIdByTitleAndType) so a
+        // Source first created date-less via a sources[] entry (#162/#180) can be backfilled here once
+        // a later quote supplies a Date — #191's own fix only ever populates Date on a brand-new Add
+        // below, never on a row that already exists.
+        (string Id, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)? existingRow =
+            await connection.QuerySingleOrDefaultAsync<(string Id, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                Sql.Sources.SelectExistingByTitleAndType, new { title = q.Source, type = typeStr }, transaction);
+        if (existingRow is { } row)
         {
-            index[key] = foundId;
-            return foundId;
+            index[key] = row.Id;
+
+            if (row.Date is null && q.Date is not null)
+            {
+                var existingPayload = new SourceActionPayload(q.Source, typeStr, row.Date, row.SeriesId);
+                var incomingPayload = new SourceActionPayload(q.Source, typeStr, q.Date, row.SeriesId);
+                var changedFields = new HashSet<string> { "date" };
+                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+
+                actions.Add(CompletenessGuard.ShouldBlock(currentStatus, changedFields)
+                    ? new ImportActionEntity
+                    {
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Source,
+                        EntityId = row.Id,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt = now,
+                    }
+                    : new ImportActionEntity
+                    {
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Source,
+                        EntityId = row.Id,
+                        ExistingValue = JsonSerializer.Serialize(existingPayload),
+                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                        MergedFields = JsonSerializer.Serialize(incomingPayload),
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                        DetectedAt = now,
+                    });
+            }
+
+            return row.Id;
         }
 
         var stableId = EntityIdentity.SourceId(q.Source, typeStr);

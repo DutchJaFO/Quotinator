@@ -1,6 +1,6 @@
 # #245 — Sources.Date stays NULL when a Source's only sources[] entry omits date
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #245
 **Tiers required:** T1, T2
 **Depends on:** none (isolated fix inside `ImportActionPlanner.ResolveSourceAsync`)
@@ -102,13 +102,16 @@ concern; widening scope here would blur what this issue is actually fixing.
 
 - `src/Quotinator.Core/Database/ImportActionPlanner.cs` — `ResolveSourceAsync`, per Approach above.
 - No `Sql.cs` change — reuses `Sql.Sources.SelectExistingByTitleAndType`, already correctly shaped.
+- `data/sources/vilaboim-conflict-rules.json` — 3 stale-snapshot corrections, found during T2 (see Notes).
 
 ---
 
 ## Steps
 
 ### 1. Write the four failing tests (red)
-**Status:** ⬜ Not started
+**Status:** ✅ Done — all four confirmed red against pre-fix code (3 assertion failures on the missing
+backfill/blocked behaviour; the 4th, `..._NoActionStaged`, already passed pre-fix since it documents
+existing correct behaviour, not a bug — it's a regression guard, not a repro).
 
 In `Quotinator.Core.Tests.Database.ImportActionPlannerTests`:
 - `ResolveSourceAsync_ExistingNullDatedSource_QuoteWithDate_StagesDecidedModifyBackfillingDate`
@@ -122,10 +125,17 @@ In `Quotinator.Core.Tests.Database.DatabaseInitializerTests`:
   populated after full initialisation.
 
 ### 2. Implement the fix
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `ResolveSourceAsync`'s existing-row branch switched to `SelectExistingByTitleAndType`,
+per Approach above. Neither `ExistingBatchId` nor `AppliedPolicy` is set on the staged Modify actions —
+confirmed against `PlanSourcesAsync`'s own established Source-Modify precedent (neither field is ever
+set there either) and confirmed safe (`AppliedPolicy.Parsed` only gates on `== Skip`, never on `null`).
 
 ### 3. Verify
-**Status:** ⬜ Not started
+**Status:** ✅ Done — all four tests green. Canary mutation performed on
+`..._NoActionStaged` per `docs/testing-policy.md`'s negative-assertion rule (temporarily removed the
+`row.Date is null` guard, confirmed the test fails with a clear message, reverted). Full solution
+build (0 warnings/0 errors) and test suite (3173 tests, 0 failures, up from 3169 — exactly the 4 new
+tests) both green. T2 found and required a real, unanticipated fix — see Notes below.
 
 ---
 
@@ -133,16 +143,41 @@ In `Quotinator.Core.Tests.Database.DatabaseInitializerTests`:
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | A NULL-dated existing Source resolved via a dated quote stages a Decided Modify backfilling Date | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_ExistingNullDatedSource_QuoteWithDate_StagesDecidedModifyBackfillingDate` |
-| 2 | ⬜ | A dated existing Source resolved via a differently-dated quote stages nothing (first-found-wins) | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_ExistingDatedSource_QuoteWithDifferentDate_NoActionStaged` |
-| 3 | ⬜ | A Complete, NULL-dated Source resolved via a dated quote stages Blocked, not a silent backfill | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_ExistingCompleteNullDatedSource_QuoteWithDate_StagesBlockedNotBackfill` |
-| 4 | ⬜ | A real startup seed backfills a dateless sources[]-entry Source once a later file's quote supplies a date | Unit test | `DatabaseInitializerTests.InitialiseAsync_DatelessSourcesEntryThenDatedQuoteInLaterFile_BackfillsSourceDate` |
-| 5 | ⬜ | No regression | Build + test | `dotnet build --configuration Release` (0/0); `dotnet test --configuration Release` |
+| 1 | ✅ | A NULL-dated existing Source resolved via a dated quote stages a Decided Modify backfilling Date | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_ExistingNullDatedSource_QuoteWithDate_StagesDecidedModifyBackfillingDate` |
+| 2 | ✅ | A dated existing Source resolved via a differently-dated quote stages nothing (first-found-wins) | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_ExistingDatedSource_QuoteWithDifferentDate_NoActionStaged` |
+| 3 | ✅ | A Complete, NULL-dated Source resolved via a dated quote stages Blocked, not a silent backfill | Unit test | `ImportActionPlannerTests.ResolveSourceAsync_ExistingCompleteNullDatedSource_QuoteWithDate_StagesBlockedNotBackfill` |
+| 4 | ✅ | A real startup seed backfills a dateless sources[]-entry Source once a later file's quote supplies a date | Unit test | `DatabaseInitializerTests.InitialiseAsync_DatelessSourcesEntryThenDatedQuoteInLaterFile_BackfillsSourceDate` |
+| 5 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3173/3173 |
 | 6 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer's own pass |
-| 7 | ⬜ | T2 — a fresh seeded container backfills real bundled Sources | Live (T2) | `Frozen`/`Jurassic Park` both carry a real `Date` via `Quotinator.Tools.DbInspector`; aggregate `null_dates` drops below 98 |
+| 7 | ✅ | T2 — a fresh seeded container backfills real bundled Sources | Live (T2) | `Frozen` → `2013`, `Jurassic Park` → `1993` via `Quotinator.Tools.DbInspector`; `null_dates` dropped `98` → `38`; fresh-seed `status=pending`/`status=stale` both `totalCount: 0` |
 
 ---
 
 ## Notes
 
-None yet — implementation has not started.
+**T2 surfaced a real, unanticipated downstream consequence, found and fixed in the same pass
+(2026-08-08).** A fresh seed with the code fix alone showed `quotes: 736` / `sources: 423` (not the
+expected `799`/`461`) and left 3 quotes from `vilaboim_movie-quotes.json` (Star Wars IV, The
+Terminator, Terminator 2) staged `Stale`, breaking the "fresh seed = zero pending actions" invariant.
+
+Root cause: these 3 quotes are cross-file duplicates also present in
+`NikhilNamal17_popular-movie-quotes.json` (which carries real release years). `vilaboim`'s own schema
+has no `date` field at all, so its re-import of the same quotes always sends `date: null`. Before this
+fix, these Sources' `Date` was always `null` too (nothing ever backfilled them), so the quote-level
+field comparison always saw existing=null vs incoming=null — no conflict.  Once this fix correctly
+backfills the Source's `Date`, the comparison now sees a genuine mismatch (existing=a real year,
+incoming=null), which correctly trips `vilaboim-conflict-rules.json`'s existing rules for these 3
+quotes into `Stale` — their recorded snapshot no longer matches reality, exactly the drift-detection
+#153 was built to catch. **This is #153 working correctly, not a bug in this fix** — but shipping this
+fix as-is would have left those 3 rules permanently stale on every fresh seed until manually corrected.
+
+Developer decision (2026-08-08): update the 3 affected rules' `existingRecord.date` snapshots in
+`vilaboim-conflict-rules.json` to match the new post-backfill reality (`null` → the real year), keeping
+the existing `Keep` resolution unchanged — same fix shape #153's own Zootopia-apostrophe staleness case
+already used. `existingRecord.source`'s own stale title text (e.g. `"Star Wars"` vs. the Source's
+actual current title `"Star Wars: Episode IV - A New Hope"`) was deliberately left untouched — `source`
+is not among that rule's own governed `fields`, so it plays no part in staleness evaluation and
+correcting it is unrelated, pre-existing drift outside this issue's scope.
+
+Confirmed fixed: a fresh seed with both changes shows `quotes: 799` / `sources: 461` (the expected
+baseline) and `status=pending`/`status=stale` both `totalCount: 0`.

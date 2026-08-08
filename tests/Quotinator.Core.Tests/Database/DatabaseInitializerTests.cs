@@ -392,6 +392,36 @@ public class DatabaseInitializerTests
         Assert.IsGreaterThan(0, datedSourceCount, "At least some seeded Sources must now carry a Date — today every one of them is null");
     }
 
+    /// <summary>#245: a Source first created date-less via a sources[] entry (e.g. #180's Series-linking-only shape) must have its Date backfilled once a later-seeded file's quote supplies one — #191 only ever fixed the never-named-in-a-file case, not this one.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_DatelessSourcesEntryThenDatedQuoteInLaterFile_BackfillsSourceDate()
+    {
+        string datelessEntryFile = Path.Combine(_tempDir, "dateless-entry.json");
+        string datedQuoteFile    = Path.Combine(_tempDir, "dated-quote.json");
+
+        File.WriteAllText(datelessEntryFile,
+            """{"quotes":[],"sources":[{"title":"Test Film","type":"movie"}]}""");
+        File.WriteAllText(datedQuoteFile,
+            """{"quotes":[{"id":"e1111111-1111-4111-8111-111111111111","quote":"A test line.","originalLanguage":"en","source":"Test Film","date":"1999","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}""");
+
+        var batch = new SeedBatch(
+            [
+                new SeedFile(datelessEntryFile, null),
+                new SeedFile(datedQuoteFile, null),
+            ],
+            ManifestPolicy.HardcodedDefault, "dateless-entry-test");
+
+        var db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        var date = await conn.ExecuteScalarAsync<string?>(
+            "SELECT Date FROM Quotinator_Source WHERE Title = 'Test Film' AND Type = 'Movie' AND IsDeleted = 0;");
+        Assert.AreEqual("1999", date, "The dateless sources[] entry's Source must be backfilled from the later file's own dated quote");
+    }
+
     /// <summary>
     /// #68: seeding the curated file writes its four conversations (Airplane!, Holy Grail, Princess
     /// Bride, Empire Strikes Back) into Conversations/ConversationLines/StageDirections/SoundCues,

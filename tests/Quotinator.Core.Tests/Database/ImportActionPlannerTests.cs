@@ -718,6 +718,52 @@ public class ImportActionPlannerTests
         Assert.AreEqual("1942", payload.Date, "Only one Source Add is staged for both quotes — the first-encountered quote's Date wins, matching the existing Title/Type first-quote-wins behaviour");
     }
 
+    // ── #245: ResolveSourceAsync backfilling a null Date on an already-existing Source ──────────
+
+    [TestMethod]
+    public async Task ResolveSourceAsync_ExistingNullDatedSource_QuoteWithDate_StagesDecidedModifyBackfillingDate()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: null, completenessStatus: "Incomplete");
+        SourceQuoteDto quote = BuildQuote("c1111111-1111-4111-8111-111111111111", date: "1942");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed, "The Source already exists — this must be a Modify, not a fresh Add");
+        Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed, "A background Date backfill needs no human review, matching #191's own Add-payload precedent");
+        SourceActionPayload payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        Assert.AreEqual("1942", payload.Date, "The resolving quote's own Date must backfill the existing row's null Date");
+    }
+
+    [TestMethod]
+    public async Task ResolveSourceAsync_ExistingDatedSource_QuoteWithDifferentDate_NoActionStaged()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: "1942", completenessStatus: "Incomplete");
+        SourceQuoteDto quote = BuildQuote("c2111111-1111-4111-8111-111111111111", date: "1999");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "An already-dated Source must never be touched by a later, differently-dated quote — first-found-wins, no invented conflict logic");
+    }
+
+    [TestMethod]
+    public async Task ResolveSourceAsync_ExistingCompleteNullDatedSource_QuoteWithDate_StagesBlockedNotBackfill()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: null, completenessStatus: "Complete");
+        SourceQuoteDto quote = BuildQuote("c3111111-1111-4111-8111-111111111111", date: "1942");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Blocked, sourceAction.Status.Parsed, "A Complete Source must never have its null Date silently backfilled");
+    }
+
     [TestMethod]
     public async Task PlanAsync_NeverWritesToAnyDomainTable()
     {
