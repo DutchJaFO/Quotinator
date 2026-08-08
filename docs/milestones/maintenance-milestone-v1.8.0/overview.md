@@ -52,6 +52,7 @@ and #255/#256 do not carry that urgency.
 | [#263](https://github.com/DutchJaFO/Quotinator/issues/263) | Make recovering from critical startup/database errors easier (Blazor UI, HA add-on experience) | Planning | Not yet determined | No plan doc yet |
 | [#264](https://github.com/DutchJaFO/Quotinator/issues/264) | Clarify ADR 016's Dto boundary for DB-stored JSON and dual-boundary classes | Planning | N/A (research) | No plan doc yet |
 | [#265](https://github.com/DutchJaFO/Quotinator/issues/265) | Admin audit endpoint returns AuditEntryEntity directly with no Response DTO layer | Planning | N/A (research) | No plan doc yet |
+| [#269](https://github.com/DutchJaFO/Quotinator/issues/269) | Adopt a project-wide pattern for expensive logging arguments (CA1873) | Planning | Not yet determined | No plan doc yet |
 
 ---
 
@@ -162,6 +163,9 @@ same release. None of the remaining issues block each other beyond these relatio
     dependency on the others)
 24. **#250** — Periodic Docker Scout re-scan added to the T2 smoke-test checklist (filed while closing
     #232, 2026-08-01; appended here rather than reordered in since it has no dependency on the others)
+25. **#269** — Adopt a project-wide pattern for expensive logging arguments, CA1873 (split out of
+    #244's own Step 10, 2026-08-08; appended here rather than reordered in since it has no dependency
+    on the others)
 
 ---
 

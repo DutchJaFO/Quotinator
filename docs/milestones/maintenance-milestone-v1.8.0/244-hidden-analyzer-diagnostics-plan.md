@@ -1,6 +1,6 @@
 # #244 — Hidden Roslyn code-style and .NET analyzer diagnostics (IDE0xxx, CAxxxx)
 
-**Status:** In progress (step 10)
+**Status:** In progress (step 11)
 **GitHub issue:** #244
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -395,10 +395,17 @@ positionally in the old order and was updated to match. Full build (0 warnings, 
 solution test suite (1433 tests, 0 failures) verified after escalating `CA1068` to `warning`.
 
 ### Step 10 — CA1873 (expensive logging argument evaluation) — scope decision
-**Status:** ⬜ Not started
-Present the split-into-follow-up-issue recommendation to the developer; file the follow-up issue if
-agreed, referencing #244 as the source. Do not fix the 50 occurrences inline in #244 unless the
-developer explicitly says otherwise.
+**Status:** ✅ Done
+
+Re-measured fresh (2026-08-08): 52 live occurrences, up slightly from the plan's original
+2026-08-06 count of 50 — consistent with ongoing codebase growth, not a discrepancy. Presented the
+split-into-follow-up-issue recommendation to the developer, per the reasoning already captured in
+this plan's Design details section (no single per-occurrence fix; resolving it means adopting one
+project-wide logging pattern — `[LoggerMessage]` source generation or `IsEnabled()` guards — which is
+a genuine architectural decision, not mechanical or individually-reviewable). Developer agreed; filed
+as [#269](https://github.com/DutchJaFO/Quotinator/issues/269), labelled `enhancement` + `code style`,
+milestone v1.8.0. `CA1873` is **not** escalated in `.editorconfig` — that's #269's own first
+requirement, once the pattern is decided. #244 itself does not touch the 52 occurrences.
 
 ### Step 11 — Full verification
 **Status:** ⬜ Not started
@@ -427,7 +434,7 @@ mirroring #197's own "no user-facing changes").
 | 7 | ✅ | CA1806's 12 ignored results reviewed, any real bugs fixed | Manual | Step 7 |
 | 8 | ✅ | CA2254's 3 logging template issues fixed | Manual | Step 8 |
 | 9 | ✅ | CA1068's 2 parameter-order issues reviewed | Manual | Step 9 |
-| 10 | ⬜ | CA1873 scope decision made (split vs. inline) | Manual | Step 10 |
+| 10 | ✅ | CA1873 scope decision made (split vs. inline) | Manual | Step 10 |
 | 11 | ⬜ | Full build/test 0 warnings 0 errors; T1; T2 | Build + Live | Step 11 |
 | 12 | ⬜ | CLAUDE.md updated with the primary-constructor convention | Manual | Step 12 |
 
@@ -439,4 +446,5 @@ mirroring #197's own "no user-facing changes").
   (preset-based severity escalation over hand-maintained per-rule overrides), scoped to
   `MSTestAnalysisMode` there vs. the general `IDE0xxx`/`CAxxxx` families here.
 - **#227** — precedent for decomposing a large, multi-concern issue into sub-issues once its own scope
-  became clear during planning; Step 10 may produce a similar decomposition for CA1873.
+  became clear during planning; Step 10 produced the same kind of decomposition for CA1873 — see
+  [#269](https://github.com/DutchJaFO/Quotinator/issues/269).
