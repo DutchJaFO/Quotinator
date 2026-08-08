@@ -243,6 +243,7 @@
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/166-ha-addon-stable-beta-split-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/244-hidden-analyzer-diagnostics-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/245-source-date-backfill-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/222-unicode-like-matching-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/227-domain-prefixed-naming-implementation-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/249-audit-trail-export-and-conflict-data-purge-plan.md" />
