@@ -64,7 +64,7 @@ internal sealed class StartupSummaryLogger(
             ResolveUrls(boundAddresses, _isHa, _sslEnabled, GetLocalIp());
 
         foreach (var addr in boundAddresses)
-            _logger.LogInformation("[Server] listening on {Address}", addr);
+            _logger.LogInformation("[Server] listening on {Address:l}", addr);
 
         var migLine = _db.MigrationApplied is { } mig
             ? $"\n                migration applied: {mig}"
@@ -76,10 +76,10 @@ internal sealed class StartupSummaryLogger(
             ##############################
             #     Quotinator ready       #
             ##############################
-            Version:        {Version}
-            Data:           {DataDir}
-            Database:       {DbPath}
-                            schema v{SchemaVersion} (data v{DataSchemaVersion}){MigLine}
+            Version:        {Version:l}
+            Data:           {DataDir:l}
+            Database:       {DbPath:l}
+                            schema v{SchemaVersion} (data v{DataSchemaVersion}){MigLine:l}
             Statistics:
                             {QuoteCount} quotes
                             {SourceCount} sources
@@ -90,17 +90,17 @@ internal sealed class StartupSummaryLogger(
                             {StageDirectionCount} stage directions
                             {SoundCueCount} sound cues
                             {ConversationCount} conversations
-            Backups:        {BackupsDir}
-            DataProtection: {KeysDir}
+            Backups:        {BackupsDir:l}
+            DataProtection: {KeysDir:l}
             ------------------------------
-            Log level:      {ConfiguredLogLevel}
-            Log requests:   {LogRequests}
-            SSL:            {Ssl}
-            Admin API key:  {AdminApiKey}
+            Log level:      {ConfiguredLogLevel:l}
+            Log requests:   {LogRequests:l}
+            SSL:            {Ssl:l}
+            Admin API key:  {AdminApiKey:l}
             ------------------------------
-            REST API:       {RestApi}
-            OpenAPI UI:     {OpenApiUi}
-            OpenAPI spec:   {OpenApiSpec}
+            REST API:       {RestApi:l}
+            OpenAPI UI:     {OpenApiUi:l}
+            OpenAPI spec:   {OpenApiSpec:l}
             MCP server:     not implemented
             ##############################
             """,
