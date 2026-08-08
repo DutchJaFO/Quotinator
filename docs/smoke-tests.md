@@ -612,10 +612,12 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse"
 ```
 All three must return `422` with `"detail":"You must provide a batchId."` — never the generic
-"Numeric parameters..." message. With `Quotinator__LogRequests=true`, `docker logs` for each of these
-requests must show `→ 422`, not `→ 200`. Re-run a normal `apply` with a real `batchId` (see the
-"Import and staged-action review workflow" section above) to confirm the fix didn't break the happy
-path — still `200`.
+"Numeric parameters..." message. With `Quotinator__LogRequests=true` **and** `Quotinator__LogLevel=debug`
+(request logging is Debug-only across every category, #244 — `LogRequests=true` alone only registers
+the middleware, it does not raise the log level), `docker logs` for each of these requests must show
+`→ 422`, not `→ 200`. Re-run a normal `apply` with a real `batchId` (see the "Import and
+staged-action review workflow" section above) to confirm the fix didn't break the happy path — still
+`200`.
 
 ---
 

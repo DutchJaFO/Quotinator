@@ -16,12 +16,13 @@ public class RequestLogFormattingTests
 
     /// <summary>
     /// Builds middleware with a sink at the given minimum level.
-    /// Default is Information — Debug routes are invisible at this level, which is the
-    /// correct production default and is what most tests want to assert.
-    /// Pass LogEventLevel.Debug to test that debug-category routes actually emit lines.
+    /// Default is Debug — every request/response line is logged at Debug regardless of category
+    /// (#244), so Debug is what most tests need to see any output at all.
+    /// Pass LogEventLevel.Information to assert that request logging stays invisible at the
+    /// production default level.
     /// </summary>
     private static (RequestLoggingMiddleware Middleware, CaptureSink Sink) Build(
-        LogEventLevel minimumLevel = LogEventLevel.Information)
+        LogEventLevel minimumLevel = LogEventLevel.Debug)
     {
         var sink    = new CaptureSink();
         var serilog = new LoggerConfiguration()
@@ -308,16 +309,16 @@ public class RequestLogFormattingTests
     #endregion
 
     // -------------------------------------------------------------------------
-    #region Row 9 — log levels: API at Information, web/assets at Debug
+    #region Row 9 — log levels: every category is Debug-only (#244)
 
     [TestMethod]
-    public async Task ApiRoute_LoggedAtInformationLevel()
+    public async Task ApiRoute_LoggedAtDebugLevel()
     {
         var (middleware, sink) = Build(LogEventLevel.Debug);
         await middleware.InvokeAsync(MakeContext("GET", "/api/v1/health"), Respond());
 
-        Assert.IsTrue(sink.Events.All(e => e.Level == LogEventLevel.Information),
-            "API routes must log at Information level");
+        Assert.IsTrue(sink.Events.All(e => e.Level == LogEventLevel.Debug),
+            "API routes must log at Debug level — normal operation logs only the bare minimum");
     }
 
     [TestMethod]
@@ -341,10 +342,19 @@ public class RequestLogFormattingTests
     }
 
     [TestMethod]
+    public async Task ApiRoute_NotVisibleAtInformationLevel()
+    {
+        var (middleware, sink) = Build(LogEventLevel.Information);
+        await middleware.InvokeAsync(MakeContext("GET", "/api/v1/health"), Respond());
+
+        Assert.IsEmpty(sink.Lines,
+            "API routes must not appear in the log at Information level — request logging is opt-in verbosity");
+    }
+
+    [TestMethod]
     public async Task WebRoute_NotVisibleAtInformationLevel()
     {
-        // Default Build() uses MinimumLevel.Information — web routes must produce no output
-        var (middleware, sink) = Build();
+        var (middleware, sink) = Build(LogEventLevel.Information);
         await middleware.InvokeAsync(MakeContext("GET", "/about"), Respond());
 
         Assert.IsEmpty(sink.Lines,
@@ -354,7 +364,7 @@ public class RequestLogFormattingTests
     [TestMethod]
     public async Task StaticAsset_NotVisibleAtInformationLevel()
     {
-        var (middleware, sink) = Build();
+        var (middleware, sink) = Build(LogEventLevel.Information);
         await middleware.InvokeAsync(MakeContext("GET", "/logo.svg"), Respond());
 
         Assert.IsEmpty(sink.Lines,

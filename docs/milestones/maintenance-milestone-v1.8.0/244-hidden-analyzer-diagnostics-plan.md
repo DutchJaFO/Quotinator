@@ -1,6 +1,6 @@
 # #244 — Hidden Roslyn code-style and .NET analyzer diagnostics (IDE0xxx, CAxxxx)
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 9)
 **GitHub issue:** #244
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -333,7 +333,52 @@ then reverified at 0 warnings. No genuine production bug found this step — ful
 0 errors) and full solution test suite (1433 tests, 0 failures) verified.
 
 ### Step 8 — CA2254 (inconsistent logging template) — fix each of the 3
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Two distinct root causes across the 3 hits:
+- **`RequestLoggingMiddleware.cs` (2 occurrences)** — the shared `Log(bool isDebug, string template,
+  object[] args)` helper routed to `LogDebug`/`LogInformation` based on a runtime flag, but the
+  `template` parameter it forwarded was itself a variable by the time it reached the actual logger
+  call, even though each of the helper's 2 outer call sites passed a compile-time-literal template.
+
+  First fix attempt inlined the `isDebug` dispatch directly at each of the 2 call sites in
+  `InvokeAsync`. **Developer feedback mid-review, in two rounds:** (1) prefer a helper that takes the
+  raw values as parameters over duplicating the if/else dispatch at each call site — resolved by
+  extracting two small per-shape helpers (`LogRequestStart`, `LogRequestEnd`, matching the two
+  distinct line shapes) each with its own literal template hardcoded inside; (2) a deeper design
+  question — is routing `[Api - Request]` to `LogInformation` (visible at the default level) actually
+  correct, given the project's own logging principle that per-request detail is opt-in Debug
+  verbosity, not something visible from normal operation. **Decision: no** — `[Api - Request]` was
+  itself the bug, unintentionally "noisy by default" against that principle. All three categories
+  (`[Api - Request]`, `[Web - Request]`, `[Web - Asset]`) now log at Debug uniformly. This removed the
+  `isDebug`/`Categorise`'s `IsDebug` field entirely (dead once every category shares one level), which
+  in turn removed the last reason to keep `LogRequestStart`/`LogRequestEnd` as separate methods at
+  all — both are now trivial single-line `LogDebug` calls, inlined directly into `InvokeAsync` (KISS
+  über DRY once there's no shared branching logic left to justify the indirection).
+
+  **Consequential rewrite, not just this file**: `RequestLogFormattingTests.cs` asserted the old
+  Api-at-Information/Web-at-Debug split extensively (`Build()`'s default minimum level, an
+  `ApiRoute_LoggedAtInformationLevel` test, etc.) — every test relying on the old default needed
+  updating to the new uniform-Debug behavior, not just a mechanical rename. `docs/logging.md` (the
+  authoritative logging-standards doc, boyscout-touched per its own rule) also documented the old
+  split in five separate places (the levels table, two example log blocks, a code sample, the prefix
+  table) — all updated to match. `docs/smoke-tests.md`'s #229 verification step also assumed
+  `Quotinator__LogRequests=true` alone was enough to see `[Api - Request]` lines in `docker logs` —
+  no longer true now that request logging is Debug-only, since `LogRequests` only registers the
+  middleware and never touches the log level; the step now also requires
+  `Quotinator__LogLevel=debug`.
+- **`StartupSummaryLogger.cs` (1 occurrence)** — the closing startup banner used C# string
+  interpolation (`$"""..."""`) directly as the log template, baking all 24 values into plain text
+  instead of passing them as structured Serilog properties — the actual anti-pattern CA2254 exists to
+  catch, distinct from the middleware's "template varies between calls" issue. Converted to a proper
+  message template: dropped the `$`, gave each interpolation hole a named `{Placeholder}` token, and
+  passed the 24 values as ordered arguments. Renders identically (Serilog's positional
+  placeholder-to-argument matching produces the same text `ToString()` would), but now emits genuine
+  structured properties instead of pre-formatted text baked in at the call site.
+
+Full build (0 warnings, 0 errors) and full solution test suite (1433 tests, 0 failures) verified
+after escalating `CA2254` to `warning`. The banner's exact rendered output, and the request log's new
+Debug-only default, will get a final visual check during Step 11's T2 Docker verification.
 
 ### Step 9 — CA1068 (`CancellationToken` param order) — review each of the 2
 **Status:** ⬜ Not started
@@ -369,7 +414,7 @@ mirroring #197's own "no user-facing changes").
 | 5 | ✅ | IDE0060's 3 unused parameters reviewed and resolved | Manual | Step 5 |
 | 6 | ✅ | Mechanical `CAxxxx`/`SYSLIB` rules escalated and fixed | Build | Step 6 |
 | 7 | ✅ | CA1806's 12 ignored results reviewed, any real bugs fixed | Manual | Step 7 |
-| 8 | ⬜ | CA2254's 3 logging template issues fixed | Manual | Step 8 |
+| 8 | ✅ | CA2254's 3 logging template issues fixed | Manual | Step 8 |
 | 9 | ⬜ | CA1068's 2 parameter-order issues reviewed | Manual | Step 9 |
 | 10 | ⬜ | CA1873 scope decision made (split vs. inline) | Manual | Step 10 |
 | 11 | ⬜ | Full build/test 0 warnings 0 errors; T1; T2 | Build + Live | Step 11 |

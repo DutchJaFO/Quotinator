@@ -71,39 +71,44 @@ internal sealed class StartupSummaryLogger(
             : string.Empty;
 
         _logger.LogInformation(
-            $"""
+            """
 
             ##############################
             #     Quotinator ready       #
             ##############################
-            Version:        {_version.Version}
-            Data:           {_dataDir}
-            Database:       {_dbPath}
-                            schema v{_db.SchemaVersion} (data v{_db.DataSchemaVersion}){migLine}
+            Version:        {Version}
+            Data:           {DataDir}
+            Database:       {DbPath}
+                            schema v{SchemaVersion} (data v{DataSchemaVersion}){MigLine}
             Statistics:
-                            {_db.QuoteCount} quotes
-                            {_db.SourceCount} sources
-                            {_db.CharacterCount} characters
-                            {_db.PeopleCount} people
-                            {_db.SeriesCount} series
-                            {_db.UniverseCount} universes
-                            {_db.StageDirectionCount} stage directions
-                            {_db.SoundCueCount} sound cues
-                            {_db.ConversationCount} conversations
-            Backups:        {_backupsDir}
-            DataProtection: {_keysDir}
+                            {QuoteCount} quotes
+                            {SourceCount} sources
+                            {CharacterCount} characters
+                            {PeopleCount} people
+                            {SeriesCount} series
+                            {UniverseCount} universes
+                            {StageDirectionCount} stage directions
+                            {SoundCueCount} sound cues
+                            {ConversationCount} conversations
+            Backups:        {BackupsDir}
+            DataProtection: {KeysDir}
             ------------------------------
-            Log level:      {_logLevel}
-            Log requests:   {(_logRequests ? "on" : "off")}
-            SSL:            {(_sslEnabled ? "on" : "off")}
-            Admin API key:  {(_adminKeyConfigured ? "set" : "not set")}
+            Log level:      {ConfiguredLogLevel}
+            Log requests:   {LogRequests}
+            SSL:            {Ssl}
+            Admin API key:  {AdminApiKey}
             ------------------------------
-            REST API:       {restApi}
-            OpenAPI UI:     {openApiUi}
-            OpenAPI spec:   {openApiSpec}
+            REST API:       {RestApi}
+            OpenAPI UI:     {OpenApiUi}
+            OpenAPI spec:   {OpenApiSpec}
             MCP server:     not implemented
             ##############################
-            """);
+            """,
+            _version.Version, _dataDir, _dbPath, _db.SchemaVersion, _db.DataSchemaVersion, migLine,
+            _db.QuoteCount, _db.SourceCount, _db.CharacterCount, _db.PeopleCount, _db.SeriesCount,
+            _db.UniverseCount, _db.StageDirectionCount, _db.SoundCueCount, _db.ConversationCount,
+            _backupsDir, _keysDir, _logLevel, _logRequests ? "on" : "off", _sslEnabled ? "on" : "off",
+            _adminKeyConfigured ? "set" : "not set", restApi, openApiUi, openApiSpec);
     }
 
     /// <summary>

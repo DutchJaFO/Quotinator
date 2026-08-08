@@ -24,15 +24,18 @@ Quotinator has two distinct observability tracks. They serve different purposes 
 
 ### Categories and log levels
 
-Every request is categorised by path and logged at a different level. This lets operators choose how much noise they see without disabling request logging entirely.
+Every request is categorised by path for its tag, but all three categories are logged at Debug
+(#244) — normal operation logs only the bare minimum (e.g. the startup/shutdown banners); per-request
+detail is opt-in verbosity for when an operator is actively debugging a problem, not something that
+appears by default just from serving traffic.
 
 | Tag | Level | Paths |
 |---|---|---|
-| `[Api - Request]` | Information | `/api/**` — REST API endpoints |
+| `[Api - Request]` | Debug | `/api/**` — REST API endpoints |
 | `[Web - Request]` | Debug | Blazor pages, culture routes, OpenAPI spec, Scalar UI |
 | `[Web - Asset]` | Debug | Static files (`.js`, `.css`, `.svg`, etc.), `/_framework/**`, `/_content/**`, `/lib/**` |
 
-At the default `info` log level only REST API calls are visible — clean operator view. Set `debug` to see all traffic including Blazor page loads and asset fetches.
+At the default `info` log level, no request traffic is visible at all. Set `debug` to see it.
 
 ### What is captured
 
@@ -43,16 +46,7 @@ Every request produces two log lines: one on arrival, one on completion. Each re
 {tag} {id} {METHOD} {url} → {status} in {ms}ms
 ```
 
-Example — overlapping requests at `info` level (API calls only):
-
-```
-11:00:00.000  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love
-11:00:00.001  [Api - Request] e5f6a7b8 GET /api/v1/health
-11:00:00.002  [Api - Request] e5f6a7b8 GET /api/v1/health → 200 in 2ms
-11:00:00.014  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love → 200 in 14ms
-```
-
-Example — same window at `debug` level (all traffic visible):
+Example — overlapping requests at `debug` level (all traffic visible; at the default `info` level none of this appears at all):
 
 ```
 11:00:00.000  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love
@@ -92,14 +86,14 @@ If a query parameter ever carries a secret (e.g. `?token=...`), strip that param
 
 ### Serilog quoting and the `{:l}` specifier
 
-Serilog quotes string properties in rendered output by default: `{Url}` → `"/api/v1/health"`. Use the `l` (literal) format specifier on every string property in `LogInformation` calls to suppress this:
+Serilog quotes string properties in rendered output by default: `{Url}` → `"/api/v1/health"`. Use the `l` (literal) format specifier on every string property in a logging call to suppress this:
 
 ```csharp
 // Wrong — Serilog renders: [Api - Request] "a1b2c3d4" "GET" "/api/v1/health"
-_logger.LogInformation("[Api - Request] {Id} {Method} {Url}", id, method, url);
+_logger.LogDebug("[Api - Request] {Id} {Method} {Url}", id, method, url);
 
 // Correct — Serilog renders: [Api - Request] a1b2c3d4 GET /api/v1/health
-_logger.LogInformation("[Api - Request] {Id:l} {Method:l} {Url:l}", id, method, url);
+_logger.LogDebug("[Api - Request] {Id:l} {Method:l} {Url:l}", id, method, url);
 ```
 
 Scalar numerics (`int`, `long`) are not quoted by Serilog and need no specifier.
@@ -240,7 +234,7 @@ Format: `[Subsystem - Phase] message text`
 | `[DataProtection]` | Key persistence setup |
 | `[RateLimit]` | Rate limiter configuration |
 | `[Server]` | Kestrel bind addresses, application lifetime events |
-| `[Api - Request]` | REST API endpoint calls (`/api/**`) — logged at Information |
+| `[Api - Request]` | REST API endpoint calls (`/api/**`) — logged at Debug |
 | `[Web - Request]` | Blazor pages, culture routes, OpenAPI/Scalar UI — logged at Debug |
 | `[Web - Asset]` | Static files and Blazor framework assets — logged at Debug |
 | `[Api - Random]` | Entry to GET /api/v1/quotes/random |
@@ -279,16 +273,8 @@ New subsystems must register a prefix in this table before their log lines land 
 
 ### Example request log output
 
-At `info` level — only REST API calls visible:
-
-```
-11:00:00.000  [Api - Request] a1b2c3d4 GET /api/v1/quotes/random
-11:00:00.008  [Api - Request] a1b2c3d4 GET /api/v1/quotes/random → 200 in 8ms
-11:00:01.000  [Api - Request] b2c3d4e5 GET /api/v1/quotes/search?q=love&lang=nl
-11:00:01.001  [Api - Request] f6a7b8c9 POST /api/v1/admin/database/reseed
-11:00:01.014  [Api - Request] b2c3d4e5 GET /api/v1/quotes/search?q=love&lang=nl → 200 in 14ms
-11:00:01.341  [Api - Request] f6a7b8c9 POST /api/v1/admin/database/reseed → 200 in 340ms
-```
+At `info` level — no request traffic is visible; request logging is Debug-only across all three
+categories (#244).
 
 At `debug` level — all traffic visible, grep by tag to isolate:
 
