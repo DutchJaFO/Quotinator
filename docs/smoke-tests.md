@@ -233,11 +233,29 @@ with `{"stageDirectionText":{"choice":"replace"},"markCompletenessAs":"Complete"
 `POST /import/actions/apply?batchId=...` — confirm the corrected text and `CompletenessStatus: Complete`
 via DbInspector. Re-import the same ids again with another changed `text` under `review` policy — must
 now stage `Blocked`, not `Pending` (`GET /import/actions?status=Blocked`), and the on-disk text must be
-unchanged — proves a `Complete` row can no longer be silently overwritten. Finally, exercise
-correct/apply/reverse on a still-correctable row: single-shot re-import a changed `text` under
-`newest-wins` (nothing pending, applies immediately, `Import_Batch.Status` set to `Applied` by this
-direct-apply path — the two-phase decide→apply path used above does **not** set it, a known
-pre-existing gap, see #171/#172's plan docs), confirm the write via DbInspector, then
+unchanged — proves a `Complete` row can no longer be silently overwritten.
+
+**Correction (2026-08-08, same gap as #173's own correction below):** the paragraph below used to
+describe reversing the *same* StageDirection/SoundCue from the steps above under `newest-wins`,
+expecting a clean apply with nothing pending. That cannot happen: `CompletenessGuard.ShouldBlock` is
+evaluated against the value a policy would actually *write*, not the raw incoming value — so once a
+row is `Complete`, every policy except `skip` blocks a genuine field change, `newest-wins` included.
+Re-running that sequence against the already-`Complete` rows above stages `Blocked` again, exactly
+like the paragraph above, never a clean apply. Use a **second, brand-new** pair for this part:
+```bash
+cat > .claude/temp/smoke-171-172-addonly.json <<'EOF'
+{
+  "quotes": [{"id":"f0000001-0000-4000-8000-000000000009","quote":"A #171/#172 add-only smoke test quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+  "stageDirections": [{"id":"f0000002-0000-4000-8000-000000000009","text":"Original text before correction.","imageUrl":null,"translations":{}}],
+  "soundCues": [{"id":"f0000003-0000-4000-8000-000000000009","text":"Original sound before correction.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-addonly.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+```
+Must return `200` with both rows added (fresh, still `NeedsReview`). Single-shot re-import a changed
+`text` for both ids under `newest-wins` (nothing pending, applies immediately, `Import_Batch.Status` set
+to `Applied` by this direct-apply path — the two-phase decide→apply path used above does **not** set it,
+a known pre-existing gap, see #171/#172's plan docs), confirm the write via DbInspector, then
 `POST /import/actions/reverse?batchId=...` (`preview=true` first, then for real) and confirm the
 pre-correction text is restored via DbInspector.
 
@@ -819,12 +837,16 @@ rule and alias mechanisms.
 ## 23. Rule file live-read proof (#181)
 
 Proves the lookup genuinely reads the rule file's live content, not a cached or hardcoded value —
-live-verified 2026-07-25. Temporarily delete the Auntie Mame rule entirely from
+live-verified 2026-07-25. **Both `docker run` commands in this section need
+`-e Quotinator__AutoPurgeBundledImportActions=false`** (confirmed live 2026-08-08, #249) — without it,
+every bundled batch's `Import_Action` rows (including the one this section's own `MergedFields` check
+below queries) are purged immediately after a successful seed, and the row will already be gone by the
+time you inspect it. Temporarily delete the Auntie Mame rule entirely from
 `nikhilnamal17-conflict-rules.json` (`entityId: 088603c0-...`), then rebuild and run a fresh
 container:
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
-docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending"
 ```
 With the rule removed, that one quote's conflict must now stage `Pending` again (confirmed:
@@ -843,6 +865,8 @@ docker cp <container>:/app/data/quotinatordata.db-shm .claude/temp/inspect-181.d
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
   --sql "SELECT MergedFields FROM Import_Action WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
 ```
+(again against a container started with `Quotinator__AutoPurgeBundledImportActions=false`, per the
+note above — otherwise this query returns no rows at all)
 The row for the batch matching NikhilNamal17's own rule file must show `"date":"2005"` (the incoming
 value — Replace won), confirmed changed from `"date":"1958"` under the original `Keep` rule; a
 *second* row may appear for vilaboim's own separate cross-file duplicate of the same quote id,
@@ -955,16 +979,19 @@ remove). Finally, the alias-candidate suggestion endpoint — read-only, no `X-A
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/alias?fileName=quotinator-curated-source-aliases.json&origin=Bundled"
 ```
-Must return `200` with a `candidates` array. **Live-verified 2026-07-26 against real bundled data:
-this is not empty** — it found 3 genuine near-duplicates the curated alias file doesn't cover
-(`"When Harry Met Sally"` vs. `"When Harry Met Sally..."`, `"Avengers - Age of Ultron"` vs.
-`"Avengers: Age of Ultron"` — the normalizer strips `-`/`:` identically, correctly catching this —
-and `"Airplane"` vs. `"Airplane!"`, already aliased in a *different* bundled file's own alias list,
-not curated's — the file-scoped design means a duplicate covered elsewhere can still surface here,
-a known, accepted trade-off, not a bug). This confirms the endpoint runs cleanly end to end against
-the full live `Quotinator_Source` table and genuinely finds real candidates, which is the point — do not expect
-an empty result on this dataset. A confirmed, verified duplicate should be filed as a data-quality
-follow-up per `docs/workflow/source-verification.md`, not fixed inline as part of this checklist.
+Must return `200` with a `candidates` array. **Originally live-verified 2026-07-26 against real bundled
+data with 3 genuine near-duplicates the curated alias file didn't cover** (`"When Harry Met Sally"` vs.
+`"When Harry Met Sally..."`, `"Avengers - Age of Ultron"` vs. `"Avengers: Age of Ultron"` — the
+normalizer strips `-`/`:` identically, correctly catching this — and `"Airplane"` vs. `"Airplane!"`,
+aliased in a *different* bundled file's own alias list, not curated's, at the time). **All 3 have since
+been added to `nikhilnamal17-source-aliases.json` as a data-quality follow-up (confirmed 2026-08-08)**,
+so a T2 run against current `main` correctly returns an **empty** `candidates` array for this exact
+query — that is the fix working, not a regression of the endpoint. What this section actually verifies
+is structural, not a specific candidate count: `200` with a well-formed `candidates` array, confirming
+the endpoint runs cleanly end to end against the full live `Quotinator_Source` table. If a future
+bundled-source refresh introduces a genuinely new near-duplicate, it will show up here again — a
+confirmed, verified one should be filed as a data-quality follow-up per
+`docs/workflow/source-verification.md`, not fixed inline as part of this checklist.
 
 ---
 
