@@ -1,8 +1,18 @@
 @page "/"
+@rendermode InteractiveServer
 
 <PageTitle>Quotinator</PageTitle>
 
-<h1>Quotinator</h1>
-<p class="lead">@Text.AppTagline</p>
+@if (!DatabaseHealth.IsHealthy)
+{
+    <StartupErrorModal OnContinue="ContinueToErrorLayout" />
+}
+else
+{
+    <StartupSuccessModal />
 
-<QuoteCard @rendermode="InteractiveServer" />
+    <h1>Quotinator</h1>
+    <p class="lead">@Text.AppTagline</p>
+
+    <QuoteCard />
+}

@@ -433,6 +433,7 @@ builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp =
     sp.GetRequiredService<IFileResourceRepository>()));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.DatabaseHealthState>();
+builder.Services.AddSingleton<Quotinator.Api.Startup.StartupUxState>();
 builder.Services.AddSingleton<DatabaseHealthGateMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));

@@ -3,6 +3,12 @@
 <PageTitle>@Text.RestApiHeading — Quotinator</PageTitle>
 
 <h1>@Text.RestApiHeading</h1>
+
+@if (!DatabaseHealth.IsHealthy)
+{
+    <div class="alert alert-warning" role="alert">@Text.RestApiDegradedBanner</div>
+}
+
 <p>@Text.RestApiDescription</p>
 
 <p>

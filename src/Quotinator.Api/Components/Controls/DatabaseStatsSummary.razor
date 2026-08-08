@@ -1,0 +1,53 @@
+<dl class="row">
+    <dt class="col-sm-4">@Text.StartupSummaryQuotesLabel</dt>
+    <dd class="col-sm-8">@DatabaseInitializer.QuoteCount</dd>
+    <dt class="col-sm-4">@Text.StartupSummarySourcesLabel</dt>
+    <dd class="col-sm-8">@DatabaseInitializer.SourceCount</dd>
+    <dt class="col-sm-4">@Text.StartupSummaryCharactersLabel</dt>
+    <dd class="col-sm-8">@DatabaseInitializer.CharacterCount</dd>
+    <dt class="col-sm-4">@Text.StartupSummaryPeopleLabel</dt>
+    <dd class="col-sm-8">@DatabaseInitializer.PeopleCount</dd>
+    <dt class="col-sm-4">@Text.StartupSummarySeriesLabel</dt>
+    <dd class="col-sm-8">@DatabaseInitializer.SeriesCount</dd>
+    <dt class="col-sm-4">@Text.StartupSummaryUniversesLabel</dt>
+    <dd class="col-sm-8">@DatabaseInitializer.UniverseCount</dd>
+    <dt class="col-sm-4">@Text.StartupSummaryStageDirectionsLabel</dt>
+    <dd class="col-sm-8">@DatabaseInitializer.StageDirectionCount</dd>
+    <dt class="col-sm-4">@Text.StartupSummarySoundCuesLabel</dt>
+    <dd class="col-sm-8">@DatabaseInitializer.SoundCueCount</dd>
+    <dt class="col-sm-4">@Text.StartupSummaryConversationsLabel</dt>
+    <dd class="col-sm-8">@DatabaseInitializer.ConversationCount</dd>
+</dl>
+
+@if (FileHistory.Count > 0)
+{
+    <h2 class="h5">@Text.StartupSummaryFilesHeading</h2>
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>@Text.StartupSummaryFileColumn</th>
+                <th>@Text.FileOriginColumn</th>
+                <th>@Text.FileSourceColumn</th>
+                <th>@Text.FileLastUpdatedColumn</th>
+                <th>@Text.FileRecordsColumn</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in FileHistory)
+            {
+                <tr>
+                    <td>@row.FileName</td>
+                    <td>@OriginLabel(row.Origin)</td>
+                    <td>
+                        @if (row.SourceUrl is not null)
+                        {
+                            <a href="@row.SourceUrl" target="_blank" rel="noopener noreferrer">@row.SourceUrl</a>
+                        }
+                    </td>
+                    <td>@(row.LastUpdatedUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                    <td>@(row.RecordCount?.ToString() ?? "—")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

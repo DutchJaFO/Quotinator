@@ -82,6 +82,14 @@ public class DatabaseHealthGateMiddlewareTests
     [DataRow("/openapi/v1.json")]
     [DataRow("/scalar/v1")]
     [DataRow("/_framework/blazor.web.js")]
+    [DataRow("/")]
+    [DataRow("/rest-api")]
+    [DataRow("/about")]
+    [DataRow("/stats")]
+    [DataRow("/_blazor")]
+    [DataRow("/app.khy4lop6wu.css")]
+    [DataRow("/Quotinator.Api.ngd3z69k33.styles.css")]
+    [DataRow("/favicon.png")]
     [TestMethod]
     public async Task Unhealthy_ExemptPath_CallsNext(string path)
     {
@@ -93,5 +101,20 @@ public class DatabaseHealthGateMiddlewareTests
         await middleware.InvokeAsync(MakeContext(path), next);
 
         Assert.IsTrue(wasCalled(), $"{path} must stay reachable even when the database is unhealthy");
+    }
+
+    [TestMethod]
+    public async Task Unhealthy_QuotesEndpoint_StaysGated()
+    {
+        var health = new DatabaseHealthState();
+        health.MarkFailed("schema mismatch");
+        var middleware = new DatabaseHealthGateMiddleware(health);
+        var (next, wasCalled) = SpyNext();
+        var context = MakeContext("/api/v1/quotes/random");
+
+        await middleware.InvokeAsync(context, next);
+
+        Assert.IsFalse(wasCalled(), "#263's new Blazor-route exemptions must not widen the gate for real REST data endpoints");
+        Assert.AreEqual(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
     }
 }
