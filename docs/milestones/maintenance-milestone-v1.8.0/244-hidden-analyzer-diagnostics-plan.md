@@ -408,10 +408,49 @@ milestone v1.8.0. `CA1873` is **not** escalated in `.editorconfig` — that's #2
 requirement, once the pattern is decided. #244 itself does not touch the 52 occurrences.
 
 ### Step 11 — Full verification
-**Status:** ⬜ Not started
-`dotnet build --configuration Release` / `dotnet test --configuration Release` — 0 warnings, 0 errors.
-T1 (developer's own Visual Studio run), T2 (Docker) — no runtime behaviour changes expected, but both
-tiers are always required per `docs/release-verification.md`.
+**Status:** ⬜ T2 done, T1 not yet started (developer's own action)
+
+`dotnet build --configuration Release`: 0 warnings, 0 errors. `dotnet test --configuration Release`:
+9 test projects, 3169 tests, 0 failures.
+
+**T2 (Docker) — full 32-section `docs/smoke-tests.md` pass, per explicit developer choice to run the
+complete checklist rather than a scoped subset, given #244's own changes touch logging and request
+handling directly.** Every section verified live against a rebuilt image, including the destructive/
+invasive ones (section 23's temporary rule-file mutation + double image rebuild, section 29's
+schema-breaking + Reset-recovery test, section 32's full Reset wipe). All 32 sections match documented
+behaviour with two exceptions, both found and fixed as part of this pass:
+
+- **Real regression, found and fixed**: `StartupSummaryLogger.cs`'s Step 8 conversion from string
+  interpolation to a Serilog message template omitted the `:l` literal-format specifier on every
+  string placeholder, causing every value in the closing startup banner to render Serilog-quoted
+  (`"1.8.2"` instead of `1.8.2`) and the empty `MigLine` case to render as a stray `""`. Caught via
+  live inspection of `docker logs`, not by any existing test — `StartupSummaryLoggerTests.cs`'s
+  previous `CapturingLogger<T>` double used MEL's own formatter, which cannot reproduce Serilog's
+  quoting behaviour, so the bug was invisible to the test suite. Fixed by adding `:l` to every string
+  placeholder; the test file was rewritten to render through a real `LoggerConfiguration` +
+  `SerilogLoggerFactory` + custom `ILogEventSink`, and the now-provably-blind `CapturingLogger<T>` was
+  deleted. Verified red (10 failures) against the reverted fix via `git stash`, green after.
+- **Doc staleness, not a #244 regression**: section 23's `MergedFields` check assumed an
+  `Import_Action` row survives a successful seed by default. #249 (unrelated, later work in this same
+  session) added `Quotinator:AutoPurgeBundledImportActions`, defaulting to `true`, which purges every
+  successfully-applied bundled-seed `Import_Action` row immediately — so the row the check inspects no
+  longer exists on a default container. Re-verified with `Quotinator__AutoPurgeBundledImportActions=
+  false` and confirmed the underlying mechanism (rule live-read, `Replace` resolution) still works
+  exactly as documented; `docs/smoke-tests.md`'s section 23 should note the env var is now required for
+  this specific check. Two smaller doc-staleness items noted for the same reason, not acted on here:
+  section 8's "Finally" paragraph doesn't yet reflect the `Complete`-blocks-`newest-wins` correction
+  section 9 already documents for itself (worked around with a fresh, never-`Complete` fixture instead
+  of the doc's own row); section 26's alias-candidate endpoint returned 0 candidates instead of the
+  documented 3 from 2026-07-26, most likely because those specific near-duplicates were since added to
+  the curated alias file as a data-quality fix.
+
+No other regression found. The `?lang=` fix from Step 5 and the `→ 422` real-status-code logging fix
+(#229, pre-existing) were both re-confirmed live as part of this pass (section 19), directly proving
+Step 8's request-logging redesign didn't regress either.
+
+**T1 — not yet performed.** Per this project's own standing rule, live Visual Studio verification is
+exclusively the developer's own action; the assistant does not replicate it locally. Awaiting the
+developer's own T1 pass before this step and #244 as a whole can be marked done.
 
 ### Step 12 — Docs sync
 **Status:** ⬜ Not started
@@ -425,8 +464,8 @@ mirroring #197's own "no user-facing changes").
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | `EnforceCodeStyleInBuild=true` added, 0 new warnings | Build | Step 1 |
-| 2 | ⬜ | Mechanical `IDE0xxx` rules escalated to warning and fixed | Build | Step 2 |
+| 1 | ✅ | `EnforceCodeStyleInBuild=true` added, 0 new warnings | Build | Step 1 |
+| 2 | ✅ | Mechanical `IDE0xxx` rules escalated to warning and fixed | Build | Step 2 |
 | 3 | ✅ | IDE0290 decision made and applied consistently | Manual | Step 3 |
 | 4 | ✅ | IDE0130's 4 real namespace/folder mismatches resolved | Manual | Step 4 |
 | 5 | ✅ | IDE0060's 3 unused parameters reviewed and resolved | Manual | Step 5 |
@@ -435,7 +474,7 @@ mirroring #197's own "no user-facing changes").
 | 8 | ✅ | CA2254's 3 logging template issues fixed | Manual | Step 8 |
 | 9 | ✅ | CA1068's 2 parameter-order issues reviewed | Manual | Step 9 |
 | 10 | ✅ | CA1873 scope decision made (split vs. inline) | Manual | Step 10 |
-| 11 | ⬜ | Full build/test 0 warnings 0 errors; T1; T2 | Build + Live | Step 11 |
+| 11 | ⬜ | Full build/test 0 warnings 0 errors; T1; T2 | Build + Live | Step 11 (T2 ✅, T1 outstanding) |
 | 12 | ⬜ | CLAUDE.md updated with the primary-constructor convention | Manual | Step 12 |
 
 ---
