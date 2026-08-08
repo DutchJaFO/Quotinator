@@ -183,7 +183,7 @@ that the new Blazor exemptions don't widen the gate for real REST data endpoints
 | 2 | ✅ | `StartupUxState` dismiss/state behaviour | Unit test | `StartupUxStateTests` |
 | 3 | ✅ | No regression | Build + test | `dotnet build --configuration Release` (0/0); `dotnet test --configuration Release` (625/625 passed) |
 | 4 | ✅ | Translation completeness holds with new keys | Unit test | `TranslationCompletenessTests` |
-| 5 | ⬜ | T1 — degraded error card, startup-success modal, Statistics page, and nav all render correctly (and correctly *styled*) in Visual Studio | Live (T1) | Developer's own pass |
+| 5 | ✅ | T1 — degraded error card, startup-success modal, Statistics page, and nav all render correctly (and correctly *styled*) in Visual Studio | Live (T1) | Developer's own pass, confirmed 2026-08-08 |
 | 6 | ✅ | T2 — fresh startup shows the success modal over `QuoteCard`, dismissible, no reappearance after; a broken schema shows the degraded card (fully styled) with durable per-file history, Home disabled, REST API/About/Statistics reachable, REST data endpoints still 503; admin Reset recovers health and Home; Statistics page correct both healthy and degraded, and survives a container restart | Live (T2) | Docker, `execute-sql.csx` schema-break technique (smoke-tests.md §29), verified visually via screenshot — documented in Notes |
 
 ---

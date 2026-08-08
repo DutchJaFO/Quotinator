@@ -3,12 +3,13 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245],
+    "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245, 263],
     "highlights": [
       "If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page — an admin database Reset can fix it without needing to restart the app or container.",
       "Quotinator now keeps a copy of every import/seed file it processes — including which conversion settings were used — so the original content can be listed, reviewed, or downloaded again later, and old versions can be pruned to reclaim space.",
       "Old conflict-resolution history from completed imports is now cleaned up automatically, and the full audit trail (what changed and when) can be exported in bulk for record-keeping.",
-      "Resetting the database is now a complete, unconditional wipe — it always rebuilds from scratch and no longer automatically re-imports the bundled quote content afterward. Nothing survives a reset any more, including the audit trail, so export it first (see above) if you want to keep it."
+      "Resetting the database is now a complete, unconditional wipe — it always rebuilds from scratch and no longer automatically re-imports the bundled quote content afterward. Nothing survives a reset any more, including the audit trail, so export it first (see above) if you want to keep it.",
+      "When something goes wrong at startup, the web interface itself now shows a clear popup explaining what happened and the database's last known-good status — not just the REST API. Home is disabled until the problem is resolved, but the REST API (clearly marked as limited), Statistics, and About pages stay reachable. Database status — quote counts and which files were used to build it — is also now always available on a new Statistics page in the navigation menu."
     ],
     "added": [
       "Release entries can now carry an optional one-line `quote` (release-note flavour text, with optional `attribution`) — rendered in `CHANGELOG.md` and the Blazor changelog UI, omitted from the more concise `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)",
@@ -19,7 +20,10 @@
       "New `GET /api/v1/import/batches` (paginated list, filterable by `type`/`status`) and `GET /api/v1/import/batches/{id}` — the existing import batch history is now reachable over HTTP, not just internally (issue #251)",
       "New `GET /api/v1/admin/audit/export` (bulk-export the full audit trail — every audit entry and change-log row — for an optional date range, as a single downloaded JSON file) and `GET /api/v1/admin/audit/date-range` (the earliest/latest date that actually has data, so a caller can check before exporting) (issue #249)",
       "Conflict-resolution history from a completed import (the temporary record of how each row's conflicts were resolved) is now purged automatically once nothing is left pending, controlled separately for bundled sources and user imports via new `auto_purge_bundled_import_actions`/`auto_purge_user_import_actions` add-on options (both on by default, so a specific source's history can be kept temporarily while investigating it) (issue #249)",
-      "`POST /import` and `POST /import/actions/apply` gained an opt-in `purgeOnSuccess` parameter to purge a batch's conflict-resolution history immediately once it applies fully — note this also gives up the ability to undo (`POST /import/actions/reverse`) that batch afterward, since undo depends on that same history (issue #249)"
+      "`POST /import` and `POST /import/actions/apply` gained an opt-in `purgeOnSuccess` parameter to purge a batch's conflict-resolution history immediately once it applies fully — note this also gives up the ability to undo (`POST /import/actions/reverse`) that batch afterward, since undo depends on that same history (issue #249)",
+      "New Blazor `/stats` page showing current database counts (across all nine entity categories) and a per-file import history table (filename, origin, source URL, last-updated timestamp, record count), reachable from the nav menu at any time, including while the database is degraded (issue #263)",
+      "New `StartupErrorModal`/`StartupSuccessModal` popups on the Blazor Home page — a degraded-startup popup shows the failure reason and last known-good database status with a button through to the rest of the app; a one-time startup-success popup shows the same kind of status after a healthy startup (issue #263)",
+      "`DatabaseHealthGateMiddleware`'s exempt list extended so Blazor's own page routes and fingerprinted static assets (`app.css`, `Quotinator.Api.styles.css`) stay reachable during a degraded startup, and the nav menu now shows Home as disabled and REST API as \"Limited\" in that state (issue #263)"
     ],
     "changed": [
       "Documented that the database's internal audit-trail tables (event/audit history) intentionally retain their record after the entity they describe is later changed or replaced — a purely internal documentation clarification with no behaviour change (issue #151)",
