@@ -50,10 +50,11 @@ and #255/#256 do not carry that urgency.
 | [#244](https://github.com/DutchJaFO/Quotinator/issues/244) | Hidden Roslyn code-style and .NET analyzer diagnostics are invisible to the 0-warnings build policy (IDE0xxx, CAxxxx) | Waiting for release | T1 ✅ T2 ✅ | [244-hidden-analyzer-diagnostics-plan.md](244-hidden-analyzer-diagnostics-plan.md) |
 | [#245](https://github.com/DutchJaFO/Quotinator/issues/245) | Sources.Date stays NULL when a Source's only sources[] entry omits date (gap in #191's scope) | Waiting for release | T1 ✅ T2 ✅ | [245-source-date-backfill-plan.md](245-source-date-backfill-plan.md) |
 | [#263](https://github.com/DutchJaFO/Quotinator/issues/263) | Make recovering from critical startup/database errors easier (Blazor UI, HA add-on experience) | Waiting for release | T1 ✅ T2 ✅ | [263-startup-ux-plan.md](263-startup-ux-plan.md) |
-| [#264](https://github.com/DutchJaFO/Quotinator/issues/264) | Clarify ADR 016's Dto boundary for DB-stored JSON and dual-boundary classes | Planning | N/A (research) | No plan doc yet |
+| [#264](https://github.com/DutchJaFO/Quotinator/issues/264) | Clarify ADR 016's Dto boundary for DB-stored JSON and dual-boundary classes | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — decision recorded in [ADR 016](../architecture-decisions/016-class-naming-suffixes-and-enum-placement.md)'s "Revision — issue #264" section |
 | [#265](https://github.com/DutchJaFO/Quotinator/issues/265) | Admin audit endpoint returns AuditEntryEntity directly with no Response DTO layer | Planning | N/A (research) | No plan doc yet |
 | [#267](https://github.com/DutchJaFO/Quotinator/issues/267) | Investigate using FileResource/ImportBatch history to avoid unconditional backup-before-seed on every startup | Planning | N/A (research) | No plan doc yet |
 | [#269](https://github.com/DutchJaFO/Quotinator/issues/269) | Adopt a project-wide pattern for expensive logging arguments (CA1873) | Planning | Not yet determined | No plan doc yet |
+| [#271](https://github.com/DutchJaFO/Quotinator/issues/271) | Rename ActionPayload/ConverterOptions classes, add ImportActionFieldRow subclasses (ADR 016 revision) | Planning | Not yet determined | No plan doc yet |
 
 ---
 
@@ -185,6 +186,9 @@ same release. None of the remaining issues block each other beyond these relatio
 29. **#269** — Adopt a project-wide pattern for expensive logging arguments, CA1873 (split out of
     #244's own Step 10, 2026-08-08; appended here rather than reordered in since it has no dependency
     on the others)
+30. **#271** — Rename `*ActionPayload`/converter-options classes to `Dto`, add `ImportActionFieldRow`
+    response/DTO subclasses (split out of #264's own investigation once its ADR 016 revision landed,
+    2026-08-08; appended here rather than reordered in since it has no dependency on the others)
 
 ---
 
