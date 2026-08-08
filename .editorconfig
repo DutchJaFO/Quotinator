@@ -95,3 +95,11 @@ dotnet_diagnostic.CA1806.severity = warning
 # with the values passed as separate arguments) — same rendered multi-line output, actual structured
 # logging instead of pre-formatted text.
 dotnet_diagnostic.CA2254.severity = warning
+
+# Step 9: CA1068 (CancellationToken should be the last parameter), 2 occurrences, both in
+# EffectiveRuleFileResolver.cs — `logPrefix` (an optional string with a default) was appended after
+# `cancellationToken`, pushing it out of last position. Confirmed every external call site either
+# omits both trailing optional params or passes `logPrefix:` by name (never `cancellationToken`
+# positionally) before reordering; the one internal self-call between the two methods was updated to
+# match the new order in the same commit.
+dotnet_diagnostic.CA1068.severity = warning

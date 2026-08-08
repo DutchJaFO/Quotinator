@@ -1,6 +1,6 @@
 # #244 — Hidden Roslyn code-style and .NET analyzer diagnostics (IDE0xxx, CAxxxx)
 
-**Status:** In progress (step 9)
+**Status:** In progress (step 10)
 **GitHub issue:** #244
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -381,7 +381,18 @@ after escalating `CA2254` to `warning`. The banner's exact rendered output, and 
 Debug-only default, will get a final visual check during Step 11's T2 Docker verification.
 
 ### Step 9 — CA1068 (`CancellationToken` param order) — review each of the 2
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Both hits were in `EffectiveRuleFileResolver.cs` — `ResolveEffectivePathAsync` and
+`ReadEffectiveContentAsync` each declared `CancellationToken cancellationToken = default` followed
+by `string logPrefix = "[Database - Seed]"`, pushing the token out of the conventional last position.
+Confirmed every one of the 5 external call sites (3 in `ImportRuleEndpoints.cs`, 2 in
+`QuotinatorDatabaseInitializer.cs`) either omits both trailing optional parameters entirely or passes
+`logPrefix:` by name — never `cancellationToken` positionally — so reordering the parameters carries
+no risk of silently swapping which value binds to which parameter at any external call site. The one
+internal self-call (`ReadEffectiveContentAsync` calling `ResolveEffectivePathAsync`) did pass both
+positionally in the old order and was updated to match. Full build (0 warnings, 0 errors) and full
+solution test suite (1433 tests, 0 failures) verified after escalating `CA1068` to `warning`.
 
 ### Step 10 — CA1873 (expensive logging argument evaluation) — scope decision
 **Status:** ⬜ Not started
@@ -415,7 +426,7 @@ mirroring #197's own "no user-facing changes").
 | 6 | ✅ | Mechanical `CAxxxx`/`SYSLIB` rules escalated and fixed | Build | Step 6 |
 | 7 | ✅ | CA1806's 12 ignored results reviewed, any real bugs fixed | Manual | Step 7 |
 | 8 | ✅ | CA2254's 3 logging template issues fixed | Manual | Step 8 |
-| 9 | ⬜ | CA1068's 2 parameter-order issues reviewed | Manual | Step 9 |
+| 9 | ✅ | CA1068's 2 parameter-order issues reviewed | Manual | Step 9 |
 | 10 | ⬜ | CA1873 scope decision made (split vs. inline) | Manual | Step 10 |
 | 11 | ⬜ | Full build/test 0 warnings 0 errors; T1; T2 | Build + Live | Step 11 |
 | 12 | ⬜ | CLAUDE.md updated with the primary-constructor convention | Manual | Step 12 |
