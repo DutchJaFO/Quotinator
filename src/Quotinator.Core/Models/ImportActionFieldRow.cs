@@ -6,17 +6,21 @@ namespace Quotinator.Core.Models;
 
 /// <summary>
 /// One field-level row of the bulk export/decide flat format (#163) — <c>GET /import/actions/export</c>
-/// produces these, <c>POST /import/actions/bulk-decide</c> consumes them back. <see cref="Field"/> uses
-/// the same camelCase vocabulary already exposed via <c>GET /import/actions</c>' own
+/// produces these as <see cref="ImportActionFieldRowResponse"/>, <c>POST /import/actions/bulk-decide</c>
+/// consumes them back as <see cref="ImportActionFieldRowDto"/>. <see cref="Field"/> uses the same
+/// camelCase vocabulary already exposed via <c>GET /import/actions</c>' own
 /// <c>ExistingFields</c>/<c>IncomingFields</c>/<c>AmbiguousFields</c> (e.g. <c>"quoteText"</c>,
 /// <c>"title"</c>, <c>"name"</c>) rather than <see cref="ConflictDecisionRequest"/>'s PascalCase property
 /// names — <see cref="EntityType"/> and <see cref="Field"/> together identify a decidable field
 /// unambiguously, since the same field name can mean different things on different entity types (e.g.
-/// <c>"name"</c> on a Person row versus a Character row).
+/// <c>"name"</c> on a Person row versus a Character row). Unsuffixed and <see langword="abstract"/>
+/// per ADR 016's shared-base-class pattern (revision — issue #264): both boundaries have the identical
+/// shape, so the shared properties live here and each boundary gets its own thin, constructible
+/// subclass rather than a full duplicate.
 /// </summary>
-public sealed class ImportActionFieldRow
+public abstract class ImportActionFieldRow
 {
-    /// <summary>The <c>System_ImportActions</c> row this field belongs to.</summary>
+    /// <summary>The <c>Import_Action</c> row this field belongs to.</summary>
     public required Guid ActionId { get; init; }
 
     /// <summary>The target record's own id (<c>SystemImportAction.EntityId</c>).</summary>
@@ -53,4 +57,14 @@ public sealed class ImportActionFieldRow
     /// decision) — resolves a <c>Blocked</c> hold the same way <see cref="ConflictDecisionRequest.MarkCompletenessAs"/> already does.
     /// </summary>
     public CompletenessStatus? MarkCompletenessAs { get; init; }
+}
+
+/// <summary>The bare-array response element for <c>GET /import/actions/export</c>.</summary>
+public sealed class ImportActionFieldRowResponse : ImportActionFieldRow
+{
+}
+
+/// <summary>The uploaded-file-content deserialization target for <c>POST /import/actions/bulk-decide</c>.</summary>
+public sealed class ImportActionFieldRowDto : ImportActionFieldRow
+{
 }

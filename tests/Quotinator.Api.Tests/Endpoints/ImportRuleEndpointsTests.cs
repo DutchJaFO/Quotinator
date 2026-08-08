@@ -201,7 +201,7 @@ public class ImportRuleEndpointsTests
         {
             ReturnExportRows =
             [
-                new ImportActionFieldRow
+                new ImportActionFieldRowResponse
                 {
                     ActionId      = Guid.NewGuid(),
                     EntityId      = "33333333-3333-3333-3333-333333333333",
@@ -245,7 +245,7 @@ public class ImportRuleEndpointsTests
         {
             ReturnExportRows =
             [
-                new ImportActionFieldRow
+                new ImportActionFieldRowResponse
                 {
                     ActionId      = Guid.NewGuid(),
                     EntityId      = "44444444-4444-4444-4444-444444444444",

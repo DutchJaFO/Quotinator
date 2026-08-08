@@ -183,7 +183,7 @@ public class CsvQuoteConverterTests
         // Header labels deliberately don't match canonical names — mapping must be used exclusively.
         var inputPath  = WriteInput("Text,Movie\nA quote.,A Source\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new CsvConverterOptions
+        var options = ToOptions(new CsvConverterOptionsDto
         {
             ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
         });
@@ -200,7 +200,7 @@ public class CsvQuoteConverterTests
     {
         var inputPath  = WriteInput("A quote.,A Source\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new CsvConverterOptions
+        var options = ToOptions(new CsvConverterOptionsDto
         {
             HasHeader     = false,
             ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
@@ -217,7 +217,7 @@ public class CsvQuoteConverterTests
     {
         var inputPath  = WriteInput("quote,source\nA quote.,A Source\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new CsvConverterOptions
+        var options = ToOptions(new CsvConverterOptionsDto
         {
             Defaults = new QuoteFieldDefaults { OriginalLanguage = "nl", Type = QuoteType.Book }
         });
@@ -234,7 +234,7 @@ public class CsvQuoteConverterTests
     {
         var inputPath  = WriteInput("A quote.,A Source,book\n");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new CsvConverterOptions
+        var options = ToOptions(new CsvConverterOptionsDto
         {
             HasHeader     = false,
             ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2, Type = 3 },
@@ -247,7 +247,7 @@ public class CsvQuoteConverterTests
         Assert.AreEqual(QuoteType.Book, quote.Type);
     }
 
-    private static JsonElement ToOptions(CsvConverterOptions options)
+    private static JsonElement ToOptions(CsvConverterOptionsDto options)
         => JsonSerializer.SerializeToElement(options);
 
     #endregion

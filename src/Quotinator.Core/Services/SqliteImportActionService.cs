@@ -80,10 +80,10 @@ public sealed class SqliteImportActionService(
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<ImportActionFieldRow>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ImportActionFieldRowResponse>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default)
     {
         var actions = await _actionReader.GetAllForBatchAsync(batchId);
-        var rows    = new List<ImportActionFieldRow>();
+        var rows    = new List<ImportActionFieldRowResponse>();
 
         foreach (var action in actions)
         {
@@ -107,7 +107,7 @@ public sealed class SqliteImportActionService(
                     customValue = stored.Choice == FieldResolutionChoice.Custom ? DecodedCustomValueToPlainString(field, stored.CustomValue) : null;
                 }
 
-                rows.Add(new ImportActionFieldRow
+                rows.Add(new ImportActionFieldRowResponse
                 {
                     ActionId           = action.Id,
                     EntityId           = action.EntityId,
@@ -126,7 +126,7 @@ public sealed class SqliteImportActionService(
     }
 
     /// <inheritdoc/>
-    public async Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRow> rows, CancellationToken cancellationToken = default)
+    public async Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRowDto> rows, CancellationToken cancellationToken = default)
     {
         var batchActions = (await _actionReader.GetAllForBatchAsync(batchId)).ToDictionary(a => a.Id);
         var errors  = new List<BulkDecideRowError>();
@@ -185,8 +185,8 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Source && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayload>(action.ExistingValue!)!;
-            var incomingSourcePayload = JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!;
+            var existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.ExistingValue!)!;
+            var incomingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.IncomingValue!)!;
 
             var existingSourceFields = ToFieldMap(existingSourcePayload);
             var incomingSourceFields = ToFieldMap(incomingSourcePayload);
@@ -194,7 +194,7 @@ public sealed class SqliteImportActionService(
 
             var sourceResult = FieldMergeResolver.ResolveWithDecisions(existingSourceFields, incomingSourceFields, sourceDecisions);
 
-            var resolvedSourcePayload = new SourceActionPayload(
+            var resolvedSourcePayload = new SourceActionPayloadDto(
                 (string)sourceResult.MergedFields["title"]!,
                 (string)sourceResult.MergedFields["type"]!,
                 (string?)sourceResult.MergedFields["date"],
@@ -206,8 +206,8 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.StageDirection && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.ExistingValue!)!;
-            var incomingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.IncomingValue!)!;
+            var existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.ExistingValue!)!;
+            var incomingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.IncomingValue!)!;
 
             var existingStageDirectionFields = ToFieldMap(existingStageDirectionPayload);
             var incomingStageDirectionFields = ToFieldMap(incomingStageDirectionPayload);
@@ -215,7 +215,7 @@ public sealed class SqliteImportActionService(
 
             var stageDirectionResult = FieldMergeResolver.ResolveWithDecisions(existingStageDirectionFields, incomingStageDirectionFields, stageDirectionDecisions);
 
-            var resolvedStageDirectionPayload = new StageDirectionActionPayload(
+            var resolvedStageDirectionPayload = new StageDirectionActionPayloadDto(
                 (string)stageDirectionResult.MergedFields["text"]!,
                 (string?)stageDirectionResult.MergedFields["imageUrl"],
                 existingStageDirectionPayload.Translations);
@@ -226,8 +226,8 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.SoundCue && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.ExistingValue!)!;
-            var incomingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.IncomingValue!)!;
+            var existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.ExistingValue!)!;
+            var incomingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.IncomingValue!)!;
 
             var existingSoundCueFields = ToFieldMap(existingSoundCuePayload);
             var incomingSoundCueFields = ToFieldMap(incomingSoundCuePayload);
@@ -235,7 +235,7 @@ public sealed class SqliteImportActionService(
 
             var soundCueResult = FieldMergeResolver.ResolveWithDecisions(existingSoundCueFields, incomingSoundCueFields, soundCueDecisions);
 
-            var resolvedSoundCuePayload = new SoundCueActionPayload(
+            var resolvedSoundCuePayload = new SoundCueActionPayloadDto(
                 (string)soundCueResult.MergedFields["text"]!,
                 (string?)soundCueResult.MergedFields["soundFileUrl"],
                 (string?)soundCueResult.MergedFields["imageUrl"],
@@ -247,8 +247,8 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Conversation && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.ExistingValue!)!;
-            var incomingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.IncomingValue!)!;
+            var existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
+            var incomingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
 
             var existingConversationFields = new Dictionary<string, object?> { ["description"] = existingConversationPayload.Description };
             var incomingConversationFields = new Dictionary<string, object?> { ["description"] = incomingConversationPayload.Description };
@@ -258,7 +258,7 @@ public sealed class SqliteImportActionService(
 
             var conversationResult = FieldMergeResolver.ResolveWithDecisions(existingConversationFields, incomingConversationFields, conversationDecisions);
 
-            var resolvedConversationPayload = new ConversationActionPayload((string?)conversationResult.MergedFields["description"], []);
+            var resolvedConversationPayload = new ConversationActionPayloadDto((string?)conversationResult.MergedFields["description"], []);
 
             await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedConversationPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(conversationDecisions));
             return;
@@ -266,8 +266,8 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Person && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayload>(action.ExistingValue!)!;
-            var incomingPersonPayload = JsonSerializer.Deserialize<PersonActionPayload>(action.IncomingValue!)!;
+            var existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.ExistingValue!)!;
+            var incomingPersonPayload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.IncomingValue!)!;
 
             var existingPersonFields = ToFieldMap(existingPersonPayload);
             var incomingPersonFields = ToFieldMap(incomingPersonPayload);
@@ -275,7 +275,7 @@ public sealed class SqliteImportActionService(
 
             var personResult = FieldMergeResolver.ResolveWithDecisions(existingPersonFields, incomingPersonFields, personDecisions);
 
-            var resolvedPersonPayload = new PersonActionPayload(
+            var resolvedPersonPayload = new PersonActionPayloadDto(
                 (string)personResult.MergedFields["name"]!,
                 (string?)personResult.MergedFields["dateOfBirth"],
                 (string?)personResult.MergedFields["dateOfDeath"]);
@@ -286,8 +286,8 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Character && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayload>(action.ExistingValue!)!;
-            var incomingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayload>(action.IncomingValue!)!;
+            var existingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.ExistingValue!)!;
+            var incomingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.IncomingValue!)!;
 
             var existingCharacterFields = ToFieldMap(existingCharacterPayload);
             var incomingCharacterFields = ToFieldMap(incomingCharacterPayload);
@@ -298,7 +298,7 @@ public sealed class SqliteImportActionService(
             // #175: SourceId/SourceTitle/SourceType are never Modify-able (ADR 013 Decision 9) — the
             // resolved payload carries the existing row's own values through unchanged, only Name
             // comes from FieldMergeResolver's result.
-            var resolvedCharacterPayload = new CharacterActionPayload(
+            var resolvedCharacterPayload = new CharacterActionPayloadDto(
                 existingCharacterPayload.SourceId,
                 (string)characterResult.MergedFields["name"]!,
                 existingCharacterPayload.SourceTitle,
@@ -310,8 +310,8 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Series && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayload>(action.ExistingValue!)!;
-            var incomingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayload>(action.IncomingValue!)!;
+            var existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.ExistingValue!)!;
+            var incomingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.IncomingValue!)!;
 
             var existingSeriesFields = ToFieldMap(existingSeriesPayload);
             var incomingSeriesFields = ToFieldMap(incomingSeriesPayload);
@@ -322,7 +322,7 @@ public sealed class SqliteImportActionService(
             // UniverseName only carries through when the resolved universeId is the incoming one — see
             // the matching comment in ImportActionPlanner.PlanSeriesAsync's merge branch.
             var resolvedSeriesUniverseId = (string?)seriesResult.MergedFields["universeId"];
-            var resolvedSeriesPayload = new SeriesActionPayload(
+            var resolvedSeriesPayload = new SeriesActionPayloadDto(
                 (string)seriesResult.MergedFields["name"]!,
                 resolvedSeriesUniverseId,
                 resolvedSeriesUniverseId == incomingSeriesPayload.UniverseId ? incomingSeriesPayload.UniverseName : null);
@@ -333,8 +333,8 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Universe && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayload>(action.ExistingValue!)!;
-            var incomingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayload>(action.IncomingValue!)!;
+            var existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.ExistingValue!)!;
+            var incomingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.IncomingValue!)!;
 
             var existingUniverseFields = ToFieldMap(existingUniversePayload);
             var incomingUniverseFields = ToFieldMap(incomingUniversePayload);
@@ -342,7 +342,7 @@ public sealed class SqliteImportActionService(
 
             var universeResult = FieldMergeResolver.ResolveWithDecisions(existingUniverseFields, incomingUniverseFields, universeDecisions);
 
-            var resolvedUniversePayload = new UniverseActionPayload((string)universeResult.MergedFields["name"]!);
+            var resolvedUniversePayload = new UniverseActionPayloadDto((string)universeResult.MergedFields["name"]!);
 
             await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedUniversePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(universeDecisions));
             return;
@@ -351,8 +351,8 @@ public sealed class SqliteImportActionService(
         if (action.EntityType != ImportActionEntityTypes.Quote)
             throw new ImportActionNotDecidableException(actionId, action.EntityType);
 
-        var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
-        var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.IncomingValue!)!;
+        var existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
+        var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
 
         var existing  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
         var incoming  = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
@@ -364,7 +364,7 @@ public sealed class SqliteImportActionService(
 
         // Store the fully resolved payload (not the raw decision request) — apply never needs to
         // re-run FieldMergeResolver or know about policies/decisions at all.
-        var resolvedPayload = new QuoteActionPayload
+        var resolvedPayload = new QuoteActionPayloadDto
         {
             Fields      = QuoteFieldMerge.ToDto(result.MergedFields),
             SourceId    = incomingPayload.SourceId,
@@ -635,7 +635,7 @@ public sealed class SqliteImportActionService(
                         // (SourceId/SourceTitle/SourceType are immutable once a Character exists, ADR
                         // 013 Decision 9, so nothing else needs restoring), so no active-reference
                         // check is needed, mirroring Source's own Modify-reversal branch above.
-                        var existingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayload>(action.ExistingValue!)!;
+                        var existingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Characters.UpdateFieldsById, new
                         {
                             name = existingCharacterPayload.Name,
@@ -656,7 +656,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #162: a Modify reversal restores the prior field values — it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
-                        var existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayload>(action.ExistingValue!)!;
+                        var existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Sources.UpdateFieldsById, new
                         {
                             title = existingSourcePayload.Title,
@@ -683,7 +683,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #173: a Modify reversal restores the prior field values — it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
-                        var existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayload>(action.ExistingValue!)!;
+                        var existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.People.UpdateFieldsById, new
                         {
                             name = existingPersonPayload.Name,
@@ -708,7 +708,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #163: a Modify reversal restores the prior field values — it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
-                        var existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayload>(action.ExistingValue!)!;
+                        var existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Series.UpdateFieldsById, new
                         {
                             name = existingSeriesPayload.Name,
@@ -732,7 +732,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #163: a Modify reversal restores the prior Name — it never deletes anything,
                         // so no active-reference check is needed (unlike an Add reversal).
-                        var existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayload>(action.ExistingValue!)!;
+                        var existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Universe.UpdateFieldsById, new
                         {
                             name = existingUniversePayload.Name,
@@ -754,7 +754,7 @@ public sealed class SqliteImportActionService(
                         // #176: a Modify reversal restores the prior Description only — it never
                         // touches Lines and never deletes anything, so no active-reference check is
                         // needed (unlike an Add reversal).
-                        var existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.ExistingValue!)!;
+                        var existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Conversations.UpdateDescriptionById, new
                         {
                             description = existingConversationPayload.Description,
@@ -778,7 +778,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #171: a Modify reversal restores the prior field values — it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
-                        var existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.ExistingValue!)!;
+                        var existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.StageDirections.UpdateFieldsById, new
                         {
                             text = existingStageDirectionPayload.Text,
@@ -799,7 +799,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #172: a Modify reversal restores the prior field values — it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
-                        var existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.ExistingValue!)!;
+                        var existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.SoundCues.UpdateFieldsById, new
                         {
                             text = existingSoundCuePayload.Text,
@@ -843,7 +843,7 @@ public sealed class SqliteImportActionService(
         if (action.AppliedPolicy.Parsed == DuplicateResolutionPolicy.Skip)
             return; // Nothing was ever written for a Skip-policy Modify — its reversal is a no-op write.
 
-        var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
+        var existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
         var existingFields  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
         // Only .Id and .Translations are actually taken from this template (see ApplyMergedFields'
         // own remarks) — QuoteText/Source are required properties but immediately overwritten below.
@@ -927,12 +927,12 @@ public sealed class SqliteImportActionService(
                 var isSourceAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isSourceAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!;
+                    var payload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.IncomingValue!)!;
                     await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Title, payload.Type, batchId, now, changeLog, payload.Date, payload.SeriesId);
                 }
                 else
                 {
-                    var payload = JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields
+                    var payload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.Sources.UpdateFieldsById, new
                     {
@@ -955,7 +955,7 @@ public sealed class SqliteImportActionService(
                 var isCharacterAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isCharacterAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<CharacterActionPayload>(action.IncomingValue!)!;
+                    var payload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.IncomingValue!)!;
                     // Defensive: CharacterSources.SourceId (#179) is a real FK, but System_ImportActions
                     // rows apply in whatever order the coordinator returns them — this action's own
                     // Source may not have applied yet. Idempotent, so re-running it here is safe either way.
@@ -966,7 +966,7 @@ public sealed class SqliteImportActionService(
                 {
                     // #175: Modify only ever writes Name — SourceType is immutable once a Character
                     // exists (ADR 013 Decision 9), so this never touches CharacterSources.
-                    var payload = JsonSerializer.Deserialize<CharacterActionPayload>(action.MergedFields
+                    var payload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.Characters.UpdateFieldsById, new
                     {
@@ -986,13 +986,13 @@ public sealed class SqliteImportActionService(
                 var isPersonAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isPersonAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<PersonActionPayload>(action.IncomingValue!)!;
+                    var payload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.IncomingValue!)!;
                     await EnsurePersonExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog,
                         payload.DateOfBirth, payload.DateOfDeath);
                 }
                 else
                 {
-                    var payload = JsonSerializer.Deserialize<PersonActionPayload>(action.MergedFields
+                    var payload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.People.UpdateFieldsById, new
                     {
@@ -1014,12 +1014,12 @@ public sealed class SqliteImportActionService(
                 var isUniverseAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isUniverseAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<UniverseActionPayload>(action.IncomingValue!)!;
+                    var payload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.IncomingValue!)!;
                     await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog);
                 }
                 else
                 {
-                    var payload = JsonSerializer.Deserialize<UniverseActionPayload>(action.MergedFields
+                    var payload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.Universe.UpdateFieldsById, new
                     {
@@ -1039,7 +1039,7 @@ public sealed class SqliteImportActionService(
                 var isSeriesAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isSeriesAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<SeriesActionPayload>(action.IncomingValue!)!;
+                    var payload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.IncomingValue!)!;
                     // Defensive: Series.UniverseId (#179) is a real FK, but System_ImportActions rows
                     // apply in whatever order the coordinator returns them — this action's own Universe
                     // may not have applied yet. Idempotent, so re-running it here is safe either way.
@@ -1054,7 +1054,7 @@ public sealed class SqliteImportActionService(
                 {
                     // #163: Modify writes Name and UniverseId — unlike Character's SourceType, a
                     // Series' UniverseId is not documented as immutable, so both are correctable.
-                    var payload = JsonSerializer.Deserialize<SeriesActionPayload>(action.MergedFields
+                    var payload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     // Uses payload.UniverseName (the Universe's own name), not payload.Name (the
                     // Series' own name) — see the matching comment in the Add branch above.
@@ -1089,7 +1089,7 @@ public sealed class SqliteImportActionService(
                     break;
 
                 var json  = isAdd ? action.IncomingValue : action.MergedFields;
-                var payload = JsonSerializer.Deserialize<QuoteActionPayload>(json!)
+                var payload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(json!)
                               ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload.");
                 var resolved = new SourceQuoteDto
                 {
@@ -1164,12 +1164,12 @@ public sealed class SqliteImportActionService(
                 var isStageDirectionAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isStageDirectionAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.IncomingValue!)!;
+                    var payload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.IncomingValue!)!;
                     await EnsureStageDirectionExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
                 }
                 else
                 {
-                    var payload = JsonSerializer.Deserialize<StageDirectionActionPayload>(action.MergedFields
+                    var payload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.StageDirections.UpdateFieldsById, new
                     {
@@ -1190,12 +1190,12 @@ public sealed class SqliteImportActionService(
                 var isSoundCueAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isSoundCueAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.IncomingValue!)!;
+                    var payload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.IncomingValue!)!;
                     await EnsureSoundCueExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
                 }
                 else
                 {
-                    var payload = JsonSerializer.Deserialize<SoundCueActionPayload>(action.MergedFields
+                    var payload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.SoundCues.UpdateFieldsById, new
                     {
@@ -1216,7 +1216,7 @@ public sealed class SqliteImportActionService(
             {
                 if (action.ActionType.Parsed == ImportActionKind.Modify)
                 {
-                    var modifyPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.MergedFields
+                    var modifyPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.Conversations.UpdateDescriptionById, new
                     {
@@ -1233,7 +1233,7 @@ public sealed class SqliteImportActionService(
                 // Trusts its referenced Quote/StageDirection/SoundCue rows already applied — see
                 // PlanAsync's remark on why that ordering is safe to rely on here, unlike
                 // Character/Quote's defensive re-ensure.
-                var payload = JsonSerializer.Deserialize<ConversationActionPayload>(action.IncomingValue!)!;
+                var payload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
                 var inserted = await sqliteConnection.ExecuteAsync(Sql.Conversations.InsertIfNotExists,
                     new { Id = action.EntityId, payload.Description, ImportBatchId = batchId, DateCreated = now }, sqliteTransaction);
 
@@ -1365,7 +1365,7 @@ public sealed class SqliteImportActionService(
 
     /// <summary>#68: id-keyed like Quote (see <see cref="ImportActionEntityTypes.Conversation"/>'s remark), not natural-key-keyed like the three helpers above — <paramref name="id"/> is the file's own explicit id, used as-is.</summary>
     private static async Task EnsureStageDirectionExistsAsync(
-        SqliteConnection connection, SqliteTransaction transaction, string id, StageDirectionActionPayload payload,
+        SqliteConnection connection, SqliteTransaction transaction, string id, StageDirectionActionPayloadDto payload,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
@@ -1391,7 +1391,7 @@ public sealed class SqliteImportActionService(
 
     /// <summary>#68: id-keyed like <see cref="EnsureStageDirectionExistsAsync"/> — see its remark.</summary>
     private static async Task EnsureSoundCueExistsAsync(
-        SqliteConnection connection, SqliteTransaction transaction, string id, SoundCueActionPayload payload,
+        SqliteConnection connection, SqliteTransaction transaction, string id, SoundCueActionPayloadDto payload,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
@@ -1443,43 +1443,43 @@ public sealed class SqliteImportActionService(
         if (json is null) return null;
         return entityType switch
         {
-            "Quote"          => QuoteFieldMerge.ToFieldMap(JsonSerializer.Deserialize<QuoteActionPayload>(json)!.Fields),
-            "Source"         => ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(json)!),
-            "Character"      => ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayload>(json)!),
-            "Person"         => ToFieldMap(JsonSerializer.Deserialize<PersonActionPayload>(json)!),
-            "StageDirection" => ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayload>(json)!),
-            "SoundCue"       => ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayload>(json)!),
-            "Conversation"   => ToFieldMap(JsonSerializer.Deserialize<ConversationActionPayload>(json)!),
-            "Series"         => ToFieldMap(JsonSerializer.Deserialize<SeriesActionPayload>(json)!),
-            "Universe"       => ToFieldMap(JsonSerializer.Deserialize<UniverseActionPayload>(json)!),
+            "Quote"          => QuoteFieldMerge.ToFieldMap(JsonSerializer.Deserialize<QuoteActionPayloadDto>(json)!.Fields),
+            "Source"         => ToFieldMap(JsonSerializer.Deserialize<SourceActionPayloadDto>(json)!),
+            "Character"      => ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayloadDto>(json)!),
+            "Person"         => ToFieldMap(JsonSerializer.Deserialize<PersonActionPayloadDto>(json)!),
+            "StageDirection" => ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(json)!),
+            "SoundCue"       => ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayloadDto>(json)!),
+            "Conversation"   => ToFieldMap(JsonSerializer.Deserialize<ConversationActionPayloadDto>(json)!),
+            "Series"         => ToFieldMap(JsonSerializer.Deserialize<SeriesActionPayloadDto>(json)!),
+            "Universe"       => ToFieldMap(JsonSerializer.Deserialize<UniverseActionPayloadDto>(json)!),
             _                => null,
         };
     }
 
-    private static Dictionary<string, object?> ToFieldMap(SourceActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(SourceActionPayloadDto payload) =>
         new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId };
 
-    private static Dictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(CharacterActionPayloadDto payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["sourceId"] = payload.SourceId };
 
-    private static Dictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(PersonActionPayloadDto payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["dateOfBirth"] = payload.DateOfBirth, ["dateOfDeath"] = payload.DateOfDeath };
 
-    private static Dictionary<string, object?> ToFieldMap(StageDirectionActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(StageDirectionActionPayloadDto payload) =>
         new Dictionary<string, object?> { ["text"] = payload.Text, ["imageUrl"] = payload.ImageUrl };
 
-    private static Dictionary<string, object?> ToFieldMap(SoundCueActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(SoundCueActionPayloadDto payload) =>
         new Dictionary<string, object?> { ["text"] = payload.Text, ["soundFileUrl"] = payload.SoundFileUrl, ["imageUrl"] = payload.ImageUrl };
 
-    private static Dictionary<string, object?> ToFieldMap(ConversationActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(ConversationActionPayloadDto payload) =>
         new Dictionary<string, object?> { ["description"] = payload.Description, ["lineCount"] = payload.Lines.Count };
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload — must stay in sync (#163).</summary>
-    private static Dictionary<string, object?> ToFieldMap(SeriesActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(SeriesActionPayloadDto payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name, ["universeId"] = payload.UniverseId };
 
     /// <summary>Same key name as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload — must stay in sync (#163).</summary>
-    private static Dictionary<string, object?> ToFieldMap(UniverseActionPayload payload) =>
+    private static Dictionary<string, object?> ToFieldMap(UniverseActionPayloadDto payload) =>
         new Dictionary<string, object?> { ["name"] = payload.Name };
 
     private static IReadOnlyList<string> ComputeAmbiguousFields(ImportActionEntity action)
@@ -1494,60 +1494,60 @@ public sealed class SqliteImportActionService(
         {
             case ImportActionEntityTypes.Quote:
             {
-                var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
-                var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.IncomingValue!)!;
+                var existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
+                var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
                 existing = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
                 incoming = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
                 break;
             }
             case ImportActionEntityTypes.Source:
             {
-                existing = ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(action.ExistingValue!)!);
-                incoming = ToFieldMap(JsonSerializer.Deserialize<SourceActionPayload>(action.IncomingValue!)!);
+                existing = ToFieldMap(JsonSerializer.Deserialize<SourceActionPayloadDto>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<SourceActionPayloadDto>(action.IncomingValue!)!);
                 break;
             }
             case ImportActionEntityTypes.Person:
             {
-                existing = ToFieldMap(JsonSerializer.Deserialize<PersonActionPayload>(action.ExistingValue!)!);
-                incoming = ToFieldMap(JsonSerializer.Deserialize<PersonActionPayload>(action.IncomingValue!)!);
+                existing = ToFieldMap(JsonSerializer.Deserialize<PersonActionPayloadDto>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<PersonActionPayloadDto>(action.IncomingValue!)!);
                 break;
             }
             case ImportActionEntityTypes.Character:
             {
-                existing = ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayload>(action.ExistingValue!)!);
-                incoming = ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayload>(action.IncomingValue!)!);
+                existing = ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.IncomingValue!)!);
                 break;
             }
             case ImportActionEntityTypes.StageDirection:
             {
-                existing = ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayload>(action.ExistingValue!)!);
-                incoming = ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayload>(action.IncomingValue!)!);
+                existing = ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.IncomingValue!)!);
                 break;
             }
             case ImportActionEntityTypes.SoundCue:
             {
-                existing = ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayload>(action.ExistingValue!)!);
-                incoming = ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayload>(action.IncomingValue!)!);
+                existing = ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.IncomingValue!)!);
                 break;
             }
             case ImportActionEntityTypes.Conversation:
             {
-                var existingPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.ExistingValue!)!;
-                var incomingPayload = JsonSerializer.Deserialize<ConversationActionPayload>(action.IncomingValue!)!;
+                var existingPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
+                var incomingPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
                 existing = new Dictionary<string, object?> { ["description"] = existingPayload.Description };
                 incoming = new Dictionary<string, object?> { ["description"] = incomingPayload.Description };
                 break;
             }
             case ImportActionEntityTypes.Series:
             {
-                existing = ToFieldMap(JsonSerializer.Deserialize<SeriesActionPayload>(action.ExistingValue!)!);
-                incoming = ToFieldMap(JsonSerializer.Deserialize<SeriesActionPayload>(action.IncomingValue!)!);
+                existing = ToFieldMap(JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.IncomingValue!)!);
                 break;
             }
             case ImportActionEntityTypes.Universe:
             {
-                existing = ToFieldMap(JsonSerializer.Deserialize<UniverseActionPayload>(action.ExistingValue!)!);
-                incoming = ToFieldMap(JsonSerializer.Deserialize<UniverseActionPayload>(action.IncomingValue!)!);
+                existing = ToFieldMap(JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.ExistingValue!)!);
+                incoming = ToFieldMap(JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.IncomingValue!)!);
                 break;
             }
             default:
@@ -1570,7 +1570,7 @@ public sealed class SqliteImportActionService(
         if (action.EntityType != ImportActionEntityTypes.Quote) return [];
 
         var json    = action.ActionType.Parsed == ImportActionKind.Add ? action.IncomingValue : (action.MergedFields ?? action.IncomingValue);
-        var payload = JsonSerializer.Deserialize<QuoteActionPayload>(json!)!;
+        var payload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(json!)!;
 
         if (!batchCache.TryGetValue(action.BatchId, out var batchActions))
         {

@@ -1144,7 +1144,7 @@ public class SqliteImportActionServiceTests
 
     /// <summary>
     /// #180 regression guard, found live via T2: <c>DecideAsync</c>'s Source branch reconstructed
-    /// <see cref="SourceActionPayload"/> with only Title/Type/Date, silently dropping SeriesId to its
+    /// <see cref="SourceActionPayloadDto"/> with only Title/Type/Date, silently dropping SeriesId to its
     /// default null even though <c>FieldMergeResolver</c> had already resolved it correctly — every
     /// decided Source SeriesId Modify applied as null. This is the one test in the whole suite that
     /// exercises the full plan → stage → decide → apply → verify-on-disk pipeline for SeriesId; the
@@ -1967,7 +1967,7 @@ public class SqliteImportActionServiceTests
                 new { Id = batchId, now = setupNow });
         }
 
-        var payload = new SeriesActionPayload("The Lord of the Rings", universeId, "Middle Earth");
+        var payload = new SeriesActionPayloadDto("The Lord of the Rings", universeId, "Middle Earth");
         await _actionWriter.WriteAsync(new ImportActionEntity
         {
             BatchId       = batchId.ToCanonicalId(),
@@ -1992,7 +1992,7 @@ public class SqliteImportActionServiceTests
     /// <summary>
     /// Same bug as <see cref="ApplyBatchAsync_SeriesAddReferencesUnappliedUniverse_EnsuresUniverseWithCorrectName"/>,
     /// but exercises the real <c>ImportActionPlanner.PlanSeriesAsync</c> construction path instead of a
-    /// hand-built <see cref="SeriesActionPayload"/> — proving the planner itself now populates
+    /// hand-built <see cref="SeriesActionPayloadDto"/> — proving the planner itself now populates
     /// <c>UniverseName</c> on the incoming-side payload it stages, not just that the applier reads it
     /// correctly when it happens to be present. Only the Series action is staged, simulating its own
     /// Universe action never having applied within this batch.
@@ -2015,7 +2015,7 @@ public class SqliteImportActionServiceTests
             universe: [new UniverseEntryDto { Name = "Middle Earth" }]);
 
         var seriesAction = actions.Single(a => a.EntityType == ImportActionEntityTypes.Series);
-        var stagedUniverseId = ((SeriesActionPayload)JsonSerializer.Deserialize(seriesAction.IncomingValue!, typeof(SeriesActionPayload))!).UniverseId;
+        var stagedUniverseId = ((SeriesActionPayloadDto)JsonSerializer.Deserialize(seriesAction.IncomingValue!, typeof(SeriesActionPayloadDto))!).UniverseId;
 
         // Deliberately skip staging the Universe action — simulates it never having applied in this batch.
         await _actionWriter.WriteAsync(seriesAction);
@@ -2058,8 +2058,8 @@ public class SqliteImportActionServiceTests
     public async Task ExportBatchAsync_PendingDecidedAndBlockedModifyActions_AllIncluded()
     {
         var batchId = Guid.NewGuid();
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name"));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name"));
 
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Decided, incoming, existing);
@@ -2076,7 +2076,7 @@ public class SqliteImportActionServiceTests
     {
         var batchId = Guid.NewGuid();
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Add, ImportActionStatus.Decided,
-            JsonSerializer.Serialize(new PersonActionPayload("Brand New")));
+            JsonSerializer.Serialize(new PersonActionPayloadDto("Brand New")));
 
         var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
 
@@ -2087,7 +2087,7 @@ public class SqliteImportActionServiceTests
     public async Task ExportBatchAsync_AppliedAndDiscardedActions_Excluded()
     {
         var batchId = Guid.NewGuid();
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name"));
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Applied, incoming);
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Discarded, incoming);
 
@@ -2100,8 +2100,8 @@ public class SqliteImportActionServiceTests
     public async Task ExportBatchAsync_PersonModify_EmitsOneRowPerDecidableFieldWithExistingAndIncomingValues()
     {
         var batchId = Guid.NewGuid();
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name", "1990-01-01", null));
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name", "1980-01-01", null));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name", "1990-01-01", null));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name", "1980-01-01", null));
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
@@ -2117,8 +2117,8 @@ public class SqliteImportActionServiceTests
     public async Task ExportBatchAsync_DecidedActionWithOriginalDecision_ReflectsActualStoredChoiceNotInferred()
     {
         var batchId = Guid.NewGuid();
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name", "1990-01-01", null));
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name", "1980-01-01", null));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name", "1990-01-01", null));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name", "1980-01-01", null));
         // The resolved value for "name" happens to equal the incoming value, but the caller's actual
         // choice was Custom, not Replace — proves the export reads the real recorded choice rather than
         // inferring Replace-vs-Keep by comparing MergedFields against ExistingValue/IncomingValue.
@@ -2127,7 +2127,7 @@ public class SqliteImportActionServiceTests
             ["name"] = new FieldMergeDecision(FieldResolutionChoice.Custom, "New Name"),
             ["dateOfBirth"] = new FieldMergeDecision(FieldResolutionChoice.Keep, null),
         });
-        var merged = JsonSerializer.Serialize(new PersonActionPayload("New Name", "1980-01-01", null));
+        var merged = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name", "1980-01-01", null));
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Decided,
             incoming, existing, merged, originalDecision);
 
@@ -2149,8 +2149,8 @@ public class SqliteImportActionServiceTests
     public async Task ExportBatchAsync_QuoteGenresCustomChoice_RoundTripsThroughSemicolonEncoding()
     {
         var batchId = Guid.NewGuid();
-        var incomingPayload = new QuoteActionPayload { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["drama"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
-        var existingPayload = new QuoteActionPayload { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["comedy"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
+        var incomingPayload = new QuoteActionPayloadDto { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["drama"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
+        var existingPayload = new QuoteActionPayloadDto { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["comedy"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
         var originalDecision = JsonSerializer.Serialize(new Dictionary<string, FieldMergeDecision>
         {
             ["genres"] = new FieldMergeDecision(FieldResolutionChoice.Custom, new List<string> { "drama", "comedy", "sci-fi" }),
@@ -2172,8 +2172,8 @@ public class SqliteImportActionServiceTests
     public async Task ExportBatchAsync_ConversationModify_EmitsOnlyDescriptionField()
     {
         var batchId = Guid.NewGuid();
-        var incoming = JsonSerializer.Serialize(new ConversationActionPayload("New description", []));
-        var existing = JsonSerializer.Serialize(new ConversationActionPayload("Old description", []));
+        var incoming = JsonSerializer.Serialize(new ConversationActionPayloadDto("New description", []));
+        var existing = JsonSerializer.Serialize(new ConversationActionPayloadDto("Old description", []));
         await StageActionAsync(batchId, ImportActionEntityTypes.Conversation, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         var rows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
@@ -2188,7 +2188,7 @@ public class SqliteImportActionServiceTests
     public async Task ExportBatchAsync_MarkCompletenessAsSetOnAction_PopulatedOnEveryRowInTheGroup()
     {
         var batchId = Guid.NewGuid();
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name"));
         await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Blocked,
             incoming, markCompletenessAs: CompletenessStatus.Complete);
 
@@ -2201,7 +2201,7 @@ public class SqliteImportActionServiceTests
 
     // ── #163: BulkDecideAsync ────────────────────────────────────────────────
 
-    private static ImportActionFieldRow Field(Guid actionId, string entityId, string entityType, string field,
+    private static ImportActionFieldRowDto Field(Guid actionId, string entityId, string entityType, string field,
         FieldResolutionChoice? decision = null, string? customValue = null, CompletenessStatus? markCompletenessAs = null) =>
         new()
         {
@@ -2218,8 +2218,8 @@ public class SqliteImportActionServiceTests
     public async Task BulkDecideAsync_ValidRows_DecidesTheAction()
     {
         var batchId = Guid.NewGuid();
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name"));
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace) };
@@ -2237,8 +2237,8 @@ public class SqliteImportActionServiceTests
     public async Task BulkDecideAsync_ActionIdNotInBatch_ReportedAsErrorWithoutAbortingOtherRows()
     {
         var batchId = Guid.NewGuid();
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name"));
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         var unknownActionId = Guid.NewGuid();
@@ -2259,8 +2259,8 @@ public class SqliteImportActionServiceTests
     public async Task BulkDecideAsync_EntityTypeMismatch_ReportedAsError()
     {
         var batchId = Guid.NewGuid();
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name"));
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Character, "name", FieldResolutionChoice.Replace) };
@@ -2275,8 +2275,8 @@ public class SqliteImportActionServiceTests
     public async Task BulkDecideAsync_UnknownFieldForEntityType_ReportedAsError()
     {
         var batchId = Guid.NewGuid();
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name"));
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "quoteText", FieldResolutionChoice.Replace) };
@@ -2290,8 +2290,8 @@ public class SqliteImportActionServiceTests
     public async Task BulkDecideAsync_BlockedAction_DecidesJustLikePending()
     {
         var batchId = Guid.NewGuid();
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name"));
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Blocked, incoming, existing);
 
         var rows = new[] { Field(action.Id, action.EntityId, ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace, markCompletenessAs: CompletenessStatus.Complete) };
@@ -2305,8 +2305,8 @@ public class SqliteImportActionServiceTests
     public async Task BulkDecideAsync_MultipleFieldsForSameAction_AppliesAllAsOneDecision()
     {
         var batchId = Guid.NewGuid();
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name", "1980-01-01", null));
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name", "1990-01-01", null));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name", "1980-01-01", null));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name", "1990-01-01", null));
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         var rows = new[]
@@ -2331,8 +2331,8 @@ public class SqliteImportActionServiceTests
     public async Task ExportThenBulkDecide_UnmodifiedExportedRows_RoundTripsWithZeroErrors()
     {
         var batchId = Guid.NewGuid();
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name", "1980-01-01", null));
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name", "1990-01-01", null));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name", "1980-01-01", null));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name", "1990-01-01", null));
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         await _service.DecideAsync(action.Id, new ConflictDecisionRequest
@@ -2349,7 +2349,19 @@ public class SqliteImportActionServiceTests
         Assert.IsNull(exportedRows.Single(r => r.Field == "dateOfDeath").Decision,
             "dateOfDeath was never actually decided (both sides null, auto-resolved) — no entry in OriginalDecision");
 
-        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), exportedRows, TestContext.CancellationToken);
+        var dtoRows = exportedRows.Select(r => new ImportActionFieldRowDto
+        {
+            ActionId           = r.ActionId,
+            EntityId           = r.EntityId,
+            EntityType         = r.EntityType,
+            Field              = r.Field,
+            ExistingValue      = r.ExistingValue,
+            IncomingValue      = r.IncomingValue,
+            Decision           = r.Decision,
+            CustomValue        = r.CustomValue,
+            MarkCompletenessAs = r.MarkCompletenessAs,
+        }).ToList();
+        var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), dtoRows, TestContext.CancellationToken);
 
         Assert.IsEmpty(response.Errors, "The unmodified export must round-trip through bulk-decide with zero errors");
         Assert.AreEqual(1, response.ActionsDecided);
@@ -2359,14 +2371,16 @@ public class SqliteImportActionServiceTests
     /// Same baseline correctness check as <see cref="ExportThenBulkDecide_UnmodifiedExportedRows_RoundTripsWithZeroErrors"/>,
     /// but through the exact JSON wire serialization <c>GET /import/actions/export</c> and
     /// <c>POST /import/actions/bulk-decide</c> actually use (<see cref="JsonSerializer"/> over
-    /// <see cref="ImportActionFieldRow"/>), not the in-memory C# objects directly.
+    /// <see cref="ImportActionFieldRowResponse"/>/<see cref="ImportActionFieldRowDto"/>), not the
+    /// in-memory C# objects directly — also proves the wire shape is compatible across the
+    /// export/Dto split (issue #271).
     /// </summary>
     [TestMethod]
     public async Task ExportThenBulkDecide_ViaJsonWireFormat_RoundTripsWithZeroErrors()
     {
         var batchId = Guid.NewGuid();
-        var existing = JsonSerializer.Serialize(new PersonActionPayload("Old Name"));
-        var incoming = JsonSerializer.Serialize(new PersonActionPayload("New Name"));
+        var existing = JsonSerializer.Serialize(new PersonActionPayloadDto("Old Name"));
+        var incoming = JsonSerializer.Serialize(new PersonActionPayloadDto("New Name"));
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Person, ImportActionKind.Modify, ImportActionStatus.Pending, incoming, existing);
 
         await _service.DecideAsync(action.Id, new ConflictDecisionRequest
@@ -2376,7 +2390,7 @@ public class SqliteImportActionServiceTests
 
         var exportedRows = await _service.ExportBatchAsync(batchId.ToCanonicalId(), TestContext.CancellationToken);
         var json          = JsonSerializer.Serialize(exportedRows);
-        var deserialized  = JsonSerializer.Deserialize<List<ImportActionFieldRow>>(json)!;
+        var deserialized  = JsonSerializer.Deserialize<List<ImportActionFieldRowDto>>(json)!;
 
         var response = await _service.BulkDecideAsync(batchId.ToCanonicalId(), deserialized, TestContext.CancellationToken);
 
@@ -2394,8 +2408,8 @@ public class SqliteImportActionServiceTests
     public async Task ExportThenBulkDecide_ViaCsvWireFormat_RoundTripsWithZeroErrors()
     {
         var batchId = Guid.NewGuid();
-        var existingPayload = new QuoteActionPayload { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["comedy"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
-        var incomingPayload = new QuoteActionPayload { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["drama", "sci-fi"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
+        var existingPayload = new QuoteActionPayloadDto { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["comedy"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
+        var incomingPayload = new QuoteActionPayloadDto { Fields = new QuoteConflictFieldsDto { QuoteText = "q", OriginalLanguage = "en", Source = "s", Genres = ["drama", "sci-fi"] }, SourceId = "s0000001-0000-4000-8000-000000000001" };
         var action = await StageActionAsync(batchId, ImportActionEntityTypes.Quote, ImportActionKind.Modify, ImportActionStatus.Pending,
             JsonSerializer.Serialize(incomingPayload), JsonSerializer.Serialize(existingPayload));
 

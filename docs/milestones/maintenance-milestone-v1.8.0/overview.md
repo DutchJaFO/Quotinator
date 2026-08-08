@@ -54,7 +54,7 @@ and #255/#256 do not carry that urgency.
 | [#265](https://github.com/DutchJaFO/Quotinator/issues/265) | Admin audit endpoint returns AuditEntryEntity directly with no Response DTO layer | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — findings and recommendation recorded in the issue's own closing comment |
 | [#267](https://github.com/DutchJaFO/Quotinator/issues/267) | Investigate using FileResource/ImportBatch history to avoid unconditional backup-before-seed on every startup | Planning | N/A (research) | No plan doc yet |
 | [#269](https://github.com/DutchJaFO/Quotinator/issues/269) | Adopt a project-wide pattern for expensive logging arguments (CA1873) | Planning | Not yet determined | No plan doc yet |
-| [#271](https://github.com/DutchJaFO/Quotinator/issues/271) | Rename ActionPayload/ConverterOptions classes, add ImportActionFieldRow subclasses (ADR 016 revision) | Planning | Not yet determined | No plan doc yet |
+| [#271](https://github.com/DutchJaFO/Quotinator/issues/271) | Rename ActionPayload/ConverterOptions classes, add ImportActionFieldRow subclasses (ADR 016 revision) | Waiting for release | N/A | [271-actionpayload-converteroptions-rename-plan.md](271-actionpayload-converteroptions-rename-plan.md) |
 | [#272](https://github.com/DutchJaFO/Quotinator/issues/272) | Add AuditEntryResponse/AuditChangeResponse DTOs — stop leaking SafeValue's raw/parsed wrapper over HTTP | Planning | Not yet determined | No plan doc yet |
 
 ---

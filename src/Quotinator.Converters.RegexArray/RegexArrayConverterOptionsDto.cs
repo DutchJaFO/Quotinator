@@ -5,12 +5,12 @@ namespace Quotinator.Converters.RegexArray;
 
 /// <summary>
 /// Configuration for <see cref="RegexArrayConverter"/>, supplied via a manifest entry's or import
-/// request's <c>converterOptions</c>. Unlike <c>CsvConverterOptions</c>/
-/// <c>BasicJsonArrayConverterOptions</c>, there is no zero-config path — a bare regex capture group
+/// request's <c>converterOptions</c>. Unlike <c>CsvConverterOptionsDto</c>/
+/// <c>BasicJsonArrayConverterOptionsDto</c>, there is no zero-config path — a bare regex capture group
 /// has no inherent name to match a canonical field against, so both <see cref="Pattern"/> and
 /// <see cref="GroupMapping"/> are required.
 /// </summary>
-public sealed class RegexArrayConverterOptions
+public sealed class RegexArrayConverterOptionsDto
 {
     /// <summary>
     /// The regex pattern applied to each raw string entry. Not <c>required</c> at the C# level —

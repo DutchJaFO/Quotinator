@@ -214,8 +214,8 @@ public sealed class SqliteQuoteImportService(
                 || action.Status.Parsed is ImportActionStatus.Blocked or ImportActionStatus.Stale)
                 continue;
 
-            var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
-            var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.IncomingValue!)!;
+            var existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
+            var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
             var existingFields  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
             var incomingFields  = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
             var policy          = action.AppliedPolicy.Parsed!.Value;

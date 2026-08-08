@@ -24,14 +24,14 @@ public interface IImportActionService
     Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns one <see cref="ImportActionFieldRow"/> per decidable field, across every <c>Modify</c>
+    /// Returns one <see cref="ImportActionFieldRowResponse"/> per decidable field, across every <c>Modify</c>
     /// action sharing <paramref name="batchId"/> whose status is <c>Pending</c>, <c>Decided</c>,
     /// <c>Blocked</c> (#163), or <c>Stale</c> (#153) — the flat export format <c>GET /import/actions/export</c> serialises to
     /// CSV or JSON. An already-<c>Decided</c> action's <c>Decision</c>/<c>CustomValue</c> reflect the
     /// caller's actual prior per-field choice (from the stored <c>OriginalDecision</c>), not an
     /// inference from the resolved value.
     /// </summary>
-    Task<IReadOnlyList<ImportActionFieldRow>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ImportActionFieldRowResponse>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Applies a bulk-decide file's already-parsed rows (#163) — the reverse of
@@ -44,7 +44,7 @@ public interface IImportActionService
     /// rest of the file, matching <c>POST /import</c>'s existing "one bad row never aborts the rest"
     /// model. Deciding a <c>Blocked</c> or <c>Stale</c> action works exactly like deciding a <c>Pending</c> one.
     /// </summary>
-    Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRow> rows, CancellationToken cancellationToken = default);
+    Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRowDto> rows, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Stages a decision for one action of a currently-decidable entity type and <c>ActionType</c>

@@ -12,7 +12,7 @@ public class ConflictRuleGeneratorTests
 {
     private const string EntityId = "e0000001-0000-4000-8000-000000000001";
 
-    private static ImportActionFieldRow Row(string field, string? existingValue, string? incomingValue, FieldResolutionChoice? decision = null, string? customValue = null, string entityId = EntityId) =>
+    private static ImportActionFieldRowResponse Row(string field, string? existingValue, string? incomingValue, FieldResolutionChoice? decision = null, string? customValue = null, string entityId = EntityId) =>
         new()
         {
             ActionId      = Guid.NewGuid(),

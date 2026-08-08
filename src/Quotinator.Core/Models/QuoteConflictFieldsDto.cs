@@ -6,7 +6,7 @@ namespace Quotinator.Core.Models;
 /// <summary>
 /// The 8 mergeable quote fields (mirrors <c>Quotinator.Core.Database.QuoteFieldMerge</c>'s field-map
 /// shape exactly — <c>Id</c>/translations are deliberately excluded there too). Property names use the
-/// same wire tags already stored in <c>System_ImportConflicts.ExistingValue</c>/<c>IncomingValue</c>,
+/// same wire tags already stored in <c>Import_Action.ExistingValue</c>/<c>IncomingValue</c>,
 /// so this deserializes directly from that stored JSON with no manual field-by-field mapping.
 /// </summary>
 public sealed class QuoteConflictFieldsDto

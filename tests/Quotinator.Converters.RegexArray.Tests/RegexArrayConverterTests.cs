@@ -67,7 +67,7 @@ public class RegexArrayConverterTests
     {
         var inputPath  = WriteInput("[\"\\\"A quote.\\\" A Source\"]");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptions
+        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
         {
             Pattern      = VilaboimPattern,
             GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 },
@@ -90,7 +90,7 @@ public class RegexArrayConverterTests
     {
         var inputPath  = WriteInput("[\"\\\"A quote.\\\" A Source\"]");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptions
+        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
         {
             GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
         });
@@ -104,7 +104,7 @@ public class RegexArrayConverterTests
     {
         var inputPath  = WriteInput("[\"\\\"A quote.\\\" A Source\"]");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptions { Pattern = VilaboimPattern });
+        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto { Pattern = VilaboimPattern });
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken));
@@ -170,7 +170,7 @@ public class RegexArrayConverterTests
 
     #endregion
 
-    private static JsonElement VilaboimOptions() => JsonSerializer.SerializeToElement(new RegexArrayConverterOptions
+    private static JsonElement VilaboimOptions() => JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
     {
         Pattern      = VilaboimPattern,
         GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }

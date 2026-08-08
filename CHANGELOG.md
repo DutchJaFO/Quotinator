@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-08 19:43 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-08 20:08 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -46,6 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Roslyn code-style and .NET analyzer diagnostics (previously invisible to the build, since neither `EnforceCodeStyleInBuild` nor `AnalysisMode` was configured) are now escalated to build-time warnings and resolved across the whole solution — around 470 occurrences, including adopting primary constructors project-wide and requiring per-parameter XML documentation on every constructor — a purely internal code-quality change with no behaviour change beyond the `?lang=` fix noted above (issue #244)
 - Revised ADR 016 to clarify that its `Dto` class-naming suffix also covers JSON stored in a database column (not just on-disk files), to add a rule for a bare-array HTTP response's element type, and to recommend a shared unsuffixed base class when the same shape is used at two different serialization boundaries — a purely internal documentation decision that issue #271 implements as class renames; no behaviour change of its own (issue #264)
 - Confirmed `GET /admin/audit`/`GET /admin/audit/export` are the only endpoints that serialize a database entity directly to JSON with no response-mapping layer, and recommended dedicated response types that keep every field but stop leaking internal serialization detail — a purely internal documentation decision that issue #272 implements; no behaviour change of its own (issue #265)
+- Thirteen internal C# classes were renamed to consistently reflect what boundary they cross, implementing ADR 016's revision from issue #264 — ten import-action payload classes and three converter-options classes gained a `Dto` suffix (they round-trip through a database column or a settings blob, not an HTTP request/response), and `ImportActionFieldRow` was split into an abstract shared base plus `ImportActionFieldRowResponse`/`ImportActionFieldRowDto` for its two genuinely different serialization boundaries — no functional change, no API surface change (issue #271)
 
 ### Fixed
 - Database columns backed by the duplicate-resolution-policy setting (`ImportBatches.ConflictPolicy`, and the internal `AppliedPolicy` column on two provenance tables) now reject an invalid value at the database level via a CHECK constraint, matching every other enum-backed column in the schema; a pre-existing data inconsistency this closed is also normalised automatically (issue #150)

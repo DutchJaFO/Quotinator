@@ -59,7 +59,7 @@ public class BasicJsonArrayConverterTests
     {
         var inputPath  = WriteInput("""[{"quote":"A quote.","movie":"A Source"}]""");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptions
+        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie" }
         });
@@ -75,7 +75,7 @@ public class BasicJsonArrayConverterTests
     {
         var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source"}]""");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptions
+        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             Defaults = new QuoteFieldDefaults { OriginalLanguage = "nl" }
         });
@@ -185,7 +185,7 @@ public class BasicJsonArrayConverterTests
             [{"quote":"Do, or do not. There is no try.","movie":"Star Wars: Episode V - The Empire Strikes Back","type":"movie","year":1980}]
             """);
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptions
+        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
@@ -202,7 +202,7 @@ public class BasicJsonArrayConverterTests
     {
         var inputPath  = WriteInput("""[{"quote":"A quote.","movie":"A Movie","year":1994}]""");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptions
+        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
@@ -236,7 +236,7 @@ public class BasicJsonArrayConverterTests
         return quotes!.Single();
     }
 
-    private static JsonElement ToOptions(BasicJsonArrayConverterOptions options)
+    private static JsonElement ToOptions(BasicJsonArrayConverterOptionsDto options)
         => JsonSerializer.SerializeToElement(options);
 
     public TestContext TestContext { get; set; }

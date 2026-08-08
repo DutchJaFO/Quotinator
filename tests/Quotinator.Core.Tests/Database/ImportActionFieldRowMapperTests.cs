@@ -10,7 +10,7 @@ namespace Quotinator.Core.Tests.Database;
 [TestClass]
 public class ImportActionFieldRowMapperTests
 {
-    private static ImportActionFieldRow Row(string entityType, string field, FieldResolutionChoice? decision = null, string? customValue = null, CompletenessStatus? markCompletenessAs = null) =>
+    private static ImportActionFieldRowDto Row(string entityType, string field, FieldResolutionChoice? decision = null, string? customValue = null, CompletenessStatus? markCompletenessAs = null) =>
         new()
         {
             ActionId            = Guid.NewGuid(),
@@ -26,7 +26,7 @@ public class ImportActionFieldRowMapperTests
     public void ToCsvRow_PopulatedRow_EmitsFieldsInCsvHeaderOrder()
     {
         var actionId = Guid.NewGuid();
-        var row = new ImportActionFieldRow
+        var row = new ImportActionFieldRowResponse
         {
             ActionId           = actionId,
             EntityId           = "e0000001-0000-4000-8000-000000000001",
@@ -51,7 +51,7 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void ToCsvRow_UndecidedRow_EmitsNullForDecisionCustomValueAndMarkCompletenessAs()
     {
-        var row = new ImportActionFieldRow
+        var row = new ImportActionFieldRowResponse
         {
             ActionId      = Guid.NewGuid(),
             EntityId      = "e0000001-0000-4000-8000-000000000001",
@@ -71,7 +71,7 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void ToCsvRow_ThenFromCsvRow_RoundTripsAllFields()
     {
-        var row = new ImportActionFieldRow
+        var row = new ImportActionFieldRowResponse
         {
             ActionId           = Guid.NewGuid(),
             EntityId           = "e0000001-0000-4000-8000-000000000001",

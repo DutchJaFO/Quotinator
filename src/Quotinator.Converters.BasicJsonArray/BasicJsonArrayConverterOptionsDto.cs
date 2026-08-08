@@ -9,7 +9,7 @@ namespace Quotinator.Converters.BasicJsonArray;
 /// instance preserves the converter's zero-config behaviour: reading each canonical field from the
 /// raw JSON property of the same name.
 /// </summary>
-public sealed class BasicJsonArrayConverterOptions
+public sealed class BasicJsonArrayConverterOptionsDto
 {
     /// <summary>
     /// Maps a canonical field to the raw JSON property name it should actually be read from, for raw

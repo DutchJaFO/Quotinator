@@ -150,7 +150,7 @@ public class ImportActionPlannerTests
         var quoteAction = actions.Single();
         Assert.AreEqual("Quote", quoteAction.EntityType);
 
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         // GuidExtensions.ToCanonicalId (and GuidHandler, given RemoveTypeMap) render every Guid column
         // as lowercase "D"-format TEXT (ADR 012) — the resolved id must match that convention.
         Assert.AreEqual(realSourceId.ToString("D"), payload.SourceId, "Must resolve to the real existing Source id, not a stable id");
@@ -192,7 +192,7 @@ public class ImportActionPlannerTests
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "Already linked to this exact Source — silently reused, no Add staged");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(existingCharacterId, payload.CharacterId);
     }
 
@@ -211,7 +211,7 @@ public class ImportActionPlannerTests
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "A Series-scoped cross-Source match is reused directly, like the same-Source case");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(existingCharacterId, payload.CharacterId, "Must resolve to the existing global Character, not stage a duplicate");
     }
 
@@ -256,7 +256,7 @@ public class ImportActionPlannerTests
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "Name matching is case-insensitive — storage keeps original casing, comparison does not");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(existingCharacterId, payload.CharacterId);
     }
 
@@ -352,7 +352,7 @@ public class ImportActionPlannerTests
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "A matching rule for the only changed field must auto-resolve instead of leaving it Pending");
         Assert.IsNotNull(quoteAction.MergedFields, "An auto-resolved action already has its final values computed, the same as any other Decided action");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.MergedFields!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.MergedFields!)!;
         Assert.AreEqual("Original text", payload.Fields.QuoteText, "Keep must resolve to the existing side's value");
     }
 
@@ -427,7 +427,7 @@ public class ImportActionPlannerTests
 
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionKind.Add, quoteAction.ActionType.Parsed, "This is still a genuine first-ever encounter, not a Modify");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual("Steve McCroskey", payload.Fields.Character, "A matching Custom rule must correct the field on a brand-new Add, not only on a later Modify");
     }
 
@@ -471,7 +471,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual("Some Newly-Added Value", payload.Fields.Character, "A stale rule (recorded snapshot no longer matches this field's real value) must never silently apply, on Add or Modify");
     }
 
@@ -488,7 +488,7 @@ public class ImportActionPlannerTests
 
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionKind.Add, quoteAction.ActionType.Parsed);
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual("Here's looking at you, kid.", payload.Fields.QuoteText, "Keep/Replace on a first-ever Add must be a no-op, not an error");
     }
 
@@ -520,7 +520,7 @@ public class ImportActionPlannerTests
 
         Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must resolve to the already-existing canonical Source — no new SourceEntity Add should be staged");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload     = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload     = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(canonicalSourceId, payload.SourceId, "The quote must link to the existing canonical Source, not a spurious alias-derived one");
     }
 
@@ -549,7 +549,7 @@ public class ImportActionPlannerTests
         Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must normalise type before Source resolution runs — no spurious anime-typed Source should ever be staged");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed);
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.MergedFields!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.MergedFields!)!;
         Assert.AreEqual(sourceId, payload.SourceId, "Must resolve to the original existing Source id, not a new alias-derived one");
     }
 
@@ -562,7 +562,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
         Assert.AreEqual("Marvel's The Avengers", payload.Title, "With no alias lookup provided, the raw incoming title is used unchanged — regression guard matching pre-#181 behaviour");
     }
 
@@ -641,7 +641,7 @@ public class ImportActionPlannerTests
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "No Source has ever existed under this canonical name yet — this is a legitimate first-time creation, not staleness");
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
         Assert.AreEqual("The Avengers", payload.Title, "The new SourceEntity must be created under the alias's canonical title, not the raw incoming one");
     }
 
@@ -700,7 +700,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
         Assert.AreEqual("1993", payload.Date, "The resolving quote's own Date must carry through to the staged Source Add payload");
     }
 
@@ -714,7 +714,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [q1, q2], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
         Assert.AreEqual("1942", payload.Date, "Only one Source Add is staged for both quotes — the first-encountered quote's Date wins, matching the existing Title/Type first-quote-wins behaviour");
     }
 
@@ -733,7 +733,7 @@ public class ImportActionPlannerTests
         ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed, "The Source already exists — this must be a Modify, not a fresh Add");
         Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed, "A background Date backfill needs no human review, matching #191's own Add-payload precedent");
-        SourceActionPayload payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        SourceActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.MergedFields!)!;
         Assert.AreEqual("1942", payload.Date, "The resolving quote's own Date must backfill the existing row's null Date");
     }
 
@@ -917,7 +917,7 @@ public class ImportActionPlannerTests
         var universeAction = actions.Single(a => a.EntityType == "Universe");
         Assert.AreEqual(ImportActionKind.Modify, universeAction.ActionType.Parsed);
         Assert.AreEqual(ImportActionStatus.Decided, universeAction.Status.Parsed);
-        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayload>(universeAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayloadDto>(universeAction.MergedFields!)!;
         Assert.AreEqual("Middle-earth (corrected)", merged.Name);
     }
 
@@ -941,7 +941,7 @@ public class ImportActionPlannerTests
 
         var universeAction = actions.Single(a => a.EntityType == "Universe");
         Assert.AreEqual(ImportActionStatus.Decided, universeAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayload>(universeAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayloadDto>(universeAction.MergedFields!)!;
         Assert.AreEqual("Middle Earth", merged.Name, "Keep must resolve to the existing side's value");
     }
 
@@ -973,7 +973,7 @@ public class ImportActionPlannerTests
         var universeAction = actions.SingleOrDefault(a => a.EntityType == "Universe");
         Assert.IsNotNull(universeAction, "The Custom rule must produce an action even though nothing 'changed' in the ordinary sense");
         Assert.AreEqual(ImportActionStatus.Decided, universeAction!.Status.Parsed);
-        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayload>(universeAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayloadDto>(universeAction.MergedFields!)!;
         Assert.AreEqual("Middle-earth", merged.Name, "Custom must resolve to customValue, not either side's actual value");
     }
 
@@ -1020,7 +1020,7 @@ public class ImportActionPlannerTests
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionKind.Modify, seriesAction.ActionType.Parsed);
         Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed);
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayloadDto>(seriesAction.MergedFields!)!;
         Assert.AreEqual("The Hobbit Trilogy", merged.Name);
     }
 
@@ -1038,7 +1038,7 @@ public class ImportActionPlannerTests
 
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionKind.Modify, seriesAction.ActionType.Parsed);
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayloadDto>(seriesAction.MergedFields!)!;
         Assert.AreEqual(newUniverseId.ToUpperInvariant(), merged.UniverseId?.ToUpperInvariant());
     }
 
@@ -1062,7 +1062,7 @@ public class ImportActionPlannerTests
 
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayloadDto>(seriesAction.MergedFields!)!;
         Assert.AreEqual("The Hobbit", merged.Name, "Keep must resolve to the existing side's value");
     }
 
@@ -1077,7 +1077,7 @@ public class ImportActionPlannerTests
 
         var universeAction = actions.Single(a => a.EntityType == "Universe");
         var seriesAction   = actions.Single(a => a.EntityType == "Series");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayloadDto>(seriesAction.IncomingValue!)!;
         Assert.AreEqual(universeAction.EntityId, payload.UniverseId, "Series' Add payload must carry the same-batch Universe Add's own stable id");
     }
 
@@ -1093,7 +1093,7 @@ public class ImportActionPlannerTests
 
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
         Assert.AreEqual(seriesAction.EntityId, payload.SeriesId, "Source's Add payload must carry the same-batch Series Add's own stable id");
     }
 
@@ -1111,7 +1111,7 @@ public class ImportActionPlannerTests
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed);
         Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.MergedFields!)!;
         Assert.AreEqual(seriesId, merged.SeriesId);
     }
 
@@ -1136,7 +1136,7 @@ public class ImportActionPlannerTests
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed, "A natural-key match must stage a Modify, not be silently skipped");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.MergedFields!)!;
         Assert.AreEqual(seriesId, merged.SeriesId);
     }
 
@@ -1183,7 +1183,7 @@ public class ImportActionPlannerTests
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed, "A matching rule must auto-resolve the Source's seriesId enrichment instead of leaving it Pending");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.MergedFields!)!;
         Assert.IsNotNull(merged.SeriesId);
     }
 
@@ -1203,7 +1203,7 @@ public class ImportActionPlannerTests
             sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "The Hobbit")]);
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.MergedFields!)!;
         Assert.AreEqual("1942", merged.Date, "An omitted date must carry the existing row's value through, never null it out");
         Assert.AreEqual("Casablanca", merged.Title, "Title is the lookup key on this path — never a correction");
     }
@@ -1442,7 +1442,7 @@ public class ImportActionPlannerTests
 
         Assert.ContainsSingle(a => a.EntityType == "Source", actions, "Only one Source Add — the quote must resolve to the same row the sources[] section staged, not a second one");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         // #209/#210: the quote resolves to the canonicalized form of the file's declared id (ADR 012).
         Assert.AreEqual(newFileId, payload.SourceId);
     }
@@ -1898,7 +1898,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, conversations: [entry]);
 
         var action = actions.Single(a => a.EntityType == "Conversation");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<ConversationActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.MergedFields!)!;
         Assert.IsEmpty(merged.Lines, "Lines are never read or included in a Modify payload — out of scope for this issue");
     }
 
@@ -1959,7 +1959,7 @@ public class ImportActionPlannerTests
 
         Assert.ContainsSingle(a => a.EntityType == "Source", actions, "The correction-match must be found via case-insensitive lookup — no duplicate Add");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(canonicalId, payload.SourceId, "sourceIndex must be seeded with the canonicalized (lowercase) form of the file's uppercase id, not the raw file casing, so a same-batch quote resolves to the row's real stored id");
     }
 
@@ -1975,7 +1975,7 @@ public class ImportActionPlannerTests
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         var quoteAction  = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(sourceAction.EntityId, payload.SourceId, "The quote must resolve to the same canonical id the Source Add itself staged");
         Assert.AreEqual(uppercaseId.ToLowerInvariant(), payload.SourceId);
     }
@@ -2073,7 +2073,7 @@ public class ImportActionPlannerTests
             conversations: [conversationEntry]);
 
         var conversationAction = actions.Single(a => a.EntityType == "Conversation");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<ConversationActionPayload>(conversationAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<ConversationActionPayloadDto>(conversationAction.IncomingValue!)!;
         Assert.AreEqual(uppercaseQuoteId.ToLowerInvariant(), payload.Lines[0].QuoteId,
             "A conversation line's QuoteId must be canonicalized to lowercase, matching the referenced quote's own canonical id — otherwise the ConversationLines FOREIGN KEY constraint to Quotes(Id) fails");
     }
@@ -2107,7 +2107,7 @@ public class ImportActionPlannerTests
 
         var action = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed, "An explicit 'date: null' must resolve to a genuine reset");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields!)!;
         Assert.IsNull(merged.Date);
     }
 
@@ -2140,7 +2140,7 @@ public class ImportActionPlannerTests
 
         var action = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed, "An explicit 'seriesName: null' must resolve to a genuine clear");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields!)!;
         Assert.IsNull(merged.SeriesId);
     }
 
@@ -2159,7 +2159,7 @@ public class ImportActionPlannerTests
         var action = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed,
             "#190 requirement 6's liberalization: a natural-key entry that explicitly sets 'date' now actually takes effect, where it was previously always silently ignored regardless of what the file said");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields!)!;
         Assert.AreEqual("1975", merged.Date);
     }
 
@@ -2177,7 +2177,7 @@ public class ImportActionPlannerTests
             sources: [entry]);
 
         var action = actions.Single(a => a.EntityType == "Source");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields!)!;
         Assert.AreEqual(originalSeriesId, merged.SeriesId,
             "#190 drive-by fix: MergeOurs must keep the existing Series on a genuine conflict — this branch previously never consulted FieldMergeResolver at all and always took the incoming value unconditionally");
     }
@@ -2209,7 +2209,7 @@ public class ImportActionPlannerTests
 
         var action = actions.Single(a => a.EntityType == "Person");
         Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed, "An explicit 'dateOfDeath: null' must resolve to a genuine reset");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<PersonActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<PersonActionPayloadDto>(action.MergedFields!)!;
         Assert.IsNull(merged.DateOfDeath);
     }
 

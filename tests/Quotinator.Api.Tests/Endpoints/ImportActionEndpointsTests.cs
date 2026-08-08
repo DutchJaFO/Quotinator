@@ -254,7 +254,7 @@ public class ImportActionEndpointsTests
         {
             ReturnExportRows =
             [
-                new ImportActionFieldRow
+                new ImportActionFieldRowResponse
                 {
                     ActionId      = actionId,
                     EntityId      = "e0000001-0000-4000-8000-000000000001",
@@ -269,7 +269,7 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1", TestContext.CancellationToken);
-        var rows = await response.Content.ReadFromJsonAsync<List<ImportActionFieldRow>>(TestContext.CancellationToken);
+        var rows = await response.Content.ReadFromJsonAsync<List<ImportActionFieldRowResponse>>(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsNotNull(rows);
@@ -285,7 +285,7 @@ public class ImportActionEndpointsTests
         {
             ReturnExportRows =
             [
-                new ImportActionFieldRow
+                new ImportActionFieldRowResponse
                 {
                     ActionId      = Guid.NewGuid(),
                     EntityId      = "e0000001-0000-4000-8000-000000000001",

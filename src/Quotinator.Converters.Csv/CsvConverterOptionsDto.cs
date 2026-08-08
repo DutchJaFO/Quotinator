@@ -9,7 +9,7 @@ namespace Quotinator.Converters.Csv;
 /// instance preserves the converter's original zero-config behaviour: header-name auto-matching
 /// against Quotinator's own canonical column names.
 /// </summary>
-public sealed class CsvConverterOptions
+public sealed class CsvConverterOptionsDto
 {
     /// <summary>
     /// Whether the first row is a header label row (skipped as data) rather than the first data row.

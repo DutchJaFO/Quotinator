@@ -171,7 +171,7 @@ internal static class ImportEndpoints
 
             return Results.Ok(rows);
         })
-        .Produces<IReadOnlyList<ImportActionFieldRow>>(StatusCodes.Status200OK)
+        .Produces<IReadOnlyList<ImportActionFieldRowResponse>>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
         .WithName("ExportImportActionBatch")
         .WithSummary("Export a staged batch's decidable fields as a flat file")
@@ -441,12 +441,12 @@ internal static class ImportEndpoints
     // "missing required properties" despite the data being present under its camelCase name.
     private static readonly JsonSerializerOptions BulkDecideRowJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-    // Row-by-row, not JsonSerializer.Deserialize<List<ImportActionFieldRow>> in one call — a single
+    // Row-by-row, not JsonSerializer.Deserialize<List<ImportActionFieldRowDto>> in one call — a single
     // malformed element would otherwise abort the whole file's parse, violating the "one bad row never
     // aborts the rest" contract (#163 spec requirement 6) for the parse stage specifically.
-    private static (List<ImportActionFieldRow> Rows, List<BulkDecideRowError> Errors) ParseJsonRows(string content)
+    private static (List<ImportActionFieldRowDto> Rows, List<BulkDecideRowError> Errors) ParseJsonRows(string content)
     {
-        var rows   = new List<ImportActionFieldRow>();
+        var rows   = new List<ImportActionFieldRowDto>();
         var errors = new List<BulkDecideRowError>();
 
         JsonElement root;
@@ -472,7 +472,7 @@ internal static class ImportEndpoints
             index++;
             try
             {
-                rows.Add(element.Deserialize<ImportActionFieldRow>(BulkDecideRowJsonOptions) ?? throw new JsonException("Row is null."));
+                rows.Add(element.Deserialize<ImportActionFieldRowDto>(BulkDecideRowJsonOptions) ?? throw new JsonException("Row is null."));
             }
             catch (JsonException ex)
             {
@@ -485,9 +485,9 @@ internal static class ImportEndpoints
 
     // Same per-row resilience as ParseJsonRows — one malformed CSV line is reported and skipped, not
     // an aborted parse of the whole file.
-    private static (List<ImportActionFieldRow> Rows, List<BulkDecideRowError> Errors) ParseCsvRows(string content)
+    private static (List<ImportActionFieldRowDto> Rows, List<BulkDecideRowError> Errors) ParseCsvRows(string content)
     {
-        var rows   = new List<ImportActionFieldRow>();
+        var rows   = new List<ImportActionFieldRowDto>();
         var errors = new List<BulkDecideRowError>();
         var lines  = CsvLineParser.Parse(content);
 

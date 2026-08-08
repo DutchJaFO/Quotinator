@@ -135,12 +135,12 @@ public class RepositoryStructureTests
         var schema = JsonSchema.FromText(
             File.ReadAllText(Path.Combine(RepoRoot, "schemas", "source-flat.schema.json")));
 
-        var nikhilNamal17Options = JsonSerializer.SerializeToElement(new BasicJsonArrayConverterOptions
+        var nikhilNamal17Options = JsonSerializer.SerializeToElement(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
 
-        var vilaboimOptions = JsonSerializer.SerializeToElement(new RegexArrayConverterOptions
+        var vilaboimOptions = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
         {
             Pattern      = """^"(.+?)"\s+(.+)$""",
             GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }

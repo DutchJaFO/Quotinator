@@ -7,7 +7,7 @@ namespace Quotinator.Core.Database;
 
 /// <summary>
 /// Generates <see cref="ConflictResolutionRule"/> entries from a batch's already-decided
-/// <see cref="ImportActionFieldRow"/> export rows (#153, Phase 2 of #163) — the same flat rows
+/// <see cref="ImportActionFieldRowResponse"/> export rows (#153, Phase 2 of #163) — the same flat rows
 /// <c>GET /import/actions/export</c> produces. Reuses that shape rather than re-reading raw
 /// <c>SystemImportAction</c> payloads directly, so a generated rule is always built from exactly the
 /// same field set a human reviewing the export file would see.
@@ -28,7 +28,7 @@ public static class ConflictRuleGenerator
     /// row per <em>decidable</em> field for that entity type — the full mergeable field set, not a
     /// subset — matching every hand-authored rule's own "complete field set on both sides" convention.
     /// </summary>
-    public static IReadOnlyList<ConflictResolutionRule> Generate(IReadOnlyList<ImportActionFieldRow> rows)
+    public static IReadOnlyList<ConflictResolutionRule> Generate(IReadOnlyList<ImportActionFieldRowResponse> rows)
     {
         var result = new List<ConflictResolutionRule>();
 
