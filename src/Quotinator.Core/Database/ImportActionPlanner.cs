@@ -51,17 +51,17 @@ internal static class ImportActionPlanner
         ConflictRuleLookup? conflictRules = null,
         SourceAliasLookup? sourceAliases = null)
     {
-        var actions        = new List<ImportActionEntity>();
-        var sourceIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var actions = new List<ImportActionEntity>();
+        var sourceIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var characterIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var personIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var seriesIndex    = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var universeIndex  = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var seenQuotes     = new Dictionary<string, SourceQuoteDto>(StringComparer.Ordinal);
+        var personIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var seriesIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var universeIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var seenQuotes = new Dictionary<string, SourceQuoteDto>(StringComparer.Ordinal);
         var seenQuoteStatus = new Dictionary<string, CompletenessStatus>(StringComparer.Ordinal);
 
         var batchIdStr = batchId.ToCanonicalId();
-        var now        = DateTime.UtcNow;
+        var now = DateTime.UtcNow;
 
         // #180: Universe then Series are planned before Source — a declared series[] entry's own
         // universeName must resolve against an already-built universe index, and a sources[] entry's
@@ -94,16 +94,16 @@ internal static class ImportActionPlanner
             var q = EntityIdCanonicalizer.TryCanonicalizeLowercase(rawQuote.Id, out var canonicalQuoteId)
                 ? new SourceQuoteDto
                 {
-                    Id               = canonicalQuoteId!,
-                    QuoteText        = rawQuote.QuoteText,
+                    Id = canonicalQuoteId!,
+                    QuoteText = rawQuote.QuoteText,
                     OriginalLanguage = rawQuote.OriginalLanguage,
-                    Source           = rawQuote.Source,
-                    Date             = rawQuote.Date,
-                    Character        = rawQuote.Character,
-                    Author           = rawQuote.Author,
-                    Type             = rawQuote.Type,
-                    Genres           = rawQuote.Genres,
-                    Translations     = rawQuote.Translations,
+                    Source = rawQuote.Source,
+                    Date = rawQuote.Date,
+                    Character = rawQuote.Character,
+                    Author = rawQuote.Author,
+                    Type = rawQuote.Type,
+                    Genres = rawQuote.Genres,
+                    Translations = rawQuote.Translations,
                 }
                 : rawQuote;
 
@@ -156,16 +156,16 @@ internal static class ImportActionPlanner
                 {
                     q = new SourceQuoteDto
                     {
-                        Id               = q.Id,
-                        QuoteText        = q.QuoteText,
+                        Id = q.Id,
+                        QuoteText = q.QuoteText,
                         OriginalLanguage = q.OriginalLanguage,
-                        Source           = canonical.CanonicalTitle,
-                        Date             = q.Date,
-                        Character        = q.Character,
-                        Author           = q.Author,
-                        Type             = QuoteSeedWriter.ParseQuoteType(canonical.CanonicalType),
-                        Genres           = q.Genres,
-                        Translations     = q.Translations,
+                        Source = canonical.CanonicalTitle,
+                        Date = q.Date,
+                        Character = q.Character,
+                        Author = q.Author,
+                        Type = QuoteSeedWriter.ParseQuoteType(canonical.CanonicalType),
+                        Genres = q.Genres,
+                        Translations = q.Translations,
                     };
                 }
                 else
@@ -204,9 +204,9 @@ internal static class ImportActionPlanner
                 }
             }
 
-            var sourceId    = await ResolveSourceAsync(connection, q, sourceIndex, batchIdStr, actions, now, transaction);
+            var sourceId = await ResolveSourceAsync(connection, q, sourceIndex, batchIdStr, actions, now, transaction);
             var characterId = await ResolveCharacterAsync(connection, q, sourceId, characterIndex, batchIdStr, actions, now, transaction);
-            var personId    = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
+            var personId = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
 
             var existing = seenQuotes.TryGetValue(q.Id, out var firstInFile)
                 ? new QuoteSeedWriter.ExistingQuoteFields(QuoteFieldMerge.ToFieldMap(firstInFile), batchIdStr, seenQuoteStatus.GetValueOrDefault(q.Id, CompletenessStatus.Incomplete))
@@ -225,32 +225,32 @@ internal static class ImportActionPlanner
                 }
                 var payload = new QuoteActionPayload
                 {
-                    Fields    = QuoteFieldMerge.ToDto(q),
-                    SourceId  = sourceId,
+                    Fields = QuoteFieldMerge.ToDto(q),
+                    SourceId = sourceId,
                     CharacterId = characterId,
-                    PersonId  = personId,
+                    PersonId = personId,
                 };
                 var addStatus = sourceAliasStale ? ImportActionStatus.Stale : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchIdStr,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-                    EntityType    = ImportActionEntityTypes.Quote,
-                    EntityId      = q.Id,
+                    BatchId = batchIdStr,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                    EntityType = ImportActionEntityTypes.Quote,
+                    EntityId = q.Id,
                     IncomingValue = JsonSerializer.Serialize(payload),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status        = new SafeValue<ImportActionStatus?>(addStatus.ToString(), addStatus),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(addStatus.ToString(), addStatus),
+                    DetectedAt = now,
                 });
                 continue;
             }
 
-            var existingFields  = existing.Value.Fields;
+            var existingFields = existing.Value.Fields;
             var existingBatchId = existing.Value.ImportBatchId;
-            var incomingFields  = QuoteFieldMerge.ToFieldMap(q);
+            var incomingFields = QuoteFieldMerge.ToFieldMap(q);
 
-            var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+            var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
             var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
             // Skip's resolved payload is the existing row's own values (nothing changes) — not the
             // incoming row's, which is what "resolved" would otherwise default to. The applier's Quote
@@ -267,23 +267,23 @@ internal static class ImportActionPlanner
             // the raw incoming value — Skip's resolved value always equals existingFields (nothing
             // written), so Skip can never block a Complete quote; a merge policy only blocks on
             // fields the merge itself would actually change.
-            var resolvedFields     = QuoteFieldMerge.ToFieldMap(resolved);
-            var effectiveChanged   = new HashSet<string>(
+            var resolvedFields = QuoteFieldMerge.ToFieldMap(resolved);
+            var effectiveChanged = new HashSet<string>(
                 existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
             if (CompletenessGuard.ShouldBlock(existing.Value.CompletenessStatus, effectiveChanged))
             {
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId         = batchIdStr,
+                    BatchId = batchIdStr,
                     ExistingBatchId = existingBatchId,
-                    ActionType      = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType      = ImportActionEntityTypes.Quote,
-                    EntityId        = q.Id,
-                    ExistingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                    IncomingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                    Status          = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                    DetectedAt      = now,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Quote,
+                    EntityId = q.Id,
+                    ExistingValue = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                    IncomingValue = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                    Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                    DetectedAt = now,
                 });
                 continue;
             }
@@ -298,7 +298,7 @@ internal static class ImportActionPlanner
             if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
             {
                 var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
-                var hasStaleRule  = false;
+                var hasStaleRule = false;
                 foreach (var field in existingFields.Keys)
                 {
                     // #153: a field already equal on both sides needs no decision at all (matching
@@ -324,15 +324,15 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId         = batchIdStr,
+                        BatchId = batchIdStr,
                         ExistingBatchId = existingBatchId,
-                        ActionType      = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType      = ImportActionEntityTypes.Quote,
-                        EntityId        = q.Id,
-                        ExistingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                        IncomingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                        Status          = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
-                        DetectedAt      = now,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Quote,
+                        EntityId = q.Id,
+                        ExistingValue = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                        IncomingValue = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
+                        DetectedAt = now,
                     });
                     continue;
                 }
@@ -365,22 +365,22 @@ internal static class ImportActionPlanner
             // Source resolution is unreliable regardless of how cleanly its fields would otherwise
             // have resolved, so it is held for review the same way a stale rule already is above.
             var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
-            var status    = sourceAliasStale ? ImportActionStatus.Stale : isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+            var status = sourceAliasStale ? ImportActionStatus.Stale : isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
             var isUnresolved = isPending || sourceAliasStale;
 
             actions.Add(new ImportActionEntity
             {
-                BatchId         = batchIdStr,
+                BatchId = batchIdStr,
                 ExistingBatchId = existingBatchId,
-                ActionType      = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                EntityType      = ImportActionEntityTypes.Quote,
-                EntityId        = q.Id,
-                ExistingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                IncomingValue   = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                MergedFields    = isUnresolved ? null : JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(resolved), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                AppliedPolicy   = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                Status          = new SafeValue<ImportActionStatus?>(status.ToString(), status),
-                DetectedAt      = now,
+                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                EntityType = ImportActionEntityTypes.Quote,
+                EntityId = q.Id,
+                ExistingValue = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                IncomingValue = JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                MergedFields = isUnresolved ? null : JsonSerializer.Serialize(new QuoteActionPayload { Fields = QuoteFieldMerge.ToDto(resolved), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                DetectedAt = now,
             });
 
             if (!isUnresolved)
@@ -402,7 +402,7 @@ internal static class ImportActionPlanner
         string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         var typeStr = q.Type.ToString();
-        var key     = $"{q.Source}|{typeStr}";
+        var key = $"{q.Source}|{typeStr}";
         if (index.TryGetValue(key, out var existing)) return existing;
 
         // #162: raw string, not Guid?-typed — a natural-key-matched row's id may now be an explicit,
@@ -425,13 +425,13 @@ internal static class ImportActionPlanner
 
         actions.Add(new ImportActionEntity
         {
-            BatchId       = batchId,
-            ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-            EntityType    = ImportActionEntityTypes.Source,
-            EntityId      = stableId,
+            BatchId = batchId,
+            ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+            EntityType = ImportActionEntityTypes.Source,
+            EntityId = stableId,
             IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(q.Source, typeStr, q.Date)),
-            Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-            DetectedAt    = now,
+            Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+            DetectedAt = now,
         });
 
         return stableId;
@@ -468,13 +468,13 @@ internal static class ImportActionPlanner
 
         actions.Add(new ImportActionEntity
         {
-            BatchId       = batchId,
-            ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-            EntityType    = ImportActionEntityTypes.Character,
-            EntityId      = stableId,
+            BatchId = batchId,
+            ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+            EntityType = ImportActionEntityTypes.Character,
+            EntityId = stableId,
             IncomingValue = JsonSerializer.Serialize(new CharacterActionPayload(sourceId, q.Character, q.Source, sourceTypeStr)),
-            Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-            DetectedAt    = now,
+            Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+            DetectedAt = now,
         });
 
         return stableId;
@@ -502,13 +502,13 @@ internal static class ImportActionPlanner
 
         actions.Add(new ImportActionEntity
         {
-            BatchId       = batchId,
-            ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-            EntityType    = ImportActionEntityTypes.Person,
-            EntityId      = stableId,
+            BatchId = batchId,
+            ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+            EntityType = ImportActionEntityTypes.Person,
+            EntityId = stableId,
             IncomingValue = JsonSerializer.Serialize(new PersonActionPayload(q.Author)),
-            Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-            DetectedAt    = now,
+            Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+            DetectedAt = now,
         });
 
         return stableId;
@@ -579,15 +579,15 @@ internal static class ImportActionPlanner
 
             if (existing is { } row)
             {
-                var matchedId       = canonicalId!; // Non-null by construction: `existing` is only set when canonicalId is.
+                var matchedId = canonicalId!; // Non-null by construction: `existing` is only set when canonicalId is.
                 // #190: an absent Date/SeriesName resolves to the existing row's own value — never a
                 // change, under any policy. See OptionalExtensions.ResolveAgainst.
-                var incomingDate     = s.Date.ResolveAgainst(row.Date);
+                var incomingDate = s.Date.ResolveAgainst(row.Date);
                 var incomingSeriesId = resolvedSeriesId.ResolveAgainst(row.SeriesId);
                 var existingPayload = new SourceActionPayload(row.Title, row.Type, row.Date, row.SeriesId);
                 var incomingPayload = new SourceActionPayload(s.Title, typeStr, incomingDate, incomingSeriesId);
-                var existingFields  = ToFieldMap(existingPayload);
-                var incomingFields  = ToFieldMap(incomingPayload);
+                var existingFields = ToFieldMap(existingPayload);
+                var incomingFields = ToFieldMap(incomingPayload);
 
                 // The corrected Title/Type is what a same-batch quote referencing this Source should
                 // resolve to — indexed regardless of whether this ends up changed/blocked/unchanged.
@@ -599,7 +599,7 @@ internal static class ImportActionPlanner
                 // #181: build the rule-decisions map before the "nothing changed" early exit below —
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides.
                 var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
-                var hasStaleRule  = false;
+                var hasStaleRule = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
                     foreach (var field in existingFields.Keys)
@@ -615,9 +615,9 @@ internal static class ImportActionPlanner
                 // silently skipped just because the raw fields themselves happen to already agree.
                 if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule) continue; // Unchanged — silent reuse, same as a natural-key match.
 
-                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved    = policy switch
+                var resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new SourceActionPayload((string)mergeResult!.MergedFields["title"]!, (string)mergeResult.MergedFields["type"]!, (string?)mergeResult.MergedFields["date"], (string?)mergeResult.MergedFields["seriesId"]),
@@ -629,7 +629,7 @@ internal static class ImportActionPlanner
                 // not the raw incoming value used for the "unchanged" check above — Skip's resolved
                 // value is always existingPayload (nothing written), so Skip can never block a
                 // Complete row; a merge policy only blocks on fields the merge itself would change.
-                var resolvedFields        = ToFieldMap(resolved);
+                var resolvedFields = ToFieldMap(resolved);
                 var effectiveChangedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
@@ -638,14 +638,14 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.Source,
-                        EntityId      = matchedId,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Source,
+                        EntityId = matchedId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt = now,
                     });
                     continue;
                 }
@@ -656,14 +656,14 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.Source,
-                        EntityId      = matchedId,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Source,
+                        EntityId = matchedId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
+                        DetectedAt = now,
                     });
                     continue;
                 }
@@ -680,20 +680,20 @@ internal static class ImportActionPlanner
                     resolved = new SourceActionPayload((string)ruleResolved.MergedFields["title"]!, (string)ruleResolved.MergedFields["type"]!, (string?)ruleResolved.MergedFields["date"], (string?)ruleResolved.MergedFields["seriesId"]);
 
                 var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
-                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchId,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType    = ImportActionEntityTypes.Source,
-                    EntityId      = matchedId,
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Source,
+                    EntityId = matchedId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt = now,
                 });
                 continue;
             }
@@ -717,12 +717,12 @@ internal static class ImportActionPlanner
                 // "date" still never changes it (ResolveAgainst falls back to keyRow.Date); one that
                 // explicitly sets "date" now actually takes effect, where it was previously always
                 // silently ignored regardless of what the file said.
-                var keyIncomingDate     = s.Date.ResolveAgainst(keyRow.Date);
+                var keyIncomingDate = s.Date.ResolveAgainst(keyRow.Date);
                 var keyIncomingSeriesId = resolvedSeriesId.ResolveAgainst(keyRow.SeriesId);
                 var keyExistingPayload = new SourceActionPayload(s.Title, typeStr, keyRow.Date, keyRow.SeriesId);
                 var keyIncomingPayload = new SourceActionPayload(s.Title, typeStr, keyIncomingDate, keyIncomingSeriesId);
-                var keyExistingFields  = ToFieldMap(keyExistingPayload);
-                var keyIncomingFields  = ToFieldMap(keyIncomingPayload);
+                var keyExistingFields = ToFieldMap(keyExistingPayload);
+                var keyIncomingFields = ToFieldMap(keyIncomingPayload);
 
                 var changedFields = new HashSet<string>(
                     keyExistingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, keyIncomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
@@ -730,7 +730,7 @@ internal static class ImportActionPlanner
                 // #181: build the rule-decisions map before the "nothing changed" early exit below —
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides.
                 var keyRuleDecisions = new Dictionary<string, FieldMergeDecision>();
-                var keyHasStaleRule  = false;
+                var keyHasStaleRule = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
                     foreach (var field in keyExistingFields.Keys)
@@ -750,9 +750,9 @@ internal static class ImportActionPlanner
                 // but Skip, so MergeOurs could silently overwrite an existing Series link even though
                 // its own contract is "existing wins on a genuine conflict". Now matches the
                 // explicit-id branch's shape exactly.
-                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(keyExistingFields, keyIncomingFields, policy) : null;
-                var resolved    = policy switch
+                var resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new SourceActionPayload((string)mergeResult!.MergedFields["title"]!, (string)mergeResult.MergedFields["type"]!, (string?)mergeResult.MergedFields["date"], (string?)mergeResult.MergedFields["seriesId"]),
@@ -762,7 +762,7 @@ internal static class ImportActionPlanner
 
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
-                var resolvedFields        = ToFieldMap(resolved);
+                var resolvedFields = ToFieldMap(resolved);
                 var effectiveChangedFields = new HashSet<string>(
                     keyExistingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
@@ -771,14 +771,14 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.Source,
-                        EntityId      = keyRow.Id,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Source,
+                        EntityId = keyRow.Id,
                         ExistingValue = JsonSerializer.Serialize(keyExistingPayload),
                         IncomingValue = JsonSerializer.Serialize(keyIncomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt = now,
                     });
                     continue;
                 }
@@ -788,14 +788,14 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.Source,
-                        EntityId      = keyRow.Id,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Source,
+                        EntityId = keyRow.Id,
                         ExistingValue = JsonSerializer.Serialize(keyExistingPayload),
                         IncomingValue = JsonSerializer.Serialize(keyIncomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
+                        DetectedAt = now,
                     });
                     continue;
                 }
@@ -812,20 +812,20 @@ internal static class ImportActionPlanner
                     resolved = new SourceActionPayload((string)keyRuleResolved.MergedFields["title"]!, (string)keyRuleResolved.MergedFields["type"]!, (string?)keyRuleResolved.MergedFields["date"], (string?)keyRuleResolved.MergedFields["seriesId"]);
 
                 var keyIsPending = policy == DuplicateResolutionPolicy.Review && keyRuleResolved is null;
-                var keyStatus    = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                var keyStatus = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchId,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType    = ImportActionEntityTypes.Source,
-                    EntityId      = keyRow.Id,
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Source,
+                    EntityId = keyRow.Id,
                     ExistingValue = JsonSerializer.Serialize(keyExistingPayload),
                     IncomingValue = JsonSerializer.Serialize(keyIncomingPayload),
-                    MergedFields  = keyIsPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = keyIsPending ? null : JsonSerializer.Serialize(resolved),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status        = new SafeValue<ImportActionStatus?>(keyStatus.ToString(), keyStatus),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(keyStatus.ToString(), keyStatus),
+                    DetectedAt = now,
                 });
                 continue;
             }
@@ -845,20 +845,19 @@ internal static class ImportActionPlanner
             // resolves to null, matching this project's existing Add-path behaviour exactly.
             actions.Add(new ImportActionEntity
             {
-                BatchId       = batchId,
-                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-                EntityType    = ImportActionEntityTypes.Source,
-                EntityId      = addId,
+                BatchId = batchId,
+                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType = ImportActionEntityTypes.Source,
+                EntityId = addId,
                 IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(s.Title, typeStr, s.Date.ResolveAgainst(null), resolvedSeriesId.ResolveAgainst(null))),
-                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-                DetectedAt    = now,
+                Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt = now,
             });
         }
     }
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#173).</summary>
-    private static Dictionary<string, object?> ToFieldMap(PersonActionPayload payload) =>
-        new Dictionary<string, object?> { ["name"] = payload.Name, ["dateOfBirth"] = payload.DateOfBirth, ["dateOfDeath"] = payload.DateOfDeath };
+    private static Dictionary<string, object?> ToFieldMap(PersonActionPayload payload) => new() { ["name"] = payload.Name, ["dateOfBirth"] = payload.DateOfBirth, ["dateOfDeath"] = payload.DateOfDeath };
 
     /// <summary>
     /// Only <c>name</c> is diffed — <c>SourceId</c>/<c>SourceTitle</c>/<c>SourceType</c> are never
@@ -867,16 +866,13 @@ internal static class ImportActionPlanner
     /// for audit/informational purposes. Same key name as <see cref="Quotinator.Core.Services.
     /// SqliteImportActionService"/>'s own private overload — must stay in sync (#175).
     /// </summary>
-    private static Dictionary<string, object?> ToFieldMap(CharacterActionPayload payload) =>
-        new Dictionary<string, object?> { ["name"] = payload.Name };
+    private static Dictionary<string, object?> ToFieldMap(CharacterActionPayload payload) => new() { ["name"] = payload.Name };
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#163).</summary>
-    private static Dictionary<string, object?> ToFieldMap(SeriesActionPayload payload) =>
-        new Dictionary<string, object?> { ["name"] = payload.Name, ["universeId"] = payload.UniverseId };
+    private static Dictionary<string, object?> ToFieldMap(SeriesActionPayload payload) => new() { ["name"] = payload.Name, ["universeId"] = payload.UniverseId };
 
     /// <summary>Same key name as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#163).</summary>
-    private static Dictionary<string, object?> ToFieldMap(UniverseActionPayload payload) =>
-        new Dictionary<string, object?> { ["name"] = payload.Name };
+    private static Dictionary<string, object?> ToFieldMap(UniverseActionPayload payload) => new() { ["name"] = payload.Name };
 
     // ── #173: explicit Person planning ───────────────────────────────────────
     // Same shape as PlanSourcesAsync — id-first lookup, natural-key fallback for a not-yet-migrated
@@ -895,7 +891,7 @@ internal static class ImportActionPlanner
             // captured — PersonEntryDto.Id is required, so there is no absent case to preserve.
             var canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(p.Id, out var pIdCanonical) ? pIdCanonical! : p.Id;
 
-            var existing = await connection.QuerySingleOrDefaultAsync<(string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+            (string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = await connection.QuerySingleOrDefaultAsync<(string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.People.SelectExistingById, new { id = canonicalId }, transaction);
 
             if (existing is { } row)
@@ -906,8 +902,8 @@ internal static class ImportActionPlanner
                 var incomingDod = p.DateOfDeath.ResolveAgainst(row.DateOfDeath);
                 var existingPayload = new PersonActionPayload(row.Name, row.DateOfBirth, row.DateOfDeath);
                 var incomingPayload = new PersonActionPayload(p.Name, incomingDob, incomingDod);
-                var existingFields  = ToFieldMap(existingPayload);
-                var incomingFields  = ToFieldMap(incomingPayload);
+                var existingFields = ToFieldMap(existingPayload);
+                Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
                 personIndex[p.Name] = canonicalId;
 
@@ -915,9 +911,9 @@ internal static class ImportActionPlanner
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
                 if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
 
-                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved    = policy switch
+                var resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new PersonActionPayload((string)mergeResult!.MergedFields["name"]!, (string?)mergeResult.MergedFields["dateOfBirth"], (string?)mergeResult.MergedFields["dateOfDeath"]),
@@ -927,7 +923,7 @@ internal static class ImportActionPlanner
 
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
-                var resolvedFields        = ToFieldMap(resolved);
+                var resolvedFields = ToFieldMap(resolved);
                 var effectiveChangedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
@@ -936,33 +932,33 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.Person,
-                        EntityId      = canonicalId,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Person,
+                        EntityId = canonicalId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt = now,
                     });
                     continue;
                 }
 
                 var isPending = policy == DuplicateResolutionPolicy.Review;
-                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchId,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType    = ImportActionEntityTypes.Person,
-                    EntityId      = canonicalId,
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Person,
+                    EntityId = canonicalId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt = now,
                 });
                 continue;
             }
@@ -981,13 +977,13 @@ internal static class ImportActionPlanner
 
             actions.Add(new ImportActionEntity
             {
-                BatchId       = batchId,
-                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-                EntityType    = ImportActionEntityTypes.Person,
-                EntityId      = canonicalId,
+                BatchId = batchId,
+                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType = ImportActionEntityTypes.Person,
+                EntityId = canonicalId,
                 IncomingValue = JsonSerializer.Serialize(new PersonActionPayload(p.Name, p.DateOfBirth.ResolveAgainst(null), p.DateOfDeath.ResolveAgainst(null))),
-                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-                DetectedAt    = now,
+                Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt = now,
             });
         }
     }
@@ -1021,13 +1017,13 @@ internal static class ImportActionPlanner
 
         actions.Add(new ImportActionEntity
         {
-            BatchId       = batchId,
-            ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-            EntityType    = ImportActionEntityTypes.Source,
-            EntityId      = stableId,
+            BatchId = batchId,
+            ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+            EntityType = ImportActionEntityTypes.Source,
+            EntityId = stableId,
             IncomingValue = JsonSerializer.Serialize(new SourceActionPayload(title, typeStr)),
-            Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-            DetectedAt    = now,
+            Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+            DetectedAt = now,
         });
 
         return stableId;
@@ -1057,8 +1053,8 @@ internal static class ImportActionPlanner
                     Sql.Characters.SelectExistingById, new { id = explicitId }, transaction);
                 if (byId is { } row)
                 {
-                    existing   = row;
-                    matchedId  = explicitId;
+                    existing = row;
+                    matchedId = explicitId;
                 }
             }
 
@@ -1076,7 +1072,7 @@ internal static class ImportActionPlanner
                 if (candidateId is { } foundId)
                 {
                     matchedId = foundId.ToCanonicalId();
-                    existing  = await connection.QuerySingleOrDefaultAsync<(string Name, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                    existing = await connection.QuerySingleOrDefaultAsync<(string Name, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                         Sql.Characters.SelectExistingById, new { id = matchedId }, transaction);
                 }
             }
@@ -1093,13 +1089,13 @@ internal static class ImportActionPlanner
 
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchId,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-                    EntityType    = ImportActionEntityTypes.Character,
-                    EntityId      = stableId,
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                    EntityType = ImportActionEntityTypes.Character,
+                    EntityId = stableId,
                     IncomingValue = JsonSerializer.Serialize(new CharacterActionPayload(resolvedSourceId, c.Name, c.SourceTitle, sourceTypeStr)),
-                    Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                    DetectedAt = now,
                 });
                 continue;
             }
@@ -1107,8 +1103,8 @@ internal static class ImportActionPlanner
             var row2 = existing!.Value;
             var existingPayload = new CharacterActionPayload(resolvedSourceId, row2.Name, c.SourceTitle, sourceTypeStr);
             var incomingPayload = new CharacterActionPayload(resolvedSourceId, c.Name, c.SourceTitle, sourceTypeStr);
-            var existingFields  = ToFieldMap(existingPayload);
-            var incomingFields  = ToFieldMap(incomingPayload);
+            var existingFields = ToFieldMap(existingPayload);
+            var incomingFields = ToFieldMap(incomingPayload);
 
             // Indexed under the file's own declared name (not the corrected one), mirroring Person's
             // own Correction-path indexing (#173) — a same-batch quote referencing this exact
@@ -1119,9 +1115,9 @@ internal static class ImportActionPlanner
                 existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
             if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
 
-            var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+            var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
             var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-            var resolved    = policy switch
+            var resolved = policy switch
             {
                 DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                     new CharacterActionPayload(resolvedSourceId, (string)mergeResult!.MergedFields["name"]!, c.SourceTitle, sourceTypeStr),
@@ -1131,7 +1127,7 @@ internal static class ImportActionPlanner
 
             // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
             // not the raw incoming value used for the "unchanged" check above.
-            var resolvedFields        = ToFieldMap(resolved);
+            var resolvedFields = ToFieldMap(resolved);
             var effectiveChangedFields = new HashSet<string>(
                 existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
@@ -1140,33 +1136,33 @@ internal static class ImportActionPlanner
             {
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchId,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType    = ImportActionEntityTypes.Character,
-                    EntityId      = matchedId,
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Character,
+                    EntityId = matchedId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                    DetectedAt = now,
                 });
                 continue;
             }
 
             var isPending = policy == DuplicateResolutionPolicy.Review;
-            var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+            var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
             actions.Add(new ImportActionEntity
             {
-                BatchId       = batchId,
-                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                EntityType    = ImportActionEntityTypes.Character,
-                EntityId      = matchedId,
+                BatchId = batchId,
+                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                EntityType = ImportActionEntityTypes.Character,
+                EntityId = matchedId,
                 ExistingValue = JsonSerializer.Serialize(existingPayload),
                 IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
                 AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
-                DetectedAt    = now,
+                Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                DetectedAt = now,
             });
         }
     }
@@ -1202,11 +1198,11 @@ internal static class ImportActionPlanner
 
             if (existing is { } row)
             {
-                var matchedId       = canonicalId!;
+                var matchedId = canonicalId!;
                 var existingPayload = new UniverseActionPayload(row.Name);
                 var incomingPayload = new UniverseActionPayload(u.Name);
-                var existingFields  = ToFieldMap(existingPayload);
-                var incomingFields  = ToFieldMap(incomingPayload);
+                var existingFields = ToFieldMap(existingPayload);
+                var incomingFields = ToFieldMap(incomingPayload);
 
                 universeIndex[u.Name] = matchedId;
 
@@ -1217,7 +1213,7 @@ internal static class ImportActionPlanner
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides, which
                 // must still get a chance to apply rather than being skipped as "unchanged".
                 var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
-                var hasStaleRule  = false;
+                var hasStaleRule = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
                     foreach (var field in existingFields.Keys)
@@ -1232,9 +1228,9 @@ internal static class ImportActionPlanner
                 // #153: a stale rule must still be surfaced even when nothing else changed.
                 if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule) continue; // Unchanged — silent reuse, same as a natural-key match.
 
-                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved    = policy switch
+                var resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new UniverseActionPayload((string)mergeResult!.MergedFields["name"]!),
@@ -1242,7 +1238,7 @@ internal static class ImportActionPlanner
                     _ => incomingPayload,
                 };
 
-                var resolvedFields        = ToFieldMap(resolved);
+                var resolvedFields = ToFieldMap(resolved);
                 var effectiveChangedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
@@ -1251,14 +1247,14 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.Universe,
-                        EntityId      = matchedId,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Universe,
+                        EntityId = matchedId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt = now,
                     });
                     continue;
                 }
@@ -1268,14 +1264,14 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.Universe,
-                        EntityId      = matchedId,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Universe,
+                        EntityId = matchedId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
+                        DetectedAt = now,
                     });
                     continue;
                 }
@@ -1292,20 +1288,20 @@ internal static class ImportActionPlanner
                     resolved = new UniverseActionPayload((string)ruleResolved.MergedFields["name"]!);
 
                 var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
-                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchId,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType    = ImportActionEntityTypes.Universe,
-                    EntityId      = matchedId,
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Universe,
+                    EntityId = matchedId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt = now,
                 });
                 continue;
             }
@@ -1324,13 +1320,13 @@ internal static class ImportActionPlanner
 
             actions.Add(new ImportActionEntity
             {
-                BatchId       = batchId,
-                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-                EntityType    = ImportActionEntityTypes.Universe,
-                EntityId      = stableId,
+                BatchId = batchId,
+                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType = ImportActionEntityTypes.Universe,
+                EntityId = stableId,
                 IncomingValue = JsonSerializer.Serialize(new UniverseActionPayload(u.Name)),
-                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-                DetectedAt    = now,
+                Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt = now,
             });
         }
     }
@@ -1370,7 +1366,7 @@ internal static class ImportActionPlanner
 
             if (existing is { } row)
             {
-                var matchedId       = canonicalId!;
+                var matchedId = canonicalId!;
                 var incomingUniverseId = await ResolveUniverseIdAsync(s.UniverseName);
                 // UniverseName is only ever carried on the incoming side: EnsureUniverseExistsAsync's
                 // defensive re-insert (guarding against Series applying before its own Universe within
@@ -1379,8 +1375,8 @@ internal static class ImportActionPlanner
                 // always a safe no-op regardless of what name is passed.
                 var existingPayload = new SeriesActionPayload(row.Name, row.UniverseId);
                 var incomingPayload = new SeriesActionPayload(s.Name, incomingUniverseId, s.UniverseName);
-                var existingFields  = ToFieldMap(existingPayload);
-                var incomingFields  = ToFieldMap(incomingPayload);
+                var existingFields = ToFieldMap(existingPayload);
+                var incomingFields = ToFieldMap(incomingPayload);
 
                 seriesIndex[s.Name] = matchedId;
 
@@ -1391,7 +1387,7 @@ internal static class ImportActionPlanner
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides, which
                 // must still get a chance to apply rather than being skipped as "unchanged".
                 var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
-                var hasStaleRule  = false;
+                var hasStaleRule = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
                     foreach (var field in existingFields.Keys)
@@ -1406,9 +1402,9 @@ internal static class ImportActionPlanner
                 // #153: a stale rule must still be surfaced even when nothing else changed.
                 if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule) continue; // Unchanged — silent reuse, same as a natural-key match.
 
-                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved    = policy switch
+                var resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new SeriesActionPayload(
@@ -1419,7 +1415,7 @@ internal static class ImportActionPlanner
                     _ => incomingPayload,
                 };
 
-                var resolvedFields        = ToFieldMap(resolved);
+                var resolvedFields = ToFieldMap(resolved);
                 var effectiveChangedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
@@ -1428,14 +1424,14 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.Series,
-                        EntityId      = matchedId,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Series,
+                        EntityId = matchedId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt = now,
                     });
                     continue;
                 }
@@ -1445,14 +1441,14 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.Series,
-                        EntityId      = matchedId,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Series,
+                        EntityId = matchedId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
+                        DetectedAt = now,
                     });
                     continue;
                 }
@@ -1475,20 +1471,20 @@ internal static class ImportActionPlanner
                 }
 
                 var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
-                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchId,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType    = ImportActionEntityTypes.Series,
-                    EntityId      = matchedId,
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Series,
+                    EntityId = matchedId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt = now,
                 });
                 continue;
             }
@@ -1503,18 +1499,18 @@ internal static class ImportActionPlanner
             }
 
             var universeId = await ResolveUniverseIdAsync(s.UniverseName);
-            var stableId   = canonicalId ?? EntityIdentity.SeriesId(s.Name);
+            var stableId = canonicalId ?? EntityIdentity.SeriesId(s.Name);
             seriesIndex[s.Name] = stableId;
 
             actions.Add(new ImportActionEntity
             {
-                BatchId       = batchId,
-                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-                EntityType    = ImportActionEntityTypes.Series,
-                EntityId      = stableId,
+                BatchId = batchId,
+                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType = ImportActionEntityTypes.Series,
+                EntityId = stableId,
                 IncomingValue = JsonSerializer.Serialize(new SeriesActionPayload(s.Name, universeId, s.UniverseName)),
-                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-                DetectedAt    = now,
+                Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt = now,
             });
         }
     }
@@ -1544,16 +1540,16 @@ internal static class ImportActionPlanner
                 var incomingImageUrl = sd.ImageUrl.ResolveAgainst(row.ImageUrl);
                 var existingPayload = new StageDirectionActionPayload(row.Text, row.ImageUrl, emptyTranslations);
                 var incomingPayload = new StageDirectionActionPayload(sd.Text, incomingImageUrl, emptyTranslations);
-                var existingFields  = ToFieldMap(existingPayload);
-                var incomingFields  = ToFieldMap(incomingPayload);
+                var existingFields = ToFieldMap(existingPayload);
+                var incomingFields = ToFieldMap(incomingPayload);
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
                 if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
 
-                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved    = policy switch
+                var resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new StageDirectionActionPayload((string)mergeResult!.MergedFields["text"]!, (string?)mergeResult.MergedFields["imageUrl"], emptyTranslations),
@@ -1563,7 +1559,7 @@ internal static class ImportActionPlanner
 
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
-                var resolvedFields        = ToFieldMap(resolved);
+                var resolvedFields = ToFieldMap(resolved);
                 var effectiveChangedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
@@ -1572,46 +1568,46 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.StageDirection,
-                        EntityId      = canonicalId,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.StageDirection,
+                        EntityId = canonicalId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt = now,
                     });
                     continue;
                 }
 
                 var isPending = policy == DuplicateResolutionPolicy.Review;
-                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchId,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType    = ImportActionEntityTypes.StageDirection,
-                    EntityId      = canonicalId,
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.StageDirection,
+                    EntityId = canonicalId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt = now,
                 });
                 continue;
             }
 
             actions.Add(new ImportActionEntity
             {
-                BatchId       = batchId,
-                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-                EntityType    = ImportActionEntityTypes.StageDirection,
-                EntityId      = canonicalId,
+                BatchId = batchId,
+                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType = ImportActionEntityTypes.StageDirection,
+                EntityId = canonicalId,
                 IncomingValue = JsonSerializer.Serialize(new StageDirectionActionPayload(sd.Text, sd.ImageUrl.ResolveAgainst(null), sd.Translations)),
-                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-                DetectedAt    = now,
+                Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt = now,
             });
         }
     }
@@ -1634,19 +1630,19 @@ internal static class ImportActionPlanner
                 var emptyTranslations = new Dictionary<string, SourceSoundCueTranslation>();
                 // #190: an absent SoundFileUrl/ImageUrl resolves to the existing row's own value — never a change.
                 var incomingSoundFileUrl = sc.SoundFileUrl.ResolveAgainst(row.SoundFileUrl);
-                var incomingImageUrl     = sc.ImageUrl.ResolveAgainst(row.ImageUrl);
+                var incomingImageUrl = sc.ImageUrl.ResolveAgainst(row.ImageUrl);
                 var existingPayload = new SoundCueActionPayload(row.Text, row.SoundFileUrl, row.ImageUrl, emptyTranslations);
                 var incomingPayload = new SoundCueActionPayload(sc.Text, incomingSoundFileUrl, incomingImageUrl, emptyTranslations);
-                var existingFields  = ToFieldMap(existingPayload);
-                var incomingFields  = ToFieldMap(incomingPayload);
+                var existingFields = ToFieldMap(existingPayload);
+                var incomingFields = ToFieldMap(incomingPayload);
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
                 if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
 
-                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved    = policy switch
+                var resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new SoundCueActionPayload((string)mergeResult!.MergedFields["text"]!, (string?)mergeResult.MergedFields["soundFileUrl"], (string?)mergeResult.MergedFields["imageUrl"], emptyTranslations),
@@ -1656,7 +1652,7 @@ internal static class ImportActionPlanner
 
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
-                var resolvedFields        = ToFieldMap(resolved);
+                var resolvedFields = ToFieldMap(resolved);
                 var effectiveChangedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
@@ -1665,46 +1661,46 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.SoundCue,
-                        EntityId      = canonicalId,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.SoundCue,
+                        EntityId = canonicalId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt = now,
                     });
                     continue;
                 }
 
                 var isPending = policy == DuplicateResolutionPolicy.Review;
-                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchId,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType    = ImportActionEntityTypes.SoundCue,
-                    EntityId      = canonicalId,
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.SoundCue,
+                    EntityId = canonicalId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt = now,
                 });
                 continue;
             }
 
             actions.Add(new ImportActionEntity
             {
-                BatchId       = batchId,
-                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-                EntityType    = ImportActionEntityTypes.SoundCue,
-                EntityId      = canonicalId,
+                BatchId = batchId,
+                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType = ImportActionEntityTypes.SoundCue,
+                EntityId = canonicalId,
                 IncomingValue = JsonSerializer.Serialize(new SoundCueActionPayload(sc.Text, sc.SoundFileUrl.ResolveAgainst(null), sc.ImageUrl.ResolveAgainst(null), sc.Translations)),
-                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-                DetectedAt    = now,
+                Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt = now,
             });
         }
     }
@@ -1740,16 +1736,16 @@ internal static class ImportActionPlanner
                 var incomingDescription = c.Description.ResolveAgainst(row.Description);
                 var existingPayload = new ConversationActionPayload(row.Description, []);
                 var incomingPayload = new ConversationActionPayload(incomingDescription, []);
-                var existingFields  = ToConversationFieldMap(existingPayload);
-                var incomingFields  = ToConversationFieldMap(incomingPayload);
+                var existingFields = ToConversationFieldMap(existingPayload);
+                var incomingFields = ToConversationFieldMap(incomingPayload);
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
                 if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
 
-                var isMerge     = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved    = policy switch
+                var resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new ConversationActionPayload((string?)mergeResult!.MergedFields["description"], []),
@@ -1759,7 +1755,7 @@ internal static class ImportActionPlanner
 
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
-                var resolvedFields        = ToConversationFieldMap(resolved);
+                var resolvedFields = ToConversationFieldMap(resolved);
                 var effectiveChangedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
@@ -1768,33 +1764,33 @@ internal static class ImportActionPlanner
                 {
                     actions.Add(new ImportActionEntity
                     {
-                        BatchId       = batchId,
-                        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType    = ImportActionEntityTypes.Conversation,
-                        EntityId      = canonicalId,
+                        BatchId = batchId,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                        EntityType = ImportActionEntityTypes.Conversation,
+                        EntityId = canonicalId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                        DetectedAt    = now,
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt = now,
                     });
                     continue;
                 }
 
                 var isPending = policy == DuplicateResolutionPolicy.Review;
-                var status    = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
-                    BatchId       = batchId,
-                    ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType    = ImportActionEntityTypes.Conversation,
-                    EntityId      = canonicalId,
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Conversation,
+                    EntityId = canonicalId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields  = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status        = new SafeValue<ImportActionStatus?>(status.ToString(), status),
-                    DetectedAt    = now,
+                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    DetectedAt = now,
                 });
                 continue;
             }
@@ -1816,13 +1812,13 @@ internal static class ImportActionPlanner
 
             actions.Add(new ImportActionEntity
             {
-                BatchId       = batchId,
-                ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
-                EntityType    = ImportActionEntityTypes.Conversation,
-                EntityId      = canonicalId,
+                BatchId = batchId,
+                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType = ImportActionEntityTypes.Conversation,
+                EntityId = canonicalId,
                 IncomingValue = JsonSerializer.Serialize(new ConversationActionPayload(c.Description.ResolveAgainst(null), lines)),
-                Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-                DetectedAt    = now,
+                Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt = now,
             });
         }
     }
