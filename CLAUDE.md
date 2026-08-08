@@ -887,6 +887,7 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `src/Quotinator.Data/Import/ISourceCacheUpdater.cs` | Live auto-update download/convert/validate pipeline for manifest-declared sources |
 | `src/Quotinator.Data/Import/IQuoteSourceConverter.cs` | Converter plugin contract — implement one per raw upstream source format |
 | `src/Quotinator.Api/Program.cs` | API entry point |
+| `src/Quotinator.Api/wwwroot/lib/bootstrap/` | Vendored Bootstrap v5.3.8 (CSS/JS, no CDN/npm) — upgrade by replacing the `dist/` files directly |
 | `src/Quotinator.Api/resources/changelog.en.json` | Changelog source of truth — edit this, never the generated `.md` files |
 | `src/Quotinator.Api/resources/changelog.nl.json` | Dutch changelog (lockstep with `en.json`) |
 | `src/Quotinator.Api/resources/changelog.de.json` | German changelog (lockstep with `en.json`) |
