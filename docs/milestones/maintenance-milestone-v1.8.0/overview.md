@@ -52,10 +52,13 @@ and #255/#256 do not carry that urgency.
 | [#263](https://github.com/DutchJaFO/Quotinator/issues/263) | Make recovering from critical startup/database errors easier (Blazor UI, HA add-on experience) | Waiting for release | T1 ✅ T2 ✅ | [263-startup-ux-plan.md](263-startup-ux-plan.md) |
 | [#264](https://github.com/DutchJaFO/Quotinator/issues/264) | Clarify ADR 016's Dto boundary for DB-stored JSON and dual-boundary classes | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — decision recorded in [ADR 016](../architecture-decisions/016-class-naming-suffixes-and-enum-placement.md)'s "Revision — issue #264" section |
 | [#265](https://github.com/DutchJaFO/Quotinator/issues/265) | Admin audit endpoint returns AuditEntryEntity directly with no Response DTO layer | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — findings and recommendation recorded in the issue's own closing comment |
-| [#267](https://github.com/DutchJaFO/Quotinator/issues/267) | Investigate using FileResource/ImportBatch history to avoid unconditional backup-before-seed on every startup | Planning | N/A (research) | No plan doc yet |
+| [#267](https://github.com/DutchJaFO/Quotinator/issues/267) | Investigate using FileResource/ImportBatch history to avoid unconditional backup-before-seed on every startup | Waiting for release | N/A (docs-only, no runtime-loaded content) | No plan doc — findings and recommendation recorded in the issue's own closing comment |
 | [#269](https://github.com/DutchJaFO/Quotinator/issues/269) | Adopt a project-wide pattern for expensive logging arguments (CA1873) | Planning | Not yet determined | No plan doc yet |
 | [#271](https://github.com/DutchJaFO/Quotinator/issues/271) | Rename ActionPayload/ConverterOptions classes, add ImportActionFieldRow subclasses (ADR 016 revision) | Waiting for release | N/A | [271-actionpayload-converteroptions-rename-plan.md](271-actionpayload-converteroptions-rename-plan.md) |
 | [#272](https://github.com/DutchJaFO/Quotinator/issues/272) | Add AuditEntryResponse/AuditChangeResponse DTOs — stop leaking SafeValue's raw/parsed wrapper over HTTP | Waiting for release | N/A | [272-audit-response-dto-plan.md](272-audit-response-dto-plan.md) |
+| [#276](https://github.com/DutchJaFO/Quotinator/issues/276) | Startup backup safety-net improvements: correct backup gating + notification system (parent tracking issue for #277/#278) | Planning | N/A (parent — no code of its own) | No plan doc — tracking issue only |
+| [#277](https://github.com/DutchJaFO/Quotinator/issues/277) | Gate startup backups on each action's own real-work signal, not an inferred flag; add a storage pre-flight check | Planning | Not yet determined | No plan doc yet |
+| [#278](https://github.com/DutchJaFO/Quotinator/issues/278) | Add a startup notification system surfaced in the #263 modals | Planning | Not yet determined | No plan doc yet |
 
 ---
 
@@ -194,6 +197,15 @@ same release. None of the remaining issues block each other beyond these relatio
     `raw`/`parsed`/`isValid` shape without dropping any `RecordBase` column (split out of #265's own
     investigation, 2026-08-08; appended here rather than reordered in since it has no dependency on
     the others)
+32. **#276** — Parent tracking issue for #277/#278, split out of #267's own investigation once the
+    corrected per-action backup-gating model was confirmed against the actual code, 2026-08-08;
+    appended here rather than reordered in since it has no dependency on the others
+33. **#277** — Gate startup backups on each action's own real-work signal (migrate's existing
+    `dataPending`/`consumerPending` gate, content-seed's own count-gate), not an inferred cross-cutting
+    flag; add a storage pre-flight check (default 1 GB) and distinguishable per-step failure messages
+34. **#278** — Add a startup notification table (`Information`/`Warning`/`Error`/`Success`/
+    `ActionRequired` types) read at startup and surfaced in #263's `StartupSuccessModal`/
+    `StartupErrorModal` — independent of #277, no hard dependency either direction
 
 ---
 
