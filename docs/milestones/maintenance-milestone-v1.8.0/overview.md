@@ -169,10 +169,20 @@ same release. None of the remaining issues block each other beyond these relatio
     dependency on the others)
 24. **#250** — Periodic Docker Scout re-scan added to the T2 smoke-test checklist (filed while closing
     #232, 2026-08-01; appended here rather than reordered in since it has no dependency on the others)
-25. **#267** — Investigate using FileResource/ImportBatch history to reduce the unconditional pre-seed
+25. **#263** — Make recovering from critical startup/database errors easier — Blazor UI banner, HA
+    add-on experience (filed 2026-08-02 during #254's own T1 pass, once `DatabaseHealthState`/
+    `DatabaseHealthGateMiddleware`'s own first-pass safety net existed to build on; appended here
+    rather than reordered in since it has no dependency on the others)
+26. **#264** — Research: does ADR 016's `Dto` boundary extend to DB-stored JSON and dual-boundary
+    classes (filed 2026-08-02 during #256's own pre-implementation review; appended here rather than
+    reordered in since it has no dependency on the others)
+27. **#265** — Research: should `GET /admin/audit` stop returning `AuditEntryEntity` directly (filed
+    2026-08-02 during the same #256 review as #264; appended here rather than reordered in since it
+    has no dependency on the others)
+28. **#267** — Investigate using FileResource/ImportBatch history to reduce the unconditional pre-seed
     backup (filed 2026-08-04 during a T1 pass, once #251's own history tables existed to investigate
     using; appended here rather than reordered in since it has no hard dependency on the others)
-26. **#269** — Adopt a project-wide pattern for expensive logging arguments, CA1873 (split out of
+29. **#269** — Adopt a project-wide pattern for expensive logging arguments, CA1873 (split out of
     #244's own Step 10, 2026-08-08; appended here rather than reordered in since it has no dependency
     on the others)
 
