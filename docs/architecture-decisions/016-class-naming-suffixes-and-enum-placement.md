@@ -1,6 +1,6 @@
 # ADR 016 — Class-naming suffixes and enum placement
 
-**Status:** Accepted
+**Status:** Revised (see inline revision below) — `Dto` now also covers database-column JSON, and a bare-array HTTP response's element type takes `Response`
 **Date:** 2026-08-01
 **GitHub issue:** #227
 
@@ -174,3 +174,31 @@ in-memory domain value) never collide by name.
 **This should be recorded in `CLAUDE.md`/`docs/database-conventions.md` alongside ADR 015**, so the
 full naming convention (table domain prefix, class suffix family, enum folder placement) is
 discoverable together.
+
+---
+
+## Revision — issue #264: `Dto` covers database-column JSON; a bare-array response's element takes `Response`
+
+**`Dto`** — a wire-format object for a boundary that is not HTTP and not a direct entity-column
+mapping: an on-disk JSON file shape, **or a JSON blob serialized into and deserialized back out of a
+database column**, both via `JsonSerializer.Deserialize<T>`. Example: `OrderPayload`, serialized as
+JSON text into an `Orders.PayloadJson` column and read back the same way, is `OrderPayloadDto` — the
+same suffix as if that JSON lived in a file, since the persisted location isn't what the suffix is
+tracking.
+
+**`Response`** — also applies to `T` when an endpoint's response body is a bare `IReadOnlyList<T>`/array
+with no enclosing wrapper object. Example: an endpoint returning `IReadOnlyList<OrderRecord>` directly
+(no wrapper object around it) makes `OrderRecord` itself `OrderRecordResponse` for that endpoint —
+extending the original `OrderRecord`/`OrderRecordResponse` example above to the case where the
+*existing* `OrderRecord` was never nested in a wrapper to begin with.
+
+**A class needed on both sides of a boundary split never carries one shared suffix.** If the two sides
+have the same shape, a shared unsuffixed base class holds the common properties, and each boundary gets
+its own thin suffixed subclass adding nothing — the same `BaseResponse<T>`/`BaseRequest<T>` pattern this
+ADR already recommends for the `Request`/`Response` family, applied to two named leaf types instead of
+a generic wrapper. Example: if `OrderRecord` is also needed as the deserialization target for an
+uploaded file's content, it stays an unsuffixed base class holding the shared properties, with
+`OrderRecordResponse : OrderRecord` and `OrderRecordDto : OrderRecord` as empty subclasses, one per
+boundary. If the two sides need to diverge (different fields, different validation), they become two
+fully independent types instead — a base class is only ever a shortcut for identical shapes, not a
+requirement.
